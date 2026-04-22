@@ -55,6 +55,6 @@ def test_init_creates_directories():
             config_init()
 
             # Verify all directories were created
-            assert (home / "runs").exists()
+            assert (home / "data").exists()
             assert (home / "generated_agents").exists()
             assert (home / "logs").exists()

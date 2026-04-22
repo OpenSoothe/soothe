@@ -970,14 +970,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                         ).to_dict()
                     )
 
-                if iter_state.artifact_store and goal_report:
-                    try:
-                        iter_state.artifact_store.write_goal_report(goal_report)
-                        logger.debug("Goal report artifact written for %s", goal.id)
-                    except Exception:
-                        logger.debug("Goal report write failed", exc_info=True)
-
-                    # RFC-204: Process proposals queued by Layer 2 tools before completing
+                # RFC-204: Process proposals queued by Layer 2 tools before completing
                 pq = getattr(self, "_proposal_queue", None)
                 if pq is not None:
                     await self._process_proposals(goal.id, pq)

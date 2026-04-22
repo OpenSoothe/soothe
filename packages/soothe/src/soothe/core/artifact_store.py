@@ -36,15 +36,13 @@ def _lock_for_run_dir(run_dir: Path) -> threading.RLock:
 
 
 class ArtifactEntry(BaseModel):
-    """A single artifact tracked in the run manifest.
+    """A single artifact tracked in the run manifest (Layer 1 CoreAgent only).
 
     Args:
         path: Path relative to the run directory.
         source: Whether the file was produced (copied) or referenced.
         original_path: Absolute workspace path for referenced artifacts.
         tool_name: Tool that created the artifact.
-        step_id: Step that produced this artifact.
-        goal_id: Goal that owns this artifact.
         size_bytes: File size in bytes.
     """
 
@@ -52,13 +50,11 @@ class ArtifactEntry(BaseModel):
     source: Literal["produced", "reference"]
     original_path: str = ""
     tool_name: str = ""
-    step_id: str = ""
-    goal_id: str = ""
     size_bytes: int = 0
 
 
 class RunManifest(BaseModel):
-    """Index of all artifacts and metadata for a run.
+    """Index of all artifacts and metadata for a thread run (Layer 1 CoreAgent only).
 
     Args:
         version: Schema version.
@@ -68,8 +64,7 @@ class RunManifest(BaseModel):
         query: Original user query.
         mode: Execution mode.
         status: Current run status.
-        goals: Goal IDs in this run.
-        artifacts: Tracked artifacts.
+        artifacts: Tracked artifacts (CoreAgent Layer 1 only).
     """
 
     version: int = 1
@@ -79,18 +74,19 @@ class RunManifest(BaseModel):
     query: str = ""
     mode: Literal["single_pass", "autonomous"] = "single_pass"
     status: Literal["in_progress", "completed", "failed"] = "in_progress"
-    goals: list[str] = Field(default_factory=list)
     artifacts: list[ArtifactEntry] = Field(default_factory=list)
 
 
 class RunArtifactStore:
-    """Manages run artifact directory under ``$SOOTHE_HOME/data/threads/{thread_id}/``.
+    """Manages CoreAgent Layer 1 artifact directory under ``$SOOTHE_HOME/data/threads/{thread_id}/``.
 
-    Provides atomic checkpoint writes, structured step/goal reports in
-    both JSON and Markdown, and a manifest of all tracked artifacts.
+    Provides atomic checkpoint writes and a manifest of tracked artifacts.
+    Scope limited to CoreAgent (Layer 1) data: checkpoint.json, artifacts/, manifest.json.
 
-    Always uses the durability thread id (not synthetic per-goal ids). Parallel
-    goals sharing one run dir coordinate via a per-directory lock.
+    Note: Goal/step reports (Layer 2 AgentLoop data) are managed by
+    AgentLoopCheckpointPersistenceManager in ``$SOOTHE_HOME/data/loops/{loop_id}/``.
+
+    Always uses the durability thread id (not synthetic per-goal ids).
 
     Args:
         thread_id: Thread identifier for this run (canonical thread id).
@@ -162,161 +158,6 @@ class RunArtifactStore:
             Absolute filesystem path under ``self._run_dir``.
         """
         return str(self._run_dir / relative_path)
-
-    def ensure_step_dir(self, goal_id: str, step_id: str) -> Path:
-        """Create and return the step directory.
-
-        Args:
-            goal_id: Goal identifier.
-            step_id: Step identifier.
-
-        Returns:
-            Path to the step directory.
-        """
-        d = self._run_dir / "goals" / goal_id / "steps" / step_id
-        d.mkdir(parents=True, exist_ok=True)
-        return d
-
-    def write_step_report(
-        self,
-        goal_id: str,
-        step_id: str,
-        description: str,
-        status: str,
-        result: str,
-        duration_ms: int,
-        depends_on: list[str] | None = None,
-    ) -> None:
-        """Write step report as JSON and Markdown.
-
-        Args:
-            goal_id: Goal identifier.
-            step_id: Step identifier.
-            description: Step description.
-            status: Final step status.
-            result: Step output text.
-            duration_ms: Execution time in milliseconds.
-            depends_on: Step dependency IDs.
-        """
-        from soothe.protocols.planner import StepReport
-
-        with self._file_lock:
-            # Ensure step directory exists
-            self.ensure_step_dir(goal_id, step_id)
-            deps = depends_on or []
-
-            report = StepReport(
-                step_id=step_id,
-                description=description,
-                status=status if status in ("completed", "failed") else "skipped",
-                result=result,
-                duration_ms=duration_ms,
-                depends_on=deps,
-            )
-
-            # Try FrameworkFilesystem first, fallback to direct Path operations
-            try:
-                backend = FrameworkFilesystem.get()
-
-                # Write JSON report
-                json_path = self._resolve_artifact_path(
-                    f"goals/{goal_id}/steps/{step_id}/report.json"
-                )
-                backend.write(json_path, report.model_dump_json(indent=2))
-
-                # Write Markdown report
-                md_parts = [
-                    f"# Step: {description}\n",
-                    f"**Status**: {report.status}  \n**Duration**: {duration_ms}ms\n",
-                ]
-                if deps:
-                    md_parts.append(f"**Depends on**: {', '.join(deps)}\n")
-                md_parts.append(f"\n## Result\n\n{result}\n")
-
-                md_path = self._resolve_artifact_path(f"goals/{goal_id}/steps/{step_id}/report.md")
-                backend.write(md_path, "\n".join(md_parts))
-            except RuntimeError:
-                # FrameworkFilesystem not initialized - use direct Path writes
-                step_dir = self._run_dir / "goals" / goal_id / "steps" / step_id
-                step_dir.mkdir(parents=True, exist_ok=True)
-
-                (step_dir / "report.json").write_text(
-                    report.model_dump_json(indent=2), encoding="utf-8"
-                )
-
-                md_parts = [
-                    f"# Step: {description}\n",
-                    f"**Status**: {report.status}  \n**Duration**: {duration_ms}ms\n",
-                ]
-                if deps:
-                    md_parts.append(f"**Depends on**: {', '.join(deps)}\n")
-                md_parts.append(f"\n## Result\n\n{result}\n")
-                (step_dir / "report.md").write_text("\n".join(md_parts), encoding="utf-8")
-            logger.debug(
-                "Step report written: goal=%s step=%s status=%s duration=%dms",
-                goal_id,
-                step_id,
-                report.status,
-                duration_ms,
-            )
-
-    def write_goal_report(self, report: Any) -> None:
-        """Write goal report as JSON and Markdown.
-
-        Args:
-            report: A ``GoalReport`` instance.
-        """
-        with self._file_lock:
-            goal_dir = self._run_dir / "goals" / report.goal_id
-            goal_dir.mkdir(parents=True, exist_ok=True)
-
-            # Build Markdown report
-            md_parts = [
-                f"# Goal: {report.description}\n",
-                f"**Status**: {report.status}  \n**Duration**: {report.duration_ms}ms\n",
-                f"\n## Summary\n\n{report.summary}\n",
-            ]
-            if getattr(report, "reflection_assessment", ""):
-                md_parts.append(f"\n## Reflection\n\n{report.reflection_assessment}\n")
-            if getattr(report, "cross_validation_notes", ""):
-                md_parts.append(f"\n## Cross-Validation\n\n{report.cross_validation_notes}\n")
-            step_reports = getattr(report, "step_reports", [])
-            if step_reports:
-                md_parts.append("\n## Steps\n")
-                for sr in step_reports:
-                    icon = "+" if sr.status == "completed" else "x"
-                    md_parts.append(f"- [{icon}] **{sr.step_id}**: {sr.description} ({sr.status})")
-                md_parts.append("")
-
-            # Try FrameworkFilesystem first, fallback to direct Path operations
-            try:
-                backend = FrameworkFilesystem.get()
-
-                # Write JSON report
-                json_path = self._resolve_artifact_path(f"goals/{report.goal_id}/report.json")
-                backend.write(json_path, report.model_dump_json(indent=2))
-
-                # Write Markdown report
-                md_path = self._resolve_artifact_path(f"goals/{report.goal_id}/report.md")
-                backend.write(md_path, "\n".join(md_parts))
-            except RuntimeError:
-                # FrameworkFilesystem not initialized - use direct Path writes
-                (goal_dir / "report.json").write_text(
-                    report.model_dump_json(indent=2), encoding="utf-8"
-                )
-                (goal_dir / "report.md").write_text("\n".join(md_parts), encoding="utf-8")
-
-            step_count = len(getattr(report, "step_reports", []))
-            logger.info(
-                "Goal report written: goal=%s status=%s steps=%d",
-                report.goal_id,
-                report.status,
-                step_count,
-            )
-
-            if report.goal_id not in self._manifest.goals:
-                self._manifest.goals.append(report.goal_id)
-            self._save_manifest_unlocked()
 
     def record_artifact(self, entry: ArtifactEntry) -> None:
         """Track an artifact in the manifest.
@@ -415,8 +256,7 @@ class RunArtifactStore:
             manifest_file.write_text(self._manifest.model_dump_json(indent=2), encoding="utf-8")
 
         logger.debug(
-            "Manifest saved: goals=%d artifacts=%d",
-            len(self._manifest.goals),
+            "Manifest saved: artifacts=%d",
             len(self._manifest.artifacts),
         )
 

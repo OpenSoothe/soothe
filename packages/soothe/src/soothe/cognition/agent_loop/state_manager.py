@@ -24,7 +24,6 @@ from soothe.cognition.agent_loop.checkpoint import (
     ThreadSwitchPolicy,
     WorkingMemoryState,
 )
-from soothe.config import SOOTHE_HOME
 
 if TYPE_CHECKING:
     from soothe.cognition.agent_loop.schemas import (
@@ -49,10 +48,15 @@ class AgentLoopStateManager:
             workspace: Optional workspace path (not used for checkpoint storage)
         """
         self.loop_id = loop_id or str(uuid.uuid4())
-        # Checkpoint is ALWAYS stored in SOOTHE_HOME, indexed by loop_id (RFC-608)
-        sothe_home = Path(SOOTHE_HOME).expanduser()
-        self.run_dir = sothe_home / "runs" / self.loop_id
-        self.checkpoint_path = self.run_dir / "agent_loop_checkpoint.json"
+        # Checkpoint stored in data/loops/{loop_id}/ per RFC-409 (thread/loop isolation)
+        from soothe.cognition.agent_loop.persistence.directory_manager import (
+            PersistenceDirectoryManager,
+        )
+
+        self.run_dir = PersistenceDirectoryManager.get_loop_directory(self.loop_id)
+        self.checkpoint_path = (
+            self.run_dir / "agent_loop_checkpoint.json"
+        )  # JSON for now, SQLite later
         self._checkpoint: AgentLoopCheckpoint | None = None
 
     def initialize(self, thread_id: str, max_iterations: int = 10) -> AgentLoopCheckpoint:

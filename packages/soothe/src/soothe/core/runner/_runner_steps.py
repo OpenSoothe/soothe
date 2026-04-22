@@ -101,7 +101,6 @@ class StepLoopMixin:
             if len(ready) == 1:
                 step = ready[0]
                 dep_results = scheduler.get_dependency_results(step)
-                step_start = perf_counter()
                 async for chunk in self._execute_step(
                     step,
                     goal_description=goal_description,
@@ -111,12 +110,10 @@ class StepLoopMixin:
                     batch_index=batch_index,
                 ):
                     yield chunk
-                step_dur = int((perf_counter() - step_start) * 1000)
                 if step.status == "completed":
                     scheduler.mark_completed(step.id, step.result or "")
                 elif step.status != "failed":
                     scheduler.mark_failed(step.id, step.result or "No result")
-                self._write_step_report_and_checkpoint(state, step, step_dur, goal_id=goal_id)
             else:
                 collected_chunks: dict[str, list[StreamChunk]] = {}
 
@@ -160,8 +157,8 @@ class StepLoopMixin:
                             scheduler.mark_completed(s.id, s.result or "")
                         elif s.status != "failed":
                             scheduler.mark_failed(s.id, s.result or "No result")
-                for s in ready:
-                    self._write_step_report_and_checkpoint(state, s, 0, goal_id=goal_id)
+
+            # End of step batch
 
             batch_index += 1
 

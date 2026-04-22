@@ -95,6 +95,45 @@ class PersistenceDirectoryManager:
         return Path(SOOTHE_HOME).expanduser() / LOOPS_DATA_DIR / loop_id
 
     @staticmethod
+    def get_goal_directory(loop_id: str, goal_id: str) -> Path:
+        """Get AgentLoop goal directory path.
+
+        Args:
+            loop_id: Loop identifier.
+            goal_id: Goal identifier.
+
+        Returns:
+            Path to goal's directory: data/loops/{loop_id}/goals/{goal_id}/
+        """
+        from soothe.config import SOOTHE_HOME
+
+        return Path(SOOTHE_HOME).expanduser() / LOOPS_DATA_DIR / loop_id / "goals" / goal_id
+
+    @staticmethod
+    def get_step_directory(loop_id: str, goal_id: str, step_id: str) -> Path:
+        """Get AgentLoop step directory path.
+
+        Args:
+            loop_id: Loop identifier.
+            goal_id: Goal identifier.
+            step_id: Step identifier.
+
+        Returns:
+            Path to step's directory: data/loops/{loop_id}/goals/{goal_id}/steps/{step_id}/
+        """
+        from soothe.config import SOOTHE_HOME
+
+        return (
+            Path(SOOTHE_HOME).expanduser()
+            / LOOPS_DATA_DIR
+            / loop_id
+            / "goals"
+            / goal_id
+            / "steps"
+            / step_id
+        )
+
+    @staticmethod
     def get_loop_checkpoint_path(loop_id: str) -> Path:
         """Get AgentLoop loop checkpoint database path.
 

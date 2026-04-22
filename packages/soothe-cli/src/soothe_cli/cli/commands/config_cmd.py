@@ -189,7 +189,7 @@ def config_init(
         target.write_text("# Soothe configuration\n# See docs/user_guide.md for options\n")
         typer.echo(f"Created minimal {target}")
 
-    for subdir in ("runs", "generated_agents", "logs", "data"):
+    for subdir in ("generated_agents", "logs", "data"):
         (home / subdir).mkdir(parents=True, exist_ok=True)
 
     # Migrate runtime data files from root to data/ subdirectory
