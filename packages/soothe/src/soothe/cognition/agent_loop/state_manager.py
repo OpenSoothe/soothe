@@ -461,9 +461,9 @@ class AgentLoopStateManager:
 
         logger.info("Finalized loop %s (status: %s)", self.loop_id, status)
 
-    def _derive_prior_step_outputs(self, goal_record: GoalExecutionRecord) -> list[str]:
+    def _derive_prior_step_outputs(self, goal_record: GoalExecutionRecord | None) -> list[str]:
         """Get prior step outputs from goal's previous Act waves."""
-        if not goal_record.act_history:
+        if not goal_record or not goal_record.act_history:
             return []
 
         return [

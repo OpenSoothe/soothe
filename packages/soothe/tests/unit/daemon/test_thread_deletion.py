@@ -20,7 +20,7 @@ class TestThreadDeletion:
 
         # Create a thread with artifacts
         thread_id = "test-thread-delete-123"
-        runs_dir = tmp_path / "runs" / thread_id
+        runs_dir = tmp_path / "data" / "threads" / thread_id
         runs_dir.mkdir(parents=True, exist_ok=True)
 
         # Create some artifacts
@@ -59,7 +59,7 @@ class TestThreadDeletion:
         import shutil
 
         thread_id = "test-thread-missing-456"
-        runs_dir = tmp_path / "runs" / thread_id
+        runs_dir = tmp_path / "data" / "threads" / thread_id
 
         # Verify directory doesn't exist
         assert not runs_dir.exists()
@@ -77,7 +77,7 @@ class TestThreadDeletion:
         import shutil
 
         thread_id = "test-thread-nested-789"
-        runs_dir = tmp_path / "runs" / thread_id
+        runs_dir = tmp_path / "data" / "threads" / thread_id
 
         # Create complex nested structure
         for goal_id in ["g1", "g2"]:

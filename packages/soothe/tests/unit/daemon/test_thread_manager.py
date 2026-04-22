@@ -98,7 +98,7 @@ async def test_resume_thread_recovers_missing_metadata(mock_durability, mock_con
     mock_durability._store = mock_store  # noqa: SLF001
     mock_durability._update_thread_index = MagicMock()  # noqa: SLF001
 
-    run_dir = tmp_path / "runs" / "recover-123"
+    run_dir = tmp_path / "data" / "threads" / "recover-123"
     run_dir.mkdir(parents=True)
     (run_dir / "checkpoint.json").write_text("{}", encoding="utf-8")
 
@@ -258,7 +258,7 @@ async def test_delete_thread(mock_durability, mock_config, tmp_path):
     from types import SimpleNamespace
 
     # Create a mock run directory
-    run_dir = tmp_path / "runs" / "test123"
+    run_dir = tmp_path / "data" / "threads" / "test123"
     run_dir.mkdir(parents=True)
     (run_dir / "test.txt").write_text("test")
 

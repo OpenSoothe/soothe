@@ -492,7 +492,7 @@ class LoopWorkingMemoryConfig(BaseModel):
     """Agentic loop working memory (RFC-203).
 
     In-memory scratchpad for the agentic loop; large entries spill under
-    ``SOOTHE_HOME/runs/{thread_id}/loop/``.
+    ``SOOTHE_HOME/data/threads/{thread_id}/working_memory/``.
 
     Args:
         enabled: Enable working memory for Layer 2 Reason prompts.
@@ -511,7 +511,7 @@ class LoopWorkingMemoryConfig(BaseModel):
         default=1500,
         ge=200,
         le=50_000,
-        description="Spill step output to disk under SOOTHE_HOME/runs/{thread_id}/loop/ when longer than this",
+        description="Spill step output to disk under SOOTHE_HOME/data/threads/{thread_id}/working_memory/ when longer than this",
     )
 
 

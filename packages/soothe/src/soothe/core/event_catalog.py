@@ -44,6 +44,11 @@ from soothe_sdk.verbosity import VerbosityTier
 
 # Import ALL event type constants from single source of truth
 from soothe.core.event_constants import (
+    AGENT_LOOP_COMPLETED,
+    AGENT_LOOP_STARTED,
+    AGENT_LOOP_STEP_COMPLETED,
+    AGENT_LOOP_STEP_STARTED,
+    # Cognition - AgentLoop
     AUTOPILLOT_CHECKPOINT_SAVED,
     AUTOPILLOT_DREAMING_ENTERED,
     AUTOPILLOT_DREAMING_EXITED,
@@ -643,25 +648,25 @@ _reg(
 
 # -- Agentic Loop (RFC-0008) -------------------------------------------------
 _reg(
-    "soothe.cognition.agent_loop.started",
+    AGENT_LOOP_STARTED,
     AgenticLoopStartedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="{goal}",
 )
 _reg(
-    "soothe.cognition.agent_loop.completed",
+    AGENT_LOOP_COMPLETED,
     AgenticLoopCompletedEvent,
     verbosity=VerbosityTier.QUIET,
     summary_template="Done: {completion_summary}",
 )
 _reg(
-    "soothe.cognition.agent_loop.step.started",
+    AGENT_LOOP_STEP_STARTED,
     AgenticStepStartedEvent,
     verbosity=VerbosityTier.NORMAL,  # RFC-0020: Step descriptions visible at normal verbosity
     summary_template="{description}",
 )
 _reg(
-    "soothe.cognition.agent_loop.step.completed",
+    AGENT_LOOP_STEP_COMPLETED,
     AgenticStepCompletedEvent,
     verbosity=VerbosityTier.NORMAL,  # Show step completion at normal verbosity for progress visibility
     summary_template="{summary} ({duration_ms}ms)",

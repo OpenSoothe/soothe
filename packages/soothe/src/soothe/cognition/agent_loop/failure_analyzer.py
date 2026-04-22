@@ -59,12 +59,12 @@ Execution Context:
 
 Provide analysis in JSON format:
 ```json
-{
-            "root_cause": "<string - root cause of failure>",
-  "context": "<string - execution context that led to failure>",
-  "patterns": ["<pattern1>", "<pattern2>"],
-  "suggestions": ["<suggestion1>", "<suggestion2>"]
-}
+{{
+    "root_cause": "<string - root cause of failure>",
+    "context": "<string - execution context that led to failure>",
+    "patterns": ["<pattern1>", "<pattern2>"],
+    "suggestions": ["<suggestion1>", "<suggestion2>"]
+}}
 ```
 """
 

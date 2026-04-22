@@ -1,13 +1,12 @@
-"""In-memory loop working memory with spill under SOOTHE_HOME/runs/{thread_id}/loop/ (RFC-203)."""
+"""In-memory loop working memory with spill under SOOTHE_HOME/data/threads/{thread_id}/working_memory/ (RFC-203)."""
 
 from __future__ import annotations
 
 import logging
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 
-from soothe.config import SOOTHE_HOME
+from soothe.cognition.agent_loop.persistence.directory_manager import PersistenceDirectoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +19,10 @@ _INLINE_SUCCESS_BODY_CAP = 800
 class LoopWorkingMemory:
     """Accumulate agentic-loop facts for Reason prompts.
 
-    Spills large outputs under ``SOOTHE_HOME/runs/{thread_id}/loop/``.
+    Spills large outputs under ``SOOTHE_HOME/data/threads/{thread_id}/working_memory/``.
 
     Args:
-        thread_id: Canonical thread identifier; spill path is ``runs/{thread_id}/loop/``.
+        thread_id: Canonical thread identifier; spill path is ``data/threads/{thread_id}/working_memory/``.
         max_inline_chars: Cap for ``render_for_reason`` aggregate text.
         max_entry_chars_before_spill: Spill raw step output when longer than this.
     """
@@ -45,17 +44,25 @@ class LoopWorkingMemory:
         return n
 
     def _write_spill(self, step_id: str, body: str) -> str:
-        """Write spill file under ``SOOTHE_HOME/runs/{thread_id}/loop/``; return relative path (posix)."""
+        """Write spill file under ``SOOTHE_HOME/data/threads/{thread_id}/working_memory/``; return relative path (posix)."""
         seq = self._next_spill_seq(step_id)
         safe_step = re.sub(r"[^a-zA-Z0-9._-]+", "_", step_id)[:64] or "step"
-        home = Path(SOOTHE_HOME).expanduser()
-        rel_dir = Path("runs") / self.thread_id / "loop"
-        name = f"step-{safe_step}-{seq}.md"
-        abs_dir = (home / rel_dir).resolve()
+        # Use new isolated directory structure (RFC-409)
+        abs_dir = (
+            PersistenceDirectoryManager.get_thread_directory(self.thread_id) / "working_memory"
+        )
         abs_dir.mkdir(parents=True, exist_ok=True)
+        name = f"step-{safe_step}-{seq}.md"
         path = abs_dir / name
         header = f"# Loop working memory spill: step `{step_id}`\n\n"
         path.write_text(header + body, encoding="utf-8")
+        # Return relative path from SOOTHE_HOME for consistency
+        rel_dir = (
+            PersistenceDirectoryManager.get_thread_directory(self.thread_id).relative_to(
+                PersistenceDirectoryManager.get_loops_directory().parent
+            )
+            / "working_memory"
+        )
         rel = (rel_dir / name).as_posix()
         logger.info("LoopWorkingMemory spilled %d chars to %s", len(body), path)
         return rel
@@ -72,7 +79,7 @@ class LoopWorkingMemory:
         thread_id: str,
     ) -> None:
         """Record one Act step outcome."""
-        _ = workspace  # Spill files live under SOOTHE_HOME/runs/{thread_id}/; arg kept for API stability.
+        _ = workspace  # Spill files live under SOOTHE_HOME/data/threads/{thread_id}/; arg kept for API stability.
         _ = thread_id  # thread_id is set in constructor; kept for protocol compatibility.
         desc = (description or "").strip().replace("\n", " ")
         if len(desc) > _DESC_INLINE_MAX:

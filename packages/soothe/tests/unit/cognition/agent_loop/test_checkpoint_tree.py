@@ -24,10 +24,10 @@ from soothe.cognition.agent_loop.smart_retry_manager import SmartRetryManager
 async def test_checkpoint_anchor_manager_capture_start_anchor(tmp_path):
     """Test checkpoint anchor manager captures iteration start anchor."""
 
-    import soothe.config.constants as constants
+    import soothe.config as config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = config.SOOTHE_HOME
+    config.SOOTHE_HOME = str(tmp_path)
 
     try:
         from soothe.cognition.agent_loop.persistence.directory_manager import (
@@ -64,17 +64,17 @@ async def test_checkpoint_anchor_manager_capture_start_anchor(tmp_path):
         assert mock_checkpointer.aget_tuple.called
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.asyncio
 async def test_checkpoint_anchor_manager_capture_end_anchor_with_summary(tmp_path):
     """Test checkpoint anchor manager captures iteration end anchor with execution summary."""
 
-    import soothe.config.constants as constants
+    import soothe.config as config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = config.SOOTHE_HOME
+    config.SOOTHE_HOME = str(tmp_path)
 
     try:
         from soothe.cognition.agent_loop.persistence.directory_manager import (
@@ -113,17 +113,17 @@ async def test_checkpoint_anchor_manager_capture_end_anchor_with_summary(tmp_pat
         assert mock_checkpointer.aget_tuple.called
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.asyncio
 async def test_failed_branch_manager_detect_failure(tmp_path):
     """Test failed branch manager detects iteration failure and creates branch."""
 
-    import soothe.config.constants as constants
+    import soothe.config as config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = config.SOOTHE_HOME
+    config.SOOTHE_HOME = str(tmp_path)
 
     try:
         from soothe.cognition.agent_loop.persistence.directory_manager import (
@@ -183,17 +183,17 @@ async def test_failed_branch_manager_detect_failure(tmp_path):
         assert failed_branch["failure_checkpoint_id"] == "checkpoint_failure"
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.asyncio
 async def test_failure_analyzer_analyze_failure(tmp_path):
     """Test failure analyzer computes learning insights."""
 
-    import soothe.config.constants as constants
+    import soothe.config as config_module
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = config_module.SOOTHE_HOME
+    config_module.SOOTHE_HOME = str(tmp_path)
 
     try:
         from soothe.cognition.agent_loop.persistence.directory_manager import (
@@ -201,11 +201,11 @@ async def test_failure_analyzer_analyze_failure(tmp_path):
         )
 
         PersistenceDirectoryManager.ensure_directories_exist()
-        from soothe.config import SootheConfig
 
-        PersistenceDirectoryManager.ensure_directories_exist()
+        # Create a mock config object (not SootheConfig instance since we need to set methods)
+        from unittest.mock import MagicMock
 
-        config = SootheConfig()
+        mock_config = MagicMock()
 
         # Mock LLM model
         mock_model = AsyncMock()
@@ -214,9 +214,9 @@ async def test_failure_analyzer_analyze_failure(tmp_path):
                 content='```json\n{"root_cause": "Subagent timeout", "context": "Large file analysis", "patterns": ["Avoid large files"], "suggestions": ["Use streaming"]}\n```'
             )
         )
-        config.create_chat_model = MagicMock(return_value=mock_model)
+        mock_config.create_chat_model = MagicMock(return_value=mock_model)
 
-        analyzer = FailureAnalyzer(config)
+        analyzer = FailureAnalyzer(mock_config)
 
         # Create branch (simplified)
         branch = {
@@ -241,7 +241,7 @@ async def test_failure_analyzer_analyze_failure(tmp_path):
         assert analyzed_branch["analyzed_at"] is not None
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        config_module.SOOTHE_HOME = original_home
 
 
 def test_extract_failure_context_from_exception():

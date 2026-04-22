@@ -62,11 +62,17 @@ def _normalize_agentic_body(full_output: str | None) -> str | None:
 def _resolve_agentic_report_run_dir(
     *, thread_id: str, workspace: str, config: SootheConfig
 ) -> Path:
-    """Run root aligned with ``RunArtifactStore`` (RFC-0010 / IG-123)."""
+    """Run root aligned with ``RunArtifactStore`` (RFC-0010 / IG-123).
+
+    Uses new isolated directory structure (RFC-409).
+    """
+    from soothe.cognition.agent_loop.persistence.directory_manager import (
+        PersistenceDirectoryManager,
+    )
     from soothe.config import SOOTHE_HOME
 
-    _ = workspace, config  # Spool location is always under SOOTHE_HOME (IG-124).
-    return Path(SOOTHE_HOME).expanduser() / "runs" / thread_id
+    _ = workspace, config, SOOTHE_HOME  # Spool location is always under SOOTHE_HOME (IG-124).
+    return PersistenceDirectoryManager.get_thread_directory(thread_id)
 
 
 def _spool_agentic_overflow_report(body: str, *, run_dir: Path) -> Path | None:
@@ -121,9 +127,9 @@ def _agentic_final_stdout_text(
         elif tid:
             from soothe.config import SOOTHE_HOME
 
-            pattern = f"{Path(SOOTHE_HOME).expanduser().resolve().as_posix()}/runs/{tid}/final_report_*.md"
+            pattern = f"{Path(SOOTHE_HOME).expanduser().resolve().as_posix()}/data/threads/{tid}/final_report_*.md"
         else:
-            pattern = "runs/<thread_id>/final_report_*.md"
+            pattern = "data/threads/<thread_id>/final_report_*.md"
         return (
             f"{preview_text}...\n\nFull report: {pattern}\n"
             f"(file not written; exceeds {_AGENTIC_REPORT_FULL_DISPLAY_MAX} characters — see logs)"
