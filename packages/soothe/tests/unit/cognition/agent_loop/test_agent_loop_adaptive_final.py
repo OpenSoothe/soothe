@@ -48,7 +48,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
     mock_sm.finalize_goal = AsyncMock()
 
     mock_gcm = Mock()
-    mock_gcm.get_plan_context.return_value = []
+    mock_gcm.get_plan_context = AsyncMock(return_value=[])
 
     with (
         patch(

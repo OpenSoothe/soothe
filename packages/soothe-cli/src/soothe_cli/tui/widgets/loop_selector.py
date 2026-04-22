@@ -30,56 +30,6 @@ from soothe_cli.tui.config import (
 )
 from soothe_cli.tui.widgets._links import open_style_link
 
-# Stub helper functions for loop config (reuse thread config for now)
-def _load_loop_config_stub() -> Any:
-    """Load loop display configuration (stub: reuse thread config).
-
-    Returns:
-        ThreadConfig instance with columns, relative_time, sort_order.
-    """
-    from soothe_cli.tui.model_config import load_thread_config
-
-    return load_thread_config(None)
-
-
-def _save_loop_columns_stub(columns: dict[str, bool]) -> bool:
-    """Save loop column preferences (stub: no-op success).
-
-    Args:
-        columns: Column visibility dict.
-
-    Returns:
-        True (success stub).
-    """
-    # Stub - implement with SootheConfig persistence later
-    return True
-
-
-def _save_loop_relative_time_stub(relative_time: bool) -> bool:
-    """Save loop relative time preference (stub: no-op success).
-
-    Args:
-        relative_time: Whether to use relative timestamps.
-
-    Returns:
-        True (success stub).
-    """
-    # Stub - implement with SootheConfig persistence later
-    return True
-
-
-def _save_loop_sort_order_stub(sort_order: str) -> bool:
-    """Save loop sort order preference (stub: no-op success).
-
-    Args:
-        sort_order: Sort order ("updated_at" or "created_at").
-
-    Returns:
-        True (success stub).
-    """
-    # Stub - implement with SootheConfig persistence later
-    return True
-
 logger = logging.getLogger(__name__)
 
 _column_widths_cache: (
@@ -643,7 +593,9 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         self._cell_text: dict[tuple[str, str], str] = {}
         self._daemon_session = daemon_session
 
-        cfg = _load_loop_config_stub()
+        from soothe_cli.tui.model_config import load_loop_config
+
+        cfg = load_loop_config()
         self._columns = dict(cfg.columns)
         self._relative_time = cfg.relative_time
         self._sort_by_updated = cfg.sort_order == "updated_at"
@@ -932,8 +884,10 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                 return
             self._relative_time = event.value
 
+            from soothe_cli.tui.model_config import save_loop_relative_time
+
             self.run_worker(
-                asyncio.to_loop(_save_loop_relative_time_stub, event.value),
+                asyncio.to_loop(save_loop_relative_time, event.value),
                 group="loop-selector-save",
             )
             self._schedule_list_rebuild()
@@ -953,8 +907,11 @@ class LoopSelectorScreen(ModalScreen[str | None]):
             self._schedule_checkpoint_enrichment()
 
         snapshot = dict(self._columns)
+
+        from soothe_cli.tui.model_config import save_loop_columns
+
         self.run_worker(
-            asyncio.to_loop(_save_loop_columns_stub, snapshot),
+            asyncio.to_loop(save_loop_columns, snapshot),
             group="loop-selector-save",
         )
         self._schedule_list_rebuild()
@@ -972,7 +929,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         tokens = query.split()
         try:
             matchers = [Matcher(token, case_sensitive=False) for token in tokens]
-            scored: list[tuple[float, LoopInfo]] = []
+            scored: list[tuple[float, dict[str, Any]]] = []
             for loop in self._loops:
                 search_text = self._get_search_text(loop)
                 scores = [matcher.match(search_text) for matcher in matchers]
@@ -1127,7 +1084,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
 
         if not query:
             result = list(loops)
-            result.sort(key=lambda t: t.get(sort_key) or "", reverse=True)
+            result.sort(key=lambda t: t.get(sort_key) or t.get("created") or "", reverse=True)
             return result
 
         tokens = query.split()
@@ -1146,7 +1103,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                 exc_info=True,
             )
             result = list(loops)
-            result.sort(key=lambda t: t.get(sort_key) or "", reverse=True)
+            result.sort(key=lambda t: t.get(sort_key) or t.get("created") or "", reverse=True)
             return result
 
         return [
@@ -1155,8 +1112,8 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                 scored,
                 key=lambda item: (
                     item[0],
-                    item[1].get(sort_key) or "",
-                    item[1].get("updated_at") or "",
+                    item[1].get(sort_key) or item[1].get("created") or "",
+                    item[1].get("created") or "",
                     item[1]["loop_id"],
                 ),
                 reverse=True,
@@ -1446,7 +1403,11 @@ class LoopSelectorScreen(ModalScreen[str | None]):
     def _apply_sort(self) -> None:
         """Sort filtered loops by the active sort key."""
         key = _active_sort_key(self._sort_by_updated)
-        self._filtered_loops.sort(key=lambda loop: loop.get(key) or "", reverse=True)
+        # Daemon returns "created" field, so fallback to that if sort_key is missing
+        self._filtered_loops.sort(
+            key=lambda loop: loop.get(key) or loop.get("created") or "",
+            reverse=True,
+        )
 
     def _move_selection(self, delta: int) -> None:
         """Move selection by delta, updating only the affected rows.
@@ -1562,7 +1523,9 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Save sort-order preference to config, notifying on failure."""
 
         async def _save() -> None:
-            ok = await asyncio.to_loop(_save_loop_sort_order_stub, order)
+            from soothe_cli.tui.model_config import save_loop_sort_order
+
+            ok = await asyncio.to_loop(save_loop_sort_order, order)
             if not ok:
                 self.app.notify("Could not save sort preference", severity="warning")
 

@@ -5208,9 +5208,7 @@ class SootheApp(App):
                 warn_if_missing=True,
             )
             await self._mount_message(
-                AppMessage(
-                    f"Failed to attach to loop {loop_id}: {exc}. Use /loops to try again."
-                )
+                AppMessage(f"Failed to attach to loop {loop_id}: {exc}. Use /loops to try again.")
             )
         finally:
             self._thread_switching = False

@@ -34,8 +34,19 @@ async def test_checkpoint_anchor_manager_capture_start_anchor(tmp_path):
         from soothe.cognition.agent_loop.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
+        from soothe.cognition.agent_loop.persistence.manager import (
+            AgentLoopCheckpointPersistenceManager,
+        )
 
         PersistenceDirectoryManager.ensure_directories_exist()
+
+        # Register loop first (required for FK constraint)
+        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        await persistence_manager.register_loop(
+            loop_id="test_loop",
+            thread_ids=["thread_001"],
+            current_thread_id="thread_001",
+        )
 
         # Mock checkpointer
         mock_checkpointer = AsyncMock()
@@ -51,7 +62,7 @@ async def test_checkpoint_anchor_manager_capture_start_anchor(tmp_path):
             )
         )
 
-        # Create anchor manager
+        # Create anchor manager (uses same persistence manager)
         anchor_manager = CheckpointAnchorManager("test_loop")
 
         # Capture iteration start anchor
@@ -81,8 +92,19 @@ async def test_checkpoint_anchor_manager_capture_end_anchor_with_summary(tmp_pat
         from soothe.cognition.agent_loop.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
+        from soothe.cognition.agent_loop.persistence.manager import (
+            AgentLoopCheckpointPersistenceManager,
+        )
 
         PersistenceDirectoryManager.ensure_directories_exist()
+
+        # Register loop first (required for FK constraint)
+        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        await persistence_manager.register_loop(
+            loop_id="test_loop",
+            thread_ids=["thread_001"],
+            current_thread_id="thread_001",
+        )
 
         # Mock checkpointer
         mock_checkpointer = AsyncMock()
@@ -130,8 +152,19 @@ async def test_failed_branch_manager_detect_failure(tmp_path):
         from soothe.cognition.agent_loop.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
+        from soothe.cognition.agent_loop.persistence.manager import (
+            AgentLoopCheckpointPersistenceManager,
+        )
 
         PersistenceDirectoryManager.ensure_directories_exist()
+
+        # Register loop first (required for FK constraint)
+        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        await persistence_manager.register_loop(
+            loop_id="test_loop",
+            thread_ids=["thread_001"],
+            current_thread_id="thread_001",
+        )
 
         # Mock checkpointer
         mock_checkpointer = AsyncMock()
