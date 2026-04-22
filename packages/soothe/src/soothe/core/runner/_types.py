@@ -93,7 +93,8 @@ class RunnerState:
     """Runner state for protocol pre/post-processing (IG-226: added intent_classification).
 
     Attributes:
-        thread_id: Thread context for execution
+        thread_id: Thread context for execution (Layer 1 CoreAgent)
+        loop_id: Loop context for goal execution (Layer 2 AgentLoop, RFC-608)
         workspace: Thread-specific workspace path (RFC-103)
         recalled_memories: Memory items recalled for this query
         recalled_memory_count: Number of memories recalled
@@ -114,6 +115,7 @@ class RunnerState:
     """Mutable state accumulated during a single query execution."""
 
     thread_id: str = ""
+    loop_id: str | None = None  # AgentLoop identifier for Layer 2 operations (RFC-608)
     langgraph_thread_id: str | None = None  # LangGraph id when parallel goals/steps need isolation
     workspace: str | None = None  # Thread-specific workspace (RFC-103)
     full_response: list[str] = field(default_factory=list)

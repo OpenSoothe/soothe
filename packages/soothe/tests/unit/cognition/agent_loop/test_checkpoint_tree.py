@@ -7,6 +7,7 @@ Tests for:
 - Smart retry (checkpoint restoration)
 """
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -199,8 +200,42 @@ async def test_failure_analyzer_analyze_failure(tmp_path):
         from soothe.cognition.agent_loop.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
+        from soothe.cognition.agent_loop.persistence.sqlite_backend import (
+            SQLitePersistenceBackend,
+        )
 
         PersistenceDirectoryManager.ensure_directories_exist()
+
+        # Initialize database for test_loop
+        loop_dir = PersistenceDirectoryManager.get_loop_directory("test_loop")
+        db_path = loop_dir / "checkpoint.db"
+        await SQLitePersistenceBackend.initialize_database(db_path)
+
+        # Create a failed branch record in database
+        import aiosqlite
+
+        async with aiosqlite.connect(db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO failed_branches
+                (branch_id, loop_id, iteration, thread_id,
+                 root_checkpoint_id, failure_checkpoint_id,
+                 failure_reason, execution_path, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "branch_abc",
+                    "test_loop",
+                    3,
+                    "test_thread",
+                    "checkpoint_root_123",
+                    "checkpoint_failure_456",
+                    "Tool execution timeout",
+                    "step1->step2->step3",
+                    datetime.now(UTC).isoformat(),
+                ),
+            )
+            await db.commit()
 
         # Create a mock config object (not SootheConfig instance since we need to set methods)
         from unittest.mock import MagicMock

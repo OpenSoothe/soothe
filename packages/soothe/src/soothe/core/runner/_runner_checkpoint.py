@@ -10,7 +10,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe.core.event_catalog import CheckpointSavedEvent, RecoveryResumedEvent
-from soothe.protocols.planner import Plan, PlanStep
+from soothe.protocols.planner import Plan
 
 from ._runner_shared import StreamChunk, _custom
 
@@ -122,47 +122,6 @@ class CheckpointMixin:
             )
         except Exception:
             logger.debug("Checkpoint save failed", exc_info=True)
-
-    def _write_step_report_and_checkpoint(
-        self,
-        state: Any,
-        step: PlanStep,
-        duration_ms: int,
-        *,
-        goal_id: str = "default",
-    ) -> None:
-        """Write step report to artifact store and save checkpoint.
-
-        Called synchronously after step completion in the step loop.
-
-        Args:
-            state: Current runner state.
-            step: The completed plan step.
-            duration_ms: Step execution time in milliseconds.
-            goal_id: Goal identifier for directory placement.
-        """
-        store = getattr(state, "artifact_store", None)
-        if not store:
-            return
-        logger.debug(
-            "Writing step report: goal=%s step=%s status=%s duration=%dms",
-            goal_id,
-            step.id,
-            step.status,
-            duration_ms,
-        )
-        try:
-            store.write_step_report(
-                goal_id=goal_id,
-                step_id=step.id,
-                description=step.description,
-                status=step.status or "skipped",
-                result=step.result or "",
-                duration_ms=duration_ms,
-                depends_on=step.depends_on,
-            )
-        except Exception:
-            logger.debug("Step report write failed", exc_info=True)
 
     async def _try_recover_checkpoint(
         self,

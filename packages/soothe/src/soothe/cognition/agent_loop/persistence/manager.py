@@ -411,5 +411,230 @@ class AgentLoopCheckpointPersistenceManager:
 
         return count
 
+    async def save_goal_record(
+        self,
+        goal_id: str,
+        loop_id: str,
+        thread_id: str,
+        goal_text: str,
+        iteration: int = 0,
+        status: str = "running",
+        started_at: datetime | None = None,
+    ) -> None:
+        """Save goal execution record to SQLite goal_records table (RFC-409).
+
+        Args:
+            goal_id: Goal identifier.
+            loop_id: AgentLoop identifier.
+            thread_id: Thread where goal executes.
+            goal_text: Goal description.
+            iteration: Current iteration number.
+            status: Goal status ("running", "completed", "failed").
+            started_at: Goal start timestamp.
+        """
+        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
+        db_path = loop_dir / "checkpoint.db"
+
+        # Ensure database exists
+        await SQLitePersistenceBackend.initialize_database(db_path)
+
+        started_at_iso = (started_at or datetime.now(UTC)).isoformat()
+
+        async with aiosqlite.connect(db_path) as db:
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO goal_records
+                (goal_id, loop_id, goal_text, thread_id, iteration, status, started_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+                (goal_id, loop_id, goal_text, thread_id, iteration, status, started_at_iso),
+            )
+            await db.commit()
+
+        logger.debug(
+            "Saved goal record: goal=%s loop=%s thread=%s status=%s",
+            goal_id,
+            loop_id,
+            thread_id,
+            status,
+        )
+
+    async def update_goal_record(
+        self,
+        goal_id: str,
+        loop_id: str,
+        status: str = "completed",
+        final_report: str = "",
+        evidence_summary: str = "",
+        iteration: int = 0,
+        duration_ms: int = 0,
+        tokens_used: int = 0,
+        completed_at: datetime | None = None,
+    ) -> None:
+        """Update goal record with execution results (RFC-409).
+
+        Args:
+            goal_id: Goal identifier.
+            loop_id: AgentLoop identifier.
+            status: Final goal status.
+            final_report: Generated final report content.
+            evidence_summary: Condensed evidence summary.
+            iteration: Final iteration number.
+            duration_ms: Goal execution duration.
+            tokens_used: Tokens consumed.
+            completed_at: Goal completion timestamp.
+        """
+        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
+        db_path = loop_dir / "checkpoint.db"
+
+        if not db_path.exists():
+            logger.warning("Goal record database not found: %s", db_path)
+            return
+
+        completed_at_iso = (completed_at or datetime.now(UTC)).isoformat()
+
+        async with aiosqlite.connect(db_path) as db:
+            await db.execute(
+                """
+                UPDATE goal_records
+                SET status = ?, iteration = ?, final_report = ?, evidence_summary = ?,
+                    duration_ms = ?, tokens_used = ?, completed_at = ?
+                WHERE goal_id = ? AND loop_id = ?
+            """,
+                (
+                    status,
+                    iteration,
+                    final_report,
+                    evidence_summary,
+                    duration_ms,
+                    tokens_used,
+                    completed_at_iso,
+                    goal_id,
+                    loop_id,
+                ),
+            )
+            await db.commit()
+
+        logger.info(
+            "Updated goal record: goal=%s loop=%s status=%s duration=%dms tokens=%d",
+            goal_id,
+            loop_id,
+            status,
+            duration_ms,
+            tokens_used,
+        )
+
+    def write_goal_report_markdown(
+        self,
+        loop_id: str,
+        goal_id: str,
+        description: str,
+        summary: str,
+        status: str,
+        duration_ms: int,
+        reflection_assessment: str = "",
+        cross_validation_notes: str = "",
+        step_reports: list[Any] | None = None,
+    ) -> None:
+        """Write goal report markdown file at loop level (RFC-409).
+
+        Path: data/loops/{loop_id}/goals/{goal_id}/report.md
+
+        Args:
+            loop_id: AgentLoop identifier.
+            goal_id: Goal identifier.
+            description: Goal description.
+            summary: Goal summary.
+            status: Goal status.
+            duration_ms: Execution duration in milliseconds.
+            reflection_assessment: Reflection analysis text.
+            cross_validation_notes: Cross-validation notes.
+            step_reports: List of step report objects.
+        """
+        goal_dir = PersistenceDirectoryManager.get_goal_directory(loop_id, goal_id)
+        goal_dir.mkdir(parents=True, exist_ok=True)
+
+        # Build Markdown report
+        md_parts = [
+            f"# Goal: {description}\n",
+            f"**Status**: {status}  \n**Duration**: {duration_ms}ms\n",
+            f"\n## Summary\n\n{summary}\n",
+        ]
+        if reflection_assessment:
+            md_parts.append(f"\n## Reflection\n\n{reflection_assessment}\n")
+        if cross_validation_notes:
+            md_parts.append(f"\n## Cross-Validation\n\n{cross_validation_notes}\n")
+
+        step_reports_list = step_reports or []
+        if step_reports_list:
+            md_parts.append("\n## Steps\n")
+            for sr in step_reports_list:
+                icon = "+" if getattr(sr, "status", "") == "completed" else "x"
+                step_id = getattr(sr, "step_id", "unknown")
+                step_desc = getattr(sr, "description", "")
+                step_status = getattr(sr, "status", "")
+                md_parts.append(f"- [{icon}] **{step_id}**: {step_desc} ({step_status})")
+            md_parts.append("")
+
+        md_path = goal_dir / "report.md"
+        md_path.write_text("\n".join(md_parts), encoding="utf-8")
+
+        logger.info(
+            "Wrote goal report markdown: goal=%s loop=%s path=%s",
+            goal_id,
+            loop_id,
+            md_path,
+        )
+
+    def write_step_report_markdown(
+        self,
+        loop_id: str,
+        goal_id: str,
+        step_id: str,
+        description: str,
+        status: str,
+        result: str,
+        duration_ms: int,
+        depends_on: list[str] | None = None,
+    ) -> None:
+        """Write step report markdown file at loop level (RFC-409).
+
+        Path: data/loops/{loop_id}/goals/{goal_id}/steps/{step_id}/report.md
+
+        Args:
+            loop_id: AgentLoop identifier.
+            goal_id: Goal identifier.
+            step_id: Step identifier.
+            description: Step description.
+            status: Step status.
+            result: Step execution result.
+            duration_ms: Execution duration in milliseconds.
+            depends_on: Step dependency IDs.
+        """
+        step_dir = PersistenceDirectoryManager.get_step_directory(loop_id, goal_id, step_id)
+        step_dir.mkdir(parents=True, exist_ok=True)
+
+        deps = depends_on or []
+
+        # Build Markdown report
+        md_parts = [
+            f"# Step: {description}\n",
+            f"**Status**: {status}  \n**Duration**: {duration_ms}ms\n",
+        ]
+        if deps:
+            md_parts.append(f"**Depends on**: {', '.join(deps)}\n")
+        md_parts.append(f"\n## Result\n\n{result}\n")
+
+        md_path = step_dir / "report.md"
+        md_path.write_text("\n".join(md_parts), encoding="utf-8")
+
+        logger.debug(
+            "Wrote step report markdown: step=%s goal=%s loop=%s path=%s",
+            step_id,
+            goal_id,
+            loop_id,
+            md_path,
+        )
+
 
 __all__ = ["AgentLoopCheckpointPersistenceManager"]
