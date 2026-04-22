@@ -17,9 +17,7 @@ RFC Mapping:
 """
 
 import re
-import sys
 from pathlib import Path
-from typing import Dict, List
 
 # RFC mapping from old to new numbers
 RFC_MAPPING = {

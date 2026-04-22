@@ -13,7 +13,7 @@ from typing import Any
 
 from soothe_sdk.client.protocol import decode, encode
 
-from soothe.core.event_catalog import ERROR
+from soothe.core.event_constants import ERROR
 
 # Import RPC command handlers (RFC-404)
 from soothe.daemon._rpc_handlers import (

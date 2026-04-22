@@ -35,7 +35,15 @@
 - Memory: Use `deepagents.MemoryMiddleware`
 - Check: `langchain-core`, `langchain-community`, `deepagents` first!
 
-### 3. Verification Before Commit
+### 4. MUST Place Tests in Package Directories
+**ALL tests MUST be placed in package-specific test directories, NOT in root `tests/` directory**:
+- Unit tests: `packages/<package>/tests/unit/<module_path>/`
+- Integration tests: `packages/<package>/tests/integration/<module_path>/`
+- Example: Tests for `packages/soothe/src/soothe/cognition/agent_loop/` go in `packages/soothe/tests/unit/cognition/agent_loop/`
+- **Why**: Tests should be close to the code they test, making it easier to find and maintain
+- **How to apply**: When creating tests, always place them in the corresponding package's test directory matching the source code structure
+
+### 5. Verification Before Commit
 **MANDATORY**: Run verification script after ANY code change:
 ```bash
 ./scripts/verify_finally.sh
@@ -47,7 +55,7 @@ This runs:
 
 **NEVER commit code without running this verification first!**
 
-### 4. Talking style
+### 6. Talking style
 
 1. Think before acting. Read existing files before writing code.
 2. Be concise in output but thorough in reasoning.

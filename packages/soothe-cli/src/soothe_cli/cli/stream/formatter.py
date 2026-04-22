@@ -193,7 +193,7 @@ def format_tool_result(
     return DisplayLine(
         level=3,
         content=content,
-        icon="✗" if is_error else "✓",
+        icon="✗" if is_error else "●",  # Solid bullet for success (polish)
         indent=indent_for_level(3),
         duration_ms=duration_ms,
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
@@ -221,7 +221,7 @@ def format_subagent_milestone(
     return DisplayLine(
         level=3,
         content=content,
-        icon="✓",
+        icon="●",  # Solid bullet for milestone (polish)
         indent=indent_for_level(3),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
@@ -268,12 +268,13 @@ def format_plan_phase_reasoning(
     """Format a labeled plan-phase reasoning line (assessment vs plan strategy).
 
     IG-225: Uses level=2 (flat, no indent) for prominent visibility alongside step headers.
+    Uses solid bullet ● (matching goal) to indicate reasoning phase is active.
     """
     content = f"💭 {label}: {text}"
     return DisplayLine(
         level=2,
         content=content,
-        icon="•",
+        icon="●",  # Solid bullet matching goal icon (polish)
         indent=indent_for_level(2),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
@@ -288,6 +289,7 @@ def format_reasoning(
     """Format a reasoning line for LLM decision internal analysis.
 
     IG-XXX: Shows technical reasoning with "Reasoning:" prefix for clarity.
+    Uses solid bullet ● (matching goal) to indicate reasoning is active phase.
 
     Args:
         reasoning: Internal technical analysis text.
@@ -303,7 +305,7 @@ def format_reasoning(
     return DisplayLine(
         level=3,  # Use level 3 for less prominence (subordinate to next_action)
         content=content,
-        icon="•",
+        icon="●",  # Solid bullet matching goal icon (polish)
         indent=indent_for_level(3),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
@@ -332,7 +334,7 @@ def format_judgement(
     Returns:
         DisplayLine for judgement.
     """
-    action_icon = "→" if action == "continue" else "✓"
+    action_icon = "○" if action == "continue" else "●"  # Polish: ○ for continue, ● for complete
 
     badge = ""
     if plan_action in ("keep", "new"):

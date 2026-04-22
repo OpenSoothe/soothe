@@ -151,6 +151,26 @@ class MessageRouter:
             await self._handle_resume_interrupts(client_id, msg)
             return
 
+        # Loop RPC handlers (RFC-504 Loop Management CLI Commands)
+        if msg_type == "loop_list":
+            await self._handle_loop_list(client_id, msg)
+            return
+        if msg_type == "loop_get":
+            await self._handle_loop_get(client_id, msg)
+            return
+        if msg_type == "loop_tree":
+            await self._handle_loop_tree(client_id, msg)
+            return
+        if msg_type == "loop_prune":
+            await self._handle_loop_prune(client_id, msg)
+            return
+        if msg_type == "loop_delete":
+            await self._handle_loop_delete(client_id, msg)
+            return
+        if msg_type == "loop_reattach":
+            await self._handle_loop_reattach(client_id, msg)
+            return
+
         if msg_type == "detach":
             session = await d._session_manager.get_session(client_id)
             if session:
@@ -991,3 +1011,454 @@ class MessageRouter:
         }
 
         await d._send_client_message(client_id, response)
+
+    # ---------------------------------------------------------------------------
+    # Loop RPC Handlers (RFC-504 Loop Management CLI Commands)
+    # ---------------------------------------------------------------------------
+
+    async def _handle_loop_list(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle loop_list RPC request (RFC-504).
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message with optional filter and limit.
+        """
+        import json
+
+        from soothe.cognition.agent_loop.persistence.directory_manager import (
+            PersistenceDirectoryManager,
+        )
+
+        d = self._daemon
+        request_id = msg.get("request_id")
+        filter_data = msg.get("filter")
+        limit = msg.get("limit", 20)
+
+        # Get all loop directories
+        loops_dir = PersistenceDirectoryManager.get_loops_directory()
+
+        loops = []
+        if loops_dir.exists():
+            for loop_dir in loops_dir.iterdir():
+                if loop_dir.is_dir():
+                    metadata_file = loop_dir / "metadata.json"
+                    if metadata_file.exists():
+                        try:
+                            metadata = json.loads(metadata_file.read_text())
+
+                            # Filter by status
+                            if filter_data and filter_data.get("status"):
+                                if metadata.get("status") != filter_data["status"]:
+                                    continue
+
+                            loops.append(
+                                {
+                                    "loop_id": metadata.get("loop_id", loop_dir.name),
+                                    "status": metadata.get("status", "unknown"),
+                                    "threads": len(metadata.get("thread_ids", [])),
+                                    "goals": metadata.get("total_goals_completed", 0),
+                                    "switches": metadata.get("total_thread_switches", 0),
+                                    "created": metadata.get("created_at", "")[:16],
+                                }
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to read metadata for %s: %s", loop_dir.name, str(e)
+                            )
+
+        # Sort by created_at (most recent first)
+        loops.sort(key=lambda x: x["created"], reverse=True)
+
+        # Limit results
+        loops = loops[:limit]
+
+        response = {
+            "type": "loop_list_response",
+            "request_id": request_id,
+            "loops": loops,
+            "total": len(loops),
+        }
+
+        await d._send_client_message(client_id, response)
+
+    async def _handle_loop_get(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle loop_get RPC request (RFC-504).
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message with loop_id and optional verbose flag.
+        """
+        import json
+
+        from soothe.cognition.agent_loop.persistence.directory_manager import (
+            PersistenceDirectoryManager,
+        )
+        from soothe.cognition.agent_loop.persistence.manager import (
+            AgentLoopCheckpointPersistenceManager,
+        )
+
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "loop_id required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
+
+        if not loop_dir.exists():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_NOT_FOUND",
+                    "message": f"Loop {loop_id} not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Load metadata
+        metadata_file = loop_dir / "metadata.json"
+        if not metadata_file.exists():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_METADATA_MISSING",
+                    "message": f"No metadata found for loop {loop_id}",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        try:
+            metadata = json.loads(metadata_file.read_text())
+        except Exception as e:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_METADATA_PARSE_ERROR",
+                    "message": f"Failed to read metadata: {str(e)}",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Load checkpoint database
+        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+
+        # Get failed branches
+        branches = await persistence_manager.get_failed_branches_for_loop(loop_id)
+
+        # Get checkpoint anchors
+        anchors = await persistence_manager.get_checkpoint_anchors_for_range(loop_id, 0, 1000)
+
+        loop_data = {
+            "loop_id": metadata.get("loop_id", loop_id),
+            "status": metadata.get("status", "unknown"),
+            "schema_version": metadata.get("schema_version", "unknown"),
+            "current_thread_id": metadata.get("current_thread_id", "unknown"),
+            "thread_ids": metadata.get("thread_ids", []),
+            "total_goals_completed": metadata.get("total_goals_completed", 0),
+            "total_thread_switches": metadata.get("total_thread_switches", 0),
+            "total_duration_ms": metadata.get("total_duration_ms", 0),
+            "total_tokens_used": metadata.get("total_tokens_used", 0),
+            "created_at": metadata.get("created_at", "unknown"),
+            "updated_at": metadata.get("updated_at", "unknown"),
+            "failed_branches": branches,
+            "checkpoint_anchors": anchors,
+        }
+
+        response = {
+            "type": "loop_get_response",
+            "request_id": request_id,
+            "loop": loop_data,
+        }
+
+        await d._send_client_message(client_id, response)
+
+    async def _handle_loop_tree(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle loop_tree RPC request (RFC-504).
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message with loop_id and format.
+        """
+        from soothe.cognition.agent_loop.persistence.directory_manager import (
+            PersistenceDirectoryManager,
+        )
+        from soothe.cognition.agent_loop.persistence.manager import (
+            AgentLoopCheckpointPersistenceManager,
+        )
+
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "loop_id required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
+
+        if not loop_dir.exists():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_NOT_FOUND",
+                    "message": f"Loop {loop_id} not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+
+        # Get checkpoint anchors (main line)
+        anchors = await persistence_manager.get_checkpoint_anchors_for_range(loop_id, 0, 1000)
+
+        # Get failed branches
+        branches = await persistence_manager.get_failed_branches_for_loop(loop_id)
+
+        # Build tree structure
+        tree_data = {
+            "main_line": [],
+            "failed_branches": [],
+        }
+
+        # Group anchors by iteration
+        iterations = {}
+        for anchor in anchors:
+            iter_num = anchor["iteration"]
+            if iter_num not in iterations:
+                iterations[iter_num] = {}
+            iterations[iter_num][anchor["anchor_type"]] = anchor
+
+        for iter_num in sorted(iterations.keys()):
+            iter_data = iterations[iter_num]
+            start_anchor = iter_data.get("iteration_start", {})
+            end_anchor = iter_data.get("iteration_end", {})
+
+            tree_data["main_line"].append(
+                {
+                    "iteration": iter_num,
+                    "thread_id": start_anchor.get("thread_id", "unknown"),
+                    "start_checkpoint": start_anchor.get("checkpoint_id", ""),
+                    "end_checkpoint": end_anchor.get("checkpoint_id", ""),
+                    "status": end_anchor.get("iteration_status", "unknown"),
+                    "tools_executed": end_anchor.get("tools_executed", []),
+                }
+            )
+
+        for branch in branches:
+            tree_data["failed_branches"].append(
+                {
+                    "branch_id": branch["branch_id"],
+                    "iteration": branch["iteration"],
+                    "thread_id": branch["thread_id"],
+                    "root_checkpoint": branch["root_checkpoint_id"],
+                    "failure_checkpoint": branch["failure_checkpoint_id"],
+                    "failure_reason": branch["failure_reason"],
+                    "execution_path": branch.get("execution_path", []),
+                    "avoid_patterns": branch.get("avoid_patterns", []),
+                    "suggested_adjustments": branch.get("suggested_adjustments", []),
+                }
+            )
+
+        response = {
+            "type": "loop_tree_response",
+            "request_id": request_id,
+            "tree": tree_data,
+        }
+
+        await d._send_client_message(client_id, response)
+
+    async def _handle_loop_prune(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle loop_prune RPC request (RFC-504).
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message with loop_id, retention_days, and dry_run.
+        """
+        from soothe.cognition.agent_loop.persistence.directory_manager import (
+            PersistenceDirectoryManager,
+        )
+        from soothe.cognition.agent_loop.persistence.manager import (
+            AgentLoopCheckpointPersistenceManager,
+        )
+
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+        retention_days = msg.get("retention_days", 30)
+        dry_run = msg.get("dry_run", False)
+
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "loop_id required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
+
+        if not loop_dir.exists():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_NOT_FOUND",
+                    "message": f"Loop {loop_id} not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+
+        if dry_run:
+            # Get branches but don't delete
+            branches = await persistence_manager.get_failed_branches_for_loop(loop_id)
+            remaining = len(branches)
+            pruned = 0
+        else:
+            # Prune old branches
+            pruned = await persistence_manager.prune_old_branches(loop_id, retention_days)
+            remaining = len(await persistence_manager.get_failed_branches_for_loop(loop_id))
+
+        result_data = {
+            "pruned": pruned,
+            "remaining": remaining,
+            "dry_run": dry_run,
+        }
+
+        response = {
+            "type": "loop_prune_response",
+            "request_id": request_id,
+            "result": result_data,
+        }
+
+        await d._send_client_message(client_id, response)
+
+    async def _handle_loop_delete(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle loop_delete RPC request (RFC-504).
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message with loop_id.
+        """
+        import shutil
+
+        from soothe.cognition.agent_loop.persistence.directory_manager import (
+            PersistenceDirectoryManager,
+        )
+
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "loop_id required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
+
+        if not loop_dir.exists():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_NOT_FOUND",
+                    "message": f"Loop {loop_id} not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Delete loop directory
+        try:
+            shutil.rmtree(loop_dir)
+            logger.info("Deleted loop directory: %s", loop_id)
+
+            response = {
+                "type": "loop_delete_response",
+                "request_id": request_id,
+                "success": True,
+                "message": f"Loop {loop_id} deleted successfully",
+            }
+
+            await d._send_client_message(client_id, response)
+        except Exception as e:
+            logger.error("Failed to delete loop %s: %s", loop_id, str(e))
+
+            response = {
+                "type": "loop_delete_response",
+                "request_id": request_id,
+                "success": False,
+                "message": f"Failed to delete loop: {str(e)}",
+            }
+
+            await d._send_client_message(client_id, response)
+
+    async def _handle_loop_reattach(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle loop_reattach RPC request (RFC-411).
+
+        Reconstruct event history and replay to client for loop reattachment.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message with loop_id.
+        """
+        from soothe.daemon.reattachment_handler import handle_loop_reattach
+
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "loop_id required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Execute reattachment handler
+        await handle_loop_reattach(loop_id, d, client_id)

@@ -21,7 +21,7 @@ load_dotenv()
 
 
 async def main() -> None:
-    config = load_example_config()
+    load_example_config()
 
     spec = create_browser_subagent(headless=True, max_steps=50)
     runnable = spec["runnable"]

@@ -1,14 +1,14 @@
 """Core events and event registry for soothe.* events.
 
-RFC-0015: All progress events use 4-segment type strings
-``soothe.<domain>.<component>.<action>`` with six domains:
-lifecycle, protocol, tool, subagent, output, error.
+Architecture:
+- event_constants.py: Event type string constants (single source of truth)
+- event_catalog.py: Event models, registry, registration logic
 
 This module provides:
-- Core protocol and lifecycle event models
-- Event type string constants
+- Event model classes (Pydantic models)
 - Event registry for O(1) lookup and dispatch
 - Helper functions for event emission
+- Event registration logic
 
 Base event classes are defined in soothe.core.base_events.
 Module-specific events (subagents, tools) are defined in their respective modules
@@ -21,10 +21,12 @@ For type-safe event emission (recommended):
     yield custom_event(ThreadCreatedEvent(thread_id=tid).to_dict())
 
 For event type string constants:
-    from soothe.core.event_catalog import THREAD_CREATED, PLAN_STEP_STARTED
+    from soothe.core.event_constants import THREAD_CREATED, PLAN_STEP_STARTED
     # Use constants for comparisons, routing, etc.
     if event_type == THREAD_CREATED:
         ...
+
+RFC-0015: 4-segment naming convention: soothe.<domain>.<component>.<action>
 """
 
 from __future__ import annotations
@@ -39,6 +41,66 @@ from soothe_sdk.events import (
     SootheEvent,
 )
 from soothe_sdk.verbosity import VerbosityTier
+
+# Import ALL event type constants from single source of truth
+from soothe.core.event_constants import (
+    AUTOPILLOT_CHECKPOINT_SAVED,
+    AUTOPILLOT_DREAMING_ENTERED,
+    AUTOPILLOT_DREAMING_EXITED,
+    AUTOPILLOT_GOAL_BLOCKED,
+    AUTOPILLOT_GOAL_COMPLETED,
+    AUTOPILLOT_GOAL_CREATED,
+    AUTOPILLOT_GOAL_PROGRESS,
+    AUTOPILLOT_GOAL_SUSPENDED,
+    AUTOPILLOT_GOAL_VALIDATED,
+    AUTOPILLOT_RELATIONSHIP_DETECTED,
+    AUTOPILLOT_SEND_BACK,
+    # System - Autopilot
+    AUTOPILLOT_STATUS_CHANGED,
+    BRANCH_ANALYZED,
+    # Cognition - Branch
+    BRANCH_CREATED,
+    BRANCH_PRUNED,
+    BRANCH_RETRY_STARTED,
+    CHECKPOINT_SAVED,
+    CHITCHAT_RESPONSE,
+    # Output
+    CHITCHAT_STARTED,
+    # System - Daemon
+    DAEMON_HEARTBEAT,
+    FINAL_REPORT,
+    GOAL_BATCH_STARTED,
+    GOAL_COMPLETED,
+    # Cognition - Goal
+    GOAL_CREATED,
+    GOAL_DEFERRED,
+    GOAL_DIRECTIVES_APPLIED,
+    GOAL_FAILED,
+    GOAL_REPORT,
+    ITERATION_COMPLETED,
+    # Lifecycle - Iteration
+    ITERATION_STARTED,
+    MEMORY_RECALLED,
+    MEMORY_STORED,
+    PLAN_BATCH_STARTED,
+    # Cognition - Plan
+    PLAN_CREATED,
+    PLAN_DAG_SNAPSHOT,
+    PLAN_REFLECTED,
+    PLAN_STEP_COMPLETED,
+    PLAN_STEP_FAILED,
+    PLAN_STEP_STARTED,
+    POLICY_CHECKED,
+    POLICY_DENIED,
+    # Lifecycle - Recovery
+    RECOVERY_RESUMED,
+    # Lifecycle - Thread
+    THREAD_CREATED,
+    THREAD_ENDED,
+    THREAD_RESUMED,
+    THREAD_SAVED,
+    THREAD_STARTED,
+)
 
 # ---------------------------------------------------------------------------
 # Type aliases and helpers
@@ -67,60 +129,6 @@ def custom_event(data: dict[str, Any]) -> StreamChunk:
 # Event type string constants
 # All event types follow RFC-0015's 4-segment naming convention:
 # ``soothe.<domain>.<component>.<action>``
-# ---------------------------------------------------------------------------
-
-# -- Lifecycle events --------------------------------------------------------
-THREAD_CREATED = "soothe.lifecycle.thread.started"
-THREAD_STARTED = "soothe.lifecycle.thread.started"
-THREAD_RESUMED = "soothe.lifecycle.thread.resumed"
-THREAD_SAVED = "soothe.lifecycle.thread.saved"
-THREAD_ENDED = "soothe.lifecycle.thread.ended"
-ITERATION_STARTED = "soothe.lifecycle.iteration.started"
-ITERATION_COMPLETED = "soothe.lifecycle.iteration.completed"
-CHECKPOINT_SAVED = "soothe.lifecycle.checkpoint.saved"
-RECOVERY_RESUMED = "soothe.lifecycle.recovery.resumed"
-DAEMON_HEARTBEAT = "soothe.system.daemon.heartbeat"
-
-# -- Protocol events ---------------------------------------------------------
-MEMORY_RECALLED = "soothe.protocol.memory.recalled"
-MEMORY_STORED = "soothe.protocol.memory.stored"
-PLAN_CREATED = "soothe.cognition.plan.created"
-PLAN_STEP_STARTED = "soothe.cognition.plan.step.started"
-PLAN_STEP_COMPLETED = "soothe.cognition.plan.step.completed"
-PLAN_STEP_FAILED = "soothe.cognition.plan.step.failed"
-PLAN_BATCH_STARTED = "soothe.cognition.plan.batch.started"
-PLAN_REFLECTED = "soothe.cognition.plan.reflected"
-PLAN_DAG_SNAPSHOT = "soothe.cognition.plan.dag_snapshot"
-POLICY_CHECKED = "soothe.protocol.policy.checked"
-POLICY_DENIED = "soothe.protocol.policy.denied"
-GOAL_CREATED = "soothe.cognition.goal.created"
-GOAL_COMPLETED = "soothe.cognition.goal.completed"
-GOAL_FAILED = "soothe.cognition.goal.failed"
-GOAL_BATCH_STARTED = "soothe.cognition.goal.batch.started"
-GOAL_REPORT = "soothe.cognition.goal.reported"
-GOAL_DIRECTIVES_APPLIED = "soothe.cognition.goal.directives.applied"
-GOAL_DEFERRED = "soothe.cognition.goal.deferred"
-
-# -- Output events -----------------------------------------------------------
-CHITCHAT_STARTED = "soothe.output.chitchat.started"
-CHITCHAT_RESPONSE = "soothe.output.chitchat.responded"
-AGENT_LOOP_COMPLETED = "soothe.cognition.agent_loop.completed"
-FINAL_REPORT = "soothe.output.autonomous.final_report.reported"
-
-# -- Error events ------------------------------------------------------------
-ERROR = "soothe.error.general.failed"
-
-# -- Plugin events -----------------------------------------------------------
-PLUGIN_LOADED = "soothe.plugin.loaded"
-PLUGIN_FAILED = "soothe.plugin.failed"
-PLUGIN_UNLOADED = "soothe.plugin.unloaded"
-
-
-# ---------------------------------------------------------------------------
-# Core event class definitions
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
 # Lifecycle events
 # ---------------------------------------------------------------------------
 
@@ -713,18 +721,39 @@ _reg(CHITCHAT_RESPONSE, ChitchatResponseEvent, verbosity=VerbosityTier.QUIET)
 _reg(FINAL_REPORT, FinalReportEvent, verbosity=VerbosityTier.QUIET)
 
 # -- Autopilot (RFC-204) -------------------------------------------------
-AUTOPILLOT_STATUS_CHANGED = "soothe.system.autopilot.status.changed"
-AUTOPILLOT_GOAL_CREATED = "soothe.system.autopilot.goal.created"
-AUTOPILLOT_GOAL_PROGRESS = "soothe.system.autopilot.goal.reported"
-AUTOPILLOT_GOAL_COMPLETED = "soothe.system.autopilot.goal.completed"
-AUTOPILLOT_DREAMING_ENTERED = "soothe.system.autopilot.dreaming.started"
-AUTOPILLOT_DREAMING_EXITED = "soothe.system.autopilot.dreaming.completed"
-AUTOPILLOT_GOAL_VALIDATED = "soothe.system.autopilot.goal.validated"
-AUTOPILLOT_GOAL_SUSPENDED = "soothe.system.autopilot.goal.suspended"
-AUTOPILLOT_SEND_BACK = "soothe.system.autopilot.feedback.sent"
-AUTOPILLOT_RELATIONSHIP_DETECTED = "soothe.system.autopilot.relationship.detected"
-AUTOPILLOT_CHECKPOINT_SAVED = "soothe.system.autopilot.checkpoint.saved"
-AUTOPILLOT_GOAL_BLOCKED = "soothe.system.autopilot.goal.blocked"
+
+
+class _BranchCreatedEvent(SootheEvent):
+    type: str = "soothe.cognition.branch.created"
+    branch_id: str
+    iteration: int
+    failure_reason: str
+
+
+class _BranchAnalyzedEvent(SootheEvent):
+    type: str = "soothe.cognition.branch.analyzed"
+    branch_id: str
+    avoid_patterns: list[str] = []
+    suggested_adjustments: list[str] = []
+
+
+class _BranchRetryStartedEvent(SootheEvent):
+    type: str = "soothe.cognition.branch.retry.started"
+    branch_id: str
+    retry_iteration: int
+    learning_applied: list[str] = []
+
+
+class _BranchPrunedEvent(SootheEvent):
+    type: str = "soothe.cognition.branch.pruned"
+    branch_id: str
+    loop_id: str
+
+
+_reg(BRANCH_CREATED, _BranchCreatedEvent, verbosity=VerbosityTier.NORMAL)
+_reg(BRANCH_ANALYZED, _BranchAnalyzedEvent, verbosity=VerbosityTier.DETAILED)
+_reg(BRANCH_RETRY_STARTED, _BranchRetryStartedEvent, verbosity=VerbosityTier.NORMAL)
+_reg(BRANCH_PRUNED, _BranchPrunedEvent, verbosity=VerbosityTier.DETAILED)
 
 
 class _AutopilotStatusChanged(SootheEvent):
