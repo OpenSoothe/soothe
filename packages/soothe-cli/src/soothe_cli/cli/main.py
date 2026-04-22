@@ -121,10 +121,16 @@ def main(
 
 
 # ---------------------------------------------------------------------------
-# Thread Command (Nested Subcommands)
+# Thread Command (Nested Subcommands) - Read-Only Diagnostics
 # ---------------------------------------------------------------------------
+# NOTE: Thread commands are read-only diagnostics per RFC-503 (Loop-First UX).
+# Users manage loops (primary entity), not threads (internal execution contexts).
+# For thread lifecycle management, use loop commands: soothe loop <subcommand>
 
-thread_app = typer.Typer(name="thread", help="Manage conversation threads")
+thread_app = typer.Typer(
+    name="thread",
+    help="Inspect conversation threads (read-only diagnostics)",
+)
 add_help_alias(thread_app)
 app.add_typer(thread_app)
 
@@ -140,11 +146,13 @@ def _thread_list(
         typer.Option("--status", "-s", help="Filter by status (active, archived)."),
     ] = None,
 ) -> None:
-    """List all conversation threads.
+    """List all agent threads (read-only diagnostics).
 
     Examples:
         soothe thread list
         soothe thread list --status active
+
+    Note: For thread lifecycle management, use loop commands (RFC-503).
     """
     from soothe_cli.cli.commands.thread_cmd import thread_list
 
@@ -159,83 +167,16 @@ def _thread_show(
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
 ) -> None:
-    """Show thread details.
+    """Show thread details (read-only diagnostics).
 
     Example:
         soothe thread show abc123
+
+    Note: For thread lifecycle management, use loop commands (RFC-503).
     """
     from soothe_cli.cli.commands.thread_cmd import thread_show
 
     thread_show(thread_id=thread_id, config=config)
-
-
-@thread_app.command("continue")
-def _thread_continue(
-    thread_id: Annotated[
-        str | None,
-        typer.Argument(help="Thread ID to continue. Omit to continue last active thread."),
-    ] = None,
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-    new: Annotated[  # noqa: FBT002
-        bool,
-        typer.Option("--new", help="Create a new thread instead of continuing."),
-    ] = False,
-) -> None:
-    """Continue a conversation thread in the TUI.
-
-    Requires a running daemon. Start daemon with 'soothe-daemon start' first.
-
-    Examples:
-        soothe thread continue abc123
-        soothe thread continue --new
-        soothe thread continue
-    """
-    from soothe_cli.cli.commands.thread_cmd import thread_continue
-
-    thread_continue(thread_id=thread_id, config=config, new=new)
-
-
-@thread_app.command("archive")
-def _thread_archive(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID to archive.")],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-) -> None:
-    """Archive a thread.
-
-    Example:
-        soothe thread archive abc123
-    """
-    from soothe_cli.cli.commands.thread_cmd import thread_archive
-
-    thread_archive(thread_id=thread_id, config=config)
-
-
-@thread_app.command("delete")
-def _thread_delete(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID to delete.")],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-    yes: Annotated[  # noqa: FBT002
-        bool,
-        typer.Option("--yes", "-y", help="Skip confirmation."),
-    ] = False,
-) -> None:
-    """Permanently delete a thread.
-
-    Example:
-        soothe thread delete abc123
-    """
-    from soothe_cli.cli.commands.thread_cmd import thread_delete
-
-    thread_delete(thread_id=thread_id, config=config, yes=yes)
 
 
 @thread_app.command("export")
@@ -250,10 +191,12 @@ def _thread_export(
         typer.Option("--format", "-f", help="Export format: jsonl or md."),
     ] = "jsonl",
 ) -> None:
-    """Export thread conversation to a file.
+    """Export thread conversation to a file (read-only diagnostics).
 
     Example:
-        soothe thread export abc123 --output out.json
+        soothe thread export abc123 --output out.jsonl
+
+    Note: For thread lifecycle management, use loop commands (RFC-503).
     """
     from soothe_cli.cli.commands.thread_cmd import thread_export
 
@@ -268,68 +211,16 @@ def _thread_stats(
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
 ) -> None:
-    """Show thread execution statistics.
+    """Show thread execution statistics (read-only diagnostics).
 
     Example:
         soothe thread stats abc123
+
+    Note: For thread lifecycle management, use loop commands (RFC-503).
     """
     from soothe_cli.cli.commands.thread_cmd import thread_stats
 
     thread_stats(thread_id=thread_id, config=config)
-
-
-@thread_app.command("tag")
-def _thread_tag(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID.")],
-    tags: Annotated[
-        list[str],
-        typer.Argument(help="Tags to add/remove."),
-    ],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-    remove: Annotated[  # noqa: FBT002
-        bool,
-        typer.Option("--remove", help="Remove tags instead of adding."),
-    ] = False,
-) -> None:
-    """Add or remove tags from a thread.
-
-    Examples:
-        soothe thread tag abc123 research analysis
-        soothe thread tag abc123 research --remove
-    """
-    from soothe_cli.cli.commands.thread_cmd import thread_tag
-
-    thread_tag(thread_id=thread_id, tags=tags, config=config, remove=remove)
-
-
-@thread_app.command("create")
-def _thread_create(
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-    message: Annotated[
-        str | None,
-        typer.Option("--message", "-m", help="Initial message to seed the thread."),
-    ] = None,
-    tag: Annotated[
-        list[str] | None,
-        typer.Option("--tag", "-t", help="Tags for the thread (repeatable)."),
-    ] = None,
-) -> None:
-    """Create a new persisted thread.
-
-    Examples:
-        soothe thread create
-        soothe thread create --message "Hello world"
-        soothe thread create --tag research
-    """
-    from soothe_cli.cli.commands.thread_cmd import thread_create
-
-    thread_create(config=config, message=message, tag=tag)
 
 
 @thread_app.command("artifacts")
@@ -340,14 +231,26 @@ def _thread_artifacts(
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
 ) -> None:
-    """List artifacts for a thread.
+    """List artifacts for a thread (read-only diagnostics).
 
     Example:
         soothe thread artifacts abc123
+
+    Note: For thread lifecycle management, use loop commands (RFC-503).
     """
     from soothe_cli.cli.commands.thread_cmd import thread_artifacts
 
     thread_artifacts(thread_id=thread_id, config=config)
+
+
+# ---------------------------------------------------------------------------
+# Loop Command (Nested Subcommands)
+# ---------------------------------------------------------------------------
+
+from soothe_cli.loop_commands import loop_app as _loop_app  # noqa: E402
+
+add_help_alias(_loop_app)
+app.add_typer(_loop_app, name="loop")
 
 
 # ---------------------------------------------------------------------------

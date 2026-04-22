@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Automated import path updates for soothe-cli package (IG-185 Phase 2)."""
 
-import re
 from pathlib import Path
 
 # Import mapping (from RFC-610)

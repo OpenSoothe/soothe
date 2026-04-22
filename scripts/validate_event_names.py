@@ -43,7 +43,7 @@ def extract_event_types(filepath: Path) -> list[str]:
         content = filepath.read_text(encoding='utf-8', errors='ignore')
     except Exception:
         # Skip files with encoding issues
-        return event_types
+        return []
     event_types = []
 
     # Pattern 1: Event type string constants
@@ -108,7 +108,7 @@ def validate_event_type(event_type: str) -> list[str]:
         elif len(parts) >= 4:  # e.g., soothe.plugin.acme.collector.started
             # Third-party plugin event, validate vendor namespace
             vendor = parts[2] if len(parts) >= 3 else None
-            component = parts[3] if len(parts) >= 4 else None
+            parts[3] if len(parts) >= 4 else None
             action = parts[4] if len(parts) >= 5 else parts[-1]
 
             # Vendor should not be a core domain
@@ -124,7 +124,7 @@ def validate_event_type(event_type: str) -> list[str]:
             violations.append(f"Domain '{domain}' not approved (must be one of: {APPROVED_DOMAINS})")
 
         # Validate action
-        component = parts[2] if len(parts) >= 3 else ""
+        parts[2] if len(parts) >= 3 else ""
         action = parts[-1]  # Last segment
 
         # Allow hierarchical components (e.g., agent_loop.step)
@@ -185,7 +185,7 @@ def main():
 
     # Report results
     print(f"\n{'=' * 60}")
-    print(f"Validation Summary:")
+    print("Validation Summary:")
     print(f"  Total events checked: {total_events}")
     print(f"  Valid events: {valid_events}")
     print(f"  Violations found: {len(all_violations)}")
@@ -208,7 +208,7 @@ def main():
         print(f"\n⚠ Validation warnings: {len(all_violations)} violations (run with --strict to fail)")
         sys.exit(0)
     else:
-        print(f"\n✓ Validation PASSED: All events conform to RFC-403")
+        print("\n✓ Validation PASSED: All events conform to RFC-403")
         sys.exit(0)
 
 

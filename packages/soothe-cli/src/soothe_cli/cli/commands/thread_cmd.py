@@ -1,18 +1,21 @@
-"""Thread commands for Soothe CLI.
+"""Thread commands for Soothe CLI (read-only diagnostics).
 
 All thread operations communicate exclusively via daemon WebSocket RPC.
 The daemon must be running for thread commands to work.
+
+Note: Thread commands are read-only diagnostics per RFC-503 (Loop-First UX).
+Users manage loops (primary entity), not threads (internal execution contexts).
+For thread lifecycle management, use loop commands: soothe loop <subcommand>
 """
 
 import asyncio
+import json
 import sys
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
 from soothe_sdk.client import WebSocketClient, is_daemon_live, websocket_url_from_config
-from soothe_sdk.client.config import SOOTHE_HOME
-from soothe_sdk.utils.logging import resolve_cli_log_level
 
 from soothe_cli.shared import load_config
 
@@ -92,7 +95,7 @@ def _echo_thread_table(rows: list[dict[str, object]]) -> None:
         typer.echo("No threads.")
         return
     typer.echo(f"{'ID':<20}  {'Status':<10}  {'Created':<19}  {'Last Message':<19}  {'Topic':<30}")
-    typer.echo("\u2500" * 104)
+    typer.echo("─" * 104)
     for raw in rows:
         tid_raw = str(raw.get("thread_id", ""))
         tid = (
@@ -127,13 +130,15 @@ def thread_list(
         typer.Option("--limit", "-l", help="Limit number of threads shown."),
     ] = None,
 ) -> None:
-    """List all agent threads.
+    """List all agent threads (read-only diagnostics).
 
     Examples:
         soothe thread list
         soothe thread list --status active
         soothe thread list --limit 10
         soothe thread list --limit 20 --status idle
+
+    Note: For thread lifecycle management, use loop commands (RFC-503).
     """
     cfg = load_config(config)
     ws_url = websocket_url_from_config(cfg)
@@ -181,105 +186,6 @@ def thread_list(
     asyncio.run(_list())
 
 
-def thread_continue(
-    thread_id: Annotated[
-        str | None,
-        typer.Argument(help="Thread ID to continue. Omit to continue last active thread."),
-    ] = None,
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-    *,
-    new: Annotated[
-        bool,
-        typer.Option("--new", help="Create a new thread instead of continuing."),
-    ] = False,
-) -> None:
-    """Continue a conversation thread in the TUI.
-
-    Requires a running daemon. Start daemon with 'soothe daemon start' first.
-
-    Examples:
-        soothe thread continue abc123
-        soothe thread continue --new
-        soothe thread continue
-    """
-    from soothe_cli.cli.execution import run_tui
-    from soothe_cli.shared import setup_logging
-
-    cfg = load_config(config)
-    log_level = resolve_cli_log_level(
-        cfg.logging.verbosity,
-        logging_level=cfg.logging.level,
-    )
-    log_file = Path(SOOTHE_HOME) / "logs" / "soothe-cli.log"
-    setup_logging(log_level, log_file=log_file)
-    ws_url = websocket_url_from_config(cfg)
-    _require_daemon(ws_url)
-
-    # Handle --new flag
-    if new:
-        thread_id = None
-    elif not thread_id:
-        # Find the most recently updated active thread through the daemon
-        async def get_last_thread_via_daemon() -> str | None:
-            client = WebSocketClient(url=ws_url)
-            try:
-                await client.connect()
-                await client.send_thread_list()
-                while True:
-                    event = await client.read_event()
-                    if not event:
-                        break
-                    if event.get("type") != "thread_list_response":
-                        continue
-                    threads = event.get("threads", [])
-                    active_threads = [t for t in threads if t.get("status") in ("active", "idle")]
-                    if not active_threads:
-                        typer.echo("No active threads found.", err=True)
-                        sys.exit(1)
-                    active_threads.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
-                    return active_threads[0].get("thread_id")
-            finally:
-                await client.close()
-
-            typer.echo("No active threads found.", err=True)
-            sys.exit(1)
-
-        thread_id = asyncio.run(get_last_thread_via_daemon())
-
-    run_tui(cfg, thread_id=thread_id)
-
-
-def thread_archive(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID to archive.")],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-) -> None:
-    """Archive a thread.
-
-    Example:
-        soothe thread archive abc123
-    """
-    cfg = load_config(config)
-    ws_url = websocket_url_from_config(cfg)
-    _require_daemon(ws_url)
-
-    resp = asyncio.run(
-        _rpc(ws_url, "send_thread_archive", {"thread_id": thread_id}, "thread_operation_ack")
-    )
-    if resp.get("success"):
-        typer.echo(f"Archived thread {thread_id}.")
-    else:
-        typer.echo(
-            f"Failed to archive thread: {resp.get('message', resp.get('error', 'unknown'))}",
-            err=True,
-        )
-
-
 def thread_show(
     thread_id: Annotated[str, typer.Argument(help="Thread ID to show.")],
     config: Annotated[
@@ -287,10 +193,12 @@ def thread_show(
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
 ) -> None:
-    """Show thread details.
+    """Show thread details (read-only diagnostics).
 
     Example:
         soothe thread show abc123
+
+    Note: For thread lifecycle management, use loop commands (RFC-503).
     """
     cfg = load_config(config)
     ws_url = websocket_url_from_config(cfg)
@@ -331,45 +239,6 @@ def thread_show(
     asyncio.run(_show())
 
 
-def thread_delete(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID to delete.")],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-    *,
-    yes: Annotated[
-        bool,
-        typer.Option("--yes", "-y", help="Skip confirmation."),
-    ] = False,
-) -> None:
-    """Permanently delete a thread.
-
-    Example:
-        soothe thread delete abc123
-    """
-    if not yes:
-        confirm = typer.confirm(f"Permanently delete thread {thread_id}?")
-        if not confirm:
-            typer.echo("Cancelled.")
-            return
-
-    cfg = load_config(config)
-    ws_url = websocket_url_from_config(cfg)
-    _require_daemon(ws_url)
-
-    resp = asyncio.run(
-        _rpc(ws_url, "send_thread_delete", {"thread_id": thread_id}, "thread_operation_ack")
-    )
-    if resp.get("success"):
-        typer.echo(f"Deleted thread {thread_id}.")
-    else:
-        typer.echo(
-            f"Failed to delete thread: {resp.get('message', resp.get('error', 'unknown'))}",
-            err=True,
-        )
-
-
 def thread_export(
     thread_id: Annotated[str, typer.Argument(help="Thread ID to export.")],
     output: Annotated[
@@ -381,15 +250,14 @@ def thread_export(
         typer.Option("--format", "-f", help="Export format: jsonl or md."),
     ] = "jsonl",
 ) -> None:
-    """Export thread conversation to a file.
+    """Export thread conversation to a file (read-only diagnostics).
 
     Example:
         soothe thread export abc123 --output out.jsonl
         soothe thread export abc123 --format md --output out.md
-    """
-    import json
-    from pathlib import Path
 
+    Note: For thread lifecycle management, use loop commands (RFC-503).
+    """
     cfg = load_config(config=None)
     ws_url = websocket_url_from_config(cfg)
     _require_daemon(ws_url)
@@ -448,10 +316,12 @@ def thread_stats(
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
 ) -> None:
-    """Show thread execution statistics.
+    """Show thread execution statistics (read-only diagnostics).
 
     Example:
         soothe thread stats abc123
+
+    Note: For thread lifecycle management, use loop commands (RFC-503).
     """
     cfg = load_config(config)
     ws_url = websocket_url_from_config(cfg)
@@ -498,137 +368,6 @@ def thread_stats(
     asyncio.run(_stats())
 
 
-def thread_tag(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID.")],
-    tags: Annotated[
-        list[str],
-        typer.Argument(help="Tags to add/remove."),
-    ],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-    *,
-    remove: Annotated[
-        bool,
-        typer.Option("--remove", help="Remove tags instead of adding."),
-    ] = False,
-) -> None:
-    """Add or remove tags from a thread.
-
-    Examples:
-        soothe thread tag abc123 research analysis
-        soothe thread tag abc123 research --remove
-    """
-    cfg = load_config(config)
-    ws_url = websocket_url_from_config(cfg)
-    _require_daemon(ws_url)
-
-    async def _tag() -> None:
-        client = WebSocketClient(url=ws_url)
-        try:
-            await client.connect()
-
-            # Get current thread state to read existing tags
-            await client.send_thread_get(thread_id)
-            thread_data: dict[str, Any] = {}
-            async with asyncio.timeout(30.0):
-                while True:
-                    event = await client.read_event()
-                    if not event:
-                        typer.echo("No response from daemon.", err=True)
-                        return
-                    etype = event.get("type", "")
-                    if etype == "thread_get_response":
-                        thread_data = event.get("thread", {})
-                        break
-                    if etype == "error":
-                        typer.echo(f"Error: {event.get('message', 'unknown')}", err=True)
-                        return
-
-            # Update tags
-            metadata = dict(thread_data.get("metadata", {}))
-            current_tags = set(metadata.get("tags", []))
-
-            if remove:
-                current_tags -= set(tags)
-            else:
-                current_tags |= set(tags)
-
-            metadata["tags"] = sorted(current_tags)
-
-            # Update state via thread_update_state
-            await client.send_thread_update_state(thread_id, {"metadata": metadata})
-
-            # Wait for ack
-            async with asyncio.timeout(10.0):
-                while True:
-                    event = await client.read_event()
-                    if not event:
-                        break
-                    if event.get("type") in (
-                        "thread_update_state_response",
-                        "thread_operation_ack",
-                    ):
-                        break
-
-            tag_list = ", ".join(metadata["tags"]) if metadata["tags"] else "(none)"
-            typer.echo(f"Tags: {tag_list}")
-        except TimeoutError:
-            typer.echo("Timed out waiting for response.", err=True)
-        finally:
-            await client.close()
-
-    asyncio.run(_tag())
-
-
-def thread_create(
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-    *,
-    message: Annotated[
-        str | None,
-        typer.Option("--message", "-m", help="Initial message to seed the thread."),
-    ] = None,
-    tag: Annotated[
-        list[str] | None,
-        typer.Option("--tag", "-t", help="Tags for the thread (repeatable)."),
-    ] = None,
-) -> None:
-    """Create a new persisted thread.
-
-    Examples:
-        soothe thread create
-        soothe thread create --message "Hello world"
-        soothe thread create --tag research --tag analysis
-    """
-    cfg = load_config(config)
-    ws_url = websocket_url_from_config(cfg)
-    _require_daemon(ws_url)
-
-    metadata: dict[str, Any] | None = None
-    if tag:
-        metadata = {"tags": sorted(tag)}
-
-    resp = asyncio.run(
-        _rpc(
-            ws_url,
-            "send_thread_create",
-            {"initial_message": message, "metadata": metadata},
-            "thread_created",
-        )
-    )
-    if resp.get("thread_id"):
-        typer.echo(f"Created thread {resp['thread_id']}")
-    else:
-        typer.echo(
-            f"Failed to create thread: {resp.get('message', resp.get('error', 'unknown'))}",
-            err=True,
-        )
-
-
 def thread_artifacts(
     thread_id: Annotated[str, typer.Argument(help="Thread ID to list artifacts for.")],
     config: Annotated[
@@ -636,10 +375,12 @@ def thread_artifacts(
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
 ) -> None:
-    """List artifacts for a thread.
+    """List artifacts for a thread (read-only diagnostics).
 
     Example:
         soothe thread artifacts abc123
+
+    Note: For thread lifecycle management, use loop commands (RFC-503).
     """
     cfg = load_config(config)
     ws_url = websocket_url_from_config(cfg)
@@ -653,7 +394,7 @@ def thread_artifacts(
         typer.echo("No artifacts found.")
         return
     typer.echo(f"{'Name':<30}  {'Type':<15}  {'Summary':<40}")
-    typer.echo("\u2500" * 90)
+    typer.echo("─" * 90)
     for a in artifacts:
         name = str(a.get("name", ""))[:30]
         a_type = str(a.get("type", ""))[:15]

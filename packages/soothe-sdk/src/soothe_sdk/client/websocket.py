@@ -310,6 +310,139 @@ class WebSocketClient:
             payload["request_id"] = request_id
         await self.send(payload)
 
+    # ---------------------------------------------------------------------------
+    # Loop RPC Methods (RFC-504 Loop Management CLI Commands)
+    # ---------------------------------------------------------------------------
+
+    async def send_loop_list(
+        self,
+        filter_dict: dict[str, Any] | None = None,
+        *,
+        limit: int = 20,
+        request_id: str | None = None,
+    ) -> None:
+        """Request AgentLoop instances via daemon RPC (RFC-504 ``loop_list``).
+
+        Args:
+            filter_dict: Optional filter (e.g., {"status": "running"}).
+            limit: Maximum number of results.
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {"type": "loop_list", "limit": limit}
+        if filter_dict:
+            payload["filter"] = filter_dict
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_loop_get(
+        self,
+        loop_id: str,
+        *,
+        verbose: bool = False,
+        request_id: str | None = None,
+    ) -> None:
+        """Request loop details via daemon RPC (RFC-504 ``loop_get``).
+
+        Args:
+            loop_id: Loop identifier.
+            verbose: Show detailed branch analysis.
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {
+            "type": "loop_get",
+            "loop_id": loop_id,
+            "verbose": verbose,
+        }
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_loop_tree(
+        self,
+        loop_id: str,
+        *,
+        format: str = "ascii",
+        request_id: str | None = None,
+    ) -> None:
+        """Request checkpoint tree visualization via daemon RPC (RFC-504 ``loop_tree``).
+
+        Args:
+            loop_id: Loop identifier.
+            format: Visualization format (ascii, json, dot).
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {
+            "type": "loop_tree",
+            "loop_id": loop_id,
+            "format": format,
+        }
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_loop_prune(
+        self,
+        loop_id: str,
+        *,
+        retention_days: int = 30,
+        dry_run: bool = False,
+        request_id: str | None = None,
+    ) -> None:
+        """Request branch pruning via daemon RPC (RFC-504 ``loop_prune``).
+
+        Args:
+            loop_id: Loop identifier.
+            retention_days: Retention period in days.
+            dry_run: Show what would be pruned without making changes.
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {
+            "type": "loop_prune",
+            "loop_id": loop_id,
+            "retention_days": retention_days,
+            "dry_run": dry_run,
+        }
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_loop_delete(
+        self,
+        loop_id: str,
+        *,
+        request_id: str | None = None,
+    ) -> None:
+        """Request loop deletion via daemon RPC (RFC-504 ``loop_delete``).
+
+        Args:
+            loop_id: Loop identifier.
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {"type": "loop_delete", "loop_id": loop_id}
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_loop_reattach(
+        self,
+        loop_id: str,
+        *,
+        request_id: str | None = None,
+    ) -> None:
+        """Request loop reattachment via daemon RPC (RFC-411 ``loop_reattach``).
+
+        Reconstructs event history and replays to client for loop reattachment.
+
+        Args:
+            loop_id: Loop identifier.
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {"type": "loop_reattach", "loop_id": loop_id}
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
     async def send_resume_interrupts(
         self,
         thread_id: str,
