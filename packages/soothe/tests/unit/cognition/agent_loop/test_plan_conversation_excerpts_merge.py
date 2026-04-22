@@ -40,7 +40,7 @@ async def test_run_with_progress_merges_runner_thread_excerpts_into_loop_state()
     mock_sm.finalize_goal = AsyncMock()
 
     mock_gcm = Mock()
-    mock_gcm.get_plan_context.return_value = ["<briefing>ctx</briefing>"]
+    mock_gcm.get_plan_context = AsyncMock(return_value=["<briefing>ctx</briefing>"])
 
     async def noop_astream(*args, **kwargs):  # noqa: ARG002
         if False:

@@ -146,6 +146,13 @@ async def test_persistence_manager_save_checkpoint_anchor(tmp_path):
         # Use unique loop_id to avoid global database conflicts
         unique_loop_id = f"test_loop_{uuid.uuid4().hex[:8]}"
 
+        # Register loop first (required for FK constraint)
+        await manager.register_loop(
+            loop_id=unique_loop_id,
+            thread_ids=["thread_001"],
+            current_thread_id="thread_001",
+        )
+
         # Save checkpoint anchor
         await manager.save_checkpoint_anchor(
             loop_id=unique_loop_id,
@@ -162,9 +169,6 @@ async def test_persistence_manager_save_checkpoint_anchor(tmp_path):
         assert anchors[0]["iteration"] == 0
         assert anchors[0]["thread_id"] == "thread_001"
         assert anchors[0]["checkpoint_id"] == "checkpoint_abc"
-
-        # Close manager to cleanup connection
-        await manager.close()
         assert anchors[0]["anchor_type"] == "iteration_start"
 
     finally:
@@ -200,6 +204,13 @@ async def test_persistence_manager_save_checkpoint_anchor_with_summary(tmp_path)
         # Use unique loop_id to avoid conflicts across tests
         unique_loop_id = f"test_loop_summary_{uuid.uuid4().hex[:8]}"
 
+        # Register loop first (required for FK constraint)
+        await manager.register_loop(
+            loop_id=unique_loop_id,
+            thread_ids=["thread_001"],
+            current_thread_id="thread_001",
+        )
+
         await manager.save_checkpoint_anchor(
             loop_id=unique_loop_id,
             iteration=0,
@@ -217,9 +228,6 @@ async def test_persistence_manager_save_checkpoint_anchor_with_summary(tmp_path)
         assert anchors[0]["next_action_summary"] == "Continue to next iteration"
         assert anchors[0]["tools_executed"] == ["execute(ls)", "execute(read_file)"]
         assert anchors[0]["reasoning_decision"] == "Analyze project structure"
-
-        # Close manager to cleanup connection
-        await manager.close()
 
     finally:
         config.SOOTHE_HOME = original_home
@@ -249,6 +257,13 @@ async def test_persistence_manager_save_failed_branch(tmp_path):
         branch_id = f"branch_abc_{unique_id}"
         loop_id = f"test_loop_{unique_id}"
 
+        # Register loop first (required for FK constraint)
+        await manager.register_loop(
+            loop_id=loop_id,
+            thread_ids=["thread_001"],
+            current_thread_id="thread_001",
+        )
+
         await manager.save_failed_branch(
             branch_id=branch_id,
             loop_id=loop_id,
@@ -273,9 +288,6 @@ async def test_persistence_manager_save_failed_branch(tmp_path):
             "checkpoint_1",
             "checkpoint_failure",
         ]
-
-        # Close manager to cleanup connection
-        await manager.close()
 
     finally:
         config.SOOTHE_HOME = original_home
@@ -304,6 +316,13 @@ async def test_persistence_manager_update_branch_analysis(tmp_path):
         unique_id = uuid.uuid4().hex[:8]
         branch_id = f"branch_analysis_test_{unique_id}"
         loop_id = f"test_loop_analysis_{unique_id}"
+
+        # Register loop first (required for FK constraint)
+        await manager.register_loop(
+            loop_id=loop_id,
+            thread_ids=["thread_001"],
+            current_thread_id="thread_001",
+        )
 
         # Create branch first
         await manager.save_failed_branch(
@@ -348,9 +367,6 @@ async def test_persistence_manager_update_branch_analysis(tmp_path):
         assert branches[0]["suggested_adjustments"] == suggested_adjustments
         assert branches[0]["analyzed_at"] is not None
 
-        # Close manager to cleanup connection
-        await manager.close()
-
     finally:
         config.SOOTHE_HOME = original_home
         sdk_config.SOOTHE_DATA_DIR = original_data_dir
@@ -376,6 +392,13 @@ async def test_persistence_manager_get_thread_checkpoints_for_loop(tmp_path):
 
         # Use unique loop_id to avoid global database conflicts
         unique_loop_id = f"test_loop_threads_{uuid.uuid4().hex[:8]}"
+
+        # Register loop first (required for FK constraint)
+        await manager.register_loop(
+            loop_id=unique_loop_id,
+            thread_ids=["thread_001", "thread_002"],
+            current_thread_id="thread_001",
+        )
 
         # Save anchors for multiple threads
         await manager.save_checkpoint_anchor(
@@ -409,9 +432,6 @@ async def test_persistence_manager_get_thread_checkpoints_for_loop(tmp_path):
         assert len(thread_checkpoints["thread_002"]) == 1
         assert "checkpoint_a" in thread_checkpoints["thread_001"]
         assert "checkpoint_c" in thread_checkpoints["thread_002"]
-
-        # Close manager to cleanup connection
-        await manager.close()
 
     finally:
         config.SOOTHE_HOME = original_home
