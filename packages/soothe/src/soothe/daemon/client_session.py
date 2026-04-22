@@ -10,6 +10,7 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+import websockets.exceptions
 from soothe_sdk.verbosity import VerbosityLevel
 
 if TYPE_CHECKING:
@@ -356,6 +357,14 @@ class ClientSessionManager:
                 # Send filtered event to client
                 try:
                     await session.transport.send(session.transport_client, event)
+                except websockets.exceptions.ConnectionClosedOK:
+                    # Normal disconnect (code 1000) - expected behavior
+                    logger.debug(
+                        "Client %s disconnected normally while sending",
+                        session.client_id[:8],
+                    )
+                    # Stop sender loop gracefully
+                    break
                 except Exception:
                     logger.exception(
                         "Failed to send event to client %s",

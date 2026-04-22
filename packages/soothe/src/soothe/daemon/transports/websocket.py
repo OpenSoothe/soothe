@@ -130,17 +130,22 @@ class WebSocketTransport(TransportServer):
             message: Message dictionary to send
 
         Raises:
-            ConnectionError: If send fails
+            ConnectionError: If send fails (except normal disconnects)
+            websockets.exceptions.ConnectionClosedOK: For normal disconnects (code 1000)
         """
         try:
             data = encode(message)
             await client.send(data)
+        except websockets.exceptions.ConnectionClosedOK as e:
+            # Normal disconnect (code 1000) - expected behavior
+            logger.debug("WebSocket client disconnected normally: %s", e)
+            raise  # Propagate without wrapping
         except (
             websockets.exceptions.ConnectionClosed,
-            websockets.exceptions.ConnectionClosedOK,
             websockets.exceptions.ConnectionClosedError,
         ) as e:
-            logger.debug("WebSocket client already closed while sending: %s", e)
+            # Abnormal disconnect - log as warning
+            logger.warning("WebSocket client disconnected unexpectedly: %s", e)
             error_msg = f"Failed to send: {e}"
             raise ConnectionError(error_msg) from e
         except Exception as e:

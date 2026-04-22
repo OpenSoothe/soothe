@@ -134,14 +134,15 @@ class PersistenceDirectoryManager:
         )
 
     @staticmethod
-    def get_loop_checkpoint_path(loop_id: str) -> Path:
-        """Get AgentLoop loop checkpoint database path.
+    def get_loop_checkpoint_path() -> Path:
+        """Get AgentLoop global checkpoint database path.
 
         Returns:
-            Path to loop's checkpoint.db (managed by AgentLoop).
+            Path to global loop_checkpoints.db (managed by AgentLoop).
         """
-        # No need to import SOOTHE_HOME here - uses get_loop_directory
-        return PersistenceDirectoryManager.get_loop_directory(loop_id) / "checkpoint.db"
+        from soothe_sdk.client.config import SOOTHE_DATA_DIR
+
+        return Path(SOOTHE_DATA_DIR) / "loop_checkpoints.db"
 
     @staticmethod
     def get_loop_metadata_path(loop_id: str) -> Path:

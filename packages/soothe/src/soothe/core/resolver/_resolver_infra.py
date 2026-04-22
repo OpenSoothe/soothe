@@ -163,9 +163,9 @@ def _resolve_sqlite_checkpointer(config: SootheConfig) -> tuple[Checkpointer | N
         import sqlite3
         from pathlib import Path
 
-        # Use new checkpoint_sqlite_path for LangGraph checkpoints (checkpoints.db)
+        # Use new checkpoint_sqlite_path for LangGraph checkpoints (langgraph_checkpoints.db)
         db_path = config.persistence.checkpoint_sqlite_path or str(
-            Path(SOOTHE_DATA_DIR) / "checkpoints.db"
+            Path(SOOTHE_DATA_DIR) / "langgraph_checkpoints.db"
         )
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -173,7 +173,7 @@ def _resolve_sqlite_checkpointer(config: SootheConfig) -> tuple[Checkpointer | N
         logger.warning("Failed to create SQLite checkpointer connection: %s", exc)
         return None
 
-    logger.info("SQLite checkpointer connection created at %s (checkpoints.db)", db_path)
+    logger.info("SQLite checkpointer connection created at %s (langgraph_checkpoints.db)", db_path)
     return (None, conn)
 
 

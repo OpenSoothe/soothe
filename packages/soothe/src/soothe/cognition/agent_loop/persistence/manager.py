@@ -1,6 +1,8 @@
 """AgentLoop checkpoint persistence manager.
 
 RFC-409: AgentLoop Persistence Backend Architecture
+
+Uses unified global database (loop_checkpoints.db) with loop_id as partition key.
 """
 
 from __future__ import annotations
@@ -24,8 +26,8 @@ logger = logging.getLogger(__name__)
 class AgentLoopCheckpointPersistenceManager:
     """Manager for AgentLoop checkpoint persistence.
 
-    Supports SQLite (primary) and PostgreSQL (secondary) backends.
-    Enforces thread/loop isolation with cross-reference linkage.
+    Uses unified global SQLite database (loop_checkpoints.db) with loop_id as partition key.
+    All loop states stored in single database for efficient querying and maintenance.
     """
 
     def __init__(self, backend: Literal["sqlite", "postgresql"] = "sqlite") -> None:
@@ -35,7 +37,9 @@ class AgentLoopCheckpointPersistenceManager:
             backend: Database backend type (default: sqlite).
         """
         self.backend = backend
-        PersistenceDirectoryManager.ensure_directories_exist()
+        # Initialize global database
+        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
+        SQLitePersistenceBackend.initialize_database_sync(db_path)
 
     async def save_checkpoint_anchor(
         self,
@@ -58,11 +62,7 @@ class AgentLoopCheckpointPersistenceManager:
             checkpoint_ns: CoreAgent checkpoint namespace.
             execution_summary: Optional execution metadata.
         """
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-        db_path = loop_dir / "checkpoint.db"
-
-        # Ensure database exists
-        await SQLitePersistenceBackend.initialize_database(db_path)
+        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
 
         # Insert anchor
         async with aiosqlite.connect(db_path) as db:
@@ -117,8 +117,7 @@ class AgentLoopCheckpointPersistenceManager:
         Returns:
             List of checkpoint anchors with metadata.
         """
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-        db_path = loop_dir / "checkpoint.db"
+        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
 
         if not db_path.exists():
             return []
@@ -165,8 +164,7 @@ class AgentLoopCheckpointPersistenceManager:
         Returns:
             Dict: {thread_id: [checkpoint_id_1, checkpoint_id_2, ...]}
         """
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-        db_path = loop_dir / "checkpoint.db"
+        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
 
         if not db_path.exists():
             return {}
@@ -217,10 +215,7 @@ class AgentLoopCheckpointPersistenceManager:
             failure_reason: High-level failure reason.
             execution_path: List of checkpoint_ids from root → failure.
         """
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-        db_path = loop_dir / "checkpoint.db"
-
-        await SQLitePersistenceBackend.initialize_database(db_path)
+        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
 
         async with aiosqlite.connect(db_path) as db:
             await db.execute(
@@ -270,8 +265,7 @@ class AgentLoopCheckpointPersistenceManager:
             avoid_patterns: Patterns to avoid in retry.
             suggested_adjustments: Retry suggestions.
         """
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-        db_path = loop_dir / "checkpoint.db"
+        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
 
         analyzed_at = datetime.now(UTC)
 
@@ -316,8 +310,7 @@ class AgentLoopCheckpointPersistenceManager:
         Returns:
             List of failed branch records.
         """
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-        db_path = loop_dir / "checkpoint.db"
+        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
 
         if not db_path.exists():
             return []
@@ -374,8 +367,7 @@ class AgentLoopCheckpointPersistenceManager:
 
         threshold = datetime.now(UTC) - timedelta(days=retention_days)
 
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-        db_path = loop_dir / "checkpoint.db"
+        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
 
         if not db_path.exists():
             return 0
@@ -432,11 +424,7 @@ class AgentLoopCheckpointPersistenceManager:
             status: Goal status ("running", "completed", "failed").
             started_at: Goal start timestamp.
         """
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-        db_path = loop_dir / "checkpoint.db"
-
-        # Ensure database exists
-        await SQLitePersistenceBackend.initialize_database(db_path)
+        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
 
         started_at_iso = (started_at or datetime.now(UTC)).isoformat()
 
@@ -484,8 +472,7 @@ class AgentLoopCheckpointPersistenceManager:
             tokens_used: Tokens consumed.
             completed_at: Goal completion timestamp.
         """
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-        db_path = loop_dir / "checkpoint.db"
+        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
 
         if not db_path.exists():
             logger.warning("Goal record database not found: %s", db_path)
