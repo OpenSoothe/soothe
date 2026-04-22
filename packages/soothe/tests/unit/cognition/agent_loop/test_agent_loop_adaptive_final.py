@@ -40,9 +40,12 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
     mock_ckpt.goal_history = []
 
     mock_sm = Mock()
-    mock_sm.load.return_value = None
-    mock_sm.initialize.return_value = mock_ckpt
-    mock_sm.start_new_goal.return_value = mock_gr
+    mock_sm.load = AsyncMock(return_value=None)
+    mock_sm.initialize = AsyncMock(return_value=mock_ckpt)
+    mock_sm.start_new_goal = Mock(return_value=mock_gr)
+    mock_sm.save = AsyncMock()
+    mock_sm.record_iteration = AsyncMock()
+    mock_sm.finalize_goal = AsyncMock()
 
     mock_gcm = Mock()
     mock_gcm.get_plan_context.return_value = []

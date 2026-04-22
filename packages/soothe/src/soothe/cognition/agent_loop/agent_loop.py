@@ -161,7 +161,7 @@ class AgentLoop:
         goal_context_manager = GoalContextManager(state_manager, goal_context_config)
 
         # Try to recover from checkpoint (RFC-608: loop-scoped)
-        checkpoint = state_manager.load()
+        checkpoint = await state_manager.load()
         if checkpoint and checkpoint.status == "running":
             # Get current goal iteration (RFC-608: per-goal tracking)
             current_goal_index = checkpoint.current_goal_index
@@ -187,7 +187,7 @@ class AgentLoop:
             plan_excerpts = plan_goal_excerpts + runner_prior + list(prior_outputs)
         else:
             # Initialize new checkpoint (RFC-608: pass thread_id, not goal)
-            checkpoint = state_manager.initialize(thread_id, max_iterations)
+            checkpoint = await state_manager.initialize(thread_id, max_iterations)
             iteration = 0  # New goal starts at iteration 0
             # RFC-609: Inject previous goal context for Plan phase
             plan_goal_excerpts = goal_context_manager.get_plan_context()
@@ -199,7 +199,7 @@ class AgentLoop:
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
             checkpoint.goal_history.append(goal_record)
             checkpoint.status = "running"
-            state_manager.save(checkpoint)
+            await state_manager.save(checkpoint)
 
         state = LoopState(
             goal=goal,
@@ -363,7 +363,7 @@ Use all tool results and AI responses available in the conversation history to c
                     plan_result = plan_result.model_copy(update={"full_output": final_output})
 
                 # Finalize goal (RFC-608: mark completed, update metrics)
-                state_manager.finalize_goal(goal_record, final_output)
+                await state_manager.finalize_goal(goal_record, final_output)
                 logger.info(
                     "[✓] Goal achieved in %d iterations (%dms)",
                     state.iteration,
@@ -439,7 +439,7 @@ Use all tool results and AI responses available in the conversation history to c
                 checkpoint.status = "ready_for_next_goal"
                 checkpoint.thread_health_metrics.consecutive_goal_failures += 1
                 checkpoint.thread_health_metrics.last_goal_status = "failed"
-                state_manager.save(checkpoint)
+                await state_manager.save(checkpoint)
                 yield (
                     "fatal_error",
                     {
@@ -492,7 +492,7 @@ Use all tool results and AI responses available in the conversation history to c
             state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
 
             # Record iteration to checkpoint (RFC-205) with pre-increment value
-            state_manager.record_iteration(
+            await state_manager.record_iteration(
                 goal_record=goal_record,
                 iteration=iteration_completed,  # Use pre-increment value
                 plan_result=plan_result,
@@ -532,7 +532,7 @@ Use all tool results and AI responses available in the conversation history to c
         checkpoint.status = "ready_for_next_goal"
         checkpoint.thread_health_metrics.consecutive_goal_failures += 1
         checkpoint.thread_health_metrics.last_goal_status = "failed"
-        state_manager.save(checkpoint)
+        await state_manager.save(checkpoint)
 
         result = state.previous_plan or PlanResult(
             status="replan",
