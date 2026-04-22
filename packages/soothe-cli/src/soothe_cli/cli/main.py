@@ -93,7 +93,7 @@ def main(
         soothe                           # Interactive TUI mode
         soothe -p "Research AI advances" # Headless single-prompt mode
         soothe --config custom.yml       # Ignored for client settings; use ~/.soothe/config/cli_config.yml
-        soothe thread list               # List conversation threads
+        soothe loop list                 # List AgentLoop instances
     """
     # Handle -h/--help flag
     if show_help:

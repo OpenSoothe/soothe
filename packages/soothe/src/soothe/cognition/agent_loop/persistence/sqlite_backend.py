@@ -36,6 +36,10 @@ class SQLitePersistenceBackend:
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
         with sqlite3.connect(db_path) as db:
+            # Enable FK constraints and WAL mode BEFORE creating tables
+            db.execute("PRAGMA foreign_keys=ON")
+            db.execute("PRAGMA journal_mode=WAL")
+
             # Create agentloop_loops table
             db.execute("""
                 CREATE TABLE IF NOT EXISTS agentloop_loops (
@@ -159,7 +163,41 @@ class SQLitePersistenceBackend:
 
             db.commit()
 
+        # Migrate existing records to current schema version
+        SQLitePersistenceBackend.migrate_schema_version(db_path)
+
         logger.info("Initialized SQLite database schema at %s", db_path)
+
+    @staticmethod
+    def migrate_schema_version(db_path: Path, target_version: str = "3.1") -> None:
+        """Migrate existing loop records to target schema version.
+
+        Args:
+            db_path: Path to SQLite database file.
+            target_version: Target schema version (default: 3.1)
+        """
+        if not db_path.exists():
+            return
+
+        with sqlite3.connect(db_path) as db:
+            db.execute("PRAGMA foreign_keys=ON")
+
+            # Check if there are any loops
+            count_result = db.execute("SELECT COUNT(*) FROM agentloop_loops").fetchone()
+            loop_count = count_result[0] if count_result else 0
+
+            if loop_count == 0:
+                return
+
+            # Update schema version for all loops
+            logger.info(
+                "Migrating schema version to %s for %d existing loops",
+                target_version,
+                loop_count,
+            )
+            db.execute("UPDATE agentloop_loops SET schema_version = ?", (target_version,))
+            db.commit()
+            logger.info("Schema migration completed successfully")
 
     @staticmethod
     async def initialize_database(db_path: Path) -> None:
@@ -178,6 +216,31 @@ class SQLitePersistenceBackend:
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
         async with aiosqlite.connect(db_path) as db:
+            # Enable FK constraints and WAL mode BEFORE creating tables
+            await db.execute("PRAGMA foreign_keys=ON")
+            await db.execute("PRAGMA journal_mode=WAL")
+
+            # Create agentloop_loops table (MISSING in async version - add it)
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS agentloop_loops (
+                    loop_id TEXT PRIMARY KEY,
+                    thread_ids TEXT NOT NULL,
+                    current_thread_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    current_goal_index INTEGER DEFAULT -1,
+                    working_memory_state TEXT,
+                    thread_health_metrics TEXT,
+                    total_goals_completed INTEGER DEFAULT 0,
+                    total_thread_switches INTEGER DEFAULT 0,
+                    total_duration_ms INTEGER DEFAULT 0,
+                    total_tokens_used INTEGER DEFAULT 0,
+                    thread_switch_pending INTEGER DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    schema_version TEXT DEFAULT '3.1'
+                )
+            """)
+
             # Create checkpoint_anchors table
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS checkpoint_anchors (

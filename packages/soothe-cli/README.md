@@ -19,9 +19,9 @@ soothe
 # Headless single-prompt mode
 soothe -p "Research AI advances"
 
-# Thread management
-soothe thread list
-soothe thread continue abc123
+# Loop management
+soothe loop list
+soothe loop continue loop_abc123
 
 # Configuration
 soothe config show

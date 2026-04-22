@@ -95,8 +95,8 @@ COMMANDS: tuple[SlashCommand, ...] = (
         bypass_tier=BypassTier.QUEUED,
     ),
     SlashCommand(
-        name="/threads",
-        description="Browse and resume previous threads",
+        name="/loops",
+        description="Browse and resume AgentLoop instances",
         bypass_tier=BypassTier.IMMEDIATE_UI,
         hidden_keywords="continue history sessions",
     ),

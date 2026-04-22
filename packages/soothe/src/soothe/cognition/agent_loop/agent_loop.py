@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from soothe.cognition.agent_loop.anchor_manager import CheckpointAnchorManager
 from soothe.cognition.agent_loop.executor import Executor
 from soothe.cognition.agent_loop.final_response_policy import needs_final_thread_synthesis
 from soothe.cognition.agent_loop.goal_context_manager import GoalContextManager
@@ -142,6 +143,9 @@ class AgentLoop:
         # Initialize AgentLoop state manager (RFC-205)
         state_manager = AgentLoopStateManager(thread_id, Path(workspace) if workspace else None)
 
+        # Initialize checkpoint anchor manager for execution synchronization
+        anchor_manager = CheckpointAnchorManager(state_manager.loop_id)
+
         # IG-226: Handle thread continuation intent
         thread_continuation_mode = False
         if intent and hasattr(intent, "intent_type"):
@@ -190,7 +194,7 @@ class AgentLoop:
             checkpoint = await state_manager.initialize(thread_id, max_iterations)
             iteration = 0  # New goal starts at iteration 0
             # RFC-609: Inject previous goal context for Plan phase
-            plan_goal_excerpts = goal_context_manager.get_plan_context()
+            plan_goal_excerpts = await goal_context_manager.get_plan_context()
             # Prior Human/Assistant turns from LangGraph checkpointer (IG-128, IG-198)
             runner_prior = list(plan_conversation_excerpts or [])
             plan_excerpts = plan_goal_excerpts + runner_prior
@@ -249,6 +253,19 @@ class AgentLoop:
                     "max_iterations": max_iterations,
                 },
             )
+
+            # Capture iteration start checkpoint anchor (RFC-611)
+            try:
+                await anchor_manager.capture_iteration_start_anchor(
+                    iteration=state.iteration,
+                    thread_id=state.thread_id,
+                    checkpointer=self.core_agent.graph.checkpointer,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to capture iteration start anchor",
+                    exc_info=True,
+                )
 
             plan_result = await self.plan_phase.plan(
                 goal=goal,
@@ -501,6 +518,30 @@ Use all tool results and AI responses available in the conversation history to c
                 state=state,
                 working_memory=state.working_memory,
             )
+
+            # Capture iteration end checkpoint anchor (RFC-611)
+            # Build execution summary from plan_result and step_results
+            execution_summary = {
+                "status": getattr(plan_result, "status", "success"),
+                "next_action_summary": getattr(plan_result, "next_action", None),
+                "tools_executed": [
+                    f"execute({sr.step_id})" for sr in step_results if hasattr(sr, "step_id")
+                ],
+                "reasoning_decision": getattr(decision, "reasoning", None),
+            }
+
+            try:
+                await anchor_manager.capture_iteration_end_anchor(
+                    iteration=iteration_completed,  # Use pre-increment value
+                    thread_id=state.thread_id,
+                    checkpointer=self.core_agent.graph.checkpointer,
+                    execution_summary=execution_summary,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to capture iteration end anchor",
+                    exc_info=True,
+                )
 
             yield (
                 "iteration_completed",

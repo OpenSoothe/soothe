@@ -162,6 +162,9 @@ async def test_persistence_manager_save_checkpoint_anchor(tmp_path):
         assert anchors[0]["iteration"] == 0
         assert anchors[0]["thread_id"] == "thread_001"
         assert anchors[0]["checkpoint_id"] == "checkpoint_abc"
+
+        # Close manager to cleanup connection
+        await manager.close()
         assert anchors[0]["anchor_type"] == "iteration_start"
 
     finally:
@@ -215,6 +218,9 @@ async def test_persistence_manager_save_checkpoint_anchor_with_summary(tmp_path)
         assert anchors[0]["tools_executed"] == ["execute(ls)", "execute(read_file)"]
         assert anchors[0]["reasoning_decision"] == "Analyze project structure"
 
+        # Close manager to cleanup connection
+        await manager.close()
+
     finally:
         config.SOOTHE_HOME = original_home
         sdk_config.SOOTHE_DATA_DIR = original_data_dir
@@ -267,6 +273,9 @@ async def test_persistence_manager_save_failed_branch(tmp_path):
             "checkpoint_1",
             "checkpoint_failure",
         ]
+
+        # Close manager to cleanup connection
+        await manager.close()
 
     finally:
         config.SOOTHE_HOME = original_home
@@ -339,6 +348,9 @@ async def test_persistence_manager_update_branch_analysis(tmp_path):
         assert branches[0]["suggested_adjustments"] == suggested_adjustments
         assert branches[0]["analyzed_at"] is not None
 
+        # Close manager to cleanup connection
+        await manager.close()
+
     finally:
         config.SOOTHE_HOME = original_home
         sdk_config.SOOTHE_DATA_DIR = original_data_dir
@@ -397,6 +409,9 @@ async def test_persistence_manager_get_thread_checkpoints_for_loop(tmp_path):
         assert len(thread_checkpoints["thread_002"]) == 1
         assert "checkpoint_a" in thread_checkpoints["thread_001"]
         assert "checkpoint_c" in thread_checkpoints["thread_002"]
+
+        # Close manager to cleanup connection
+        await manager.close()
 
     finally:
         config.SOOTHE_HOME = original_home
