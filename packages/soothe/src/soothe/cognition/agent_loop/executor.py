@@ -493,7 +493,7 @@ class Executor:
                 configurable["current_decision"] = state.current_decision
             # RFC-609: Inject goal briefing on thread switch
             if self._goal_context_manager:
-                goal_briefing = self._goal_context_manager.get_execute_briefing()
+                goal_briefing = await self._goal_context_manager.get_execute_briefing()
                 if goal_briefing:
                     configurable["soothe_goal_briefing"] = goal_briefing
                     logger.info("Execute briefing injected (%d chars)", len(goal_briefing))

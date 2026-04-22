@@ -182,7 +182,7 @@ class AgentLoop:
             # Derive prior conversation from step outputs (RFC-205)
             prior_outputs = state_manager.derive_plan_conversation(limit=10)
             # RFC-609: Add goal-level context to plan excerpts
-            plan_goal_excerpts = goal_context_manager.get_plan_context()
+            plan_goal_excerpts = await goal_context_manager.get_plan_context()
             runner_prior = list(plan_conversation_excerpts or [])
             plan_excerpts = plan_goal_excerpts + runner_prior + list(prior_outputs)
         else:
