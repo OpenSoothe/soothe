@@ -71,17 +71,20 @@ class TestRunArtifactStore:
     def test_creates_run_directory(self, tmp_path: Path) -> None:
         store = RunArtifactStore("thread-1", soothe_home=str(tmp_path))
         assert store.run_dir.exists()
-        assert store.run_dir == tmp_path / "runs" / "thread-1"
+        assert store.run_dir == tmp_path / "data" / "threads" / "thread-1"
 
     def test_conversation_log_path(self, tmp_path: Path) -> None:
         store = RunArtifactStore("thread-1", soothe_home=str(tmp_path))
-        assert store.conversation_log_path == tmp_path / "runs" / "thread-1" / "conversation.jsonl"
+        assert (
+            store.conversation_log_path
+            == tmp_path / "data" / "threads" / "thread-1" / "conversation.jsonl"
+        )
 
     def test_ensure_step_dir(self, tmp_path: Path) -> None:
         store = RunArtifactStore("t1", soothe_home=str(tmp_path))
         d = store.ensure_step_dir("goal-a", "step-1")
         assert d.exists()
-        assert d == tmp_path / "runs" / "t1" / "goals" / "goal-a" / "steps" / "step-1"
+        assert d == tmp_path / "data" / "threads" / "t1" / "goals" / "goal-a" / "steps" / "step-1"
 
     def test_write_step_report(self, tmp_path: Path) -> None:
         store = RunArtifactStore("t1", soothe_home=str(tmp_path))

@@ -146,7 +146,8 @@ def _check_soothe_home() -> CheckResult:
         )
 
     # Check required subdirectories
-    required_subdirs = ["config", "runs", "logs", "data"]
+    required_subdirs = ["config", "data", "logs", "memory", "Workspace"]
+    # Note: "data" now contains "threads" and "loops" subdirectories (RFC-409)
     missing = [subdir for subdir in required_subdirs if not (home / subdir).exists()]
 
     if missing:

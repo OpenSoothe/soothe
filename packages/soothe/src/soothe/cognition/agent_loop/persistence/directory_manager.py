@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe.config import SOOTHE_HOME
+# SOOTHE_HOME will be imported at runtime to allow test mocking
+SOOTHE_HOME = None  # Will be set in methods
 
 THREADS_DATA_DIR = "data/threads"
 """Directory for CoreAgent thread runtime data (Layer 1)."""
@@ -26,6 +27,8 @@ class PersistenceDirectoryManager:
     @staticmethod
     def ensure_directories_exist() -> None:
         """Create isolated data directories if they don't exist."""
+        from soothe.config import SOOTHE_HOME
+
         threads_dir = Path(SOOTHE_HOME).expanduser() / THREADS_DATA_DIR
         loops_dir = Path(SOOTHE_HOME).expanduser() / LOOPS_DATA_DIR
 
@@ -42,6 +45,8 @@ class PersistenceDirectoryManager:
         Returns:
             Path to thread's data directory.
         """
+        from soothe.config import SOOTHE_HOME
+
         return Path(SOOTHE_HOME).expanduser() / THREADS_DATA_DIR / thread_id
 
     @staticmethod
@@ -51,6 +56,7 @@ class PersistenceDirectoryManager:
         Returns:
             Path to thread's checkpoint.db (managed by LangGraph).
         """
+        # No need to import SOOTHE_HOME here - uses get_thread_directory
         return PersistenceDirectoryManager.get_thread_directory(thread_id) / "checkpoint.db"
 
     @staticmethod
@@ -60,6 +66,7 @@ class PersistenceDirectoryManager:
         Returns:
             Path to thread's artifacts/ directory.
         """
+        # No need to import SOOTHE_HOME here - uses get_thread_directory
         return PersistenceDirectoryManager.get_thread_directory(thread_id) / "artifacts"
 
     @staticmethod
@@ -69,6 +76,8 @@ class PersistenceDirectoryManager:
         Returns:
             Path to data/loops/ directory.
         """
+        from soothe.config import SOOTHE_HOME
+
         return Path(SOOTHE_HOME).expanduser() / LOOPS_DATA_DIR
 
     @staticmethod
@@ -81,6 +90,8 @@ class PersistenceDirectoryManager:
         Returns:
             Path to loop's data directory.
         """
+        from soothe.config import SOOTHE_HOME
+
         return Path(SOOTHE_HOME).expanduser() / LOOPS_DATA_DIR / loop_id
 
     @staticmethod
@@ -90,6 +101,7 @@ class PersistenceDirectoryManager:
         Returns:
             Path to loop's checkpoint.db (managed by AgentLoop).
         """
+        # No need to import SOOTHE_HOME here - uses get_loop_directory
         return PersistenceDirectoryManager.get_loop_directory(loop_id) / "checkpoint.db"
 
     @staticmethod
@@ -99,6 +111,7 @@ class PersistenceDirectoryManager:
         Returns:
             Path to loop's metadata.json (human-readable quick access).
         """
+        # No need to import SOOTHE_HOME here - uses get_loop_directory
         return PersistenceDirectoryManager.get_loop_directory(loop_id) / "metadata.json"
 
     @staticmethod
@@ -108,6 +121,7 @@ class PersistenceDirectoryManager:
         Returns:
             Path to loop's working_memory/ directory.
         """
+        # No need to import SOOTHE_HOME here - uses get_loop_directory
         return PersistenceDirectoryManager.get_loop_directory(loop_id) / "working_memory"
 
 

@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from soothe.config import SOOTHE_HOME
+from soothe.cognition.agent_loop.persistence.directory_manager import PersistenceDirectoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class ThreadLogger:
     user/assistant conversation turns for lightweight in-terminal review.
 
     Args:
-        thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/runs/{thread_id}/``.
+        thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/data/threads/{thread_id}/logs/``.
         thread_id: Thread ID for the log file name.
     """
 
@@ -45,13 +45,14 @@ class ThreadLogger:
         """Initialize the thread logger.
 
         Args:
-            thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/runs/{thread_id}/``.
+            thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/data/threads/{thread_id}/logs/``.
             thread_id: Thread ID for the log file name.
             retention_days: Days to retain thread logs before cleanup.
             max_size_mb: Maximum total size for thread logs (not enforced yet).
         """
         tid = str(thread_id or "default")
-        default_dir = Path(SOOTHE_HOME) / "runs" / tid
+        # Use new isolated directory structure (RFC-409)
+        default_dir = PersistenceDirectoryManager.get_thread_directory(tid) / "logs"
         self._thread_dir = Path(thread_dir or default_dir).expanduser()
         self._thread_id = tid
         self._retention_days = retention_days
@@ -76,7 +77,8 @@ class ThreadLogger:
         """
         tid = str(thread_id)
         self._thread_id = tid
-        default_dir = Path(SOOTHE_HOME) / "runs" / tid
+        # Use new isolated directory structure (RFC-409)
+        default_dir = PersistenceDirectoryManager.get_thread_directory(tid) / "logs"
         self._thread_dir = default_dir.expanduser()
         self._initialized = False
         logger.debug("ThreadLogger dir changed to %s", self._thread_dir)

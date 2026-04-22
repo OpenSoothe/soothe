@@ -137,7 +137,7 @@ def test_over_threshold_spools_and_announces_path(tmp_path: Path) -> None:
     assert out.startswith("y" * _AGENTIC_REPORT_PREVIEW_MAX)
     assert "..." in out
     assert "Full report:" in out
-    run_dir = root / "runs" / "thread-a"
+    run_dir = root / "data" / "threads" / "thread-a"
     saved = list(run_dir.glob("final_report_*.md"))
     assert len(saved) == 1
     assert saved[0].read_text(encoding="utf-8") == body

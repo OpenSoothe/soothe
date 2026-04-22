@@ -372,12 +372,11 @@ class PhasesMixin:
         config = {"configurable": {"thread_id": thread_id}}
 
         try:
-            # IG-229: Specify as_node to avoid langgraph InvalidUpdateError
-            # Use the agent's primary node (typically the first node in the graph)
+            # IG-238: Remove as_node parameter - LangGraph auto-determines node context
+            # The "agent" node doesn't exist in create_deep_agent graph structure
             await self._agent.graph.aupdate_state(
                 config,
                 {"messages": [HumanMessage(content=user_input), AIMessage(content=response)]},
-                as_node="agent",  # Specify node to avoid ambiguous update error
             )
             logger.debug("Chitchat exchange saved to checkpointer for thread %s", thread_id)
         except Exception:

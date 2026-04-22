@@ -146,7 +146,7 @@ class ThreadContextManager:
 
         def _find_matching_thread() -> str | None:
             """Find a thread ID matching the provided ID or prefix."""
-            runs_dir = Path(SOOTHE_HOME).expanduser() / "runs"
+            runs_dir = Path(SOOTHE_HOME).expanduser() / "data" / "threads"
             if not runs_dir.exists():
                 return None
 
@@ -406,7 +406,7 @@ class ThreadContextManager:
 
         # Delete run directory
         def get_run_dir() -> Path:
-            return Path(SOOTHE_HOME).expanduser() / "runs" / thread_id
+            return Path(SOOTHE_HOME).expanduser() / "data" / "threads" / thread_id
 
         run_dir = await asyncio.to_thread(get_run_dir)
         run_dir_exists = await asyncio.to_thread(run_dir.exists)
@@ -477,7 +477,7 @@ class ThreadContextManager:
         from datetime import UTC, datetime
 
         def get_run_dir() -> Path:
-            return Path(SOOTHE_HOME).expanduser() / "runs" / thread_id
+            return Path(SOOTHE_HOME).expanduser() / "data" / "threads" / thread_id
 
         run_dir = await asyncio.to_thread(get_run_dir)
         run_dir_exists = await asyncio.to_thread(run_dir.exists)

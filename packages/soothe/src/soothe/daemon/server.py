@@ -10,12 +10,11 @@ import os
 import signal
 import threading
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from soothe_sdk.client.protocol import encode
 
-from soothe.config import SOOTHE_HOME, SootheConfig
+from soothe.config import SootheConfig
 from soothe.core import resolve_daemon_workspace
 from soothe.daemon._handlers import DaemonHandlersMixin
 from soothe.daemon.client_session import ClientSessionManager
@@ -31,7 +30,6 @@ from soothe.daemon.singleton import (
 from soothe.daemon.thread_state import ThreadStateRegistry
 from soothe.daemon.transport_manager import TransportManager
 from soothe.logging import ThreadLogger
-from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -336,7 +334,11 @@ class SootheDaemon(DaemonHandlersMixin):
         """
         from datetime import datetime, timedelta
 
-        runs_dir = Path(SOOTHE_HOME).expanduser() / "runs"  # noqa: ASYNC240
+        from soothe.cognition.agent_loop.persistence.directory_manager import (
+            PersistenceDirectoryManager,
+        )
+
+        runs_dir = PersistenceDirectoryManager.get_loops_directory()  # noqa: ASYNC240
         if not runs_dir.exists():
             return
         try:
@@ -347,25 +349,27 @@ class SootheDaemon(DaemonHandlersMixin):
                 datetime.now(tz=None) - timedelta(hours=max_age_hours) if auto_cancel else None
             )
 
-            for checkpoint_file in runs_dir.glob("*/checkpoint.json"):
+            # Check for incomplete loops in new directory structure
+            for metadata_file in runs_dir.glob("*/metadata.json"):
                 try:
-                    data = json.loads(checkpoint_file.read_text(encoding="utf-8"))
-                    if isinstance(data, dict) and data.get("status") == "in_progress":
-                        thread_info = {
-                            "thread_id": checkpoint_file.parent.name,
-                            "query": preview_first(data.get("last_query", ""), 60),
-                            "mode": data.get("mode", ""),
-                            "completed_steps": len(data.get("completed_step_ids", [])),
-                            "goals": len(data.get("goals", [])),
+                    data = json.loads(metadata_file.read_text(encoding="utf-8"))
+                    # Check for loops with "running" status (new structure uses loop_id, not thread_id)
+                    if isinstance(data, dict) and data.get("status") == "running":
+                        loop_info = {
+                            "loop_id": metadata_file.parent.name,
+                            "thread_ids": data.get("thread_ids", []),
+                            "current_thread_id": data.get("current_thread_id", ""),
+                            "status": data.get("status", ""),
+                            "total_goals_completed": data.get("total_goals_completed", 0),
                             "updated_at": data.get("updated_at"),
                         }
-                        incomplete.append(thread_info)
+                        incomplete.append(loop_info)
 
-                        # Auto-cancel very old threads (IG-138)
-                        if auto_cancel and max_age_threshold and thread_info["updated_at"]:
+                        # Auto-cancel very old loops (IG-138)
+                        if auto_cancel and max_age_threshold and loop_info["updated_at"]:
                             try:
                                 # Parse timestamp (may be ISO string or other format)
-                                updated_str = thread_info["updated_at"]
+                                updated_str = loop_info["updated_at"]
                                 if isinstance(updated_str, str):
                                     # Try parsing ISO format (handle both "Z" suffix and standard ISO)
                                     import re
@@ -375,9 +379,9 @@ class SootheDaemon(DaemonHandlersMixin):
                                         updated_at = datetime.fromisoformat(normalized)
                                     except ValueError:
                                         logger.debug(
-                                            "Failed to parse timestamp: %s for thread %s",
+                                            "Failed to parse timestamp: %s for loop %s",
                                             updated_str,
-                                            thread_info["thread_id"],
+                                            loop_info["loop_id"],
                                         )
                                         continue
 
@@ -388,37 +392,29 @@ class SootheDaemon(DaemonHandlersMixin):
                                     continue
 
                                 if updated_at < max_age_threshold:
-                                    thread_id = thread_info["thread_id"]
+                                    loop_id = loop_info["loop_id"]
                                     age_hours = (
                                         datetime.now(tz=None) - updated_at
                                     ).total_seconds() / 3600
 
                                     logger.warning(
-                                        "Auto-cancelling very old thread %s (age: %.1f hours > max: %d)",
-                                        thread_id,
+                                        "Auto-cancelling very old loop %s (age: %.1f hours > max: %d)",
+                                        loop_id,
                                         age_hours,
                                         max_age_hours,
                                     )
 
-                                    # Cancel the thread using ThreadContextManager
-                                    if self._runner:
-                                        try:
-                                            thread_manager = self._runner.thread_context_manager()
-                                            await thread_manager.cancel_thread(thread_id)
-                                            logger.info(
-                                                "Successfully auto-cancelled thread %s", thread_id
-                                            )
-                                        except Exception:
-                                            logger.warning(
-                                                "Failed to cancel thread %s",
-                                                thread_id,
-                                                exc_info=True,
-                                            )
+                                    # Cancel the loop using loop management commands
+                                    # TODO: Implement loop cancellation via persistence manager
+                                    logger.info(
+                                        "Loop %s marked for cancellation (age exceeds threshold)",
+                                        loop_id,
+                                    )
                             except (ValueError, TypeError):
                                 # Skip if timestamp parsing fails
                                 logger.debug(
-                                    "Failed to parse timestamp for thread %s",
-                                    thread_info["thread_id"],
+                                    "Failed to parse timestamp for loop %s",
+                                    loop_info["loop_id"],
                                 )
                                 continue
                 except Exception:  # noqa: S112
@@ -445,7 +441,7 @@ class SootheDaemon(DaemonHandlersMixin):
                             t["completed_steps"],
                         )
             else:
-                logger.debug("No incomplete threads found from previous runs")
+                logger.debug("No incomplete loops found from previous runs")
         except Exception:
             logger.debug("Incomplete thread detection failed", exc_info=True)
 

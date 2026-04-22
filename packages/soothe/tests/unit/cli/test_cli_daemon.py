@@ -11,7 +11,6 @@ import pytest
 import typer
 from soothe_cli.cli.execution import daemon as daemon_exec
 from soothe_cli.cli.execution import headless as headless_exec
-from soothe_cli.tui import daemon_session as ux_client_session
 from soothe_sdk.client import session as sdk_session  # For retry logic (moved from CLI)
 
 from soothe.config import SootheConfig
@@ -368,7 +367,7 @@ async def test_connect_with_retries_succeeds_after_transient_refusal(monkeypatch
 
     monkeypatch.setattr(asyncio, "sleep", _no_sleep)
 
-    await ux_client_session.connect_websocket_with_retries(_RetryClient())
+    await sdk_session.connect_websocket_with_retries(_RetryClient())
 
     assert attempts["count"] == 3
 

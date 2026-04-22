@@ -91,7 +91,7 @@ def _extract_domain(url: str) -> str:
 def _save_raw_results(query: str, result: object) -> None:
     """Persist the full search result JSON to the current thread's run dir.
 
-    Writes to ``$SOOTHE_HOME/runs/{thread_id}/search_results/{ts}_{slug}.json``.
+    Writes to ``$SOOTHE_HOME/data/threads/{thread_id}/search_results/{ts}_{slug}.json``.
     Fails silently if no run directory is active.
     """
     import json

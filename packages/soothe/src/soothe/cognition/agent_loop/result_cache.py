@@ -13,10 +13,9 @@ import json
 import logging
 import shutil
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
-from soothe.config import SOOTHE_HOME
+from soothe.cognition.agent_loop.persistence.directory_manager import PersistenceDirectoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ logger = logging.getLogger(__name__)
 class ToolResultCache:
     """Manages file system cache for large tool results.
 
-    Cache location: ~/.soothe/runs/{thread_id}/tool_results/{tool_call_id}.json
+    Cache location: ~/.soothe/data/threads/{thread_id}/tool_results/{tool_call_id}.json
 
     File naming uses tool_call_id to guarantee uniqueness even when the same
     tool is called multiple times in a single run.
@@ -44,7 +43,10 @@ class ToolResultCache:
         """
         self.thread_id = thread_id
         self.size_threshold = size_threshold
-        self.cache_dir = Path(SOOTHE_HOME).expanduser() / "runs" / thread_id / "tool_results"
+        # Use new isolated directory structure (RFC-409)
+        self.cache_dir = (
+            PersistenceDirectoryManager.get_thread_directory(thread_id) / "tool_results"
+        )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def should_cache(self, size_bytes: int) -> bool:

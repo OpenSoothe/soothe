@@ -246,7 +246,7 @@ class Reflection(BaseModel):
 class CheckpointEnvelope(BaseModel):
     """Progressive checkpoint for crash recovery (RFC-0010).
 
-    Stored in ``$SOOTHE_HOME/runs/{thread_id}/checkpoint.json`` via
+    Stored in ``$SOOTHE_HOME/data/threads/{thread_id}/checkpoint.json`` via
     ``RunArtifactStore.save_checkpoint``.
 
     Args:

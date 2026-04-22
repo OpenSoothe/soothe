@@ -18,10 +18,10 @@ async def test_directory_manager_creates_directories(tmp_path):
     """Test that directory manager creates isolated directories."""
 
     # Mock SOOTHE_HOME to temp directory
-    import soothe.config.constants as constants
+    import soothe.config as config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = config.SOOTHE_HOME
+    config.SOOTHE_HOME = str(tmp_path)
 
     try:
         # Ensure directories exist
@@ -36,17 +36,17 @@ async def test_directory_manager_creates_directories(tmp_path):
 
     finally:
         # Restore original SOOTHE_HOME
-        constants.SOOTHE_HOME = original_home
+        config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.asyncio
 async def test_directory_manager_paths(tmp_path):
     """Test directory manager returns correct paths."""
 
-    import soothe.config.constants as constants
+    import soothe.config as config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = config.SOOTHE_HOME
+    config.SOOTHE_HOME = str(tmp_path)
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
@@ -66,7 +66,7 @@ async def test_directory_manager_paths(tmp_path):
         assert loop_checkpoint == tmp_path / "data" / "loops" / "loop_abc" / "checkpoint.db"
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.asyncio
@@ -121,10 +121,10 @@ async def test_sqlite_backend_initialize_database(tmp_path):
 async def test_persistence_manager_save_checkpoint_anchor(tmp_path):
     """Test persistence manager saves checkpoint anchor."""
 
-    import soothe.config.constants as constants
+    import soothe.config as config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = config.SOOTHE_HOME
+    config.SOOTHE_HOME = str(tmp_path)
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
@@ -150,17 +150,17 @@ async def test_persistence_manager_save_checkpoint_anchor(tmp_path):
         assert anchors[0]["anchor_type"] == "iteration_start"
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.asyncio
 async def test_persistence_manager_save_checkpoint_anchor_with_summary(tmp_path):
     """Test persistence manager saves checkpoint anchor with execution summary."""
 
-    import soothe.config.constants as constants
+    import soothe.config as config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = config.SOOTHE_HOME
+    config.SOOTHE_HOME = str(tmp_path)
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
@@ -193,17 +193,17 @@ async def test_persistence_manager_save_checkpoint_anchor_with_summary(tmp_path)
         assert anchors[0]["reasoning_decision"] == "Analyze project structure"
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.asyncio
 async def test_persistence_manager_save_failed_branch(tmp_path):
     """Test persistence manager saves failed branch."""
 
-    import soothe.config.constants as constants
+    import soothe.config as config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = config.SOOTHE_HOME
+    config.SOOTHE_HOME = str(tmp_path)
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
@@ -236,17 +236,17 @@ async def test_persistence_manager_save_failed_branch(tmp_path):
         ]
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.asyncio
 async def test_persistence_manager_update_branch_analysis(tmp_path):
     """Test persistence manager updates branch with analysis."""
 
-    import soothe.config.constants as constants
+    import soothe.config as config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = config.SOOTHE_HOME
+    config.SOOTHE_HOME = str(tmp_path)
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
@@ -297,17 +297,17 @@ async def test_persistence_manager_update_branch_analysis(tmp_path):
         assert branches[0]["analyzed_at"] is not None
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.asyncio
 async def test_persistence_manager_get_thread_checkpoints_for_loop(tmp_path):
     """Test persistence manager gets thread checkpoint cross-reference."""
 
-    import soothe.config.constants as constants
+    import soothe.config as config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = config.SOOTHE_HOME
+    config.SOOTHE_HOME = str(tmp_path)
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
@@ -348,4 +348,4 @@ async def test_persistence_manager_get_thread_checkpoints_for_loop(tmp_path):
         assert "checkpoint_c" in thread_checkpoints["thread_002"]
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        config.SOOTHE_HOME = original_home

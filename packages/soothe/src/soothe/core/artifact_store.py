@@ -1,6 +1,6 @@
 """RunArtifactStore -- structured run output directory (RFC-0010).
 
-Manages ``$SOOTHE_HOME/runs/{thread_id}/`` with hierarchical goal/step
+Manages ``$SOOTHE_HOME/data/threads/{thread_id}/`` with hierarchical goal/step
 layout, atomic checkpoint writes, and a manifest tracking all artifacts.
 """
 
@@ -84,7 +84,7 @@ class RunManifest(BaseModel):
 
 
 class RunArtifactStore:
-    """Manages run artifact directory under ``$SOOTHE_HOME/runs/{thread_id}/``.
+    """Manages run artifact directory under ``$SOOTHE_HOME/data/threads/{thread_id}/``.
 
     Provides atomic checkpoint writes, structured step/goal reports in
     both JSON and Markdown, and a manifest of all tracked artifacts.
@@ -113,7 +113,8 @@ class RunArtifactStore:
         """
         self._thread_id = thread_id
         self._config = config
-        self._run_dir = Path(soothe_home).expanduser() / "runs" / thread_id
+        # Use new isolated directory structure (RFC-409): data/threads/{thread_id}
+        self._run_dir = Path(soothe_home).expanduser() / "data" / "threads" / thread_id
         self._file_lock = _lock_for_run_dir(self._run_dir)
 
         self._run_dir.mkdir(parents=True, exist_ok=True)
