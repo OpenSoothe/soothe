@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -34,16 +34,16 @@ def goal_context_manager(mock_state_manager, default_config):
     return GoalContextManager(mock_state_manager, default_config)
 
 
-def test_get_plan_context_empty_history(goal_context_manager, mock_state_manager):
+async def test_get_plan_context_empty_history(goal_context_manager, mock_state_manager):
     """Plan context returns [] when no checkpoint."""
-    mock_state_manager.load.return_value = None
+    mock_state_manager.load = AsyncMock(return_value=None)
 
-    result = goal_context_manager.get_plan_context(limit=10)
+    result = await goal_context_manager.get_plan_context(limit=10)
 
     assert result == []
 
 
-def test_get_plan_context_no_goals(goal_context_manager, mock_state_manager):
+async def test_get_plan_context_no_goals(goal_context_manager, mock_state_manager):
     """Plan context returns [] when goal_history is empty."""
     checkpoint = AgentLoopCheckpoint(
         loop_id="test_loop",
@@ -58,14 +58,14 @@ def test_get_plan_context_no_goals(goal_context_manager, mock_state_manager):
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    mock_state_manager.load.return_value = checkpoint
+    mock_state_manager.load = AsyncMock(return_value=checkpoint)
 
-    result = goal_context_manager.get_plan_context(limit=10)
+    result = await goal_context_manager.get_plan_context(limit=10)
 
     assert result == []
 
 
-def test_get_plan_context_filters_same_thread(goal_context_manager, mock_state_manager):
+async def test_get_plan_context_filters_same_thread(goal_context_manager, mock_state_manager):
     """Plan context only includes goals from current thread."""
     checkpoint = AgentLoopCheckpoint(
         loop_id="test_loop",
@@ -105,16 +105,16 @@ def test_get_plan_context_filters_same_thread(goal_context_manager, mock_state_m
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    mock_state_manager.load.return_value = checkpoint
+    mock_state_manager.load = AsyncMock(return_value=checkpoint)
 
-    result = goal_context_manager.get_plan_context(limit=10)
+    result = await goal_context_manager.get_plan_context(limit=10)
 
     assert len(result) == 1  # Only thread_A goal
     assert "thread_A" in result[0]
     assert "analyze performance" in result[0]
 
 
-def test_get_plan_context_filters_completed_only(goal_context_manager, mock_state_manager):
+async def test_get_plan_context_filters_completed_only(goal_context_manager, mock_state_manager):
     """Plan context only includes completed goals."""
     checkpoint = AgentLoopCheckpoint(
         loop_id="test_loop",
@@ -154,15 +154,15 @@ def test_get_plan_context_filters_completed_only(goal_context_manager, mock_stat
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    mock_state_manager.load.return_value = checkpoint
+    mock_state_manager.load = AsyncMock(return_value=checkpoint)
 
-    result = goal_context_manager.get_plan_context(limit=10)
+    result = await goal_context_manager.get_plan_context(limit=10)
 
     assert len(result) == 1  # Only completed goal
     assert "completed task" in result[0]
 
 
-def test_get_plan_context_respects_limit(goal_context_manager, mock_state_manager):
+async def test_get_plan_context_respects_limit(goal_context_manager, mock_state_manager):
     """Plan context respects limit parameter."""
     checkpoint = AgentLoopCheckpoint(
         loop_id="test_loop",
@@ -191,14 +191,14 @@ def test_get_plan_context_respects_limit(goal_context_manager, mock_state_manage
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    mock_state_manager.load.return_value = checkpoint
+    mock_state_manager.load = AsyncMock(return_value=checkpoint)
 
-    result = goal_context_manager.get_plan_context(limit=5)
+    result = await goal_context_manager.get_plan_context(limit=5)
 
     assert len(result) == 5
 
 
-def test_get_plan_context_config_disabled(mock_state_manager):
+async def test_get_plan_context_config_disabled(mock_state_manager):
     """Plan context returns [] when config.enabled=False."""
     config = GoalContextConfig(enabled=False)
     manager = GoalContextManager(mock_state_manager, config)
@@ -229,14 +229,16 @@ def test_get_plan_context_config_disabled(mock_state_manager):
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    mock_state_manager.load.return_value = checkpoint
+    mock_state_manager.load = AsyncMock(return_value=checkpoint)
 
-    result = manager.get_plan_context()
+    result = await manager.get_plan_context()
 
     assert result == []
 
 
-def test_get_execute_briefing_returns_none_without_flag(goal_context_manager, mock_state_manager):
+async def test_get_execute_briefing_returns_none_without_flag(
+    goal_context_manager, mock_state_manager
+):
     """Execute briefing returns None when thread_switch_pending=False."""
     checkpoint = AgentLoopCheckpoint(
         loop_id="test_loop",
@@ -252,14 +254,14 @@ def test_get_execute_briefing_returns_none_without_flag(goal_context_manager, mo
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    mock_state_manager.load.return_value = checkpoint
+    mock_state_manager.load = AsyncMock(return_value=checkpoint)
 
-    result = goal_context_manager.get_execute_briefing()
+    result = await goal_context_manager.get_execute_briefing()
 
     assert result is None
 
 
-def test_get_execute_briefing_clears_flag(goal_context_manager, mock_state_manager):
+async def test_get_execute_briefing_clears_flag(goal_context_manager, mock_state_manager):
     """Execute briefing clears thread_switch_pending flag."""
     checkpoint = AgentLoopCheckpoint(
         loop_id="test_loop",
@@ -288,10 +290,10 @@ def test_get_execute_briefing_clears_flag(goal_context_manager, mock_state_manag
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    mock_state_manager.load.return_value = checkpoint
-    mock_state_manager.save = Mock()
+    mock_state_manager.load = AsyncMock(return_value=checkpoint)
+    mock_state_manager.save = AsyncMock()
 
-    result = goal_context_manager.get_execute_briefing()
+    result = await goal_context_manager.get_execute_briefing()
 
     assert result is not None
     # Verify save was called with flag cleared
@@ -299,7 +301,7 @@ def test_get_execute_briefing_clears_flag(goal_context_manager, mock_state_manag
     assert not saved_checkpoint.thread_switch_pending
 
 
-def test_get_execute_briefing_cross_thread(goal_context_manager, mock_state_manager):
+async def test_get_execute_briefing_cross_thread(goal_context_manager, mock_state_manager):
     """Execute briefing includes goals from all threads."""
     checkpoint = AgentLoopCheckpoint(
         loop_id="test_loop",
@@ -340,10 +342,10 @@ def test_get_execute_briefing_cross_thread(goal_context_manager, mock_state_mana
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    mock_state_manager.load.return_value = checkpoint
-    mock_state_manager.save = Mock()
+    mock_state_manager.load = AsyncMock(return_value=checkpoint)
+    mock_state_manager.save = AsyncMock()
 
-    result = goal_context_manager.get_execute_briefing()
+    result = await goal_context_manager.get_execute_briefing()
 
     assert result is not None
     assert "thread_A" in result
@@ -352,7 +354,7 @@ def test_get_execute_briefing_cross_thread(goal_context_manager, mock_state_mana
     assert "task B" in result
 
 
-def test_get_execute_briefing_no_completed_goals(goal_context_manager, mock_state_manager):
+async def test_get_execute_briefing_no_completed_goals(goal_context_manager, mock_state_manager):
     """Execute briefing returns None when no completed goals."""
     checkpoint = AgentLoopCheckpoint(
         loop_id="test_loop",
@@ -381,15 +383,15 @@ def test_get_execute_briefing_no_completed_goals(goal_context_manager, mock_stat
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    mock_state_manager.load.return_value = checkpoint
-    mock_state_manager.save = Mock()
+    mock_state_manager.load = AsyncMock(return_value=checkpoint)
+    mock_state_manager.save = AsyncMock()
 
-    result = goal_context_manager.get_execute_briefing()
+    result = await goal_context_manager.get_execute_briefing()
 
     assert result is None
 
 
-def test_get_execute_briefing_config_disabled(mock_state_manager):
+async def test_get_execute_briefing_config_disabled(mock_state_manager):
     """Execute briefing returns None when config.enabled=False."""
     config = GoalContextConfig(enabled=False)
     manager = GoalContextManager(mock_state_manager, config)
@@ -421,9 +423,9 @@ def test_get_execute_briefing_config_disabled(mock_state_manager):
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    mock_state_manager.load.return_value = checkpoint
+    mock_state_manager.load = AsyncMock(return_value=checkpoint)
 
-    result = manager.get_execute_briefing()
+    result = await manager.get_execute_briefing()
 
     assert result is None
 

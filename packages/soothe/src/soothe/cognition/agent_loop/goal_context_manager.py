@@ -53,7 +53,7 @@ class GoalContextManager:
             config = GoalContextConfig()
         self._config = config
 
-    def get_plan_context(self, limit: int | None = None) -> list[str]:
+    async def get_plan_context(self, limit: int | None = None) -> list[str]:
         """Get previous goal summaries for Plan phase (XML blocks).
 
         Always injects - Plan phase needs goal-level strategy context
@@ -80,7 +80,7 @@ class GoalContextManager:
             return []
 
         try:
-            checkpoint = self._state_manager.load()
+            checkpoint = await self._state_manager.load()
             if not checkpoint or not checkpoint.goal_history:
                 return []
 
@@ -121,7 +121,7 @@ class GoalContextManager:
             logger.warning("Failed to load plan context: %s, continuing without goal context", e)
             return []
 
-    def get_execute_briefing(self, limit: int | None = None) -> str | None:
+    async def get_execute_briefing(self, limit: int | None = None) -> str | None:
         """Get goal briefing for Execute phase (only on thread switch).
 
         Thread-switch constraint: Only inject when CoreAgent conversation
@@ -141,7 +141,7 @@ class GoalContextManager:
             return None
 
         try:
-            checkpoint = self._state_manager.load()
+            checkpoint = await self._state_manager.load()
             if not checkpoint:
                 return None
 
@@ -152,7 +152,7 @@ class GoalContextManager:
 
             # Clear flag (briefing will be injected this execution)
             checkpoint.thread_switch_pending = False
-            self._state_manager.save(checkpoint)
+            await self._state_manager.save(checkpoint)
 
             logger.info(
                 "Execute briefing: thread switch detected (thread %s), generating briefing",
