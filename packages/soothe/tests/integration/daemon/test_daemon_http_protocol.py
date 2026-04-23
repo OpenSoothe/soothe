@@ -9,16 +9,16 @@ from typing import Any
 
 import httpx
 import pytest
-from tests.integration.conftest import (
-    alloc_ephemeral_port,
-    force_isolated_home,
-    get_base_config,
-)
 
 from soothe.config import SootheConfig
 from soothe.config.daemon_config import HttpRestConfig
 from soothe.daemon import SootheDaemon
 from soothe.daemon.transports.http_rest import HttpRestTransport
+from tests.integration.conftest import (
+    alloc_ephemeral_port,
+    force_isolated_home,
+    get_base_config,
+)
 
 
 async def _await_user_messages(

@@ -10,7 +10,7 @@ import pytest
 from soothe.cognition.agent_loop import AgentLoop
 from soothe.cognition.agent_loop.schemas import (
     AgentDecision,
-    ReasonResult,
+    PlanResult,
     StepAction,
 )
 from soothe.protocols.planner import PlanContext
@@ -48,19 +48,19 @@ class MockLoopReasoner:
         self.scenario = scenario
         self.reason_count = 0
 
-    async def reason(self, goal: str, state, context: PlanContext) -> ReasonResult:
+    async def reason(self, goal: str, state, context: PlanContext) -> PlanResult:
         self.reason_count += 1
 
         if self.scenario == "success":
             if self.reason_count == 1:
-                return ReasonResult(
+                return PlanResult(
                     status="continue",
                     plan_action="new",
                     decision=_three_step_decision(),
                     next_action="I'll run these three steps next.",
                     reasoning="First pass",
                 )
-            return ReasonResult(
+            return PlanResult(
                 status="done",
                 plan_action="keep",
                 next_action="I'm done and sharing the outcome.",
@@ -71,7 +71,7 @@ class MockLoopReasoner:
 
         if self.scenario == "replan":
             if self.reason_count == 1:
-                return ReasonResult(
+                return PlanResult(
                     status="continue",
                     plan_action="new",
                     decision=_three_step_decision(),
@@ -79,7 +79,7 @@ class MockLoopReasoner:
                     reasoning="v1",
                 )
             if self.reason_count == 2:
-                return ReasonResult(
+                return PlanResult(
                     status="replan",
                     plan_action="new",
                     decision=_two_step_replan_decision(),
@@ -87,7 +87,7 @@ class MockLoopReasoner:
                     reasoning="replan",
                     goal_progress=0.3,
                 )
-            return ReasonResult(
+            return PlanResult(
                 status="done",
                 plan_action="keep",
                 next_action="I'm wrapping up after the revised plan.",
@@ -97,14 +97,14 @@ class MockLoopReasoner:
 
         if self.scenario == "continue":
             if self.reason_count == 1:
-                return ReasonResult(
+                return PlanResult(
                     status="continue",
                     plan_action="new",
                     decision=_three_step_decision(),
                     next_action="I'll execute the first chunk of work now.",
                     reasoning="start",
                 )
-            return ReasonResult(
+            return PlanResult(
                 status="done",
                 plan_action="keep",
                 next_action="I'm done with the remaining work.",
@@ -112,7 +112,7 @@ class MockLoopReasoner:
                 confidence=0.95,
             )
 
-        return ReasonResult(
+        return PlanResult(
             status="done",
             plan_action="keep",
             next_action="I'm done.",
@@ -218,7 +218,7 @@ async def test_loop_agent_max_iterations() -> None:
 
         async def reason(self, goal, state, context):
             self.reason_count += 1
-            return ReasonResult(
+            return PlanResult(
                 status="continue",
                 plan_action="new",
                 decision=AgentDecision(
@@ -267,7 +267,7 @@ async def test_loop_agent_parallel_execution() -> None:
         async def reason(self, goal, state, context):
             self.reason_count += 1
             if self.reason_count == 1:
-                return ReasonResult(
+                return PlanResult(
                     status="continue",
                     plan_action="new",
                     decision=AgentDecision(
@@ -285,7 +285,7 @@ async def test_loop_agent_parallel_execution() -> None:
                     ),
                     next_action="I'll run these three steps in parallel.",
                 )
-            return ReasonResult(
+            return PlanResult(
                 status="done",
                 plan_action="keep",
                 next_action="I'm finished with the parallel work.",

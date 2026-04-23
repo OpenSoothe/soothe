@@ -9,31 +9,31 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 import uuid
 from pathlib import Path
 
 import pytest
+
+from soothe.config import SootheConfig
+from soothe.daemon import SootheDaemon, WebSocketClient
 from tests.integration.conftest import (
+    alloc_ephemeral_port,
     await_event_type,
     build_daemon_config,
     force_isolated_home,
 )
 
-from soothe.config import SootheConfig
-from soothe.daemon import DaemonClient, SootheDaemon
 
-
-def _build_daemon_config(tmp_path: Path, socket_path: str) -> SootheConfig:
+def _build_daemon_config(tmp_path: Path, ws_port: int) -> SootheConfig:
     """Build an isolated daemon config for event protocol tests."""
     return build_daemon_config(
         tmp_path=tmp_path,
-        unix_socket_path=socket_path,
+        websocket_port=ws_port,
     )
 
 
 async def _collect_events_during_query(
-    client: DaemonClient,
+    client: WebSocketClient,
     query: str,
     timeout: float = 6.0,
 ) -> list[dict]:
@@ -77,13 +77,13 @@ async def _collect_events_during_query(
 async def daemon_fixture(tmp_path: Path):
     """Start a daemon for event protocol tests."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-events-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = _build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = _build_daemon_config(tmp_path, ws_port)
     daemon = SootheDaemon(config)
     await daemon.start()
     await asyncio.sleep(0.2)
     try:
-        yield daemon, socket_path
+        yield daemon, ws_port
     finally:
         with contextlib.suppress(Exception):
             await daemon.stop()
@@ -91,12 +91,12 @@ async def daemon_fixture(tmp_path: Path):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_lifecycle_events(daemon_fixture: tuple[SootheDaemon, str]) -> None:
+async def test_lifecycle_events(daemon_fixture: tuple[SootheDaemon, int]) -> None:
     """Validate thread lifecycle event structure per RFC-0015."""
-    daemon, socket_path = daemon_fixture
+    daemon, ws_port = daemon_fixture
     _ = daemon
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -138,12 +138,12 @@ async def test_lifecycle_events(daemon_fixture: tuple[SootheDaemon, str]) -> Non
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_protocol_events(daemon_fixture: tuple[SootheDaemon, str]) -> None:
+async def test_protocol_events(daemon_fixture: tuple[SootheDaemon, int]) -> None:
     """Validate protocol events (context, memory, plan, policy) per RFC-0015."""
-    daemon, socket_path = daemon_fixture
+    daemon, ws_port = daemon_fixture
     _ = daemon
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -178,12 +178,12 @@ async def test_protocol_events(daemon_fixture: tuple[SootheDaemon, str]) -> None
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_tool_events(daemon_fixture: tuple[SootheDaemon, str]) -> None:
+async def test_tool_events(daemon_fixture: tuple[SootheDaemon, int]) -> None:
     """Validate tool execution events with dynamic naming per RFC-0015."""
-    daemon, socket_path = daemon_fixture
+    daemon, ws_port = daemon_fixture
     _ = daemon
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -216,12 +216,12 @@ async def test_tool_events(daemon_fixture: tuple[SootheDaemon, str]) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_subagent_events(daemon_fixture: tuple[SootheDaemon, str]) -> None:
+async def test_subagent_events(daemon_fixture: tuple[SootheDaemon, int]) -> None:
     """Validate subagent activity events per RFC-0015."""
-    daemon, socket_path = daemon_fixture
+    daemon, ws_port = daemon_fixture
     _ = daemon
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -254,12 +254,12 @@ async def test_subagent_events(daemon_fixture: tuple[SootheDaemon, str]) -> None
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_error_events(daemon_fixture: tuple[SootheDaemon, str]) -> None:
+async def test_error_events(daemon_fixture: tuple[SootheDaemon, int]) -> None:
     """Validate error event structure per RFC-0015."""
-    daemon, socket_path = daemon_fixture
+    daemon, ws_port = daemon_fixture
     _ = daemon
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -294,13 +294,13 @@ async def test_error_events(daemon_fixture: tuple[SootheDaemon, str]) -> None:
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_event_registry_dispatch(
-    daemon_fixture: tuple[SootheDaemon, str],
+    daemon_fixture: tuple[SootheDaemon, int],
 ) -> None:
     """Test event type handling and dispatch correctness."""
-    daemon, socket_path = daemon_fixture
+    daemon, ws_port = daemon_fixture
     _ = daemon
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
