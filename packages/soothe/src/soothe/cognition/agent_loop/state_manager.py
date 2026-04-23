@@ -666,14 +666,24 @@ class AgentLoopStateManager:
     def _build_act_wave_record(
         self,
         iteration: int,
-        decision: AgentDecision,
+        decision: AgentDecision | None,
         step_results: list[StepResult],
         state: LoopState,  # noqa: ARG002 - Reserved for future metrics extraction
     ) -> ActWaveRecord:
-        """Convert execution results to ActWaveRecord."""
+        """Convert execution results to ActWaveRecord.
+
+        Args:
+            iteration: Iteration number
+            decision: AgentDecision (None for immediate completion without execution)
+            step_results: Step execution results (empty list for no execution)
+            state: LoopState with metrics
+
+        Returns:
+            ActWaveRecord with step details and metrics
+        """
         # Build step execution records
         step_records = []
-        step_desc_map = {s.id: s.description for s in decision.steps}
+        step_desc_map = {s.id: s.description for s in decision.steps} if decision else {}
 
         for result in step_results:
             step_input = step_desc_map.get(result.step_id, "")
@@ -702,7 +712,7 @@ class AgentLoopStateManager:
             iteration=iteration,
             timestamp=datetime.now(UTC),
             steps=step_records,
-            execution_mode=decision.execution_mode,
+            execution_mode=decision.execution_mode if decision else "sequential",  # Handle None
             duration_ms=duration_ms,
             tool_call_count=total_tool_calls,
             subagent_task_count=total_subagent_tasks,
