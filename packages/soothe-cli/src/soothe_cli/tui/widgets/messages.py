@@ -608,11 +608,6 @@ class AssistantMessage(_TimestampClickMixin, Vertical):
         border-left: wide $secondary;
     }
 
-    AssistantMessage .assistant-header {
-        height: auto;
-        margin-bottom: 1;
-    }
-
     AssistantMessage Markdown {
         padding: 0;
         margin: 0;
@@ -622,7 +617,7 @@ class AssistantMessage(_TimestampClickMixin, Vertical):
         background: $background-darken-2;
     }
     """
-    """Enhanced styling with role indicator, secondary border, and background tint."""
+    """Enhanced styling with secondary border and background tint."""
 
     def __init__(self, content: str = "", **kwargs: Any) -> None:
         """Initialize an assistant message.
@@ -640,18 +635,8 @@ class AssistantMessage(_TimestampClickMixin, Vertical):
         """Compose the assistant message layout.
 
         Yields:
-            Header widget with role indicator and Markdown widget for content.
+            Markdown widget for content.
         """
-        colors = theme.get_theme_colors()
-        glyphs = get_glyphs()
-        is_ascii = is_ascii_mode()
-        role_icon = glyphs.assistant if not is_ascii else "◆"
-
-        # Add role header
-        yield Static(
-            Content.styled(f"{role_icon}  ", f"bold {colors.secondary}"),
-            classes="assistant-header",
-        )
         from textual.widgets import Markdown
 
         yield Markdown("", id="assistant-content")
@@ -1946,26 +1931,9 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
     def compose(self) -> ComposeResult:
         prefix = get_glyphs().tool_prefix
         badge = f" [{self._plan_action}]" if self._plan_action in ("keep", "new") else ""
-        header = f"{prefix} Plan · {self._next_action}{badge}"
+        args = f"{self._next_action}{badge}"
+        header = f"{prefix} Plan({args})"
         yield Static(header, markup=False, classes="cognition-plan-header")
-        if self._assessment_reasoning:
-            yield Static(
-                f"A: {self._assessment_reasoning}",
-                markup=False,
-                classes="plan-section-line",
-            )
-        if self._plan_reasoning:
-            yield Static(
-                f"P: {self._plan_reasoning}",
-                markup=False,
-                classes="plan-section-line",
-            )
-        if not self._assessment_reasoning and not self._plan_reasoning and self._legacy_reasoning:
-            yield Static(
-                self._legacy_reasoning,
-                markup=False,
-                classes="plan-section-line",
-            )
 
     def on_mount(self) -> None:
         """Use ASCII border variant when configured."""
@@ -2082,15 +2050,15 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
     def _goal_header_content(self) -> Content:
         prefix = get_glyphs().tool_prefix
         g = self._clip(self._goal_text, _MAX_GOAL_HEADER)
-        suffix = ""
+        args = g
         if self._max_iterations > 1:
-            suffix = f" · ≤{self._max_iterations} iter"
-        line = f"{prefix} Goal · {g}{suffix}"
+            args += f", iter<={self._max_iterations}"
+        line = f"{prefix} Goal({args})"
         return Content.styled(line, "bold")
 
     def _indent_prefix(self) -> str:
         g = get_glyphs()
-        return f"  {g.box_vertical} "
+        return f"{g.output_prefix} "
 
     def _format_step_line(self, st: _StepLineState) -> str:
         g = get_glyphs()

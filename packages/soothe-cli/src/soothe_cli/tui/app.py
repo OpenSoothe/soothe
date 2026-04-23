@@ -994,7 +994,7 @@ class SootheApp(App):
         def _create() -> TextualSessionState:
             return TextualSessionState(
                 auto_approve=self._auto_approve,
-                thread_id=self._lc_loop_id,
+                loop_id=self._lc_loop_id,
             )
 
         try:
