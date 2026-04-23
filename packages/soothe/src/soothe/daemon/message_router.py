@@ -1030,6 +1030,78 @@ class MessageRouter:
         await d._send_client_message(client_id, response)
 
     # ---------------------------------------------------------------------------
+    # Loop RPC Helpers (IG-246: Self-healing metadata sync)
+    # ---------------------------------------------------------------------------
+
+    async def _ensure_loop_metadata(self, loop_id: str) -> Path | None:
+        """Ensure loop dir + metadata.json exist. Reconstruct from SQLite if needed.
+
+        Self-healing for:
+        - Pre-existing loops (created before IG-246)
+        - Edge cases where metadata.json was deleted
+
+        Args:
+            loop_id: Loop identifier
+
+        Returns:
+            loop_dir Path if loop exists (in filesystem or SQLite), None if not found
+        """
+        import json
+
+        import aiosqlite
+
+        from soothe.cognition.agent_loop.persistence.directory_manager import (
+            PersistenceDirectoryManager,
+        )
+
+        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
+        metadata_file = loop_dir / "metadata.json"
+
+        # Case 1: metadata.json exists → use it
+        if metadata_file.exists():
+            return loop_dir
+
+        # Case 2: metadata.json missing → reconstruct from SQLite
+        try:
+            db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
+            async with aiosqlite.connect(db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(
+                    "SELECT * FROM agentloop_loops WHERE loop_id = ?", (loop_id,)
+                )
+                row = await cursor.fetchone()
+
+                if row is None:
+                    # Loop doesn't exist in SQLite → truly not found
+                    return None
+
+                # Reconstruct metadata from checkpoint
+                metadata = {
+                    "loop_id": row["loop_id"],
+                    "status": row["status"],
+                    "thread_ids": json.loads(row["thread_ids"]),
+                    "current_thread_id": row["current_thread_id"],
+                    "total_goals_completed": row["total_goals_completed"],
+                    "total_thread_switches": row["total_thread_switches"],
+                    "total_duration_ms": row["total_duration_ms"],
+                    "total_tokens_used": row["total_tokens_used"],
+                    "schema_version": row["schema_version"],
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                }
+
+                # Write metadata.json for future use
+                loop_dir.mkdir(parents=True, exist_ok=True)
+                metadata_file.write_text(json.dumps(metadata, indent=2))
+                logger.info("Reconstructed metadata.json for loop %s from SQLite", loop_id)
+
+                return loop_dir
+
+        except Exception as e:
+            logger.error("Failed to reconstruct metadata for loop %s: %s", loop_id, e)
+            return None
+
+    # ---------------------------------------------------------------------------
     # Loop RPC Handlers (RFC-504 Loop Management CLI Commands)
     # ---------------------------------------------------------------------------
 
@@ -1042,6 +1114,8 @@ class MessageRouter:
         """
         import json
 
+        import aiosqlite
+
         from soothe.cognition.agent_loop.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
@@ -1051,13 +1125,15 @@ class MessageRouter:
         filter_data = msg.get("filter")
         limit = msg.get("limit", 20)
 
-        # Get all loop directories
+        # Get all loop directories from filesystem
         loops_dir = PersistenceDirectoryManager.get_loops_directory()
 
+        filesystem_loops = set()
         loops = []
         if loops_dir.exists():
             for loop_dir in loops_dir.iterdir():
-                if loop_dir.is_dir():
+                if loop_dir.is_dir() and loop_dir.name != "loop_checkpoints.db":
+                    filesystem_loops.add(loop_dir.name)
                     metadata_file = loop_dir / "metadata.json"
                     if metadata_file.exists():
                         try:
@@ -1083,6 +1159,57 @@ class MessageRouter:
                                 "Failed to read metadata for %s: %s", loop_dir.name, str(e)
                             )
 
+        # Query SQLite for loops missing from filesystem (IG-246 self-healing)
+        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
+        if db_path.exists():
+            try:
+                async with aiosqlite.connect(db_path) as db:
+                    cursor = await db.execute("SELECT loop_id FROM agentloop_loops")
+                    rows = await cursor.fetchall()
+                    sqlite_loops = {row[0] for row in rows}
+
+                    # Find orphaned loops (in SQLite but not in filesystem)
+                    orphaned_loops = sqlite_loops - filesystem_loops
+
+                    # Self-heal: reconstruct metadata.json for orphaned loops
+                    for loop_id in orphaned_loops:
+                        await self._ensure_loop_metadata(loop_id)
+
+                        # Now load the reconstructed metadata
+                        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
+                        metadata_file = loop_dir / "metadata.json"
+                        if metadata_file.exists():
+                            try:
+                                metadata = json.loads(metadata_file.read_text())
+
+                                # Filter by status
+                                if filter_data and filter_data.get("status"):
+                                    if metadata.get("status") != filter_data["status"]:
+                                        continue
+
+                                loops.append(
+                                    {
+                                        "loop_id": metadata.get("loop_id", loop_id),
+                                        "status": metadata.get("status", "unknown"),
+                                        "threads": len(metadata.get("thread_ids", [])),
+                                        "goals": metadata.get("total_goals_completed", 0),
+                                        "switches": metadata.get("total_thread_switches", 0),
+                                        "created": metadata.get("created_at", "")[:16],
+                                    }
+                                )
+                                logger.info(
+                                    "Self-healed orphaned loop %s (reconstructed metadata.json)",
+                                    loop_id,
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    "Failed to read reconstructed metadata for %s: %s",
+                                    loop_id,
+                                    str(e),
+                                )
+            except Exception as e:
+                logger.error("Failed to query SQLite for orphaned loops: %s", str(e))
+
         # Sort by created_at (most recent first)
         loops.sort(key=lambda x: x["created"], reverse=True)
 
@@ -1107,9 +1234,6 @@ class MessageRouter:
         """
         import json
 
-        from soothe.cognition.agent_loop.persistence.directory_manager import (
-            PersistenceDirectoryManager,
-        )
         from soothe.cognition.agent_loop.persistence.manager import (
             AgentLoopCheckpointPersistenceManager,
         )
@@ -1130,9 +1254,9 @@ class MessageRouter:
             )
             return
 
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-
-        if not loop_dir.exists():
+        # Self-healing: ensure metadata.json exists (reconstruct from SQLite if needed)
+        loop_dir = await self._ensure_loop_metadata(loop_id)
+        if loop_dir is None:
             await d._send_client_message(
                 client_id,
                 {
@@ -1144,20 +1268,8 @@ class MessageRouter:
             )
             return
 
-        # Load metadata
+        # Load metadata (guaranteed to exist after _ensure_loop_metadata)
         metadata_file = loop_dir / "metadata.json"
-        if not metadata_file.exists():
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "LOOP_METADATA_MISSING",
-                    "message": f"No metadata found for loop {loop_id}",
-                    "request_id": request_id,
-                },
-            )
-            return
-
         try:
             metadata = json.loads(metadata_file.read_text())
         except Exception as e:
@@ -1212,9 +1324,6 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message with loop_id and format.
         """
-        from soothe.cognition.agent_loop.persistence.directory_manager import (
-            PersistenceDirectoryManager,
-        )
         from soothe.cognition.agent_loop.persistence.manager import (
             AgentLoopCheckpointPersistenceManager,
         )
@@ -1235,9 +1344,9 @@ class MessageRouter:
             )
             return
 
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-
-        if not loop_dir.exists():
+        # Self-healing: ensure metadata.json exists (reconstruct from SQLite if needed)
+        loop_dir = await self._ensure_loop_metadata(loop_id)
+        if loop_dir is None:
             await d._send_client_message(
                 client_id,
                 {
@@ -1317,9 +1426,6 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message with loop_id, retention_days, and dry_run.
         """
-        from soothe.cognition.agent_loop.persistence.directory_manager import (
-            PersistenceDirectoryManager,
-        )
         from soothe.cognition.agent_loop.persistence.manager import (
             AgentLoopCheckpointPersistenceManager,
         )
@@ -1342,9 +1448,9 @@ class MessageRouter:
             )
             return
 
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-
-        if not loop_dir.exists():
+        # Self-healing: ensure metadata.json exists (reconstruct from SQLite if needed)
+        loop_dir = await self._ensure_loop_metadata(loop_id)
+        if loop_dir is None:
             await d._send_client_message(
                 client_id,
                 {
@@ -1411,24 +1517,39 @@ class MessageRouter:
             )
             return
 
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-
-        if not loop_dir.exists():
+        # Self-healing: ensure metadata.json exists (reconstruct from SQLite if needed)
+        loop_dir = await self._ensure_loop_metadata(loop_id)
+        if loop_dir is None:
+            # Already deleted or never existed
             await d._send_client_message(
                 client_id,
                 {
-                    "type": "error",
-                    "code": "LOOP_NOT_FOUND",
-                    "message": f"Loop {loop_id} not found",
+                    "type": "loop_delete_response",
                     "request_id": request_id,
+                    "success": True,
+                    "message": f"Loop {loop_id} not found (already deleted)",
                 },
             )
             return
 
-        # Delete loop directory
+        # Delete loop directory and SQLite data (IG-246: comprehensive cleanup)
         try:
+            import aiosqlite
+
+            # Delete filesystem directory
             shutil.rmtree(loop_dir)
             logger.info("Deleted loop directory: %s", loop_id)
+
+            # Delete from SQLite (all 4 tables)
+            db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
+            if db_path.exists():
+                async with aiosqlite.connect(db_path) as db:
+                    await db.execute("DELETE FROM agentloop_loops WHERE loop_id = ?", (loop_id,))
+                    await db.execute("DELETE FROM checkpoint_anchors WHERE loop_id = ?", (loop_id,))
+                    await db.execute("DELETE FROM failed_branches WHERE loop_id = ?", (loop_id,))
+                    await db.execute("DELETE FROM goal_records WHERE loop_id = ?", (loop_id,))
+                    await db.commit()
+                    logger.info("Deleted loop %s from SQLite database", loop_id)
 
             response = {
                 "type": "loop_delete_response",
@@ -1490,9 +1611,6 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message with loop_id.
         """
-        from soothe.cognition.agent_loop.persistence.directory_manager import (
-            PersistenceDirectoryManager,
-        )
         from soothe.daemon.reattachment_handler import handle_loop_reattach
 
         d = self._daemon
@@ -1511,9 +1629,9 @@ class MessageRouter:
             )
             return
 
-        # Check loop exists
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-        if not loop_dir.exists():
+        # Self-healing: ensure metadata.json exists (reconstruct from SQLite if needed)
+        loop_dir = await self._ensure_loop_metadata(loop_id)
+        if loop_dir is None:
             await d._send_client_message(
                 client_id,
                 {
@@ -1552,10 +1670,6 @@ class MessageRouter:
         import json
         from datetime import UTC, datetime
 
-        from soothe.cognition.agent_loop.persistence.directory_manager import (
-            PersistenceDirectoryManager,
-        )
-
         d = self._daemon
         request_id = msg.get("request_id")
         loop_id = msg.get("loop_id")
@@ -1572,9 +1686,9 @@ class MessageRouter:
             )
             return
 
-        # Check loop exists
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-        if not loop_dir.exists():
+        # Self-healing: ensure metadata.json exists (reconstruct from SQLite if needed)
+        loop_dir = await self._ensure_loop_metadata(loop_id)
+        if loop_dir is None:
             await d._send_client_message(
                 client_id,
                 {
@@ -1687,10 +1801,6 @@ class MessageRouter:
         from datetime import UTC, datetime
         from pathlib import Path
 
-        from soothe.cognition.agent_loop.persistence.directory_manager import (
-            PersistenceDirectoryManager,
-        )
-
         d = self._daemon
         request_id = msg.get("request_id")
         loop_id = msg.get("loop_id")
@@ -1708,9 +1818,9 @@ class MessageRouter:
             )
             return
 
-        # Check loop exists
-        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-        if not loop_dir.exists():
+        # Self-healing: ensure metadata.json exists (reconstruct from SQLite if needed)
+        loop_dir = await self._ensure_loop_metadata(loop_id)
+        if loop_dir is None:
             await d._send_client_message(
                 client_id,
                 {
@@ -1722,20 +1832,8 @@ class MessageRouter:
             )
             return
 
-        # Load loop metadata to get current_thread_id
+        # Load loop metadata (guaranteed to exist after _ensure_loop_metadata)
         metadata_file = loop_dir / "metadata.json"
-        if not metadata_file.exists():
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "LOOP_METADATA_MISSING",
-                    "message": f"No metadata found for loop {loop_id}",
-                    "request_id": request_id,
-                },
-            )
-            return
-
         try:
             metadata = json.loads(metadata_file.read_text())
         except Exception as e:
