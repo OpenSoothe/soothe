@@ -1,7 +1,7 @@
 """Shared utilities for SDK, CLI, and daemon.
 
 This package provides logging, display formatting, parsing,
-and workspace utilities used across all Soothe packages.
+serde, and workspace utilities used across all Soothe packages.
 """
 
 from soothe_sdk.utils.display import (
@@ -22,6 +22,10 @@ from soothe_sdk.utils.parsing import (
     parse_autopilot_goals,
     resolve_provider_env,
 )
+from soothe_sdk.utils.serde import (
+    create_soothe_serde,
+    get_soothe_msgpack_allowlist,
+)
 from soothe_sdk.utils.workspace import INVALID_WORKSPACE_DIRS
 
 __all__ = [
@@ -38,4 +42,6 @@ __all__ = [
     "resolve_provider_env",
     "INVALID_WORKSPACE_DIRS",
     "is_path_argument",
+    "create_soothe_serde",
+    "get_soothe_msgpack_allowlist",
 ]

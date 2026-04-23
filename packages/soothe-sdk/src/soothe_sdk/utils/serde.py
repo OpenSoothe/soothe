@@ -4,9 +4,12 @@ Registers ``LoopHumanMessage`` and ``LoopAIMessage`` so that langgraph's
 msgpack-based checkpoint deserialization does not emit warnings (and will
 continue to work when ``LANGGRAPH_STRICT_MSGPACK=true`` becomes the default).
 
+This module lives in the SDK package so that both the daemon and CLI can
+use it without the CLI importing daemon runtime.
+
 Usage::
 
-    from soothe.utils.serde import create_soothe_serde
+    from soothe_sdk.utils.serde import create_soothe_serde
 
     serde = create_soothe_serde()
     checkpointer = AsyncSqliteSaver(conn, serde=serde)
