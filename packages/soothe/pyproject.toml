@@ -88,6 +88,9 @@ claude = [
 github = [
     "PyGithub>=2.0.0",
 ]
+dashscope = [
+    "dashscope>=1.20.0",
+]
 # CLI client (optional - for interactive usage)
 cli = [
     "soothe-cli>=0.2.0",
@@ -100,7 +103,7 @@ dev = [
     "mypy>=1.0.0",
 ]
 all = [
-    "soothe[research,websearch,tabular,document,media,video,claude,github,cli]",
+    "soothe[research,websearch,tabular,document,media,video,claude,github,dashscope,cli]",
 ]
 
 [project.scripts]
