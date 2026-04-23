@@ -579,7 +579,7 @@ async def test_protocol_message_thread_id_in_events(tmp_path: Path, requires_llm
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_protocol_client_id_in_status(tmp_path: Path) -> None:
+async def test_protocol_client_id_in_status(tmp_path: Path, requires_llm_api) -> None:
     """Test that status messages include client_id field."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
@@ -813,7 +813,7 @@ async def test_graceful_handling_of_invalid_subscriptions(tmp_path: Path) -> Non
 @pytest.mark.asyncio
 @pytest.mark.integration
 @pytest.mark.slow
-async def test_concurrent_queries_different_threads(tmp_path: Path) -> None:
+async def test_concurrent_queries_different_threads(tmp_path: Path, requires_llm_api) -> None:
     """Test that multiple threads can execute concurrently (if supported)."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
