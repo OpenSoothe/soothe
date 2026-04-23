@@ -657,14 +657,14 @@ async def _get_jsonplus_serializer() -> JsonPlusSerializer:
 
 
 def _create_jsonplus_serializer() -> JsonPlusSerializer:
-    """Import and create a JsonPlus serializer.
+    """Import and create a JsonPlus serializer with Soothe type allowlist.
 
     Returns:
         A ready `JsonPlusSerializer` instance.
     """
-    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+    from soothe.utils.serde import create_soothe_serde
 
-    return JsonPlusSerializer()
+    return create_soothe_serde()
 
 
 def _cache_message_count(thread_id: str, freshness: str | None, count: int) -> None:
