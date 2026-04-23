@@ -39,16 +39,24 @@ async def test_complete_smart_retry_workflow(tmp_path):
     5. Retry succeeds with adjusted approach
     """
     # Mock SOOTHE_HOME to temp directory
-    import soothe.config.constants as constants
+    import soothe.config.env as env_config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = env_config.SOOTHE_HOME
+    env_config.SOOTHE_HOME = str(tmp_path)
 
     try:
         # Setup persistence
         PersistenceDirectoryManager.ensure_directories_exist()
         persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
         loop_id = "test_retry_loop"
+
+        # Register the loop first (required for FK constraint)
+        await persistence_manager.register_loop(
+            loop_id=loop_id,
+            thread_ids=["thread_001"],
+            current_thread_id="thread_001",
+            status="running",
+        )
 
         # Mock checkpointer for anchor capture
         mock_checkpointer = AsyncMock()
@@ -162,7 +170,7 @@ async def test_complete_smart_retry_workflow(tmp_path):
         assert len(successful_anchors) >= 1  # iteration 0
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        env_config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.integration
@@ -176,15 +184,23 @@ async def test_multiple_failures_with_learning_accumulation(tmp_path):
     3. Both branches preserved for learning
     4. Smart retry uses accumulated insights
     """
-    import soothe.config.constants as constants
+    import soothe.config.env as env_config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = env_config.SOOTHE_HOME
+    env_config.SOOTHE_HOME = str(tmp_path)
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
         persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
         loop_id = "test_multi_failure_loop"
+
+        # Register the loop first (required for FK constraint)
+        await persistence_manager.register_loop(
+            loop_id=loop_id,
+            thread_ids=["thread_001"],
+            current_thread_id="thread_001",
+            status="running",
+        )
 
         # Create multiple failed branches
         branch_manager = FailedBranchManager(loop_id)
@@ -239,7 +255,7 @@ async def test_multiple_failures_with_learning_accumulation(tmp_path):
         assert branches[1]["iteration"] == 4
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        env_config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.integration
@@ -254,15 +270,23 @@ async def test_branch_pruning_retention_policy(tmp_path):
     """
     from datetime import timedelta
 
-    import soothe.config.constants as constants
+    import soothe.config.env as env_config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = env_config.SOOTHE_HOME
+    env_config.SOOTHE_HOME = str(tmp_path)
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
         persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
         loop_id = "test_prune_loop"
+
+        # Register the loop first (required for FK constraint)
+        await persistence_manager.register_loop(
+            loop_id=loop_id,
+            thread_ids=["thread_001"],
+            current_thread_id="thread_001",
+            status="running",
+        )
 
         # Create old branch (60 days ago)
         await persistence_manager.save_failed_branch(
@@ -319,4 +343,4 @@ async def test_branch_pruning_retention_policy(tmp_path):
         assert branches[0]["branch_id"] == "branch_recent"
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        env_config.SOOTHE_HOME = original_home

@@ -259,7 +259,7 @@ def _resolve_single_tool_group_uncached(
         return list(create_video_tools())
     if name == "github":
         try:
-            from langchain_community.utilities import GitHubAPIWrapper
+            from langchain_community.utilities.github import GitHubAPIWrapper
 
             wrapper = GitHubAPIWrapper()
             return wrapper.get_tools()
