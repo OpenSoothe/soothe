@@ -174,7 +174,7 @@ class WelcomeBanner(Static):
 
         editable_path = _get_editable_install_path()
         if editable_path:
-            parts.extend([("Installed from: ", "dim"), (editable_path, "dim"), "\n"])
+            parts.extend([("Source: ", "dim"), (editable_path, "dim"), "\n"])
 
         if self._cli_loop_id:
             parts.append((f"Loop: {self._cli_loop_id}\n", "dim"))
