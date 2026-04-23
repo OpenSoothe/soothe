@@ -52,6 +52,14 @@ async def test_loop_detachment_continues_execution(tmp_path):
         persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
         loop_id = "test_detach_loop"
 
+        # Register the loop first (required for FK constraint)
+        await persistence_manager.register_loop(
+            loop_id=loop_id,
+            thread_ids=["thread_001"],
+            current_thread_id="thread_001",
+            status="running",
+        )
+
         # Mock checkpointer for anchor capture
         mock_checkpointer = AsyncMock()
         mock_checkpointer.aget_tuple = AsyncMock(
@@ -181,6 +189,14 @@ async def test_loop_reattachment_history_replay(tmp_path):
         PersistenceDirectoryManager.ensure_directories_exist()
         persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
         loop_id = "test_reattach_loop"
+
+        # Register the loop first (required for FK constraint)
+        await persistence_manager.register_loop(
+            loop_id=loop_id,
+            thread_ids=["thread_001", "thread_002"],
+            current_thread_id="thread_001",
+            status="running",
+        )
 
         # Mock checkpointer
         mock_checkpointer = AsyncMock()
@@ -317,6 +333,14 @@ async def test_loop_reattachment_with_thread_switch(tmp_path):
         PersistenceDirectoryManager.ensure_directories_exist()
         persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
         loop_id = "test_thread_switch_loop"
+
+        # Register the loop first (required for FK constraint)
+        await persistence_manager.register_loop(
+            loop_id=loop_id,
+            thread_ids=["thread_001", "thread_002"],
+            current_thread_id="thread_001",
+            status="running",
+        )
 
         # Mock checkpointer for thread_001
         mock_checkpointer_t1 = AsyncMock()

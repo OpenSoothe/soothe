@@ -361,7 +361,7 @@ async def test_http_transport_shutdown_endpoint(tmp_path: Path) -> None:
     port = alloc_ephemeral_port()
     config = HttpRestConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
     transport = HttpRestTransport(config)
-    await transport.start(lambda msg: None)
+    await transport.start(lambda client_id, msg: None)
     await asyncio.sleep(0.2)
 
     try:

@@ -41,18 +41,18 @@ def _two_step_replan_decision() -> AgentDecision:
     )
 
 
-class MockLoopReasoner:
-    """Drives Reason phase for tests (one LLM call per outer iteration)."""
+class MockLoopPlanner:
+    """Drives Plan phase for tests (one LLM call per outer iteration)."""
 
     def __init__(self, scenario: str = "success") -> None:
         self.scenario = scenario
-        self.reason_count = 0
+        self.plan_count = 0
 
-    async def reason(self, goal: str, state, context: PlanContext) -> PlanResult:
-        self.reason_count += 1
+    async def plan(self, goal: str, state, context: PlanContext) -> PlanResult:
+        self.plan_count += 1
 
         if self.scenario == "success":
-            if self.reason_count == 1:
+            if self.plan_count == 1:
                 return PlanResult(
                     status="continue",
                     plan_action="new",
@@ -70,7 +70,7 @@ class MockLoopReasoner:
             )
 
         if self.scenario == "replan":
-            if self.reason_count == 1:
+            if self.plan_count == 1:
                 return PlanResult(
                     status="continue",
                     plan_action="new",
@@ -78,7 +78,7 @@ class MockLoopReasoner:
                     next_action="I'll start with this three-step approach.",
                     reasoning="v1",
                 )
-            if self.reason_count == 2:
+            if self.plan_count == 2:
                 return PlanResult(
                     status="replan",
                     plan_action="new",
@@ -96,7 +96,7 @@ class MockLoopReasoner:
             )
 
         if self.scenario == "continue":
-            if self.reason_count == 1:
+            if self.plan_count == 1:
                 return PlanResult(
                     status="continue",
                     plan_action="new",
@@ -147,11 +147,11 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
 @pytest.mark.asyncio
 async def test_loop_agent_success() -> None:
     """Test AgentLoop with successful execution."""
-    reasoner = MockLoopReasoner(scenario="success")
+    planner = MockLoopPlanner(scenario="success")
     core_agent = MockCoreAgent()
     loop_agent = AgentLoop(
         core_agent=core_agent,
-        loop_reasoner=reasoner,
+        loop_planner=planner,
         config=_make_config(),
     )
 
@@ -163,17 +163,17 @@ async def test_loop_agent_success() -> None:
 
     assert result.status == "done"
     assert result.goal_progress == 1.0
-    assert reasoner.reason_count == 2
+    assert planner.plan_count == 2
 
 
 @pytest.mark.asyncio
 async def test_loop_agent_with_replan() -> None:
     """Test AgentLoop with replan scenario."""
-    reasoner = MockLoopReasoner(scenario="replan")
+    planner = MockLoopPlanner(scenario="replan")
     core_agent = MockCoreAgent()
     loop_agent = AgentLoop(
         core_agent=core_agent,
-        loop_reasoner=reasoner,
+        loop_planner=planner,
         config=_make_config(),
     )
 
@@ -184,17 +184,17 @@ async def test_loop_agent_with_replan() -> None:
     )
 
     assert result.status == "done"
-    assert reasoner.reason_count == 3
+    assert planner.plan_count == 3
 
 
 @pytest.mark.asyncio
 async def test_loop_agent_with_continue() -> None:
     """Test AgentLoop with continue-then-done scenario."""
-    reasoner = MockLoopReasoner(scenario="continue")
+    planner = MockLoopPlanner(scenario="continue")
     core_agent = MockCoreAgent()
     loop_agent = AgentLoop(
         core_agent=core_agent,
-        loop_reasoner=reasoner,
+        loop_planner=planner,
         config=_make_config(),
     )
 
@@ -205,19 +205,19 @@ async def test_loop_agent_with_continue() -> None:
     )
 
     assert result.status == "done"
-    assert reasoner.reason_count == 2
+    assert planner.plan_count == 2
 
 
 @pytest.mark.asyncio
 async def test_loop_agent_max_iterations() -> None:
     """Test AgentLoop respects max iterations."""
 
-    class NeverDoneReasoner:
+    class NeverDonePlanner:
         def __init__(self) -> None:
-            self.reason_count = 0
+            self.plan_count = 0
 
-        async def reason(self, goal, state, context):
-            self.reason_count += 1
+        async def plan(self, goal, state, context):
+            self.plan_count += 1
             return PlanResult(
                 status="continue",
                 plan_action="new",
@@ -238,11 +238,11 @@ async def test_loop_agent_max_iterations() -> None:
                 confidence=0.5,
             )
 
-    reasoner = NeverDoneReasoner()
+    planner = NeverDonePlanner()
     core_agent = MockCoreAgent()
     loop_agent = AgentLoop(
         core_agent=core_agent,
-        loop_reasoner=reasoner,
+        loop_planner=planner,
         config=_make_config(max_iterations=3),
     )
 
@@ -252,7 +252,7 @@ async def test_loop_agent_max_iterations() -> None:
         max_iterations=3,
     )
 
-    assert reasoner.reason_count == 3
+    assert planner.plan_count == 3
     assert result.status == "continue"
 
 
@@ -260,13 +260,13 @@ async def test_loop_agent_max_iterations() -> None:
 async def test_loop_agent_parallel_execution() -> None:
     """Test AgentLoop with parallel execution mode."""
 
-    class ParallelReasoner:
+    class ParallelPlanner:
         def __init__(self) -> None:
-            self.reason_count = 0
+            self.plan_count = 0
 
-        async def reason(self, goal, state, context):
-            self.reason_count += 1
-            if self.reason_count == 1:
+        async def plan(self, goal, state, context):
+            self.plan_count += 1
+            if self.plan_count == 1:
                 return PlanResult(
                     status="continue",
                     plan_action="new",
@@ -293,11 +293,11 @@ async def test_loop_agent_parallel_execution() -> None:
                 confidence=0.95,
             )
 
-    reasoner = ParallelReasoner()
+    planner = ParallelPlanner()
     core_agent = MockCoreAgent()
     loop_agent = AgentLoop(
         core_agent=core_agent,
-        loop_reasoner=reasoner,
+        loop_planner=planner,
         config=_make_config(),
     )
 
