@@ -97,7 +97,10 @@ class MessageRouter:
                     "Received %s via router — treating as client detach (daemon keeps running)",
                     normalized,
                 )
-                await d._broadcast({"type": "status", "state": "detached"})
+                # IG-248: Send directly to this client (deprecated legacy socket support)
+                # IG-161: Bypass input queue - handle immediately in router
+                # IG-248: No thread association for detached status
+                await d._send_client_message(client_id, {"type": "status", "state": "detached"})
                 return
             if normalized == "/cancel" and getattr(d, "_query_engine", None) is not None:
                 await d._query_engine.cancel_current_query()

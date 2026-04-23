@@ -635,8 +635,8 @@ class SootheDaemon(DaemonHandlersMixin):
             with contextlib.suppress(asyncio.CancelledError):
                 await self._current_query_task
 
-        with contextlib.suppress(Exception):
-            await self._broadcast({"type": "status", "state": "stopped"})
+        # IG-248: Skip stopped status broadcast - daemon shutdown disconnects all clients anyway
+        # No need to broadcast globally; clients will receive connection close event
 
         # Clean up runner resources with a timeout
         if self._runner and hasattr(self._runner, "cleanup"):
@@ -711,10 +711,13 @@ class SootheDaemon(DaemonHandlersMixin):
             topic = f"thread:{thread_id}"
             await self._event_bus.publish(topic, msg, event_meta=event_meta)
         else:
-            # Event without thread_id - broadcast to all transports
-            logger.debug("Event has no thread_id, broadcasting to all: %s", msg_type)
-            if self._transport_manager:
-                await self._transport_manager.broadcast(msg)
+            # IG-248: Event without thread_id - log error (should never happen)
+            # Do NOT broadcast globally to prevent cross-client leakage
+            logger.error(
+                "Event lacks thread_id, cannot route (type=%s): %s",
+                msg_type,
+                msg,
+            )
 
     async def _send(self, client: _ClientConn, msg: dict[str, Any]) -> None:
         with contextlib.suppress(Exception):

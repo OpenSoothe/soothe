@@ -10,7 +10,7 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.mark.asyncio
-async def test_query_complexity_classification(test_config: SootheConfig):
+async def test_query_complexity_classification(test_config: SootheConfig, requires_llm_api):
     """Test that query complexity is classified correctly."""
     runner = SootheRunner(test_config)
 
@@ -26,7 +26,7 @@ async def test_query_complexity_classification(test_config: SootheConfig):
 
 
 @pytest.mark.asyncio
-async def test_template_planning(test_config: SootheConfig):
+async def test_template_planning(test_config: SootheConfig, requires_llm_api):
     """Test that template plans are used for trivial/simple queries."""
     runner = SootheRunner(test_config)
 
@@ -41,7 +41,7 @@ async def test_template_planning(test_config: SootheConfig):
 
 
 @pytest.mark.asyncio
-async def test_conditional_memory_recall(test_config: SootheConfig):
+async def test_conditional_memory_recall(test_config: SootheConfig, requires_llm_api):
     """Test that memory recall is conditionally applied based on query complexity."""
     runner = SootheRunner(test_config)
 
@@ -56,7 +56,7 @@ async def test_conditional_memory_recall(test_config: SootheConfig):
 
 
 @pytest.mark.asyncio
-async def test_conditional_context_projection(test_config: SootheConfig):
+async def test_conditional_context_projection(test_config: SootheConfig, requires_llm_api):
     """Test that context projection is conditionally applied based on query complexity."""
     runner = SootheRunner(test_config)
 
@@ -71,7 +71,7 @@ async def test_conditional_context_projection(test_config: SootheConfig):
 
 
 @pytest.mark.asyncio
-async def test_parallel_execution(test_config: SootheConfig):
+async def test_parallel_execution(test_config: SootheConfig, requires_llm_api):
     """Test that parallel execution works for medium/complex queries."""
     test_config.performance.enabled = True
     runner = SootheRunner(test_config)
@@ -88,7 +88,7 @@ async def test_parallel_execution(test_config: SootheConfig):
 
 
 @pytest.mark.asyncio
-async def test_feature_flags():
+async def test_feature_flags(requires_llm_api):
     """Test that feature flags work correctly."""
     # Test with performance disabled
     config1 = SootheConfig()

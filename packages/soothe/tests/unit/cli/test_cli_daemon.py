@@ -160,19 +160,23 @@ async def test_exit_and_quit_commands_bypass_input_queue() -> None:
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     sent: list[dict] = []
 
-    async def _fake_broadcast(msg: dict) -> None:
-        sent.append(msg)
+    # IG-248: Mock _send_client_message instead of _broadcast
+    sent_to_client: list[dict] = []
 
-    daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
+    async def _fake_send_client_message(cid: str, msg: dict) -> None:
+        sent_to_client.append({"client_id": cid, "msg": msg})
+
+    daemon._send_client_message = _fake_send_client_message  # type: ignore[method-assign]
 
     await daemon._handle_client_message("client-1", {"type": "command", "cmd": " /exit "})
     assert daemon._current_input_queue.qsize() == 0
-    assert sent == [{"type": "status", "state": "detached"}]
+    # IG-248: Direct send to client (no thread_id, deprecated legacy socket)
+    assert sent_to_client == [{"client_id": "client-1", "msg": {"type": "status", "state": "detached"}}]
 
-    sent.clear()
+    sent_to_client.clear()
     await daemon._handle_client_message("client-1", {"type": "command", "cmd": "/QUIT"})
     assert daemon._current_input_queue.qsize() == 0
-    assert sent == [{"type": "status", "state": "detached"}]
+    assert sent_to_client == [{"client_id": "client-1", "msg": {"type": "status", "state": "detached"}}]
 
 
 @pytest.mark.asyncio

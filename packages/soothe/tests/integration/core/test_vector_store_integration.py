@@ -95,6 +95,7 @@ def weaviate_store(weaviate_config):
 
 
 @pytest.mark.integration
+@pytest.mark.requires_postgresql
 class TestPGVectorStoreIntegration:
     """Integration tests for PGVectorStore with real PostgreSQL database."""
 
@@ -329,7 +330,7 @@ class TestPGVectorStoreIntegration:
 
 
 @pytest.mark.integration
-@pytest.mark.skip(reason="Weaviate server not available for integration tests")
+@pytest.mark.requires_weaviate
 class TestWeaviateVectorStoreIntegration:
     """Integration tests for WeaviateVectorStore with real Weaviate instance."""
 

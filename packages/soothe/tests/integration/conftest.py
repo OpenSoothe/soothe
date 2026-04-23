@@ -28,6 +28,9 @@ def pytest_addoption(parser) -> None:
 def pytest_configure(config) -> None:
     """Configure pytest markers."""
     config.addinivalue_line("markers", "integration: mark test as integration test")
+    config.addinivalue_line("markers", "requires_postgresql: requires PostgreSQL database")
+    config.addinivalue_line("markers", "requires_weaviate: requires Weaviate vector store")
+    config.addinivalue_line("markers", "requires_llm_api: requires LLM API keys")
 
 
 def pytest_collection_modifyitems(config, items) -> None:
@@ -40,6 +43,35 @@ def pytest_collection_modifyitems(config, items) -> None:
     for item in items:
         if "integration" in item.keywords:
             item.add_marker(skip_integration)
+
+
+# ---------------------------------------------------------------------------
+# External Service Availability Checks
+# ---------------------------------------------------------------------------
+
+
+def _has_postgresql() -> bool:
+    """Check if PostgreSQL database is available for integration tests."""
+    # Check for PostgreSQL connection parameters
+    has_postgres_host = os.getenv("POSTGRES_HOST") or os.getenv("PGHOST")
+    has_postgres_url = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL")
+    return bool(has_postgres_host or has_postgres_url)
+
+
+def _has_weaviate() -> bool:
+    """Check if Weaviate vector store is available for integration tests."""
+    # Check for Weaviate connection parameters
+    has_weaviate_host = os.getenv("WEAVIATE_HOST") or os.getenv("WEAVIATE_URL")
+    return bool(has_weaviate_host)
+
+
+def _has_valid_api_key() -> bool:
+    """Check if a valid LLM API key is available for integration tests."""
+    return bool(
+        os.getenv("OPENAI_API_KEY")
+        or os.getenv("ANTHROPIC_API_KEY")
+        or (os.getenv("DASHSCOPE_CP_API_KEY") and os.getenv("DASHSCOPE_CP_BASE_URL"))
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +134,35 @@ def force_isolated_home(home: Path) -> None:
     import soothe.core.thread.manager as thread_manager
 
     thread_manager.SOOTHE_HOME = home_str
+
+
+# ---------------------------------------------------------------------------
+# Service Availability Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def requires_postgresql():
+    """Fixture that skips test if PostgreSQL is not available."""
+    if not _has_postgresql():
+        pytest.skip("Test requires PostgreSQL (set POSTGRES_HOST, POSTGRES_URL, PGHOST, or DATABASE_URL)")
+
+
+@pytest.fixture
+def requires_weaviate():
+    """Fixture that skips test if Weaviate is not available."""
+    if not _has_weaviate():
+        pytest.skip("Test requires Weaviate (set WEAVIATE_HOST or WEAVIATE_URL)")
+
+
+@pytest.fixture
+def requires_llm_api():
+    """Fixture that skips test if LLM API key is not available."""
+    if not _has_valid_api_key():
+        pytest.skip(
+            "Test requires LLM API key (set OPENAI_API_KEY, ANTHROPIC_API_KEY, "
+            "or DASHSCOPE_CP_API_KEY + DASHSCOPE_CP_BASE_URL)"
+        )
 
 
 def build_daemon_config(
