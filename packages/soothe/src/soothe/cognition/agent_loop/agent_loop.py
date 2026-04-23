@@ -290,8 +290,21 @@ class AgentLoop:
 
             if plan_result.is_done():
                 state.previous_plan = plan_result
+                iteration_completed = state.iteration  # Capture pre-increment value
                 state.iteration += 1
                 state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
+
+                # Record iteration for goals completing immediately (IG-054)
+                # This preserves Plan phase reasoning even when no Act phase executed
+                await state_manager.record_iteration(
+                    goal_record=goal_record,
+                    iteration=iteration_completed,  # Pre-increment value (0 for immediate completion)
+                    plan_result=plan_result,
+                    decision=None,  # No decision was executed
+                    step_results=[],  # Empty - no Act phase executed
+                    state=state,
+                    working_memory=state.working_memory,
+                )
 
                 # RFC-211 / IG-199: Final report — adaptive second CoreAgent turn vs last Execute text
                 final_output = plan_result.full_output or plan_result.evidence_summary
