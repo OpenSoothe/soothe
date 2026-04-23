@@ -685,7 +685,7 @@ class Executor:
                 configurable["workspace"] = workspace
             # RFC-609: Inject goal briefing on thread switch (for single-step execution)
             if self._goal_context_manager:
-                goal_briefing = self._goal_context_manager.get_execute_briefing()
+                goal_briefing = await self._goal_context_manager.get_execute_briefing()
                 if goal_briefing:
                     configurable["soothe_goal_briefing"] = goal_briefing
                     logger.info(

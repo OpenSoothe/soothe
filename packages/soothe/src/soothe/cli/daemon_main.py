@@ -52,7 +52,10 @@ def daemon_start(
         raise typer.Exit(code=1)
 
     if foreground:
+        from soothe.logging import setup_logging
+
         typer.echo("Starting daemon in foreground...")
+        setup_logging(cfg, foreground=True)
         run_daemon(cfg, detached=False)
         return
 
