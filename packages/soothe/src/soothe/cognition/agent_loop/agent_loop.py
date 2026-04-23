@@ -200,8 +200,8 @@ class AgentLoop:
             plan_excerpts = plan_goal_excerpts + runner_prior
             # Create new goal_record for this goal execution
             goal_record = state_manager.start_new_goal(goal, max_iterations)
-            checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
-            checkpoint.goal_history.append(goal_record)
+            checkpoint.goal_history.append(goal_record)  # Append FIRST
+            checkpoint.current_goal_index = len(checkpoint.goal_history) - 1  # Compute index AFTER
             checkpoint.status = "running"
             await state_manager.save(checkpoint)
 

@@ -222,6 +222,30 @@ class AgentLoopStateManager:
 
                 self._checkpoint = checkpoint
 
+                # Auto-repair: Detect and fix orphaned running goals
+                if (
+                    checkpoint.status == "ready_for_next_goal"
+                    and checkpoint.current_goal_index == -1
+                ):
+                    # Check if goal_history has running goals
+                    running_goals = [g for g in checkpoint.goal_history if g.status == "running"]
+                    if running_goals:
+                        logger.warning(
+                            "Found orphaned running goals in loop %s (index=-1 but %d running goals)",
+                            checkpoint.loop_id,
+                            len(running_goals),
+                        )
+                        # Auto-repair: set index to last running goal
+                        checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
+                        checkpoint.status = "running"
+                        logger.info(
+                            "Auto-repaired orphaned goal index: set to %d (goal_id=%s)",
+                            checkpoint.current_goal_index,
+                            checkpoint.goal_history[checkpoint.current_goal_index].goal_id,
+                        )
+                        # Save repaired checkpoint
+                        await self._save_checkpoint_to_db(checkpoint)
+
                 logger.info(
                     "Loaded loop %s checkpoint (status %s, %d goals, %d threads)",
                     self.loop_id,
@@ -327,11 +351,21 @@ class AgentLoopStateManager:
 
         Returns:
             New GoalExecutionRecord (thread_id = current_thread_id)
+
+        Raises:
+            ValueError: If checkpoint is None or loop status is 'running'
         """
         if self._checkpoint is None:
             raise ValueError("No checkpoint to add goal to")
 
         checkpoint = self._checkpoint
+
+        # Validate: Cannot start new goal while loop is already running
+        if checkpoint.status == "running":
+            raise ValueError(
+                f"Cannot start new goal while loop is running (status={checkpoint.status}, "
+                f"current_goal_index={checkpoint.current_goal_index})"
+            )
 
         # Generate goal_id (loop-scoped sequence, independent of thread)
         goal_id = f"{checkpoint.loop_id}_goal_{len(checkpoint.goal_history)}"
