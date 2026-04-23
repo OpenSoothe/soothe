@@ -1,6 +1,5 @@
 """Tests for type definitions."""
 
-
 from soothe_sdk.plugin import Health as PluginHealth
 from soothe_sdk.plugin import Manifest as PluginManifest
 
