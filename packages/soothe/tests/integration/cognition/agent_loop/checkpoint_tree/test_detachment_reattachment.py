@@ -42,10 +42,10 @@ async def test_loop_detachment_continues_execution(tmp_path):
     4. Execute goal 2 while detached
     5. Verify loop status remains 'running'
     """
-    import soothe.config.constants as constants
+    import soothe.config.env as env_config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = env_config.SOOTHE_HOME
+    env_config.SOOTHE_HOME = str(tmp_path)
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
@@ -157,7 +157,7 @@ async def test_loop_detachment_continues_execution(tmp_path):
         assert iteration_1_end[0]["iteration_status"] == "success"
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        env_config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.integration
@@ -172,10 +172,10 @@ async def test_loop_reattachment_history_replay(tmp_path):
     4. Receive history_replay event with complete event stream
     5. Verify all goals/iterations/branches reconstructed
     """
-    import soothe.config.constants as constants
+    import soothe.config.env as env_config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = env_config.SOOTHE_HOME
+    env_config.SOOTHE_HOME = str(tmp_path)
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
@@ -294,7 +294,7 @@ async def test_loop_reattachment_history_replay(tmp_path):
         assert timestamps == sorted(timestamps)
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        env_config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.integration
@@ -308,10 +308,10 @@ async def test_loop_reattachment_with_thread_switch(tmp_path):
     3. Reattach client
     4. Verify THREAD_SWITCHED events in replay
     """
-    import soothe.config.constants as constants
+    import soothe.config.env as env_config
 
-    original_home = constants.SOOTHE_HOME
-    constants.SOOTHE_HOME = str(tmp_path)
+    original_home = env_config.SOOTHE_HOME
+    env_config.SOOTHE_HOME = str(tmp_path)
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
@@ -420,4 +420,4 @@ async def test_loop_reattachment_with_thread_switch(tmp_path):
         assert "thread_002" in thread_checkpoints
 
     finally:
-        constants.SOOTHE_HOME = original_home
+        env_config.SOOTHE_HOME = original_home

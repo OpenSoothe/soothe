@@ -67,14 +67,20 @@ def _build_http_transport_config(
                 protocols={
                     "memory": {"enabled": False},
                     "durability": {
-                        "backend": "json",
+                        "backend": "sqlite",
                         "persist_dir": str(tmp_path / "durability"),
                     },
                 },
                 daemon={
                     "transports": {
                         "unix_socket": {"enabled": False},
-                        "websocket": {"enabled": False},
+                        "websocket": {
+                            "enabled": True,
+                            "host": "127.0.0.1",
+                            "port": alloc_ephemeral_port(),
+                            "cors_origins": ["*"],
+                            "tls_enabled": False,
+                        },
                         "http_rest": {
                             "enabled": True,
                             "host": "127.0.0.1",
