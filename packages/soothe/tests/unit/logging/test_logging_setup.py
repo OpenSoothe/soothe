@@ -222,3 +222,67 @@ class TestLoggingSetup:
         for name in noisy_loggers:
             logger = logging.getLogger(name)
             assert logger.level == logging.WARNING
+
+    def test_foreground_forces_console_to_stdout(self, tmp_path: Path) -> None:
+        """Test that foreground mode forces console logging to stdout."""
+        cfg = SootheConfig(
+            logging={
+                "file": {"path": str(tmp_path / "test.log")},
+                "console": {"enabled": False},
+            }
+        )
+
+        setup_logging(cfg, foreground=True)
+
+        root_logger = logging.getLogger("soothe")
+        stream_handlers = [
+            h
+            for h in root_logger.handlers
+            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
+        ]
+        assert len(stream_handlers) == 1
+        assert stream_handlers[0].stream == sys.stdout
+        assert stream_handlers[0].level == logging.INFO
+
+    def test_foreground_console_level_overridden_by_debug(self, tmp_path: Path) -> None:
+        """Test that debug flag takes precedence over foreground's INFO default."""
+        cfg = SootheConfig(
+            debug=True,
+            logging={
+                "file": {"path": str(tmp_path / "test.log")},
+                "console": {"enabled": False},
+            },
+        )
+
+        setup_logging(cfg, foreground=True)
+
+        root_logger = logging.getLogger("soothe")
+        stream_handlers = [
+            h
+            for h in root_logger.handlers
+            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
+        ]
+        assert len(stream_handlers) == 1
+        assert stream_handlers[0].level == logging.DEBUG
+
+    def test_foreground_still_creates_file_handler(self, tmp_path: Path) -> None:
+        """Test that foreground mode still writes to log file."""
+        log_file = tmp_path / "test.log"
+        cfg = SootheConfig(
+            logging={
+                "file": {"path": str(log_file)},
+                "console": {"enabled": False},
+            }
+        )
+
+        setup_logging(cfg, foreground=True)
+
+        root_logger = logging.getLogger("soothe")
+        file_handlers = [h for h in root_logger.handlers if isinstance(h, RotatingFileHandler)]
+        assert len(file_handlers) == 1
+        stream_handlers = [
+            h
+            for h in root_logger.handlers
+            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
+        ]
+        assert len(stream_handlers) == 1  # console also present

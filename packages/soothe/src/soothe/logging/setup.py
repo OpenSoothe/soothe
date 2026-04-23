@@ -33,7 +33,7 @@ class ThreadFormatter(logging.Formatter):
         return super().format(record)
 
 
-def setup_logging(config: SootheConfig | None = None) -> None:
+def setup_logging(config: SootheConfig | None = None, *, foreground: bool = False) -> None:
     """Configure the ``soothe`` logger hierarchy with file and optional console handlers.
 
     Writes to ``SOOTHE_HOME/logs/soothe-daemon.log`` (rotating, 5 MB max, 3 backups).
@@ -41,6 +41,8 @@ def setup_logging(config: SootheConfig | None = None) -> None:
 
     Args:
         config: Optional config to read logging configuration from.
+        foreground: When ``True``, forces console logging to stdout at INFO level
+            regardless of config settings. Useful for ``--foreground`` daemon mode.
     """
     from soothe.config import SootheConfig as _SootheConfig
 
@@ -54,6 +56,8 @@ def setup_logging(config: SootheConfig | None = None) -> None:
     if cfg.debug:
         file_level_name = "DEBUG"
         console_level_name = "DEBUG"
+    elif foreground:
+        console_level_name = "INFO"
 
     file_level = getattr(logging, file_level_name, logging.INFO)
     console_level = getattr(logging, console_level_name, logging.WARNING)
@@ -77,13 +81,16 @@ def setup_logging(config: SootheConfig | None = None) -> None:
         file_handler.setLevel(file_level)
         root_logger.addHandler(file_handler)
 
-    if cfg.logging.console.enabled:
-        stream = sys.stderr if cfg.logging.console.stream == "stderr" else sys.stdout
+    console_enabled = cfg.logging.console.enabled or foreground
+    console_stream = sys.stdout if foreground else (
+        sys.stderr if cfg.logging.console.stream == "stderr" else sys.stdout
+    )
+    if console_enabled:
         if not any(
-            isinstance(h, logging.StreamHandler) and h.stream == stream
+            isinstance(h, logging.StreamHandler) and h.stream == console_stream
             for h in root_logger.handlers
         ):
-            console_handler = logging.StreamHandler(stream)
+            console_handler = logging.StreamHandler(console_stream)
             console_handler.setFormatter(logging.Formatter(cfg.logging.console.format))
             console_handler.setLevel(console_level)
             root_logger.addHandler(console_handler)

@@ -50,6 +50,11 @@ def main() -> None:
         action="store_true",
         help="Run in detached/background mode (disables SIGINT-triggered shutdown).",
     )
+    parser.add_argument(
+        "--foreground",
+        action="store_true",
+        help="Run in foreground with console logging to stdout.",
+    )
     args = parser.parse_args()
 
     cfg: SootheConfig | None = None
@@ -60,7 +65,7 @@ def main() -> None:
         if default_config.exists():
             cfg = SootheConfig.from_yaml_file(str(default_config))
 
-    setup_logging(cfg)
+    setup_logging(cfg, foreground=args.foreground)
 
     # Migrate runtime data files from root to data/ subdirectory
     from soothe_sdk.client.config import migrate_data_to_subdir
