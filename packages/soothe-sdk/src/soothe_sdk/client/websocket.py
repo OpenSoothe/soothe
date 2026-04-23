@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 import uuid
 from collections import deque
@@ -64,10 +63,17 @@ class WebSocketClient:
             raise ConnectionError(msg) from e
 
     async def close(self) -> None:
-        """Close the connection."""
+        """Close the connection with timeout to prevent exit hangs."""
         if self._ws:
-            with contextlib.suppress(Exception):
-                await self._ws.close()
+            try:
+                # Wait up to 2s for close handshake to prevent indefinite hangs
+                await asyncio.wait_for(self._ws.close(), timeout=2.0)
+            except (TimeoutError, asyncio.TimeoutError):
+                # Force close on timeout - daemon will handle graceful cleanup
+                logger.debug("WebSocket close timed out after 2s, forcing closure")
+            except Exception:
+                # Suppress other errors (connection closed, network issues)
+                logger.debug("WebSocket close error (connection likely already closed)")
             self._ws = None
             self._connected = False
             self._pending_events.clear()

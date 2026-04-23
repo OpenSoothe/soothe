@@ -4614,6 +4614,7 @@ class SootheApp(App):
         try:
             if self._daemon_session is not None:
                 await self._daemon_session.detach()
+                await self._daemon_session.close()
             self.exit()
         finally:
             self._detaching = False
