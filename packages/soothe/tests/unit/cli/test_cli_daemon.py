@@ -158,7 +158,6 @@ async def test_exit_and_quit_commands_bypass_input_queue() -> None:
     """IG-161: /exit and /quit must not enqueue — input loop may be blocked on run_query."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
-    sent: list[dict] = []
 
     # IG-248: Mock _send_client_message instead of _broadcast
     sent_to_client: list[dict] = []
@@ -171,12 +170,16 @@ async def test_exit_and_quit_commands_bypass_input_queue() -> None:
     await daemon._handle_client_message("client-1", {"type": "command", "cmd": " /exit "})
     assert daemon._current_input_queue.qsize() == 0
     # IG-248: Direct send to client (no thread_id, deprecated legacy socket)
-    assert sent_to_client == [{"client_id": "client-1", "msg": {"type": "status", "state": "detached"}}]
+    assert sent_to_client == [
+        {"client_id": "client-1", "msg": {"type": "status", "state": "detached"}}
+    ]
 
     sent_to_client.clear()
     await daemon._handle_client_message("client-1", {"type": "command", "cmd": "/QUIT"})
     assert daemon._current_input_queue.qsize() == 0
-    assert sent_to_client == [{"client_id": "client-1", "msg": {"type": "status", "state": "detached"}}]
+    assert sent_to_client == [
+        {"client_id": "client-1", "msg": {"type": "status", "state": "detached"}}
+    ]
 
 
 @pytest.mark.asyncio

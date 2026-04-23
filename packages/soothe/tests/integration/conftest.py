@@ -145,7 +145,9 @@ def force_isolated_home(home: Path) -> None:
 def requires_postgresql():
     """Fixture that skips test if PostgreSQL is not available."""
     if not _has_postgresql():
-        pytest.skip("Test requires PostgreSQL (set POSTGRES_HOST, POSTGRES_URL, PGHOST, or DATABASE_URL)")
+        pytest.skip(
+            "Test requires PostgreSQL (set POSTGRES_HOST, POSTGRES_URL, PGHOST, or DATABASE_URL)"
+        )
 
 
 @pytest.fixture
