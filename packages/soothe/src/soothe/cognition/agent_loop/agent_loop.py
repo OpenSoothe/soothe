@@ -118,6 +118,7 @@ class AgentLoop:
         workspace: str | None = None,
         git_status: dict[str, Any] | None = None,
         max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
+        loop_id: str | None = None,  # IG-246: explicit loop_id parameter
         plan_conversation_excerpts: list[str] | None = None,
         intent: Any | None = None,  # IG-226: Intent classification from unified classifier
     ) -> AsyncGenerator[tuple[str, Any], None]:
@@ -131,6 +132,7 @@ class AgentLoop:
             workspace: Thread-specific workspace path (RFC-103)
             git_status: Optional git snapshot for RFC-104-aligned Reason prompts.
             max_iterations: Maximum loop iterations (default: 8)
+            loop_id: Optional loop_id (None → auto-generate UUID)
             plan_conversation_excerpts: Prior thread lines (User/Assistant) for Plan phase (IG-128).
             intent: IntentClassification from unified classifier (IG-226). Determines goal handling:
                 - thread_continuation: Adjust iteration behavior, reuse working memory
@@ -140,8 +142,8 @@ class AgentLoop:
         Yields:
             Tuples of (event_type, event_data) for progress updates
         """
-        # Initialize AgentLoop state manager (RFC-205)
-        state_manager = AgentLoopStateManager(thread_id, Path(workspace) if workspace else None)
+        # Initialize AgentLoop state manager (RFC-205, IG-246: loop_id parameter)
+        state_manager = AgentLoopStateManager(loop_id, Path(workspace) if workspace else None)
 
         # Initialize checkpoint anchor manager for execution synchronization
         anchor_manager = CheckpointAnchorManager(state_manager.loop_id)

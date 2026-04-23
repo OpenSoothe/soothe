@@ -208,7 +208,6 @@ class PhasesMixin:
             if is_sqlite:
                 import aiosqlite
                 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-
                 from soothe_sdk.utils.serde import create_soothe_serde
 
                 # Create async connection from path
@@ -226,7 +225,6 @@ class PhasesMixin:
                 await self._checkpointer_pool.open()
 
                 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-
                 from soothe_sdk.utils.serde import create_soothe_serde
 
                 checkpointer = AsyncPostgresSaver(
