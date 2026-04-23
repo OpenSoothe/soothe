@@ -7,19 +7,11 @@ Tests verify that:
 4. Recovery logic auto-repairs orphaned goals
 """
 
-import asyncio
 import tempfile
 from pathlib import Path
-from datetime import UTC, datetime
 
 import pytest
 
-from soothe.cognition.agent_loop.checkpoint import (
-    AgentLoopCheckpoint,
-    GoalExecutionRecord,
-    WorkingMemoryState,
-    ThreadHealthMetrics,
-)
 from soothe.cognition.agent_loop.state_manager import AgentLoopStateManager
 
 

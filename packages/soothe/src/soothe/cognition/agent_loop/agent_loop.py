@@ -203,6 +203,14 @@ class AgentLoop:
             checkpoint.goal_history.append(goal_record)  # Append FIRST
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1  # Compute index AFTER
             checkpoint.status = "running"
+
+            logger.debug(
+                "[DEBUG agent_loop] Created goal_record id=%s, goal_history index=%d, object_id=%d",
+                goal_record.goal_id,
+                checkpoint.current_goal_index,
+                id(goal_record),
+            )
+
             await state_manager.save(checkpoint)
 
         state = LoopState(

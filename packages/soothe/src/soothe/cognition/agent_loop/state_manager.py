@@ -310,6 +310,15 @@ class AgentLoopStateManager:
 
             # Save goal_history to goal_records table
             for goal_record in checkpoint.goal_history:
+                logger.debug(
+                    "[DEBUG save] Saving goal_record: goal_id=%s, status=%s, iteration=%d, reason_len=%d, act_len=%d, completed_at=%s",
+                    goal_record.goal_id,
+                    goal_record.status,
+                    goal_record.iteration,
+                    len(goal_record.reason_history),
+                    len(goal_record.act_history),
+                    goal_record.completed_at.isoformat() if goal_record.completed_at else None,
+                )
                 await db.execute(
                     """
                     INSERT OR REPLACE INTO goal_records
@@ -406,15 +415,42 @@ class AgentLoopStateManager:
 
         checkpoint = self._checkpoint
 
-        # Update goal record status
-        goal_record.status = "completed"
-        goal_record.final_report = final_report
-        goal_record.completed_at = datetime.now(UTC)
+        # BUGFIX: Modify goal_history entry directly (not passed parameter)
+        # Pydantic model_copy() creates new instances, so goal_record may be detached
+        # Find the goal in goal_history by goal_id and modify that object directly
+        target_goal = None
+        for g in checkpoint.goal_history:
+            if g.goal_id == goal_record.goal_id:
+                target_goal = g
+                break
+
+        if target_goal is None:
+            logger.error("Cannot find goal %s in goal_history", goal_record.goal_id)
+            return
+
+        logger.debug(
+            "[DEBUG finalize_goal] Found target_goal in history: goal_id=%s, object_same=%s",
+            target_goal.goal_id,
+            target_goal is goal_record,
+        )
+
+        # Update goal record status (modify history object directly)
+        target_goal.status = "completed"
+        target_goal.final_report = final_report
+        target_goal.completed_at = datetime.now(UTC)
+
+        logger.debug(
+            "[DEBUG finalize_goal] Modified target_goal: status=%s, iteration=%d, reason_history_len=%d, act_history_len=%d",
+            target_goal.status,
+            target_goal.iteration,
+            len(target_goal.reason_history),
+            len(target_goal.act_history),
+        )
 
         # Update loop metrics
         checkpoint.total_goals_completed += 1
-        checkpoint.total_duration_ms += goal_record.duration_ms
-        checkpoint.total_tokens_used += goal_record.tokens_used
+        checkpoint.total_duration_ms += target_goal.duration_ms
+        checkpoint.total_tokens_used += target_goal.tokens_used
 
         # Update thread health (reset consecutive failures on success)
         checkpoint.thread_health_metrics.consecutive_goal_failures = 0
@@ -567,7 +603,7 @@ class AgentLoopStateManager:
         goal_record: GoalExecutionRecord,
         iteration: int,
         plan_result: PlanResult,
-        decision: AgentDecision,
+        decision: AgentDecision | None,  # Allow None for immediate completion
         step_results: list[StepResult],
         state: LoopState,
         working_memory: LoopWorkingMemory | None,
@@ -578,7 +614,7 @@ class AgentLoopStateManager:
             goal_record: Goal execution record to update
             iteration: Current iteration number
             plan_result: Plan phase result
-            decision: AgentDecision that was executed
+            decision: AgentDecision that was executed (or None for immediate completion)
             step_results: Step execution results
             state: LoopState with metrics
             working_memory: Current working memory state (optional)
@@ -587,35 +623,73 @@ class AgentLoopStateManager:
             logger.error("No checkpoint to update")
             return
 
+        checkpoint = self._checkpoint
+
+        # BUGFIX: Modify goal_history entry directly (not passed parameter)
+        # Pydantic model_copy() creates new instances, so goal_record may be detached
+        # Find the goal in goal_history by goal_id and modify that object directly
+        target_goal = None
+        for g in checkpoint.goal_history:
+            if g.goal_id == goal_record.goal_id:
+                target_goal = g
+                break
+
+        if target_goal is None:
+            logger.error("Cannot find goal %s in goal_history", goal_record.goal_id)
+            return
+
+        logger.debug(
+            "[DEBUG record_iteration] Found target_goal in history: goal_id=%s, object_same=%s",
+            target_goal.goal_id,
+            target_goal is goal_record,
+        )
+
         # Record Plan step
         reason_record = ReasonStepRecord(
             iteration=iteration,
             timestamp=datetime.now(UTC),
             goal_text=state.goal,
-            prior_step_outputs=self._derive_prior_step_outputs(goal_record),
+            prior_step_outputs=self._derive_prior_step_outputs(target_goal),
             reasoning=plan_result.reasoning,
             status=plan_result.status,
             goal_progress=plan_result.goal_progress,
             decision=decision.model_dump() if decision else None,
             next_action=plan_result.next_action,
         )
-        goal_record.reason_history.append(reason_record)
+        target_goal.reason_history.append(reason_record)
+
+        logger.debug(
+            "[DEBUG record_iteration] Added reason_record to target_goal, reason_history_len=%d",
+            len(target_goal.reason_history),
+        )
 
         # Record Act wave
         act_record = self._build_act_wave_record(iteration, decision, step_results, state)
-        goal_record.act_history.append(act_record)
+        target_goal.act_history.append(act_record)
+
+        logger.debug(
+            "[DEBUG record_iteration] Added act_record to target_goal, act_history_len=%d",
+            len(target_goal.act_history),
+        )
 
         # Record working memory state
         if working_memory is not None:
-            self._checkpoint.working_memory_state = self._serialize_working_memory(working_memory)
+            checkpoint.working_memory_state = self._serialize_working_memory(working_memory)
 
         # Update goal metrics
-        goal_record.iteration = iteration + 1
-        goal_record.duration_ms += act_record.duration_ms
-        goal_record.tokens_used = state.total_tokens_used
+        target_goal.iteration = iteration + 1
+        target_goal.duration_ms += act_record.duration_ms
+        target_goal.tokens_used = state.total_tokens_used
+
+        logger.debug(
+            "[DEBUG record_iteration] Updated target_goal: iteration=%d, duration_ms=%d, tokens=%d",
+            target_goal.iteration,
+            target_goal.duration_ms,
+            target_goal.tokens_used,
+        )
 
         # Save checkpoint
-        await self.save(self._checkpoint)
+        await self.save(checkpoint)
 
     def derive_plan_conversation(self, limit: int = 10) -> list[str]:
         """Derive prior conversation from current goal's step outputs.
