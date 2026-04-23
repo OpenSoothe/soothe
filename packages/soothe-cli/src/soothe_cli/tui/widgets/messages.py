@@ -174,7 +174,7 @@ class UserMessage(_TimestampClickMixin, Static):
         height: auto;
         padding: 0 1;
         margin: 1 0;
-        background: $surface;
+        background: transparent;
         border-left: wide $primary;
     }
 
@@ -187,10 +187,10 @@ class UserMessage(_TimestampClickMixin, Static):
     }
 
     UserMessage:hover {
-        background: $surface-darken-1;
+        opacity: 0.9;
     }
     """
-    """Enhanced styling with role indicator, background tint, and mode-specific borders."""
+    """Consistent styling with transparent background and colored borders matching other cards."""
 
     def __init__(self, content: str, **kwargs: Any) -> None:
         """Initialize a user message.
@@ -604,7 +604,7 @@ class AssistantMessage(_TimestampClickMixin, Vertical):
         height: auto;
         padding: 0 1;
         margin: 1 0;
-        background: $background-darken-1;
+        background: transparent;
         border-left: wide $secondary;
     }
 
@@ -614,10 +614,10 @@ class AssistantMessage(_TimestampClickMixin, Vertical):
     }
 
     AssistantMessage:hover {
-        background: $background-darken-2;
+        opacity: 0.9;
     }
     """
-    """Enhanced styling with secondary border and background tint."""
+    """Consistent styling with transparent background and colored borders matching other cards."""
 
     def __init__(self, content: str = "", **kwargs: Any) -> None:
         """Initialize an assistant message.
@@ -793,8 +793,8 @@ class ToolCallMessage(Vertical):
     """Left border tracks tool lifecycle; hover brightens for interactivity."""
 
     # Max lines/chars to show in preview mode
-    _PREVIEW_LINES = 6
-    _PREVIEW_CHARS = 400
+    _PREVIEW_LINES = 1
+    _PREVIEW_CHARS = 120
 
     def __init__(
         self,
@@ -1173,7 +1173,7 @@ class ToolCallMessage(Vertical):
             return FormattedOutput(content=Content.styled("    No todos", "dim"))
 
         lines: list[Content] = []
-        max_items = 4 if is_preview else len(items)
+        max_items = 1 if is_preview else len(items)
 
         # Build stats header
         stats = self._build_todo_stats(items)
@@ -1273,7 +1273,7 @@ class ToolCallMessage(Vertical):
             items = ast.literal_eval(output)
             if isinstance(items, list):
                 lines: list[Content] = []
-                max_items = 5 if is_preview else len(items)
+                max_items = 2 if is_preview else len(items)
                 for item in items[:max_items]:
                     path = Path(str(item))
                     name = path.name
@@ -1330,7 +1330,7 @@ class ToolCallMessage(Vertical):
             items = ast.literal_eval(output.strip())
             if isinstance(items, list):
                 parts: list[Content] = []
-                max_items = 5 if is_preview else len(items)
+                max_items = 2 if is_preview else len(items)
                 for item in items[:max_items]:
                     path = Path(str(item))
                     try:
@@ -1350,7 +1350,7 @@ class ToolCallMessage(Vertical):
 
         # Fallback: line-based output (grep results)
         lines = output.split("\n")
-        max_lines = 5 if is_preview else len(lines)
+        max_lines = 1 if is_preview else len(lines)
 
         parts = [
             Content(f"    {raw_line.strip()}") for raw_line in lines[:max_lines] if raw_line.strip()
