@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 import stat
-import uuid
 from pathlib import Path
 
 import pytest
+
+from soothe.daemon import SootheDaemon, WebSocketClient
 from tests.integration.conftest import (
     alloc_ephemeral_port,
     await_event_type,
@@ -22,20 +22,20 @@ from tests.integration.conftest import (
     force_isolated_home,
 )
 
-from soothe.daemon import DaemonClient, SootheDaemon
-
 
 @pytest.fixture
 async def unix_daemon_fixture(tmp_path: Path):
     """Start a daemon exposing only the unix socket transport."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-security-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
     daemon = SootheDaemon(config)
     await daemon.start()
     await asyncio.sleep(0.4)
     try:
-        yield daemon, socket_path
+        yield daemon, ws_port
     finally:
         with contextlib.suppress(Exception):
             await daemon.stop()
@@ -45,12 +45,13 @@ async def unix_daemon_fixture(tmp_path: Path):
 async def websocket_daemon_fixture(tmp_path: Path):
     """Start a daemon with WebSocket transport for CORS testing."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-ws-security-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
+    ws_port = alloc_ephemeral_port()
+
     ws_port = alloc_ephemeral_port()
 
     config = build_daemon_config(
         tmp_path,
-        socket_path,
+        ws_port,
         websocket_port=ws_port,
         cors_origins=["http://localhost:*", "http://127.0.0.1:*"],
     )
@@ -59,7 +60,7 @@ async def websocket_daemon_fixture(tmp_path: Path):
     await daemon.start()
     await asyncio.sleep(0.4)
     try:
-        yield daemon, socket_path, ws_port
+        yield daemon, ws_port, ws_port
     finally:
         with contextlib.suppress(Exception):
             await daemon.stop()
@@ -71,10 +72,10 @@ async def test_unix_socket_permissions(
     unix_daemon_fixture: tuple[SootheDaemon, str],
 ) -> None:
     """Test that Unix socket has correct file permissions (0o600)."""
-    _, socket_path = unix_daemon_fixture
+    _, ws_port = unix_daemon_fixture
 
-    socket_file = Path(socket_path)
-    assert socket_file.exists(), f"Socket file not found: {socket_path}"
+    socket_file = Path(ws_port)
+    assert socket_file.exists(), f"Socket file not found: {ws_port}"
 
     file_stat = socket_file.stat()
     file_mode = stat.S_IMODE(file_stat.st_mode)
@@ -101,13 +102,13 @@ async def test_websocket_cors_validation(
     websocket_daemon_fixture: tuple[SootheDaemon, str, int],
 ) -> None:
     """Test WebSocket CORS origin validation."""
-    daemon, socket_path, ws_port = websocket_daemon_fixture
+    daemon, ws_port, ws_port = websocket_daemon_fixture
     _ = ws_port  # Would be used for WebSocket client testing
 
     assert daemon._transport_manager is not None
     assert daemon._transport_manager.client_count == 0
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -125,9 +126,9 @@ async def test_message_size_limit(
     unix_daemon_fixture: tuple[SootheDaemon, str],
 ) -> None:
     """Test that messages exceeding 10MB size limit are rejected."""
-    _, socket_path = unix_daemon_fixture
+    _, ws_port = unix_daemon_fixture
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -145,16 +146,16 @@ async def test_message_size_limit(
 async def test_rate_limiting(tmp_path: Path) -> None:
     """Test rate limiting enforcement (if configured)."""
     force_isolated_home(tmp_path / "soothe-home")
+    ws_port = alloc_ephemeral_port()
 
-    socket_path = f"/tmp/soothe-rate-limit-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
     await asyncio.sleep(0.4)
 
     try:
-        client = DaemonClient(sock=Path(socket_path))
+        client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
         try:
@@ -178,16 +179,16 @@ async def test_rate_limiting(tmp_path: Path) -> None:
 async def test_pid_lock_enforcement(tmp_path: Path) -> None:
     """Test that only one daemon instance can run at a time (PID lock)."""
     force_isolated_home(tmp_path / "soothe-home")
+    ws_port = alloc_ephemeral_port()
 
-    socket_path = f"/tmp/soothe-pid-lock-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon1 = SootheDaemon(config)
     await daemon1.start()
     await asyncio.sleep(0.4)
 
     try:
-        client1 = DaemonClient(sock=Path(socket_path))
+        client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client1.connect()
 
         try:
@@ -204,7 +205,7 @@ async def test_pid_lock_enforcement(tmp_path: Path) -> None:
             await daemon2.start()
             await asyncio.sleep(0.2)
 
-            client2 = DaemonClient(sock=Path(socket_path))
+            client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             try:
                 await client2.connect()
 

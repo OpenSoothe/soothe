@@ -11,17 +11,17 @@ import pytest_asyncio
 import websockets.asyncio.client
 import websockets.exceptions
 from soothe_sdk.client import WebSocketClient
+
+from soothe.config import SootheConfig
+from soothe.config.daemon_config import WebSocketConfig
+from soothe.daemon import SootheDaemon
+from soothe.daemon.transports.websocket import WebSocketTransport
 from tests.integration.conftest import (
     alloc_ephemeral_port,
     await_event_type,
     await_status_state,
     get_base_config,
 )
-
-from soothe.config import SootheConfig
-from soothe.config.daemon_config import WebSocketConfig
-from soothe.daemon import SootheDaemon
-from soothe.daemon.transports.websocket import WebSocketTransport
 
 
 def _build_daemon_config(tmp_path: Path, port: int) -> SootheConfig:

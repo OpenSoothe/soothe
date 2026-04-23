@@ -35,8 +35,11 @@ jobs:
     - name: Run tests (daemon package)
       run: make test-unit
 
-    # - name: Run integration tests
-    #   run: make test-integration
+    - name: Run integration tests
+      run: make test-integration
+      env:
+        DASHSCOPE_CP_API_KEY: ${{ secrets.DASHSCOPE_CP_API_KEY }}
+        DASHSCOPE_CP_BASE_URL: ${{ secrets.DASHSCOPE_CP_BASE_URL }}
 
     - name: Build all packages
       run: make all-build

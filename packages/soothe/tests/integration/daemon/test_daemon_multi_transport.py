@@ -2,7 +2,7 @@
 
 This module validates daemon behavior with all transports enabled simultaneously,
 ensuring correct broadcast fanout, cross-transport thread operations, and client
-aggregation across Unix socket, WebSocket, and HTTP REST transports.
+aggregation across WebSocket and HTTP REST transports (per RFC-450, Unix socket removed).
 """
 
 from __future__ import annotations
@@ -14,7 +14,9 @@ import uuid
 from pathlib import Path
 
 import pytest
-from soothe_sdk.client import WebSocketClient
+
+from soothe.config import SootheConfig
+from soothe.daemon import SootheDaemon, WebSocketClient
 from tests.integration.conftest import (
     alloc_ephemeral_port,
     await_event_type,
@@ -23,20 +25,17 @@ from tests.integration.conftest import (
     force_isolated_home,
 )
 
-from soothe.config import SootheConfig
-from soothe.daemon import DaemonClient, SootheDaemon
-
 
 def _build_daemon_config(
     tmp_path: Path,
-    unix_socket_path: str,
+    unix_ws_port: str,
     websocket_port: int,
     http_port: int,
 ) -> SootheConfig:
     """Build an isolated daemon config with all transports enabled."""
     return build_daemon_config(
         tmp_path=tmp_path,
-        unix_socket_path=unix_socket_path,
+        unix_ws_port=unix_ws_port,
         websocket_port=websocket_port,
         http_port=http_port,
     )
@@ -46,6 +45,7 @@ def _build_daemon_config(
 async def multi_transport_daemon(tmp_path: Path):
     """Start a daemon with all three transports enabled."""
     force_isolated_home(tmp_path / "soothe-home")
+    ws_port = alloc_ephemeral_port()
 
     unix_path = f"/tmp/soothe-multi-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
     ws_port = alloc_ephemeral_port()
@@ -60,7 +60,6 @@ async def multi_transport_daemon(tmp_path: Path):
     try:
         yield {
             "daemon": daemon,
-            "unix_path": unix_path,
             "ws_port": ws_port,
             "http_port": http_port,
             "config": config,
@@ -75,30 +74,29 @@ async def multi_transport_daemon(tmp_path: Path):
 async def test_all_transports_simultaneous_lifecycle(
     multi_transport_daemon: dict,
 ) -> None:
-    """Test that all three transports can start and stop together."""
+    """Test that WebSocket transport can start and stop."""
     daemon = multi_transport_daemon["daemon"]
-    unix_path = multi_transport_daemon["unix_path"]
-    multi_transport_daemon["ws_port"]
+    ws_port = multi_transport_daemon["ws_port"]
     multi_transport_daemon["http_port"]
 
-    # Verify all transports are running
+    # Verify transports are running
     assert daemon._transport_manager is not None
     assert daemon._transport_manager.client_count == 0
 
-    # Connect to Unix socket
-    unix_client = DaemonClient(sock=Path(unix_path))
-    await unix_client.connect()
+    # Connect via WebSocket
+    ws_client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
+    await ws_client.connect()
     await asyncio.sleep(0.1)
 
     # Verify client count increases
     assert daemon._transport_manager.client_count >= 1
 
     # Send ping and receive status
-    await unix_client.send_thread_list()
-    response = await await_event_type(unix_client.read_event, "thread_list_response", timeout=3.0)
+    await ws_client.send_thread_list()
+    response = await await_event_type(ws_client.read_event, "thread_list_response", timeout=3.0)
     assert response["type"] == "thread_list_response"
 
-    await unix_client.close()
+    await ws_client.close()
 
     # Verify client count decreases
     await asyncio.sleep(0.1)
@@ -110,10 +108,10 @@ async def test_all_transports_simultaneous_lifecycle(
 async def test_multi_transport_broadcast(multi_transport_daemon: dict) -> None:
     """Test that events broadcast to clients across all transports."""
     daemon = multi_transport_daemon["daemon"]
-    unix_path = multi_transport_daemon["unix_path"]
+    ws_port = multi_transport_daemon["ws_port"]
 
     # Connect client via Unix socket
-    unix_client = DaemonClient(sock=Path(unix_path))
+    unix_client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await unix_client.connect()
 
     try:
@@ -148,12 +146,12 @@ async def test_multi_transport_broadcast(multi_transport_daemon: dict) -> None:
 async def test_multi_transport_thread_operations(multi_transport_daemon: dict) -> None:
     """Test creating thread on one transport and accessing from another."""
     daemon = multi_transport_daemon["daemon"]
-    unix_path = multi_transport_daemon["unix_path"]
+    ws_port = multi_transport_daemon["ws_port"]
 
     _ = daemon  # Acknowledge daemon for future multi-transport testing
 
     # Connect via Unix socket
-    unix_client = DaemonClient(sock=Path(unix_path))
+    unix_client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await unix_client.connect()
 
     try:
@@ -207,11 +205,11 @@ async def test_multi_transport_cross_transport_thread_sync(
     multi_transport_daemon: dict,
 ) -> None:
     """Thread created on WebSocket is visible and operable on Unix socket."""
-    unix_path = multi_transport_daemon["unix_path"]
+    ws_port = multi_transport_daemon["ws_port"]
     ws_port = multi_transport_daemon["ws_port"]
 
     ws_client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
-    unix_client = DaemonClient(sock=Path(unix_path))
+    unix_client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await ws_client.connect()
     await unix_client.connect()
 
@@ -243,20 +241,20 @@ async def test_multi_transport_cross_transport_thread_sync(
 async def test_multi_transport_client_count(multi_transport_daemon: dict) -> None:
     """Test that client count aggregates correctly across transports."""
     daemon = multi_transport_daemon["daemon"]
-    unix_path = multi_transport_daemon["unix_path"]
+    ws_port = multi_transport_daemon["ws_port"]
 
     # Initial state: no clients
     await asyncio.sleep(0.2)
     assert daemon._transport_manager.client_count == 0
 
     # Connect first Unix client
-    client1 = DaemonClient(sock=Path(unix_path))
+    client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client1.connect()
     await asyncio.sleep(0.1)
     assert daemon._transport_manager.client_count >= 1
 
     # Connect second Unix client
-    client2 = DaemonClient(sock=Path(unix_path))
+    client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client2.connect()
     await asyncio.sleep(0.1)
     assert daemon._transport_manager.client_count >= 2
@@ -277,10 +275,10 @@ async def test_multi_transport_client_count(multi_transport_daemon: dict) -> Non
 async def test_multi_transport_shutdown_order(multi_transport_daemon: dict) -> None:
     """Test graceful shutdown stops all transports cleanly."""
     daemon = multi_transport_daemon["daemon"]
-    unix_path = multi_transport_daemon["unix_path"]
+    ws_port = multi_transport_daemon["ws_port"]
 
     # Connect client
-    client = DaemonClient(sock=Path(unix_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
     await asyncio.sleep(0.2)
 

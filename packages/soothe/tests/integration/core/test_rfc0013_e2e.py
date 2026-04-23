@@ -13,13 +13,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 import time
 import uuid
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+from soothe.daemon import SootheDaemon, WebSocketClient
+from soothe.daemon.event_bus import EventBus
 from tests.integration.conftest import (
     alloc_ephemeral_port,
     await_event_type,
@@ -28,9 +30,6 @@ from tests.integration.conftest import (
     force_isolated_home,
 )
 
-from soothe.daemon import DaemonClient, SootheDaemon
-from soothe.daemon.event_bus import EventBus
-
 # ============================================================================
 # Test Fixtures
 # ============================================================================
@@ -38,16 +37,14 @@ from soothe.daemon.event_bus import EventBus
 
 @pytest.fixture
 async def isolated_daemon(tmp_path: Path):
-    """Start an isolated daemon with all transports for E2E testing."""
+    """Start an isolated daemon with WebSocket and HTTP REST transports for E2E testing."""
     force_isolated_home(tmp_path / "soothe-home")
 
-    socket_path = f"/tmp/soothe-e2e-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
     ws_port = alloc_ephemeral_port()
     http_port = alloc_ephemeral_port()
 
     config = build_daemon_config(
         tmp_path=tmp_path,
-        unix_socket_path=socket_path,
         websocket_port=ws_port,
         http_port=http_port,
     )
@@ -59,7 +56,6 @@ async def isolated_daemon(tmp_path: Path):
     try:
         yield {
             "daemon": daemon,
-            "socket_path": socket_path,
             "ws_port": ws_port,
             "http_port": http_port,
             "config": config,
@@ -169,8 +165,8 @@ async def test_event_bus_overflow_protection() -> None:
 async def test_three_clients_complete_isolation(tmp_path: Path) -> None:
     """Test that three clients with different threads are completely isolated."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-3client-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
@@ -181,7 +177,7 @@ async def test_three_clients_complete_isolation(tmp_path: Path) -> None:
         thread_ids = []
 
         for i in range(3):
-            client = DaemonClient(sock=Path(socket_path))
+            client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await client.connect()
             await client.send_thread_create(initial_message=f"Client {i}")
 
@@ -224,14 +220,14 @@ async def test_three_clients_complete_isolation(tmp_path: Path) -> None:
 async def test_client_subscription_after_thread_creation(tmp_path: Path) -> None:
     """Test that client can subscribe to thread after it's created."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-sub-after-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
 
     try:
-        client = DaemonClient(sock=Path(socket_path))
+        client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
         # Create thread first (without immediate subscription)
@@ -264,14 +260,14 @@ async def test_client_subscription_after_thread_creation(tmp_path: Path) -> None
 async def test_client_multiple_thread_subscriptions(tmp_path: Path) -> None:
     """Test that a single client can subscribe to multiple threads simultaneously."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-multi-sub-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
 
     try:
-        client = DaemonClient(sock=Path(socket_path))
+        client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
         # Create 3 threads and subscribe to all
@@ -312,8 +308,8 @@ async def test_client_multiple_thread_subscriptions(tmp_path: Path) -> None:
 async def test_rapid_client_connections(tmp_path: Path) -> None:
     """Test daemon stability with rapid client connections/disconnections."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-rapid-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
@@ -323,7 +319,7 @@ async def test_rapid_client_connections(tmp_path: Path) -> None:
 
         for iteration in range(num_iterations):
             # Connect
-            client = DaemonClient(sock=Path(socket_path))
+            client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await client.connect()
 
             # Create thread
@@ -346,7 +342,7 @@ async def test_rapid_client_connections(tmp_path: Path) -> None:
             await asyncio.sleep(0.05)
 
         # Verify daemon is still stable
-        test_client = DaemonClient(sock=Path(socket_path))
+        test_client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await test_client.connect()
         await test_client.send_thread_list()
         response = await await_event_type(
@@ -365,14 +361,14 @@ async def test_rapid_client_connections(tmp_path: Path) -> None:
 async def test_event_throughput_stress(tmp_path: Path) -> None:
     """Test event bus performance under high throughput."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-throughput-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
 
     try:
-        client = DaemonClient(sock=Path(socket_path))
+        client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
         # Create thread and subscribe
@@ -403,14 +399,14 @@ async def test_event_throughput_stress(tmp_path: Path) -> None:
 async def test_large_message_handling(tmp_path: Path) -> None:
     """Test daemon handles large messages correctly (up to size limit)."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-large-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
 
     try:
-        client = DaemonClient(sock=Path(socket_path))
+        client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
         # Create thread with moderately large initial message (1KB)
@@ -436,8 +432,8 @@ async def test_large_message_handling(tmp_path: Path) -> None:
 async def test_session_cleanup_on_unexpected_disconnect(tmp_path: Path) -> None:
     """Test that session is properly cleaned up on unexpected client disconnect."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-cleanup-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
@@ -446,7 +442,7 @@ async def test_session_cleanup_on_unexpected_disconnect(tmp_path: Path) -> None:
         initial_count = daemon._session_manager.session_count
 
         # Connect client
-        client = DaemonClient(sock=Path(socket_path))
+        client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
         await client.send_thread_create(initial_message="Test")
         status = await await_event_type(client.read_event, "thread_created", timeout=3.0)
@@ -474,91 +470,18 @@ async def test_session_cleanup_on_unexpected_disconnect(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_unix_socket_session_cleanup_on_abrupt_disconnect(tmp_path: Path) -> None:
-    """Test that Unix socket transport properly cleans up session on abrupt disconnect.
-
-    This test validates the fix for the daemon hanging issue where Unix socket
-    transport's _handle_client finally block must call remove_session() to cancel
-    orphaned sender_tasks and prevent daemon shutdown hanging.
-    """
-    force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-session-cleanup-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
-
-    daemon = SootheDaemon(config)
-    await daemon.start()
-
-    try:
-        # Get initial session count
-        initial_count = daemon._session_manager.session_count
-
-        # Connect client via Unix socket
-        reader, writer = await asyncio.open_unix_connection(socket_path)
-
-        # Wait for session creation (transport creates session on connect)
-        await asyncio.sleep(0.2)
-
-        # Verify session was created
-        count_after_connect = daemon._session_manager.session_count
-        assert count_after_connect == initial_count + 1, (
-            "Session should be created on client connect"
-        )
-
-        # Abrupt disconnect (close socket without proper protocol shutdown)
-        writer.close()
-        await writer.wait_closed()
-
-        # Wait for cleanup (finally block should call remove_session)
-        await asyncio.sleep(0.3)
-
-        # CRITICAL: Verify session was removed by finally block
-        final_count = daemon._session_manager.session_count
-        assert final_count == initial_count, (
-            "Session must be removed on disconnect to prevent hanging"
-        )
-
-        # Verify no orphaned sender_tasks remain
-        # Check that all asyncio tasks in the session manager are properly cleaned up
-        # This prevents daemon hanging on shutdown
-        for session_id, session in daemon._session_manager._sessions.items():
-            if session.sender_task and not session.sender_task.done():
-                pytest.fail(f"Orphaned sender_task found for session {session_id}")
-
-        # Verify daemon can shutdown cleanly (no hanging)
-        shutdown_start = time.time()
-        await daemon.stop()
-        shutdown_duration = time.time() - shutdown_start
-
-        # Daemon should shutdown within 3 seconds if no orphaned tasks
-        assert shutdown_duration < 3.0, (
-            f"Daemon shutdown took {shutdown_duration}s (> 3s), likely hanging on orphaned tasks"
-        )
-
-        # Cleanup socket file
-        Path(socket_path).unlink(missing_ok=True)
-
-    except Exception:
-        # Cleanup on failure
-        with contextlib.suppress(Exception):
-            await daemon.stop()
-        Path(socket_path).unlink(missing_ok=True)
-        raise
-
-
-@pytest.mark.asyncio
-@pytest.mark.integration
 async def test_client_reconnect_after_disconnect(tmp_path: Path) -> None:
     """Test that client can reconnect after disconnect and create new session."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-reconnect-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
 
     try:
         # First connection
-        client = DaemonClient(sock=Path(socket_path))
+        client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
         await client.send_thread_create(initial_message="First session")
         created1 = await await_event_type(client.read_event, "thread_created", timeout=3.0)
@@ -572,7 +495,7 @@ async def test_client_reconnect_after_disconnect(tmp_path: Path) -> None:
         await asyncio.sleep(0.2)
 
         # Reconnect
-        client2 = DaemonClient(sock=Path(socket_path))
+        client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
         await client2.send_thread_create(initial_message="Second session")
         created2 = await await_event_type(client2.read_event, "thread_created", timeout=3.0)
@@ -600,14 +523,14 @@ async def test_client_reconnect_after_disconnect(tmp_path: Path) -> None:
 async def test_protocol_message_thread_id_in_events(tmp_path: Path) -> None:
     """Test that all event messages include thread_id field."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-thread-id-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
 
     try:
-        client = DaemonClient(sock=Path(socket_path))
+        client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
         # Create thread
@@ -659,15 +582,15 @@ async def test_protocol_message_thread_id_in_events(tmp_path: Path) -> None:
 async def test_protocol_client_id_in_status(tmp_path: Path) -> None:
     """Test that status messages include client_id field."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-client-id-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
 
     try:
         # Connect first client
-        client1 = DaemonClient(sock=Path(socket_path))
+        client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client1.connect()
         await client1.send_thread_create(initial_message="Client 1")
         status1 = await await_event_type(client1.read_event, "thread_created", timeout=3.0)
@@ -677,7 +600,7 @@ async def test_protocol_client_id_in_status(tmp_path: Path) -> None:
         assert isinstance(client_id1, str)
 
         # Connect second client
-        client2 = DaemonClient(sock=Path(socket_path))
+        client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
         await client2.send_thread_create(initial_message="Client 2")
         status2 = await await_event_type(client2.read_event, "thread_created", timeout=3.0)
@@ -706,14 +629,14 @@ async def test_protocol_client_id_in_status(tmp_path: Path) -> None:
 async def test_cross_transport_client_count(isolated_daemon: dict) -> None:
     """Test that client count correctly aggregates across all transports."""
     daemon = isolated_daemon["daemon"]
-    socket_path = isolated_daemon["socket_path"]
+    ws_port = isolated_daemon["ws_port"]
 
     # Initial state
     await asyncio.sleep(0.2)
     initial_count = daemon._transport_manager.client_count
 
     # Connect Unix socket client
-    client1 = DaemonClient(sock=Path(socket_path))
+    client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client1.connect()
     await asyncio.sleep(0.1)
 
@@ -721,7 +644,7 @@ async def test_cross_transport_client_count(isolated_daemon: dict) -> None:
     assert count_after_1 >= initial_count + 1
 
     # Connect second Unix socket client
-    client2 = DaemonClient(sock=Path(socket_path))
+    client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client2.connect()
     await asyncio.sleep(0.1)
 
@@ -754,14 +677,14 @@ async def test_cross_transport_client_count(isolated_daemon: dict) -> None:
 async def test_event_delivery_latency(tmp_path: Path) -> None:
     """Test event delivery latency is within acceptable bounds."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-latency-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
 
     try:
-        client = DaemonClient(sock=Path(socket_path))
+        client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
         # Create thread
@@ -805,15 +728,15 @@ async def test_event_delivery_latency(tmp_path: Path) -> None:
 async def test_daemon_remains_stable_after_client_errors(tmp_path: Path) -> None:
     """Test daemon remains stable after client errors (malformed messages, etc.)."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-stable-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
 
     try:
         # Connect client and send problematic messages
-        client = DaemonClient(sock=Path(socket_path))
+        client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
         # Try to access non-existent thread
@@ -851,14 +774,14 @@ async def test_daemon_remains_stable_after_client_errors(tmp_path: Path) -> None
 async def test_graceful_handling_of_invalid_subscriptions(tmp_path: Path) -> None:
     """Test that invalid subscription attempts are handled gracefully."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-invalid-sub-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
 
     try:
-        client = DaemonClient(sock=Path(socket_path))
+        client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
         # Try to subscribe to non-existent thread
@@ -893,15 +816,15 @@ async def test_graceful_handling_of_invalid_subscriptions(tmp_path: Path) -> Non
 async def test_concurrent_queries_different_threads(tmp_path: Path) -> None:
     """Test that multiple threads can execute concurrently (if supported)."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-concurrent-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
 
     daemon = SootheDaemon(config)
     await daemon.start()
 
     try:
         # Create two clients with different threads
-        client1 = DaemonClient(sock=Path(socket_path))
+        client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client1.connect()
         await client1.send_thread_create(initial_message="Thread 1")
         created1 = await await_event_type(client1.read_event, "thread_created", timeout=3.0)
@@ -909,7 +832,7 @@ async def test_concurrent_queries_different_threads(tmp_path: Path) -> None:
         await client1.subscribe_thread(thread1)
         await await_event_type(client1.read_event, "subscription_confirmed", timeout=3.0)
 
-        client2 = DaemonClient(sock=Path(socket_path))
+        client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
         await client2.send_thread_create(initial_message="Thread 2")
         created2 = await await_event_type(client2.read_event, "thread_created", timeout=3.0)

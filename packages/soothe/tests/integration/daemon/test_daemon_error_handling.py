@@ -10,32 +10,32 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 import uuid
 from pathlib import Path
 
 import pytest
+
+from soothe.daemon import SootheDaemon, WebSocketClient
 from tests.integration.conftest import (
+    alloc_ephemeral_port,
     await_event_type,
     await_status_state,
     build_daemon_config,
     force_isolated_home,
 )
 
-from soothe.daemon import DaemonClient, SootheDaemon
-
 
 @pytest.fixture
 async def daemon_fixture(tmp_path: Path):
     """Start a daemon for error handling tests."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-error-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
     daemon = SootheDaemon(config)
     await daemon.start()
     await asyncio.sleep(0.4)
     try:
-        yield daemon, socket_path
+        yield daemon, ws_port
     finally:
         with contextlib.suppress(Exception):
             await daemon.stop()
@@ -44,12 +44,12 @@ async def daemon_fixture(tmp_path: Path):
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_malformed_json_handling(
-    daemon_fixture: tuple[SootheDaemon, str],
+    daemon_fixture: tuple[SootheDaemon, int],
 ) -> None:
     """Test that malformed JSON messages are handled gracefully."""
-    _, socket_path = daemon_fixture
+    _, ws_port = daemon_fixture
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -64,12 +64,12 @@ async def test_malformed_json_handling(
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_missing_required_fields(
-    daemon_fixture: tuple[SootheDaemon, str],
+    daemon_fixture: tuple[SootheDaemon, int],
 ) -> None:
     """Test that messages with missing required fields return error."""
-    _, socket_path = daemon_fixture
+    _, ws_port = daemon_fixture
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -83,11 +83,11 @@ async def test_missing_required_fields(
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_invalid_message_type(daemon_fixture: tuple[SootheDaemon, str]) -> None:
+async def test_invalid_message_type(daemon_fixture: tuple[SootheDaemon, int]) -> None:
     """Test that unknown message types are handled gracefully."""
-    _, socket_path = daemon_fixture
+    _, ws_port = daemon_fixture
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -101,11 +101,11 @@ async def test_invalid_message_type(daemon_fixture: tuple[SootheDaemon, str]) ->
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_thread_not_found_error(daemon_fixture: tuple[SootheDaemon, str]) -> None:
+async def test_thread_not_found_error(daemon_fixture: tuple[SootheDaemon, int]) -> None:
     """Test that accessing non-existent thread returns proper error."""
-    _, socket_path = daemon_fixture
+    _, ws_port = daemon_fixture
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -132,12 +132,12 @@ async def test_thread_not_found_error(daemon_fixture: tuple[SootheDaemon, str]) 
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_client_disconnection_during_stream(
-    daemon_fixture: tuple[SootheDaemon, str],
+    daemon_fixture: tuple[SootheDaemon, int],
 ) -> None:
     """Test that daemon handles client disconnection during active stream."""
-    _, socket_path = daemon_fixture
+    _, ws_port = daemon_fixture
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -152,7 +152,7 @@ async def test_client_disconnection_during_stream(
 
         await asyncio.sleep(0.5)
 
-        client2 = DaemonClient(sock=Path(socket_path))
+        client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
 
         try:
@@ -177,17 +177,17 @@ async def test_client_disconnection_during_stream(
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_concurrent_client_connections(
-    daemon_fixture: tuple[SootheDaemon, str],
+    daemon_fixture: tuple[SootheDaemon, int],
 ) -> None:
     """Test that daemon handles multiple concurrent client connections."""
-    _, socket_path = daemon_fixture
+    _, ws_port = daemon_fixture
 
     num_clients = 5
     clients = []
 
     try:
         for _ in range(num_clients):
-            client = DaemonClient(sock=Path(socket_path))
+            client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await client.connect()
             clients.append(client)
 
@@ -226,12 +226,12 @@ async def test_concurrent_client_connections(
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_daemon_shutdown_during_operation(
-    daemon_fixture: tuple[SootheDaemon, str],
+    daemon_fixture: tuple[SootheDaemon, int],
 ) -> None:
     """Test graceful shutdown during active operation."""
-    _, socket_path = daemon_fixture
+    _, ws_port = daemon_fixture
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:

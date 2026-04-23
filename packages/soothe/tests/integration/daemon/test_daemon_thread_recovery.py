@@ -9,24 +9,23 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
-import uuid
 from pathlib import Path
 
 import pytest
+
+from soothe.config import SootheConfig
+from soothe.daemon import SootheDaemon, WebSocketClient
 from tests.integration.conftest import (
+    alloc_ephemeral_port,
     await_event_type,
     await_status_state,
     force_isolated_home,
     get_base_config,
 )
 
-from soothe.config import SootheConfig
-from soothe.daemon import DaemonClient, SootheDaemon
-
 
 def _build_daemon_config(
-    tmp_path: Path, socket_path: str, max_concurrent_threads: int = 3
+    tmp_path: Path, ws_port: str, max_concurrent_threads: int = 3
 ) -> SootheConfig:
     """Build an isolated daemon config for thread recovery tests."""
     base_config = get_base_config()
@@ -46,7 +45,7 @@ def _build_daemon_config(
         },
         daemon={
             "transports": {
-                "unix_socket": {"enabled": True, "path": socket_path},
+                "unix_socket": {"enabled": True, "path": ws_port},
                 "websocket": {"enabled": False},
                 "http_rest": {"enabled": False},
             },
@@ -60,13 +59,15 @@ def _build_daemon_config(
 async def daemon_fixture(tmp_path: Path):
     """Start a daemon for thread recovery tests."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-recovery-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = _build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+
+    ws_port = alloc_ephemeral_port()
+    config = _build_daemon_config(tmp_path, websocket_port=ws_port)
     daemon = SootheDaemon(config)
     await daemon.start()
     await asyncio.sleep(0.2)
     try:
-        yield daemon, socket_path, config
+        yield daemon, ws_port, config
     finally:
         with contextlib.suppress(Exception):
             await daemon.stop()
@@ -77,8 +78,10 @@ async def daemon_fixture(tmp_path: Path):
 async def test_thread_resume_from_disk(tmp_path: Path) -> None:
     """Test resuming thread after daemon restart (RFC-402)."""
     force_isolated_home(tmp_path / "soothe-home")
-    socket_path = f"/tmp/soothe-restart-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    config = _build_daemon_config(tmp_path, socket_path)
+    ws_port = alloc_ephemeral_port()
+
+    ws_port = alloc_ephemeral_port()
+    config = _build_daemon_config(tmp_path, websocket_port=ws_port)
 
     # Start first daemon instance
     daemon1 = SootheDaemon(config)
@@ -89,7 +92,7 @@ async def test_thread_resume_from_disk(tmp_path: Path) -> None:
 
     try:
         # Create thread and execute query
-        client1 = DaemonClient(sock=Path(socket_path))
+        client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client1.connect()
 
         try:
@@ -118,7 +121,7 @@ async def test_thread_resume_from_disk(tmp_path: Path) -> None:
 
     try:
         # Resume thread
-        client2 = DaemonClient(sock=Path(socket_path))
+        client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
 
         try:
@@ -167,10 +170,10 @@ async def test_thread_recovery_missing_metadata(
     daemon_fixture: tuple[SootheDaemon, str, SootheConfig],
 ) -> None:
     """Test thread recovery when durability metadata is missing (RFC-402)."""
-    daemon, socket_path, config = daemon_fixture
+    daemon, ws_port, config = daemon_fixture
     _ = daemon
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -209,10 +212,10 @@ async def test_concurrent_thread_execution(
     daemon_fixture: tuple[SootheDaemon, str, SootheConfig],
 ) -> None:
     """Test concurrent thread execution with RFC-402 ThreadExecutor."""
-    daemon, socket_path, config = daemon_fixture
+    daemon, ws_port, config = daemon_fixture
     _ = daemon
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -261,10 +264,10 @@ async def test_thread_cancellation(
     daemon_fixture: tuple[SootheDaemon, str, SootheConfig],
 ) -> None:
     """Test thread cancellation during execution (RFC-402)."""
-    daemon, socket_path, config = daemon_fixture
+    daemon, ws_port, config = daemon_fixture
     _ = daemon
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
@@ -320,10 +323,10 @@ async def test_thread_isolation(
     daemon_fixture: tuple[SootheDaemon, str, SootheConfig],
 ) -> None:
     """Test thread state isolation guarantees (RFC-402)."""
-    daemon, socket_path, config = daemon_fixture
+    daemon, ws_port, config = daemon_fixture
     _ = daemon
 
-    client = DaemonClient(sock=Path(socket_path))
+    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
