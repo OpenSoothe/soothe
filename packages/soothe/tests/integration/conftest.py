@@ -99,10 +99,6 @@ def force_isolated_home(home: Path) -> None:
     daemon_paths.SOOTHE_HOME = home_str
     importlib.reload(daemon_paths)
 
-    import soothe.daemon.thread_logger as daemon_thread_logger
-
-    daemon_thread_logger.SOOTHE_HOME = home_str
-
     import soothe.core.thread.manager as thread_manager
 
     thread_manager.SOOTHE_HOME = home_str
@@ -156,7 +152,7 @@ def build_daemon_config(
         persistence={"persist_dir": str(tmp_path / "persistence")},
         protocols={
             "memory": {"enabled": False},
-            "durability": {"backend": "json", "persist_dir": str(tmp_path / "durability")},
+            "durability": {"backend": "sqlite", "persist_dir": str(tmp_path / "durability")},
         },
         daemon=daemon_config,
         performance={"unified_classification": False},
