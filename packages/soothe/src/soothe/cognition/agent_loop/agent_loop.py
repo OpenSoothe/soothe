@@ -180,8 +180,14 @@ class AgentLoop:
                     goal_record.goal_id,
                 )
             else:
-                # No active goal in recovered checkpoint - shouldn't happen if status==running
-                logger.error("Checkpoint status is 'running' but no active goal found")
+                # No active goal in recovered checkpoint - invalid state
+                # Treat as new checkpoint instead of failing
+                logger.warning(
+                    "Checkpoint has invalid goal index %d (history length: %d), initializing fresh state",
+                    current_goal_index,
+                    len(checkpoint.goal_history),
+                )
+                checkpoint = await state_manager.initialize(thread_id, max_iterations)
                 iteration = 0
                 goal_record = None
 
