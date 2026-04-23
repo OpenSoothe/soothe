@@ -662,7 +662,7 @@ def _create_jsonplus_serializer() -> JsonPlusSerializer:
     Returns:
         A ready `JsonPlusSerializer` instance.
     """
-    from soothe.utils.serde import create_soothe_serde
+    from soothe_sdk.utils.serde import create_soothe_serde
 
     return create_soothe_serde()
 

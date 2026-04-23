@@ -82,8 +82,10 @@ def setup_logging(config: SootheConfig | None = None, *, foreground: bool = Fals
         root_logger.addHandler(file_handler)
 
     console_enabled = cfg.logging.console.enabled or foreground
-    console_stream = sys.stdout if foreground else (
-        sys.stderr if cfg.logging.console.stream == "stderr" else sys.stdout
+    console_stream = (
+        sys.stdout
+        if foreground
+        else (sys.stderr if cfg.logging.console.stream == "stderr" else sys.stdout)
     )
     if console_enabled:
         if not any(
