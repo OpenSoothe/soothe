@@ -365,10 +365,20 @@ class ClientSessionManager:
                     )
                     # Stop sender loop gracefully
                     break
+                except websockets.exceptions.ConnectionClosedError:
+                    # Abnormal disconnect (client dropped connection)
+                    logger.debug(
+                        "Client %s disconnected abnormally while sending",
+                        session.client_id[:8],
+                    )
+                    # Stop sender loop gracefully
+                    break
                 except Exception:
-                    logger.exception(
-                        "Failed to send event to client %s",
-                        session.client_id,
+                    # Unexpected transport error - log with context
+                    logger.warning(
+                        "Failed to send event to client %s, stopping sender loop",
+                        session.client_id[:8],
+                        exc_info=True,
                     )
                     # Transport error, stop sender loop
                     break

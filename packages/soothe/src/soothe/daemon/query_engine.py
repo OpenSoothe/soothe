@@ -377,9 +377,11 @@ class QueryEngine:
                     await d._runner.touch_thread_activity_timestamp(final_thread_id)
 
                 completion_thread_id = thread_id or final_thread_id
-                await d._broadcast(
-                    {"type": "status", "state": "idle", "thread_id": completion_thread_id}
-                )
+                # Only broadcast status if we have a valid thread_id
+                if completion_thread_id:
+                    await d._broadcast(
+                        {"type": "status", "state": "idle", "thread_id": completion_thread_id}
+                    )
 
                 # Release thread ownership
                 if client_id:
@@ -606,9 +608,11 @@ class QueryEngine:
                     await d._runner.touch_thread_activity_timestamp(final_thread_id)
 
                 completion_thread_id = thread_id or final_thread_id
-                await d._broadcast(
-                    {"type": "status", "state": "idle", "thread_id": completion_thread_id}
-                )
+                # Only broadcast status if we have a valid thread_id
+                if completion_thread_id:
+                    await d._broadcast(
+                        {"type": "status", "state": "idle", "thread_id": completion_thread_id}
+                    )
 
                 # Release thread ownership
                 if client_id:
@@ -692,7 +696,11 @@ class QueryEngine:
             )
             # IG-157: Broadcast idle status immediately after cancel
             final_thread_id = d._runner.current_thread_id or ""
-            await d._broadcast({"type": "status", "state": "idle", "thread_id": final_thread_id})
+            # Only broadcast if we have a valid thread_id
+            if final_thread_id:
+                await d._broadcast(
+                    {"type": "status", "state": "idle", "thread_id": final_thread_id}
+                )
 
     async def cancel_thread(self, thread_id: str) -> None:
         """Cancel a specific thread's execution."""
