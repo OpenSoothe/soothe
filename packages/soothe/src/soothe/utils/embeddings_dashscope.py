@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import dashscope
 from langchain_core.embeddings import Embeddings
 from pydantic import BaseModel
 
@@ -43,6 +42,7 @@ class DashScopeEmbeddings(BaseModel, Embeddings):
         super().__init__(**kwargs)
 
         # Import and configure dashscope
+        import dashscope
         from dashscope import TextEmbedding
 
         # Set API key if provided
