@@ -162,7 +162,7 @@ async def test_event_bus_overflow_protection() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_three_clients_complete_isolation(tmp_path: Path) -> None:
+async def test_three_clients_complete_isolation(tmp_path: Path, requires_llm_api) -> None:
     """Test that three clients with different threads are completely isolated."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
@@ -217,7 +217,7 @@ async def test_three_clients_complete_isolation(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_client_subscription_after_thread_creation(tmp_path: Path) -> None:
+async def test_client_subscription_after_thread_creation(tmp_path: Path, requires_llm_api) -> None:
     """Test that client can subscribe to thread after it's created."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
@@ -257,7 +257,7 @@ async def test_client_subscription_after_thread_creation(tmp_path: Path) -> None
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_client_multiple_thread_subscriptions(tmp_path: Path) -> None:
+async def test_client_multiple_thread_subscriptions(tmp_path: Path, requires_llm_api) -> None:
     """Test that a single client can subscribe to multiple threads simultaneously."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
@@ -305,7 +305,7 @@ async def test_client_multiple_thread_subscriptions(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 @pytest.mark.integration
 @pytest.mark.slow
-async def test_rapid_client_connections(tmp_path: Path) -> None:
+async def test_rapid_client_connections(tmp_path: Path, requires_llm_api) -> None:
     """Test daemon stability with rapid client connections/disconnections."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
@@ -358,7 +358,7 @@ async def test_rapid_client_connections(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 @pytest.mark.integration
 @pytest.mark.slow
-async def test_event_throughput_stress(tmp_path: Path) -> None:
+async def test_event_throughput_stress(tmp_path: Path, requires_llm_api) -> None:
     """Test event bus performance under high throughput."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
@@ -396,7 +396,7 @@ async def test_event_throughput_stress(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_large_message_handling(tmp_path: Path) -> None:
+async def test_large_message_handling(tmp_path: Path, requires_llm_api) -> None:
     """Test daemon handles large messages correctly (up to size limit)."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
@@ -429,7 +429,7 @@ async def test_large_message_handling(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_session_cleanup_on_unexpected_disconnect(tmp_path: Path) -> None:
+async def test_session_cleanup_on_unexpected_disconnect(tmp_path: Path, requires_llm_api) -> None:
     """Test that session is properly cleaned up on unexpected client disconnect."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
@@ -470,7 +470,7 @@ async def test_session_cleanup_on_unexpected_disconnect(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_client_reconnect_after_disconnect(tmp_path: Path) -> None:
+async def test_client_reconnect_after_disconnect(tmp_path: Path, requires_llm_api) -> None:
     """Test that client can reconnect after disconnect and create new session."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
@@ -520,7 +520,7 @@ async def test_client_reconnect_after_disconnect(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_protocol_message_thread_id_in_events(tmp_path: Path) -> None:
+async def test_protocol_message_thread_id_in_events(tmp_path: Path, requires_llm_api) -> None:
     """Test that all event messages include thread_id field."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()

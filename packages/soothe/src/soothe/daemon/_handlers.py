@@ -148,11 +148,13 @@ class DaemonHandlersMixin:
                 if msg_type == "command":
                     cmd = msg.get("cmd", "")
                     if cmd in ("/exit", "/quit"):
-                        logger.info(
-                            "Received %s command - treating as client detach (daemon keeps running)",
+                        # IG-248: LEGACY SOCKET DEPRECATED - /exit/quit handled in MessageRouter
+                        # Commands no longer enqueued; handled immediately in dispatch()
+                        # Legacy socket clients still connect but use modern WebSocket protocol
+                        logger.warning(
+                            "Received %s command in _input_loop - should be handled in MessageRouter",
                             cmd,
                         )
-                        await self._broadcast({"type": "status", "state": "detached"})
                         continue
                     if cmd.strip().lower() == "/cancel":
                         if self._query_engine is not None:
