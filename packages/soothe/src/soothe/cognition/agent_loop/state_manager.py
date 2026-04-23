@@ -406,6 +406,7 @@ class AgentLoopStateManager:
 
         checkpoint = self._checkpoint
 
+        # Update goal record status
         goal_record.status = "completed"
         goal_record.final_report = final_report
         goal_record.completed_at = datetime.now(UTC)
@@ -419,7 +420,9 @@ class AgentLoopStateManager:
         checkpoint.thread_health_metrics.consecutive_goal_failures = 0
         checkpoint.thread_health_metrics.last_goal_status = "completed"
 
+        # Reset loop state for next goal
         checkpoint.status = "ready_for_next_goal"
+        checkpoint.current_goal_index = -1  # IG-055: Reset index after goal completion
 
         await self.save(checkpoint)
 
