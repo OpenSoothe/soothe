@@ -225,33 +225,16 @@ def _is_summarization_chunk(metadata: dict | None) -> bool:
 
 
 def _extract_custom_output_text(data: dict[str, Any]) -> str | None:
-    """Extract assistant-visible text from daemon custom output events."""
-    from soothe_sdk.events import (
-        AGENT_LOOP_COMPLETED,
-        CHITCHAT_RESPONSE,
-        FINAL_REPORT,
-        QUIZ_RESPONSE,
-    )
-    from soothe_sdk.ux import strip_internal_tags
+    """Extract assistant-visible text from daemon custom output events.
+
+    Uses unified output event registry (IG-254) for single source of truth.
+    All user-visible output events (chitchat, quiz, final report, etc.) are
+    registered in soothe_sdk.output_events and queried here.
+    """
+    from soothe_sdk.output_events import extract_output_text
 
     event_type = str(data.get("type", ""))
-    if event_type == CHITCHAT_RESPONSE:
-        content = data.get("content", "")
-        cleaned = strip_internal_tags(str(content))
-        return cleaned or None
-    if event_type == QUIZ_RESPONSE:
-        content = data.get("content", "")
-        cleaned = strip_internal_tags(str(content))
-        return cleaned or None
-    if event_type == AGENT_LOOP_COMPLETED:
-        content = data.get("final_stdout_message", "")
-        cleaned = strip_internal_tags(str(content))
-        return cleaned or None
-    if event_type == FINAL_REPORT:
-        content = data.get("content", data.get("summary", ""))
-        cleaned = strip_internal_tags(str(content))
-        return cleaned or None
-    return None
+    return extract_output_text(event_type, data)
 
 
 def _format_display_line_for_tui(line: DisplayLine) -> str:
