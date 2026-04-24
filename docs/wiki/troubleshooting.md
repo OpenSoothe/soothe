@@ -425,6 +425,8 @@ soothe thread archive abc123
 
 ## Debug Mode
 
+For comprehensive debugging instructions, see the [Debug Guide](../howto_debug.md).
+
 Enable verbose logging to diagnose issues:
 
 ```bash
@@ -445,16 +447,30 @@ Or in YAML:
 debug: true
 ```
 
+### Key Debug Features
+
+The debug guide covers:
+
+- **Log locations**: `~/.soothe/logs/`, `~/.soothe/runs/`
+- **Enable debug logs**: Environment variables and config files
+- **Monitor logs in real-time**: `tail -f` commands for daemon, CLI, and thread logs
+- **LLM tracing**: Debug model behavior with request/response logging
+- **Verbosity levels**: Understand TUI event filtering (quiet/normal/detailed/debug)
+- **Common workflows**: Debug agent behavior, LLM issues, connection, subagents, protocols
+- **Performance profiling**: Analyze agent performance from logs
+
 ## Getting Help
 
 1. Use `/help` in the TUI to see available commands
-2. Check logs: `~/.soothe/logs/daemon.log`
-3. Review configuration: `soothe config show`
-4. Check the [documentation](../) for detailed guides
-5. Review RFCs and implementation guides in `docs/specs/` and `docs/impl/`
+2. Check the [Debug Guide](../howto_debug.md) for comprehensive debugging instructions
+3. Check logs: `~/.soothe/logs/daemon.log`, `~/.soothe/logs/cli.log`
+4. Review configuration: `soothe config show`
+5. Check the [documentation](../) for detailed guides
+6. Review RFCs and implementation guides in `docs/specs/` and `docs/impl/`
 
 ## Related Guides
 
+- [Debug Guide](../howto_debug.md) - Enable debug logs, diagnose issues, log locations
 - [Configuration Guide](configuration.md) - Configuration reference
 - [Daemon Management](daemon-management.md) - Daemon lifecycle
 - [Multi-Transport Setup](multi-transport.md) - Transport configuration

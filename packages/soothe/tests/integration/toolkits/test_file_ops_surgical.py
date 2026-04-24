@@ -1,6 +1,6 @@
 """Integration tests for code editing tools.
 
-Tests tools from soothe.toolkits.code_edit:
+Tests tools from soothe.toolkits.file_ops:
 - edit_file_lines: Replace specific line range in a file
 - insert_lines: Insert lines at specific positions
 - delete_lines: Delete specific line ranges
@@ -27,7 +27,7 @@ class TestEditFileLinesTool:
     @pytest.fixture
     def edit_tool(self):
         """Create EditFileLinesTool instance."""
-        from soothe.toolkits.code_edit import EditFileLinesTool
+        from soothe.toolkits.file_ops import EditFileLinesTool
 
         return EditFileLinesTool()
 
@@ -130,7 +130,7 @@ class TestInsertLinesTool:
     @pytest.fixture
     def insert_tool(self):
         """Create InsertLinesTool instance."""
-        from soothe.toolkits.code_edit import InsertLinesTool
+        from soothe.toolkits.file_ops import InsertLinesTool
 
         return InsertLinesTool()
 
@@ -214,7 +214,7 @@ class TestDeleteLinesTool:
     @pytest.fixture
     def delete_lines_tool(self):
         """Create DeleteLinesTool instance."""
-        from soothe.toolkits.code_edit import DeleteLinesTool
+        from soothe.toolkits.file_ops import DeleteLinesTool
 
         return DeleteLinesTool()
 

@@ -25,7 +25,7 @@ from tests.integration.conftest import (
 
 
 def _build_daemon_config(
-    tmp_path: Path, ws_port: str, max_concurrent_threads: int = 3
+    tmp_path: Path, websocket_port: int, max_concurrent_threads: int = 3
 ) -> SootheConfig:
     """Build an isolated daemon config for thread recovery tests."""
     base_config = get_base_config()
@@ -45,8 +45,11 @@ def _build_daemon_config(
         },
         daemon={
             "transports": {
-                "unix_socket": {"enabled": True, "path": ws_port},
-                "websocket": {"enabled": False},
+                "websocket": {
+                    "enabled": True,
+                    "host": "127.0.0.1",
+                    "port": websocket_port,
+                },
                 "http_rest": {"enabled": False},
             },
             "max_concurrent_threads": max_concurrent_threads,
@@ -61,7 +64,6 @@ async def daemon_fixture(tmp_path: Path):
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
 
-    ws_port = alloc_ephemeral_port()
     config = _build_daemon_config(tmp_path, websocket_port=ws_port)
     daemon = SootheDaemon(config)
     await daemon.start()

@@ -53,6 +53,7 @@ Browse the complete Soothe documentation organized by user journey.
 
 ### 🛠️ Troubleshooting & Advanced
 
+- [Debug Guide](howto_debug.md) - Enable debug logs, diagnose issues, log locations
 - [Troubleshooting Guide](wiki/troubleshooting.md) - Common issues and solutions
 
 ---

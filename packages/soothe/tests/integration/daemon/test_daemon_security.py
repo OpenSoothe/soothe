@@ -25,11 +25,10 @@ from tests.integration.conftest import (
 
 @pytest.fixture
 async def unix_daemon_fixture(tmp_path: Path):
-    """Start a daemon exposing only the unix socket transport."""
+    """Start a daemon exposing only WebSocket transport."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
 
-    ws_port = alloc_ephemeral_port()
     config = build_daemon_config(tmp_path, websocket_port=ws_port)
     daemon = SootheDaemon(config)
     await daemon.start()
@@ -47,11 +46,8 @@ async def websocket_daemon_fixture(tmp_path: Path):
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
 
-    ws_port = alloc_ephemeral_port()
-
     config = build_daemon_config(
         tmp_path,
-        ws_port,
         websocket_port=ws_port,
         cors_origins=["http://localhost:*", "http://127.0.0.1:*"],
     )

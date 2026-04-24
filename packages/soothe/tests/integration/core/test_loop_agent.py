@@ -132,7 +132,8 @@ class MockCoreAgent:
 
         async def mock_stream():
             self.call_count += 1
-            yield {"content": f"Mock output for: {user_input[:50]}"}
+            # Use message format expected by agent_loop
+            yield {"messages": [{"content": f"Mock output for: {user_input}"}]}
 
         return mock_stream()
 
@@ -141,6 +142,11 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
     cfg = MagicMock()
     cfg.subagents = {}
     cfg.agentic.max_iterations = max_iterations
+    cfg.agentic.context_window_limit = 128000
+    cfg.agentic.working_memory.max_inline_chars = 4000
+    cfg.agentic.working_memory.max_entry_chars_before_spill = 500
+    cfg.execution.concurrency.max_parallel_steps = 1
+    cfg.execution.concurrency.max_parallel_goals = 1
     return cfg
 
 
@@ -307,5 +313,6 @@ async def test_loop_agent_parallel_execution() -> None:
         max_iterations=8,
     )
 
-    assert core_agent.call_count == 3
+    # 3 parallel steps in first iteration + 1 plan call in second iteration = 4
+    assert core_agent.call_count == 4
     assert result.status == "done"

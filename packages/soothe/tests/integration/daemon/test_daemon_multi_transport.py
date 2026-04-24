@@ -1,16 +1,14 @@
 """Multi-transport integration tests for daemon protocol.
 
-This module validates daemon behavior with all transports enabled simultaneously,
+This module validates daemon behavior with WebSocket and HTTP REST transports enabled,
 ensuring correct broadcast fanout, cross-transport thread operations, and client
-aggregation across WebSocket and HTTP REST transports (per RFC-450, Unix socket removed).
+aggregation (per RFC-450, Unix socket removed due to stability issues).
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
-import uuid
 from pathlib import Path
 
 import pytest
@@ -28,14 +26,12 @@ from tests.integration.conftest import (
 
 def _build_daemon_config(
     tmp_path: Path,
-    unix_ws_port: str,
     websocket_port: int,
     http_port: int,
 ) -> SootheConfig:
-    """Build an isolated daemon config with all transports enabled."""
+    """Build an isolated daemon config with WebSocket and HTTP transports enabled."""
     return build_daemon_config(
         tmp_path=tmp_path,
-        unix_ws_port=unix_ws_port,
         websocket_port=websocket_port,
         http_port=http_port,
     )
@@ -43,15 +39,13 @@ def _build_daemon_config(
 
 @pytest.fixture
 async def multi_transport_daemon(tmp_path: Path):
-    """Start a daemon with all three transports enabled."""
+    """Start a daemon with WebSocket and HTTP transports enabled."""
     force_isolated_home(tmp_path / "soothe-home")
-    ws_port = alloc_ephemeral_port()
 
-    unix_path = f"/tmp/soothe-multi-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
     ws_port = alloc_ephemeral_port()
     http_port = alloc_ephemeral_port()
 
-    config = _build_daemon_config(tmp_path, unix_path, ws_port, http_port)
+    config = _build_daemon_config(tmp_path, ws_port, http_port)
     daemon = SootheDaemon(config)
     await daemon.start()
     # Allow transports to fully initialize

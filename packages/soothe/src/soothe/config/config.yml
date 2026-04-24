@@ -500,7 +500,7 @@ logging:
   # Thread conversation logging for audit and recovery
   thread_logging:
     enabled: true
-    dir: ""                  # Empty = SOOTHE_HOME/runs/{thread_id}/
+    dir: ""                  # Empty = SOOTHE_DATA_DIR/threads/{thread_id}/logs/
     retention_days: 30       # Auto-delete threads older than N days
     max_size_mb: 100         # Max total size (not enforced yet)
 
