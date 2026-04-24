@@ -144,7 +144,10 @@ def format_tool_call(
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
 ) -> DisplayLine:
-    """Format a tool/subagent call line with visual distinction.
+    """Format a tool/subagent call line.
+
+    IG-256: Restored uniform tool display - no subagent differentiation.
+    All tools/subagents use same wrench emoji and gear icon.
 
     Args:
         name: Tool or subagent name.
@@ -154,21 +157,14 @@ def format_tool_call(
         verbosity_tier: Current verbosity tier.
 
     Returns:
-        DisplayLine for tool/subagent call with appropriate icon.
+        DisplayLine for tool/subagent call with uniform wrench icon.
     """
     # Transform to PascalCase for display
     display_name = get_tool_pascal_name(name)
 
-    # Differentiate subagent calls from regular tools
-    is_subagent = "_subagent" in name.lower()
-    if is_subagent:
-        # Subagent dispatch: use agent emoji
-        icon_emoji = "🤖"
-        icon_char = "●"
-    else:
-        # Regular tool: use wrench emoji
-        icon_emoji = "🔧"
-        icon_char = "⚙"
+    # IG-256: No differentiation - use wrench for all tools/subagents
+    icon_emoji = "🔧"
+    icon_char = "⚙"
 
     content = f"{icon_emoji} {display_name}({args_summary})"
     return DisplayLine(
@@ -222,16 +218,18 @@ def format_subagent_milestone(
 ) -> DisplayLine:
     """Format a subagent milestone line showing progress.
 
+    IG-256: Restored detective emoji for subagent milestones.
+
     Args:
         brief: Milestone description (e.g., "Step 3: click on login").
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
     Returns:
-        DisplayLine for milestone with activity indicator.
+        DisplayLine for milestone with detective emoji.
     """
-    # Use spinning gear for active work
-    content = f"🔄 {brief}"
+    # IG-256: Use detective emoji for milestones (restored from IG-255)
+    content = f"🕵🏻‍♂️ {brief}"
     return DisplayLine(
         level=3,
         content=content,
@@ -249,31 +247,27 @@ def format_subagent_done(
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
 ) -> DisplayLine:
-    """Format a subagent completion line with metrics and optional result preview.
+    """Format a subagent completion line with metrics.
 
-    IG-255: Consolidated display - single completion line with embedded result preview.
-    Eliminates redundant success markers and separate result display lines.
+    IG-256: Restored verbose format with triple success markers and separate result display.
+    Result preview parameter is ignored - results show via separate tool events.
 
     Args:
         summary: Completion summary with subagent-specific metrics (e.g., "success", "$1.23").
         duration_s: Duration in seconds.
-        result_preview: Optional first meaningful result line (e.g., "Current Time: 12:24:49 AM").
+        result_preview: Ignored (kept for backward compatibility).
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
     Returns:
-        DisplayLine for subagent done with consolidated status and result.
+        DisplayLine for subagent done with verbose triple markers.
     """
     duration_ms = int(duration_s * 1000)
 
-    # IG-255: Consolidated format - status + preview in single line
-    # Format: "✓ {summary} ✓ {preview}" when preview available, else "✓ {summary}"
-    # Simplified emoji: single ✓ instead of triple "✓ ✅ ✓"
-    content = f"✓ {summary}"
-    if result_preview:
-        # Truncate preview to 40 chars for inline display
-        preview_text = abbreviate_text(result_preview, 40)
-        content = f"{content} ✓ {preview_text}"
+    # IG-256: Verbose format restored - triple success markers, result shows separately
+    # Format: "✓ ✅ ✓ {summary}"
+    # result_preview is ignored - let result show via separate tool execution events
+    content = f"✓ ✅ ✓ {summary}"
 
     return DisplayLine(
         level=3,
@@ -296,8 +290,14 @@ def format_plan_phase_reasoning(
 
     IG-225: Uses level=2 (flat, no indent) for prominent visibility alongside step headers.
     Uses solid bullet ● (matching goal) to indicate reasoning phase is active.
+
+    IG-257: When label is empty, shows text without prefix (just emoji + text).
     """
-    content = f"💭 {label}: {text}"
+    # IG-257: Handle empty label (no prefix)
+    if label:
+        content = f"💭 {label}: {text}"
+    else:
+        content = f"💭 {text}"
     return DisplayLine(
         level=2,
         content=content,
@@ -393,6 +393,8 @@ def format_step_done(
     IG-159/IG-182: Shows brief "Done"/"Failed" with tree connector as child of step header.
     No description repeat - user already saw it in the step header above.
 
+    IG-257: Uses Unicode tree branch "└─" (U+2514) for cleaner visual tree.
+
     Args:
         duration_s: Duration in seconds.
         tool_call_count: Number of tool calls made during step execution.
@@ -414,7 +416,7 @@ def format_step_done(
             DisplayLine(
                 level=3,  # Child node of step header (level 2)
                 content=content,
-                icon="|__",  # Tree connector (IG-159)
+                icon="└─",  # IG-257: Unicode tree branch (U+2514)
                 indent=indent_for_level(3),
                 duration_ms=duration_ms,
                 source_prefix=_derive_source_prefix(namespace, verbosity_tier),
@@ -426,7 +428,7 @@ def format_step_done(
         DisplayLine(
             level=3,
             content=f"Failed{tool_info}",
-            icon="|__",
+            icon="└─",  # IG-257: Unicode tree branch (U+2514)
             indent=indent_for_level(3),
             duration_ms=duration_ms,
             source_prefix=_derive_source_prefix(namespace, verbosity_tier),
@@ -439,7 +441,7 @@ def format_step_done(
             DisplayLine(
                 level=4,  # Error detail as child of failed result
                 content=f"Error: {error_msg}",
-                icon="|__",
+                icon="└─",  # IG-257: Unicode tree branch (U+2514)
                 indent=indent_for_level(4),
                 source_prefix=_derive_source_prefix(namespace, verbosity_tier),
             )

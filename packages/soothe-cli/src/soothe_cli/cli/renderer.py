@@ -111,6 +111,16 @@ class CliRenderer:
         """Shared presentation policy used with StreamDisplayPipeline and EventProcessor."""
         return self._presentation
 
+    def _is_inside_step_context(self) -> bool:
+        """Check if we're inside an active step (for indentation).
+
+        IG-257: Used to determine if tool calls/results should be indented as tree children.
+
+        Returns:
+            True if current_step_id is set in pipeline context.
+        """
+        return self._pipeline._context.current_step_id is not None
+
     def write_lines(self, lines: list[DisplayLine]) -> None:
         """Write display lines to stderr.
 
@@ -221,6 +231,11 @@ class CliRenderer:
         # Use display helper for consistency with TUI (RFC-0020 Principle 5)
         tool_block = make_tool_block(display_name, args_str, status="running")
 
+        # IG-257: Add indentation when inside step context
+        # Unicode U+2514 "└─" (Box Drawings Light Up and Right) for tree branch
+        if self._is_inside_step_context():
+            tool_block = f"  └─ {tool_block}"
+
         # Track start time for duration display (RFC-0020)
         if tool_call_id:
             self._state.tool_call_start_times[tool_call_id] = time.time()
@@ -271,6 +286,11 @@ class CliRenderer:
             result_line = f"{icon} {result}"
         if duration_ms > 0:
             result_line += f" ({duration_ms}ms)"
+
+        # IG-257: Add indentation when inside step context
+        # Unicode U+2514 "└─" (Box Drawings Light Up and Right) for tree branch
+        if self._is_inside_step_context():
+            result_line = f"  └─ {result_line}"
 
         sys.stderr.write(result_line + "\n")
         sys.stderr.flush()
