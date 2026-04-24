@@ -828,12 +828,12 @@ class Executor:
         """
         from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
+        from soothe.cognition.agent_loop.metadata_generator import generate_outcome_metadata
         from soothe.cognition.agent_loop.result_cache import ToolResultCache
         from soothe.cognition.agent_loop.stream_chunk_normalize import (
             extract_text_from_message_content,
             iter_messages_for_act_aggregation,
         )
-        from soothe.toolkits.metadata_generator import generate_outcome_metadata
 
         chunks: list[str] = []
         tool_call_count = 0

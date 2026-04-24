@@ -28,9 +28,12 @@ class ToolMeta:
             of ``arg_keys``). Used for path abbreviation in display.
         aliases: Alternative names the model might emit for the same tool
             (e.g., ``shell`` and ``bash`` are aliases of ``execute``).
-        category: Semantic category for output formatting
+        category: Semantic category for display grouping
             (``file_ops``, ``execution``, ``web``, ``media``, ``goals``,
             ``subagent``, ``generic``).
+        outcome_type: Outcome classification for agent reasoning
+            (``file_read``, ``file_write``, ``web_search``, ``code_exec``,
+            ``subagent``, ``generic``). If ``None``, derived from category.
         source: Origin package -- ``deepagents`` or ``soothe``.
         has_header_info: True when ``format_tool_display()`` already renders
             the key information in the header line, so the args body
@@ -43,6 +46,7 @@ class ToolMeta:
     path_arg_keys: tuple[str, ...] = ()
     aliases: tuple[str, ...] = ()
     category: str = "generic"
+    outcome_type: str | None = None
     source: str = "soothe"
     has_header_info: bool = False
 
@@ -97,6 +101,7 @@ _register(
             "relative_path",
         ),
         category="file_ops",
+        outcome_type="file_read",
         source="deepagents",
         has_header_info=True,
     )
@@ -109,6 +114,7 @@ _register(
         arg_keys=("file_path", "path"),
         path_arg_keys=("file_path", "path"),
         category="file_ops",
+        outcome_type="file_write",
         source="deepagents",
         has_header_info=True,
     )
@@ -121,6 +127,7 @@ _register(
         arg_keys=("file_path", "path"),
         path_arg_keys=("file_path", "path"),
         category="file_ops",
+        outcome_type="file_write",
         source="deepagents",
         has_header_info=True,
     )
@@ -134,6 +141,7 @@ _register(
         path_arg_keys=("path", "path_name", "directory", "target_directory", "dir"),
         aliases=("list_files",),
         category="file_ops",
+        outcome_type="file_read",
         source="deepagents",
         has_header_info=True,
     )
@@ -147,6 +155,7 @@ _register(
         path_arg_keys=("path",),
         aliases=("search_files",),
         category="file_ops",
+        outcome_type="file_read",
         source="deepagents",
         has_header_info=True,
     )
@@ -158,6 +167,7 @@ _register(
         display_name="Search Content",
         arg_keys=("pattern", "regex", "regexp"),
         category="file_ops",
+        outcome_type="file_read",
         source="deepagents",
         has_header_info=True,
     )
@@ -170,6 +180,7 @@ _register(
         arg_keys=("command", "cmd", "script"),
         aliases=("shell", "bash", "run_command"),
         category="execution",
+        outcome_type="code_exec",
         source="deepagents",
         has_header_info=True,
     )
@@ -182,6 +193,7 @@ _register(
         arg_keys=("query",),
         aliases=("search_web",),
         category="web",
+        outcome_type="web_search",
         source="deepagents",
         has_header_info=True,
     )
@@ -194,6 +206,7 @@ _register(
         arg_keys=("url",),
         aliases=("crawl_web",),
         category="web",
+        outcome_type="web_search",
         source="deepagents",
         has_header_info=True,
     )
@@ -205,6 +218,7 @@ _register(
         display_name="Task",
         arg_keys=("subagent_type", "description", "prompt"),
         category="subagent",
+        outcome_type="subagent",
         source="deepagents",
         has_header_info=True,
     )
@@ -221,6 +235,7 @@ _register(
         arg_keys=("file_path", "path"),
         path_arg_keys=("file_path", "path"),
         category="file_ops",
+        outcome_type="file_write",
         source="soothe",
     )
 )
@@ -232,6 +247,7 @@ _register(
         arg_keys=("path", "file_path"),
         path_arg_keys=("path", "file_path"),
         category="file_ops",
+        outcome_type="file_read",
         source="soothe",
     )
 )
@@ -243,6 +259,7 @@ _register(
         arg_keys=("path", "file_path"),
         path_arg_keys=("path", "file_path"),
         category="file_ops",
+        outcome_type="file_write",
         source="soothe",
     )
 )
@@ -254,6 +271,7 @@ _register(
         arg_keys=("path", "file_path"),
         path_arg_keys=("path", "file_path"),
         category="file_ops",
+        outcome_type="file_write",
         source="soothe",
     )
 )
@@ -265,6 +283,7 @@ _register(
         arg_keys=("path", "file_path"),
         path_arg_keys=("path", "file_path"),
         category="file_ops",
+        outcome_type="file_write",
         source="soothe",
     )
 )
@@ -276,6 +295,7 @@ _register(
         arg_keys=("path", "file_path"),
         path_arg_keys=("path", "file_path"),
         category="file_ops",
+        outcome_type="file_write",
         source="soothe",
     )
 )
@@ -290,6 +310,7 @@ _register(
         display_name="Run Python",
         arg_keys=("code",),
         category="execution",
+        outcome_type="code_exec",
         source="soothe",
     )
 )
@@ -300,6 +321,7 @@ _register(
         display_name="Run Background",
         arg_keys=("command",),
         category="execution",
+        outcome_type="code_exec",
         source="soothe",
     )
 )
@@ -310,6 +332,7 @@ _register(
         display_name="Kill Process",
         arg_keys=("pid",),
         category="execution",
+        outcome_type="code_exec",
         source="soothe",
     )
 )
@@ -324,6 +347,7 @@ _register(
         display_name="Multi-Engine Search",
         arg_keys=("query",),
         category="web",
+        outcome_type="web_search",
         source="soothe",
         has_header_info=True,
     )
@@ -335,6 +359,7 @@ _register(
         display_name="Headless Crawl",
         arg_keys=("url",),
         category="web",
+        outcome_type="web_search",
         source="soothe",
         has_header_info=True,
     )
@@ -350,6 +375,7 @@ _register(
         display_name="Research",
         arg_keys=("topic", "domain"),
         category="subagent",
+        outcome_type="subagent",
         source="soothe",
         has_header_info=True,
     )
@@ -366,6 +392,7 @@ _register(
         arg_keys=("image_path",),
         path_arg_keys=("image_path",),
         category="media",
+        outcome_type="file_read",
         source="soothe",
     )
 )
@@ -377,6 +404,7 @@ _register(
         arg_keys=("image_path",),
         path_arg_keys=("image_path",),
         category="media",
+        outcome_type="file_read",
         source="soothe",
     )
 )
@@ -388,6 +416,7 @@ _register(
         arg_keys=("video_path",),
         path_arg_keys=("video_path",),
         category="media",
+        outcome_type="file_read",
         source="soothe",
     )
 )
@@ -399,6 +428,7 @@ _register(
         arg_keys=("video_path",),
         path_arg_keys=("video_path",),
         category="media",
+        outcome_type="file_read",
         source="soothe",
     )
 )
@@ -410,6 +440,7 @@ _register(
         arg_keys=("audio_path",),
         path_arg_keys=("audio_path",),
         category="media",
+        outcome_type="file_read",
         source="soothe",
     )
 )
@@ -421,6 +452,7 @@ _register(
         arg_keys=("audio_path",),
         path_arg_keys=("audio_path",),
         category="media",
+        outcome_type="file_read",
         source="soothe",
     )
 )
@@ -436,6 +468,7 @@ _register(
         arg_keys=("file_path",),
         path_arg_keys=("file_path",),
         category="file_ops",
+        outcome_type="file_read",
         source="soothe",
     )
 )
@@ -447,6 +480,7 @@ _register(
         arg_keys=("file_path",),
         path_arg_keys=("file_path",),
         category="file_ops",
+        outcome_type="file_read",
         source="soothe",
     )
 )
@@ -458,6 +492,7 @@ _register(
         arg_keys=("file_path",),
         path_arg_keys=("file_path",),
         category="file_ops",
+        outcome_type="file_read",
         source="soothe",
     )
 )
@@ -469,6 +504,7 @@ _register(
         arg_keys=("file_path",),
         path_arg_keys=("file_path",),
         category="file_ops",
+        outcome_type="file_read",
         source="soothe",
     )
 )
@@ -480,6 +516,7 @@ _register(
         arg_keys=("file_path",),
         path_arg_keys=("file_path",),
         category="file_ops",
+        outcome_type="file_read",
         source="soothe",
     )
 )
@@ -491,6 +528,7 @@ _register(
         arg_keys=("file_path",),
         path_arg_keys=("file_path",),
         category="file_ops",
+        outcome_type="file_read",
         source="soothe",
     )
 )
@@ -504,6 +542,7 @@ _register(
         name="current_datetime",
         display_name="Current DateTime",
         category="generic",
+        outcome_type="generic",
         source="soothe",
     )
 )
@@ -518,6 +557,7 @@ _register(
         display_name="Create Goal",
         arg_keys=("description",),
         category="goals",
+        outcome_type="generic",
         source="soothe",
     )
 )
@@ -527,6 +567,7 @@ _register(
         name="list_goals",
         display_name="List Goals",
         category="goals",
+        outcome_type="generic",
         source="soothe",
     )
 )
@@ -537,6 +578,7 @@ _register(
         display_name="Complete Goal",
         arg_keys=("goal_id",),
         category="goals",
+        outcome_type="generic",
         source="soothe",
     )
 )
@@ -547,6 +589,7 @@ _register(
         display_name="Fail Goal",
         arg_keys=("goal_id",),
         category="goals",
+        outcome_type="generic",
         source="soothe",
     )
 )
@@ -561,6 +604,7 @@ _register(
         display_name="Ask User",
         arg_keys=("questions",),
         category="generic",
+        outcome_type="generic",
         source="soothe",
     )
 )
@@ -570,6 +614,7 @@ _register(
         name="compact_conversation",
         display_name="Compact Conversation",
         category="generic",
+        outcome_type="generic",
         source="soothe",
     )
 )
@@ -580,6 +625,7 @@ _register(
         display_name="Write Todos",
         arg_keys=("todos",),
         category="generic",
+        outcome_type="generic",
         source="soothe",
         has_header_info=True,
     )
@@ -639,3 +685,32 @@ def get_tools_with_header_info() -> frozenset[str]:
 def get_tool_categories() -> dict[str, str]:
     """Return ``{tool_name: category}`` for all registered tools (includes aliases)."""
     return {name: meta.category for name, meta in TOOL_REGISTRY.items()}
+
+
+def get_outcome_type(name: str) -> str:
+    """Get outcome_type for a tool with fallback derivation from category.
+
+    Args:
+        name: Tool name or alias
+
+    Returns:
+        outcome_type string, derived from category if not explicitly set
+    """
+    meta = TOOL_REGISTRY.get(name)
+    if meta and meta.outcome_type:
+        return meta.outcome_type
+
+    # Fallback: categories with uniform outcome_type
+    if meta:
+        category_map = {
+            "execution": "code_exec",
+            "web": "web_search",
+            "subagent": "subagent",
+            "media": "file_read",
+            "goals": "generic",
+            "generic": "generic",
+            "file_ops": "file_read",  # Default for ambiguous category
+        }
+        return category_map.get(meta.category, "generic")
+
+    return "generic"

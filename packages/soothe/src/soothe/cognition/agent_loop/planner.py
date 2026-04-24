@@ -915,6 +915,19 @@ class LLMPlanner:
                 # Status Assessment
                 assessment = await self._assess_status(messages, goal, state.iteration)
 
+                # IG-053: Guard - Reject "done" status at iteration 0 with no execution
+                # Prevents false "done" that causes hanging and fabricated final reports
+                if assessment.status == "done":
+                    if state.iteration == 0 and len(state.step_results) == 0:
+                        logger.warning(
+                            "[Guard] Rejecting 'done' at iteration 0 with no execution - forcing 'replan'"
+                        )
+                        assessment.status = "replan"
+                        assessment.goal_progress = 0.0
+                        assessment.brief_reasoning = (
+                            "No execution occurred yet - must run at least one iteration"
+                        )
+
                 # Early completion optimization: skip plan generation if status="done"
                 if assessment.status == "done":
                     logger.debug("[Plan] early-complete status=done (skip plan gen)")
