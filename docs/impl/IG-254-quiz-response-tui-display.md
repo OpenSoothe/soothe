@@ -92,4 +92,146 @@ soothe "Who wrote Romeo and Juliet?"
 ## Success Criteria
 ✅ Quiz responses display in TUI/CLI
 ✅ Event processor handles quiz events correctly
+<<<<<<< HEAD
 ✅ Verification script passes
+=======
+✅ Verification script passes
+
+---
+
+## Architecture Issue: Duplicated Event Handling
+
+### Problem
+Adding a new query type (quiz) required modifications in **THREE places**:
+1. **CLI**: `packages/soothe-cli/src/soothe_cli/shared/event_processor.py:719`
+2. **TUI**: `packages/soothe-cli/src/soothe_cli/tui/textual_adapter.py:227`
+3. **SDK**: `packages/soothe-sdk/src/soothe_sdk/events.py` (export constant)
+
+This violates the single-responsibility principle and creates maintenance burden.
+
+### Current Architecture Gaps
+
+#### CLI Path (EventProcessor)
+- Handles custom events via `_handle_custom_event()`
+- Explicitly checks event type strings: `soothe.output.chitchat.responded`, `soothe.output.quiz.responded`
+- Calls `on_assistant_text()` for display
+
+#### TUI Path (TextualUIAdapter)
+- Handles custom events via `_extract_custom_output_text()`
+- Explicitly checks event type strings: `CHITCHAT_RESPONSE`, `QUIZ_RESPONSE`
+- Returns text for mounting `AssistantMessage`
+
+Both paths have **hardcoded event type checks** that must be synchronized manually.
+
+### Proposed Solution: Unified Output Event Registry
+
+Create a **single registry** that CLI and TUI both query:
+
+```python
+# soothe_sdk/output_events.py (NEW FILE)
+from soothe_sdk.events import SootheEvent
+from soothe_sdk.ux import strip_internal_tags
+
+OUTPUT_EVENT_REGISTRY: dict[str, Callable[[dict], str | None]] = {
+    # Chitchat responses
+    "soothe.output.chitchat.responded": lambda data: strip_internal_tags(data.get("content", "")),
+    
+    # Quiz responses (IG-250, IG-254)
+    "soothe.output.quiz.responded": lambda data: strip_internal_tags(data.get("content", "")),
+    
+    # Agent loop final output
+    "soothe.cognition.agent_loop.completed": lambda data: strip_internal_tags(
+        data.get("final_stdout_message", "")
+    ),
+    
+    # Autonomous final report
+    "soothe.output.autonomous.final_report.reported.reported": lambda data: strip_internal_tags(
+        data.get("content", data.get("summary", ""))
+    ),
+}
+
+def is_output_event(event_type: str) -> bool:
+    """Check if event is a user-visible output."""
+    return event_type in OUTPUT_EVENT_REGISTRY
+
+def extract_output_text(event_type: str, data: dict) -> str | None:
+    """Extract user-visible text from output event."""
+    extractor = OUTPUT_EVENT_REGISTRY.get(event_type)
+    if extractor is None:
+        return None
+    return extractor(data)
+```
+
+### Unified Usage
+
+#### CLI (EventProcessor)
+```python
+# BEFORE: Hardcoded event types
+if etype in {
+    "soothe.output.chitchat.responded",
+    "soothe.output.quiz.responded",
+    "soothe.output.autonomous.final_report.reported.reported",
+}:
+    content = data.get("content", ...)
+    ...
+
+# AFTER: Query registry
+from soothe_sdk.output_events import is_output_event, extract_output_text
+
+if is_output_event(etype):
+    content = extract_output_text(etype, data)
+    if content and self._presentation.tier_visible(VerbosityTier.QUIET, self._verbosity):
+        self._emit_assistant_text(content, is_main=True, is_streaming=False)
+        self._presentation.mark_final_answer_locked()
+    return
+```
+
+#### TUI (TextualUIAdapter)
+```python
+# BEFORE: Hardcoded event checks
+def _extract_custom_output_text(data: dict) -> str | None:
+    if event_type == CHITCHAT_RESPONSE:
+        ...
+    if event_type == QUIZ_RESPONSE:
+        ...
+    ...
+
+# AFTER: Query registry
+from soothe_sdk.output_events import extract_output_text
+
+def _extract_custom_output_text(data: dict) -> str | None:
+    event_type = str(data.get("type", ""))
+    return extract_output_text(event_type, data)
+```
+
+### Benefits
+1. **Single source of truth**: Add new output event to registry → both CLI and TUI work
+2. **No duplication**: Registry centralizes extraction logic
+3. **Type-safe**: Registry can validate event types at registration
+4. **Extensible**: Plugins can register custom output events
+
+### Implementation Steps (Future RFC)
+1. Create `soothe_sdk/output_events.py` with registry
+2. Migrate CLI `EventProcessor` to use registry
+3. Migrate TUI `_extract_custom_output_text()` to use registry
+4. Add tests for registry-based extraction
+5. Document in RFC for future query types
+
+### Example: Adding New Query Type
+```python
+# Step 1: Add event constant
+TRIVIA_RESPONSE = "soothe.output.trivia.responded"
+
+# Step 2: Register in output_events.py
+OUTPUT_EVENT_REGISTRY[TRIVIA_RESPONSE] = lambda data: strip_internal_tags(
+    data.get("answer", "")
+)
+
+# Step 3: Emit event in runner
+yield _custom(TriviaResponseEvent(answer=response).to_dict())
+
+# DONE! CLI and TUI automatically display trivia responses
+```
+
+**No changes needed to CLI/TUI code** - registry handles everything.
+>>>>>>> 0da1f35 (Complete subagent logging and fix quiz response display (IG-253, IG-254))
