@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from soothe_sdk.utils import get_tool_pascal_name
 from soothe_sdk.verbosity import VerbosityTier
 
 from soothe_cli.cli.stream.display_line import DisplayLine, indent_for_level
@@ -155,8 +156,10 @@ def format_tool_call(
     Returns:
         DisplayLine for tool call.
     """
+    # Transform to PascalCase for display
+    display_name = get_tool_pascal_name(name)
     # Add inline symbol for tool execution
-    content = f"🔧 {name}({args_summary})"
+    content = f"🔧 {display_name}({args_summary})"
     return DisplayLine(
         level=2,
         content=content,

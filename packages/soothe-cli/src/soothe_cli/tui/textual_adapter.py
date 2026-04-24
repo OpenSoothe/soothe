@@ -230,11 +230,16 @@ def _extract_custom_output_text(data: dict[str, Any]) -> str | None:
         AGENT_LOOP_COMPLETED,
         CHITCHAT_RESPONSE,
         FINAL_REPORT,
+        QUIZ_RESPONSE,
     )
     from soothe_sdk.ux import strip_internal_tags
 
     event_type = str(data.get("type", ""))
     if event_type == CHITCHAT_RESPONSE:
+        content = data.get("content", "")
+        cleaned = strip_internal_tags(str(content))
+        return cleaned or None
+    if event_type == QUIZ_RESPONSE:
         content = data.get("content", "")
         cleaned = strip_internal_tags(str(content))
         return cleaned or None

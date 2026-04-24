@@ -33,6 +33,7 @@ from soothe_sdk.utils.tool_meta import (
     get_outcome_type,
     get_tool_categories,
     get_tool_meta,
+    get_tool_pascal_name,
     get_tools_with_header_info,
 )
 from soothe_sdk.utils.workspace import INVALID_WORKSPACE_DIRS
@@ -58,6 +59,7 @@ __all__ = [
     "TOOL_REGISTRY",
     "get_tool_meta",
     "get_all_path_arg_keys",
+    "get_tool_pascal_name",
     "get_tools_with_header_info",
     "get_tool_categories",
     "get_outcome_type",

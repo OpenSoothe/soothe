@@ -1,7 +1,7 @@
 # IG-253: Enhance Subagent Logging
 
 ## Status
-🟡 In Progress
+✅ Completed
 
 ## Summary
 Enhance logging coverage across all subagents (explore, research, browser, claude) to provide comprehensive visibility into LLM decisions, tool executions, and iteration progress. Currently, explore subagent has minimal logging (only 2 warnings), while browser and claude have good coverage.
@@ -201,4 +201,104 @@ Before committing:
 
 ## Implementation Notes
 
-(Added during implementation)
+### Changes Made (Simplified & Compact)
+
+Following user feedback, simplified logging to be minimal and non-verbose.
+
+#### 1. Explore Subagent (`explore/engine.py`)
+Added 5 compact INFO-level log statements at key milestones:
+
+- **plan_search_node**:
+  - `"Explore: searching for 'auth'"` (first iteration)
+  - `"Explore: planned 2 tools"` (LLM decision)
+
+- **execute_action_node**:
+  - `"Explore: executing tools"` (execution start)
+
+- **assess_results_node**:
+  - `"Explore: decision=continue (iter 1/4, found 5)"` (assessment with metrics)
+
+- **synthesize_node**:
+  - `"Explore: completed 3 matches in 120ms"` (final result)
+
+Removed:
+- All DEBUG-level diagnostic logs
+- Verbose tool-by-tool execution details
+- Argument previews
+- Intermediate iteration logging
+- Warnings for fallback behavior (kept essential WARNING for tool call failures)
+
+#### 2. Research Subagent (`research/engine.py`)
+Added 4 compact INFO-level log statements:
+
+- **analyze_topic_node**:
+  - `"Research: found 2 sub-questions"` (topic analysis)
+
+- **generate_queries_node**:
+  - `"Research: generated 3 queries"` (query generation)
+
+- **reflect_node**:
+  - `"Research: loop 1, sufficient=false, follow_ups=2"` (reflection decision)
+
+- **synthesize_node**:
+  - `"Research: synthesized 850 chars from 3 sources"` (final result)
+
+Removed:
+- All DEBUG-level logs
+- Verbose topic/query previews
+- Source selection details
+- Knowledge gap descriptions
+- Warnings for parse failures (kept essential WARNING for missing sources)
+
+#### 3. Browser & Claude Subagents
+Reviewed but no changes needed:
+- **Browser**: Already has appropriate INFO-level logging
+- **Claude**: DEBUG-level logging adequate for wrapper behavior
+
+### Logging Principles Applied
+
+1. **Minimal INFO-level milestone logs only**:
+   - Format: `"<Subagent>: <action> <metrics>"`
+   - Example: `"Explore: decision=continue (iter 1/4, found 5)"`
+
+2. **Removed all verbose details**:
+   - No DEBUG-level diagnostic logs
+   - No argument previews
+   - No tool-by-tool execution details
+   - No intermediate progress logging
+
+3. **Essential metrics only**:
+   - Iteration counts
+   - Match/findings counts
+   - Duration (ms)
+   - Decision outcomes (continue/finish)
+
+### Verification Results
+
+✅ All checks passed:
+- Format: Correct (2 files formatted)
+- Lint: Zero errors
+- Tests: 1279 passed, 2 skipped, 1 xfailed, 46 warnings
+
+### Example Log Output
+
+For a search like `"find authentication module"`, user sees:
+```
+INFO: Explore: searching for 'authentication module'
+INFO: Explore: planned 3 tools
+INFO: Explore: executing tools
+INFO: Explore: decision=adjust (iter 1/4, found 2)
+INFO: Explore: planned 2 tools
+INFO: Explore: executing tools
+INFO: Explore: decision=finish (iter 2/4, found 8)
+INFO: Explore: completed 5 matches in 340ms
+```
+
+Clean, concise, actionable - exactly 8 lines for a 2-iteration search.
+
+### Success Metrics
+
+✅ Explore: 5 compact INFO logs (milestones only)
+✅ Research: 4 compact INFO logs (key decisions)
+✅ No verbose output
+✅ All tests pass

@@ -10,7 +10,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from soothe_sdk.utils import get_all_path_arg_keys, get_tool_meta
+from soothe_sdk.utils import get_all_path_arg_keys, get_tool_meta, get_tool_pascal_name
 
 from soothe_cli.shared.message_processing import (
     _normalize_tool_name_for_arg_map,
@@ -135,6 +135,8 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
     prefix = get_glyphs().tool_prefix
     tool_args = extract_tool_args_dict(tool_args) if tool_args else {}
     tool_key = _normalize_tool_name_for_arg_map(tool_name or "")
+    # Get PascalCase display name for all return statements
+    pascal_name = get_tool_pascal_name(tool_key)
 
     def abbreviate_path(path_str: str, max_length: int = 60) -> str:
         """Abbreviate a file path intelligently - show basename or relative path.
@@ -193,11 +195,11 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
                 try:
                     start = int(start_line)
                     end = int(end_line)
-                    return f"{prefix} {tool_name}({path}:{start}-{end})"
+                    return f"{prefix} {pascal_name}({path}:{start}-{end})"
                 except (ValueError, TypeError):
                     pass  # Fall through to path-only display
 
-            return f"{prefix} {tool_name}({path})"
+            return f"{prefix} {pascal_name}({path})"
         # No recognized path key: still show other kwargs in the header (was: silent
         # fallthrough → generic fallback → read_file(…) with no secondary args line
         # because read_file is in _TOOLS_WITH_HEADER_INFO).
@@ -206,20 +208,20 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
                 f"{_sanitize_display_value(k, max_length=30)}={_sanitize_display_value(v, max_length=50)}"
                 for k, v in tool_args.items()
             )
-            return f"{prefix} {tool_name}({args_str})"
-        return f"{prefix} {tool_name}(…)"
+            return f"{prefix} {pascal_name}({args_str})"
+        return f"{prefix} {pascal_name}(…)"
 
     elif meta and meta.name == "web_search":
         # Web search: show the query string (no outer quotes)
         if "query" in tool_args:
             query = _sanitize_display_value(tool_args["query"], max_length=100)
-            return f"{prefix} {tool_name}({query})"
+            return f"{prefix} {pascal_name}({query})"
 
     elif meta and meta.name == "grep":
         pat = _first_nonempty_str_arg(tool_args, ("pattern", "regex", "regexp"))
         if pat is not None:
             pattern = _sanitize_display_value(pat, max_length=70)
-            return f"{prefix} {tool_name}({pattern})"
+            return f"{prefix} {pascal_name}({pattern})"
 
     elif meta and meta.name == "execute":
         # Execute: show the command, and timeout only if non-default
@@ -231,9 +233,9 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
 
             if timeout is not None and timeout != DEFAULT_EXECUTE_TIMEOUT:
                 timeout_str = _format_timeout(timeout)
-                return f"{prefix} {tool_name}({command}, timeout={timeout_str})"
+                return f"{prefix} {pascal_name}({command}, timeout={timeout_str})"
             # Don't add quotes around command - show it directly
-            return f"{prefix} {tool_name}({command})"
+            return f"{prefix} {pascal_name}({command})"
 
     elif meta and meta.name == "ls":
         # ls / list_files: directory varies by provider (path, directory, …).
@@ -256,20 +258,20 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             if s == "":
                 pass
             elif s == ".":
-                return f"{prefix} {tool_name}(.)"
+                return f"{prefix} {pascal_name}(.)"
             else:
                 path_raw = strip_dangerous_unicode(s)
                 path = abbreviate_path(path_raw)
                 if path_raw != s:
                     path += _HIDDEN_CHAR_MARKER
-                return f"{prefix} {tool_name}({path})"
+                return f"{prefix} {pascal_name}({path})"
         if tool_key == "list_files":
             pat = _first_nonempty_str_arg(tool_args, ("pattern", "glob_pattern", "glob"))
             if pat is not None and pat != "*":
                 pshown = _sanitize_display_value(pat, max_length=80)
-                return f'{prefix} {tool_name}("{pshown}")'
+                return f'{prefix} {pascal_name}("{pshown}")'
         # No path/pattern in payload — model often omits kwargs for workspace default listing.
-        return f"{prefix} {tool_name}(.)"
+        return f"{prefix} {pascal_name}(.)"
 
     elif meta and meta.name == "glob":
         pat = _first_nonempty_str_arg(
@@ -278,7 +280,7 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         )
         if pat is not None:
             pattern = _sanitize_display_value(pat, max_length=80)
-            return f"{prefix} {tool_name}({pattern})"
+            return f"{prefix} {pascal_name}({pattern})"
         loc_raw = None
         for k in ("path", "directory", "dir", "root", "cwd", "base_path"):
             if k in tool_args and tool_args[k] is not None:
@@ -290,21 +292,21 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             path = abbreviate_path(path_raw)
             if path_raw != loc_raw:
                 path += _HIDDEN_CHAR_MARKER
-            return f"{prefix} {tool_name}(dir={path})"
+            return f"{prefix} {pascal_name}(dir={path})"
         if tool_args:
             args_str = ", ".join(
                 f"{_sanitize_display_value(k, max_length=30)}={_sanitize_display_value(v, max_length=50)}"
                 for k, v in tool_args.items()
             )
-            return f"{prefix} {tool_name}({args_str})"
+            return f"{prefix} {pascal_name}({args_str})"
         # Default glob when the model sends `{}` — show a visible pattern hint.
-        return f"{prefix} {tool_name}(*)"
+        return f"{prefix} {pascal_name}(*)"
 
     elif meta and meta.name == "fetch_url":
         # Crawl web: show the URL being fetched (no outer quotes)
         if "url" in tool_args:
             url = _sanitize_display_value(tool_args["url"], max_length=80)
-            return f"{prefix} {tool_name}({url})"
+            return f"{prefix} {pascal_name}({url})"
 
     elif meta and meta.name == "task":
         # Task: subagent type and optional description inside parentheses (RFC-0020).
@@ -317,26 +319,26 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             agent_shown = _sanitize_display_value(str(agent_type), max_length=40)
             if desc is not None:
                 d = _sanitize_display_value(desc, max_length=80)
-                return f"{prefix} {tool_name}({agent_shown}, {d})"
-            return f"{prefix} {tool_name}({agent_shown})"
+                return f"{prefix} {pascal_name}({agent_shown}, {d})"
+            return f"{prefix} {pascal_name}({agent_shown})"
         if desc is not None:
             d = _sanitize_display_value(desc, max_length=100)
-            return f"{prefix} {tool_name}({d})"
-        return f"{prefix} {tool_name}(…)"
+            return f"{prefix} {pascal_name}({d})"
+        return f"{prefix} {pascal_name}(…)"
 
     elif meta and meta.name == "ask_user":
         if "questions" in tool_args and isinstance(tool_args["questions"], list):
             count = len(tool_args["questions"])
             label = "question" if count == 1 else "questions"
-            return f"{prefix} {tool_name}({count} {label})"
+            return f"{prefix} {pascal_name}({count} {label})"
 
     elif meta and meta.name == "compact_conversation":
-        return f"{prefix} {tool_name}(…)"
+        return f"{prefix} {pascal_name}(…)"
 
     elif meta and meta.name == "write_todos":
         if "todos" in tool_args and isinstance(tool_args["todos"], list):
             count = len(tool_args["todos"])
-            return f"{prefix} {tool_name}({count} items)"
+            return f"{prefix} {pascal_name}({count} items)"
 
     # Fallback: generic formatting for unknown tools
     # Show all arguments in key=value format
@@ -345,5 +347,5 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         for k, v in tool_args.items()
     )
     if not args_str:
-        return f"{prefix} {tool_name}(…)"
-    return f"{prefix} {tool_name}({args_str})"
+        return f"{prefix} {pascal_name}(…)"
+    return f"{prefix} {pascal_name}({args_str})"

@@ -715,9 +715,10 @@ class EventProcessor:
         # Tool events are now visible at NORMAL verbosity (RFC-0020 CLI Stream Display Pipeline)
         # They are processed through on_progress_event -> StreamDisplayPipeline
 
-        # Handle chitchat/final responses through shared cleaner path
+        # Handle chitchat/quiz/final responses through shared cleaner path
         if etype in {
             "soothe.output.chitchat.responded",
+            "soothe.output.quiz.responded",
             "soothe.output.autonomous.final_report.reported.reported",
         }:
             content = data.get("content", data.get("summary", ""))
