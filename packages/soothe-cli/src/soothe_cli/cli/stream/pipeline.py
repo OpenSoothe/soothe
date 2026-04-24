@@ -85,6 +85,8 @@ class StreamDisplayPipeline:
     def process(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Process an event into display lines.
 
+        IG-255: Filter redundant task/tool result events after subagent completion shown.
+
         Args:
             event: Event dictionary with 'type' key.
 
@@ -97,6 +99,15 @@ class StreamDisplayPipeline:
 
         # Extract namespace from event
         self._current_namespace = tuple(event.get("namespace", []))
+
+        # IG-255: Deduplication filter - skip redundant tool/task results after completion
+        if self._context.subagent_completion_shown:
+            # Filter task tool result events (deepagents Task(browser, ...))
+            if event_type in ("tool.execution.completed", "tool.execution.result"):
+                tool_name = event.get("name", event.get("tool_name", ""))
+                # Skip if this is a subagent task tool result
+                if "Task(" in tool_name or "_subagent" in tool_name.lower():
+                    return []
 
         # Classify and filter
         tier = self._classify_event(event_type)
@@ -289,6 +300,8 @@ class StreamDisplayPipeline:
     ) -> list[DisplayLine]:
         """Handle subagent dispatched event.
 
+        IG-255: Reset completion tracking state for new subagent dispatch.
+
         Args:
             event: Event dictionary.
             subagent_name: Subagent name (extracted from event type).
@@ -307,6 +320,10 @@ class StreamDisplayPipeline:
         name = name or subagent_name or event.get("name", event.get("subagent_name", ""))
         self._context.subagent_name = name
         self._context.subagent_milestones.clear()
+
+        # IG-255: Reset completion tracking for new dispatch
+        self._context.subagent_completion_shown = False
+        self._context.subagent_result_preview = ""
 
         # Emit tool call for subagent dispatch
         query = event.get("query", event.get("task", event.get("topic", "")))
@@ -383,25 +400,24 @@ class StreamDisplayPipeline:
     ) -> list[DisplayLine]:
         """Handle subagent completed event.
 
+        IG-255: Extract result preview and mark completion as shown for deduplication.
+
         Args:
             event: Event dictionary.
             subagent_name: Subagent name (extracted from event type).
 
         Returns:
-            Display lines for completion.
+            Display lines for completion with subagent-specific metrics and result preview.
         """
-        # Handle various summary fields from different subagent events
-        summary = event.get("summary", event.get("result", "done"))
-        if not summary:
-            # For events like ResearchCompletedEvent that have answer_length
-            answer_len = event.get("answer_length", 0)
-            result_count = event.get("result_count", 0)
-            if answer_len:
-                summary = f"{answer_len} chars"
-            elif result_count:
-                summary = f"{result_count} results"
-            else:
-                summary = "done"
+        # Extract subagent name from event type if not provided
+        event_type = event.get("type", "")
+        if not subagent_name and event_type.startswith("soothe.capability."):
+            parts = event_type.split(".")
+            if len(parts) >= 3:  # noqa: PLR2004
+                subagent_name = parts[2]
+
+        # Build subagent-specific progress summary
+        summary = self._build_subagent_summary(event, subagent_name)
 
         duration_s = event.get("duration_s", event.get("duration_seconds", 0))
 
@@ -409,14 +425,76 @@ class StreamDisplayPipeline:
             duration_ms = event.get("duration_ms", 0)
             duration_s = duration_ms / 1000 if duration_ms else 0
 
+        # IG-255: Extract result preview for consolidated display
+        result_preview = self._extract_result_preview(event, subagent_name)
+
+        # IG-255: Mark completion as shown (for deduplication filter)
+        self._context.subagent_completion_shown = True
+        self._context.subagent_result_preview = result_preview
+
         return [
             format_subagent_done(
-                preview_first(summary, 50),
+                preview_first(summary, 70),  # Increased from 50 for richer metrics
                 duration_s,
+                result_preview=result_preview,
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
             )
         ]
+
+    def _build_subagent_summary(self, event: dict[str, Any], subagent_name: str) -> str:
+        """Build subagent-specific progress summary with metrics.
+
+        Args:
+            event: Event dictionary.
+            subagent_name: Subagent name (explore, browser, claude, research).
+
+        Returns:
+            Formatted summary string with key metrics.
+        """
+        # Explore: total_findings, iterations_used, thoroughness
+        if subagent_name == "explore":
+            findings = event.get("total_findings", 0)
+            iterations = event.get("iterations_used", 0)
+            thoroughness = event.get("thoroughness", "")
+            if findings:
+                summary = f"{findings} findings"
+                if iterations:
+                    summary += f", {iterations} iterations"
+                if thoroughness:
+                    summary += f" ({thoroughness})"
+                return summary
+            return "done"
+
+        # Claude: cost_usd, claude_session_id
+        if subagent_name == "claude":
+            cost = event.get("cost_usd", 0.0)
+            session_id = event.get("claude_session_id")
+            if cost:
+                summary = f"$${cost:.2f}"
+                if session_id:
+                    summary += f", session={session_id[:8]}"
+                return summary
+            return "done"
+
+        # Browser: success status
+        if subagent_name == "browser":
+            success = event.get("success", True)
+            return "✓ success" if success else "✗ failed"
+
+        # Research: answer_length or result_count
+        if subagent_name == "research":
+            answer_len = event.get("answer_length", 0)
+            result_count = event.get("result_count", 0)
+            if answer_len:
+                return f"{answer_len} chars"
+            if result_count:
+                return f"{result_count} results"
+            return "done"
+
+        # Generic fallback
+        summary = event.get("summary", event.get("result", "done"))
+        return summary if summary else "done"
 
     def _on_capability_step(self, event: dict[str, Any], subagent_name: str) -> list[DisplayLine]:
         """Handle capability step event (e.g., browser automation steps).
@@ -636,6 +714,140 @@ class StreamDisplayPipeline:
         if status == "working":
             return "Processing next step"
         # No fallback for missing/empty status - better to skip than emit noise
+        return ""
+
+    def _extract_result_preview(self, event: dict[str, Any], subagent_name: str) -> str:
+        """Extract first meaningful result line for consolidated display.
+
+        IG-255: Subagent-specific extraction logic to get concise preview
+        for embedding in completion line.
+
+        Args:
+            event: Completion event dictionary.
+            subagent_name: Subagent name (browser, claude, research, explore).
+
+        Returns:
+            First meaningful result line, or empty string if no suitable preview.
+        """
+        # Get result content from event
+        result = event.get("result", "")
+        if not result:
+            return ""
+
+        # Browser: Parse markdown output for first meaningful field
+        if subagent_name == "browser":
+            return self._extract_browser_result_preview(result)
+
+        # Claude: First meaningful response line
+        if subagent_name == "claude":
+            return self._extract_claude_result_preview(result)
+
+        # Research: Answer summary or first finding
+        if subagent_name == "research":
+            return self._extract_research_result_preview(event, result)
+
+        # Explore: Findings count or first finding
+        if subagent_name == "explore":
+            return self._extract_explore_result_preview(event, result)
+
+        # Generic fallback: First non-empty line (truncated to 40 chars)
+        for line in result.split("\n"):
+            line = line.strip()
+            if line and not line.startswith("#"):  # Skip markdown headers
+                return preview_first(line, 40)
+
+        return ""
+
+    def _extract_browser_result_preview(self, result: str) -> str:
+        """Extract first meaningful markdown field from browser result.
+
+        Browser subagent outputs markdown with **Field:** value format.
+        Extract first field-value pair for preview.
+
+        Args:
+            result: Browser result string (markdown format).
+
+        Returns:
+            First field-value pair (e.g., "Current Time: 12:24:49 AM").
+        """
+        for line in result.split("\n"):
+            line = line.strip()
+            # Match pattern: **Field:** Value
+            if line.startswith("**") and ":" in line:
+                # Extract: "Field: Value" by removing ** markers
+                field_value = line.replace("**", "").strip()
+                # Return first meaningful field (skip empty values)
+                if field_value and ":" in field_value:
+                    # Format: "Field: Value"
+                    parts = field_value.split(":", 1)
+                    if len(parts) == 2 and parts[1].strip():
+                        return field_value
+        return ""
+
+    def _extract_claude_result_preview(self, result: str) -> str:
+        """Extract first meaningful response line from Claude result.
+
+        Claude outputs prose text. Extract first substantive sentence.
+
+        Args:
+            result: Claude result string.
+
+        Returns:
+            First meaningful line (truncated to 40 chars).
+        """
+        for line in result.split("\n"):
+            line = line.strip()
+            # Skip empty lines and markdown headers
+            if line and not line.startswith("#"):
+                return preview_first(line, 40)
+        return ""
+
+    def _extract_research_result_preview(self, event: dict[str, Any], result: str) -> str:
+        """Extract answer summary or result count from research completion.
+
+        Research provides structured answer or result count in event metadata.
+
+        Args:
+            event: Completion event dictionary.
+            result: Research result string.
+
+        Returns:
+            Answer preview or result count (e.g., "5 results").
+        """
+        # Prefer event metadata for structured data
+        result_count = event.get("result_count", 0)
+        if result_count:
+            return f"{result_count} results"
+
+        # Fallback: First meaningful line from answer
+        for line in result.split("\n"):
+            line = line.strip()
+            if line and not line.startswith("#"):
+                return preview_first(line, 40)
+        return ""
+
+    def _extract_explore_result_preview(self, event: dict[str, Any], result: str) -> str:
+        """Extract findings count or first finding from explore completion.
+
+        Explore provides total_findings count in event metadata.
+
+        Args:
+            event: Completion event dictionary.
+            result: Explore result string.
+
+        Returns:
+            Findings preview (e.g., "3 findings").
+        """
+        # Prefer event metadata for structured data
+        findings = event.get("total_findings", 0)
+        if findings:
+            return f"{findings} findings"
+
+        # Fallback: First meaningful line
+        for line in result.split("\n"):
+            line = line.strip()
+            if line and not line.startswith("#"):
+                return preview_first(line, 40)
         return ""
 
 

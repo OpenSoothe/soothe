@@ -62,6 +62,8 @@ class PipelineContext:
     # Subagent tracking
     subagent_name: str | None = None
     subagent_milestones: list[str] = field(default_factory=list)
+    subagent_completion_shown: bool = False  # IG-255: Track if completion already displayed
+    subagent_result_preview: str = ""  # IG-255: Cache result preview for deduplication
 
     def reset_goal(self) -> None:
         """Reset goal-related state."""
@@ -84,6 +86,8 @@ class PipelineContext:
         self.parallel_header_emitted = False
         self.subagent_name = None
         self.subagent_milestones.clear()
+        self.subagent_completion_shown = False  # IG-255: Reset completion flag
+        self.subagent_result_preview = ""  # IG-255: Reset result preview
         # Don't clear _active_step_ids here - it's cleared when steps complete
 
     def complete_step(self, step_id: str) -> None:

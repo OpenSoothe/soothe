@@ -296,7 +296,7 @@ class TestCodeEditErrorHandling:
 
     def test_edit_nonexistent_file(self) -> None:
         """Test editing non-existent file."""
-        from soothe.toolkits.code_edit import EditFileLinesTool
+        from soothe.toolkits.file_ops import EditFileLinesTool
 
         tool = EditFileLinesTool()
         result = tool._run("/nonexistent/file.txt", start_line=1, end_line=1, new_content="test")

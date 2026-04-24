@@ -144,26 +144,37 @@ def format_tool_call(
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
 ) -> DisplayLine:
-    """Format a tool call line.
+    """Format a tool/subagent call line with visual distinction.
 
     Args:
-        name: Tool name.
-        args_summary: Truncated args.
-        running: Whether tool is in parallel mode.
+        name: Tool or subagent name.
+        args_summary: Truncated args or query preview.
+        running: Whether tool/subagent is running.
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
     Returns:
-        DisplayLine for tool call.
+        DisplayLine for tool/subagent call with appropriate icon.
     """
     # Transform to PascalCase for display
     display_name = get_tool_pascal_name(name)
-    # Add inline symbol for tool execution
-    content = f"🔧 {display_name}({args_summary})"
+
+    # Differentiate subagent calls from regular tools
+    is_subagent = "_subagent" in name.lower()
+    if is_subagent:
+        # Subagent dispatch: use agent emoji
+        icon_emoji = "🤖"
+        icon_char = "●"
+    else:
+        # Regular tool: use wrench emoji
+        icon_emoji = "🔧"
+        icon_char = "⚙"
+
+    content = f"{icon_emoji} {display_name}({args_summary})"
     return DisplayLine(
         level=2,
         content=content,
-        icon="⚙",
+        icon=icon_char,
         indent=indent_for_level(2),
         status="running" if running else None,
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
@@ -209,18 +220,18 @@ def format_subagent_milestone(
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
 ) -> DisplayLine:
-    """Format a subagent milestone line.
+    """Format a subagent milestone line showing progress.
 
     Args:
-        brief: Milestone description.
+        brief: Milestone description (e.g., "Step 3: click on login").
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
     Returns:
-        DisplayLine for milestone.
+        DisplayLine for milestone with activity indicator.
     """
-    # Add inline symbol for subagent investigation
-    content = f"🕵🏻‍♂️ {brief}"
+    # Use spinning gear for active work
+    content = f"🔄 {brief}"
     return DisplayLine(
         level=3,
         content=content,
@@ -233,24 +244,37 @@ def format_subagent_milestone(
 def format_subagent_done(
     summary: str,
     duration_s: float,
+    result_preview: str = "",
     *,
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
 ) -> DisplayLine:
-    """Format a subagent completion line.
+    """Format a subagent completion line with metrics and optional result preview.
+
+    IG-255: Consolidated display - single completion line with embedded result preview.
+    Eliminates redundant success markers and separate result display lines.
 
     Args:
-        summary: Completion summary.
+        summary: Completion summary with subagent-specific metrics (e.g., "success", "$1.23").
         duration_s: Duration in seconds.
+        result_preview: Optional first meaningful result line (e.g., "Current Time: 12:24:49 AM").
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
     Returns:
-        DisplayLine for subagent done.
+        DisplayLine for subagent done with consolidated status and result.
     """
     duration_ms = int(duration_s * 1000)
-    # Add inline symbol for subagent investigation complete
-    content = f"🕵🏻‍♂️ Done: {summary}"
+
+    # IG-255: Consolidated format - status + preview in single line
+    # Format: "✓ {summary} ✓ {preview}" when preview available, else "✓ {summary}"
+    # Simplified emoji: single ✓ instead of triple "✓ ✅ ✓"
+    content = f"✓ {summary}"
+    if result_preview:
+        # Truncate preview to 40 chars for inline display
+        preview_text = abbreviate_text(result_preview, 40)
+        content = f"{content} ✓ {preview_text}"
+
     return DisplayLine(
         level=3,
         content=content,

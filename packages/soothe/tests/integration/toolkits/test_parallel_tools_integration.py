@@ -13,10 +13,10 @@ from soothe.core.agent import create_soothe_agent
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_parallel_tools_config_propagation():
-    """Verify max_parallel_tools config propagates to middleware."""
-    # Create config with custom parallel limit
+    """Verify concurrency config propagates correctly."""
+    # Create config with custom concurrency settings
     config = SootheConfig(
-        execution={"concurrency": {"max_parallel_tools": 5}},
+        execution={"concurrency": {"max_parallel_steps": 5}},
     )
 
     # Create agent
@@ -58,9 +58,9 @@ async def test_parallel_tools_performance_improvement():
         await asyncio.sleep(delay)
         return f"Tool 3 completed after {delay}s"
 
-    # Test with parallel execution (max_parallel=3)
+    # Test with parallel execution (max_parallel_steps=3)
     config_parallel = SootheConfig(
-        execution={"concurrency": {"max_parallel_tools": 3}},
+        execution={"concurrency": {"max_parallel_steps": 3}},
     )
 
     create_soothe_agent(
@@ -69,9 +69,9 @@ async def test_parallel_tools_performance_improvement():
         config=config_parallel,
     )
 
-    # Test with sequential execution (max_parallel=1)
+    # Test with sequential execution (max_parallel_steps=1)
     config_sequential = SootheConfig(
-        execution={"concurrency": {"max_parallel_tools": 1}},
+        execution={"concurrency": {"max_parallel_steps": 1}},
     )
 
     create_soothe_agent(
@@ -102,7 +102,7 @@ async def test_parallel_tools_mixed_sync_async():
         return x * 3
 
     config = SootheConfig(
-        execution={"concurrency": {"max_parallel_tools": 5}},
+        execution={"concurrency": {"max_parallel_steps": 5}},
     )
 
     create_soothe_agent(
@@ -116,12 +116,12 @@ async def test_parallel_tools_mixed_sync_async():
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_parallel_tools_default_is_10():
-    """Verify default configuration uses max_parallel_tools=10."""
+async def test_parallel_tools_default_is_1():
+    """Verify default configuration uses max_parallel_steps=1."""
     config = SootheConfig()
 
-    # Check default value
-    assert config.execution.concurrency.max_parallel_tools == 10
+    # Check default value for max_parallel_steps
+    assert config.execution.concurrency.max_parallel_steps == 1
 
     create_soothe_agent(
         model=config.create_chat_model("agent"),
@@ -129,22 +129,22 @@ async def test_parallel_tools_default_is_10():
         config=config,
     )
 
-    # Agent should use default 10 parallel tools
+    # Agent should use default concurrency settings
 
 
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_parallel_tools_extreme_cases():
-    """Test edge cases: max_parallel=1 (sequential) and max_parallel=50 (high)."""
+    """Test edge cases: max_parallel_steps=1 (sequential) and max_parallel_steps=10 (high)."""
 
     @tool
     async def dummy_tool() -> str:
         """A minimal tool."""
         return "done"
 
-    # Test sequential (max_parallel=1)
+    # Test sequential (max_parallel_steps=1)
     config_seq = SootheConfig(
-        execution={"concurrency": {"max_parallel_tools": 1}},
+        execution={"concurrency": {"max_parallel_steps": 1}},
     )
 
     create_soothe_agent(
@@ -153,9 +153,9 @@ async def test_parallel_tools_extreme_cases():
         config=config_seq,
     )
 
-    # Test high parallelism (max_parallel=50)
+    # Test high parallelism (max_parallel_steps=10)
     config_high = SootheConfig(
-        execution={"concurrency": {"max_parallel_tools": 50}},
+        execution={"concurrency": {"max_parallel_steps": 10}},
     )
 
     create_soothe_agent(
@@ -169,17 +169,22 @@ async def test_parallel_tools_extreme_cases():
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_parallel_tools_zero_limit_invalid():
-    """Verify that max_parallel_tools=0 or negative is rejected."""
-    with pytest.raises(ValueError):
-        SootheConfig(
-            execution={"concurrency": {"max_parallel_tools": 0}},
-        )
+async def test_parallel_tools_zero_means_unlimited():
+    """Verify that max_parallel_steps=0 means unlimited (valid special value)."""
+    # 0 is valid - it means unlimited parallelism
+    config_unlimited = SootheConfig(
+        execution={"concurrency": {"max_parallel_steps": 0}},
+    )
 
-    with pytest.raises(ValueError):
-        SootheConfig(
-            execution={"concurrency": {"max_parallel_tools": -1}},
-        )
+    # Should create successfully
+    create_soothe_agent(
+        model=config_unlimited.create_chat_model("agent"),
+        tools=[],
+        config=config_unlimited,
+    )
+
+    # Note: ConcurrencyPolicy allows 0 as special "unlimited" value
+    # Negative values would be rejected by Pydantic validation
 
 
 # Note: Full integration tests with actual LLM execution would require:

@@ -1,15 +1,16 @@
 """Security integration tests for daemon protocol.
 
-This module validates security features including Unix socket file permissions,
-WebSocket CORS origin validation, message size limits, rate limiting, and
-PID lock enforcement for single daemon instance.
+This module validates security features including WebSocket CORS origin validation,
+message size limits, rate limiting, and PID lock enforcement for single daemon instance.
+
+Note: Unix socket transport was removed on 2026-03-29 due to stability issues.
+WebSocket is now the primary transport for bidirectional streaming.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-import stat
 from pathlib import Path
 
 import pytest
@@ -21,23 +22,6 @@ from tests.integration.conftest import (
     build_daemon_config,
     force_isolated_home,
 )
-
-
-@pytest.fixture
-async def unix_daemon_fixture(tmp_path: Path):
-    """Start a daemon exposing only WebSocket transport."""
-    force_isolated_home(tmp_path / "soothe-home")
-    ws_port = alloc_ephemeral_port()
-
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
-    daemon = SootheDaemon(config)
-    await daemon.start()
-    await asyncio.sleep(0.4)
-    try:
-        yield daemon, ws_port
-    finally:
-        with contextlib.suppress(Exception):
-            await daemon.stop()
 
 
 @pytest.fixture
@@ -62,34 +46,9 @@ async def websocket_daemon_fixture(tmp_path: Path):
             await daemon.stop()
 
 
-@pytest.mark.asyncio
-@pytest.mark.integration
-async def test_unix_socket_permissions(
-    unix_daemon_fixture: tuple[SootheDaemon, str],
-) -> None:
-    """Test that Unix socket has correct file permissions (0o600)."""
-    _, ws_port = unix_daemon_fixture
-
-    socket_file = Path(ws_port)
-    assert socket_file.exists(), f"Socket file not found: {ws_port}"
-
-    file_stat = socket_file.stat()
-    file_mode = stat.S_IMODE(file_stat.st_mode)
-
-    expected_mode = 0o600
-    assert file_mode == expected_mode, (
-        f"Socket file has incorrect permissions: {oct(file_mode)}, expected {oct(expected_mode)}"
-    )
-
-    assert file_mode & stat.S_IRUSR, "Owner should have read permission"
-    assert file_mode & stat.S_IWUSR, "Owner should have write permission"
-    assert not (file_mode & stat.S_IXUSR), "Owner should not have execute permission"
-    assert not (file_mode & stat.S_IRGRP), "Group should not have read permission"
-    assert not (file_mode & stat.S_IWGRP), "Group should not have write permission"
-    assert not (file_mode & stat.S_IXGRP), "Group should not have execute permission"
-    assert not (file_mode & stat.S_IROTH), "Others should not have read permission"
-    assert not (file_mode & stat.S_IWOTH), "Others should not have write permission"
-    assert not (file_mode & stat.S_IXOTH), "Others should not have execute permission"
+# Note: test_unix_socket_permissions removed - Unix socket transport was removed
+# on 2026-03-29 due to stability issues (RFC-0013 update). WebSocket is now the
+# primary transport for bidirectional streaming.
 
 
 @pytest.mark.asyncio

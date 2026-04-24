@@ -158,9 +158,24 @@ class TestFormatters:
         assert line.icon == "✓"
 
     def test_format_subagent_done(self) -> None:
+        """IG-255: Subagent done shows consolidated status without 'Done:' prefix."""
         line = format_subagent_done("5 papers found", 45.2)
-        assert line.content == "🕵🏻‍♂️ Done: 5 papers found"
+        assert line.content == "✓ 5 papers found"
         assert line.duration_ms == 45200
+
+    def test_format_subagent_done_with_preview(self) -> None:
+        """IG-255: Subagent done with result preview shows consolidated line."""
+        line = format_subagent_done("success", 1.5, result_preview="Current Time: 12:24:49 AM")
+        assert line.content == "✓ success ✓ Current Time: 12:24:49 AM"
+        assert line.duration_ms == 1500
+
+    def test_format_subagent_done_with_long_preview(self) -> None:
+        """IG-255: Long result preview is truncated to 40 chars."""
+        long_preview = "Current Time: 12:24:49 AM Date: Saturday, April 25, 2026 Timezone: CST"
+        line = format_subagent_done("success", 1.0, result_preview=long_preview)
+        # Preview should be truncated using abbreviate_text
+        assert "Current Time: 12:24:49 AM" in line.content
+        assert len(line.content) < len(f"✓ success ✓ {long_preview}")
 
     def test_format_step_done(self) -> None:
         """IG-182: Step done shows as level-3 tree child with duration."""

@@ -89,6 +89,12 @@ SUBAGENT_RESEARCH_COMPLETED = "soothe.capability.research.completed"
 SUBAGENT_RESEARCH_JUDGEMENT_REPORTING = "soothe.capability.research.judgement.reporting"
 SUBAGENT_RESEARCH_INTERNAL_LLM = "soothe.capability.research.internal_llm.run"
 
+# Explore subagent events (RFC-613)
+SUBAGENT_EXPLORE_STARTED = "soothe.capability.explore.started"
+SUBAGENT_EXPLORE_EXECUTING = "soothe.capability.explore.executing"
+SUBAGENT_EXPLORE_ASSESSING = "soothe.capability.explore.assessing"
+SUBAGENT_EXPLORE_COMPLETED = "soothe.capability.explore.completed"
+
 # Thread lifecycle events (exposed for DEBUG/DETAILED level)
 THREAD_CREATED = "soothe.lifecycle.thread.started"
 THREAD_RESUMED = "soothe.lifecycle.thread.resumed"
@@ -144,6 +150,11 @@ __all__ = [
     "SUBAGENT_RESEARCH_COMPLETED",
     "SUBAGENT_RESEARCH_JUDGEMENT_REPORTING",
     "SUBAGENT_RESEARCH_INTERNAL_LLM",
+    # Explore subagent (RFC-613)
+    "SUBAGENT_EXPLORE_STARTED",
+    "SUBAGENT_EXPLORE_EXECUTING",
+    "SUBAGENT_EXPLORE_ASSESSING",
+    "SUBAGENT_EXPLORE_COMPLETED",
     # Thread lifecycle (DEBUG/DETAILED)
     "THREAD_CREATED",
     "THREAD_RESUMED",

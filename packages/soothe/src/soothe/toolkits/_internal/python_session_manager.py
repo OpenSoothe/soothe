@@ -6,7 +6,6 @@ to persist across multiple run_python calls within the same thread.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from threading import Lock, RLock
 from typing import Any, Self
@@ -23,6 +22,9 @@ class PythonSessionManager:
     Each session maintains an IPython InteractiveShell instance that persists
     across multiple code executions, allowing variables, imports, and definitions
     to be retained.
+
+    When IPython is not available, falls back to stateless exec() with namespace
+    persistence per session_id.
     """
 
     _instance: PythonSessionManager | None = None
@@ -36,6 +38,7 @@ class PythonSessionManager:
                     cls._instance = super().__new__(cls)
                     cls._instance._sessions: dict[str, Any] = {}
                     cls._instance._session_locks: dict[str, RLock] = {}
+                    cls._instance._namespaces: dict[str, dict] = {}  # For stateless fallback
         return cls._instance
 
     def get_or_create(self, session_id: str) -> Any:
@@ -82,8 +85,8 @@ class PythonSessionManager:
         shell = self.get_or_create(session_id)
 
         if shell is None:
-            # Fallback to stateless execution
-            return self._execute_stateless(code)
+            # Fallback to stateless execution with persistent namespace
+            return self._execute_stateless(session_id, code)
 
         # Use session-specific lock for thread safety
         if session_id not in self._session_locks:
@@ -118,11 +121,14 @@ class PythonSessionManager:
                 logger.exception("Failed to execute code in session %s", session_id)
                 return {"success": False, "output": "", "result": None, "error": str(e)}
 
-    def _execute_stateless(self, code: str) -> dict[str, Any]:
-        """Fallback stateless execution when IPython is not available."""
+    def _execute_stateless(self, session_id: str, code: str) -> dict[str, Any]:
+        """Fallback stateless execution with persistent namespace per session."""
         try:
-            # Create a new namespace for execution
-            namespace = {}
+            # Get or create persistent namespace for this session
+            if session_id not in self._namespaces:
+                self._namespaces[session_id] = {}
+
+            namespace = self._namespaces[session_id]
 
             # Capture stdout/stderr
             import io
@@ -134,12 +140,45 @@ class PythonSessionManager:
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
                 exec(code, namespace)  # noqa: S102
 
-            # Get result if there's a single expression
+            # Try to capture the result from the last expression
             result = None
-            if code.strip() and "\n" not in code.strip():
-                # Try to evaluate as expression
-                with contextlib.suppress(SyntaxError):
-                    result = eval(code.strip(), namespace)  # noqa: S307
+            lines = code.strip().splitlines()
+            if lines:
+                last_line = lines[-1].strip()
+                # Try to evaluate the last line as an expression (if it's not an assignment/statement)
+                if last_line and not any(
+                    last_line.startswith(kw)
+                    for kw in [
+                        "import",
+                        "from",
+                        "def",
+                        "class",
+                        "if",
+                        "for",
+                        "while",
+                        "with",
+                        "try",
+                        "except",
+                        "return",
+                        "yield",
+                        "raise",
+                        "assert",
+                        "=",
+                        "print",
+                    ]
+                ):
+                    try:
+                        result = eval(last_line, namespace)  # noqa: S307
+                    except (
+                        SyntaxError,
+                        NameError,
+                        AttributeError,
+                        TypeError,
+                        KeyError,
+                        IndexError,
+                    ):
+                        # Last line is not an expression, skip
+                        pass
 
             return {
                 "success": True,
@@ -149,7 +188,9 @@ class PythonSessionManager:
             }
 
         except Exception as e:
-            return {"success": False, "output": "", "result": None, "error": str(e)}
+            # Include exception type in error message for better error identification
+            error_msg = f"{type(e).__name__}: {e}"
+            return {"success": False, "output": "", "result": None, "error": error_msg}
 
     def cleanup(self, session_id: str) -> None:
         """Clean up a specific session.
@@ -168,6 +209,10 @@ class PythonSessionManager:
 
                 if session_id in self._session_locks:
                     del self._session_locks[session_id]
+
+            # Also clean up namespace for stateless fallback
+            if session_id in self._namespaces:
+                del self._namespaces[session_id]
 
     def cleanup_all(self) -> None:
         """Clean up all sessions."""
