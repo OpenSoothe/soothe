@@ -33,11 +33,13 @@ def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubA
     """
     from soothe.subagents.browser import create_browser_subagent
     from soothe.subagents.claude import create_claude_subagent
+    from soothe.subagents.explore import create_explore_subagent
     from soothe.subagents.research import create_research_subagent
 
     return {
         "browser": create_browser_subagent,
         "claude": create_claude_subagent,
+        "explore": create_explore_subagent,
         "research": create_research_subagent,
     }
 
@@ -319,20 +321,42 @@ def _resolve_single_tool_group_uncached(
         return []
 
     if name == "file_ops":
-        from soothe.toolkits.file_ops import FileOpsToolkit
+        from deepagents.backends.filesystem import FilesystemBackend  # noqa: I001
+
+        from soothe.middleware.filesystem import SootheFilesystemMiddleware  # noqa: I001
 
         resolved_cwd = (
             str(expand_path(config.workspace_dir))
             if config and config.workspace_dir
             else str(Path.cwd())
         )
-        allow_outside = (
-            config.security.allow_paths_outside_workspace
-            if config and hasattr(config, "security")
-            else False
+
+        # Create filesystem backend
+        backend = FilesystemBackend(
+            root_dir=resolved_cwd or None,
+            virtual_mode=False,
+            max_file_size_mb=10,
         )
-        toolkit = FileOpsToolkit(work_dir=resolved_cwd, allow_outside_workdir=allow_outside)
-        return toolkit.get_tools()
+
+        # Create middleware with surgical file ops
+        middleware = SootheFilesystemMiddleware(
+            backend=backend,
+            backup_enabled=True,
+            workspace_root=resolved_cwd or None,
+            tool_token_limit_before_evict=20000,
+        )
+
+        # Extract surgical tools only (not ls, read_file, etc. from FilesystemMiddleware)
+        surgical_tool_names = [
+            "delete_file",
+            "file_info",
+            "edit_file_lines",
+            "insert_lines",
+            "delete_lines",
+            "apply_diff",
+        ]
+        tools = [t for t in middleware.tools if t.name in surgical_tool_names]
+        return tools
 
     # Support individual tool names (map to consolidated group)
     if name in (
@@ -347,24 +371,55 @@ def _resolve_single_tool_group_uncached(
         "delete_lines",
         "apply_diff",
     ):
-        from soothe.toolkits.file_ops import FileOpsToolkit
+        from deepagents.backends.filesystem import FilesystemBackend  # noqa: I001
+
+        from soothe.middleware.filesystem import SootheFilesystemMiddleware  # noqa: I001
 
         resolved_cwd = (
             str(expand_path(config.workspace_dir))
             if config and config.workspace_dir
             else str(Path.cwd())
         )
-        allow_outside = (
-            config.security.allow_paths_outside_workspace
-            if config and hasattr(config, "security")
-            else False
+
+        # Create filesystem backend
+        backend = FilesystemBackend(
+            root_dir=resolved_cwd or None,
+            virtual_mode=False,
+            max_file_size_mb=10,
         )
-        toolkit = FileOpsToolkit(work_dir=resolved_cwd, allow_outside_workdir=allow_outside)
-        all_tools = toolkit.get_tools()
+
+        # Create middleware with surgical file ops
+        middleware = SootheFilesystemMiddleware(
+            backend=backend,
+            backup_enabled=True,
+            workspace_root=resolved_cwd or None,
+            tool_token_limit_before_evict=20000,
+        )
+
+        # Extract surgical tools only
+        surgical_tool_names = [
+            "delete_file",
+            "file_info",
+            "edit_file_lines",
+            "insert_lines",
+            "delete_lines",
+            "apply_diff",
+        ]
+        all_tools = [t for t in middleware.tools if t.name in surgical_tool_names]
         tool_map = {tool.name: tool for tool in all_tools}
+
+        # For read_file/write_file/edit_file/search_files/list_files, these come from deepagents
+        # so we need to get them from the middleware's full tools list
+        if name in ("read_file", "write_file", "edit_file", "search_files", "list_files"):
+            full_tool_map = {tool.name: tool for tool in middleware.tools}
+            if name in full_tool_map:
+                return [full_tool_map[name]]
+            logger.warning("Tool '%s' not found in SootheFilesystemMiddleware", name)
+            return []
+
         if name in tool_map:
             return [tool_map[name]]
-        logger.warning("Tool '%s' not found in FileOpsToolkit", name)
+        logger.warning("Tool '%s' not found in surgical tools", name)
         return []
 
     if name == "data":

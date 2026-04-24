@@ -10,6 +10,8 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+from soothe_sdk.utils import get_all_path_arg_keys, get_tool_meta
+
 from soothe_cli.shared.message_processing import (
     _normalize_tool_name_for_arg_map,
     extract_tool_args_dict,
@@ -21,17 +23,8 @@ _HIDDEN_CHAR_MARKER = " [hidden chars removed]"
 """Marker appended to display values that had dangerous Unicode stripped, so
 users know the value was modified for safety."""
 
-# Path-like argument names for read/write/edit tools (models and hosts vary).
-_FILE_TOOL_PATH_KEYS: tuple[str, ...] = (
-    "file_path",
-    "path",
-    "path_name",
-    "target_file",
-    "file",
-    "filepath",
-    "filename",
-    "relative_path",
-)
+# Path-like argument names for read/write/edit tools (derived from ToolMeta registry)
+_FILE_TOOL_PATH_KEYS: tuple[str, ...] = tuple(sorted(get_all_path_arg_keys()))
 
 
 def _format_timeout(seconds: int) -> str:
@@ -177,9 +170,15 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             return path.name
 
     # Tool-specific formatting - show the most important argument(s).
+    # Use ToolMeta registry to resolve aliases and categories.
     # Branch on normalized ``tool_key`` so PascalCase names (``ReadFile``) still match;
     # display the original ``tool_name`` substring for consistency with model output.
-    if tool_key in {"read_file", "write_file", "edit_file"}:
+
+    # Look up ToolMeta for this tool (resolves aliases)
+    meta = get_tool_meta(tool_key)
+
+    # File read/write/edit tools: show path + optional line range
+    if meta and meta.name in ("read_file", "write_file", "edit_file"):
         raw_path = _first_nonempty_str_arg(tool_args, _FILE_TOOL_PATH_KEYS)
         if raw_path is not None:
             path_raw = strip_dangerous_unicode(raw_path)
@@ -210,19 +209,19 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             return f"{prefix} {tool_name}({args_str})"
         return f"{prefix} {tool_name}(…)"
 
-    elif tool_key in {"web_search", "search_web"}:
+    elif meta and meta.name == "web_search":
         # Web search: show the query string (no outer quotes)
         if "query" in tool_args:
             query = _sanitize_display_value(tool_args["query"], max_length=100)
             return f"{prefix} {tool_name}({query})"
 
-    elif tool_key == "grep":
+    elif meta and meta.name == "grep":
         pat = _first_nonempty_str_arg(tool_args, ("pattern", "regex", "regexp"))
         if pat is not None:
             pattern = _sanitize_display_value(pat, max_length=70)
             return f"{prefix} {tool_name}({pattern})"
 
-    elif tool_key in {"execute", "shell", "bash", "run_command"}:
+    elif meta and meta.name == "execute":
         # Execute: show the command, and timeout only if non-default
         cmd = _first_nonempty_str_arg(tool_args, ("command", "cmd", "script"))
         if cmd is not None:
@@ -236,7 +235,7 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             # Don't add quotes around command - show it directly
             return f"{prefix} {tool_name}({command})"
 
-    elif tool_key in {"ls", "list_files"}:
+    elif meta and meta.name == "ls":
         # ls / list_files: directory varies by provider (path, directory, …).
         # Show explicit cwd (".") — omitting it produced bare ls() and looked like missing args.
         path_keys = (
@@ -272,7 +271,7 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         # No path/pattern in payload — model often omits kwargs for workspace default listing.
         return f"{prefix} {tool_name}(.)"
 
-    elif tool_key == "glob":
+    elif meta and meta.name == "glob":
         pat = _first_nonempty_str_arg(
             tool_args,
             ("pattern", "glob_pattern", "glob", "glob_file_pattern", "include"),
@@ -301,13 +300,13 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         # Default glob when the model sends `{}` — show a visible pattern hint.
         return f"{prefix} {tool_name}(*)"
 
-    elif tool_key in {"fetch_url", "crawl_web"}:
+    elif meta and meta.name == "fetch_url":
         # Crawl web: show the URL being fetched (no outer quotes)
         if "url" in tool_args:
             url = _sanitize_display_value(tool_args["url"], max_length=80)
             return f"{prefix} {tool_name}({url})"
 
-    elif tool_key == "task":
+    elif meta and meta.name == "task":
         # Task: subagent type and optional description inside parentheses (RFC-0020).
         agent_type = tool_args.get("subagent_type", "")
         desc = _first_nonempty_str_arg(
@@ -325,16 +324,16 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             return f"{prefix} {tool_name}({d})"
         return f"{prefix} {tool_name}(…)"
 
-    elif tool_key == "ask_user":
+    elif meta and meta.name == "ask_user":
         if "questions" in tool_args and isinstance(tool_args["questions"], list):
             count = len(tool_args["questions"])
             label = "question" if count == 1 else "questions"
             return f"{prefix} {tool_name}({count} {label})"
 
-    elif tool_key == "compact_conversation":
+    elif meta and meta.name == "compact_conversation":
         return f"{prefix} {tool_name}(…)"
 
-    elif tool_key == "write_todos":
+    elif meta and meta.name == "write_todos":
         if "todos" in tool_args and isinstance(tool_args["todos"], list):
             count = len(tool_args["todos"])
             return f"{prefix} {tool_name}({count} items)"

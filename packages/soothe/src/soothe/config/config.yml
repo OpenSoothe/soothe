@@ -232,6 +232,19 @@ subagents:
     # Uses the InquiryEngine for comprehensive investigation
     # No additional configuration needed - uses wizsearch tool settings
 
+  explore:
+    enabled: true
+    # Explore subagent for targeted filesystem search (RFC-613)
+    # Uses LLM-orchestrated iterative search with configurable thoroughness
+    config:
+      thoroughness: "medium"  # quick (2 iterations), medium (4), thorough (6)
+      max_iterations:
+        quick: 2
+        medium: 4
+        thorough: 6
+      max_read_lines: 50  # Max lines per read_file call
+      max_matches_returned: 5  # Max matches in final result
+
 # =============================================================================
 # Tools Configuration
 # =============================================================================

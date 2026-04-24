@@ -131,29 +131,10 @@ _MAX_TODO_CONTENT_LEN = 70
 _MAX_WEB_CONTENT_LEN = 100
 
 # Tools that have their key info already in the header (no need for args line)
-_TOOLS_WITH_HEADER_INFO: set[str] = {
-    # Filesystem tools
-    "ls",
-    "list_files",
-    "read_file",
-    "write_file",
-    "edit_file",
-    "glob",
-    "grep",
-    "execute",  # sandbox shell
-    # Shell tools
-    "shell",  # local shell
-    "bash",
-    "run_command",
-    # Web tools (CLI uses web_search/fetch_url, daemon uses search_web/crawl_web)
-    "web_search",
-    "fetch_url",
-    "search_web",
-    "crawl_web",
-    # Agent tools
-    "task",
-    "write_todos",
-}
+# Derived from ToolMeta registry (IG-232)
+from soothe_sdk.utils import get_tools_with_header_info  # noqa: E402, I001 -- module-level import after code
+
+_TOOLS_WITH_HEADER_INFO: set[str] = set(get_tools_with_header_info())
 
 
 _SUCCESS_EXIT_RE = re.compile(r"\n?\[Command succeeded with exit code 0\]\s*$")

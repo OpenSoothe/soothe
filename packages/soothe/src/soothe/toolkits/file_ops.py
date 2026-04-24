@@ -1,16 +1,12 @@
 """File operations toolkit -- surgical file manipulation not provided by deepagents.
 
-After deduplication with deepagents FilesystemMiddleware, this toolkit provides:
-- delete_file: Delete files (with optional backup)
-- file_info: Get file metadata (size, modification time, permissions)
-- edit_file_lines: Replace specific line ranges (surgical, not full-file)
-- insert_lines: Insert content at a specific line number
-- delete_lines: Delete specific line ranges from a file
-- apply_diff: Apply unified diff patches
+DEPRECATED: These BaseTool classes are deprecated and will be removed in a future release.
+Use `SootheFilesystemMiddleware` from `soothe.middleware.filesystem` instead, which
+provides these tools via `StructuredTool.from_function()` with proper Schema classes.
 
-Tools that DUPLICATE deepagents are NOT included:
-- read_file, write_file (use deepagents' versions)
-- search_files/grep, list_files/glob/ls (use deepagents' versions)
+The `FileOpsPlugin` in this module delegates to `SootheFilesystemMiddleware` for all
+tool creation. The BaseTool classes below are kept for backward compatibility with
+existing tests, but are not used in production code paths.
 """
 
 from __future__ import annotations

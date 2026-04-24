@@ -284,10 +284,29 @@ class GetDataInfoTool(BaseTool):
                     return "\n".join(f"{k}: {v}" for k, v in result.items())
                 return str(result)
 
-            # For tabular and unknown files, use generic file info
-            from soothe.toolkits.file_ops import FileInfoTool
+            # For tabular and unknown files, use simple file metadata retrieval
+            from datetime import UTC, datetime
 
-            return FileInfoTool()._run(file_path)
+            from soothe.utils import expand_path
+
+            resolved_path = expand_path(file_path)
+            if not resolved_path.exists():
+                return f"Error: File not found: {file_path}"
+
+            stat = resolved_path.stat()
+            mtime = datetime.fromtimestamp(stat.st_mtime, tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
+            atime = datetime.fromtimestamp(stat.st_atime, tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
+
+            info = [
+                f"Path: {resolved_path}",
+                f"Size: {stat.st_size} bytes ({stat.st_size / 1024:.2f} KB)",
+                f"Modified: {mtime}",
+                f"Accessed: {atime}",
+                f"Is File: {resolved_path.is_file()}",
+                f"Is Directory: {resolved_path.is_dir()}",
+            ]
+
+            return "\n".join(info)
 
         except Exception as exc:
             logger.exception("File info retrieval failed")

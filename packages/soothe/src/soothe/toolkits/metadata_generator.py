@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from soothe_sdk.utils import get_tool_meta
+
 
 def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) -> dict[str, Any]:
     """Generate structured outcome metadata from tool result.
@@ -35,20 +37,31 @@ def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) ->
         "tool_name": tool_name,
     }
 
-    # Dispatch to tool-specific metadata extractors
-    if tool_name in ["read_file", "ls", "grep", "glob"]:
-        outcome["type"] = "file_read"
-        outcome.update(_extract_file_metadata(result))
-    elif tool_name in ["write_file", "edit_file"]:
-        outcome["type"] = "file_write"
-        outcome.update(_extract_file_write_metadata(result))
-    elif tool_name in ["web_search", "tavily_search", "duckduckgo_search"]:
-        outcome["type"] = "web_search"
-        outcome.update(_extract_search_metadata(result))
-    elif tool_name == "execute":
+    # Use ToolMeta registry to categorize (IG-232)
+    meta = get_tool_meta(tool_name)
+    category = meta.category if meta else "generic"
+
+    # Dispatch to tool-specific metadata extractors based on category
+    # For file_ops, distinguish read vs write by tool name
+    if category == "file_ops":
+        # Read-like operations
+        if tool_name in ["read_file", "ls", "grep", "glob"]:
+            outcome["type"] = "file_read"
+            outcome.update(_extract_file_metadata(result))
+        # Write-like operations
+        elif tool_name in ["write_file", "edit_file", "delete_file"]:
+            outcome["type"] = "file_write"
+            outcome.update(_extract_file_write_metadata(result))
+        else:
+            outcome["type"] = "file_ops"
+            outcome.update(_extract_generic_metadata(result))
+    elif category == "execution":
         outcome["type"] = "code_exec"
         outcome.update(_extract_exec_metadata(result))
-    elif tool_name == "task":
+    elif category == "web":
+        outcome["type"] = "web_search"
+        outcome.update(_extract_search_metadata(result))
+    elif category == "subagent":
         outcome["type"] = "subagent"
         outcome.update(_extract_subagent_metadata(result))
     else:

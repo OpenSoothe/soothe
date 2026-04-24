@@ -26,6 +26,14 @@ from soothe_sdk.utils.serde import (
     create_soothe_serde,
     get_soothe_msgpack_allowlist,
 )
+from soothe_sdk.utils.tool_meta import (
+    TOOL_REGISTRY,
+    ToolMeta,
+    get_all_path_arg_keys,
+    get_tool_categories,
+    get_tool_meta,
+    get_tools_with_header_info,
+)
 from soothe_sdk.utils.workspace import INVALID_WORKSPACE_DIRS
 
 __all__ = [
@@ -44,4 +52,11 @@ __all__ = [
     "is_path_argument",
     "create_soothe_serde",
     "get_soothe_msgpack_allowlist",
+    # ToolMeta registry exports
+    "ToolMeta",
+    "TOOL_REGISTRY",
+    "get_tool_meta",
+    "get_all_path_arg_keys",
+    "get_tools_with_header_info",
+    "get_tool_categories",
 ]

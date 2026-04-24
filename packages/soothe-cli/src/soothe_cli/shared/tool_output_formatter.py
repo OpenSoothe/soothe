@@ -10,6 +10,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from soothe_sdk.utils import get_tool_categories
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,34 +63,8 @@ class ToolBrief:
             self.detail = self.detail[: max_detail_len - 3] + "..."
 
 
-# Tool category mapping for classifier
-TOOL_CATEGORIES: dict[str, str] = {
-    # File operations
-    "read_file": "file_ops",
-    "write_file": "file_ops",
-    "delete_file": "file_ops",
-    "list_files": "file_ops",
-    "search_files": "file_ops",
-    "glob": "file_ops",
-    "ls": "file_ops",
-    # Execution
-    "run_command": "execution",
-    "run_python": "execution",
-    "run_background": "execution",
-    "kill_process": "execution",
-    # Media
-    "transcribe_audio": "media",
-    "get_video_info": "media",
-    "analyze_image": "media",
-    # Goals
-    "create_goal": "goals",
-    "list_goals": "goals",
-    "complete_goal": "goals",
-    "fail_goal": "goals",
-    # Web
-    "search_web": "web",
-    "crawl_web": "web",
-}
+# Tool category mapping for classifier (derived from ToolMeta registry, IG-232)
+TOOL_CATEGORIES: dict[str, str] = get_tool_categories()
 
 
 def classify_tool(tool_name: str) -> str:
