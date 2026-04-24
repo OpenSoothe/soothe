@@ -19,7 +19,7 @@ from langgraph.graph.message import add_messages
 
 from soothe.subagents.claude.events import (
     ClaudeResultEvent,
-    ClaudeStartedEvent,
+    # IG-258: Removed unused event imports
     ClaudeTextEvent,
     ClaudeToolUseEvent,
 )
@@ -246,13 +246,7 @@ def _build_claude_graph(
             disallowed_tools or [],
         )
 
-        _emit(
-            ClaudeStartedEvent(
-                task=str(task)[:500] if task else "",
-                resume_session_id=resume_sid,
-            ).to_dict(),
-            logger,
-        )
+        # IG-258: Removed event emission - no longer needed
 
         collected_text: list[str] = []
         cost_usd: float = 0.0
@@ -269,10 +263,7 @@ def _build_claude_graph(
                                 len(block.text),
                                 block.text[:50] if len(block.text) > 50 else block.text,
                             )
-                            _emit(
-                                ClaudeTextEvent(text=block.text).to_dict(),
-                                logger,
-                            )
+                            # IG-258: Removed event emission
                         elif isinstance(block, ToolUseBlock):
                             tool_input = getattr(block, "input", None)
                             logger.debug(
@@ -280,13 +271,7 @@ def _build_claude_graph(
                                 block.name,
                                 str(tool_input)[:200] if tool_input else "<none>",
                             )
-                            _emit(
-                                ClaudeToolUseEvent(
-                                    tool=block.name,
-                                    args_preview=_preview_claude_tool_input(tool_input),
-                                ).to_dict(),
-                                logger,
-                            )
+                            # IG-258: Removed event emission
                 elif isinstance(message, ResultMessage):
                     cost_usd = message.total_cost_usd or 0.0
                     last_claude_session_id = getattr(message, "session_id", None)
