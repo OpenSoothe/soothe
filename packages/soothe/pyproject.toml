@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "soothe-sdk>=0.3.7,<1.0.0",     # Shared types, protocol
+    "soothe-sdk>=0.4.0,<1.0.0",     # Shared types, protocol
     "aiohttp>=3.9.0",
     "aiosqlite>=0.22.1",
     "anyio>=3.0.0",
@@ -93,7 +93,7 @@ dashscope = [
 ]
 # CLI client (optional - for interactive usage)
 cli = [
-    "soothe-cli>=0.2.0",
+    "soothe-cli>=0.4.0",
 ]
 dev = [
     "pytest>=8.0.0",
