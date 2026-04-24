@@ -470,6 +470,8 @@ From RFC-000:
 3. **Run verification script** before committing any code
 4. **Fix all linting errors** before committing
 5. **Call platonic-coding skill** when generating plans and implementing code to follow spec-driven development workflow
+6. **DO NOT cheat tests** - Never use superficial fixes (keyword matching, bypassing logic, workarounds) just to pass tests. Tests exist to verify real functionality. If tests fail, fix the actual implementation, not the test expectations. "Passing tests" != "Working correctly"
+6. **DO NOT cheat tests** - Never use superficial fixes (keyword matching, bypassing logic, workarounds) just to pass tests. Tests exist to verify real functionality. If tests fail, fix the actual implementation, not the test expectations. "Passing tests" != "Working correctly"
 
 ### SHOULD Rules
 1. **Ask for clarification** when requirements are ambiguous
