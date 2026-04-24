@@ -3,6 +3,10 @@
 This module provides utilities for CLI/TUI to identify which subagent events
 are important for progress tracking (visible at NORMAL verbosity tier).
 
+CRITICAL: This whitelist overrides event registration metadata for capability events.
+When adding new subagents with events at NORMAL tier, MUST update this whitelist
+to ensure visibility. Registration at VerbosityTier.NORMAL requires whitelist entry.
+
 Usage:
     from soothe_sdk.ux import is_subagent_progress_event
 
@@ -29,6 +33,9 @@ SUBAGENT_PROGRESS_EVENT_TYPES: Final[frozenset[str]] = frozenset(
         "soothe.capability.research.started",
         "soothe.capability.research.completed",
         "soothe.capability.research.judgement.reporting",  # LLM decision reasoning
+        # Explore subagent lifecycle (RFC-613)
+        "soothe.capability.explore.started",
+        "soothe.capability.explore.completed",
     }
 )
 
