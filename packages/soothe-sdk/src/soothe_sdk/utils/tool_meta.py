@@ -11,7 +11,7 @@ and consumed everywhere.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,415 +72,518 @@ def _register(meta: ToolMeta) -> ToolMeta:
 # deepagents tools
 # ---------------------------------------------------------------------------
 
-_register(ToolMeta(
-    name="read_file",
-    display_name="Read File",
-    arg_keys=("file_path", "path", "path_name", "target_file", "filename", "relative_path"),
-    path_arg_keys=("file_path", "path", "path_name", "target_file", "filename", "relative_path"),
-    category="file_ops",
-    source="deepagents",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="read_file",
+        display_name="Read File",
+        arg_keys=(
+            "file_path",
+            "path",
+            "path_name",
+            "target_file",
+            "file",
+            "filepath",
+            "filename",
+            "relative_path",
+        ),
+        path_arg_keys=(
+            "file_path",
+            "path",
+            "path_name",
+            "target_file",
+            "file",
+            "filepath",
+            "filename",
+            "relative_path",
+        ),
+        category="file_ops",
+        source="deepagents",
+        has_header_info=True,
+    )
+)
 
-_register(ToolMeta(
-    name="write_file",
-    display_name="Write File",
-    arg_keys=("file_path", "path"),
-    path_arg_keys=("file_path", "path"),
-    category="file_ops",
-    source="deepagents",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="write_file",
+        display_name="Write File",
+        arg_keys=("file_path", "path"),
+        path_arg_keys=("file_path", "path"),
+        category="file_ops",
+        source="deepagents",
+        has_header_info=True,
+    )
+)
 
-_register(ToolMeta(
-    name="edit_file",
-    display_name="Edit File",
-    arg_keys=("file_path", "path"),
-    path_arg_keys=("file_path", "path"),
-    category="file_ops",
-    source="deepagents",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="edit_file",
+        display_name="Edit File",
+        arg_keys=("file_path", "path"),
+        path_arg_keys=("file_path", "path"),
+        category="file_ops",
+        source="deepagents",
+        has_header_info=True,
+    )
+)
 
-_register(ToolMeta(
-    name="ls",
-    display_name="List Files",
-    arg_keys=("path", "path_name", "directory", "target_directory", "dir", "pattern"),
-    path_arg_keys=("path", "path_name", "directory", "target_directory", "dir"),
-    aliases=("list_files",),
-    category="file_ops",
-    source="deepagents",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="ls",
+        display_name="List Files",
+        arg_keys=("path", "path_name", "directory", "target_directory", "dir", "pattern"),
+        path_arg_keys=("path", "path_name", "directory", "target_directory", "dir"),
+        aliases=("list_files",),
+        category="file_ops",
+        source="deepagents",
+        has_header_info=True,
+    )
+)
 
-_register(ToolMeta(
-    name="glob",
-    display_name="Search Files",
-    arg_keys=("pattern", "path"),
-    path_arg_keys=("path",),
-    category="file_ops",
-    source="deepagents",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="glob",
+        display_name="Search Files",
+        arg_keys=("pattern", "path"),
+        path_arg_keys=("path",),
+        aliases=("search_files",),
+        category="file_ops",
+        source="deepagents",
+        has_header_info=True,
+    )
+)
 
-_register(ToolMeta(
-    name="grep",
-    display_name="Search Content",
-    arg_keys=("pattern", "regex", "regexp"),
-    category="file_ops",
-    source="deepagents",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="grep",
+        display_name="Search Content",
+        arg_keys=("pattern", "regex", "regexp"),
+        category="file_ops",
+        source="deepagents",
+        has_header_info=True,
+    )
+)
 
-_register(ToolMeta(
-    name="execute",
-    display_name="Shell Execute",
-    arg_keys=("command", "cmd", "script"),
-    aliases=("shell", "bash", "run_command"),
-    category="execution",
-    source="deepagents",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="execute",
+        display_name="Shell Execute",
+        arg_keys=("command", "cmd", "script"),
+        aliases=("shell", "bash", "run_command"),
+        category="execution",
+        source="deepagents",
+        has_header_info=True,
+    )
+)
 
-_register(ToolMeta(
-    name="web_search",
-    display_name="Web Search",
-    arg_keys=("query",),
-    aliases=("search_web",),
-    category="web",
-    source="deepagents",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="web_search",
+        display_name="Web Search",
+        arg_keys=("query",),
+        aliases=("search_web",),
+        category="web",
+        source="deepagents",
+        has_header_info=True,
+    )
+)
 
-_register(ToolMeta(
-    name="fetch_url",
-    display_name="Web Crawl",
-    arg_keys=("url",),
-    aliases=("crawl_web",),
-    category="web",
-    source="deepagents",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="fetch_url",
+        display_name="Web Crawl",
+        arg_keys=("url",),
+        aliases=("crawl_web",),
+        category="web",
+        source="deepagents",
+        has_header_info=True,
+    )
+)
 
-_register(ToolMeta(
-    name="task",
-    display_name="Task",
-    arg_keys=("subagent_type", "description", "prompt"),
-    category="subagent",
-    source="deepagents",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="task",
+        display_name="Task",
+        arg_keys=("subagent_type", "description", "prompt"),
+        category="subagent",
+        source="deepagents",
+        has_header_info=True,
+    )
+)
 
 # ---------------------------------------------------------------------------
 # soothe file_ops tools
 # ---------------------------------------------------------------------------
 
-_register(ToolMeta(
-    name="delete_file",
-    display_name="Delete File",
-    arg_keys=("file_path", "path"),
-    path_arg_keys=("file_path", "path"),
-    category="file_ops",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="delete_file",
+        display_name="Delete File",
+        arg_keys=("file_path", "path"),
+        path_arg_keys=("file_path", "path"),
+        category="file_ops",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="file_info",
-    display_name="File Info",
-    arg_keys=("path", "file_path"),
-    path_arg_keys=("path", "file_path"),
-    category="file_ops",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="file_info",
+        display_name="File Info",
+        arg_keys=("path", "file_path"),
+        path_arg_keys=("path", "file_path"),
+        category="file_ops",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="edit_file_lines",
-    display_name="Edit File Lines",
-    arg_keys=("path", "file_path"),
-    path_arg_keys=("path", "file_path"),
-    category="file_ops",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="edit_file_lines",
+        display_name="Edit File Lines",
+        arg_keys=("path", "file_path"),
+        path_arg_keys=("path", "file_path"),
+        category="file_ops",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="insert_lines",
-    display_name="Insert Lines",
-    arg_keys=("path", "file_path"),
-    path_arg_keys=("path", "file_path"),
-    category="file_ops",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="insert_lines",
+        display_name="Insert Lines",
+        arg_keys=("path", "file_path"),
+        path_arg_keys=("path", "file_path"),
+        category="file_ops",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="delete_lines",
-    display_name="Delete Lines",
-    arg_keys=("path", "file_path"),
-    path_arg_keys=("path", "file_path"),
-    category="file_ops",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="delete_lines",
+        display_name="Delete Lines",
+        arg_keys=("path", "file_path"),
+        path_arg_keys=("path", "file_path"),
+        category="file_ops",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="apply_diff",
-    display_name="Apply Diff",
-    arg_keys=("path", "file_path"),
-    path_arg_keys=("path", "file_path"),
-    category="file_ops",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="apply_diff",
+        display_name="Apply Diff",
+        arg_keys=("path", "file_path"),
+        path_arg_keys=("path", "file_path"),
+        category="file_ops",
+        source="soothe",
+    )
+)
 
 # ---------------------------------------------------------------------------
 # soothe execution tools
 # ---------------------------------------------------------------------------
 
-_register(ToolMeta(
-    name="run_python",
-    display_name="Run Python",
-    arg_keys=("code",),
-    category="execution",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="run_python",
+        display_name="Run Python",
+        arg_keys=("code",),
+        category="execution",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="run_background",
-    display_name="Run Background",
-    arg_keys=("command",),
-    category="execution",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="run_background",
+        display_name="Run Background",
+        arg_keys=("command",),
+        category="execution",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="kill_process",
-    display_name="Kill Process",
-    arg_keys=("pid",),
-    category="execution",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="kill_process",
+        display_name="Kill Process",
+        arg_keys=("pid",),
+        category="execution",
+        source="soothe",
+    )
+)
 
 # ---------------------------------------------------------------------------
 # soothe wizsearch tools
 # ---------------------------------------------------------------------------
 
-_register(ToolMeta(
-    name="wizsearch_search",
-    display_name="Multi-Engine Search",
-    arg_keys=("query",),
-    category="web",
-    source="soothe",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="wizsearch_search",
+        display_name="Multi-Engine Search",
+        arg_keys=("query",),
+        category="web",
+        source="soothe",
+        has_header_info=True,
+    )
+)
 
-_register(ToolMeta(
-    name="wizsearch_crawl",
-    display_name="Headless Crawl",
-    arg_keys=("url",),
-    category="web",
-    source="soothe",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="wizsearch_crawl",
+        display_name="Headless Crawl",
+        arg_keys=("url",),
+        category="web",
+        source="soothe",
+        has_header_info=True,
+    )
+)
 
 # ---------------------------------------------------------------------------
 # soothe research tool
 # ---------------------------------------------------------------------------
 
-_register(ToolMeta(
-    name="research",
-    display_name="Research",
-    arg_keys=("topic", "domain"),
-    category="subagent",
-    source="soothe",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="research",
+        display_name="Research",
+        arg_keys=("topic", "domain"),
+        category="subagent",
+        source="soothe",
+        has_header_info=True,
+    )
+)
 
 # ---------------------------------------------------------------------------
 # soothe media tools
 # ---------------------------------------------------------------------------
 
-_register(ToolMeta(
-    name="analyze_image",
-    display_name="Analyze Image",
-    arg_keys=("image_path",),
-    path_arg_keys=("image_path",),
-    category="media",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="analyze_image",
+        display_name="Analyze Image",
+        arg_keys=("image_path",),
+        path_arg_keys=("image_path",),
+        category="media",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="extract_text_from_image",
-    display_name="Extract Text From Image",
-    arg_keys=("image_path",),
-    path_arg_keys=("image_path",),
-    category="media",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="extract_text_from_image",
+        display_name="Extract Text From Image",
+        arg_keys=("image_path",),
+        path_arg_keys=("image_path",),
+        category="media",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="analyze_video",
-    display_name="Analyze Video",
-    arg_keys=("video_path",),
-    path_arg_keys=("video_path",),
-    category="media",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="analyze_video",
+        display_name="Analyze Video",
+        arg_keys=("video_path",),
+        path_arg_keys=("video_path",),
+        category="media",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="get_video_info",
-    display_name="Get Video Info",
-    arg_keys=("video_path",),
-    path_arg_keys=("video_path",),
-    category="media",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="get_video_info",
+        display_name="Get Video Info",
+        arg_keys=("video_path",),
+        path_arg_keys=("video_path",),
+        category="media",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="transcribe_audio",
-    display_name="Transcribe Audio",
-    arg_keys=("audio_path",),
-    path_arg_keys=("audio_path",),
-    category="media",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="transcribe_audio",
+        display_name="Transcribe Audio",
+        arg_keys=("audio_path",),
+        path_arg_keys=("audio_path",),
+        category="media",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="audio_qa",
-    display_name="Audio QA",
-    arg_keys=("audio_path",),
-    path_arg_keys=("audio_path",),
-    category="media",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="audio_qa",
+        display_name="Audio QA",
+        arg_keys=("audio_path",),
+        path_arg_keys=("audio_path",),
+        category="media",
+        source="soothe",
+    )
+)
 
 # ---------------------------------------------------------------------------
 # soothe data tools
 # ---------------------------------------------------------------------------
 
-_register(ToolMeta(
-    name="inspect_data",
-    display_name="Inspect Data",
-    arg_keys=("file_path",),
-    path_arg_keys=("file_path",),
-    category="file_ops",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="inspect_data",
+        display_name="Inspect Data",
+        arg_keys=("file_path",),
+        path_arg_keys=("file_path",),
+        category="file_ops",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="summarize_data",
-    display_name="Summarize Data",
-    arg_keys=("file_path",),
-    path_arg_keys=("file_path",),
-    category="file_ops",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="summarize_data",
+        display_name="Summarize Data",
+        arg_keys=("file_path",),
+        path_arg_keys=("file_path",),
+        category="file_ops",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="check_data_quality",
-    display_name="Check Data Quality",
-    arg_keys=("file_path",),
-    path_arg_keys=("file_path",),
-    category="file_ops",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="check_data_quality",
+        display_name="Check Data Quality",
+        arg_keys=("file_path",),
+        path_arg_keys=("file_path",),
+        category="file_ops",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="extract_text",
-    display_name="Extract Text",
-    arg_keys=("file_path",),
-    path_arg_keys=("file_path",),
-    category="file_ops",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="extract_text",
+        display_name="Extract Text",
+        arg_keys=("file_path",),
+        path_arg_keys=("file_path",),
+        category="file_ops",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="get_data_info",
-    display_name="Get Data Info",
-    arg_keys=("file_path",),
-    path_arg_keys=("file_path",),
-    category="file_ops",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="get_data_info",
+        display_name="Get Data Info",
+        arg_keys=("file_path",),
+        path_arg_keys=("file_path",),
+        category="file_ops",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="ask_about_file",
-    display_name="Ask About File",
-    arg_keys=("file_path",),
-    path_arg_keys=("file_path",),
-    category="file_ops",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="ask_about_file",
+        display_name="Ask About File",
+        arg_keys=("file_path",),
+        path_arg_keys=("file_path",),
+        category="file_ops",
+        source="soothe",
+    )
+)
 
 # ---------------------------------------------------------------------------
 # soothe datetime tool
 # ---------------------------------------------------------------------------
 
-_register(ToolMeta(
-    name="current_datetime",
-    display_name="Current DateTime",
-    category="generic",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="current_datetime",
+        display_name="Current DateTime",
+        category="generic",
+        source="soothe",
+    )
+)
 
 # ---------------------------------------------------------------------------
 # soothe goals tools
 # ---------------------------------------------------------------------------
 
-_register(ToolMeta(
-    name="create_goal",
-    display_name="Create Goal",
-    arg_keys=("description",),
-    category="goals",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="create_goal",
+        display_name="Create Goal",
+        arg_keys=("description",),
+        category="goals",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="list_goals",
-    display_name="List Goals",
-    category="goals",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="list_goals",
+        display_name="List Goals",
+        category="goals",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="complete_goal",
-    display_name="Complete Goal",
-    arg_keys=("goal_id",),
-    category="goals",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="complete_goal",
+        display_name="Complete Goal",
+        arg_keys=("goal_id",),
+        category="goals",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="fail_goal",
-    display_name="Fail Goal",
-    arg_keys=("goal_id",),
-    category="goals",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="fail_goal",
+        display_name="Fail Goal",
+        arg_keys=("goal_id",),
+        category="goals",
+        source="soothe",
+    )
+)
 
 # ---------------------------------------------------------------------------
 # other tools
 # ---------------------------------------------------------------------------
 
-_register(ToolMeta(
-    name="ask_user",
-    display_name="Ask User",
-    arg_keys=("questions",),
-    category="generic",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="ask_user",
+        display_name="Ask User",
+        arg_keys=("questions",),
+        category="generic",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="compact_conversation",
-    display_name="Compact Conversation",
-    category="generic",
-    source="soothe",
-))
+_register(
+    ToolMeta(
+        name="compact_conversation",
+        display_name="Compact Conversation",
+        category="generic",
+        source="soothe",
+    )
+)
 
-_register(ToolMeta(
-    name="write_todos",
-    display_name="Write Todos",
-    arg_keys=("todos",),
-    category="generic",
-    source="soothe",
-    has_header_info=True,
-))
+_register(
+    ToolMeta(
+        name="write_todos",
+        display_name="Write Todos",
+        arg_keys=("todos",),
+        category="generic",
+        source="soothe",
+        has_header_info=True,
+    )
+)
 
 # ---------------------------------------------------------------------------
 # Convenience accessors (derived from registry)

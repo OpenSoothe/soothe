@@ -288,46 +288,25 @@ def tool_calls_have_any_arg_dict(tc_list: list[Any]) -> bool:
 
 # Argument display mapping for tool calls (see IG-053)
 # Maps tool name to list of argument keys to display (supports multiple args)
-_ARG_DISPLAY_MAP: dict[str, list[str]] = {
-    # File operations — deepagents uses ``file_path`` for read/write/edit (see IG-053)
-    "read_file": ["file_path", "path", "path_name", "target_file", "filename", "relative_path"],
-    "write_file": ["file_path", "path"],
-    "delete_file": ["file_path", "path"],
-    "file_info": ["path", "file_path"],
-    "edit_file_lines": ["path", "file_path"],
-    "insert_lines": ["path", "file_path"],
-    "delete_lines": ["path", "file_path"],
-    "apply_diff": ["path", "file_path"],
-    "edit_file": ["file_path", "path"],
-    # Models vary: ``path``, ``directory`` (deepagents), ``target_directory``
-    "ls": ["path", "path_name", "directory", "target_directory", "dir", "pattern"],
-    "glob": ["pattern", "path"],  # Glob tool
-    "list_files": ["pattern"],
-    "search_files": ["pattern"],
-    # Execution - show command/code
-    "run_command": ["command", "args"],  # Multiple args support
-    "run_python": ["code"],
-    "run_background": ["command"],
-    "kill_process": ["pid"],
-    "execute": ["command"],  # Alias for run_command
-    # Search - show pattern/query
-    "web_search": ["query"],  # from deepagents
-    "fetch_url": ["url"],  # from deepagents
-    "wizsearch_search": ["query"],  # from soothe wizsearch toolkit
-    "wizsearch_crawl": ["url"],  # from soothe wizsearch toolkit
-    # Research - show topic
-    "research": ["topic", "domain"],
-    # Media - show file path
-    "analyze_image": ["image_path"],
-    "analyze_video": ["video_path"],
-    "transcribe_audio": ["audio_path"],
-    # Goals - show description or ID
-    "create_goal": ["description"],
-    "complete_goal": ["goal_id"],
-    "fail_goal": ["goal_id"],
-    # Subagent delegation (deepagents ``task`` tool)
-    "task": ["subagent_type", "description", "prompt"],
-}
+# Now derived from the canonical ToolMeta registry (IG-232)
+from soothe_sdk.utils import TOOL_REGISTRY  # noqa: E402, I001 -- module-level import after code
+
+
+def _get_arg_display_map_from_registry() -> dict[str, list[str]]:
+    """Derive arg display map from ToolMeta registry."""
+    result: dict[str, list[str]] = {}
+    seen_ids: set[int] = set()
+    for name, meta in TOOL_REGISTRY.items():
+        if id(meta) in seen_ids or not meta.arg_keys:
+            continue
+        seen_ids.add(id(meta))
+        result[name] = list(meta.arg_keys)
+        for alias in meta.aliases:
+            result[alias] = list(meta.arg_keys)
+    return result
+
+
+_ARG_DISPLAY_MAP: dict[str, list[str]] = _get_arg_display_map_from_registry()
 
 
 def _normalize_tool_name_for_arg_map(tool_name: str) -> str:

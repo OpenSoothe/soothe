@@ -689,8 +689,8 @@ class SootheDaemon(DaemonHandlersMixin):
         """
         msg_type = msg.get("type", "")
 
-        # Extract thread_id for routing
-        thread_id = msg.get("thread_id")
+        # Extract thread_id for routing (treat empty string as None)
+        thread_id = msg.get("thread_id") or None
 
         # For status messages without thread_id, try current thread
         if not thread_id and msg_type == "status":

@@ -87,35 +87,15 @@ def convert_and_abbreviate_path(path: str, base_dir: str | None = None) -> str:
     return str(p)
 
 
-def get_tool_display_name(tool_name: str) -> str:
-    """Get user-friendly display name for tool.
+# Re-export get_tool_display_name from tool_meta (canonical registry)
+from soothe_sdk.utils.tool_meta import get_tool_display_name  # noqa: E402, F401, I001 -- re-export after code
 
-    Maps internal tool names to readable display names.
-
-    Args:
-        tool_name: Internal tool name.
-
-    Returns:
-        User-friendly display name.
-    """
-    # Tool name mapping
-    display_names = {
-        "execute": "Shell Execute",
-        "ls": "List Files",
-        "read_file": "Read File",
-        "write_file": "Write File",
-        "edit_file": "Edit File",
-        "glob": "Search Files",
-        "grep": "Search Content",
-        "web_search": "Web Search",  # from deepagents
-        "fetch_url": "Web Crawl",  # from deepagents
-        "wizsearch_search": "Multi-Engine Search",  # from soothe wizsearch toolkit
-        "wizsearch_crawl": "Headless Crawl",  # from soothe wizsearch toolkit
-        "research": "Research",
-    }
-
-    # Return mapped name or original if no mapping
-    return display_names.get(tool_name, tool_name.replace("_", " ").title())
+__all__ = [
+    "format_cli_error",
+    "log_preview",
+    "convert_and_abbreviate_path",
+    "get_tool_display_name",
+]
 
 
 __all__ = [
