@@ -122,6 +122,12 @@ COMMANDS: tuple[SlashCommand, ...] = (
         bypass_tier=BypassTier.QUEUED,
     ),
     SlashCommand(
+        name="/explore",
+        description="Route prompt to Explore subagent (usage: /explore <query>)",
+        bypass_tier=BypassTier.QUEUED,
+        hidden_keywords="find locate search",
+    ),
+    SlashCommand(
         name="/plan",
         description="Send input in plan mode (usage: /plan or /plan <prompt>)",
         bypass_tier=BypassTier.QUEUED,
