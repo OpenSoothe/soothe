@@ -102,6 +102,8 @@ POLICY_DENIED = "soothe.protocol.policy.denied"
 
 CHITCHAT_STARTED = "soothe.output.chitchat.started"
 CHITCHAT_RESPONSE = "soothe.output.chitchat.responded"
+QUIZ_STARTED = "soothe.output.quiz.started"
+QUIZ_RESPONSE = "soothe.output.quiz.responded"
 FINAL_REPORT = "soothe.output.autonomous.final_report.reported.reported"
 
 # ============================================================================
@@ -197,6 +199,8 @@ __all__ = [
     # Output
     "CHITCHAT_STARTED",
     "CHITCHAT_RESPONSE",
+    "QUIZ_STARTED",
+    "QUIZ_RESPONSE",
     "FINAL_REPORT",
     # System - Daemon
     "DAEMON_HEARTBEAT",

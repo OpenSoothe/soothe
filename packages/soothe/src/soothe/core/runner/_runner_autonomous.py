@@ -184,6 +184,14 @@ class AutonomousMixin(GoalDirectivesMixin):
                     yield chunk
                 return
 
+            # Fast path for quiz (IG-250) - skip goal engine and planning
+            if intent_classification.intent_type == "quiz":
+                async for chunk in self._run_quiz(
+                    user_input, state.thread_id or "", classification=intent_classification
+                ):
+                    yield chunk
+                return
+
             # Convert IntentClassification to RoutingClassification for compatibility
             state.unified_classification = intent_classification.to_routing_classification()
         else:
