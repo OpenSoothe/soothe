@@ -38,10 +38,10 @@ class WebFormatter(BaseFormatter):
         # Normalize tool name
         normalized = tool_name.lower().replace("-", "_").replace(" ", "_")
 
-        # Route to specific formatter
-        if normalized == "search_web":
+        # Route to specific formatter (handle both legacy and wizsearch naming)
+        if normalized in ("search_web", "wizsearch_search"):
             return self._format_search_web(result)
-        if normalized == "crawl_web":
+        if normalized in ("crawl_web", "wizsearch_crawl"):
             return self._format_crawl_web(result)
 
         msg = f"Unknown web tool: {tool_name}"
