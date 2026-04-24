@@ -239,6 +239,34 @@ def _resolve_single_tool_group_uncached(
             "Plugin registry not loaded, falling back to hardcoded dispatch for '%s'", name
         )
 
+    # Backward compatibility: code_edit redirects to file_ops
+    if name == "code_edit":
+        logger.warning("Tool group 'code_edit' is deprecated. Use 'file_ops' instead.")
+        from soothe.toolkits.file_ops import FileOpsToolkit
+
+        resolved_cwd = (
+            str(expand_path(config.workspace_dir))
+            if config and config.workspace_dir
+            else str(Path.cwd())
+        )
+        allow_outside = (
+            config.security.allow_paths_outside_workspace
+            if config and hasattr(config, "security")
+            else False
+        )
+        toolkit = FileOpsToolkit(work_dir=resolved_cwd, allow_outside_workdir=allow_outside)
+        return toolkit.get_tools()
+
+    # Backward compatibility: web_search redirects to wizsearch
+    if name == "web_search":
+        logger.warning(
+            "Tool group 'web_search' is deprecated. Use 'wizsearch' instead (deepagents provides web_search/fetch_url)."
+        )
+        from soothe.toolkits.wizsearch import WizsearchToolkit
+
+        toolkit = WizsearchToolkit(config=None)
+        return toolkit.get_tools()
+
     # Toolkit dispatch using new toolkit classes
     if name == "datetime":
         from soothe.toolkits.datetime import DatetimeToolkit

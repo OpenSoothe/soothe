@@ -218,17 +218,16 @@ def discover_all_plugins(config: "SootheConfig") -> dict[str, tuple[str, dict]]:
     for tool_name in [
         "execution",
         "file_ops",
-        "code_edit",
         "data",
         "datetime",
         "goals",
-        "web_search",
+        "wizsearch",
         "research",
         "image",
         "audio",
         "video",
     ]:
-        module_path = f"soothe.tools.{tool_name}"
+        module_path = f"soothe.toolkits.{tool_name}"
         discovered[tool_name] = (module_path, {})
         logger.debug("Discovered built-in tool plugin: %s", tool_name)
 

@@ -2,8 +2,8 @@
 
 import pytest
 
-from soothe.tools._internal.python_session_manager import get_session_manager
-from soothe.tools.execution import RunPythonTool
+from soothe.toolkits._internal.python_session_manager import get_session_manager
+from soothe.toolkits.execution import RunPythonTool
 
 # Mark all tests in this module as integration tests
 pytestmark = pytest.mark.integration

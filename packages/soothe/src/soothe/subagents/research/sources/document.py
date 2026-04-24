@@ -37,11 +37,10 @@ class DocumentSource:
             return
         self._loaded = True
         try:
-            from soothe.tools._internal.document import create_document_tools
+            # Use plain functions from _internal/document.py
+            from soothe.toolkits._internal.document import document_qa
 
-            tools = create_document_tools(config=self._config)
-            if tools:
-                self._doc_tool = tools[0]
+            self._doc_tool = lambda path, question: document_qa(path, question, config=self._config)
         except Exception:
             logger.debug("Document QA tool not available", exc_info=True)
 

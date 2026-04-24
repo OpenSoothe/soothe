@@ -107,10 +107,10 @@ def get_tool_display_name(tool_name: str) -> str:
         "edit_file": "Edit File",
         "glob": "Search Files",
         "grep": "Search Content",
-        "web_search": "Web Search",
-        "search_web": "Web Search",
-        "fetch_url": "Web Crawl",
-        "crawl_web": "Web Crawl",
+        "web_search": "Web Search",  # from deepagents
+        "fetch_url": "Web Crawl",  # from deepagents
+        "wizsearch_search": "Multi-Engine Search",  # from soothe wizsearch toolkit
+        "wizsearch_crawl": "Headless Crawl",  # from soothe wizsearch toolkit
         "research": "Research",
     }
 

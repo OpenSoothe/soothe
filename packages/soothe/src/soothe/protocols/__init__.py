@@ -32,6 +32,7 @@ from soothe.protocols.policy import (
     PolicyProtocol,
 )
 from soothe.protocols.remote import RemoteAgentProtocol
+from soothe.protocols.toolkit import ToolkitProtocol
 from soothe.protocols.vector_store import VectorRecord, VectorStoreProtocol
 
 __all__ = [
@@ -62,6 +63,7 @@ __all__ = [
     "ThreadFilter",
     "ThreadInfo",
     "ThreadMetadata",
+    "ToolkitProtocol",
     "VectorRecord",
     "VectorStoreProtocol",
 ]

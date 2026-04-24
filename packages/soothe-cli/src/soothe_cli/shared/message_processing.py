@@ -177,7 +177,7 @@ def extract_tool_brief(tool_name: str, content: str | dict | Any, max_length: in
         # Fallback to simple truncation if formatter fails
         if isinstance(content, str):
             # Web search/crawl tools return structured output with summary on first line
-            web_tools = {"search_web", "crawl_web", "web_search", "fetch_url"}
+            web_tools = {"wizsearch_search", "wizsearch_crawl", "web_search", "fetch_url"}
             if tool_name in web_tools:
                 first_line = content.split("\n", 1)[0].strip()
                 if first_line:
@@ -311,10 +311,10 @@ _ARG_DISPLAY_MAP: dict[str, list[str]] = {
     "kill_process": ["pid"],
     "execute": ["command"],  # Alias for run_command
     # Search - show pattern/query
-    "web_search": ["query"],
-    "search_web": ["query"],
-    "fetch_url": ["url"],
-    "crawl_web": ["url"],
+    "web_search": ["query"],  # from deepagents
+    "fetch_url": ["url"],  # from deepagents
+    "wizsearch_search": ["query"],  # from soothe wizsearch toolkit
+    "wizsearch_crawl": ["url"],  # from soothe wizsearch toolkit
     # Research - show topic
     "research": ["topic", "domain"],
     # Media - show file path
