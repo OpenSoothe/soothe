@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from soothe.cognition.intention import RoutingClassification
 from soothe.config import SootheConfig
-from soothe.core.middleware import SystemPromptOptimizationMiddleware
+from soothe.middleware import SystemPromptOptimizationMiddleware
 
 
 class MockModelRequest(ModelRequest[dict]):

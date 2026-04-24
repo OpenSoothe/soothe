@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soothe.core.middleware import ExecutionHintsMiddleware
+from soothe.middleware import ExecutionHintsMiddleware
 
 
 class TestLayer2Layer1Bridge:

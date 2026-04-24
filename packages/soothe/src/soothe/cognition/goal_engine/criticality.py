@@ -90,10 +90,10 @@ async def _evaluate_with_llm(
         Tuple of (risk_level, reasons) where risk_level is "high", "medium", or "low".
     """
     # IG-143: Wrap model with tracing if enabled
-    from soothe.core.middleware._utils import create_llm_call_metadata
+    from soothe.middleware._utils import create_llm_call_metadata
 
     if config and hasattr(config, "llm_tracing") and config.llm_tracing.enabled:
-        from soothe.core.middleware._wrapper import LLMTracingWrapper
+        from soothe.middleware._wrapper import LLMTracingWrapper
 
         model = LLMTracingWrapper(model)
 

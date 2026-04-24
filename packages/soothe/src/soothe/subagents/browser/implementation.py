@@ -81,7 +81,7 @@ Examples:
             HumanMessage(content=prompt),
         ]
         # IG-143: Add metadata for tracing
-        from soothe.core.middleware._utils import create_llm_call_metadata
+        from soothe.middleware._utils import create_llm_call_metadata
 
         response = await model.ainvoke(
             messages,

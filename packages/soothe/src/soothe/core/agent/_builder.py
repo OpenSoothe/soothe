@@ -14,7 +14,6 @@ from soothe.config import SootheConfig
 
 # Import and apply deepagents patches
 from soothe.core.agent._patch import *  # noqa: F403
-from soothe.core.middleware import build_soothe_middleware_stack
 from soothe.core.resolver import (
     resolve_memory,
     resolve_planner,
@@ -22,6 +21,7 @@ from soothe.core.resolver import (
     resolve_subagents,
     resolve_tools,
 )
+from soothe.middleware import build_soothe_middleware_stack
 from soothe.skills import get_built_in_skills_paths
 
 if TYPE_CHECKING:

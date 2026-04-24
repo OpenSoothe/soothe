@@ -33,7 +33,7 @@ def test_prompt_templates_exist():
 
 def test_middleware_can_be_imported():
     """Test that middleware can be imported from package."""
-    from soothe.core.middleware import SystemPromptOptimizationMiddleware
+    from soothe.middleware import SystemPromptOptimizationMiddleware
 
     assert SystemPromptOptimizationMiddleware is not None
 

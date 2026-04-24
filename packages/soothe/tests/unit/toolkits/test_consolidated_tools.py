@@ -240,27 +240,8 @@ class TestResolverToolkitNames:
         assert tools[0].name == "inspect_data"
 
 
-class TestResolverBackwardCompat:
-    """Backward compatibility: deprecated names redirect to new toolkits."""
-
-    def test_web_search_redirects_to_wizsearch(self) -> None:
-        """web_search should redirect to wizsearch toolkit."""
-        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
-
-        tools = _resolve_single_tool_group_uncached("web_search")
-        # Should resolve wizsearch tools (backward compat)
-        assert len(tools) == 2
-        assert "wizsearch" in tools[0].name or "search" in tools[0].name
-
-    def test_code_edit_redirects_to_file_ops(self) -> None:
-        """code_edit should redirect to file_ops toolkit."""
-        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
-
-        tools = _resolve_single_tool_group_uncached("code_edit")
-        # Should resolve file_ops surgical tools (backward compat)
-        assert len(tools) == 6
-        tool_names = {t.name for t in tools}
-        assert "edit_file_lines" in tool_names
+class TestResolverOldNamesRejected:
+    """Legacy names should not resolve."""
 
     def test_old_names_rejected(self) -> None:
         """Legacy names without backward compat should not resolve."""
@@ -268,18 +249,15 @@ class TestResolverBackwardCompat:
 
         for old_name in (
             "inquiry",
-            "file_edit",  # This has backward compat (redirects to file_ops)
+            "web_search",
+            "code_edit",
             "cli",
             "tabular",
             "document",
             "python_executor",
         ):
-            if old_name == "file_edit":
-                # file_edit has backward compat - skip this one
-                continue
-            tools = _resolve_single_tool_group_uncached(old_name)  # noqa: F841
-            # These should either return [] or redirect
-            # We'll allow empty or redirect, just check they don't crash
+            tools = _resolve_single_tool_group_uncached(old_name)
+            assert tools == [], f"Legacy name '{old_name}' should not resolve"
 
 
 # ---------------------------------------------------------------------------

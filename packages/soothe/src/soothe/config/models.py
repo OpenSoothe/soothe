@@ -295,7 +295,7 @@ class ToolsConfig(BaseModel):
 
     Args:
         execution: Execution tools config (run_command, run_python, etc.).
-        file_ops: File operation tools config (merged with code_edit).
+        file_ops: File operation tools config.
         datetime: DateTime tool config.
         data: Data inspection tools config.
         wizsearch: Wizsearch multi-engine search tools config.
@@ -854,6 +854,37 @@ class AutopilotConfig(BaseModel):
 
     webhooks: dict[str, str | None] = Field(default_factory=dict)
     """Webhook URLs by event type (e.g., on_goal_completed, on_goal_failed)."""
+
+
+class FilesystemMiddlewareConfig(BaseModel):
+    """Configuration for SootheFilesystemMiddleware.
+
+    Args:
+        backup_enabled: Enable automatic backup before file deletion.
+        backup_dir: Directory for backup files.
+        workspace_root: Root directory for workspace operations.
+        virtual_mode: Enable path sandboxing to workspace (passed to FilesystemBackend).
+        max_file_size_mb: Maximum file size for operations.
+        tool_token_limit_before_evict: Token limit for large result eviction.
+    """
+
+    backup_enabled: bool = True
+    """Enable automatic file backup on delete operations."""
+
+    backup_dir: str | None = None
+    """Directory for backup files. Defaults to .backups in each file's parent."""
+
+    workspace_root: str | None = None
+    """Root directory for workspace operations."""
+
+    virtual_mode: bool = False
+    """Enable path sandboxing to workspace directory (FilesystemBackend parameter)."""
+
+    max_file_size_mb: int = 10
+    """Maximum file size for operations (MB) - passed to FilesystemBackend."""
+
+    tool_token_limit_before_evict: int | None = 20000
+    """Token limit before evicting large tool results (inherited from FilesystemMiddleware)."""
 
 
 class SecurityConfig(BaseModel):

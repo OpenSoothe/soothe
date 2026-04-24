@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soothe.toolkits.audio import AudioToolkit, AudioQATool, AudioTranscriptionTool
+from soothe.toolkits.audio import AudioQATool, AudioTranscriptionTool
 
 
 class TestAudioTranscriptionTool:
@@ -20,14 +20,6 @@ class TestAudioTranscriptionTool:
         assert tool.name == "transcribe_audio"
         assert "transcribe" in tool.description.lower()
         assert "audio" in tool.description.lower()
-
-    def test_create_audio_tools(self) -> None:
-        """Test factory function creates all tools."""
-        tools = create_audio_tools()
-
-        assert len(tools) == 2
-        assert isinstance(tools[0], AudioTranscriptionTool)
-        assert isinstance(tools[1], AudioQATool)
 
     def test_get_cache_path_disabled(self) -> None:
         """Test cache path when caching disabled."""

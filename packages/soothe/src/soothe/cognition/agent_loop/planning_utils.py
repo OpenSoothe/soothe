@@ -229,7 +229,7 @@ async def reflect_with_llm(
 
     try:
         # IG-143: Add metadata for tracing
-        from soothe.core.middleware._utils import create_llm_call_metadata
+        from soothe.middleware._utils import create_llm_call_metadata
 
         prompt = _build_reflection_prompt(plan, step_results, goal_context)
         response = await model.ainvoke(

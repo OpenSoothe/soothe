@@ -24,10 +24,9 @@ class TestSootheConfig:
         # Check that default tools are enabled
         assert cfg.tools.execution.enabled is True
         assert cfg.tools.file_ops.enabled is True
-        assert cfg.tools.code_edit.enabled is True
         assert cfg.tools.datetime.enabled is True
         assert cfg.tools.data.enabled is True
-        assert cfg.tools.web_search.enabled is True
+        assert cfg.tools.wizsearch.enabled is True
         assert cfg.tools.research.enabled is True
         # Check that optional tools are enabled by default (but won't work without API keys)
         assert cfg.tools.image.enabled is True
@@ -606,22 +605,22 @@ class TestToolsSettings:
         cfg = SootheConfig()
         assert hasattr(cfg, "tools")
         assert isinstance(cfg.tools, ToolsConfig)
-        assert hasattr(cfg.tools, "web_search")
-        assert isinstance(cfg.tools.web_search, WebSearchConfig)
+        assert hasattr(cfg.tools, "wizsearch")
+        assert isinstance(cfg.tools.wizsearch, WebSearchConfig)
 
     def test_web_search_default_engines(self) -> None:
-        """Test that web_search default_engines defaults to ['tavily', 'duckduckgo']."""
+        """Test that wizsearch default_engines defaults to ['tavily', 'duckduckgo']."""
         cfg = SootheConfig()
-        assert cfg.tools.web_search.default_engines == ["tavily", "duckduckgo"]
-        assert cfg.tools.web_search.max_results_per_engine == 10
-        assert cfg.tools.web_search.timeout == 30
-        assert cfg.tools.web_search.enabled is True
+        assert cfg.tools.wizsearch.default_engines == ["tavily", "duckduckgo"]
+        assert cfg.tools.wizsearch.max_results_per_engine == 10
+        assert cfg.tools.wizsearch.timeout == 30
+        assert cfg.tools.wizsearch.enabled is True
 
     def test_web_search_custom_config(self) -> None:
-        """Test web_search with custom configuration."""
+        """Test wizsearch with custom configuration."""
         cfg = SootheConfig(
             tools=ToolsConfig(
-                web_search=WebSearchConfig(
+                wizsearch=WebSearchConfig(
                     enabled=True,
                     default_engines=["tavily", "duckduckgo"],
                     max_results_per_engine=15,
@@ -629,16 +628,16 @@ class TestToolsSettings:
                 )
             )
         )
-        assert cfg.tools.web_search.enabled is True
-        assert cfg.tools.web_search.default_engines == ["tavily", "duckduckgo"]
-        assert cfg.tools.web_search.max_results_per_engine == 15
-        assert cfg.tools.web_search.timeout == 45
+        assert cfg.tools.wizsearch.enabled is True
+        assert cfg.tools.wizsearch.default_engines == ["tavily", "duckduckgo"]
+        assert cfg.tools.wizsearch.max_results_per_engine == 15
+        assert cfg.tools.wizsearch.timeout == 45
 
     def test_web_search_config_from_dict(self) -> None:
-        """Test web_search config from dict."""
+        """Test wizsearch config from dict."""
         cfg = SootheConfig(
             tools={
-                "web_search": {
+                "wizsearch": {
                     "enabled": True,
                     "default_engines": ["brave", "tavily"],
                     "max_results_per_engine": 20,
@@ -646,26 +645,26 @@ class TestToolsSettings:
                 }
             }
         )
-        assert cfg.tools.web_search.enabled is True
-        assert cfg.tools.web_search.default_engines == ["brave", "tavily"]
-        assert cfg.tools.web_search.max_results_per_engine == 20
-        assert cfg.tools.web_search.timeout == 60
+        assert cfg.tools.wizsearch.enabled is True
+        assert cfg.tools.wizsearch.default_engines == ["brave", "tavily"]
+        assert cfg.tools.wizsearch.max_results_per_engine == 20
+        assert cfg.tools.wizsearch.timeout == 60
 
     def test_web_search_partial_config(self) -> None:
-        """Test web_search with partial configuration."""
+        """Test wizsearch with partial configuration."""
         cfg = SootheConfig(
             tools={
-                "web_search": {
+                "wizsearch": {
                     "default_engines": ["duckduckgo"],
                 }
             }
         )
         # Custom value
-        assert cfg.tools.web_search.default_engines == ["duckduckgo"]
+        assert cfg.tools.wizsearch.default_engines == ["duckduckgo"]
         # Defaults preserved
-        assert cfg.tools.web_search.max_results_per_engine == 10
-        assert cfg.tools.web_search.timeout == 30
-        assert cfg.tools.web_search.enabled is True
+        assert cfg.tools.wizsearch.max_results_per_engine == 10
+        assert cfg.tools.wizsearch.timeout == 30
+        assert cfg.tools.wizsearch.enabled is True
 
     def test_resolve_persistence_postgres_dsn_prefers_soothe_dsn(self) -> None:
         cfg = SootheConfig(

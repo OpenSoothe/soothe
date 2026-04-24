@@ -97,7 +97,7 @@ class ImageAnalysisTool(BaseTool):
         from langchain.chat_models import init_chat_model
 
         # IG-143: Add metadata for tracing
-        from soothe.core.middleware._utils import create_llm_call_metadata
+        from soothe.middleware._utils import create_llm_call_metadata
 
         b64 = _image_to_base64(image_path)
         model = init_chat_model(f"openai:{self.model_name}")

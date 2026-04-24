@@ -16,9 +16,11 @@ from langchain_core.tools import BaseTool
 from pydantic import Field
 from soothe_sdk.plugin import plugin
 
-from soothe.toolkits._internal.wizsearch._crawl_impl import perform_wizsearch_crawl
-from soothe.toolkits._internal.wizsearch._helpers import _run_coro
-from soothe.toolkits._internal.wizsearch._search_impl import perform_wizsearch_search
+from soothe.toolkits._internal.wizsearch import (
+    _run_coro,
+    perform_wizsearch_crawl,
+    perform_wizsearch_search,
+)
 from soothe.utils.tool_error_handler import tool_error_handler
 
 logger = logging.getLogger(__name__)

@@ -230,7 +230,7 @@ subagents:
     enabled: true
     # Research subagent for deep multi-source iterative research
     # Uses the InquiryEngine for comprehensive investigation
-    # No additional configuration needed - uses web_search tool settings
+    # No additional configuration needed - uses wizsearch tool settings
 
 # =============================================================================
 # Tools Configuration
@@ -254,7 +254,7 @@ tools:
   data:
     enabled: true       # Inspect tabular data (CSV, Excel) and documents (PDF, DOCX)
 
-  # Enhanced multi-engine search (replaces web_search)
+  # Enhanced multi-engine search (formerly web_search, now wizsearch)
   wizsearch:
     enabled: true       # wizsearch_search, wizsearch_crawl
     # NOTE: deepagents provides basic web_search/fetch_url tools
