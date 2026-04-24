@@ -18,6 +18,7 @@ from soothe_sdk.events import (
     PLAN_STEP_STARTED,
     SUBAGENT_RESEARCH_INTERNAL_LLM,
 )
+from soothe_sdk.output_events import extract_output_text, is_output_event
 from soothe_sdk.ux import classify_event_to_tier
 from soothe_sdk.verbosity import VerbosityTier
 
@@ -715,13 +716,10 @@ class EventProcessor:
         # Tool events are now visible at NORMAL verbosity (RFC-0020 CLI Stream Display Pipeline)
         # They are processed through on_progress_event -> StreamDisplayPipeline
 
-        # Handle chitchat/quiz/final responses through shared cleaner path
-        if etype in {
-            "soothe.output.chitchat.responded",
-            "soothe.output.quiz.responded",
-            "soothe.output.autonomous.final_report.reported.reported",
-        }:
-            content = data.get("content", data.get("summary", ""))
+        # Handle output events (chitchat, quiz, final report, etc.) through unified registry
+        # IG-254: Single source of truth for user-visible output events
+        if is_output_event(etype):
+            content = extract_output_text(etype, data)
             if content and self._presentation.tier_visible(VerbosityTier.QUIET, self._verbosity):
                 cleaned = self._clean_assistant_text(content)
                 if cleaned:
