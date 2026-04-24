@@ -6,6 +6,7 @@ SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
     "browser": "Browser",
     "claude": "Claude",
     "research": "Research",
+    "explore": "Explore",
 }
 
 BUILTIN_SUBAGENT_NAMES: list[str] = list(SUBAGENT_DISPLAY_NAMES.keys())

@@ -2786,7 +2786,7 @@ class SootheApp(App):
                 "/model [--model-params JSON] [--default], /notifications, "
                 "/reload, /skill:<name>, /remember, /theme, "
                 "/tokens, /loops, /trace, "
-                "/browser, /claude, /research, /plan (subagent routing), "
+                "/browser, /claude, /research, /explore, /plan (subagent routing), "
                 "/update, /auto-update, /changelog, /docs, /feedback, /help\n\n"
                 "Interactive Features:\n"
                 "  Enter           Submit your message\n"

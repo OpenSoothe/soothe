@@ -421,24 +421,24 @@ class SootheDaemon(DaemonHandlersMixin):
                     continue
 
             if incomplete:
-                # Filter out auto-cancelled threads for reporting
+                # Filter out auto-cancelled loops for reporting
                 remaining = [
                     t
                     for t in incomplete
-                    if t["thread_id"] not in getattr(self, "_cancelled_threads", set())
+                    if t["loop_id"] not in getattr(self, "_cancelled_threads", set())
                 ]
                 if remaining:
                     logger.info(
-                        "Found %d incomplete threads from previous run (%d auto-cancelled)",
+                        "Found %d incomplete loops from previous run (%d auto-cancelled)",
                         len(remaining),
                         len(incomplete) - len(remaining),
                     )
                     for t in remaining:
                         logger.info(
-                            "  Thread %s: %s (%d steps done)",
-                            t["thread_id"],
-                            t["query"],
-                            t["completed_steps"],
+                            "  Loop %s: %d goals completed, %d threads",
+                            t["loop_id"],
+                            t["total_goals_completed"],
+                            len(t["thread_ids"]),
                         )
             else:
                 logger.debug("No incomplete loops found from previous runs")
@@ -691,6 +691,17 @@ class SootheDaemon(DaemonHandlersMixin):
 
         # Extract thread_id for routing (treat empty string as None)
         thread_id = msg.get("thread_id") or None
+
+        # Special case: daemon-level status broadcasts (startup/idle/ready)
+        # These should broadcast globally to all clients
+        if not thread_id and msg_type == "status" and msg.get("state") in ["idle", "ready"]:
+            logger.debug(
+                "Daemon-level status broadcast: state=%s",
+                msg.get("state"),
+            )
+            # Broadcast to global topic for daemon-level status
+            await self._event_bus.publish("global", msg, event_meta=None)
+            return
 
         # For status messages without thread_id, try current thread
         if not thread_id and msg_type == "status":

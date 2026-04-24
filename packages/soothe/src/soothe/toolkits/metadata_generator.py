@@ -42,19 +42,46 @@ def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) ->
     category = meta.category if meta else "generic"
 
     # Dispatch to tool-specific metadata extractors based on category
+    # Map ToolMeta categories to outcome_type expected by schemas.py
     # For file_ops, distinguish read vs write by tool name
     if category == "file_ops":
-        # Read-like operations
-        if tool_name in ["read_file", "ls", "grep", "glob"]:
+        # Read-like operations (produce output)
+        if tool_name in [
+            "read_file",
+            "ls",
+            "grep",
+            "glob",
+            "file_info",
+            "inspect_data",
+            "summarize_data",
+            "check_data_quality",
+            "extract_text",
+            "get_data_info",
+            "ask_about_file",
+            "get_video_info",
+            "transcribe_audio",
+            "analyze_image",
+            "analyze_video",
+            "extract_text_from_image",
+        ]:
             outcome["type"] = "file_read"
             outcome.update(_extract_file_metadata(result))
-        # Write-like operations
-        elif tool_name in ["write_file", "edit_file", "delete_file"]:
+        # Write-like operations (modify state)
+        elif tool_name in [
+            "write_file",
+            "edit_file",
+            "delete_file",
+            "edit_file_lines",
+            "insert_lines",
+            "delete_lines",
+            "apply_diff",
+        ]:
             outcome["type"] = "file_write"
             outcome.update(_extract_file_write_metadata(result))
         else:
-            outcome["type"] = "file_ops"
-            outcome.update(_extract_generic_metadata(result))
+            # Generic file_ops fallback
+            outcome["type"] = "file_read"  # Assume read for unknown file ops
+            outcome.update(_extract_file_metadata(result))
     elif category == "execution":
         outcome["type"] = "code_exec"
         outcome.update(_extract_exec_metadata(result))
