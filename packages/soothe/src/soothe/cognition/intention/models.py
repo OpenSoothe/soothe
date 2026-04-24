@@ -43,22 +43,24 @@ class RoutingClassification(BaseModel):
 
 
 class IntentClassification(BaseModel):
-    """Primary intent classification model (IG-226).
+    """Primary intent classification model (IG-226, IG-250).
 
     LLM-driven query intent classification determining execution path and goal handling.
-    Three-tier classification system with conversation context awareness.
+    Four-tier classification system with conversation context awareness.
 
     Args:
-        intent_type: Primary intent (chitchat | thread_continuation | new_goal).
+        intent_type: Primary intent (chitchat | thread_continuation | new_goal | quiz).
         reuse_current_goal: Whether to reuse active goal in current thread.
         goal_description: Normalized goal description for GoalEngine.
         task_complexity: Secondary routing complexity level.
         chitchat_response: Direct response for chitchat queries.
+        quiz_response: Direct response for quiz/trivia queries.
         reasoning: LLM reasoning for classification decision.
     """
 
-    intent_type: Literal["chitchat", "thread_continuation", "new_goal"] = Field(
-        description="Primary intent determines execution path and goal handling strategy"
+    intent_type: Literal["chitchat", "thread_continuation", "new_goal", "quiz"] = Field(
+        description="Primary intent: chitchat (greeting), thread_continuation (follow-up), "
+        "new_goal (tool-requiring task), quiz (factual knowledge query)"
     )
     reuse_current_goal: bool = Field(
         default=False,
@@ -67,12 +69,16 @@ class IntentClassification(BaseModel):
     goal_description: str | None = Field(
         default=None, description="Normalized goal description extracted from query (new_goal only)"
     )
-    task_complexity: Literal["chitchat", "medium", "complex"] = Field(
+    task_complexity: Literal["chitchat", "quiz", "medium", "complex"] = Field(
         description="Secondary routing complexity level for execution path refinement"
     )
     chitchat_response: str | None = Field(
         default=None,
         description="Direct response for chitchat queries (piggybacked from classification)",
+    )
+    quiz_response: str | None = Field(
+        default=None,
+        description="Direct response for quiz/trivia queries (piggybacked from classification)",
     )
     reasoning: str = Field(description="LLM reasoning explaining classification decision")
 

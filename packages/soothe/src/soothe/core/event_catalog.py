@@ -97,6 +97,8 @@ from soothe.core.event_constants import (
     PLAN_STEP_STARTED,
     POLICY_CHECKED,
     POLICY_DENIED,
+    QUIZ_RESPONSE,
+    QUIZ_STARTED,
     # Lifecycle - Recovery
     RECOVERY_RESUMED,
     # Lifecycle - Thread
@@ -427,6 +429,20 @@ class ChitchatResponseEvent(OutputEvent):
     content: str = ""
 
 
+class QuizStartedEvent(OutputEvent):
+    """Quiz query started (IG-250)."""
+
+    type: Literal["soothe.output.quiz.started"] = "soothe.output.quiz.started"
+    query: str = ""
+
+
+class QuizResponseEvent(OutputEvent):
+    """Quiz response generated (IG-250)."""
+
+    type: Literal["soothe.output.quiz.responded"] = "soothe.output.quiz.responded"
+    content: str = ""
+
+
 class FinalReportEvent(OutputEvent):
     type: Literal["soothe.output.autonomous.final_report.reported.reported"] = (
         "soothe.output.autonomous.final_report.reported.reported"
@@ -723,6 +739,8 @@ _reg(GOAL_DEFERRED, GoalDeferredEvent, summary_template="Goal {goal_id} deferred
 # -- Output ------------------------------------------------------------------
 _reg(CHITCHAT_STARTED, ChitchatStartedEvent, verbosity=VerbosityTier.INTERNAL)
 _reg(CHITCHAT_RESPONSE, ChitchatResponseEvent, verbosity=VerbosityTier.QUIET)
+_reg(QUIZ_STARTED, QuizStartedEvent, verbosity=VerbosityTier.INTERNAL)
+_reg(QUIZ_RESPONSE, QuizResponseEvent, verbosity=VerbosityTier.QUIET)
 _reg(FINAL_REPORT, FinalReportEvent, verbosity=VerbosityTier.QUIET)
 
 # -- Autopilot (RFC-204) -------------------------------------------------

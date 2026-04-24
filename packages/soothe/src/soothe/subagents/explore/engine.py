@@ -52,8 +52,8 @@ def build_explore_engine(
     Returns:
         Compiled LangGraph runnable.
     """
-    # Get read-only filesystem tools
-    tools = get_explore_tools()
+    # Get read-only filesystem tools (reusing deepagents tools)
+    tools = get_explore_tools(workspace=workspace)
 
     # Bind tools to model for plan_search node
     model_with_tools = model.bind_tools(tools)
@@ -75,12 +75,25 @@ def build_explore_engine(
 
         # Emit started event on first iteration
         if iterations_used == 0:
+            logger.info(
+                "Explore subagent: starting search for '%s' (thoroughness=%s, max_iterations=%d)",
+                search_target[:100],
+                thoroughness,
+                max_iterations,
+            )
             emit_progress(
                 ExploreStartedEvent(
                     search_target=search_target[:200],
                     thoroughness=thoroughness,
                 ).to_dict(),
                 logger,
+            )
+        else:
+            logger.debug(
+                "Explore: planning iteration %d/%d for '%s'",
+                iterations_used + 1,
+                max_iterations,
+                search_target[:50],
             )
 
         # Build findings summary for prompt
@@ -107,6 +120,7 @@ def build_explore_engine(
             logger.warning("LLM did not produce tool calls, using fallback glob")
             # Extract simple pattern from target
             fallback_pattern = f"**/*{search_target.split()[0]}*"
+            logger.debug("Explore: fallback glob pattern: %s", fallback_pattern)
             from langchain_core.messages import ToolCall
 
             response = AIMessage(
@@ -115,6 +129,24 @@ def build_explore_engine(
                     ToolCall(name="glob", args={"pattern": fallback_pattern}, id="fallback"),
                 ],
             )
+
+        tool_call_count = len(response.tool_calls)
+        tool_names = [tc.get("name", "unknown") for tc in response.tool_calls]
+        logger.info(
+            "Explore: LLM planned %d tool call(s): %s",
+            tool_call_count,
+            ", ".join(tool_names),
+        )
+        logger.debug(
+            "Explore: tool call details: %s",
+            [
+                {
+                    "name": tc.get("name"),
+                    "args_preview": str(tc.get("args", {}))[:100],
+                }
+                for tc in response.tool_calls
+            ],
+        )
 
         return {"messages": [response]}
 
@@ -130,6 +162,8 @@ def build_explore_engine(
             return {}
 
         # Execute tools via ToolNode
+        tool_names = [tc.get("name", "unknown") for tc in last_message.tool_calls]
+        logger.info("Explore: executing %d tool(s): %s", len(last_message.tool_calls), ", ".join(tool_names))
         tool_results = tool_node.invoke({"messages": messages})
 
         # Extract results and update findings

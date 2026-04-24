@@ -1372,6 +1372,35 @@ async def execute_task_textual(
 
                         if output_text := _extract_custom_output_text(data):
                             pending_text = pending_text_by_namespace.get(ns_key, "")
+                            existing_msg = assistant_message_by_namespace.get(ns_key)
+
+                            # Avoid duplicate messages when output matches streamed text (IG-251)
+                            pending_normalized = pending_text.strip()
+                            output_normalized = output_text.strip()
+
+                            # Case 1: Exact match or output is subset of pending - reuse existing message
+                            should_reuse = pending_normalized and (
+                                pending_normalized == output_normalized
+                                or output_normalized in pending_normalized
+                            )
+
+                            if should_reuse and existing_msg:
+                                # Finalize the streaming message without creating a duplicate
+                                await _flush_assistant_text_ns(
+                                    adapter,
+                                    pending_text,
+                                    ns_key,
+                                    assistant_message_by_namespace,
+                                )
+                                pending_text_by_namespace[ns_key] = ""
+                                # Message already finalized, no need to create new one
+                                if adapter._set_active_message:
+                                    adapter._set_active_message(None)
+                                if adapter._set_spinner:
+                                    await adapter._set_spinner(None)
+                                continue
+
+                            # Case 2: Output differs from pending (or no pending) - flush old and create new
                             if pending_text:
                                 await _flush_assistant_text_ns(
                                     adapter,
@@ -1381,13 +1410,17 @@ async def execute_task_textual(
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
-                            output_widget = AssistantMessage(
-                                output_text, id=f"asst-{uuid.uuid4().hex[:8]}"
-                            )
-                            await adapter._mount_message(output_widget)
-                            await output_widget.write_initial_content()
-                            if adapter._sync_message_content and output_widget.id:
-                                adapter._sync_message_content(output_widget.id, output_text)
+
+                            # Only create new message if no existing one or content differs
+                            if not existing_msg or output_normalized != pending_normalized:
+                                output_widget = AssistantMessage(
+                                    output_text, id=f"asst-{uuid.uuid4().hex[:8]}"
+                                )
+                                await adapter._mount_message(output_widget)
+                                await output_widget.write_initial_content()
+                                if adapter._sync_message_content and output_widget.id:
+                                    adapter._sync_message_content(output_widget.id, output_text)
+
                             if adapter._set_active_message:
                                 adapter._set_active_message(None)
                             if adapter._set_spinner:

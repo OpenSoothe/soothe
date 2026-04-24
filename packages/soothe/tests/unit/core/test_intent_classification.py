@@ -246,6 +246,119 @@ class TestIntentClassificationLLM:
         assert result.chitchat_response is None
 
     @pytest.mark.asyncio
+    async def test_quiz_intent_classification(self) -> None:
+        """LLM correctly classifies factual questions as quiz (IG-250)."""
+        mock_model = MagicMock()
+        mock_intent_model = AsyncMock()
+
+        # Mock LLM response for quiz
+        mock_intent_model.ainvoke = AsyncMock(
+            return_value=IntentClassification(
+                intent_type="quiz",
+                quiz_response="Paris is the capital of France.",
+                task_complexity="quiz",
+                reasoning="Factual geography question, LLM knowledge sufficient",
+            )
+        )
+
+        classifier = IntentClassifier(model=mock_model)
+        classifier._intent_model = mock_intent_model
+
+        result = await classifier.classify_intent("What is the capital of France?")
+
+        assert result.intent_type == "quiz"
+        assert result.quiz_response is not None
+        assert "Paris" in result.quiz_response
+        assert result.task_complexity == "quiz"
+        assert not result.reuse_current_goal
+        assert result.goal_description is None
+
+    @pytest.mark.asyncio
+    async def test_quiz_vs_new_goal_distinction(self) -> None:
+        """Quiz questions distinguished from tool-requiring tasks (IG-250)."""
+        mock_model = MagicMock()
+        mock_intent_model = AsyncMock()
+
+        # Quiz question -> quiz intent
+        mock_intent_model.ainvoke = AsyncMock(
+            return_value=IntentClassification(
+                intent_type="quiz",
+                quiz_response="William Shakespeare wrote Romeo and Juliet.",
+                task_complexity="quiz",
+                reasoning="Literature knowledge question",
+            )
+        )
+
+        classifier = IntentClassifier(model=mock_model)
+        classifier._intent_model = mock_intent_model
+
+        quiz_result = await classifier.classify_intent("Who wrote Romeo and Juliet?")
+        assert quiz_result.intent_type == "quiz"
+        assert quiz_result.quiz_response is not None
+        assert quiz_result.task_complexity == "quiz"
+
+        # Tool-requiring task -> new_goal intent
+        mock_intent_model.ainvoke = AsyncMock(
+            return_value=IntentClassification(
+                intent_type="new_goal",
+                goal_description="Count all readme files in the workspace",
+                task_complexity="medium",
+                reasoning="Requires file system tools",
+            )
+        )
+
+        task_result = await classifier.classify_intent("count all readme files")
+        assert task_result.intent_type == "new_goal"
+        assert task_result.goal_description is not None
+        assert task_result.quiz_response is None
+
+    @pytest.mark.asyncio
+    async def test_quiz_math_question(self) -> None:
+        """Simple math questions classified as quiz (IG-250)."""
+        mock_model = MagicMock()
+        mock_intent_model = AsyncMock()
+
+        mock_intent_model.ainvoke = AsyncMock(
+            return_value=IntentClassification(
+                intent_type="quiz",
+                quiz_response="15 * 23 = 345",
+                task_complexity="quiz",
+                reasoning="Simple arithmetic, LLM can compute",
+            )
+        )
+
+        classifier = IntentClassifier(model=mock_model)
+        classifier._intent_model = mock_intent_model
+
+        result = await classifier.classify_intent("What is 15 * 23?")
+        assert result.intent_type == "quiz"
+        assert result.quiz_response is not None
+
+    @pytest.mark.asyncio
+    async def test_patching_missing_quiz_response(self) -> None:
+        """Classifier patches missing quiz_response for quiz intent (IG-250)."""
+        mock_model = MagicMock()
+        mock_intent_model = AsyncMock()
+
+        # Mock LLM response missing quiz_response
+        mock_intent_model.ainvoke = AsyncMock(
+            return_value=IntentClassification(
+                intent_type="quiz",
+                task_complexity="quiz",
+                reasoning="Factual question detected",
+                quiz_response=None,  # Missing
+            )
+        )
+
+        classifier = IntentClassifier(model=mock_model)
+        classifier._intent_model = mock_intent_model
+
+        result = await classifier.classify_intent("What is the capital of France?")
+
+        assert result.intent_type == "quiz"
+        assert result.quiz_response is not None  # Patched
+
+    @pytest.mark.asyncio
     async def test_fallback_on_classification_disabled(self) -> None:
         """Fallback to new_goal when classification disabled."""
         classifier = IntentClassifier(

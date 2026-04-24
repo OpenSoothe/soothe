@@ -1,4 +1,4 @@
-"""Intent classifier implementation (IG-226).
+"""Intent classifier implementation (IG-226, IG-250).
 
 LLM-driven query intent classifier with conversation context awareness.
 Pure LLM-driven classification - no keyword heuristics.
@@ -253,7 +253,7 @@ class IntentClassifier:
         if result is None:
             raise ValueError("LLM returned None - structured output parsing failed")
 
-        if result.intent_type not in ("chitchat", "thread_continuation", "new_goal"):
+        if result.intent_type not in ("chitchat", "thread_continuation", "new_goal", "quiz"):
             raise ValueError(f"Invalid intent_type from LLM: {result.intent_type!r}")
 
         return result
@@ -287,7 +287,7 @@ class IntentClassifier:
         if result is None:
             raise ValueError("LLM routing returned None")
 
-        if result.task_complexity not in ("chitchat", "medium", "complex"):
+        if result.task_complexity not in ("chitchat", "quiz", "medium", "complex"):
             raise ValueError(f"Invalid task_complexity: {result.task_complexity!r}")
 
         return result
@@ -434,6 +434,11 @@ class IntentClassifier:
             intent.chitchat_response = self._generate_chitchat_response(query)
             logger.debug("Patched missing chitchat_response")
 
+        # Patch missing quiz_response
+        if intent.intent_type == "quiz" and not intent.quiz_response:
+            intent.quiz_response = self._generate_quiz_response(query)
+            logger.debug("Patched missing quiz_response")
+
         # Patch missing goal_description
         if intent.intent_type == "new_goal" and not intent.goal_description:
             intent.goal_description = query
@@ -453,6 +458,19 @@ class IntentClassifier:
         # Pure fallback: simple template without language detection
         # LLM will have already detected language in the classification prompt
         return f"Hello! I'm {self._assistant_name}. How can I help you today?"
+
+    def _generate_quiz_response(self, query: str) -> str:
+        """Generate quiz response fallback (LLM knowledge query).
+
+        Args:
+            query: Quiz/trivia question.
+
+        Returns:
+            Factual answer placeholder (primary path uses piggybacked quiz_response).
+        """
+        # Fallback placeholder - primary path uses piggybacked quiz_response from classification
+        # This is only used if LLM classification fails to provide quiz_response
+        return f"I'll answer that question: {query}"
 
     def _create_llm_metadata(
         self,

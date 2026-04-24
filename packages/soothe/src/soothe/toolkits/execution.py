@@ -147,11 +147,17 @@ class RunCommandTool(BaseTool):
 
     def _initialize_shell(self) -> None:
         """Start persistent shell with custom prompt (optimized)."""
+        import time
+
+        init_start = time.perf_counter()
         try:
             import pexpect
 
             custom_prompt = "soothe-cli>> "
             init_timeout = 2  # Reduced from default 5s for faster initialization
+
+            logger.debug("Shell init: spawning bash process")
+            spawn_start = time.perf_counter()
 
             child = pexpect.spawn(
                 "/bin/bash",
@@ -160,11 +166,17 @@ class RunCommandTool(BaseTool):
                 timeout=self.timeout,
             )
 
+            spawn_elapsed_ms = int((time.perf_counter() - spawn_start) * 1000)
+            logger.debug("Shell init: spawned bash in %dms", spawn_elapsed_ms)
+
             # Send all setup commands in one batch (eliminates unnecessary sleeps)
             # stty -onlcr: disable newline-to-carriage-return mapping
             # unset PROMPT_COMMAND: clear any existing prompt hooks
             # PS1 setup: set custom prompt marker
             # echo '__init__': validation marker to confirm initialization
+            logger.debug("Shell init: sending setup commands")
+            setup_start = time.perf_counter()
+
             child.sendline(
                 "stty -onlcr; unset PROMPT_COMMAND; PS1='soothe-cli>> '; echo '__init__'"
             )
@@ -173,6 +185,9 @@ class RunCommandTool(BaseTool):
             child.expect(custom_prompt, timeout=init_timeout)
             output = child.before or ""
 
+            setup_elapsed_ms = int((time.perf_counter() - setup_start) * 1000)
+            logger.debug("Shell init: setup completed in %dms", setup_elapsed_ms)
+
             # Validate initialization marker
             if "__init__" not in output:
                 msg = f"Shell initialization failed. Expected '__init__' in output, got: {preview_first(output, 100)}"
@@ -180,6 +195,7 @@ class RunCommandTool(BaseTool):
 
             # Set working directory if specified
             if self.workspace_root:
+                logger.debug("Shell init: changing to workspace %s", self.workspace_root)
                 workspace = str(expand_path(self.workspace_root))
                 child.sendline(f"cd '{workspace}'")
                 child.expect(custom_prompt, timeout=init_timeout)
@@ -187,7 +203,8 @@ class RunCommandTool(BaseTool):
             _shell_instances["default"] = child
             self.custom_prompt = custom_prompt
 
-            logger.info("Shell initialized successfully")
+            total_init_ms = int((time.perf_counter() - init_start) * 1000)
+            logger.info("Shell initialized successfully in %dms", total_init_ms)
 
         except ImportError:
             logger.warning("pexpect not installed; cli tool will not work")

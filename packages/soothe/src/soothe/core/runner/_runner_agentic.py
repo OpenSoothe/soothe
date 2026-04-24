@@ -368,6 +368,13 @@ class AgenticMixin:
                     yield chunk
                 return
 
+            # Handle quiz intent (IG-250)
+            if intent_classification.intent_type == "quiz":
+                logger.info("[Intent] Quiz → direct LLM response")
+                async for chunk in self._run_quiz(user_input, tid, intent_classification):
+                    yield chunk
+                return
+
             # Handle thread continuation intent
             if intent_classification.intent_type == "thread_continuation":
                 if intent_classification.reuse_current_goal and active_goal_id:
