@@ -100,15 +100,6 @@ class StreamDisplayPipeline:
         # Extract namespace from event
         self._current_namespace = tuple(event.get("namespace", []))
 
-        # IG-255: Deduplication filter - skip redundant tool/task results after completion
-        if self._context.subagent_completion_shown:
-            # Filter task tool result events (deepagents Task(browser, ...))
-            if event_type in ("tool.execution.completed", "tool.execution.result"):
-                tool_name = event.get("name", event.get("tool_name", ""))
-                # Skip if this is a subagent task tool result
-                if "Task(" in tool_name or "_subagent" in tool_name.lower():
-                    return []
-
         # Classify and filter
         tier = self._classify_event(event_type)
         if tier > self._verbosity_tier:
@@ -171,46 +162,16 @@ class StreamDisplayPipeline:
             List of DisplayLine objects.
         """
         # Capability events (soothe.capability.<subagent>.<action>)
-        # IG-192: Handle new unified naming scheme for subagent events
+        # IG-256: Do NOT process subagent events explicitly - let Task tool events handle display
+        # Subagents are invoked via Task tool, so tool.execution events will show them
+        # Return empty list to suppress explicit subagent event processing
         if event_type.startswith("soothe.capability."):
-            parts = event_type.split(".")
-            if len(parts) >= 4:  # noqa: PLR2004
-                # soothe.capability.<subagent>.<action>
-                subagent = parts[2]
-                action = parts[3]
-
-                # Started/dispatched events
-                if action in ("started", "dispatching"):
-                    return self._on_subagent_dispatched(event, subagent)
-
-                # Judgement events (research)
-                if "judgement" in action:
-                    return self._on_subagent_judgement(event)
-
-                # Step events (browser automation): type ends with .step.running
-                if len(parts) >= 5 and parts[3] == "step" and parts[4] == "running":  # noqa: PLR2004
-                    return self._on_capability_step(event, subagent)
-
-                # Completed events
-                if action == "completed":
-                    return self._on_subagent_completed(event, subagent)
-
-                # Text/tool events (claude) - DETAILED level
-                if action in ("text", "tool") and "running" in event_type:
-                    return self._on_capability_activity(event, subagent, action)
+            return []
 
         # Legacy subagent events (.subagent.* format)
-        if ".subagent." in event_type and ".dispatched" in event_type:
-            return self._on_subagent_dispatched(event)
-
-        if ".subagent." in event_type and ".judgement" in event_type:
-            return self._on_subagent_judgement(event)
-
-        if ".subagent." in event_type and ".step" in event_type:
-            return self._on_subagent_step(event)
-
-        if ".subagent." in event_type and ".completed" in event_type:
-            return self._on_subagent_completed(event)
+        # IG-256: Also suppress legacy subagent events - let tool events flow through
+        if ".subagent." in event_type:
+            return []
 
         # Goal/step events
         if is_goal_start_event_type(event_type):
@@ -664,27 +625,18 @@ class StreamDisplayPipeline:
             )
         ]
 
-        assessment = event.get("assessment_reasoning", "").strip()
+        # IG-257: Only show Plan reasoning, Assessment removed from display
         plan_reasoning = event.get("plan_reasoning", "").strip()
-        if assessment or plan_reasoning:
-            if assessment:
-                lines.append(
-                    format_plan_phase_reasoning(
-                        "Assessment",
-                        assessment,
-                        namespace=self._current_namespace,
-                        verbosity_tier=self._verbosity_tier,
-                    )
+        if plan_reasoning:
+            # IG-257: Show Plan reasoning without "Plan:" prefix
+            lines.append(
+                format_plan_phase_reasoning(
+                    "",  # Empty label - no prefix
+                    plan_reasoning,
+                    namespace=self._current_namespace,
+                    verbosity_tier=self._verbosity_tier,
                 )
-            if plan_reasoning:
-                lines.append(
-                    format_plan_phase_reasoning(
-                        "Plan",
-                        plan_reasoning,
-                        namespace=self._current_namespace,
-                        verbosity_tier=self._verbosity_tier,
-                    )
-                )
+            )
         else:
             reasoning = event.get("reasoning", "").strip()
             if reasoning:
