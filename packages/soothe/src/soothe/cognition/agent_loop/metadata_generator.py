@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from soothe_sdk.utils import get_tool_meta
+from soothe_sdk.utils import get_outcome_type
 
 
 def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) -> dict[str, Any]:
@@ -37,62 +37,22 @@ def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) ->
         "tool_name": tool_name,
     }
 
-    # Use ToolMeta registry to categorize (IG-232)
-    meta = get_tool_meta(tool_name)
-    category = meta.category if meta else "generic"
+    # Get outcome_type from ToolMeta registry (single source of truth)
+    outcome_type = get_outcome_type(tool_name)
+    outcome["type"] = outcome_type
 
-    # Dispatch to tool-specific metadata extractors based on category
-    # Map ToolMeta categories to outcome_type expected by schemas.py
-    # For file_ops, distinguish read vs write by tool name
-    if category == "file_ops":
-        # Read-like operations (produce output)
-        if tool_name in [
-            "read_file",
-            "ls",
-            "grep",
-            "glob",
-            "file_info",
-            "inspect_data",
-            "summarize_data",
-            "check_data_quality",
-            "extract_text",
-            "get_data_info",
-            "ask_about_file",
-            "get_video_info",
-            "transcribe_audio",
-            "analyze_image",
-            "analyze_video",
-            "extract_text_from_image",
-        ]:
-            outcome["type"] = "file_read"
-            outcome.update(_extract_file_metadata(result))
-        # Write-like operations (modify state)
-        elif tool_name in [
-            "write_file",
-            "edit_file",
-            "delete_file",
-            "edit_file_lines",
-            "insert_lines",
-            "delete_lines",
-            "apply_diff",
-        ]:
-            outcome["type"] = "file_write"
-            outcome.update(_extract_file_write_metadata(result))
-        else:
-            # Generic file_ops fallback
-            outcome["type"] = "file_read"  # Assume read for unknown file ops
-            outcome.update(_extract_file_metadata(result))
-    elif category == "execution":
-        outcome["type"] = "code_exec"
-        outcome.update(_extract_exec_metadata(result))
-    elif category == "web":
-        outcome["type"] = "web_search"
+    # Dispatch to metadata extractors based on outcome_type
+    if outcome_type == "file_read":
+        outcome.update(_extract_file_metadata(result))
+    elif outcome_type == "file_write":
+        outcome.update(_extract_file_write_metadata(result))
+    elif outcome_type == "web_search":
         outcome.update(_extract_search_metadata(result))
-    elif category == "subagent":
-        outcome["type"] = "subagent"
+    elif outcome_type == "code_exec":
+        outcome.update(_extract_exec_metadata(result))
+    elif outcome_type == "subagent":
         outcome.update(_extract_subagent_metadata(result))
-    else:
-        outcome["type"] = "generic"
+    else:  # generic
         outcome.update(_extract_generic_metadata(result))
 
     # Calculate size

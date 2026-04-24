@@ -7,7 +7,6 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
-from soothe.core.thread.rate_limiter import APIRateLimiter
 from soothe.logging import ThreadLogger
 
 if TYPE_CHECKING:
@@ -33,7 +32,6 @@ class ThreadExecutor:
         self._runner = runner
         self._max_concurrent = max_concurrent_threads
         self._active_tasks: dict[str, asyncio.Task] = {}
-        self._rate_limiter = APIRateLimiter()
 
     async def execute_thread(
         self,
@@ -42,6 +40,9 @@ class ThreadExecutor:
         **kwargs: Any,
     ) -> AsyncGenerator[Any]:
         """Execute query in isolated thread context.
+
+        Rate limiting is now handled at LLM level via LLMRateLimitMiddleware,
+        not at thread level. Threads start immediately and share LLM API permits.
 
         Args:
             thread_id: Thread ID to execute in
@@ -58,18 +59,17 @@ class ThreadExecutor:
 
         logger.info("Executing query in thread %s", thread_id)
 
-        # Acquire rate limit permit
-        async with self._rate_limiter.acquire():
-            try:
-                # Execute in isolated context
-                async for chunk in self._runner.astream(
-                    user_input,
-                    thread_id=thread_id,
-                    **kwargs,
-                ):
-                    # Log to thread-specific logger
-                    # ThreadLogger will handle the actual logging
-                    yield chunk
-            except Exception:
-                logger.exception("Error in thread %s", thread_id)
-                raise
+        # Execute immediately without thread-level rate limiting
+        # LLM-level rate limiting handled by LLMRateLimitMiddleware
+        try:
+            async for chunk in self._runner.astream(
+                user_input,
+                thread_id=thread_id,
+                **kwargs,
+            ):
+                # Log to thread-specific logger
+                # ThreadLogger will handle the actual logging
+                yield chunk
+        except Exception:
+            logger.exception("Error in thread %s", thread_id)
+            raise

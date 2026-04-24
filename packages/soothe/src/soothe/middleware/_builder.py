@@ -76,19 +76,23 @@ def build_soothe_middleware_stack(
        runner during pre-stream phase. Only enabled when performance features
        are fully configured.
 
-    3. **LLMTracingMiddleware** - Traces LLM request/response lifecycle for
+    3. **LLMRateLimitMiddleware** - Rate limits LLM API calls at model level,
+       not thread level. Uses sliding window for RPM and semaphore for concurrent
+       requests. Solves thread hanging issues from thread-level blocking.
+
+    4. **LLMTracingMiddleware** - Traces LLM request/response lifecycle for
        debugging. Logs request details, response details, and latency metrics.
        Enabled via SOOTHE_LOG_LEVEL=DEBUG or config.llm_tracing.enabled=True.
 
-    4. **ExecutionHintsMiddleware** - Injects Layer 2 execution hints
+    5. **ExecutionHintsMiddleware** - Injects Layer 2 execution hints
        (soothe_step_tools, soothe_step_subagent, soothe_step_expected_output)
        into system prompt via abefore_agent hook. Runs before agent loop starts.
 
-    5. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
+    6. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
        abefore_agent/aafter_agent hooks. Must be set before tools run to
        enable thread-aware filesystem operations.
 
-    6. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
+    7. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
        for the current asyncio Task (daemon per-turn ``input``), replaces the
        chat model for that stream via ``ModelRequest.override``.
 
@@ -103,6 +107,7 @@ def build_soothe_middleware_stack(
         Tuple of middleware instances in execution order.
     """
     from .execution_hints import ExecutionHintsMiddleware
+    from .llm_rate_limit import LLMRateLimitMiddleware
     from .llm_tracing import LLMTracingMiddleware
     from .per_turn_model import PerTurnModelMiddleware
     from .policy import SoothePolicyMiddleware
@@ -140,7 +145,27 @@ def build_soothe_middleware_stack(
         )
         logger.info("[Middleware] System prompt optimization enabled")
 
-    # 3. LLM tracing (debug info for request/response lifecycle)
+    # 3. LLM rate limiting (throttles API calls, not threads)
+    # This prevents thread hanging by blocking only LLM calls, not entire threads
+    # IG-053: Add timeout to prevent semaphore monopolization
+    rpm = getattr(config.performance, "llm_rpm_limit", 120)
+    concurrent = getattr(config.performance, "llm_concurrent_limit", 10)
+    timeout = getattr(config.performance, "llm_call_timeout_seconds", 60)
+    stack.append(
+        LLMRateLimitMiddleware(
+            requests_per_minute=rpm,
+            max_concurrent_requests=concurrent,
+            call_timeout_seconds=timeout,
+        )
+    )
+    logger.info(
+        "[Middleware] LLM rate limiting enabled: rpm=%d, concurrent=%d, timeout=%ds",
+        rpm,
+        concurrent,
+        timeout,
+    )
+
+    # 4. LLM tracing (debug info for request/response lifecycle)
     # Enabled when logging level is DEBUG or explicitly configured
     import os
 
@@ -163,15 +188,15 @@ def build_soothe_middleware_stack(
         llm_logger = logging.getLogger("soothe.middleware.llm_tracing")
         llm_logger.setLevel(logging.DEBUG)
 
-    # 4. Execution hints (Layer 2 → Layer 1 integration)
+    # 5. Execution hints (Layer 2 → Layer 1 integration)
     stack.append(ExecutionHintsMiddleware())
     logger.debug("[Middleware] Execution hints enabled")
 
-    # 5. Workspace context (thread-aware filesystem)
+    # 6. Workspace context (thread-aware filesystem)
     stack.append(WorkspaceContextMiddleware())
     logger.debug("[Middleware] Workspace context enabled")
 
-    # 6. Per-turn model override (daemon / stream context) — innermost around the LLM
+    # 7. Per-turn model override (daemon / stream context) — innermost around the LLM
     stack.append(PerTurnModelMiddleware(config))
     logger.debug("[Middleware] Per-turn model override enabled")
 

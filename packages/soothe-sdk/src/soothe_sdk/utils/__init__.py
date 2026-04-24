@@ -30,6 +30,7 @@ from soothe_sdk.utils.tool_meta import (
     TOOL_REGISTRY,
     ToolMeta,
     get_all_path_arg_keys,
+    get_outcome_type,
     get_tool_categories,
     get_tool_meta,
     get_tools_with_header_info,
@@ -59,4 +60,5 @@ __all__ = [
     "get_all_path_arg_keys",
     "get_tools_with_header_info",
     "get_tool_categories",
+    "get_outcome_type",
 ]

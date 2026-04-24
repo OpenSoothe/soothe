@@ -12,7 +12,14 @@ Output JSON: {status, goal_progress, confidence, reasoning, next_action, plan_ac
 </PLAN_EXECUTE_LOOP>
 
 <COMPLETION_SIGNALS>
-Set status="done" when ANY signal detected:
+**CRITICAL GUARD**: NEVER set status="done" at iteration 0.
+You MUST execute at least one tool call or subagent invocation before claiming completion.
+Evidence must exist (step_results, tool output) before final report generation.
+
+Set status="done" only when ALL conditions met:
+1. At least 1 iteration completed (iteration > 0)
+2. Evidence from tool/subagent execution exists
+3. ONE of the following signals detected:
 
 - **Direct Answer**: Tool output contains complete answer (e.g., analysis report shown)
 - **Repetition**: Next action would repeat previous iteration (same tools/paths)
