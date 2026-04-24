@@ -25,21 +25,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import Send
 
-from .events import (
-    ResearchAnalyzeEvent,
-    ResearchCompletedEvent,
-    ResearchDispatchedEvent,
-    ResearchGatherDoneEvent,
-    ResearchGatherEvent,
-    ResearchInternalLLMResponseEvent,
-    ResearchJudgementEvent,
-    ResearchQueriesGeneratedEvent,
-    ResearchReflectEvent,
-    ResearchReflectionDoneEvent,
-    ResearchSubQuestionsEvent,
-    ResearchSummarizeEvent,
-    ResearchSynthesizeEvent,
-)
+# IG-258: Removed unused subagent event imports
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -75,7 +61,8 @@ def _cleanup_pool() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _emit_progress(event: dict[str, Any]) -> None:
+def # IG-258: Removed
+-> None:
     from soothe.utils.progress import emit_progress
 
     emit_progress(event, logger)
@@ -232,9 +219,7 @@ def build_research_engine(
 
     def analyze_topic_node(state: dict[str, Any]) -> dict[str, Any]:
         topic = _extract_topic(state)
-        # Emit dispatch event (RFC-0020)
-        _emit_progress(ResearchDispatchedEvent(topic=topic[:200]).to_dict())
-        _emit_progress(ResearchAnalyzeEvent(topic=topic[:200]).to_dict())
+        # IG-258: Removed subagent event emissions - no longer needed (suppressed in CLI/TUI)
 
         prompt = _ANALYZE_TOPIC.format(
             domains=available_domains,
@@ -243,7 +228,7 @@ def build_research_engine(
         )
 
         # Emit internal event to signal we're doing internal LLM work
-        _emit_progress(ResearchInternalLLMResponseEvent(response_type="analysis").to_dict())
+        # IG-258: Removed - subagent events no longer needed
 
         resp = model.invoke([{"role": "user", "content": prompt}])
         content = str(resp.content)
@@ -256,12 +241,7 @@ def build_research_engine(
             sub_questions = [{"question": topic, "suggested_domain": "auto"}]
 
         logger.info("Research: found %d sub-questions", len(sub_questions))
-        _emit_progress(
-            ResearchSubQuestionsEvent(
-                count=len(sub_questions),
-                sub_questions=sub_questions,
-            ).to_dict()
-        )
+        # IG-258: Removed
         return {
             "_sub_questions": sub_questions,
             "search_summaries": [],
@@ -282,7 +262,7 @@ def build_research_engine(
         )
 
         # Emit internal event to signal we're doing internal LLM work
-        _emit_progress(ResearchInternalLLMResponseEvent(response_type="queries").to_dict())
+        # IG-258: Removed
 
         resp = model.invoke([{"role": "user", "content": prompt}])
         content = str(resp.content)
@@ -295,9 +275,8 @@ def build_research_engine(
             queries = [{"query": _extract_topic(state), "domain_hint": "auto"}]
 
         logger.info("Research: generated %d queries", len(queries))
-        _emit_progress(
-            ResearchQueriesGeneratedEvent(
-                queries=[q.get("query", q) if isinstance(q, dict) else q for q in queries],
+        # IG-258: Removed
+if isinstance(q, dict) else q for q in queries],
             ).to_dict()
         )
         return {"_queries": queries}
@@ -326,11 +305,8 @@ def build_research_engine(
         query = state.get("_gather_query", "")
         domain_hint = state.get("_gather_domain", "auto")
 
-        _emit_progress(
-            ResearchGatherEvent(
-                query=query,
-                domain=domain_hint,
-            ).to_dict()
+        # IG-258: Removed
+.to_dict()
         )
 
         selected = router.select(query, domain=domain_hint)
@@ -384,10 +360,8 @@ def build_research_engine(
             summary_parts.append(f"[{r.source_name}] {r.content}")
             source_refs.append(f"{r.source_name}:{r.source_ref}")
 
-        _emit_progress(
-            ResearchGatherDoneEvent(
-                query=query,
-                result_count=len(all_results),
+        # IG-258: Removed
+,
                 sources_used=list({r.source_name for r in all_results}),
             ).to_dict()
         )
@@ -416,9 +390,8 @@ def build_research_engine(
         resp = model.invoke([{"role": "user", "content": prompt}])
         integrated = str(resp.content)
 
-        _emit_progress(
-            ResearchSummarizeEvent(
-                total_summaries=len(summaries),
+        # IG-258: Removed
+,
             ).to_dict()
         )
 
@@ -429,10 +402,8 @@ def build_research_engine(
         loop_count = state.get("loop_count", 0)
         summaries = "\n\n".join(state.get("search_summaries", []))
 
-        _emit_progress(
-            ResearchReflectEvent(
-                loop=loop_count + 1,
-            ).to_dict()
+        # IG-258: Removed
+.to_dict()
         )
 
         prompt = _REFLECT.format(
@@ -441,7 +412,8 @@ def build_research_engine(
         )
 
         # Emit internal event to signal we're doing internal LLM work
-        _emit_progress(ResearchInternalLLMResponseEvent(response_type="reflection").to_dict())
+        # IG-258: Removed
+.to_dict())
 
         resp = model.invoke([{"role": "user", "content": prompt}])
         content = str(resp.content)
@@ -462,11 +434,8 @@ def build_research_engine(
             len(follow_ups),
         )
 
-        _emit_progress(
-            ResearchReflectionDoneEvent(
-                loop=loop_count + 1,
-                is_sufficient=is_sufficient,
-                follow_up_count=len(follow_ups),
+        # IG-258: Removed
+,
             ).to_dict()
         )
 
@@ -478,11 +447,8 @@ def build_research_engine(
             gap_desc = knowledge_gap[:50] if knowledge_gap else "more sources needed"
             judgement_text = f"Need {gap_desc}"
             action_text = "continue"
-        _emit_progress(
-            ResearchJudgementEvent(
-                judgement=judgement_text,
-                action=action_text,
-            ).to_dict()
+        # IG-258: Removed
+.to_dict()
         )
 
         return {
@@ -521,11 +487,8 @@ def build_research_engine(
         summaries = "\n\n".join(state.get("search_summaries", []))
         num_sources = len(state.get("sources_gathered", []))
 
-        _emit_progress(
-            ResearchSynthesizeEvent(
-                topic=topic[:200],
-                total_sources=num_sources,
-            ).to_dict()
+        # IG-258: Removed
+.to_dict()
         )
 
         prompt = _SYNTHESIZE.format(
@@ -537,9 +500,8 @@ def build_research_engine(
         answer = str(resp.content)
 
         logger.info("Research: synthesized %d chars from %d sources", len(answer), num_sources)
-        _emit_progress(
-            ResearchCompletedEvent(
-                answer_length=len(answer),
+        # IG-258: Removed
+,
             ).to_dict()
         )
         return {"answer": answer}

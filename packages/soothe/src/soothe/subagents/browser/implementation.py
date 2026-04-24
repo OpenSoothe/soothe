@@ -214,15 +214,9 @@ def _build_browser_graph(
         _suppress_external_browser_loggers()
 
         from soothe.utils.output_capture import capture_subagent_output
-        from soothe.utils.progress import emit_progress as _emit
 
-        # Emit dispatch event (RFC-0020)
-        messages = state.get("messages", [])
-        task = messages[-1].content if messages else ""
-        _emit(
-            BrowserDispatchedEvent(task=preview_first(task, 200)).to_dict(),
-            logger,
-        )
+        # IG-258: Removed subagent event emission - no longer needed (suppressed in CLI/TUI)
+        # Task tool events provide all display information
 
         run_t0 = time.perf_counter()
         try:
