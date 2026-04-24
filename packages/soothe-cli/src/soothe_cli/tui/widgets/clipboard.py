@@ -9,13 +9,12 @@ import pathlib
 from typing import TYPE_CHECKING
 
 from soothe_cli.tui.config import get_glyphs
+from soothe_cli.tui.preview_limits import CLIPBOARD_TOAST_PREVIEW_CHARS
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from textual.app import App
-
-_PREVIEW_MAX_LENGTH = 40
 
 
 def _copy_osc52(text: str) -> None:
@@ -38,8 +37,8 @@ def _shorten_preview(texts: list[str]) -> str:
     """
     glyphs = get_glyphs()
     dense_text = glyphs.newline.join(texts).replace("\n", glyphs.newline)
-    if len(dense_text) > _PREVIEW_MAX_LENGTH:
-        return f"{dense_text[: _PREVIEW_MAX_LENGTH - 1]}{glyphs.ellipsis}"
+    if len(dense_text) > CLIPBOARD_TOAST_PREVIEW_CHARS:
+        return f"{dense_text[: CLIPBOARD_TOAST_PREVIEW_CHARS - 1]}{glyphs.ellipsis}"
     return dense_text
 
 

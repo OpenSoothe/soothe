@@ -22,6 +22,11 @@ from soothe_cli.tui.config import (
     get_glyphs,
     is_ascii_mode,
 )
+from soothe_cli.tui.preview_limits import (
+    APPROVAL_SHELL_COMMAND_TRUNCATE_CHARS,
+    APPROVAL_WARNING_PREVIEW_COUNT,
+    APPROVAL_WARNING_TEXT_TRUNCATE_CHARS,
+)
 from soothe_cli.tui.unicode_security import (
     check_url_safety,
     detect_dangerous_unicode,
@@ -33,11 +38,6 @@ from soothe_cli.tui.unicode_security import (
     summarize_issues,
 )
 from soothe_cli.tui.widgets.tool_renderers import get_renderer
-
-# Max length for truncated shell command display
-_SHELL_COMMAND_TRUNCATE_LENGTH: int = 120
-_WARNING_PREVIEW_LIMIT: int = 3
-_WARNING_TEXT_TRUNCATE_LENGTH: int = 220
 
 
 class ApprovalMenu(Container):
@@ -143,7 +143,7 @@ class ApprovalMenu(Container):
         if req.get("name", "") not in SHELL_TOOL_NAMES:
             return False
         command = str(req.get("args", {}).get("command", ""))
-        return len(command) > _SHELL_COMMAND_TRUNCATE_LENGTH
+        return len(command) > APPROVAL_SHELL_COMMAND_TRUNCATE_CHARS
 
     def _get_command_display(self, *, expanded: bool) -> Content:
         """Get the command display content (truncated or full).
@@ -165,12 +165,14 @@ class ApprovalMenu(Container):
         command = strip_dangerous_unicode(command_raw)
         issues = detect_dangerous_unicode(command_raw)
 
-        if expanded or len(command) <= _SHELL_COMMAND_TRUNCATE_LENGTH:
+        if expanded or len(command) <= APPROVAL_SHELL_COMMAND_TRUNCATE_CHARS:
             command_display = command
         else:
-            command_display = command[:_SHELL_COMMAND_TRUNCATE_LENGTH] + get_glyphs().ellipsis
+            command_display = (
+                command[:APPROVAL_SHELL_COMMAND_TRUNCATE_CHARS] + get_glyphs().ellipsis
+            )
 
-        if not expanded and len(command) > _SHELL_COMMAND_TRUNCATE_LENGTH:
+        if not expanded and len(command) > APPROVAL_SHELL_COMMAND_TRUNCATE_CHARS:
             display = Content.from_markup(
                 "[bold]$cmd[/bold] [dim](press 'e' to expand)[/dim]",
                 cmd=command_display,
@@ -182,9 +184,9 @@ class ApprovalMenu(Container):
             return display
 
         raw_with_markers = render_with_unicode_markers(command_raw)
-        if not expanded and len(raw_with_markers) > _WARNING_TEXT_TRUNCATE_LENGTH:
+        if not expanded and len(raw_with_markers) > APPROVAL_WARNING_TEXT_TRUNCATE_CHARS:
             raw_with_markers = (
-                raw_with_markers[:_WARNING_TEXT_TRUNCATE_LENGTH] + get_glyphs().ellipsis
+                raw_with_markers[:APPROVAL_WARNING_TEXT_TRUNCATE_CHARS] + get_glyphs().ellipsis
             )
 
         return Content.assemble(
@@ -219,10 +221,10 @@ class ApprovalMenu(Container):
             ]
             parts.extend(
                 Content.from_markup("\n[dim]- $w[/dim]", w=warning)
-                for warning in self._security_warnings[:_WARNING_PREVIEW_LIMIT]
+                for warning in self._security_warnings[:APPROVAL_WARNING_PREVIEW_COUNT]
             )
-            if len(self._security_warnings) > _WARNING_PREVIEW_LIMIT:
-                remaining = len(self._security_warnings) - _WARNING_PREVIEW_LIMIT
+            if len(self._security_warnings) > APPROVAL_WARNING_PREVIEW_COUNT:
+                remaining = len(self._security_warnings) - APPROVAL_WARNING_PREVIEW_COUNT
                 parts.append(Content.styled(f"\n- +{remaining} more warning(s)", "dim"))
             yield Static(
                 Content.assemble(*parts),

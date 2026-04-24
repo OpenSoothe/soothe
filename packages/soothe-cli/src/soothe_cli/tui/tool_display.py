@@ -210,7 +210,7 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             return f"{prefix} {tool_name}({args_str})"
         return f"{prefix} {tool_name}(…)"
 
-    elif tool_key == "web_search":
+    elif tool_key in {"web_search", "search_web"}:
         # Web search: show the query string (no outer quotes)
         if "query" in tool_args:
             query = _sanitize_display_value(tool_args["query"], max_length=100)
@@ -301,8 +301,8 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         # Default glob when the model sends `{}` — show a visible pattern hint.
         return f"{prefix} {tool_name}(*)"
 
-    elif tool_key == "fetch_url":
-        # Fetch URL: show the URL being fetched (no outer quotes)
+    elif tool_key in {"fetch_url", "crawl_web"}:
+        # Crawl web: show the URL being fetched (no outer quotes)
         if "url" in tool_args:
             url = _sanitize_display_value(tool_args["url"], max_length=80)
             return f"{prefix} {tool_name}({url})"
