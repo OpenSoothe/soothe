@@ -9,7 +9,7 @@ RFC-411: Event Stream Replay
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from soothe.cognition.agent_loop.persistence.manager import (
@@ -45,6 +45,10 @@ async def reconstruct_event_stream(
     Returns:
         Chronological event stream (sorted by timestamp).
     """
+    # Use timezone-aware minimum for UTC timestamps
+    # datetime.min is timezone-naive and cannot be compared with timezone-aware datetimes
+    min_timestamp = datetime.min.replace(tzinfo=UTC)
+
     events = []
 
     # Load checkpoint anchors (main execution line)
@@ -71,7 +75,7 @@ async def reconstruct_event_stream(
         events.append(
             {
                 "type": ITERATION_STARTED,
-                "timestamp": start_anchor.get("created_at", datetime.min),
+                "timestamp": start_anchor.get("created_at", min_timestamp),
                 "iteration": iter_num,
                 "thread_id": thread_id,
                 "checkpoint_id": start_anchor.get("checkpoint_id"),
@@ -84,7 +88,7 @@ async def reconstruct_event_stream(
             events.append(
                 {
                     "type": THREAD_SWITCHED,
-                    "timestamp": start_anchor.get("created_at", datetime.min),
+                    "timestamp": start_anchor.get("created_at", min_timestamp),
                     "iteration": iter_num,
                     "from_thread_id": previous_thread_id,
                     "to_thread_id": thread_id,
@@ -98,7 +102,7 @@ async def reconstruct_event_stream(
             events.append(
                 {
                     "type": ITERATION_COMPLETED,
-                    "timestamp": end_anchor.get("created_at", datetime.min),
+                    "timestamp": end_anchor.get("created_at", min_timestamp),
                     "iteration": iter_num,
                     "thread_id": thread_id,
                     "checkpoint_id": end_anchor.get("checkpoint_id"),
@@ -117,7 +121,7 @@ async def reconstruct_event_stream(
         events.append(
             {
                 "type": BRANCH_CREATED,
-                "timestamp": branch.get("created_at", datetime.min),
+                "timestamp": branch.get("created_at", min_timestamp),
                 "branch_id": branch["branch_id"],
                 "iteration": branch["iteration"],
                 "thread_id": branch["thread_id"],
@@ -152,8 +156,8 @@ async def reconstruct_event_stream(
                 }
             )
 
-    # Sort by timestamp
-    events.sort(key=lambda e: e.get("timestamp", datetime.min))
+    # Sort by timestamp (use timezone-aware minimum for UTC timestamps)
+    events.sort(key=lambda e: e.get("timestamp", min_timestamp))
 
     logger.info(
         "Reconstructed %d events for loop %s (%d iterations, %d branches)",

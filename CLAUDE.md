@@ -206,6 +206,20 @@ All RFCs are in `docs/specs/`. Key specifications:
 
 ---
 
+## 🐛 Debug Guide
+
+**Debugging and diagnostics**: See `docs/howto_debug.md` for comprehensive guide:
+- Log locations (`~/.soothe/logs/`, `~/.soothe/runs/`)
+- Enable debug logs via environment variables (`SOOTHE_DEBUG`, `SOOTHE_LOG_LEVEL`)
+- Enable debug logs via config files (`logging.file.level`, `verbosity`, `llm_tracing`)
+- Diagnose issues with real-time log monitoring
+- Common debugging workflows (agent behavior, LLM, connection, subagent, protocol)
+- LLM request/response tracing
+- Thread conversation auditing
+- Performance profiling with logs
+
+---
+
 ## 📝 Implementation Guides
 
 All implementation guides are in `docs/impl/`. Recent guides:
@@ -494,6 +508,7 @@ From RFC-000:
 - **Implementation patterns**: Check recent IGs in `docs/impl/`
 - **API questions**: Check `thirdparty/` for upstream code
 - **User guide**: See `docs/user_guide.md`
+- **Debug guide**: See `docs/howto_debug.md` - Enable debug logs, diagnose issues, log locations
 - **Issues**: Report at GitHub issues
 
 ---
