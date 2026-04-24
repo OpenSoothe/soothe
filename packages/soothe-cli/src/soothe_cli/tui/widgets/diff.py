@@ -11,6 +11,7 @@ from textual.widgets import Static
 
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs, is_ascii_mode
+from soothe_cli.tui.preview_limits import APPROVAL_DIFF_MAX_LINES
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
 
 def compose_diff_lines(
     diff: str,
-    max_lines: int | None = 100,
+    max_lines: int | None = APPROVAL_DIFF_MAX_LINES,
 ) -> ComposeResult:
     """Yield per-line Static widgets for a unified diff.
 
@@ -174,7 +175,7 @@ class EnhancedDiff(Vertical):
         self,
         diff: str,
         title: str = "Diff",
-        max_lines: int | None = 100,
+        max_lines: int | None = APPROVAL_DIFF_MAX_LINES,
         **kwargs: Any,
     ) -> None:
         """Initialize the diff widget.

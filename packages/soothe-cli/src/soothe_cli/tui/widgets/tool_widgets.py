@@ -9,15 +9,15 @@ from textual.content import Content
 from textual.widgets import Markdown, Static
 
 from soothe_cli.tui import theme
+from soothe_cli.tui.preview_limits import (
+    TOOL_APPROVAL_BODY_MAX_LINES,
+    TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES,
+    TOOL_APPROVAL_PREVIEW_LINES,
+    TOOL_APPROVAL_VALUE_PREVIEW_CHARS,
+)
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
-
-# Constants for display limits
-_MAX_VALUE_LEN = 200
-_MAX_LINES = 30
-_MAX_DIFF_LINES = 50
-_MAX_PREVIEW_LINES = 20
 
 
 def _format_stats(additions: int, deletions: int) -> Content:
@@ -116,9 +116,11 @@ class GenericApprovalWidget(ToolApprovalWidget):
             if value is None:
                 continue
             value_str = str(value)
-            if len(value_str) > _MAX_VALUE_LEN:
-                hidden = len(value_str) - _MAX_VALUE_LEN
-                value_str = value_str[:_MAX_VALUE_LEN] + f"... ({hidden} more chars)"
+            if len(value_str) > TOOL_APPROVAL_VALUE_PREVIEW_CHARS:
+                hidden = len(value_str) - TOOL_APPROVAL_VALUE_PREVIEW_CHARS
+                value_str = (
+                    value_str[:TOOL_APPROVAL_VALUE_PREVIEW_CHARS] + f"... ({hidden} more chars)"
+                )
             yield Static(f"{key}: {value_str}", markup=False, classes="approval-description")
 
 
@@ -142,10 +144,10 @@ class WriteFileApprovalWidget(ToolApprovalWidget):
         # File header with line count
         yield from _file_header(file_path, additions=total_lines if content else 0)
 
-        if total_lines > _MAX_LINES:
+        if total_lines > TOOL_APPROVAL_BODY_MAX_LINES:
             # Truncate for display
-            shown_lines = lines[:_MAX_LINES]
-            remaining = total_lines - _MAX_LINES
+            shown_lines = lines[:TOOL_APPROVAL_BODY_MAX_LINES]
+            remaining = total_lines - TOOL_APPROVAL_BODY_MAX_LINES
             truncated_content = "\n".join(shown_lines) + f"\n... ({remaining} more lines)"
             yield Markdown(f"```{file_extension}\n{truncated_content}\n```")
         else:
@@ -186,7 +188,7 @@ class EditFileApprovalWidget(ToolApprovalWidget):
         lines_shown = 0
 
         for line in diff_lines:
-            if lines_shown >= _MAX_DIFF_LINES:
+            if lines_shown >= TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES:
                 yield Static(
                     Content.styled(f"... ({len(diff_lines) - lines_shown} more lines)", "dim")
                 )
@@ -246,9 +248,9 @@ class EditFileApprovalWidget(ToolApprovalWidget):
         sign = "+" if is_addition else "-"
         cls = "diff-added" if is_addition else "diff-removed"
 
-        for line in lines[:_MAX_PREVIEW_LINES]:
+        for line in lines[:TOOL_APPROVAL_PREVIEW_LINES]:
             yield Static(Content.from_markup(f"{sign} $text", text=line), classes=cls)
 
-        if len(lines) > _MAX_PREVIEW_LINES:
-            remaining = len(lines) - _MAX_PREVIEW_LINES
+        if len(lines) > TOOL_APPROVAL_PREVIEW_LINES:
+            remaining = len(lines) - TOOL_APPROVAL_PREVIEW_LINES
             yield Static(Content.styled(f"... ({remaining} more lines)", "dim"))

@@ -20,6 +20,13 @@ from textual.containers import Container, ScrollableContainer
 from textual.reactive import reactive
 from textual.widgets import Static
 
+from soothe_cli.tui.preview_limits import (
+    AUTOPILOT_FINDING_LINE_PREVIEW_CHARS,
+    AUTOPILOT_FINDINGS_VISIBLE_COUNT,
+    AUTOPILOT_GOAL_DESCRIPTION_PREVIEW_CHARS,
+    AUTOPILOT_GRAPH_EDGE_PREVIEW_COUNT,
+)
+
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
@@ -68,12 +75,14 @@ class GoalDagWidget(Static):
             icon = icons.get(status, "○")
             deps = ""
             if g.get("depends_on"):
-                deps = f" [dim](deps: {', '.join(g['depends_on'][:3])})[/]"
+                deps = f" [dim](deps: {', '.join(g['depends_on'][:AUTOPILOT_GRAPH_EDGE_PREVIEW_COUNT])})[/]"
             informs = ""
             if g.get("informs"):
-                informs = f" [dim](→ {', '.join(g['informs'][:3])})[/]"
+                informs = (
+                    f" [dim](→ {', '.join(g['informs'][:AUTOPILOT_GRAPH_EDGE_PREVIEW_COUNT])})[/]"
+                )
             gid = g.get("id", "?")
-            desc = preview_first(g.get("description", ""), 50)
+            desc = preview_first(g.get("description", ""), AUTOPILOT_GOAL_DESCRIPTION_PREVIEW_CHARS)
             lines.append(f"  [{color}]{icon}[/] [{color}]{gid}[/] {desc}{deps}{informs}")
         return "\n".join(lines)
 
@@ -126,8 +135,8 @@ class FindingsWidget(ScrollableContainer):
         if not self.findings:
             return "[dim]No findings yet[/]"
         lines = ["[bold cyan]Findings[/]", ""]
-        for i, f in enumerate(self.findings[-20:], 1):
-            lines.append(f"  {i}. {preview_first(f, 80)}")
+        for i, f in enumerate(self.findings[-AUTOPILOT_FINDINGS_VISIBLE_COUNT:], 1):
+            lines.append(f"  {i}. {preview_first(f, AUTOPILOT_FINDING_LINE_PREVIEW_CHARS)}")
         return "\n".join(lines)
 
 

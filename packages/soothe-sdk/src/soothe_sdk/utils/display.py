@@ -108,7 +108,9 @@ def get_tool_display_name(tool_name: str) -> str:
         "glob": "Search Files",
         "grep": "Search Content",
         "web_search": "Web Search",
-        "tavily_search": "Web Search (Tavily)",
+        "search_web": "Web Search",
+        "fetch_url": "Web Crawl",
+        "crawl_web": "Web Crawl",
         "research": "Research",
     }
 

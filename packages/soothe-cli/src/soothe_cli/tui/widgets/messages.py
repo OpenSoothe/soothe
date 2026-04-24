@@ -28,6 +28,15 @@ from soothe_cli.tui.config import (
 )
 from soothe_cli.tui.formatting import format_duration
 from soothe_cli.tui.input import EMAIL_PREFIX_PATTERN, INPUT_HIGHLIGHT_PATTERN
+from soothe_cli.tui.preview_limits import (
+    APPROVAL_DIFF_MAX_LINES,
+    SKILL_CARD_PREVIEW_CHARS,
+    SKILL_CARD_PREVIEW_LINES,
+    TOOL_CARD_PREVIEW_CHARS,
+    TOOL_CARD_PREVIEW_LINES,
+    TOOL_CARD_PREVIEW_TODO_ITEMS,
+    TOOL_CARD_PREVIEW_WEB_DICT_KEYS,
+)
 from soothe_cli.tui.tool_display import format_tool_display
 from soothe_cli.tui.widgets._links import open_style_link
 from soothe_cli.tui.widgets.diff import compose_diff_lines
@@ -136,9 +145,11 @@ _TOOLS_WITH_HEADER_INFO: set[str] = {
     "shell",  # local shell
     "bash",
     "run_command",
-    # Web tools
+    # Web tools (CLI uses web_search/fetch_url, daemon uses search_web/crawl_web)
     "web_search",
     "fetch_url",
+    "search_web",
+    "crawl_web",
     # Agent tools
     "task",
     "write_todos",
@@ -406,8 +417,8 @@ class SkillMessage(Vertical):
     }
     """
 
-    _PREVIEW_LINES = 4
-    _PREVIEW_CHARS = 300
+    _PREVIEW_LINES = SKILL_CARD_PREVIEW_LINES
+    _PREVIEW_CHARS = SKILL_CARD_PREVIEW_CHARS
 
     _expanded: var[bool] = var(False, toggle_class="-expanded")
 
@@ -715,7 +726,7 @@ class AssistantMessage(_TimestampClickMixin, Vertical):
 class ToolCallMessage(Vertical):
     """Widget displaying a tool call with collapsible output.
 
-    Tool outputs are shown as a 3-line preview by default.
+    Tool outputs are shown as a one-line preview by default (plus expand hint).
     Press Ctrl+O to expand/collapse the full output.
     Shows an animated "Running..." indicator while the tool is executing.
     """
@@ -792,9 +803,9 @@ class ToolCallMessage(Vertical):
     """
     """Left border tracks tool lifecycle; hover brightens for interactivity."""
 
-    # Max lines/chars to show in preview mode
-    _PREVIEW_LINES = 1
-    _PREVIEW_CHARS = 120
+    # Max lines/chars to show in preview mode (see ``preview_limits``)
+    _PREVIEW_LINES = TOOL_CARD_PREVIEW_LINES
+    _PREVIEW_CHARS = TOOL_CARD_PREVIEW_CHARS
 
     def __init__(
         self,
@@ -853,7 +864,7 @@ class ToolCallMessage(Vertical):
         if self._tool_name == "task":
             desc = self._args.get("description", "")
             if desc:
-                max_len = 120
+                max_len = TOOL_CARD_PREVIEW_CHARS
                 suffix = "..." if len(desc) > max_len else ""
                 truncated = desc[:max_len].rstrip() + suffix
                 yield Static(
@@ -1111,6 +1122,7 @@ class ToolCallMessage(Vertical):
         formatters = {
             "write_todos": self._format_todos_output,
             "ls": self._format_ls_output,
+            "list_files": self._format_ls_output,
             "read_file": self._format_file_output,
             "write_file": self._format_file_output,
             "edit_file": self._format_file_output,
@@ -1121,6 +1133,8 @@ class ToolCallMessage(Vertical):
             "execute": self._format_shell_output,
             "web_search": self._format_web_output,
             "fetch_url": self._format_web_output,
+            "search_web": self._format_web_output,
+            "crawl_web": self._format_web_output,
             "task": self._format_task_output,
         }
 
@@ -1173,7 +1187,7 @@ class ToolCallMessage(Vertical):
             return FormattedOutput(content=Content.styled("    No todos", "dim"))
 
         lines: list[Content] = []
-        max_items = 1 if is_preview else len(items)
+        max_items = TOOL_CARD_PREVIEW_TODO_ITEMS if is_preview else len(items)
 
         # Build stats header
         stats = self._build_todo_stats(items)
@@ -1273,7 +1287,7 @@ class ToolCallMessage(Vertical):
             items = ast.literal_eval(output)
             if isinstance(items, list):
                 lines: list[Content] = []
-                max_items = 2 if is_preview else len(items)
+                max_items = self._PREVIEW_LINES if is_preview else len(items)
                 for item in items[:max_items]:
                     path = Path(str(item))
                     name = path.name
@@ -1294,8 +1308,19 @@ class ToolCallMessage(Vertical):
         except (ValueError, SyntaxError):
             pass
 
-        # Fallback: plain text
-        return FormattedOutput(content=Content(output))
+        # Fallback: line-based output with preview truncation
+        lines = output.split("\n")
+        max_lines = self._PREVIEW_LINES if is_preview else len(lines)
+        parts = [
+            Content(f"    {raw_line.strip()}") for raw_line in lines[:max_lines] if raw_line.strip()
+        ]
+
+        content = Content("\n").join(parts) if parts else Content("")
+        truncation = None
+        if is_preview and len(lines) > max_lines:
+            truncation = f"{len(lines) - max_lines} more"
+
+        return FormattedOutput(content=content, truncation=truncation)
 
     def _format_file_output(  # noqa: PLR6301  # Grouped as method for widget cohesion
         self, output: str, *, is_preview: bool = False
@@ -1306,7 +1331,7 @@ class ToolCallMessage(Vertical):
             FormattedOutput with file content and optional truncation info.
         """
         lines = output.split("\n")
-        max_lines = 4 if is_preview else len(lines)
+        max_lines = self._PREVIEW_LINES if is_preview else len(lines)
 
         parts = [Content(line) for line in lines[:max_lines]]
         content = Content("\n").join(parts)
@@ -1330,7 +1355,7 @@ class ToolCallMessage(Vertical):
             items = ast.literal_eval(output.strip())
             if isinstance(items, list):
                 parts: list[Content] = []
-                max_items = 2 if is_preview else len(items)
+                max_items = self._PREVIEW_LINES if is_preview else len(items)
                 for item in items[:max_items]:
                     path = Path(str(item))
                     try:
@@ -1350,7 +1375,7 @@ class ToolCallMessage(Vertical):
 
         # Fallback: line-based output (grep results)
         lines = output.split("\n")
-        max_lines = 1 if is_preview else len(lines)
+        max_lines = self._PREVIEW_LINES if is_preview else len(lines)
 
         parts = [
             Content(f"    {raw_line.strip()}") for raw_line in lines[:max_lines] if raw_line.strip()
@@ -1372,7 +1397,7 @@ class ToolCallMessage(Vertical):
             FormattedOutput with shell output and optional truncation info.
         """
         lines = output.split("\n")
-        max_lines = 4 if is_preview else len(lines)
+        max_lines = self._PREVIEW_LINES if is_preview else len(lines)
 
         parts: list[Content] = []
         for i, line in enumerate(lines[:max_lines]):
@@ -1390,7 +1415,7 @@ class ToolCallMessage(Vertical):
         return FormattedOutput(content=content, truncation=truncation)
 
     def _format_web_output(self, output: str, *, is_preview: bool = False) -> FormattedOutput:
-        """Format web_search/fetch_url output.
+        """Format web_search/fetch_url/search_web/crawl_web output.
 
         Returns:
             FormattedOutput with web response and optional truncation info.
@@ -1422,18 +1447,18 @@ class ToolCallMessage(Vertical):
         Returns:
             FormattedOutput with web response content and optional truncation info.
         """
-        # Handle web_search results
+        # Handle search results
         if "results" in data:
             return self._format_web_search_results(data.get("results", []), is_preview=is_preview)
 
-        # Handle fetch_url response
+        # Handle URL crawl response
         if "markdown_content" in data:
             lines = data["markdown_content"].split("\n")
             return self._format_lines_output(lines, is_preview=is_preview)
 
         # Generic dict - show key fields
         parts: list[Content] = []
-        max_keys = 3 if is_preview else len(data)
+        max_keys = TOOL_CARD_PREVIEW_WEB_DICT_KEYS if is_preview else len(data)
         for k, v in list(data.items())[:max_keys]:
             v_str = str(v)
             if is_preview and len(v_str) > _MAX_WEB_CONTENT_LEN:
@@ -1457,9 +1482,14 @@ class ToolCallMessage(Vertical):
         """
         if not results:
             return FormattedOutput(content=Content.styled("No results", "dim"))
+        if is_preview:
+            title = results[0].get("title", "")
+            parts = [Content.styled(f"  {title}", "bold")]
+            truncation = f"{len(results) - 1} more results" if len(results) > 1 else None
+            return FormattedOutput(content=Content("\n").join(parts), truncation=truncation)
+
         parts: list[Content] = []
-        max_results = 3 if is_preview else len(results)
-        for r in results[:max_results]:
+        for r in results:
             title = r.get("title", "")
             url = r.get("url", "")
             parts.extend(
@@ -1468,10 +1498,7 @@ class ToolCallMessage(Vertical):
                     Content.styled(f"  {url}", "dim"),
                 ]
             )
-        truncation = None
-        if is_preview and len(results) > max_results:
-            truncation = f"{len(results) - max_results} more results"
-        return FormattedOutput(content=Content("\n").join(parts), truncation=truncation)
+        return FormattedOutput(content=Content("\n").join(parts), truncation=None)
 
     def _format_lines_output(  # noqa: PLR6301  # Grouped as method for widget cohesion
         self, lines: list[str], *, is_preview: bool
@@ -1481,7 +1508,7 @@ class ToolCallMessage(Vertical):
         Returns:
             FormattedOutput with lines content and optional truncation info.
         """
-        max_lines = 4 if is_preview else len(lines)
+        max_lines = self._PREVIEW_LINES if is_preview else len(lines)
         parts = [Content(line) for line in lines[:max_lines]]
         content = Content("\n").join(parts) if parts else Content("")
         truncation = None
@@ -1498,7 +1525,7 @@ class ToolCallMessage(Vertical):
             FormattedOutput with task output and optional truncation info.
         """
         lines = output.split("\n")
-        max_lines = 4 if is_preview else len(lines)
+        max_lines = self._PREVIEW_LINES if is_preview else len(lines)
 
         parts = [Content(line) for line in lines[:max_lines]]
         content = Content("\n").join(parts) if parts else Content("")
@@ -1670,16 +1697,13 @@ class DiffMessage(_TimestampClickMixin, Static):
             )
 
         # Render the diff with per-line Statics (CSS-driven backgrounds)
-        yield from compose_diff_lines(self._diff_content, max_lines=100)
+        yield from compose_diff_lines(self._diff_content, max_lines=APPROVAL_DIFF_MAX_LINES)
 
     def on_mount(self) -> None:
         """Set border style based on charset mode."""
         if is_ascii_mode():
             colors = theme.get_theme_colors(self)
             self.styles.border = ("ascii", colors.primary)
-
-
-_MAX_STEP_DESC_DISPLAY = 120
 
 
 class CognitionStepMessage(_TimestampClickMixin, Vertical):
@@ -1731,8 +1755,8 @@ class CognitionStepMessage(_TimestampClickMixin, Vertical):
         super().__init__(**kwargs)
         self._step_id = step_id
         raw = description.strip()
-        if len(raw) > _MAX_STEP_DESC_DISPLAY:
-            raw = raw[: _MAX_STEP_DESC_DISPLAY - 3].rstrip() + "..."
+        if len(raw) > TOOL_CARD_PREVIEW_CHARS:
+            raw = raw[: TOOL_CARD_PREVIEW_CHARS - 3].rstrip() + "..."
         self._description = raw
         self._status = "pending"  # pending | running | success | error
         self._spinner_position = 0

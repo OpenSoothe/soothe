@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+from soothe_cli.tui.preview_limits import APPROVAL_DIFF_MAX_LINES
+
 logger = logging.getLogger(__name__)
 
 FileOpStatus = Literal["pending", "success", "error"]
@@ -179,7 +181,9 @@ def build_approval_preview(
         content = str(args.get("content", ""))
         before = _safe_read(physical_path) if physical_path and physical_path.exists() else ""
         after = content
-        diff = compute_unified_diff(before or "", after, display_path, max_lines=100)
+        diff = compute_unified_diff(
+            before or "", after, display_path, max_lines=APPROVAL_DIFF_MAX_LINES
+        )
         additions = 0
         if diff:
             additions = sum(
@@ -224,7 +228,7 @@ def build_approval_preview(
         else:
             after = before.replace(old_string, new_string, 1)
 
-        diff = compute_unified_diff(before, after, display_path, max_lines=100)
+        diff = compute_unified_diff(before, after, display_path, max_lines=APPROVAL_DIFF_MAX_LINES)
         additions = 0
         deletions = 0
         if diff:
@@ -352,7 +356,7 @@ class FileOpTracker:
                 record.before_content or "",
                 record.after_content,
                 record.display_path,
-                max_lines=100,
+                max_lines=APPROVAL_DIFF_MAX_LINES,
             )
             record.diff = diff
             if diff:
@@ -376,7 +380,7 @@ class FileOpTracker:
                     record.before_content or "",
                     record.after_content,
                     record.display_path,
-                    max_lines=100,
+                    max_lines=APPROVAL_DIFF_MAX_LINES,
                 )
             if record.diff is None and before_lines != record.metrics.lines_written:
                 record.metrics.lines_added = max(record.metrics.lines_written - before_lines, 0)
