@@ -16,6 +16,7 @@ from soothe.config.models import (
     AutonomousConfig,
     AutopilotConfig,
     ExecutionConfig,
+    FilesystemMiddlewareConfig,
     LLMTracingConfig,
     LoggingConfig,
     MCPServerConfig,
@@ -183,6 +184,11 @@ class SootheConfig(BaseSettings):
 
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     """Security policy configuration."""
+
+    filesystem_middleware: FilesystemMiddlewareConfig = Field(
+        default_factory=FilesystemMiddlewareConfig
+    )
+    """Filesystem middleware configuration."""
 
     # --- Performance optimization (RFC-0008) ---
 

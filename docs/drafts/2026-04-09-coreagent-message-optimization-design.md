@@ -469,7 +469,7 @@ _stream_phase()
 ```python
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
-from soothe.core.middleware import SystemPromptOptimizationMiddleware
+from soothe.middleware import SystemPromptOptimizationMiddleware
 from soothe.protocols.context import ContextEntry, ContextProjection
 from soothe.protocols.memory import MemoryItem
 from soothe.core.unified_classifier import UnifiedClassification

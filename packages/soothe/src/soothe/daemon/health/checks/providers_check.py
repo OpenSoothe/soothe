@@ -54,7 +54,7 @@ async def _check_provider(provider_name: str, config: SootheConfig | None) -> Ch
         model = config.create_chat_model(provider_name)
 
         # IG-143: Add metadata for tracing
-        from soothe.core.middleware._utils import create_llm_call_metadata
+        from soothe.middleware._utils import create_llm_call_metadata
 
         # Try a minimal test call with timeout
         # Use asyncio.wait_for to enforce timeout

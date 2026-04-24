@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soothe.toolkits.video import VideoToolkit, VideoAnalysisTool, VideoInfoTool
+from soothe.toolkits.video import VideoAnalysisTool, VideoInfoTool
 
 
 class TestVideoAnalysisTool:
@@ -19,14 +19,6 @@ class TestVideoAnalysisTool:
         assert tool.name == "analyze_video"
         assert "analyze" in tool.description.lower()
         assert "video" in tool.description.lower()
-
-    def test_create_video_tools(self) -> None:
-        """Test factory function creates all tools."""
-        tools = create_video_tools()
-
-        assert len(tools) == 2
-        assert isinstance(tools[0], VideoAnalysisTool)
-        assert isinstance(tools[1], VideoInfoTool)
 
     def test_default_configuration(self) -> None:
         """Test default configuration."""

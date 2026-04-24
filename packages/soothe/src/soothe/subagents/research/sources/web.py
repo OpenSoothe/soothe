@@ -22,7 +22,7 @@ class WebSource:
     """Information source backed by multi-engine web search.
 
     Uses ``WizsearchSearchTool`` as the backend with engines configured via
-    web_search.default_engines in config.yml. Results are normalised into
+    wizsearch.default_engines in config.yml. Results are normalised into
     ``SourceResult`` instances.
 
     Args:
@@ -44,7 +44,7 @@ class WebSource:
 
         web_search_config: dict[str, Any] = {}
         if self._config and hasattr(self._config, "tools"):
-            ws = getattr(self._config.tools, "web_search", None)
+            ws = getattr(self._config.tools, "wizsearch", None)
             if ws:
                 web_search_config = {
                     "default_engines": ws.default_engines,

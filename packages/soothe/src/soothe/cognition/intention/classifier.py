@@ -76,7 +76,7 @@ class IntentClassifier:
 
             # Apply LLM tracing wrapper if enabled
             if config and hasattr(config, "llm_tracing") and config.llm_tracing.enabled:
-                from soothe.core.middleware._wrapper import LLMTracingWrapper
+                from soothe.middleware._wrapper import LLMTracingWrapper
 
                 self._intent_model = LLMTracingWrapper(self._intent_model)
                 self._routing_model = LLMTracingWrapper(self._routing_model)
@@ -469,7 +469,7 @@ class IntentClassifier:
             Metadata dict for LLM call config.
         """
         try:
-            from soothe.core.middleware._utils import create_llm_call_metadata
+            from soothe.middleware._utils import create_llm_call_metadata
 
             return create_llm_call_metadata(
                 purpose=purpose,

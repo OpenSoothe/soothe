@@ -160,7 +160,7 @@ def build_soothe_middleware_stack(
         # Auto-configure logging level for LLM tracing module (IG-140)
         import logging
 
-        llm_logger = logging.getLogger("soothe.core.middleware.llm_tracing")
+        llm_logger = logging.getLogger("soothe.middleware.llm_tracing")
         llm_logger.setLevel(logging.DEBUG)
 
     # 4. Execution hints (Layer 2 → Layer 1 integration)

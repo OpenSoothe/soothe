@@ -833,7 +833,7 @@ class Executor:
             extract_text_from_message_content,
             iter_messages_for_act_aggregation,
         )
-        from soothe.tools.metadata_generator import generate_outcome_metadata
+        from soothe.toolkits.metadata_generator import generate_outcome_metadata
 
         chunks: list[str] = []
         tool_call_count = 0

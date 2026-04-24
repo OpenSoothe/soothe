@@ -2,7 +2,7 @@
 
 import pytest
 
-from soothe.core.middleware import ExecutionHintsMiddleware
+from soothe.middleware import ExecutionHintsMiddleware
 
 
 class TestExecutionHintsMiddleware:
