@@ -295,11 +295,10 @@ class ToolsConfig(BaseModel):
 
     Args:
         execution: Execution tools config (run_command, run_python, etc.).
-        file_ops: File operation tools config.
-        code_edit: Code editing tools config.
+        file_ops: File operation tools config (merged with code_edit).
         datetime: DateTime tool config.
         data: Data inspection tools config.
-        web_search: Web search tools config.
+        wizsearch: Wizsearch multi-engine search tools config.
         research: Research tools config.
         image: Image analysis tools config.
         audio: Audio transcription tools config.
@@ -309,10 +308,9 @@ class ToolsConfig(BaseModel):
 
     execution: ToolConfig = Field(default_factory=ToolConfig)
     file_ops: ToolConfig = Field(default_factory=ToolConfig)
-    code_edit: ToolConfig = Field(default_factory=ToolConfig)
     datetime: ToolConfig = Field(default_factory=ToolConfig)
     data: ToolConfig = Field(default_factory=ToolConfig)
-    web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
+    wizsearch: WebSearchConfig = Field(default_factory=WebSearchConfig)
     research: ToolConfig = Field(default_factory=ToolConfig)
     image: ToolConfig = Field(default_factory=ToolConfig)
     audio: ToolConfig = Field(default_factory=ToolConfig)

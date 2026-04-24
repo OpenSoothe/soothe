@@ -243,13 +243,10 @@ tools:
   execution:
     enabled: true       # run_command, run_python, run_background, kill_process
 
-  # Consolidated file operations
+  # Consolidated file operations (merged with surgical editing)
   file_ops:
-    enabled: true       # read_file, write_file, delete_file, search_files, list_files, file_info
-
-  # Consolidated surgical editing tools
-  code_edit:
-    enabled: true       # edit_file_lines, insert_lines, delete_lines, apply_diff
+    enabled: true       # delete_file, file_info, edit_file_lines, insert_lines, delete_lines, apply_diff
+    # NOTE: read_file, write_file, search_files, list_files are provided by deepagents FilesystemMiddleware
 
   # Data operations
   datetime:
@@ -257,9 +254,11 @@ tools:
   data:
     enabled: true       # Inspect tabular data (CSV, Excel) and documents (PDF, DOCX)
 
-  # Research
-  web_search:
-    enabled: true
+  # Enhanced multi-engine search (replaces web_search)
+  wizsearch:
+    enabled: true       # wizsearch_search, wizsearch_crawl
+    # NOTE: deepagents provides basic web_search/fetch_url tools
+    # wizsearch provides enhanced multi-engine search and headless crawl capabilities
     default_engines:
       - tavily          # Requires TAVILY_API_KEY
       - googleai        # Requires GEMINI_API_KEY

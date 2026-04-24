@@ -33,9 +33,9 @@ class BrowserSource:
         if self._crawl_tool is not None:
             return
         try:
-            from soothe.tools._internal.wizsearch.crawl import WizsearchCrawlPageTool
+            from soothe.toolkits.wizsearch import WizsearchCrawlTool
 
-            self._crawl_tool = WizsearchCrawlPageTool()
+            self._crawl_tool = WizsearchCrawlTool()
         except Exception:
             logger.debug("Crawl tool not available", exc_info=True)
 
