@@ -252,8 +252,10 @@ def build_research_engine(
             parsed = json.loads(content)
             sub_questions = parsed.get("sub_questions", [])
         except json.JSONDecodeError:
+            logger.warning("Research: parse failed, using fallback")
             sub_questions = [{"question": topic, "suggested_domain": "auto"}]
 
+        logger.info("Research: found %d sub-questions", len(sub_questions))
         _emit_progress(
             ResearchSubQuestionsEvent(
                 count=len(sub_questions),
@@ -289,8 +291,10 @@ def build_research_engine(
             parsed = json.loads(content)
             queries = parsed.get("queries", [])
         except json.JSONDecodeError:
+            logger.warning("Research: parse failed, using fallback")
             queries = [{"query": _extract_topic(state), "domain_hint": "auto"}]
 
+        logger.info("Research: generated %d queries", len(queries))
         _emit_progress(
             ResearchQueriesGeneratedEvent(
                 queries=[q.get("query", q) if isinstance(q, dict) else q for q in queries],
@@ -451,6 +455,13 @@ def build_research_engine(
         follow_ups = parsed.get("follow_up_queries", [])
         knowledge_gap = parsed.get("knowledge_gap", "")
 
+        logger.info(
+            "Research: loop %d, sufficient=%s, follow_ups=%d",
+            loop_count + 1,
+            is_sufficient,
+            len(follow_ups),
+        )
+
         _emit_progress(
             ResearchReflectionDoneEvent(
                 loop=loop_count + 1,
@@ -525,6 +536,7 @@ def build_research_engine(
         resp = model.invoke([{"role": "user", "content": prompt}])
         answer = str(resp.content)
 
+        logger.info("Research: synthesized %d chars from %d sources", len(answer), num_sources)
         _emit_progress(
             ResearchCompletedEvent(
                 answer_length=len(answer),

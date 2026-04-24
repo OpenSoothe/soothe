@@ -653,6 +653,29 @@ def get_tool_display_name(name: str) -> str:
     return name.replace("_", " ").title()
 
 
+def get_tool_pascal_name(name: str) -> str:
+    """Get PascalCase display name for a tool (e.g., 'SearchFiles').
+
+    This removes spaces from the Title Case display name, producing PascalCase
+    format suitable for tool call headers in the TUI.
+
+    Args:
+        name: Canonical snake_case tool name or alias
+
+    Returns:
+        PascalCase tool name without spaces (e.g., "ReadFile", "ShellExecute")
+
+    Example:
+        >>> get_tool_pascal_name("read_file")
+        "ReadFile"
+        >>> get_tool_pascal_name("execute")
+        "ShellExecute"
+    """
+    display_name = get_tool_display_name(name)
+    # Remove spaces: "Search Files" -> "SearchFiles"
+    return display_name.replace(" ", "")
+
+
 def get_all_path_arg_keys() -> frozenset[str]:
     """Return the union of all ``path_arg_keys`` across all registered tools."""
     keys: set[str] = set()

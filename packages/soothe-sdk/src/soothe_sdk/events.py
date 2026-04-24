@@ -111,6 +111,7 @@ MESSAGE_SENT = "soothe.protocol.message.sent"
 
 # Output events (QUIET level - always visible)
 CHITCHAT_RESPONSE = "soothe.output.chitchat.responded"
+QUIZ_RESPONSE = "soothe.output.quiz.responded"
 FINAL_REPORT = "soothe.output.autonomous.final_report.reported"
 
 # Agent loop configuration constants
@@ -161,6 +162,7 @@ __all__ = [
     "MESSAGE_SENT",
     # Output
     "CHITCHAT_RESPONSE",
+    "QUIZ_RESPONSE",
     "FINAL_REPORT",
     # Constants
     "DEFAULT_AGENT_LOOP_MAX_ITERATIONS",

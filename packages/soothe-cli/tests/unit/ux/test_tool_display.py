@@ -13,7 +13,7 @@ def test_read_file_shows_line_range_when_present() -> None:
         {"path": "/Users/dev/project/src/module.py", "start_line": 100, "end_line": 250},
     )
     assert "module.py:100-250" in s
-    assert "read_file" in s
+    assert "ReadFile" in s
 
 
 def test_read_file_shows_only_path_when_no_lines() -> None:
