@@ -28,7 +28,7 @@ providers:
 
   - name: lmstudio
     provider_type: openai
-    api_base_url: "http://100.75.70.86:1234/v1"
+    api_base_url: "http://100.75.70.86:9271/v1"
     api_key: "lm-studio"
     models:
       - google/gemma-4-26b-a4b
