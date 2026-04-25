@@ -39,15 +39,18 @@ class ModelProviderConfig(BaseModel):
         api_base_url: Base URL for the provider's API endpoint.
         api_key: API key. Supports ``${ENV_VAR}`` syntax for env var references.
         provider_type: langchain provider type for ``init_chat_model`` /
-            ``init_embeddings`` (e.g., ``openai``, ``anthropic``).
+            ``init_embeddings``. Supported values:
+            - ``openai``: Standard OpenAI API
+            - ``anthropic``: Anthropic Claude API
+            - ``ollama``: Ollama local inference
+            - ``lms-openai``: LMStudio and limited OpenAI-compatible APIs that:
+              * Accept json_schema response_format but return empty content
+              * Return structured JSON in reasoning_content field (thinking tokens)
+              * Only support string tool_choice values ("none", "auto", "required")
         models: Model names available from this provider (for documentation).
-        supports_advanced_tool_choice: Whether this provider supports the full
-            OpenAI-style ``tool_choice`` object format (e.g., ``{"type": "function",
-            "function": {"name": "..."}}``). Set to ``false`` for limited
-            OpenAI-compatible APIs like LMStudio, Ollama, or local inference
-            servers that only accept simple string values (``"none"``, ``"auto"``,
-            ``"required"``). When ``false``, Soothe forces ``json_mode`` for
-            structured output instead of function calling.
+        supports_advanced_tool_choice: DEPRECATED - Use provider_type="lms-openai"
+            instead for limited OpenAI-compatible providers. Whether this provider
+            supports the full OpenAI-style ``tool_choice`` object format.
     """
 
     name: str
@@ -55,7 +58,6 @@ class ModelProviderConfig(BaseModel):
     api_key: str | None = None
     provider_type: str = "openai"
     models: list[str] = Field(default_factory=list)
-    supports_advanced_tool_choice: bool = True
 
 
 class VectorStoreProviderConfig(BaseModel):

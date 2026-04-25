@@ -158,7 +158,6 @@ def test_streaming_with_provider_wrapper():
                 name="limited-provider",
                 provider_type="openai",
                 api_key="${OPENAI_API_KEY}",
-                supports_advanced_tool_choice=False,  # Will trigger wrapper
             )
         ],
         router=ModelRouter(default="limited-provider:local-model"),
@@ -166,6 +165,6 @@ def test_streaming_with_provider_wrapper():
 
     model = config.create_chat_model("default")
 
-    # Model might be wrapped but should still have streaming enabled
+    # Model should have streaming enabled
     assert hasattr(model, "streaming")
     assert model.streaming is True

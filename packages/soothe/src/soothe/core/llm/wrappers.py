@@ -1,18 +1,24 @@
-"""Model wrapper for limited OpenAI-compatible provider support.
+"""Generic model wrappers for limited OpenAI-compatible providers.
 
-Intercepts with_structured_output calls and converts json_mode to json_schema format
-for providers like LMStudio that reject response_format={"type": "json_object"}.
+These wrappers handle providers with limited OpenAI API compatibility:
+- Only support string tool_choice values, not object format
+- Require json_schema format, not json_object format
+- May return structured output in alternative fields
 
-Also sanitizes tool_choice parameters in bind_tools to avoid object-form errors.
+Note: LMStudio-specific handling is in dedicated backend `soothe.backends.lms_openai`
+with specialized reasoning_content field extraction.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import Runnable
+
+from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +26,12 @@ logger = logging.getLogger(__name__)
 class JsonSchemaModelWrapper(Runnable):
     """Wrapper that injects json_schema response_format and parses JSON output.
 
-    LMStudio requires response_format={"type": "json_schema"} not {"type": "json_object"}.
+    Limited providers require response_format={"type": "json_schema"} not {"type": "json_object"}.
     Unlike langchain's built-in structured output, we manually parse the JSON response
     into a Pydantic object.
+
+    Note: For LMStudio providers, use `soothe.backends.lms_openai.LMSJsonSchemaWrapper`
+    which checks reasoning_content field.
 
     Args:
         model: The base model to wrap.
@@ -53,31 +62,66 @@ class JsonSchemaModelWrapper(Runnable):
         Returns:
             Parsed Pydantic object from the JSON response.
         """
-        import json
-
-        # Inject response_format into kwargs
         kwargs["response_format"] = self._response_format
-
-        # Call the base model with the injected response_format
         response = self._model.invoke(input, **kwargs)
 
         # Extract JSON content from AIMessage and parse into Pydantic object
         try:
-            if hasattr(response, "content"):
-                # response is an AIMessage, extract content string
+            if hasattr(response, "content") and response.content:
                 json_str = response.content
+            # Fallback: check reasoning_content field (some providers)
+            elif hasattr(response, "reasoning_content") and response.reasoning_content:
+                json_str = response.reasoning_content
+                logger.debug("JSON found in reasoning_content field")
             else:
-                # response might already be a string or dict
                 json_str = str(response)
 
-            # Parse JSON string into dict
-            json_dict = json.loads(json_str)
+            # Check for empty response
+            if not json_str or json_str.strip() == "":
+                raise ValueError(
+                    f"Provider returned empty response for json_schema format. "
+                    f"Response object: {type(response).__name__}, "
+                    f"has content: {hasattr(response, 'content')}, "
+                    f"has reasoning_content: {hasattr(response, 'reasoning_content')}"
+                )
 
-            # Validate and convert to Pydantic object using the schema
+            # Log response for debugging
+            logger.debug(
+                "Provider response for json_schema: content='%s', reasoning_content='%s'",
+                preview_first(str(response.content) if hasattr(response, "content") else "", 100),
+                preview_first(
+                    str(response.reasoning_content)
+                    if hasattr(response, "reasoning_content")
+                    else "",
+                    100,
+                ),
+            )
+
+            # Parse and validate JSON
+            json_dict = json.loads(json_str)
             return self._schema.model_validate(json_dict)
+        except json.JSONDecodeError as e:
+            logger.error(
+                "Failed to parse JSON response: %s\n"
+                "Response content: '%s'\n"
+                "Response reasoning_content: '%s'\n"
+                "Full response: %s",
+                e,
+                preview_first(
+                    str(response.content) if hasattr(response, "content") else "N/A", 200
+                ),
+                preview_first(
+                    str(response.reasoning_content)
+                    if hasattr(response, "reasoning_content")
+                    else "N/A",
+                    200,
+                ),
+                response,
+            )
+            raise
         except Exception as e:
             logger.error(
-                "Failed to parse JSON response from LMStudio: %s\nResponse: %s",
+                "Failed to process provider response: %s\nResponse: %s",
                 e,
                 response,
             )
@@ -94,23 +138,66 @@ class JsonSchemaModelWrapper(Runnable):
         Returns:
             Parsed Pydantic object from the JSON response.
         """
-        import json
-
         kwargs["response_format"] = self._response_format
         response = await self._model.ainvoke(input, **kwargs)
 
         # Extract and parse JSON
         try:
-            if hasattr(response, "content"):
+            if hasattr(response, "content") and response.content:
                 json_str = response.content
+            # Fallback: check reasoning_content field (some providers)
+            elif hasattr(response, "reasoning_content") and response.reasoning_content:
+                json_str = response.reasoning_content
+                logger.debug("JSON found in reasoning_content field")
             else:
                 json_str = str(response)
 
+            # Check for empty response
+            if not json_str or json_str.strip() == "":
+                raise ValueError(
+                    f"Provider returned empty response for json_schema format. "
+                    f"Response object: {type(response).__name__}, "
+                    f"has content: {hasattr(response, 'content')}, "
+                    f"has reasoning_content: {hasattr(response, 'reasoning_content')}"
+                )
+
+            # Log response for debugging
+            logger.debug(
+                "Provider response for json_schema: content='%s', reasoning_content='%s'",
+                preview_first(str(response.content) if hasattr(response, "content") else "", 100),
+                preview_first(
+                    str(response.reasoning_content)
+                    if hasattr(response, "reasoning_content")
+                    else "",
+                    100,
+                ),
+            )
+
+            # Parse and validate JSON
             json_dict = json.loads(json_str)
             return self._schema.model_validate(json_dict)
+        except json.JSONDecodeError as e:
+            logger.error(
+                "Failed to parse JSON response: %s\n"
+                "Response content: '%s'\n"
+                "Response reasoning_content: '%s'\n"
+                "Full response: %s",
+                e,
+                preview_first(
+                    str(response.content) if hasattr(response, "content") else "N/A", 200
+                ),
+                preview_first(
+                    str(response.reasoning_content)
+                    if hasattr(response, "reasoning_content")
+                    else "N/A",
+                    200,
+                ),
+                response,
+            )
+            raise
         except Exception as e:
             logger.error(
-                "Failed to parse JSON response from LMStudio: %s\nResponse: %s",
+                "Failed to process provider response: %s\nResponse: %s",
                 e,
                 response,
             )
@@ -122,9 +209,15 @@ class JsonSchemaModelWrapper(Runnable):
 
 
 class LimitedProviderModelWrapper(BaseChatModel):
-    """Wrapper that converts json_mode to json_schema for LMStudio compatibility.
+    """Wrapper that converts json_mode to json_schema for limited provider compatibility.
 
-    Delegates all other methods to the wrapped model.
+    Handles providers with limited OpenAI API support:
+    - Rejects response_format={"type": "json_object"}
+    - Accepts response_format={"type": "json_schema", ...}
+    - Only accepts string tool_choice values: "none", "auto", "required"
+
+    Note: For LMStudio providers, use `soothe.backends.lms_openai.LMSOpenAIModelWrapper`
+    which includes reasoning_content field handling.
 
     Args:
         model: The original BaseChatModel to wrap.
@@ -140,13 +233,11 @@ class LimitedProviderModelWrapper(BaseChatModel):
         """
         self._model = model
         self._provider_name = provider_name
-        # Properties (_llm_type, _identifying_params, _model_name) are defined
-        # as @property methods below and delegate to the wrapped model
 
     def with_structured_output(self, schema: Any, **kwargs: Any) -> Any:
-        """Convert json_mode to json_schema format for LMStudio compatibility.
+        """Convert json_mode to json_schema format for limited provider compatibility.
 
-        LMStudio rejects response_format={"type": "json_object"} but accepts
+        Limited providers reject response_format={"type": "json_object"} but accept
         response_format={"type": "json_schema", "json_schema": {...}}.
 
         Args:
@@ -163,15 +254,12 @@ class LimitedProviderModelWrapper(BaseChatModel):
             self._provider_name,
         )
 
-        # If method is json_mode, we need to convert to json_schema
-        # LMStudio only accepts {"type": "json_schema"} not {"type": "json_object"}
         if method == "json_mode":
             # Convert pydantic schema to JSON schema format
             try:
-                # Get the JSON schema from the pydantic model
                 json_schema = schema.model_json_schema()
 
-                # Build the response_format dict that LMStudio accepts
+                # Build the response_format dict that limited providers accept
                 response_format = {
                     "type": "json_schema",
                     "json_schema": {
@@ -182,7 +270,6 @@ class LimitedProviderModelWrapper(BaseChatModel):
                 }
 
                 # Inject response_format into the model's invoke kwargs
-                # We need to wrap the model to inject this parameter and parse JSON
                 return JsonSchemaModelWrapper(self._model, response_format, schema)
             except Exception:
                 logger.debug(
@@ -194,6 +281,35 @@ class LimitedProviderModelWrapper(BaseChatModel):
 
         # For other methods, just delegate (they will likely fail but let caller handle)
         return self._model.with_structured_output(schema, **kwargs)
+
+    def bind_tools(self, tools: list[Any], **kwargs: Any) -> Any:
+        """Intercept tool_choice parameter for limited providers.
+
+        Removes object-form tool_choice and converts to string if needed.
+        Limited providers only accept string values: "none", "auto", "required".
+
+        Args:
+            tools: List of tool definitions.
+            **kwargs: Additional parameters (tool_choice intercepted).
+
+        Returns:
+            Model with sanitized tool_choice.
+        """
+        # Intercept tool_choice parameter
+        if "tool_choice" in kwargs:
+            tool_choice = kwargs["tool_choice"]
+
+            # If tool_choice is a dict/object, sanitize it for limited providers
+            if isinstance(tool_choice, dict):
+                logger.debug(
+                    "LimitedProviderModelWrapper sanitizing object-form tool_choice for %s (provider=%s)",
+                    tool_choice,
+                    self._provider_name,
+                )
+                # Convert to "auto" for best compatibility
+                kwargs["tool_choice"] = "auto"
+
+        return self._model.bind_tools(tools, **kwargs)
 
     # Delegate all BaseChatModel methods to the wrapped model
 
@@ -252,28 +368,6 @@ class LimitedProviderModelWrapper(BaseChatModel):
         """Return model name from wrapped model."""
         return getattr(self._model, "_model_name", "unknown")
 
-    def bind_tools(self, tools: list[Any], **kwargs: Any) -> Any:
-        """Intercept tool_choice parameter for limited providers.
-
-        Removes object-form tool_choice and converts to string if needed.
-        LMStudio only accepts string values: "none", "auto", "required".
-        """
-        # Intercept tool_choice parameter
-        if "tool_choice" in kwargs:
-            tool_choice = kwargs["tool_choice"]
-
-            # If tool_choice is a dict/object, sanitize it for limited providers
-            if isinstance(tool_choice, dict):
-                logger.debug(
-                    "LimitedProviderModelWrapper sanitizing object-form tool_choice for %s (provider=%s)",
-                    tool_choice,
-                    self._provider_name,
-                )
-                # Convert to "auto" for best compatibility
-                kwargs["tool_choice"] = "auto"
-
-        return self._model.bind_tools(tools, **kwargs)
-
     def __getattr__(self, name: str) -> Any:
         """Delegate any other attributes to the wrapped model."""
         return getattr(self._model, name)
@@ -282,23 +376,16 @@ class LimitedProviderModelWrapper(BaseChatModel):
 def wrap_model_if_needed(
     model: BaseChatModel,
     provider_name: str,
-    supports_advanced_tool_choice: bool,
+    supports_advanced_tool_choice: bool = True,  # noqa: ARG001
 ) -> BaseChatModel:
-    """Wrap model if provider doesn't support advanced tool_choice.
+    """Compatibility helper - no longer wraps models.
 
     Args:
-        model: The original model.
-        provider_name: Provider name for logging.
-        supports_advanced_tool_choice: Whether the provider supports full OpenAI tool_choice.
+        model: The original model (returned unchanged).
+        provider_name: Provider name (unused).
+        supports_advanced_tool_choice: Ignored (unused).
 
     Returns:
-        Wrapped model if provider is limited, otherwise original model.
+        Original model unchanged.
     """
-    if not supports_advanced_tool_choice:
-        logger.info(
-            "Wrapping model for limited provider '%s' (json_mode will be converted to json_schema)",
-            provider_name,
-        )
-        return LimitedProviderModelWrapper(model, provider_name)
-
     return model

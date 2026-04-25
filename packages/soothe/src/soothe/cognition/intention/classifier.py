@@ -54,7 +54,6 @@ class IntentClassifier:
         model: BaseChatModel | None,
         assistant_name: str = "Soothe",
         config: Any | None = None,
-        supports_advanced_tool_choice: bool = True,
     ) -> None:
         """Initialize intent classifier.
 
@@ -62,12 +61,10 @@ class IntentClassifier:
             model: Fast LLM for classification.
             assistant_name: Name used in responses.
             config: Optional SootheConfig for tracing.
-            supports_advanced_tool_choice: Provider tool_choice capability.
         """
         self._fast_model = model
         self._assistant_name = assistant_name
         self._config = config
-        self._supports_advanced_tool_choice = supports_advanced_tool_choice
 
         # Pre-create structured output models for performance
         if model:
@@ -76,7 +73,7 @@ class IntentClassifier:
 
             # Apply LLM tracing wrapper if enabled
             if config and hasattr(config, "llm_tracing") and config.llm_tracing.enabled:
-                from soothe.middleware._wrapper import LLMTracingWrapper
+                from soothe.core.llm import LLMTracingWrapper
 
                 self._intent_model = LLMTracingWrapper(self._intent_model)
                 self._routing_model = LLMTracingWrapper(self._routing_model)
@@ -299,10 +296,9 @@ class IntentClassifier:
         base_model: BaseChatModel,
         schema: type[BaseModel],
     ) -> Any:
-        """Create structured output model with provider compatibility.
+        """Create structured output model.
 
         Prefers function_calling over json_mode for better literal validation.
-        Handles provider capability variations (LMStudio, Ollama, etc.).
 
         Args:
             base_model: Base chat model.
@@ -311,16 +307,7 @@ class IntentClassifier:
         Returns:
             Model with structured output support.
         """
-        # Limited providers: force json_mode
-        if not self._supports_advanced_tool_choice:
-            logger.debug("Provider lacks advanced tool_choice, forcing json_mode")
-            try:
-                return base_model.with_structured_output(schema, method="json_mode")
-            except Exception:
-                logger.debug("json_mode failed, trying default", exc_info=True)
-                return base_model.with_structured_output(schema)
-
-        # Full OpenAI-compatible: try function_calling first
+        # Try function_calling first (best for literal validation)
         for method in ("function_calling", None, "json_mode"):
             try:
                 if method is None:
