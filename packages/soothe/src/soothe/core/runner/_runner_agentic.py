@@ -402,11 +402,20 @@ class AgenticMixin:
                 # For agentic loop, goal description is passed as-is
 
         # Emit loop started event (Level 1)
+        # IG-262: Use friendly_message from intent classification if available
+        display_goal = (
+            intent_classification.friendly_message
+            if (intent_classification and intent_classification.friendly_message)
+            else preview_first(user_input, 100)
+        )
         yield _custom(
             AgenticLoopStartedEvent(
                 thread_id=tid,
-                goal=preview_first(user_input, 100),
+                goal=display_goal,
                 max_iterations=max_iterations,
+                friendly_message=intent_classification.friendly_message
+                if intent_classification
+                else None,
             ).to_dict()
         )
 

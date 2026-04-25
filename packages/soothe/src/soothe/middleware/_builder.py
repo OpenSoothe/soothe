@@ -148,18 +148,20 @@ def build_soothe_middleware_stack(
     # 3. LLM rate limiting (throttles API calls, not threads)
     # This prevents thread hanging by blocking only LLM calls, not entire threads
     # IG-053: Add timeout to prevent semaphore monopolization
+    # IG-258 Phase 2: Thread-local rate limiting (parameter name change)
     rpm = getattr(config.performance, "llm_rpm_limit", 120)
     concurrent = getattr(config.performance, "llm_concurrent_limit", 10)
     timeout = getattr(config.performance, "llm_call_timeout_seconds", 60)
     stack.append(
         LLMRateLimitMiddleware(
             requests_per_minute=rpm,
-            max_concurrent_requests=concurrent,
+            max_concurrent_requests_per_thread=concurrent,  # IG-258 Phase 2
             call_timeout_seconds=timeout,
+            thread_local=True,  # IG-258 Phase 2: Enable thread-local budgets
         )
     )
     logger.info(
-        "[Middleware] LLM rate limiting enabled: rpm=%d, concurrent=%d, timeout=%ds",
+        "[Middleware] LLM rate limiting enabled (thread-local): rpm=%d, concurrent=%d, timeout=%ds",
         rpm,
         concurrent,
         timeout,

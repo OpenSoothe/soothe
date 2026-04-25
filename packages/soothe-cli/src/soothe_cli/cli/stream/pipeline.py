@@ -197,13 +197,16 @@ class StreamDisplayPipeline:
         Returns:
             Display lines for goal header.
         """
-        goal = event.get("goal", event.get("goal_description", ""))
+        # IG-262: Prefer friendly_message over goal/goal_description
+        friendly_message = event.get("friendly_message")
+        goal = friendly_message or event.get("goal", event.get("goal_description", ""))
         if not goal:
             return []
 
         # Reset context for new goal
         self._context.reset_goal()
-        self._context.current_goal = goal
+        # Store the actual goal description (not friendly message) for context tracking
+        self._context.current_goal = event.get("goal", event.get("goal_description", goal))
         self._context.goal_start_time = time.time()
 
         # Get steps count if available

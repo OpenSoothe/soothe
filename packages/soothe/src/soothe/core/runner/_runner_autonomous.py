@@ -252,11 +252,14 @@ class AutonomousMixin(GoalDirectivesMixin):
 
         # Only emit goal created event if goal was actually created
         if goal and (not intent or intent.intent_type == "new_goal"):
+            # IG-262: Include friendly message from intent classification
+            friendly_message = intent.friendly_message if intent else None
             yield _custom(
                 GoalCreatedEvent(
                     goal_id=goal.id,
                     description=goal.description,
                     priority=goal.priority,
+                    friendly_message=friendly_message,
                 ).to_dict()
             )
 

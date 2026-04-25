@@ -67,6 +67,7 @@ class HttpRestTransport(TransportServer):
         thread_manager: Any | None = None,
         runner: Any | None = None,
         soothe_config: Any | None = None,
+        session_manager: Any | None = None,
     ) -> None:
         """Initialize HTTP REST transport.
 
@@ -75,11 +76,13 @@ class HttpRestTransport(TransportServer):
             thread_manager: Optional ThreadContextManager for thread operations.
             runner: Optional SootheRunner instance.
             soothe_config: Optional SootheConfig instance.
+            session_manager: Optional ClientSessionManager for queue metrics.
         """
         self._config = config
         self._thread_manager = thread_manager
         self._runner = runner
         self._soothe_config = soothe_config
+        self._session_manager = session_manager
         self._app = FastAPI(
             title="Soothe Daemon API",
             description="REST API for Soothe multi-agent assistant",
@@ -108,9 +111,48 @@ class HttpRestTransport(TransportServer):
         """Setup all REST API routes."""
 
         @self._app.get("/api/v1/health")
-        async def health_check() -> dict[str, str]:
-            """Health check endpoint."""
-            return {"status": "healthy", "transport": "http_rest"}
+        async def health_check() -> dict[str, Any]:
+            """Health check endpoint with queue metrics (IG-258)."""
+            queue_metrics = {}
+
+            # Get input queue depth (if runner has it)
+            if self._runner and hasattr(self._runner, "_current_input_queue"):
+                input_queue = self._runner._current_input_queue
+                max_size = (
+                    self._soothe_config.daemon.max_input_queue_size
+                    if self._soothe_config
+                    and hasattr(self._soothe_config.daemon, "max_input_queue_size")
+                    else 0
+                )
+                current_size = input_queue.qsize()
+
+                queue_metrics["input_queue"] = {
+                    "current": current_size,
+                    "max": max_size,
+                    "percent": round((current_size / max_size * 100) if max_size > 0 else 0, 2),
+                }
+
+            # Get event queue depths (if session manager available)
+            if self._session_manager and hasattr(self._session_manager, "_sessions"):
+                event_queues = []
+                for session in self._session_manager._sessions.values():
+                    if hasattr(session, "event_queue"):
+                        event_queues.append(session.event_queue.qsize())
+
+                if event_queues:
+                    queue_metrics["event_queues"] = {
+                        "max_depth": max(event_queues),
+                        "avg_depth": round(sum(event_queues) / len(event_queues), 2),
+                        "clients_near_capacity": sum(
+                            1 for d in event_queues if d > 8000
+                        ),  # >80% of 10000
+                    }
+
+            return {
+                "status": "healthy",
+                "transport": "http_rest",
+                "queues": queue_metrics,
+            }
 
         @self._app.get("/api/v1/status")
         async def get_status() -> dict[str, Any]:

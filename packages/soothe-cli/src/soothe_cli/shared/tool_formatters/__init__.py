@@ -13,6 +13,7 @@ from soothe_cli.shared.tool_formatters.file_ops import FileOpsFormatter
 from soothe_cli.shared.tool_formatters.goal_formatter import GoalFormatter
 from soothe_cli.shared.tool_formatters.media import MediaFormatter
 from soothe_cli.shared.tool_formatters.structured import StructuredFormatter
+from soothe_cli.shared.tool_formatters.subagent import SubagentFormatter
 from soothe_cli.shared.tool_formatters.web import WebFormatter
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "FileOpsFormatter",
     "GoalFormatter",
     "MediaFormatter",
+    "SubagentFormatter",
     "StructuredFormatter",
     "WebFormatter",
 ]
