@@ -8,7 +8,7 @@ from soothe.backends.durability.base import BasePersistStoreDurability
 from soothe.backends.persistence.sqlite_store import SQLitePersistStore
 
 if TYPE_CHECKING:
-    from soothe.protocols.persistence import PersistStore
+    from soothe.protocols.persistence import AsyncPersistStore
 
 
 class SQLiteDurability(BasePersistStoreDurability):
@@ -19,13 +19,13 @@ class SQLiteDurability(BasePersistStoreDurability):
 
     def __init__(
         self,
-        persist_store: PersistStore | None = None,
+        persist_store: AsyncPersistStore | None = None,
         db_path: str | None = None,
     ) -> None:
         """Initialize SQLite durability backend.
 
         Args:
-            persist_store: Optional PersistStore instance. If None, creates SQLitePersistStore.
+            persist_store: Optional AsyncPersistStore instance. If None, creates SQLitePersistStore.
             db_path: Database file path. Used only when persist_store is None.
                 Defaults to metadata.db for ThreadInfo storage.
         """

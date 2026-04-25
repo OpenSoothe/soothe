@@ -1,54 +1,54 @@
-"""PostgreSQL persistence backend using psycopg (synchronous)."""
+"""PostgreSQL persistence backend using psycopg (async with connection pooling)."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-import threading
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class PostgreSQLPersistStore:
-    """PersistStore implementation using PostgreSQL with JSONB storage.
+    """AsyncPersistStore implementation using PostgreSQL with JSONB storage.
 
-    Uses psycopg's synchronous ConnectionPool so that ``save``/``load``/``delete``
-    work correctly whether called from an asyncio event-loop thread or a plain
-    thread -- avoiding the deadlock that occurs when ``asyncio.run_coroutine_threadsafe().result()``
-    is invoked from within the running loop.
+    Uses psycopg's AsyncConnectionPool for concurrent operations with connection pooling.
 
     Features:
-    - Synchronous connection pooling via psycopg_pool.ConnectionPool
+    - Async connection pooling via psycopg_pool.AsyncConnectionPool
     - JSONB storage with namespace isolation
     - Automatic table creation with indexes
-    - Thread-safe lazy initialization
+    - Async-safe lazy initialization with asyncio.Lock
+    - Concurrent operation support (10 connections by default)
+
+    IG-258 Phase 2: Async methods with connection pooling matching PostgreSQL checkpointer pattern.
     """
 
     def __init__(
         self,
         dsn: str,
         namespace: str = "default",
-        pool_size: int = 5,
+        pool_size: int = 10,
     ) -> None:
         """Initialize PostgreSQL store.
 
         Args:
             dsn: PostgreSQL connection string
             namespace: Namespace for key isolation (e.g., "context", "memory", "durability")
-            pool_size: Connection pool size
+            pool_size: Connection pool size (default: 10, matching checkpointer)
         """
         self._dsn = dsn
         self._namespace = namespace
         self._pool_size = pool_size
         self._pool: Any = None
-        self._init_lock = threading.Lock()
+        self._init_lock = asyncio.Lock()
 
-    def _ensure_pool(self) -> Any:
-        """Lazy pool initialization with automatic table creation.
+    async def _ensure_pool(self) -> Any:
+        """Lazy pool initialization with automatic table creation (async).
 
         Returns:
-            ConnectionPool instance
+            AsyncConnectionPool instance
 
         Raises:
             ImportError: If psycopg[pool] is not installed
@@ -57,17 +57,17 @@ class PostgreSQLPersistStore:
         if self._pool is not None:
             return self._pool
 
-        with self._init_lock:
+        async with self._init_lock:
             if self._pool is not None:
                 return self._pool
 
             try:
-                from psycopg_pool import ConnectionPool
+                from psycopg_pool import AsyncConnectionPool
             except ImportError as exc:
                 msg = "psycopg[pool] is required for PostgreSQL persistence: pip install 'soothe[postgres]'"
                 raise ImportError(msg) from exc
 
-            pool = ConnectionPool(
+            pool = AsyncConnectionPool(
                 conninfo=self._dsn,
                 min_size=1,
                 max_size=self._pool_size,
@@ -75,26 +75,27 @@ class PostgreSQLPersistStore:
             )
 
             try:
-                pool.open()
-                self._create_table(pool)
+                await pool.open()
+                await self._create_table(pool)
                 logger.info(
                     "[Store] PostgreSQL initialized (namespace=%s, pool=%d)",
                     self._namespace,
                     self._pool_size,
                 )
             except Exception as exc:
-                pool.close()
+                await pool.close()
                 msg = f"Failed to initialize PostgreSQL connection pool: {exc}"
                 raise RuntimeError(msg) from exc
 
             self._pool = pool
             return self._pool
 
-    def _create_table(self, pool: Any | None = None) -> None:
-        """Create persistence table with indexes if not exists."""
-        pool = pool or self._ensure_pool()
-        with pool.connection() as conn, conn.cursor() as cur:
-            cur.execute("""
+    async def _create_table(self, pool: Any | None = None) -> None:
+        """Create persistence table with indexes if not exists (async)."""
+        pool = pool or await self._ensure_pool()
+        async with pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS soothe_persistence (
                     key TEXT NOT NULL,
                     namespace TEXT NOT NULL,
@@ -103,24 +104,27 @@ class PostgreSQLPersistStore:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (namespace, key)
                 )
-            """)
-            cur.execute("""
+            """
+            )
+            await cur.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_persistence_updated
                 ON soothe_persistence(updated_at)
-            """)
-            conn.commit()
+            """
+            )
+            await conn.commit()
 
-    def save(self, key: str, data: Any) -> None:
-        """Persist data under the given key (upsert).
+    async def save(self, key: str, data: Any) -> None:
+        """Persist data under the given key (upsert) (async).
 
         Args:
             key: Storage key
             data: JSON-serializable data
         """
-        pool = self._ensure_pool()
+        pool = await self._ensure_pool()
         adapted_data = self._adapt_data(data)
-        with pool.connection() as conn, conn.cursor() as cur:
-            cur.execute(
+        async with pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
                 """
                 INSERT INTO soothe_persistence (key, namespace, data, updated_at)
                 VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
@@ -129,7 +133,7 @@ class PostgreSQLPersistStore:
                 """,
                 (key, self._namespace, adapted_data),
             )
-            conn.commit()
+            await conn.commit()
 
     def _adapt_data(self, data: Any) -> Any:
         """Adapt data for PostgreSQL JSONB storage.
@@ -152,8 +156,8 @@ class PostgreSQLPersistStore:
             # Fallback for older psycopg versions
             return json.dumps(data, default=str)
 
-    def load(self, key: str) -> Any | None:
-        """Load data for the given key.
+    async def load(self, key: str) -> Any | None:
+        """Load data for the given key (async).
 
         Args:
             key: Storage key
@@ -161,13 +165,13 @@ class PostgreSQLPersistStore:
         Returns:
             The stored data, or None if not found
         """
-        pool = self._ensure_pool()
-        with pool.connection() as conn, conn.cursor() as cur:
-            cur.execute(
+        pool = await self._ensure_pool()
+        async with pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
                 "SELECT data FROM soothe_persistence WHERE namespace = %s AND key = %s",
                 (self._namespace, key),
             )
-            row = cur.fetchone()
+            row = await cur.fetchone()
             if row is None:
                 return None
             # PostgreSQL JSONB column returns already-parsed Python objects (list/dict)
@@ -188,23 +192,42 @@ class PostgreSQLPersistStore:
             # Data is already a Python object (list/dict/None/etc.)
             return data
 
-    def delete(self, key: str) -> None:
-        """Delete data for the given key.
+    async def delete(self, key: str) -> None:
+        """Delete data for the given key (async).
 
         Args:
             key: Storage key
         """
-        pool = self._ensure_pool()
-        with pool.connection() as conn, conn.cursor() as cur:
-            cur.execute(
+        pool = await self._ensure_pool()
+        async with pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
                 "DELETE FROM soothe_persistence WHERE namespace = %s AND key = %s",
                 (self._namespace, key),
             )
-            conn.commit()
+            await conn.commit()
 
-    def close(self) -> None:
-        """Close connection pool."""
+    async def list_keys(self, namespace: str | None = None) -> list[str]:
+        """List all keys in the namespace (async).
+
+        Args:
+            namespace: Optional namespace to list keys from. If None, uses default namespace.
+
+        Returns:
+            List of keys in the namespace.
+        """
+        pool = await self._ensure_pool()
+        ns = namespace or self._namespace
+        async with pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT key FROM soothe_persistence WHERE namespace = %s",
+                (ns,),
+            )
+            rows = await cur.fetchall()
+            return [row[0] for row in rows]
+
+    async def close(self) -> None:
+        """Close connection pool (async)."""
         if self._pool is not None:
-            self._pool.close()
+            await self._pool.close()
             self._pool = None
             logger.info("[Store] PostgreSQL closed (namespace=%s)", self._namespace)

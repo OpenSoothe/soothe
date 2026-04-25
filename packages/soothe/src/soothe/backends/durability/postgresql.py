@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from soothe.backends.durability.base import BasePersistStoreDurability
-from soothe.backends.persistence import PersistStore
+from soothe.protocols.persistence import AsyncPersistStore
 
 
 class PostgreSQLDurability(BasePersistStoreDurability):
@@ -13,10 +13,10 @@ class PostgreSQLDurability(BasePersistStoreDurability):
     All ThreadInfo objects are serialized as JSONB.
     """
 
-    def __init__(self, persist_store: PersistStore) -> None:
+    def __init__(self, persist_store: AsyncPersistStore) -> None:
         """Initialize with PostgreSQL persist store.
 
         Args:
-            persist_store: A PersistStore instance backed by PostgreSQL.
+            persist_store: An AsyncPersistStore instance backed by PostgreSQL.
         """
         super().__init__(persist_store)

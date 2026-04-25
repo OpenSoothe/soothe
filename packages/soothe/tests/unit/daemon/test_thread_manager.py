@@ -94,9 +94,9 @@ async def test_resume_thread_recovers_missing_metadata(mock_durability, mock_con
     from types import SimpleNamespace
 
     mock_durability.resume_thread = AsyncMock(side_effect=KeyError("missing"))
-    mock_store = SimpleNamespace(save=MagicMock())
+    mock_store = SimpleNamespace(save=AsyncMock())
     mock_durability._store = mock_store  # noqa: SLF001
-    mock_durability._update_thread_index = MagicMock()  # noqa: SLF001
+    mock_durability._update_thread_index = AsyncMock()  # noqa: SLF001
 
     run_dir = tmp_path / "data" / "threads" / "recover-123"
     run_dir.mkdir(parents=True)
@@ -262,13 +262,22 @@ async def test_delete_thread(mock_durability, mock_config, tmp_path):
     run_dir.mkdir(parents=True)
     (run_dir / "test.txt").write_text("test")
 
-    # Mock the internal store and its methods
+    # Mock the internal store and its methods (async methods after IG-258 Phase 2)
     mock_store = SimpleNamespace(
-        load=MagicMock(return_value={"thread_id": "test123", "status": "active"}),
-        delete=MagicMock(),
+        load=AsyncMock(return_value={"thread_id": "test123", "status": "active"}),
+        delete=AsyncMock(),
     )
     mock_durability._store = mock_store  # noqa: SLF001
-    mock_durability._update_thread_index = MagicMock()  # noqa: SLF001
+    mock_durability._update_thread_index = AsyncMock()  # noqa: SLF001
+    mock_durability.get_thread = AsyncMock(
+        return_value=ThreadInfo(
+            thread_id="test123",
+            status="active",
+            created_at=datetime.now(tz=UTC),
+            updated_at=datetime.now(tz=UTC),
+            metadata=ThreadMetadata(),
+        )
+    )
 
     manager = ThreadContextManager(mock_durability, mock_config)
 
