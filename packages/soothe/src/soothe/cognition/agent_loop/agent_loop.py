@@ -353,9 +353,15 @@ class AgentLoop:
 
 The report should:
 1. Summarize what was accomplished
-2. Highlight key findings or outputs
+2. **Include actual content** from content-retrieval tools (read_file, web_search, fetch_url, ls, glob, etc.)
+   - ToolMessage.content contains the actual file content, search results, etc.
+   - Extract and present this actual content directly, not just summaries
+   - For file reading: show the actual file content (with line numbers if applicable)
+   - For web/research: show actual search results or fetched content
 3. Provide actionable results or deliverables
 4. Be well-structured with clear sections
+
+IMPORTANT: The user wants to see the actual content retrieved, not just confirmation messages. Extract content from ToolMessage.content in the conversation history and present it comprehensively.
 
 Use all tool results and AI responses available in the conversation history to create a comprehensive, coherent final report."""
 
