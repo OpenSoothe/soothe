@@ -8,6 +8,7 @@ file-based goal discovery, and frontmatter status updates.
 import pytest
 
 from soothe.cognition import Goal, GoalEngine
+from soothe.cognition.goal_engine.models import EvidenceBundle
 
 
 class TestValidateGoal:
@@ -281,7 +282,13 @@ class TestCheckReactivatedGoals:
         g1 = await engine.create_goal("Done")
         await engine.complete_goal(g1.id)
         g2 = await engine.create_goal("Failed")
-        await engine.fail_goal(g2.id, allow_retry=False)
+        await engine.fail_goal(
+            g2.id,
+            evidence=EvidenceBundle(
+                narrative="test failure", source="layer2_execute", structured={}
+            ),
+            allow_retry=False,
+        )
 
         reactivated = await engine.check_reactivated_goals()
         assert reactivated == []
@@ -317,7 +324,13 @@ class TestCheckReactivatedGoals:
         suspended.depends_on = [dep.id]
         suspended.status = "suspended"
 
-        await engine.fail_goal(dep.id, allow_retry=False)
+        await engine.fail_goal(
+            dep.id,
+            evidence=EvidenceBundle(
+                narrative="dependency failed", source="layer2_execute", structured={}
+            ),
+            allow_retry=False,
+        )
         reactivated = await engine.check_reactivated_goals()
 
         assert len(reactivated) == 1

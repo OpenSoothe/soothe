@@ -208,7 +208,7 @@ The SDK provides decorator-based APIs for defining plugins with clear folder org
 
 ```
 soothe_sdk/
-├── __init__.py              # Version + backward compat re-exports
+├── __init__.py              # Version info
 ├── core/                    # Core domain concepts (NEW)
 │   ├── events.py            # Event classes + 50+ type constants
 │   ├── exceptions.py        # Exception hierarchy
@@ -248,7 +248,6 @@ soothe_sdk/
 │   ├── parsing.py           # Goal/env parsing + PATH_ARG_PATTERN
 │   ├── serde.py             # LangGraph checkpoint serde
 │   └── workspace.py         # Workspace validation
-└── (backward compat shims)  # events.py, exceptions.py, verbosity.py, etc.
 ```
 
 **Import Pattern** (v0.4.0+ canonical paths):
@@ -266,14 +265,8 @@ from soothe_sdk.client.wire import messages_from_wire_dicts
 from soothe_sdk.ux.output_events import is_output_event, extract_output_text
 from soothe_sdk.tools.metadata import get_tool_meta, get_tool_display_name
 from soothe_sdk.utils.formatting import format_cli_error, log_preview
-from soothe_sdk.utils.parsing import PATH_ARG_PATTERN, is_path_argument
+from soothe_sdk.utils.parsing import PATH_ARG_PATTERN
 from soothe_sdk.protocols import PersistStore, PolicyProtocol
-
-# Backward compatibility - legacy imports still work
-from soothe_sdk.events import SootheEvent  # ✅ Still works (shim re-exports)
-from soothe_sdk.langchain_wire import messages_from_wire_dicts  # ✅ Still works
-from soothe_sdk.utils.display import format_cli_error  # ✅ Still works (shim)
-from soothe_sdk.utils.tool_meta import get_tool_meta  # ✅ Still works (shim)
 ```
 
 ## Key Design Principles

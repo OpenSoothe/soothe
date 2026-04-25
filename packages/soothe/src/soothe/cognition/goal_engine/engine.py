@@ -395,7 +395,6 @@ class GoalEngine:
         goal_id: str,
         *,
         evidence: EvidenceBundle | None = None,
-        error: str = "",  # Backward compatibility (deprecated)
         allow_retry: bool = True,
     ) -> BackoffDecision | None:
         """Mark a goal as failed with evidence, apply backoff reasoning.
@@ -409,7 +408,7 @@ class GoalEngine:
         Args:
             goal_id: Goal to fail.
             evidence: EvidenceBundle from Layer 2 execution (RFC-200 contract).
-            error: Error description (deprecated, for backward compatibility).
+            allow_retry: Whether to allow retry if retries remain.
             allow_retry: Whether to allow retry if retries remain.
 
         Returns:
@@ -423,17 +422,9 @@ class GoalEngine:
             msg = f"Goal {goal_id} not found"
             raise KeyError(msg)
 
-        # RFC-200: Build EvidenceBundle from error string if not provided (backward compatibility)
-        if not evidence and error:
-            logger.warning(
-                "Using deprecated error string for goal failure. "
-                "EvidenceBundle should be provided per RFC-200."
-            )
-            evidence = EvidenceBundle(
-                structured={"error_message": error},
-                narrative=error,
-                source="layer2_execute",
-            )
+        if not evidence:
+            logger.error("No EvidenceBundle provided for goal failure")
+            return None
 
         # RFC-200: Apply backoff reasoning if reasoner available
         backoff_decision = None
@@ -465,7 +456,7 @@ class GoalEngine:
             goal.retry_count += 1
             goal.status = "pending"
             goal.updated_at = datetime.now(UTC)
-            error_text = evidence.narrative if evidence else error
+            error_text = evidence.narrative
             logger.info(
                 "Goal %s retry %d/%d: %s%s",
                 goal_id,
@@ -478,7 +469,7 @@ class GoalEngine:
             return None
 
         goal.status = "failed"
-        goal.error = evidence.narrative if evidence else error  # IG-155: Store error message
+        goal.error = evidence.narrative  # IG-155: Store error message
         goal.updated_at = datetime.now(UTC)
 
         # IG-155: Update source file status if available
@@ -488,7 +479,7 @@ class GoalEngine:
 
                 from soothe.cognition.goal_engine.writer import update_goal_status
 
-                error_text = evidence.narrative if evidence else error
+                error_text = evidence.narrative
                 update_goal_status(Path(goal.source_file), "failed", error=error_text)
                 logger.debug("Updated goal file status for failed %s", goal_id)
             except Exception:

@@ -3,6 +3,7 @@
 import pytest
 
 from soothe.cognition import Goal, GoalEngine
+from soothe.cognition.goal_engine.models import EvidenceBundle
 
 
 class TestGoalModel:
@@ -82,18 +83,33 @@ class TestGoalEngine:
         g = await engine.create_goal("Retryable")
 
         # RFC-200: fail_goal now returns BackoffDecision | None
-        result = await engine.fail_goal(g.id, error="first failure")
-        assert result is None  # No backoff decision applied (backward compatibility)
+        result = await engine.fail_goal(
+            g.id,
+            evidence=EvidenceBundle(
+                narrative="first failure", source="layer2_execute", structured={}
+            ),
+        )
+        assert result is None  # No backoff decision applied
         # Check goal status from engine
         assert g.status == "pending"
         assert g.retry_count == 1
 
-        result = await engine.fail_goal(g.id, error="second failure")
+        result = await engine.fail_goal(
+            g.id,
+            evidence=EvidenceBundle(
+                narrative="second failure", source="layer2_execute", structured={}
+            ),
+        )
         assert result is None
         assert g.status == "pending"
         assert g.retry_count == 2
 
-        result = await engine.fail_goal(g.id, error="third failure")
+        result = await engine.fail_goal(
+            g.id,
+            evidence=EvidenceBundle(
+                narrative="third failure", source="layer2_execute", structured={}
+            ),
+        )
         assert result is None  # Permanent failure, no backoff
         assert g.status == "failed"
         assert g.retry_count == 2
@@ -102,7 +118,11 @@ class TestGoalEngine:
     async def test_fail_goal_no_retry(self) -> None:
         engine = GoalEngine()
         g = await engine.create_goal("No retry")
-        result = await engine.fail_goal(g.id, error="fail", allow_retry=False)
+        result = await engine.fail_goal(
+            g.id,
+            evidence=EvidenceBundle(narrative="fail", source="layer2_execute", structured={}),
+            allow_retry=False,
+        )
         assert result is None  # No backoff decision
         assert g.status == "failed"
 
@@ -239,7 +259,13 @@ class TestIsComplete:
         g1 = await engine.create_goal("A")
         g2 = await engine.create_goal("B")
         await engine.complete_goal(g1.id)
-        await engine.fail_goal(g2.id, allow_retry=False)
+        await engine.fail_goal(
+            g2.id,
+            evidence=EvidenceBundle(
+                narrative="test failure", source="layer2_execute", structured={}
+            ),
+            allow_retry=False,
+        )
         assert engine.is_complete() is True
 
     @pytest.mark.asyncio
