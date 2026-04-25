@@ -64,7 +64,7 @@ The code was designed with the assumption that:
 **This is incorrect** according to RFC-400:
 - **Both TUI and non-TUI should auto-start daemon**
 - Daemon should ALWAYS persist after request
-- Only `soothe daemon stop` should kill daemon
+- Only `soothed stop` should kill daemon
 
 ## Solution
 
@@ -201,15 +201,15 @@ rm -rf ~/.soothe/*.pid ~/.soothe/*.sock
 soothe -p "hello"
 
 # Daemon should be running now
-soothe daemon status
+soothed status
 
 # Ctrl+C during query should NOT kill daemon
 soothe -p "long running task..."
 # Press Ctrl+C
-soothe daemon status  # Should still be running
+soothed status  # Should still be running
 
 # Explicit stop required
-soothe daemon stop
+soothed stop
 ```
 
 ## References

@@ -874,7 +874,7 @@ def daemon_cmd(
 ```
 
 **Connection flow**:
-1. `soothe daemon start` → Daemon listens on WebSocket port 8765
+1. `soothed start` → Daemon listens on WebSocket port 8765
 2. `soothe` → TUI connects via DaemonClient
 3. TUI receives events, displays using deepagents widgets
 

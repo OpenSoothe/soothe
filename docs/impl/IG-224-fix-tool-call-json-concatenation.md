@@ -332,7 +332,7 @@ Must pass:
 
 ### Manual Testing
 
-1. Start daemon: `soothe daemon start`
+1. Start daemon: `soothed start`
 2. Run query that triggers tool calls: `soothe "read README.md"`
 3. Observe TUI tool cards:
    - Tool name displayed correctly (not `tool`)

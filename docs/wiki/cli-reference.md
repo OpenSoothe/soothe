@@ -87,12 +87,12 @@ Continue a conversation thread in the TUI.
 - `--config <file>` - Use custom configuration file
 
 **Requirements**:
-- Requires a running daemon. Start daemon with `soothe-daemon start` first.
+- Requires a running daemon. Start daemon with `soothed start` first.
 
 **Examples**:
 ```bash
 # Start daemon first
-soothe-daemon start
+soothed start
 
 # Continue specific thread
 soothe thread continue abc123
@@ -295,11 +295,11 @@ soothe agent status
 
 Manage the Soothe daemon process.
 
-### soothe-daemon start
+### soothed start
 
 Start the Soothe daemon.
 
-**Usage**: `soothe-daemon start [options]`
+**Usage**: `soothed start [options]`
 
 **Options**:
 - `--foreground` - Run in foreground (don't daemonize)
@@ -308,32 +308,32 @@ Start the Soothe daemon.
 **Examples**:
 ```bash
 # Start daemon in background
-soothe-daemon start
+soothed start
 
 # Start in foreground
-soothe-daemon start --foreground
+soothed start --foreground
 ```
 
-### soothe-daemon stop
+### soothed stop
 
 Stop the running Soothe daemon.
 
-**Usage**: `soothe-daemon stop`
+**Usage**: `soothed stop`
 
 **Examples**:
 ```bash
-soothe-daemon stop
+soothed stop
 ```
 
-### soothe-daemon status
+### soothed status
 
 Show Soothe daemon status.
 
-**Usage**: `soothe-daemon status`
+**Usage**: `soothed status`
 
 **Examples**:
 ```bash
-soothe-daemon status
+soothed status
 ```
 
 **Output**:
@@ -348,18 +348,18 @@ Transports:
 Active Threads: 3
 ```
 
-### soothe-daemon restart
+### soothed restart
 
 Restart the Soothe daemon.
 
-**Usage**: `soothe-daemon restart [options]`
+**Usage**: `soothed restart [options]`
 
 **Options**:
 - `--config <file>` - Use custom configuration file
 
 **Examples**:
 ```bash
-soothe-daemon restart
+soothed restart
 ```
 
 ## Autopilot Mode
@@ -440,13 +440,13 @@ soothe thread continue
 
 ```bash
 # Start daemon
-soothe-daemon start
+soothed start
 
 # Run in detached mode
 soothe -p "Long running task" &
 
 # Check status later
-soothe-daemon status
+soothed status
 ```
 
 ### Thread Management

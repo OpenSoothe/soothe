@@ -18,7 +18,7 @@ This document clarifies the entry points architecture following the CLI-daemon s
 
 ### soothe (Daemon Server)
 - **Purpose**: Daemon server (agent runtime, protocols, backends)
-- **Entry Points**: `soothe-daemon`
+- **Entry Points**: `soothed`
 - **Optional Dependencies**: `[cli]` - includes soothe-cli
 - **Install**: `pip install soothe` (daemon only) or `pip install soothe[cli]` (daemon + client)
 
@@ -27,7 +27,7 @@ This document clarifies the entry points architecture following the CLI-daemon s
 | Command | Package | Purpose |
 |---------|---------|---------|
 | `soothe` | soothe-cli | CLI client (TUI, thread management, config) |
-| `soothe-daemon` | soothe | Daemon management (start/stop/status/doctor/restart) |
+| `soothed` | soothe | Daemon management (start/stop/status/doctor/restart) |
 
 ## Usage Patterns
 
@@ -40,7 +40,7 @@ pip install soothe
 pip install soothe-cli
 
 # Start daemon (on server)
-soothe-daemon start
+soothed start
 
 # Connect from client (on workstation)
 soothe --websocket-host server-host --websocket-port 8765
@@ -52,7 +52,7 @@ soothe --websocket-host server-host --websocket-port 8765
 pip install soothe[cli]
 
 # Start daemon
-soothe-daemon start
+soothed start
 
 # Connect from client (same machine)
 soothe
@@ -84,7 +84,7 @@ pip install soothe
 
 # Commands (confusing):
 soothe              # Daemon management OR client (conflict!)
-soothe daemon start # Nested pattern (not implemented)
+soothed start # Nested pattern (not implemented)
 ```
 
 ### After (Split Architecture)
@@ -94,19 +94,19 @@ pip install soothe        # Daemon server
 pip install soothe-cli    # CLI client
 
 # Commands (clear):
-soothe-daemon start       # Start daemon
+soothed start       # Start daemon
 soothe                    # Run client
 ```
 
 ## Command Reference
 
-### Daemon Management (`soothe-daemon`)
+### Daemon Management (`soothed`)
 ```bash
-soothe-daemon start      # Start daemon
-soothe-daemon stop       # Stop daemon
-soothe-daemon status     # Show daemon status
-soothe-daemon restart    # Restart daemon
-soothe-daemon doctor     # Run health checks
+soothed start      # Start daemon
+soothed stop       # Stop daemon
+soothed status     # Show daemon status
+soothed restart    # Restart daemon
+soothed doctor     # Run health checks
 ```
 
 ### Client Commands (`soothe`)
@@ -139,7 +139,7 @@ soothe agent list                # List agents
 
 - **Daemon config (`config.yml`)**: `logging.file.level: DEBUG` controls daemon **log file** verbosity
   - Independent of client display preference
-  - Controls what daemon writes to `~/.soothe/logs/soothe-daemon.log`
+  - Controls what daemon writes to `~/.soothe/logs/soothed.log`
   - Options: `DEBUG`, `INFO`, `WARNING`, `ERROR`
   - **Do NOT set `verbosity` field in daemon config** - it's unused and causes confusion
 

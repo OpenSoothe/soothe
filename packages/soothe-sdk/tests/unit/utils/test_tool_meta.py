@@ -28,36 +28,59 @@ class TestOutcomeTypeCoverage:
     def test_file_read_tools_have_correct_outcome_type(self) -> None:
         """File read tools should have outcome_type='file_read'."""
         file_read_tools = [
-            "read_file", "ls", "grep", "glob", "file_info",
-            "inspect_data", "summarize_data", "check_data_quality",
-            "extract_text", "get_data_info", "ask_about_file",
+            "read_file",
+            "ls",
+            "grep",
+            "glob",
+            "file_info",
+            "inspect_data",
+            "summarize_data",
+            "check_data_quality",
+            "extract_text",
+            "get_data_info",
+            "ask_about_file",
         ]
         for name in file_read_tools:
             meta = get_tool_meta(name)
             assert meta is not None
-            assert meta.outcome_type == "file_read", f"{name}: expected file_read, got {meta.outcome_type}"
+            assert meta.outcome_type == "file_read", (
+                f"{name}: expected file_read, got {meta.outcome_type}"
+            )
 
     def test_file_write_tools_have_correct_outcome_type(self) -> None:
         """File write tools should have outcome_type='file_write'."""
         file_write_tools = [
-            "write_file", "edit_file", "delete_file",
-            "edit_file_lines", "insert_lines", "delete_lines", "apply_diff",
+            "write_file",
+            "edit_file",
+            "delete_file",
+            "edit_file_lines",
+            "insert_lines",
+            "delete_lines",
+            "apply_diff",
         ]
         for name in file_write_tools:
             meta = get_tool_meta(name)
             assert meta is not None
-            assert meta.outcome_type == "file_write", f"{name}: expected file_write, got {meta.outcome_type}"
+            assert meta.outcome_type == "file_write", (
+                f"{name}: expected file_write, got {meta.outcome_type}"
+            )
 
     def test_media_tools_have_file_read_outcome_type(self) -> None:
         """Media tools should have outcome_type='file_read' (they read files)."""
         media_tools = [
-            "analyze_image", "transcribe_audio", "get_video_info",
-            "analyze_video", "extract_text_from_image", "audio_qa",
+            "analyze_image",
+            "transcribe_audio",
+            "get_video_info",
+            "analyze_video",
+            "extract_text_from_image",
+            "audio_qa",
         ]
         for name in media_tools:
             meta = get_tool_meta(name)
             assert meta is not None
-            assert meta.outcome_type == "file_read", f"{name}: expected file_read, got {meta.outcome_type}"
+            assert meta.outcome_type == "file_read", (
+                f"{name}: expected file_read, got {meta.outcome_type}"
+            )
 
     def test_execution_tools_have_code_exec_outcome_type(self) -> None:
         """Execution tools should have outcome_type='code_exec'."""
@@ -65,7 +88,9 @@ class TestOutcomeTypeCoverage:
         for name in execution_tools:
             meta = get_tool_meta(name)
             assert meta is not None
-            assert meta.outcome_type == "code_exec", f"{name}: expected code_exec, got {meta.outcome_type}"
+            assert meta.outcome_type == "code_exec", (
+                f"{name}: expected code_exec, got {meta.outcome_type}"
+            )
 
     def test_web_tools_have_web_search_outcome_type(self) -> None:
         """Web tools should have outcome_type='web_search'."""
@@ -73,7 +98,9 @@ class TestOutcomeTypeCoverage:
         for name in web_tools:
             meta = get_tool_meta(name)
             assert meta is not None
-            assert meta.outcome_type == "web_search", f"{name}: expected web_search, got {meta.outcome_type}"
+            assert meta.outcome_type == "web_search", (
+                f"{name}: expected web_search, got {meta.outcome_type}"
+            )
 
     def test_subagent_tools_have_correct_outcome_type(self) -> None:
         """Subagent tools should have outcome_type='subagent'."""
@@ -81,7 +108,9 @@ class TestOutcomeTypeCoverage:
         for name in subagent_tools:
             meta = get_tool_meta(name)
             assert meta is not None
-            assert meta.outcome_type == "subagent", f"{name}: expected subagent, got {meta.outcome_type}"
+            assert meta.outcome_type == "subagent", (
+                f"{name}: expected subagent, got {meta.outcome_type}"
+            )
 
     def test_goals_tools_have_generic_outcome_type(self) -> None:
         """Goals tools should have outcome_type='generic'."""
@@ -89,7 +118,9 @@ class TestOutcomeTypeCoverage:
         for name in goals_tools:
             meta = get_tool_meta(name)
             assert meta is not None
-            assert meta.outcome_type == "generic", f"{name}: expected generic, got {meta.outcome_type}"
+            assert meta.outcome_type == "generic", (
+                f"{name}: expected generic, got {meta.outcome_type}"
+            )
 
     def test_generic_tools_have_generic_outcome_type(self) -> None:
         """Generic tools should have outcome_type='generic'."""
@@ -97,7 +128,9 @@ class TestOutcomeTypeCoverage:
         for name in generic_tools:
             meta = get_tool_meta(name)
             assert meta is not None
-            assert meta.outcome_type == "generic", f"{name}: expected generic, got {meta.outcome_type}"
+            assert meta.outcome_type == "generic", (
+                f"{name}: expected generic, got {meta.outcome_type}"
+            )
 
 
 class TestGetOutcomeTypeHelper:
@@ -129,7 +162,9 @@ class TestGetOutcomeTypeHelper:
                 continue
             seen_ids.add(id(meta))
             if meta.outcome_type:
-                assert meta.outcome_type in valid_types, f"{meta.name}: invalid outcome_type {meta.outcome_type}"
+                assert meta.outcome_type in valid_types, (
+                    f"{meta.name}: invalid outcome_type {meta.outcome_type}"
+                )
 
 
 class TestToolMetaDisplayNames:
@@ -151,7 +186,9 @@ class TestToolMetaDisplayNames:
             "research": "Research",
         }
         for name, expected_display in expected.items():
-            assert get_tool_display_name(name) == expected_display, f"{name}: expected {expected_display!r}"
+            assert get_tool_display_name(name) == expected_display, (
+                f"{name}: expected {expected_display!r}"
+            )
 
     def test_unknown_tool_fallback(self) -> None:
         assert get_tool_display_name("unknown_tool") == "Unknown Tool"
@@ -234,17 +271,39 @@ class TestDerivedSets:
     """Verify registry-derived sets are supersets of old hardcoded values."""
 
     def test_path_arg_keys_covers_old_file_tool_path_keys(self) -> None:
-        old_keys = {"file_path", "path", "path_name", "target_file", "file", "filepath", "filename", "relative_path"}
+        old_keys = {
+            "file_path",
+            "path",
+            "path_name",
+            "target_file",
+            "file",
+            "filepath",
+            "filename",
+            "relative_path",
+        }
         result = get_all_path_arg_keys()
         for k in old_keys:
             assert k in result, f"Missing path arg key: {k!r}"
 
     def test_tools_with_header_info_covers_old_set(self) -> None:
         old_set = {
-            "ls", "list_files", "read_file", "write_file", "edit_file",
-            "glob", "grep", "execute", "shell", "bash", "run_command",
-            "web_search", "fetch_url", "search_web", "crawl_web",
-            "task", "write_todos",
+            "ls",
+            "list_files",
+            "read_file",
+            "write_file",
+            "edit_file",
+            "glob",
+            "grep",
+            "execute",
+            "shell",
+            "bash",
+            "run_command",
+            "web_search",
+            "fetch_url",
+            "search_web",
+            "crawl_web",
+            "task",
+            "write_todos",
         }
         result = get_tools_with_header_info()
         for t in old_set:
@@ -252,12 +311,23 @@ class TestDerivedSets:
 
     def test_tool_categories_covers_old_dict(self) -> None:
         old_cats = {
-            "read_file": "file_ops", "write_file": "file_ops", "delete_file": "file_ops",
-            "list_files": "file_ops", "search_files": "file_ops", "glob": "file_ops",
-            "ls": "file_ops", "run_command": "execution", "run_python": "execution",
-            "run_background": "execution", "kill_process": "execution",
-            "transcribe_audio": "media", "get_video_info": "media", "analyze_image": "media",
-            "create_goal": "goals", "complete_goal": "goals", "fail_goal": "goals",
+            "read_file": "file_ops",
+            "write_file": "file_ops",
+            "delete_file": "file_ops",
+            "list_files": "file_ops",
+            "search_files": "file_ops",
+            "glob": "file_ops",
+            "ls": "file_ops",
+            "run_command": "execution",
+            "run_python": "execution",
+            "run_background": "execution",
+            "kill_process": "execution",
+            "transcribe_audio": "media",
+            "get_video_info": "media",
+            "analyze_image": "media",
+            "create_goal": "goals",
+            "complete_goal": "goals",
+            "fail_goal": "goals",
         }
         result = get_tool_categories()
         for name, cat in old_cats.items():

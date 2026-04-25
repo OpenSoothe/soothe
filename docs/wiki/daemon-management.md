@@ -19,10 +19,10 @@ Start the daemon in the background:
 
 ```bash
 # Start daemon in background
-soothe-daemon start
+soothed start
 
 # Start in foreground (useful for debugging)
-soothe-daemon start --foreground
+soothed start --foreground
 ```
 
 **Output**:
@@ -38,7 +38,7 @@ Status: running
 View daemon status:
 
 ```bash
-soothe-daemon status
+soothed status
 ```
 
 **Output**:
@@ -59,7 +59,7 @@ Memory Usage: 256 MB
 Gracefully stop the daemon:
 
 ```bash
-soothe-daemon stop
+soothed stop
 ```
 
 **Output**:
@@ -74,7 +74,7 @@ Daemon stopped successfully
 Restart the daemon:
 
 ```bash
-soothe-daemon restart
+soothed restart
 ```
 
 ### Attach to Daemon
@@ -124,7 +124,7 @@ Run long tasks without keeping the TUI open:
 
 ```bash
 # Start daemon
-soothe-daemon start
+soothed start
 
 # Run task in background
 soothe -p "Analyze the entire codebase" &
@@ -177,7 +177,7 @@ Enable verbose logging:
 
 ```bash
 export SOOTHE_DEBUG=true
-soothe-daemon start
+soothed start
 ```
 
 ## Configuration
@@ -222,7 +222,7 @@ Monitor daemon resource usage:
 ps aux | grep soothe
 
 # Use system monitor
-htop -p $(pgrep -f "soothe-daemon")
+htop -p $(pgrep -f "soothed")
 ```
 
 ### Health Checks
@@ -252,15 +252,15 @@ curl http://localhost:8766/api/v1/health
 **Solution**: Socket file exists from previous run
 ```bash
 rm ~/.soothe/soothe.sock
-soothe-daemon start
+soothed start
 ```
 
 ### Daemon Not Responding
 
 **Solution**: Restart the daemon
 ```bash
-soothe-daemon stop
-soothe-daemon start
+soothed stop
+soothed start
 ```
 
 ### Can't Connect to Daemon
@@ -269,7 +269,7 @@ soothe-daemon start
 
 **Solution**: Start daemon first, then use thread continue
 ```bash
-soothe-daemon start
+soothed start
 soothe thread -c --daemon
 ```
 

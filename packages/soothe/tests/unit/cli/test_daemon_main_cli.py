@@ -100,7 +100,7 @@ def test_help_subcommand_shows_root_help() -> None:
     import re
 
     clean_output = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
-    assert "Usage: soothe-daemon [OPTIONS] COMMAND [ARGS]..." in clean_output
+    assert "Usage: soothed [OPTIONS] COMMAND [ARGS]..." in clean_output
     assert "Commands" in clean_output
     assert "start" in clean_output
 

@@ -1,12 +1,12 @@
 # Soothe daemon — multi-stage build.
 # Build context must be the monorepo root (parent of `packages/`).
-#   docker build -f packages/soothe/Dockerfile -t soothe-daemon .
+#   docker build -f packages/soothe/Dockerfile -t soothed .
 #
 # Run (publish WebSocket 8765 and HTTP REST 8766; mount config and data as needed):
 #   docker run --rm -p 8765:8765 -p 8766:8766 \
 #     -e OPENAI_API_KEY=... \
 #     -v soothe-data:/var/lib/soothe \
-#     soothe-daemon
+#     soothed
 
 # ---- Builder: install Python deps + Playwright browsers ----
 FROM registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm AS builder

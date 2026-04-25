@@ -294,16 +294,16 @@ Learn more: [Autonomous Mode Guide](autonomous-mode.md)
 
 ```bash
 # Start daemon
-soothe-daemon start
+soothed start
 
 # Attach from any terminal
 soothe thread continue
 
 # Check status
-soothe-daemon status
+soothed status
 
 # Multi-transport support (requires config)
-soothe-daemon start
+soothed start
 ```
 
 **Use cases**:

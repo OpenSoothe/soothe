@@ -5,28 +5,28 @@ Agent runtime server with WebSocket/HTTP transport.
 ## Installation
 
 ```bash
-pip install soothe-daemon
+pip install soothed
 ```
 
 ## Usage
 
-The `soothe-daemon` command manages the server:
+The `soothed` command manages the server:
 
 ```bash
 # Start daemon (foreground)
-soothe-daemon start --foreground
+soothed start --foreground
 
 # Start daemon (background)
-soothe-daemon start
+soothed start
 
 # Check status
-soothe-daemon status
+soothed status
 
 # Stop daemon
-soothe-daemon stop
+soothed stop
 
 # Health checks
-soothe-daemon doctor
+soothed doctor
 ```
 
 ## Architecture

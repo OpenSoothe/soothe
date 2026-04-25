@@ -196,13 +196,13 @@ New: Resume thread → Check _active_threads → Subscribe if active → Send co
 ### Manual Testing
 
 **Test #1: Interrupt Cleanup Timeout Fix**
-1. Start daemon: `soothe daemon start`
+1. Start daemon: `soothed start`
 2. Run long query: `soothe "analyze this large codebase"`
 3. Interrupt with Ctrl+C
 4. Verify: No timeout error, thread state persisted
 
 **Test #2: Resume Running Thread**
-1. Start daemon: `soothe daemon start`
+1. Start daemon: `soothed start`
 2. Run query: `soothe "search for patterns in logs"`
 3. Detach: Press Ctrl+D (or close terminal)
 4. Attach to running thread: `soothe -r <thread_id>`
@@ -304,7 +304,7 @@ None - internal daemon behavior, transparent to users.
 
 **Symptom**: When user presses Ctrl+C during query execution, the thread stops running instead of continuing in background after detach.
 
-**Timeline from daemon logs** (`~/.soothe/logs/soothe-daemon.log`):
+**Timeline from daemon logs** (`~/.soothe/logs/soothed.log`):
 ```
 18:14:45 - Thread actively running (LLM Trace #18)
 18:14:49 - Client sends thread_update_state (interrupt cleanup)

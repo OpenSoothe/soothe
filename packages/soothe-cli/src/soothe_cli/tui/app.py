@@ -1349,7 +1349,7 @@ class SootheApp(App):
                 # Show helpful error message instead
                 raise ConnectionError(
                     f"Soothe daemon not running at {ws_url}. "
-                    f"Please start the daemon with: soothe daemon start"
+                    f"Please start the daemon with: soothed start"
                 )
 
             session = TuiDaemonSession(self._daemon_config)
