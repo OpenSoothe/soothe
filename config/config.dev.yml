@@ -26,23 +26,34 @@ providers:
       - MiniMax-M2.5
       - deepseek-v3.2
 
-# Dev model routing
-router:
-  default: "coding-plan:kimi-k2.5"
-  think: "coding-plan:kimi-k2.5"
-  fast: "coding-plan:kimi-k2.5"
-  image: "coding-plan:qwen3.5-plus"
-  embedding: "dashscope:multimodal-embedding-v1"
+  - name: lmstudio
+    provider_type: openai
+    api_base_url: "http://100.75.70.86:1234/v1"
+    api_key: "lm-studio"
+    models:
+      - google/gemma-4-26b-a4b
+      - zai-org/glm-4.7-flash
+      - zai-org/glm-4.6v-flash
+      - text-embedding-nomic-embed-text-v1.5
 
-debug: false
+# Dev model routing
+# router:
+#   default: "coding-plan:kimi-k2.5"
+#   fast: "coding-plan:kimi-k2.5"
+#   think: "coding-plan:kimi-k2.5"
+#   image: "coding-plan:qwen3.5-plus"
+#   embedding: "dashscope:multimodal-embedding-v1"
+
+router:
+  default: "lmstudio:zai-org/glm-4.7-flash"
+  fast: "lmstudio:zai-org/glm-4.7-flash"
+  think: "lmstudio:zai-org/glm-4.7-flash"
+  image: "lmstudio:zai-org/glm-4.6v-flash"
+  embedding: "lmstudio:text-embedding-nomic-embed-text-v1.5"
 
 # Agentic loop (merged with defaults; see packages/soothe/src/soothe/config/config.yml)
 agentic:
   final_response: adaptive
-
-# Dev update preferences (optional)
-# update:
-#   auto_update: false  # Disable auto-update in dev
 
 # Dev performance tuning
 performance:

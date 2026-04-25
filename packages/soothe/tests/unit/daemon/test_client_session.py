@@ -45,7 +45,8 @@ async def test_subscribe_thread():
 
     client_id = await manager.create_session(transport, None)
 
-    await manager.subscribe_thread(client_id, "thread-abc123")
+    result = await manager.subscribe_thread(client_id, "thread-abc123")
+    assert result is True
 
     session = await manager.get_session(client_id)
     assert session is not None
@@ -65,8 +66,10 @@ async def test_unsubscribe_thread():
     transport.transport_type = "test"
 
     client_id = await manager.create_session(transport, None)
-    await manager.subscribe_thread(client_id, "thread-abc123")
-    await manager.unsubscribe_thread(client_id, "thread-abc123")
+    subscribe_result = await manager.subscribe_thread(client_id, "thread-abc123")
+    assert subscribe_result is True
+    unsubscribe_result = await manager.unsubscribe_thread(client_id, "thread-abc123")
+    assert unsubscribe_result is True
 
     session = await manager.get_session(client_id)
     assert session is not None
@@ -78,12 +81,24 @@ async def test_unsubscribe_thread():
 
 @pytest.mark.asyncio
 async def test_subscribe_invalid_client():
-    """Test subscribing invalid client raises error."""
+    """Test subscribing invalid client returns False gracefully."""
     bus = EventBus()
     manager = ClientSessionManager(bus)
 
-    with pytest.raises(ValueError, match="Client invalid not found"):
-        await manager.subscribe_thread("invalid", "thread-abc123")
+    # Should return False instead of raising ValueError
+    result = await manager.subscribe_thread("invalid", "thread-abc123")
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_unsubscribe_invalid_client():
+    """Test unsubscribing invalid client returns False gracefully."""
+    bus = EventBus()
+    manager = ClientSessionManager(bus)
+
+    # Should return False instead of raising ValueError
+    result = await manager.unsubscribe_thread("invalid", "thread-abc123")
+    assert result is False
 
 
 @pytest.mark.asyncio
@@ -96,7 +111,8 @@ async def test_remove_session():
     transport.transport_type = "test"
 
     client_id = await manager.create_session(transport, None)
-    await manager.subscribe_thread(client_id, "thread-abc123")
+    result = await manager.subscribe_thread(client_id, "thread-abc123")
+    assert result is True
 
     assert manager.session_count == 1
 
@@ -153,7 +169,8 @@ async def test_sender_loop_stops_on_error():
     transport.send = AsyncMock(side_effect=Exception("Connection error"))
 
     client_id = await manager.create_session(transport, None)
-    await manager.subscribe_thread(client_id, "thread-abc123")
+    result = await manager.subscribe_thread(client_id, "thread-abc123")
+    assert result is True
 
     # Publish event
     event = {"type": "test", "data": "hello"}
@@ -180,8 +197,10 @@ async def test_multiple_subscriptions():
 
     client_id = await manager.create_session(transport, None)
 
-    await manager.subscribe_thread(client_id, "thread-abc123")
-    await manager.subscribe_thread(client_id, "thread-def456")
+    result1 = await manager.subscribe_thread(client_id, "thread-abc123")
+    assert result1 is True
+    result2 = await manager.subscribe_thread(client_id, "thread-def456")
+    assert result2 is True
 
     session = await manager.get_session(client_id)
     assert session is not None
@@ -203,7 +222,8 @@ async def test_subscribe_thread_accepts_minimal_verbosity() -> None:
     transport.transport_type = "test"
 
     client_id = await manager.create_session(transport, None)
-    await manager.subscribe_thread(client_id, "thread-abc123", verbosity="minimal")
+    result = await manager.subscribe_thread(client_id, "thread-abc123", verbosity="minimal")
+    assert result is True
 
     session = await manager.get_session(client_id)
     assert session is not None
@@ -223,7 +243,8 @@ async def test_sender_loop_filters_detailed_event_for_minimal_verbosity() -> Non
     transport.send = AsyncMock()
 
     client_id = await manager.create_session(transport, None)
-    await manager.subscribe_thread(client_id, "thread-abc123", verbosity="minimal")
+    result = await manager.subscribe_thread(client_id, "thread-abc123", verbosity="minimal")
+    assert result is True
 
     class TestEvent(SootheEvent):
         type: str = "soothe.lifecycle.thread.created"

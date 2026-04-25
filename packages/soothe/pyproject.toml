@@ -87,7 +87,7 @@ claude = [
     "claude-agent-sdk>=0.1.0",
 ]
 github = [
-    "PyGithub>=2.0.0",
+    "pygithub>=2.0.0",
 ]
 dashscope = [
     "dashscope>=1.20.0",

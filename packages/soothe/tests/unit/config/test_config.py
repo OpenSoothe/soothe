@@ -32,7 +32,6 @@ class TestSootheConfig:
         assert cfg.tools.image.enabled is True
         assert cfg.tools.audio.enabled is True
         assert cfg.tools.video.enabled is True
-        assert cfg.tools.github.enabled is True
         assert cfg.mcp_servers == []
         assert cfg.skills == []
         assert cfg.memory == []

@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Soothe Daemon End-to-End Concurrent Query Benchmark (IG-258).
 
-Real production-like benchmark that:
-1. Starts the Soothe daemon server
+Real production-like benchmark that tests against a running Soothe daemon:
+1. Requires daemon running on ws://127.0.0.1:8765
 2. Connects multiple WebSocket clients concurrently
 3. Sends real agent queries simultaneously
 4. Measures actual latency, throughput, and resource usage
 5. Tests Phase 1 + Phase 2 optimizations under real concurrent load
+
+Prerequisites:
+    soothed start
 
 Usage:
     python scripts/benchmark_e2e_concurrent_queries.py --clients 50 --queries 100
@@ -31,10 +34,6 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-
-# Add packages/soothe to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "packages" / "soothe" / "src"))
-sys.path.insert(0, str(Path(__file__).parent.parent / "packages" / "soothe-sdk" / "src"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -118,7 +117,10 @@ class E2EBenchmarkMetrics:
 
 
 class ConcurrentQueryBenchmark:
-    """End-to-end concurrent query benchmark runner."""
+    """End-to-end concurrent query benchmark runner.
+
+    Expects a running Soothe daemon on ws://127.0.0.1:8765.
+    """
 
     def __init__(self, num_clients: int, num_queries: int, warmup_queries: int = 5):
         """Initialize benchmark.
@@ -133,84 +135,27 @@ class ConcurrentQueryBenchmark:
         self.warmup_queries = warmup_queries
         self.metrics = E2EBenchmarkMetrics()
 
-        self._daemon_process = None
-        self._daemon_task = None
-        self._shutdown_event = asyncio.Event()
+    async def check_daemon_connection(self) -> bool:
+        """Check if daemon is running and accessible.
 
-    async def start_daemon(self) -> None:
-        """Start the Soothe daemon server in background."""
-        from soothe.config import SootheConfig
-        from soothe.daemon.server import SootheDaemon
+        Returns:
+            True if daemon is available, False otherwise
+        """
+        from soothe_sdk.client.websocket import WebSocketClient
 
-        logger.info("Starting Soothe daemon server...")
+        logger.info("Checking if daemon is running on ws://127.0.0.1:8765...")
 
-        config = SootheConfig()
-        config.daemon.max_concurrent_threads = 100
-
-        # Use a different port for benchmarking to avoid conflicts
-        config.daemon.transports.websocket.port = 8766  # Different from default 8765
-
-        # Set workspace - use fresh temporary directory for each benchmark run
-        import tempfile
-        workspace = Path(tempfile.mkdtemp(prefix="soothe_benchmark_"))
-        config.workspace_dir = str(workspace)
-
-        # Disable auto-cancel of old loops for faster benchmark startup
-        config.daemon.auto_cancel_on_startup = False
-
-        # Create daemon instance
-        daemon = SootheDaemon(config, handle_sigint_shutdown=False)
-
-        # Create event to signal successful startup
-        startup_ready = asyncio.Event()
-        startup_error: Exception | None = None
-
-        # Start daemon in background task
-        async def run_daemon():
-            nonlocal startup_error
-            try:
-                # Call daemon.start() to properly initialize transport_manager
-                await daemon.start()
-
-                logger.info("Daemon started successfully")
-                startup_ready.set()  # Signal successful startup
-
-                # Wait for shutdown signal
-                await self._shutdown_event.wait()
-
-            except Exception as e:
-                logger.exception("Daemon startup failed: %s", e)
-                startup_error = e
-                startup_ready.set()  # Signal that we're ready (with error)
-            finally:
-                # Stop daemon gracefully
-                await daemon.stop()
-
-        self._daemon_task = asyncio.create_task(run_daemon())
-
-        # Wait for daemon to initialize or fail (max 10 seconds)
         try:
-            await asyncio.wait_for(startup_ready.wait(), timeout=10.0)
-        except asyncio.TimeoutError:
-            logger.error("Daemon startup timed out after 10 seconds")
-            raise
-
-        # Check if startup failed
-        if startup_error:
-            logger.error("Daemon startup failed, aborting benchmark")
-            raise startup_error
-
-        logger.info("Daemon ready for connections")
-
-    async def stop_daemon(self) -> None:
-        """Stop the daemon gracefully."""
-        logger.info("Stopping daemon...")
-        self._shutdown_event.set()
-
-        if self._daemon_task:
-            await asyncio.wait_for(self._daemon_task, timeout=5.0)
-
-        logger.info("Daemon stopped")
+            # Try to connect to daemon
+            client = WebSocketClient(url="ws://127.0.0.1:8765")
+            await asyncio.wait_for(client.connect(), timeout=2.0)
+            await client.close()
+            logger.info("✅ Daemon is running and accessible")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Cannot connect to daemon: {e}")
+            logger.error("Make sure daemon is running: soothed start")
+            return False
 
     async def create_websocket_clients(self) -> list[Any]:
         """Create multiple WebSocket client connections.
@@ -228,8 +173,7 @@ class ConcurrentQueryBenchmark:
         # Connect clients concurrently
         async def connect_client(client_id: int):
             try:
-                # Use benchmark port (8766) instead of default port (8765)
-                client = WebSocketClient(url="ws://127.0.0.1:8766")
+                client = WebSocketClient(url="ws://127.0.0.1:8765")
                 await asyncio.wait_for(client.connect(), timeout=5.0)
                 clients.append(client)
                 logger.debug(f"Client {client_id} connected")
@@ -321,29 +265,45 @@ class ConcurrentQueryBenchmark:
         Returns:
             Query latency in milliseconds
         """
-        # Simple query payload - using correct WebSocketClient format
-        thread_id = f"benchmark_thread_{query_id}"
-
         query_start = time.perf_counter()
 
         try:
-            # Subscribe to thread first
-            await client.subscribe_thread(thread_id, verbosity="normal")
+            # Generate unique query to avoid duplicate filtering
+            unique_question = f"Benchmark query {query_id}: Calculate {query_id} + {query_id * 2}"
+            await client.send_input(text=unique_question)
 
-            # Send input query
-            await client.send_input(text=f"Benchmark query {query_id}: What is 2+2?")
-
-            # Wait for first response (stream start)
+            # Wait for first response (stream start or status event)
             # We measure latency to first response chunk, not completion
-            response_received = False
             timeout_seconds = 30.0 if not is_warmup else 10.0
 
             async def receive_first_response():
+                received_thread_id = None
+
                 async for event in client.receive():
-                    if event.get("type") in ["stream_start", "output", "response"]:
+                    event_type = event.get("type")
+
+                    # First, capture the thread_id from status events
+                    # The daemon sends status events with thread_id when processing queries
+                    if event_type == "status":
+                        thread_id = event.get("thread_id")
+                        state = event.get("state")
+
+                        # Capture the thread_id assigned to our query
+                        if thread_id and not received_thread_id:
+                            received_thread_id = thread_id
+                            logger.debug(f"Query {query_id} assigned thread {thread_id[:8]}")
+
+                        # Wait for our specific thread to complete (state="idle")
+                        if thread_id and thread_id == received_thread_id and state == "idle":
+                            logger.debug(f"Query {query_id} completed on thread {thread_id[:8]}")
+                            return True
+
+                    # Also accept message/output events (contain actual LLM response)
+                    if event_type in ["message", "output", "stream_start"]:
                         return True
+
                     # Collect resource metrics from daemon status events
-                    if event.get("type") == "daemon_status":
+                    if event_type == "daemon_status":
                         data = event.get("data", {})
                         if "input_queue_depth" in data:
                             self.metrics.queue_depth_samples.append(data["input_queue_depth"])
@@ -385,18 +345,22 @@ class ConcurrentQueryBenchmark:
             query_id: Query identifier
 
         Returns:
-            Query latency in milliseconds
+            Query latency in milliseconds (from send to completion)
         """
         from soothe_sdk.client.websocket import WebSocketClient
 
         client = None
         try:
             # Create fresh WebSocket client for this query
-            client = WebSocketClient(url="ws://127.0.0.1:8766")
+            client = WebSocketClient(url="ws://127.0.0.1:8765")
             await asyncio.wait_for(client.connect(), timeout=5.0)
 
-            # Send query through this dedicated client
+            # Send query and wait for completion (not just send)
+            # The daemon auto-subscribes the client when processing input
             latency = await self._send_single_query(client, query_id, is_warmup=False)
+
+            # DON'T disconnect immediately - wait for daemon to finish processing
+            # The _send_single_query method already waits for completion events
 
             return latency
 
@@ -404,10 +368,10 @@ class ConcurrentQueryBenchmark:
             logger.warning(f"Query {query_id} failed: {e}")
             raise
         finally:
-            # Always disconnect client to clean up resources
+            # Now we can disconnect after query completion
             if client:
                 try:
-                    await client.disconnect()
+                    await client.close()
                 except Exception:
                     pass  # Ignore disconnect errors
 
@@ -430,14 +394,15 @@ class ConcurrentQueryBenchmark:
         logger.info("All clients disconnected")
 
     async def run(self) -> dict[str, Any]:
-        """Run the complete end-to-end benchmark.
+        """Run the complete end-to-end benchmark against existing daemon.
 
         Returns:
             Benchmark results report
         """
         try:
-            # Start daemon
-            await self.start_daemon()
+            # Check daemon is running
+            if not await self.check_daemon_connection():
+                return {"error": "Daemon not running. Start with: soothed start"}
 
             # Create clients
             clients = await self.create_websocket_clients()
@@ -451,7 +416,6 @@ class ConcurrentQueryBenchmark:
 
             # Cleanup
             await self.cleanup_clients(clients)
-            await self.stop_daemon()
 
             # Generate report
             report = self.metrics.to_report()
@@ -461,12 +425,6 @@ class ConcurrentQueryBenchmark:
         except Exception as e:
             logger.exception("Benchmark failed: %s", e)
             return {"error": str(e)}
-        finally:
-            # Ensure cleanup
-            try:
-                await self.stop_daemon()
-            except:
-                pass
 
 
 def print_benchmark_report(report: dict[str, Any]) -> None:
@@ -560,20 +518,20 @@ def main() -> int:
     parser.add_argument(
         "--clients",
         type=int,
-        default=20,
-        help="Number of concurrent WebSocket clients (default: 20)"
+        default=3,
+        help="Number of concurrent WebSocket clients (default: 3)"
     )
     parser.add_argument(
         "--queries",
         type=int,
-        default=50,
-        help="Total number of queries to send (default: 50)"
+        default=10,
+        help="Total number of queries to send (default: 10)"
     )
     parser.add_argument(
         "--warmup",
         type=int,
-        default=5,
-        help="Number of warmup queries (default: 5)"
+        default=2,
+        help="Number of warmup queries (default: 2)"
     )
 
     args = parser.parse_args()
@@ -581,6 +539,10 @@ def main() -> int:
     logger.info("=" * 80)
     logger.info("Soothe Daemon End-to-End Concurrent Query Benchmark (IG-258)")
     logger.info("=" * 80)
+    logger.info("\n⚠️  REQUIREMENTS:")
+    logger.info("  Daemon must be running on ws://127.0.0.1:8765")
+    logger.info("  Start with: soothed start")
+    logger.info("")
     logger.info(f"\nConfiguration:")
     logger.info(f"  Concurrent Clients: {args.clients}")
     logger.info(f"  Total Queries: {args.queries}")
