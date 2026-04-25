@@ -10,7 +10,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from soothe_sdk.utils import get_all_path_arg_keys, get_tool_meta, get_tool_pascal_name
+from soothe_sdk.utils import get_all_path_arg_keys, get_tool_display_name, get_tool_meta
 
 from soothe_cli.shared.message_processing import (
     _normalize_tool_name_for_arg_map,
@@ -136,7 +136,7 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
     tool_args = extract_tool_args_dict(tool_args) if tool_args else {}
     tool_key = _normalize_tool_name_for_arg_map(tool_name or "")
     # Get PascalCase display name for all return statements
-    pascal_name = get_tool_pascal_name(tool_key)
+    pascal_name = get_tool_display_name(tool_key)
 
     def abbreviate_path(path_str: str, max_length: int = 60) -> str:
         """Abbreviate a file path intelligently - show basename or relative path.

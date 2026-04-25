@@ -148,37 +148,57 @@ class ConcurrentQueryBenchmark:
         config.daemon.max_concurrent_threads = 100
 
         # Use a different port for benchmarking to avoid conflicts
-        config.daemon.websocket_port = 8766  # Different from default 8765
+        config.daemon.transports.websocket.port = 8766  # Different from default 8765
 
-        # Set workspace
-        workspace = Path.home() / ".soothe" / "benchmark_workspace"
-        workspace.mkdir(parents=True, exist_ok=True)
+        # Set workspace - use fresh temporary directory for each benchmark run
+        import tempfile
+        workspace = Path(tempfile.mkdtemp(prefix="soothe_benchmark_"))
         config.workspace_dir = str(workspace)
+
+        # Disable auto-cancel of old loops for faster benchmark startup
+        config.daemon.auto_cancel_on_startup = False
 
         # Create daemon instance
         daemon = SootheDaemon(config, handle_sigint_shutdown=False)
 
+        # Create event to signal successful startup
+        startup_ready = asyncio.Event()
+        startup_error: Exception | None = None
+
         # Start daemon in background task
         async def run_daemon():
+            nonlocal startup_error
             try:
                 # Call daemon.start() to properly initialize transport_manager
                 await daemon.start()
 
                 logger.info("Daemon started successfully")
+                startup_ready.set()  # Signal successful startup
 
                 # Wait for shutdown signal
                 await self._shutdown_event.wait()
 
             except Exception as e:
-                logger.exception("Daemon failed: %s", e)
+                logger.exception("Daemon startup failed: %s", e)
+                startup_error = e
+                startup_ready.set()  # Signal that we're ready (with error)
             finally:
                 # Stop daemon gracefully
                 await daemon.stop()
 
         self._daemon_task = asyncio.create_task(run_daemon())
 
-        # Wait for daemon to initialize
-        await asyncio.sleep(2.0)
+        # Wait for daemon to initialize or fail (max 10 seconds)
+        try:
+            await asyncio.wait_for(startup_ready.wait(), timeout=10.0)
+        except asyncio.TimeoutError:
+            logger.error("Daemon startup timed out after 10 seconds")
+            raise
+
+        # Check if startup failed
+        if startup_error:
+            logger.error("Daemon startup failed, aborting benchmark")
+            raise startup_error
 
         logger.info("Daemon ready for connections")
 
@@ -228,25 +248,26 @@ class ConcurrentQueryBenchmark:
 
         return clients
 
-    async def send_concurrent_queries(self, clients: list[Any]) -> None:
-        """Send concurrent queries through all clients and measure performance.
+    async def send_concurrent_queries(self, initial_clients: list[Any]) -> None:
+        """Send concurrent queries through dedicated clients and measure performance.
 
         Args:
-            clients: List of connected WebSocket clients
+            initial_clients: List of initially connected WebSocket clients (for warmup)
         """
-        if not clients:
+        if not initial_clients:
             logger.error("No clients connected, cannot run benchmark")
             return
 
-        logger.info(f"Starting concurrent query benchmark ({self.num_queries} queries across {len(clients)} clients)")
+        logger.info(f"Starting concurrent query benchmark ({self.num_queries} queries)")
 
-        # Warmup phase
+        # Warmup phase: Use initial clients (one query per client to avoid concurrency issues)
         logger.info(f"Warmup phase: sending {self.warmup_queries} queries...")
         warmup_start = time.perf_counter()
 
         warmup_tasks = []
-        for i in range(min(self.warmup_queries, len(clients))):
-            client = clients[i % len(clients)]
+        for i in range(min(self.warmup_queries, len(initial_clients))):
+            # Use one client per query (no reuse)
+            client = initial_clients[i]
             warmup_tasks.append(self._send_single_query(client, i, is_warmup=True))
 
         await asyncio.gather(*warmup_tasks, return_exceptions=True)
@@ -255,15 +276,15 @@ class ConcurrentQueryBenchmark:
         self.metrics.warmup_duration = warmup_duration
         logger.info(f"Warmup completed in {warmup_duration:.2f}s")
 
-        # Main benchmark phase
+        # Main benchmark phase: Create fresh clients for each query
+        # This avoids WebSocket concurrency issues and matches real concurrent load
         logger.info(f"Benchmark phase: sending {self.num_queries} queries...")
         benchmark_start = time.perf_counter()
 
-        # Distribute queries across clients
+        # Create fresh clients and send queries concurrently
         query_tasks = []
         for i in range(self.num_queries):
-            client = clients[i % len(clients)]
-            query_tasks.append(self._send_single_query(client, i, is_warmup=False))
+            query_tasks.append(self._send_single_query_with_new_client(i))
 
         # Send all queries concurrently
         results = await asyncio.gather(*query_tasks, return_exceptions=True)
@@ -339,21 +360,56 @@ class ConcurrentQueryBenchmark:
 
             query_latency_ms = (time.perf_counter() - query_start) * 1000
 
-            if response_received and not is_warmup:
+            if response_received:
+                logger.debug(f"Query {query_id} completed in {query_latency_ms:.2f}ms")
                 return query_latency_ms
-            elif not response_received:
-                raise TimeoutError(f"No response received for query {query_id}")
             else:
-                # Warmup query, don't record metrics
-                return 0.0
+                logger.warning(f"Query {query_id} timed out after {timeout_seconds}s")
+                raise asyncio.TimeoutError(f"Query timed out after {timeout_seconds}s")
+
+        except asyncio.TimeoutError:
+            logger.warning(f"Query {query_id} timed out")
+            raise
+        except Exception as e:
+            logger.warning(f"Query {query_id} failed: {e}")
+            raise
+
+    async def _send_single_query_with_new_client(self, query_id: int) -> float:
+        """Send a single query with a fresh WebSocket client connection.
+
+        This method creates a dedicated client for each query to avoid
+        WebSocket concurrency issues where multiple queries try to use
+        the same client's recv() method concurrently.
+
+        Args:
+            query_id: Query identifier
+
+        Returns:
+            Query latency in milliseconds
+        """
+        from soothe_sdk.client.websocket import WebSocketClient
+
+        client = None
+        try:
+            # Create fresh WebSocket client for this query
+            client = WebSocketClient(url="ws://127.0.0.1:8766")
+            await asyncio.wait_for(client.connect(), timeout=5.0)
+
+            # Send query through this dedicated client
+            latency = await self._send_single_query(client, query_id, is_warmup=False)
+
+            return latency
 
         except Exception as e:
-            if not is_warmup:
-                logger.warning(f"Query {query_id} failed: {e}")
-                raise
-            else:
-                logger.debug(f"Warmup query {query_id} failed: {e}")
-                return 0.0
+            logger.warning(f"Query {query_id} failed: {e}")
+            raise
+        finally:
+            # Always disconnect client to clean up resources
+            if client:
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass  # Ignore disconnect errors
 
     async def cleanup_clients(self, clients: list[Any]) -> None:
         """Close all client connections.

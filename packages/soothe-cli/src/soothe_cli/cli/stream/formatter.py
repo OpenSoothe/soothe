@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from soothe_sdk.core.verbosity import VerbosityTier
-from soothe_sdk.utils import get_tool_pascal_name
+from soothe_sdk.utils import get_tool_display_name
 
 from soothe_cli.cli.stream.display_line import DisplayLine, indent_for_level
 
@@ -160,7 +160,7 @@ def format_tool_call(
         DisplayLine for tool/subagent call with uniform wrench icon.
     """
     # Transform to PascalCase for display
-    display_name = get_tool_pascal_name(name)
+    display_name = get_tool_display_name(name)
 
     # IG-256: No differentiation - use wrench for all tools/subagents
     icon_emoji = "🔧"

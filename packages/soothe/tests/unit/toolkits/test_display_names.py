@@ -6,18 +6,18 @@ from soothe.toolkits.display_names import get_tool_display_name
 def test_auto_conversion_basic():
     """Test basic snake_case to Title Case conversion from registry."""
     # Registry defines explicit display names
-    assert get_tool_display_name("read_file") == "Read File"
+    assert get_tool_display_name("read_file") == "ReadFile"
     # Aliases in registry use the canonical tool's display name
-    assert get_tool_display_name("run_command") == "Shell Execute"  # alias of 'execute'
+    assert get_tool_display_name("run_command") == "ShellExecute"  # alias of 'execute'
     # Unknown tools get auto-converted with spaces
-    assert get_tool_display_name("my_custom_tool") == "My Custom Tool"
+    assert get_tool_display_name("my_custom_tool") == "MyCustomTool"
 
 
 def test_auto_conversion_simple():
     """Test conversion of simple names."""
     # Registry defines explicit display names
-    assert get_tool_display_name("ls") == "List Files"
-    assert get_tool_display_name("grep") == "Search Content"
+    assert get_tool_display_name("ls") == "ListFiles"
+    assert get_tool_display_name("grep") == "Grep"
     # Unknown tools get auto-converted
     assert get_tool_display_name("cat") == "Cat"
 
@@ -25,9 +25,9 @@ def test_auto_conversion_simple():
 def test_auto_conversion_complex():
     """Test conversion of complex names."""
     # Registry defines explicit display names
-    assert get_tool_display_name("inspect_data") == "Inspect Data"
-    assert get_tool_display_name("check_data_quality") == "Check Data Quality"
-    assert get_tool_display_name("extract_text_from_image") == "Extract Text From Image"
+    assert get_tool_display_name("inspect_data") == "InspectData"
+    assert get_tool_display_name("check_data_quality") == "CheckDataQuality"
+    assert get_tool_display_name("extract_text_from_image") == "ExtractTextFromImage"
 
 
 def test_auto_conversion_edge_cases():
@@ -35,8 +35,8 @@ def test_auto_conversion_edge_cases():
     # Registry defines explicit display name
     assert get_tool_display_name("research") == "Research"
 
-    # Unknown tools with multiple underscores get spaces
-    assert get_tool_display_name("a_b_c_d") == "A B C D"
+    # Unknown tools with multiple underscores get auto-converted (no spaces)
+    assert get_tool_display_name("a_b_c_d") == "ABCD"
 
     # Empty string
     assert get_tool_display_name("") == ""
@@ -61,8 +61,8 @@ def test_tool_decorator_auto_conversion():
     assert hasattr(wrapped_tool, "_tool_name")
     assert wrapped_tool._tool_name == "auto_tool"
 
-    # But display name auto-converts with spaces (Title Case)
-    assert get_tool_display_name("auto_tool") == "Auto Tool"
+    # But display name auto-converts (no spaces)
+    assert get_tool_display_name("auto_tool") == "AutoTool"
 
 
 def test_subagent_decorator_auto_conversion():
@@ -82,5 +82,5 @@ def test_subagent_decorator_auto_conversion():
     # Should not have _subagent_display_name attribute (removed)
     assert not hasattr(wrapped_subagent, "_subagent_display_name")
 
-    # But the name should auto-convert with spaces (Title Case)
-    assert get_tool_display_name("my_agent") == "My Agent"
+    # But the name should auto-convert (no spaces)
+    assert get_tool_display_name("my_agent") == "MyAgent"
