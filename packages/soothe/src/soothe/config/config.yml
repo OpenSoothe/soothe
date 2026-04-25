@@ -60,8 +60,8 @@ providers:
 
 router:
   default: "openai:gpt-4o-mini"
-  think: "openai:o3-mini"
   fast: "openai:gpt-4o-mini"
+  think: "openai:o3-mini"
   image: "openai:gpt-4o"
   embedding: "openai:text-embedding-3-small"
 
@@ -302,8 +302,6 @@ tools:
     enabled: false   # Audio transcription (OpenAI Whisper)
   video:
     enabled: false   # Video analysis (Google Gemini)
-  github:
-    enabled: false   # GitHub API (GITHUB_TOKEN)
 
 # =============================================================================
 # MCP Servers

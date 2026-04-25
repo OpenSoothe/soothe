@@ -303,7 +303,6 @@ class ToolsConfig(BaseModel):
         image: Image analysis tools config.
         audio: Audio transcription tools config.
         video: Video analysis tools config.
-        github: GitHub API tools config.
     """
 
     execution: ToolConfig = Field(default_factory=ToolConfig)
@@ -315,7 +314,6 @@ class ToolsConfig(BaseModel):
     image: ToolConfig = Field(default_factory=ToolConfig)
     audio: ToolConfig = Field(default_factory=ToolConfig)
     video: ToolConfig = Field(default_factory=ToolConfig)
-    github: ToolConfig = Field(default_factory=ToolConfig)
 
 
 class PersistenceConfig(BaseModel):

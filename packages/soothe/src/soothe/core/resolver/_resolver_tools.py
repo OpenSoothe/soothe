@@ -118,7 +118,6 @@ def resolve_tools(
             "image",
             "audio",
             "video",
-            "github",
         ]
         if getattr(tools_config, name, None) and getattr(tools_config, name).enabled
     ]
@@ -265,16 +264,6 @@ def _resolve_single_tool_group_uncached(
 
         toolkit = VideoToolkit()
         return toolkit.get_tools()
-
-    if name == "github":
-        try:
-            from langchain_community.utilities.github import GitHubAPIWrapper
-
-            wrapper = GitHubAPIWrapper()
-            return wrapper.get_tools()
-        except Exception:
-            logger.debug("github tool not available (pip install pygithub)", exc_info=True)
-            return []
 
     if name == "wizsearch":
         from soothe.toolkits.wizsearch import WizsearchToolkit

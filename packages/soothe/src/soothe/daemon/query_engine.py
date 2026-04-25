@@ -135,7 +135,13 @@ class QueryEngine:
 
         if client_id:
             await d._session_manager.claim_thread_ownership(client_id, thread_id)
-            await d._session_manager.subscribe_thread(client_id, thread_id)
+            subscribed = await d._session_manager.subscribe_thread(client_id, thread_id)
+            if not subscribed:
+                logger.warning(
+                    "Client %s not found for thread %s subscription - query will run without client notifications",
+                    client_id[:8],
+                    thread_id[:8],
+                )
 
         await d._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
 
@@ -490,7 +496,13 @@ class QueryEngine:
 
         if client_id:
             await d._session_manager.claim_thread_ownership(client_id, thread_id)
-            await d._session_manager.subscribe_thread(client_id, thread_id)
+            subscribed = await d._session_manager.subscribe_thread(client_id, thread_id)
+            if not subscribed:
+                logger.warning(
+                    "Client %s not found for multithreaded thread %s subscription - query will run without client notifications",
+                    client_id[:8],
+                    thread_id[:8],
+                )
 
         d._query_running = True
         await d._broadcast({"type": "status", "state": "running", "thread_id": thread_id})

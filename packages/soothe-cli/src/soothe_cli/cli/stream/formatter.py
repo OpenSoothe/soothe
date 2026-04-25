@@ -414,7 +414,7 @@ def format_step_done(
 
     # Success case: single line
     if success:
-        content = f"Done{tool_info}"
+        content = f"✓ Done{tool_info}"
         return [
             DisplayLine(
                 level=3,  # Child node of step header (level 2)
@@ -430,7 +430,7 @@ def format_step_done(
     lines = [
         DisplayLine(
             level=3,
-            content=f"Failed{tool_info}",
+            content=f"✗ Failed{tool_info}",
             icon="└─",  # IG-257: Unicode tree branch (U+2514)
             indent=indent_for_level(3),
             duration_ms=duration_ms,

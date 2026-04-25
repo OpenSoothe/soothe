@@ -125,7 +125,7 @@ class ClientSessionManager:
         client_id: str,
         thread_id: str,
         verbosity: VerbosityLevel = "normal",
-    ) -> None:
+    ) -> bool:
         """Subscribe client to receive events for thread.
 
         Args:
@@ -133,15 +133,23 @@ class ClientSessionManager:
             thread_id: Thread identifier to subscribe to
             verbosity: Verbosity preference (minimal|normal|detailed|debug)
 
-        Raises:
-            ValueError: If client_id not found
+        Returns:
+            True if subscription succeeded, False if client not found
+
+        Note:
+            Gracefully handles missing clients (e.g., disconnected during
+            concurrent query setup) by returning False instead of raising.
         """
         async with self._lock:
             session = self._sessions.get(client_id)
 
         if not session:
-            msg = f"Client {client_id} not found"
-            raise ValueError(msg)
+            logger.warning(
+                "[Session] Client %s not found for thread subscription %s (likely disconnected)",
+                client_id[:8],
+                thread_id[:8],
+            )
+            return False
 
         # Set client verbosity preference (RFC-0022)
         session.verbosity = verbosity
@@ -156,29 +164,39 @@ class ClientSessionManager:
             thread_id[:8],
             verbosity,
         )
+        return True
 
-    async def unsubscribe_thread(self, client_id: str, thread_id: str) -> None:
+    async def unsubscribe_thread(self, client_id: str, thread_id: str) -> bool:
         """Unsubscribe client from thread.
 
         Args:
             client_id: Client identifier
             thread_id: Thread identifier to unsubscribe from
 
-        Raises:
-            ValueError: If client_id not found
+        Returns:
+            True if unsubscription succeeded, False if client not found
+
+        Note:
+            Gracefully handles missing clients by returning False instead
+            of raising, as client may have disconnected normally.
         """
         async with self._lock:
             session = self._sessions.get(client_id)
 
         if not session:
-            msg = f"Client {client_id} not found"
-            raise ValueError(msg)
+            logger.debug(
+                "[Session] Client %s not found for thread unsubscription %s",
+                client_id[:8],
+                thread_id[:8],
+            )
+            return False
 
         topic = f"thread:{thread_id}"
         await self._event_bus.unsubscribe(topic, session.event_queue)
         session.subscriptions.discard(thread_id)
 
         logger.info("[Session] Client %s ← thread %s", client_id[:8], thread_id[:8])
+        return True
 
     async def migrate_subscriptions(self, old_thread_id: str, new_thread_id: str) -> None:
         """Migrate all client subscriptions from old thread_id to new thread_id.
