@@ -95,25 +95,9 @@ The original name was misleading - this is a pattern, not a function.
 """
 
 
-def is_path_argument(text: str) -> bool:
-    """Check if text matches path argument pattern.
-
-    Backward compatibility wrapper for PATH_ARG_PATTERN.
-    Legacy code may call this as a function; new code should use PATH_ARG_PATTERN directly.
-
-    Args:
-        text: Argument name to check.
-
-    Returns:
-        True if text matches path argument pattern.
-    """
-    return bool(PATH_ARG_PATTERN.match(text))
-
-
 __all__ = [
     "parse_autopilot_goals",
     "_TASK_NAME_RE",
     "resolve_provider_env",
     "PATH_ARG_PATTERN",
-    "is_path_argument",
 ]

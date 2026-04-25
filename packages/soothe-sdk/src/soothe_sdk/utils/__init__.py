@@ -29,7 +29,6 @@ from soothe_sdk.utils.logging import (
 from soothe_sdk.utils.parsing import (
     _TASK_NAME_RE,
     PATH_ARG_PATTERN,
-    is_path_argument,
     parse_autopilot_goals,
     resolve_provider_env,
 )
@@ -53,7 +52,6 @@ __all__ = [
     "resolve_provider_env",
     "INVALID_WORKSPACE_DIRS",
     "PATH_ARG_PATTERN",
-    "is_path_argument",
     "create_soothe_serde",
     "get_soothe_msgpack_allowlist",
     # ToolMeta registry exports

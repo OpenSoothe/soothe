@@ -671,9 +671,10 @@ def get_tool_pascal_name(name: str) -> str:
         >>> get_tool_pascal_name("execute")
         "ShellExecute"
     """
-    display_name = get_tool_display_name(name)
-    # Remove spaces: "Search Files" -> "SearchFiles"
-    return display_name.replace(" ", "")
+    meta = TOOL_REGISTRY.get(name)
+    if meta:
+        return meta.get_display_name()
+    return name.replace("_", "").title()
 
 
 def get_all_path_arg_keys() -> frozenset[str]:
