@@ -220,8 +220,8 @@ class AgentLoopStateManager:
 
         try:
             # Get reader connection from pool (Phase 2)
-            async with AgentLoopStateManager._pool_semaphore:
-                conn = await AgentLoopStateManager._get_reader_connection()
+            async with self._pool_semaphore:
+                conn = await self._get_reader_connection()
 
                 # Execute query in thread pool
                 row_data = await asyncio.to_thread(

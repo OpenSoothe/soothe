@@ -19,14 +19,18 @@ from soothe.cognition.agent_loop.state_manager import AgentLoopStateManager
 def temp_state_manager():
     """Create temporary state manager for testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test_loop_checkpoints.db"
-        state_manager = AgentLoopStateManager.__new__(AgentLoopStateManager)
-        state_manager.loop_id = "test_loop_001"
-        state_manager.db_path = db_path
-        state_manager.run_dir = Path(tmpdir) / "loops" / "test_loop_001"
-        state_manager.run_dir.mkdir(parents=True, exist_ok=True)
-        state_manager._checkpoint = None
-        yield state_manager
+        workspace = Path(tmpdir)
+        # Override the global db_path to use temp directory for isolation
+        from unittest.mock import patch
+
+        db_path = workspace / "test_loop_checkpoints.db"
+
+        with patch(
+            "soothe.cognition.agent_loop.state_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+            return_value=db_path,
+        ):
+            state_manager = AgentLoopStateManager(loop_id="test_loop_001", workspace=workspace)
+            yield state_manager
 
 
 class TestIndexCalculationFix:
