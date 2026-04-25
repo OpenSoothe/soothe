@@ -105,12 +105,7 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
     return VerbosityTier.DEBUG
 
 
-# Backward compatibility alias
-ProgressCategory = VerbosityTier
-
-
 __all__ = [
-    "ProgressCategory",
     "VerbosityLevel",
     "VerbosityTier",
     "classify_event_to_tier",

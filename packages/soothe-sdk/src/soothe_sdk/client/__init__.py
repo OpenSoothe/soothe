@@ -16,7 +16,9 @@ from soothe_sdk.client.session import (
     bootstrap_thread_session,
     connect_websocket_with_retries,
 )
-from soothe_sdk.client.websocket import VerbosityLevel, WebSocketClient
+from soothe_sdk.client.websocket import WebSocketClient
+from soothe_sdk.client.wire import envelope_langchain_message_dict, messages_from_wire_dicts
+from soothe_sdk.core.types import VerbosityLevel
 
 __all__ = [
     "WebSocketClient",
@@ -29,4 +31,6 @@ __all__ = [
     "request_daemon_shutdown",
     "fetch_skills_catalog",
     "fetch_config_section",
+    "envelope_langchain_message_dict",
+    "messages_from_wire_dicts",
 ]

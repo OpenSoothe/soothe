@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.utils import get_tool_pascal_name
-from soothe_sdk.verbosity import VerbosityTier
 
 from soothe_cli.cli.stream.display_line import DisplayLine, indent_for_level
 

@@ -22,7 +22,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe_sdk.exceptions import (
+from soothe_sdk.core.exceptions import (
     DependencyError,
     DiscoveryError,
     InitializationError,

@@ -8,71 +8,21 @@ from typing import Any
 
 from soothe_sdk.plugin import plugin, subagent
 
-from .events import (
-    SUBAGENT_RESEARCH_ANALYZE,
-    SUBAGENT_RESEARCH_COMPLETED,
-    SUBAGENT_RESEARCH_GATHER,
-    SUBAGENT_RESEARCH_GATHER_DONE,
-    SUBAGENT_RESEARCH_INTERNAL_LLM,
-    SUBAGENT_RESEARCH_QUERIES_GENERATED,
-    SUBAGENT_RESEARCH_REFLECT,
-    SUBAGENT_RESEARCH_REFLECTION_DONE,
-    SUBAGENT_RESEARCH_SUB_QUESTIONS,
-    SUBAGENT_RESEARCH_SUMMARIZE,
-    SUBAGENT_RESEARCH_SYNTHESIZE,
-    ResearchAnalyzeEvent,
-    ResearchCompletedEvent,
-    ResearchGatherDoneEvent,
-    ResearchGatherEvent,
-    ResearchInternalLLMResponseEvent,
-    ResearchQueriesGeneratedEvent,
-    ResearchReflectEvent,
-    ResearchReflectionDoneEvent,
-    ResearchSubQuestionsEvent,
-    ResearchSummarizeEvent,
-    ResearchSynthesizeEvent,
-)
 from .implementation import create_research_subagent
 from .protocol import (
     GatherContext,
     InformationSource,
-    InquiryConfig,
     ResearchConfig,
     SourceResult,
 )
 
 __all__ = [
-    # Event type constants
-    "SUBAGENT_RESEARCH_ANALYZE",
-    "SUBAGENT_RESEARCH_COMPLETED",
-    "SUBAGENT_RESEARCH_GATHER",
-    "SUBAGENT_RESEARCH_GATHER_DONE",
-    "SUBAGENT_RESEARCH_INTERNAL_LLM",
-    "SUBAGENT_RESEARCH_QUERIES_GENERATED",
-    "SUBAGENT_RESEARCH_REFLECT",
-    "SUBAGENT_RESEARCH_REFLECTION_DONE",
-    "SUBAGENT_RESEARCH_SUB_QUESTIONS",
-    "SUBAGENT_RESEARCH_SUMMARIZE",
-    "SUBAGENT_RESEARCH_SYNTHESIZE",
     # Protocol
     "GatherContext",
     "InformationSource",
-    "InquiryConfig",  # Backward compatibility alias
-    # Events
-    "ResearchAnalyzeEvent",
-    "ResearchCompletedEvent",
     "ResearchConfig",
-    "ResearchGatherDoneEvent",
-    "ResearchGatherEvent",
-    "ResearchInternalLLMResponseEvent",
     # Plugin
     "ResearchPlugin",
-    "ResearchQueriesGeneratedEvent",
-    "ResearchReflectEvent",
-    "ResearchReflectionDoneEvent",
-    "ResearchSubQuestionsEvent",
-    "ResearchSummarizeEvent",
-    "ResearchSynthesizeEvent",
     "SourceResult",
     # Factory
     "create_research_subagent",

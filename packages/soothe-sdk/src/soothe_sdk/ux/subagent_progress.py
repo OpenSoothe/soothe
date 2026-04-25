@@ -1,67 +1,10 @@
-"""Helper functions for identifying important subagent progress events.
+"""Helper functions for subagent event processing.
 
-This module provides utilities for CLI/TUI to identify which subagent events
-are important for progress tracking (visible at NORMAL verbosity tier).
-
-CRITICAL: This whitelist overrides event registration metadata for capability events.
-When adding new subagents with events at NORMAL tier, MUST update this whitelist
-to ensure visibility. Registration at VerbosityTier.NORMAL requires whitelist entry.
-
-Usage:
-    from soothe_sdk.ux import is_subagent_progress_event
-
-    if is_subagent_progress_event(event_type):
-        # Render as important progress indicator
-        render_progress_event(event_type, data)
+This module provides utilities for CLI/TUI to extract subagent information
+from capability event types.
 """
 
 from __future__ import annotations
-
-from typing import Final
-
-# Important subagent progress events (NORMAL tier - visible by default)
-# These are the key lifecycle and milestone events that users want to see
-SUBAGENT_PROGRESS_EVENT_TYPES: Final[frozenset[str]] = frozenset(
-    {
-        # Browser subagent lifecycle
-        "soothe.capability.browser.started",
-        "soothe.capability.browser.completed",
-        # Claude subagent lifecycle (dispatch + completion visible)
-        "soothe.capability.claude.started",
-        "soothe.capability.claude.completed",
-        # Research subagent lifecycle and meaningful progress
-        "soothe.capability.research.started",
-        "soothe.capability.research.completed",
-        "soothe.capability.research.judgement.reporting",  # LLM decision reasoning
-        # Explore subagent lifecycle (RFC-613)
-        "soothe.capability.explore.started",
-        "soothe.capability.explore.completed",
-    }
-)
-
-
-def is_subagent_progress_event(event_type: str) -> bool:
-    """Check if event is an important subagent progress indicator.
-
-    Important events are those visible at NORMAL verbosity tier, representing
-    key lifecycle moments (started/completed) or meaningful progress updates
-    (like research judgement decisions).
-
-    Args:
-        event_type: Full event type string (e.g., "soothe.capability.browser.started").
-
-    Returns:
-        True if this is an important progress event that should be prominently displayed.
-
-    Example:
-        >>> is_subagent_progress_event("soothe.capability.browser.started")
-        True
-        >>> is_subagent_progress_event("soothe.capability.browser.step.running")
-        False  # DETAILED — shown via CLI/TUI pipeline when verbosity is detailed+
-        >>> is_subagent_progress_event("soothe.capability.research.judgement.reporting")
-        True  # Meaningful progress at NORMAL tier
-    """
-    return event_type in SUBAGENT_PROGRESS_EVENT_TYPES
 
 
 def get_subagent_name_from_event(event_type: str) -> str | None:
@@ -89,7 +32,5 @@ def get_subagent_name_from_event(event_type: str) -> str | None:
 
 
 __all__ = [
-    "SUBAGENT_PROGRESS_EVENT_TYPES",
-    "is_subagent_progress_event",
     "get_subagent_name_from_event",
 ]

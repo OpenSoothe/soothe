@@ -86,6 +86,8 @@ class DaemonConfig(BaseModel):
         query_timeout_action: Action on timeout (cancel | suspend).
         thread_max_age_hours: Auto-cancel incomplete threads older than N hours.
         auto_cancel_on_startup: Cancel very old incomplete threads on daemon start.
+        max_input_queue_size: Maximum pending input messages (0 = unlimited, IG-258).
+        max_concurrent_dispatches: Maximum concurrent message handlers (IG-258).
     """
 
     transports: TransportConfig = Field(default_factory=TransportConfig)
@@ -105,4 +107,11 @@ class DaemonConfig(BaseModel):
     )
     auto_cancel_on_startup: bool = Field(
         default=True, description="Cancel very old incomplete threads on daemon start"
+    )
+    # Concurrent performance optimization (IG-258)
+    max_input_queue_size: int = Field(
+        default=1000, ge=0, description="Maximum pending input messages (0 = unlimited)"
+    )
+    max_concurrent_dispatches: int = Field(
+        default=50, ge=1, description="Maximum concurrent message handlers"
     )

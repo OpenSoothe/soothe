@@ -25,8 +25,6 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import Send
 
-# IG-258: Removed unused subagent event imports
-
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
@@ -54,18 +52,6 @@ def _cleanup_pool() -> None:
     if _shared_pool is not None:
         _shared_pool.shutdown(wait=True)
         _shared_pool = None
-
-
-# ---------------------------------------------------------------------------
-# Progress helper (mirrors research.py pattern)
-# ---------------------------------------------------------------------------
-
-
-def # IG-258: Removed
--> None:
-    from soothe.utils.progress import emit_progress
-
-    emit_progress(event, logger)
 
 
 # ---------------------------------------------------------------------------
@@ -219,16 +205,11 @@ def build_research_engine(
 
     def analyze_topic_node(state: dict[str, Any]) -> dict[str, Any]:
         topic = _extract_topic(state)
-        # IG-258: Removed subagent event emissions - no longer needed (suppressed in CLI/TUI)
-
         prompt = _ANALYZE_TOPIC.format(
             domains=available_domains,
             current_date=_now_str(),
             topic=topic,
         )
-
-        # Emit internal event to signal we're doing internal LLM work
-        # IG-258: Removed - subagent events no longer needed
 
         resp = model.invoke([{"role": "user", "content": prompt}])
         content = str(resp.content)
@@ -241,7 +222,6 @@ def build_research_engine(
             sub_questions = [{"question": topic, "suggested_domain": "auto"}]
 
         logger.info("Research: found %d sub-questions", len(sub_questions))
-        # IG-258: Removed
         return {
             "_sub_questions": sub_questions,
             "search_summaries": [],
@@ -261,9 +241,6 @@ def build_research_engine(
             sub_questions=sq_text,
         )
 
-        # Emit internal event to signal we're doing internal LLM work
-        # IG-258: Removed
-
         resp = model.invoke([{"role": "user", "content": prompt}])
         content = str(resp.content)
 
@@ -275,10 +252,6 @@ def build_research_engine(
             queries = [{"query": _extract_topic(state), "domain_hint": "auto"}]
 
         logger.info("Research: generated %d queries", len(queries))
-        # IG-258: Removed
-if isinstance(q, dict) else q for q in queries],
-            ).to_dict()
-        )
         return {"_queries": queries}
 
     def route_to_gather(state: dict[str, Any]) -> list[Send]:
@@ -304,10 +277,6 @@ if isinstance(q, dict) else q for q in queries],
     def gather_node(state: dict[str, Any]) -> dict[str, Any]:
         query = state.get("_gather_query", "")
         domain_hint = state.get("_gather_domain", "auto")
-
-        # IG-258: Removed
-.to_dict()
-        )
 
         selected = router.select(query, domain=domain_hint)
         if not selected:
@@ -360,12 +329,6 @@ if isinstance(q, dict) else q for q in queries],
             summary_parts.append(f"[{r.source_name}] {r.content}")
             source_refs.append(f"{r.source_name}:{r.source_ref}")
 
-        # IG-258: Removed
-,
-                sources_used=list({r.source_name for r in all_results}),
-            ).to_dict()
-        )
-
         return {
             "search_summaries": ["\n".join(summary_parts)],
             "sources_gathered": source_refs,
@@ -390,11 +353,6 @@ if isinstance(q, dict) else q for q in queries],
         resp = model.invoke([{"role": "user", "content": prompt}])
         integrated = str(resp.content)
 
-        # IG-258: Removed
-,
-            ).to_dict()
-        )
-
         return {"search_summaries": [integrated]}
 
     def reflect_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -402,18 +360,10 @@ if isinstance(q, dict) else q for q in queries],
         loop_count = state.get("loop_count", 0)
         summaries = "\n\n".join(state.get("search_summaries", []))
 
-        # IG-258: Removed
-.to_dict()
-        )
-
         prompt = _REFLECT.format(
             topic=topic,
             summaries=summaries[:4000] or "(no summaries yet)",
         )
-
-        # Emit internal event to signal we're doing internal LLM work
-        # IG-258: Removed
-.to_dict())
 
         resp = model.invoke([{"role": "user", "content": prompt}])
         content = str(resp.content)
@@ -425,30 +375,12 @@ if isinstance(q, dict) else q for q in queries],
 
         is_sufficient = parsed.get("is_sufficient", True)
         follow_ups = parsed.get("follow_up_queries", [])
-        knowledge_gap = parsed.get("knowledge_gap", "")
 
         logger.info(
             "Research: loop %d, sufficient=%s, follow_ups=%d",
             loop_count + 1,
             is_sufficient,
             len(follow_ups),
-        )
-
-        # IG-258: Removed
-,
-            ).to_dict()
-        )
-
-        # IG-089: Emit judgement event with meaningful summary (visible at normal verbosity)
-        if is_sufficient:
-            judgement_text = "Research complete"
-            action_text = "complete"
-        else:
-            gap_desc = knowledge_gap[:50] if knowledge_gap else "more sources needed"
-            judgement_text = f"Need {gap_desc}"
-            action_text = "continue"
-        # IG-258: Removed
-.to_dict()
         )
 
         return {
@@ -487,10 +419,6 @@ if isinstance(q, dict) else q for q in queries],
         summaries = "\n\n".join(state.get("search_summaries", []))
         num_sources = len(state.get("sources_gathered", []))
 
-        # IG-258: Removed
-.to_dict()
-        )
-
         prompt = _SYNTHESIZE.format(
             current_date=_now_str(),
             topic=topic,
@@ -500,10 +428,6 @@ if isinstance(q, dict) else q for q in queries],
         answer = str(resp.content)
 
         logger.info("Research: synthesized %d chars from %d sources", len(answer), num_sources)
-        # IG-258: Removed
-,
-            ).to_dict()
-        )
         return {"answer": answer}
 
     graph = StateGraph(ResearchEngineState)

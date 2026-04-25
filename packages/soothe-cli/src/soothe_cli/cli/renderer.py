@@ -12,8 +12,8 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.utils import get_tool_pascal_name
-from soothe_sdk.verbosity import VerbosityTier
 
 from soothe_cli.cli.stream import DisplayLine, StreamDisplayPipeline
 from soothe_cli.cli.utils import make_tool_block

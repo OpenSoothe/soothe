@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import websockets.exceptions
-from soothe_sdk.verbosity import VerbosityLevel
+from soothe_sdk.core.types import VerbosityLevel
 
 if TYPE_CHECKING:
     from soothe.core.event_catalog import EventMeta
@@ -62,24 +62,29 @@ class ClientSessionManager:
         event_bus: EventBus instance for routing events
         cancel_callback: Optional async callback to cancel a thread by ID.
             Called when client disconnects without explicit detach.
+        dispatch_cleanup_callback: Optional async callback to cleanup dispatch tasks (IG-258).
+            Called when client disconnects to cancel pending dispatches.
     """
 
     def __init__(
         self,
         event_bus: EventBus,
         cancel_callback: Callable[[str], Coroutine[None, None, None]] | None = None,
+        dispatch_cleanup_callback: Callable[[str], Coroutine[None, None, None]] | None = None,
     ) -> None:
         """Initialize session manager.
 
         Args:
             event_bus: EventBus instance for routing events
             cancel_callback: Optional async callback to cancel a thread by ID.
+            dispatch_cleanup_callback: Optional async callback to cleanup dispatch tasks (IG-258).
         """
         self._event_bus = event_bus
         self._sessions: dict[str, ClientSession] = {}
         self._lock = asyncio.Lock()
         self._client_thread_ownership: dict[str, str] = {}  # client_id → thread_id
         self._cancel_callback = cancel_callback
+        self._dispatch_cleanup_callback = dispatch_cleanup_callback
 
     async def create_session(
         self,
@@ -244,6 +249,17 @@ class ClientSessionManager:
                     owned_thread_id,
                 )
 
+        # IG-258: Cancel pending dispatch tasks for this client
+        if self._dispatch_cleanup_callback:
+            try:
+                await self._dispatch_cleanup_callback(client_id)
+                logger.debug("[Session] Dispatch tasks cancelled for client %s", client_id[:8])
+            except Exception:
+                logger.exception(
+                    "Failed to cleanup dispatch tasks for client %s",
+                    client_id,
+                )
+
         # Cancel sender task
         if session.sender_task:
             session.sender_task.cancel()
@@ -309,54 +325,86 @@ class ClientSessionManager:
             return self._client_thread_ownership.get(client_id)
 
     async def _sender_loop(self, session: ClientSession) -> None:
-        """Send events from queue with daemon-side filtering (RFC-0022).
+        """Send events from queue with daemon-side filtering and batching (RFC-0022, IG-258).
 
         This task runs continuously, pulling events from the client's
         event queue, applying verbosity filtering, and sending them
-        via the transport layer.
+        via the transport layer. IG-258 adds batching for improved throughput.
 
         Args:
             session: ClientSession to send events for
         """
         logger.debug("Sender loop started for client %s", session.client_id[:8])
+        batch_timeout = 0.05  # 50ms batch window (IG-258)
+
         try:
+            batch: list[dict[str, Any]] = []
             while True:
-                # Get event data (may be tuple with metadata)
-                event_data = await session.event_queue.get()
-
-                # Extract event and metadata
-                event: dict[str, Any]
-                event_meta: EventMeta | None = None
-
-                if isinstance(event_data, tuple):
-                    # New format: (event, event_meta)
-                    event, event_meta = event_data
-                else:
-                    # Legacy format: event dict without metadata
-                    event = event_data
-
-                # Daemon-side filtering (RFC-0022)
-                if event_meta:
-                    # Heartbeat events always pass through (RFC-0013)
-                    # They're needed to prevent client timeout during long LLM calls
-                    # Check if this is a heartbeat event (wrapped in "event" message type)
-                    is_heartbeat = False
-                    if isinstance(event, dict) and event.get("type") == "event":
-                        ev_data = event.get("data")
-                        if isinstance(ev_data, dict):
-                            is_heartbeat = ev_data.get("type") == "soothe.system.daemon.heartbeat"
-
-                    if not is_heartbeat:
-                        # Import should_show from RFC-0024's verbosity_tier
-                        from soothe_sdk.verbosity import should_show
-
-                        # Check if event should be shown at client's verbosity level
-                        if not should_show(event_meta.verbosity, session.verbosity):
-                            continue  # Skip this event
-
-                # Send filtered event to client
+                # Wait for first event or batch timeout
                 try:
-                    await session.transport.send(session.transport_client, event)
+                    event_data = await asyncio.wait_for(
+                        session.event_queue.get(), timeout=batch_timeout
+                    )
+                    batch.append(event_data)
+                except TimeoutError:
+                    if not batch:
+                        continue  # No events in window, retry
+
+                # Gather remaining events in batch window (up to 10 events)
+                while not session.event_queue.empty() and len(batch) < 10:
+                    try:
+                        event_data = session.event_queue.get_nowait()
+                        batch.append(event_data)
+                    except asyncio.QueueEmpty:
+                        break
+
+                # Process batch with filtering
+                filtered_events: list[dict[str, Any]] = []
+                for event_data in batch:
+                    # Extract event and metadata
+                    event: dict[str, Any]
+                    event_meta: EventMeta | None = None
+
+                    if isinstance(event_data, tuple):
+                        # New format: (event, event_meta)
+                        event, event_meta = event_data
+                    else:
+                        # Legacy format: event dict without metadata
+                        event = event_data
+
+                    # Daemon-side filtering (RFC-0022)
+                    if event_meta:
+                        # Heartbeat events always pass through (RFC-0013)
+                        # They're needed to prevent client timeout during long LLM calls
+                        # Check if this is a heartbeat event (wrapped in "event" message type)
+                        is_heartbeat = False
+                        if isinstance(event, dict) and event.get("type") == "event":
+                            ev_data = event.get("data")
+                            if isinstance(ev_data, dict):
+                                is_heartbeat = (
+                                    ev_data.get("type") == "soothe.system.daemon.heartbeat"
+                                )
+
+                        if not is_heartbeat:
+                            # Import should_show from RFC-0024's verbosity_tier
+                            from soothe_sdk.core.verbosity import should_show
+
+                            # Check if event should be shown at client's verbosity level
+                            if not should_show(event_meta.verbosity, session.verbosity):
+                                continue  # Skip this event
+
+                    filtered_events.append(event)
+
+                # Send batch of filtered events
+                batch.clear()
+                if not filtered_events:
+                    continue  # All events filtered, continue loop
+
+                # Send events individually (batching optimization for network efficiency)
+                # Note: Could be further optimized to send as array if protocol supports it
+                try:
+                    for event in filtered_events:
+                        await session.transport.send(session.transport_client, event)
                 except websockets.exceptions.ConnectionClosedOK:
                     # Normal disconnect (code 1000) - expected behavior
                     logger.debug(

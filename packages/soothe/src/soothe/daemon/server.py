@@ -107,11 +107,20 @@ class SootheDaemon(DaemonHandlersMixin):
         self._current_query_task: asyncio.Task | None = None
         self._thread_stop = threading.Event()
         self._stop_event: asyncio.Event | None = None
-        self._current_input_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        # Input queue with configurable limit (IG-258)
+        max_queue_size = self._config.daemon.max_input_queue_size
+        self._current_input_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(
+            maxsize=max_queue_size if max_queue_size > 0 else 0
+        )
         self._cleanup_task: asyncio.Task[None] | None = None
         self._inactivity_check_task: asyncio.Task[None] | None = None
         self._input_loop_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
+        # Message dispatch concurrency control (IG-258)
+        self._dispatch_semaphore: asyncio.Semaphore = asyncio.Semaphore(
+            self._config.daemon.max_concurrent_dispatches
+        )
+        self._dispatch_tasks: dict[str, asyncio.Task] = {}  # client_id -> Task
         self._thread_logger: ThreadLogger | None = None
         self._pid_lock_fd: int | None = None
         # Transport manager for multi-transport support (RFC-0013)
@@ -121,6 +130,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._session_manager: ClientSessionManager = ClientSessionManager(
             self._event_bus,
             cancel_callback=self._cancel_thread,  # RFC-0013: auto-cancel on disconnect
+            dispatch_cleanup_callback=self._cleanup_dispatch_tasks,  # IG-258
         )
         # Multi-threading support (RFC-402)
         self._thread_executor: Any = None  # ThreadExecutor instance
@@ -221,6 +231,9 @@ class SootheDaemon(DaemonHandlersMixin):
             self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
             self._inactivity_check_task = asyncio.create_task(self._periodic_inactivity_check())
             self._heartbeat_task = asyncio.create_task(self._periodic_heartbeat())
+            self._queue_monitoring_task: asyncio.Task[None] = asyncio.create_task(
+                self._periodic_queue_monitoring()
+            )
 
             # Detect incomplete threads from previous daemon run (RFC-0010)
             await self._detect_incomplete_threads()
@@ -500,6 +513,42 @@ class SootheDaemon(DaemonHandlersMixin):
             except Exception:
                 logger.warning("Periodic inactivity check failed", exc_info=True)
 
+    async def _periodic_queue_monitoring(self) -> None:
+        """Monitor queue depths and log warnings when near capacity (IG-258)."""
+        while self._running:
+            await asyncio.sleep(10)  # Check every 10 seconds
+            try:
+                # Check input queue depth
+                max_queue_size = self._config.daemon.max_input_queue_size
+                if max_queue_size > 0:  # Only check if limit is set
+                    current_size = self._current_input_queue.qsize()
+                    threshold = int(max_queue_size * 0.8)  # 80% threshold
+                    if current_size > threshold:
+                        logger.warning(
+                            "Input queue near capacity: %d/%d (%.1f%%)",
+                            current_size,
+                            max_queue_size,
+                            (current_size / max_queue_size) * 100,
+                        )
+
+                # Check event queue depths per client
+                if self._session_manager:
+                    async with self._session_manager._lock:
+                        for client_id, session in self._session_manager._sessions.items():
+                            event_queue_size = session.event_queue.qsize()
+                            event_queue_max = 10000  # Default maxsize
+                            event_threshold = int(event_queue_max * 0.8)
+                            if event_queue_size > event_threshold:
+                                logger.warning(
+                                    "Client %s event queue near capacity: %d/%d (%.1f%%)",
+                                    client_id[:8],
+                                    event_queue_size,
+                                    event_queue_max,
+                                    (event_queue_size / event_queue_max) * 100,
+                                )
+            except Exception:
+                logger.warning("Periodic queue monitoring failed", exc_info=True)
+
     async def _periodic_heartbeat(self) -> None:
         """Broadcast heartbeat events to all subscribed clients.
 
@@ -629,6 +678,11 @@ class SootheDaemon(DaemonHandlersMixin):
             with contextlib.suppress(asyncio.CancelledError):
                 await self._heartbeat_task
 
+        if hasattr(self, "_queue_monitoring_task") and not self._queue_monitoring_task.done():
+            self._queue_monitoring_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._queue_monitoring_task
+
         # Cancel any running query task
         if self._current_query_task and not self._current_query_task.done():
             self._current_query_task.cancel()
@@ -739,15 +793,49 @@ class SootheDaemon(DaemonHandlersMixin):
         """Handle incoming message from any transport.
 
         This method routes messages from the transport layer to the
-        existing message handling logic.
+        existing message handling logic with concurrency control (IG-258).
 
         Args:
             client_id: Unique client identifier
             msg: Message dict from a transport client.
         """
-        # Create a task to handle the message asynchronously
-        task = asyncio.create_task(self._message_router.dispatch(client_id, msg))
-        _ = task  # Suppress RUF006 warning - we intentionally don't track the task
+        # Create a task with semaphore control and tracking (IG-258)
+        task = asyncio.create_task(self._dispatch_with_semaphore(client_id, msg))
+        # Track task per client for cleanup on disconnect
+        self._dispatch_tasks[client_id] = task
+        # Auto-cleanup when task completes
+        task.add_done_callback(lambda t: self._dispatch_tasks.pop(client_id, None))
+
+    async def _dispatch_with_semaphore(self, client_id: str, msg: dict[str, Any]) -> None:
+        """Dispatch message with semaphore control and proper cleanup (IG-258).
+
+        Args:
+            client_id: Unique client identifier
+            msg: Message dict from a transport client.
+        """
+        async with self._dispatch_semaphore:
+            try:
+                await self._message_router.dispatch(client_id, msg)
+            except asyncio.CancelledError:
+                logger.debug("Dispatch cancelled for client %s", client_id)
+                raise
+            except Exception:
+                logger.exception("Error dispatching message for client %s", client_id)
+
+    async def _cleanup_dispatch_tasks(self, client_id: str) -> None:
+        """Cancel pending dispatch tasks for disconnected client (IG-258).
+
+        Args:
+            client_id: Client identifier being disconnected
+        """
+        if client_id in self._dispatch_tasks:
+            task = self._dispatch_tasks[client_id]
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass  # Expected cancellation
+            logger.debug("Cancelled dispatch task for client %s", client_id[:8])
 
     # -- static helpers -----------------------------------------------------
 

@@ -43,7 +43,7 @@ if TYPE_CHECKING:
         def __call__(self, *, approximate: bool = False) -> None: ...
 
 
-from soothe_sdk.langchain_wire import envelope_langchain_message_dict
+from soothe_sdk.client.wire import envelope_langchain_message_dict
 
 from soothe_cli.cli.stream.display_line import DisplayLine
 from soothe_cli.shared.essential_events import (
@@ -231,7 +231,7 @@ def _extract_custom_output_text(data: dict[str, Any]) -> str | None:
     All user-visible output events (chitchat, quiz, final report, etc.) are
     registered in soothe_sdk.output_events and queried here.
     """
-    from soothe_sdk.output_events import extract_output_text
+    from soothe_sdk.ux.output_events import extract_output_text
 
     event_type = str(data.get("type", ""))
     return extract_output_text(event_type, data)

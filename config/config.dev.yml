@@ -60,6 +60,9 @@ llm_tracing:
 # Dev daemon configuration - enable HTTP REST for BM-003 benchmark
 daemon:
   max_concurrent_threads: 100
+  # IG-258: Concurrent performance optimization
+  max_input_queue_size: 1000         # Maximum pending input messages (0 = unlimited)
+  max_concurrent_dispatches: 50      # Maximum concurrent message handlers
   transports:
     websocket:
       enabled: true

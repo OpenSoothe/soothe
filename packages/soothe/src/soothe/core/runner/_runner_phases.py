@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command, Interrupt
-from soothe_sdk.exceptions import ConfigurationError
+from soothe_sdk.core.exceptions import ConfigurationError
 
 from soothe.core.event_catalog import (
     ChitchatResponseEvent,

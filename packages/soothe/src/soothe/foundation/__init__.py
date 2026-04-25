@@ -7,7 +7,7 @@ Note: Event types, verbosity, and internal helpers are now imported from soothe_
 """
 
 from soothe_sdk.client import VerbosityLevel
-from soothe_sdk.events import (
+from soothe_sdk.core.events import (
     ErrorEvent,
     LifecycleEvent,
     OutputEvent,
@@ -15,21 +15,18 @@ from soothe_sdk.events import (
     SootheEvent,
     SubagentEvent,
 )
+from soothe_sdk.core.verbosity import (
+    VerbosityTier,
+    should_show,
+)
 from soothe_sdk.utils import INVALID_WORKSPACE_DIRS
 from soothe_sdk.ux import (
     INTERNAL_JSON_KEYS,
     classify_event_to_tier,
     strip_internal_tags,
 )
-from soothe_sdk.verbosity import (
-    VerbosityTier,
-    should_show,
-)
 
 from soothe.foundation.ai_message import extract_text_from_ai_message
-
-# Backward compatibility alias
-ProgressCategory = VerbosityTier
 
 __all__ = [
     "INTERNAL_JSON_KEYS",
@@ -37,7 +34,6 @@ __all__ = [
     "ErrorEvent",
     "LifecycleEvent",
     "OutputEvent",
-    "ProgressCategory",
     "ProtocolEvent",
     "SootheEvent",
     "SubagentEvent",

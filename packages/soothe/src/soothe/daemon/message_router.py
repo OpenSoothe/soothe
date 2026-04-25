@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from soothe_sdk.langchain_wire import messages_from_wire_dicts
+from soothe_sdk.client.wire import messages_from_wire_dicts
 
 from soothe.core.runner._types import _generate_thread_id
 from soothe.core.workspace import validate_client_workspace

@@ -8,7 +8,7 @@ Events are self-registered at module load time using register_event().
 
 from typing import Literal
 
-from soothe_sdk.events import SootheEvent
+from soothe_sdk.core.events import SootheEvent
 
 
 class PluginLoadedEvent(SootheEvent):
@@ -85,7 +85,7 @@ class PluginUnloadedEvent(SootheEvent):
 
 # Register all plugin events with the global registry
 # This happens at module load time
-from soothe_sdk.verbosity import VerbosityTier  # noqa: E402
+from soothe_sdk.core.verbosity import VerbosityTier  # noqa: E402
 
 from soothe.core.event_catalog import register_event  # noqa: E402
 

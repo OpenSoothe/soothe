@@ -6,6 +6,7 @@ with CORS validation.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import fnmatch
 import logging
@@ -111,16 +112,44 @@ class WebSocketTransport(TransportServer):
         # Remove newline for WebSocket (native framing)
         data = data.rstrip(b"\n")
 
-        dead_clients = []
-        for client in self._clients:
-            try:
-                await client.send(data.decode("utf-8"))
-            except Exception:
-                dead_clients.append(client)
+        # IG-258: Parallel broadcast with timeout for scalability
+        send_tasks = [
+            asyncio.create_task(self._send_with_timeout(client, data, timeout=1.0))
+            for client in self._clients
+        ]
 
-        # Remove dead clients
-        for dead in dead_clients:
-            self._clients.pop(dead, None)
+        if not send_tasks:
+            return  # No clients to broadcast to
+
+        # Gather results with exception handling
+        results = await asyncio.gather(*send_tasks, return_exceptions=True)
+
+        # Remove dead clients (those that failed)
+        clients_to_remove = []
+        for client, result in zip(self._clients.keys(), results):
+            if isinstance(result, Exception):
+                clients_to_remove.append(client)
+
+        for client in clients_to_remove:
+            self._clients.pop(client, None)
+
+    async def _send_with_timeout(self, client: Any, data: bytes, timeout: float = 1.0) -> None:
+        """Send data to WebSocket client with timeout (IG-258).
+
+        Args:
+            client: WebSocket ServerConnection object
+            data: Encoded message data
+            timeout: Send timeout in seconds
+
+        Raises:
+            asyncio.TimeoutError: If send exceeds timeout
+            Exception: If send fails
+        """
+        try:
+            await asyncio.wait_for(client.send(data.decode("utf-8")), timeout=timeout)
+        except TimeoutError:
+            logger.warning("WebSocket send timeout for client %s", client)
+            raise
 
     async def send(self, client: Any, message: dict[str, Any]) -> None:
         """Send message to specific WebSocket client.

@@ -29,6 +29,6 @@ def get_tool_display_name(internal_name: str) -> str:
         stacklevel=2,
     )
     # Delegate to the canonical implementation
-    from soothe_sdk.utils.tool_meta import get_tool_display_name
+    from soothe_sdk.tools.metadata import get_tool_display_name
 
     return get_tool_display_name(internal_name)

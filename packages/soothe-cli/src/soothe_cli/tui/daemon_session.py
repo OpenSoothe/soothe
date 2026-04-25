@@ -14,7 +14,7 @@ from soothe_sdk.client import (
     connect_websocket_with_retries,
     websocket_url_from_config,
 )
-from soothe_sdk.langchain_wire import envelope_langchain_message_dict, messages_from_wire_dicts
+from soothe_sdk.client.wire import envelope_langchain_message_dict, messages_from_wire_dicts
 
 if TYPE_CHECKING:
     pass
