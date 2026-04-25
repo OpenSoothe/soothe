@@ -705,7 +705,7 @@ class EventProcessor:
 
         # Handle output events (chitchat, quiz, final report, etc.) through unified registry
         # IG-254: Single source of truth for user-visible output events
-        if is_output_event(etype):
+        if is_output_event(etype) and etype != "soothe.cognition.agent_loop.completed":
             content = extract_output_text(etype, data)
             if content and self._presentation.tier_visible(VerbosityTier.QUIET, self._verbosity):
                 cleaned = self._clean_assistant_text(content)

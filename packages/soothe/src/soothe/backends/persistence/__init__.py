@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.protocols.persistence import PersistStore
+from soothe.protocols.persistence import AsyncPersistStore
 
 
 def create_persist_store(
@@ -11,8 +11,8 @@ def create_persist_store(
     dsn: str | None = None,
     namespace: str = "default",
     db_path: str | None = None,
-) -> PersistStore | None:
-    """Factory for persistence backends.
+) -> AsyncPersistStore | None:
+    """Factory for async persistence backends.
 
     Args:
         persist_dir: Root directory for file-based backends. None disables file persistence.
@@ -22,7 +22,7 @@ def create_persist_store(
         db_path: SQLite database file path (SQLite only).
 
     Returns:
-        A PersistStore instance, or None if persistence is disabled.
+        An AsyncPersistStore instance, or None if persistence is disabled.
     """
     if backend == "postgresql":
         if not dsn:

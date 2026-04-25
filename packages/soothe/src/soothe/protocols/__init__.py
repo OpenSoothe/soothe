@@ -10,7 +10,7 @@ from soothe.protocols.durability import (
 from soothe.protocols.loop_planner import LoopPlannerProtocol
 from soothe.protocols.loop_working_memory import LoopWorkingMemoryProtocol
 from soothe.protocols.memory import MemoryItem, MemoryProtocol
-from soothe.protocols.persistence import PersistStore
+from soothe.protocols.persistence import AsyncPersistStore
 from soothe.protocols.planner import (
     CheckpointEnvelope,
     GoalReport,
@@ -37,6 +37,7 @@ from soothe.protocols.vector_store import VectorRecord, VectorStoreProtocol
 
 __all__ = [
     "ActionRequest",
+    "AsyncPersistStore",
     "CheckpointEnvelope",
     "ConcurrencyPolicy",
     "DurabilityProtocol",
@@ -47,7 +48,6 @@ __all__ = [
     "MemoryProtocol",
     "Permission",
     "PermissionSet",
-    "PersistStore",
     "Plan",
     "PlanContext",
     "PlanStep",

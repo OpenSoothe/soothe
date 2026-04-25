@@ -6,14 +6,16 @@ from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
-class PersistStore(Protocol):
-    """Simple key-value persistence interface.
+class AsyncPersistStore(Protocol):
+    """Async key-value persistence interface with concurrent operation support.
 
-    Implemented by JsonPersistStore, RocksDBPersistStore, and PostgreSQLPersistStore.
-    Provides a storage-agnostic interface for context, memory, and durability backends.
+    Implemented by SQLitePersistStore and PostgreSQLPersistStore.
+    Provides a storage-agnostic async interface for context, memory, and durability backends.
+
+    All methods are async to support concurrent operations and connection pooling.
     """
 
-    def save(self, key: str, data: Any) -> None:
+    async def save(self, key: str, data: Any) -> None:
         """Persist data under the given key.
 
         Args:
@@ -22,7 +24,7 @@ class PersistStore(Protocol):
         """
         ...
 
-    def load(self, key: str) -> Any | None:
+    async def load(self, key: str) -> Any | None:
         """Load data for the given key.
 
         Args:
@@ -33,7 +35,7 @@ class PersistStore(Protocol):
         """
         ...
 
-    def delete(self, key: str) -> None:
+    async def delete(self, key: str) -> None:
         """Delete data for the given key.
 
         Args:
@@ -41,6 +43,17 @@ class PersistStore(Protocol):
         """
         ...
 
-    def close(self) -> None:
+    async def list_keys(self, namespace: str | None = None) -> list[str]:
+        """List all keys in the namespace.
+
+        Args:
+            namespace: Optional namespace to list keys from. If None, uses default namespace.
+
+        Returns:
+            List of keys in the namespace.
+        """
+        ...
+
+    async def close(self) -> None:
         """Release any resources held by the store."""
         ...

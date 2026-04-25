@@ -1,30 +1,30 @@
-"""Base class for durability backends using PersistStore (IG-258 Phase 2: async methods)."""
+"""Base class for durability backends using AsyncPersistStore (IG-258 Phase 2: async methods)."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
 
-from soothe.backends.persistence import PersistStore
+from soothe.backends.persistence import AsyncPersistStore
 from soothe.core.runner._types import _generate_thread_id
 from soothe.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
 
 
 class BasePersistStoreDurability:
-    """Base implementation of DurabilityProtocol using PersistStore.
+    """Base implementation of DurabilityProtocol using AsyncPersistStore.
 
     Provides thread lifecycle management.  State persistence (checkpoints,
     artifacts) is handled by ``RunArtifactStore`` (RFC-0010).
-    Subclasses only need to provide a PersistStore instance.
+    Subclasses only need to provide an AsyncPersistStore instance.
 
     IG-258 Phase 2: All PersistStore methods are now async.
     """
 
-    def __init__(self, persist_store: PersistStore) -> None:
-        """Initialize durability backend with a PersistStore.
+    def __init__(self, persist_store: AsyncPersistStore) -> None:
+        """Initialize durability backend with an AsyncPersistStore.
 
         Args:
-            persist_store: The persistence backend to use.
+            persist_store: The async persistence backend to use.
         """
         self._store = persist_store
         self._thread_index_key = "thread_index"

@@ -280,6 +280,59 @@ class TestEventProcessorPlanHandling:
         assert processor.multi_step_active is False
 
 
+class TestEventProcessorOutputEventRouting:
+    """Tests for output-event routing behavior."""
+
+    def test_agent_loop_completed_routes_to_progress_event(self) -> None:
+        """Agent-loop completion must flow through progress-event suppression path."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="normal")
+
+        completion_event = {
+            "type": "event",
+            "mode": "custom",
+            "namespace": [],
+            "data": {
+                "type": "soothe.cognition.agent_loop.completed",
+                "thread_id": "t",
+                "status": "done",
+                "goal_progress": 1.0,
+                "final_stdout_message": "# Final Report\n\n1\tline one",
+            },
+        }
+
+        processor.process_event(completion_event)
+
+        progress_calls = [c for c in renderer.calls if c[0] == "on_progress_event"]
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert len(progress_calls) == 1
+        assert progress_calls[0][1][0] == "soothe.cognition.agent_loop.completed"
+        assert assistant_calls == []
+
+    def test_chitchat_output_event_still_routes_to_assistant_text(self) -> None:
+        """Non-agentic output events should keep existing fast-path behavior."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="normal")
+
+        chitchat_event = {
+            "type": "event",
+            "mode": "custom",
+            "namespace": [],
+            "data": {
+                "type": "soothe.output.chitchat.responded",
+                "content": "Hello from chitchat",
+            },
+        }
+
+        processor.process_event(chitchat_event)
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        progress_calls = [c for c in renderer.calls if c[0] == "on_progress_event"]
+        assert len(assistant_calls) == 1
+        assert assistant_calls[0][1][0] == "Hello from chitchat"
+        assert progress_calls == []
+
+
 class TestEventProcessorMessageDeduplication:
     """Tests for message deduplication."""
 
