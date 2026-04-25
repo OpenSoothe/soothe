@@ -647,7 +647,7 @@ class FileLoggingConfig(BaseModel):
 
     Args:
         level: Logging level for file output.
-        path: Log file path (empty = SOOTHE_HOME/logs/soothe-daemon.log).
+        path: Log file path (empty = SOOTHE_HOME/logs/soothed.log).
         max_bytes: Maximum file size before rotation.
         backup_count: Number of rotating backup files.
     """

@@ -107,7 +107,7 @@ all = [
 ]
 
 [project.scripts]
-soothe-daemon = "soothe.cli.daemon_main:app"
+soothed = "soothe.cli.daemon_main:app"
 
 [project.urls]
 Homepage = "https://github.com/OpenSoothe/soothe"

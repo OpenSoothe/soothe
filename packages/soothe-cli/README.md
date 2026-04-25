@@ -61,5 +61,5 @@ tui:
 
 ## Related Packages
 
-- **soothe-daemon**: Server package (agent runtime)
+- **soothed**: Server package (agent runtime)
 - **soothe-sdk**: Shared SDK (WebSocket client, types)

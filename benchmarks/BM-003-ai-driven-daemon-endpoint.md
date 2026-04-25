@@ -178,7 +178,7 @@ This benchmark evaluates daemon endpoint behavior under realistic prompt-driven 
 
 ```bash
 # Ensure daemon is running with HTTP REST enabled
-uv run soothe daemon start --config config/config.dev.yml
+uv run soothed start --config config/config.dev.yml
 
 # Verify endpoint is reachable
 curl http://127.0.0.1:8766/api/v1/health

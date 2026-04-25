@@ -67,10 +67,10 @@ Interactive session:
 ### Daemon Lifecycle Management
 
 **Explicit Daemon Control**:
-- `soothe daemon start` - Start daemon in background (foreground mode with `--foreground`)
-- `soothe daemon stop` - Stop running daemon (SIGTERM, then SIGKILL if timeout)
-- `soothe daemon restart` - Restart daemon
-- `soothe daemon status` - Show daemon status (PID, state)
+- `soothed start` - Start daemon in background (foreground mode with `--foreground`)
+- `soothed stop` - Stop running daemon (SIGTERM, then SIGKILL if timeout)
+- `soothed restart` - Restart daemon
+- `soothed status` - Show daemon status (PID, state)
 
 **Daemon Auto-Start Behavior**:
 - Non-TUI mode: Auto-start if not running, keep running after request
@@ -78,7 +78,7 @@ Interactive session:
 - Daemon remains running across multiple client sessions
 
 **Daemon Shutdown Triggers**:
-- Only explicit `soothe daemon stop` command
+- Only explicit `soothed stop` command
 - System shutdown/SIGTERM to daemon process
 - Manual foreground daemon Ctrl+C (when running with `--foreground`)
 
@@ -94,7 +94,7 @@ Interactive session:
 - Pros: User awareness, explicit consent
 - Cons: Extra step, breaks flow for new users
 
-**Recommendation**: **Option A** - Auto-start daemon in TUI mode for seamless experience. Show clear message: "Daemon started (PID: XXX). Use 'soothe daemon stop' to shutdown."
+**Recommendation**: **Option A** - Auto-start daemon in TUI mode for seamless experience. Show clear message: "Daemon started (PID: XXX). Use 'soothed stop' to shutdown."
 
 ### Q2: What happens when daemon crashes during client session?
 
@@ -106,7 +106,7 @@ Interactive session:
 - Pros: Simple, clear failure mode
 - Cons: Lost session, user must restart manually
 
-**Recommendation**: **Option B** - Client exits with clear error: "Daemon connection lost. Restart with 'soothe daemon start'." Keep simple for initial implementation. Future RFC can add reconnect logic.
+**Recommendation**: **Option B** - Client exits with clear error: "Daemon connection lost. Restart with 'soothed start'." Keep simple for initial implementation. Future RFC can add reconnect logic.
 
 ### Q3: Should TUI warn before exiting with active thread?
 
@@ -178,8 +178,8 @@ Interactive session:
    - Single Ctrl+C → cancel job, stay in TUI
 
 3. **Daemon lifecycle tests**:
-   - `soothe daemon start` → daemon running
-   - `soothe daemon stop` → daemon stopped
+   - `soothed start` → daemon running
+   - `soothed stop` → daemon stopped
    - Multiple client sessions → daemon persists
 
 ## Trade-offs
@@ -214,7 +214,7 @@ Interactive session:
 2. **TUI mode**: `/exit`/`/quit` exit client, daemon keeps running ✓
 3. **Double Ctrl+C**: Clean TUI exit within 1s window ✓
 4. **Clear messaging**: User understands daemon state at all times ✓
-5. **No implicit shutdown**: Only explicit `soothe daemon stop` kills daemon ✓
+5. **No implicit shutdown**: Only explicit `soothed stop` kills daemon ✓
 6. **Backward compatible**: Existing workflows continue working ✓
 
 ## Next Steps

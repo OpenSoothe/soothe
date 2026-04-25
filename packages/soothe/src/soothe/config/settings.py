@@ -474,7 +474,7 @@ class SootheConfig(BaseSettings):
             model_name = provider_name
             provider_name = ""
 
-        cache_key = model_str
+        cache_key = f"{model_str}:streaming"
         if cache_key in self._model_cache:
             logger.debug("Using cached model for '%s'", model_str)
             return self._model_cache[cache_key]
@@ -482,7 +482,7 @@ class SootheConfig(BaseSettings):
         provider_type, kwargs = self._provider_kwargs(provider_name)
         init_str = f"{provider_type}:{model_name}" if provider_name else model_str
 
-        model = init_chat_model(init_str, **kwargs)
+        model = init_chat_model(init_str, streaming=True, **kwargs)
 
         # Check provider capability for advanced tool_choice support (LMStudio compatibility)
         supports_advanced_tool_choice = True  # Default assumption
@@ -540,7 +540,9 @@ class SootheConfig(BaseSettings):
             raise ValueError(msg)
 
         merged_params = dict(model_params or {})
-        cache_key = f"spec:{model_str}:{json.dumps(merged_params, sort_keys=True, default=str)}"
+        cache_key = (
+            f"spec:{model_str}:streaming:{json.dumps(merged_params, sort_keys=True, default=str)}"
+        )
         if cache_key in self._model_cache:
             logger.debug("Using cached model for override key '%s'", cache_key[:120])
             return self._model_cache[cache_key]
@@ -554,7 +556,7 @@ class SootheConfig(BaseSettings):
         init_str = f"{provider_type}:{model_name}" if provider_name else model_str
         merged_kwargs = {**kwargs, **merged_params}
 
-        model = init_chat_model(init_str, **merged_kwargs)
+        model = init_chat_model(init_str, streaming=True, **merged_kwargs)
 
         supports_advanced_tool_choice = True
         if provider_name:

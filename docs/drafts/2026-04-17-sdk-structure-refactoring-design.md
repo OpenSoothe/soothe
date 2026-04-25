@@ -506,7 +506,7 @@ from soothe_sdk import PolicyProtocol → from soothe_sdk.protocols import Polic
 **Testing:**
 - Run packages/soothe/tests/
 - Run daemon tests
-- Test daemon commands: `soothe-daemon start`, `soothe-daemon doctor`
+- Test daemon commands: `soothed start`, `soothed doctor`
 
 ---
 
@@ -637,7 +637,7 @@ This is a direct breaking change. Update imports before upgrading.
 
 **Integration tests:**
 - CLI commands work: `soothe --help`, `soothe thread list`, `soothe -p "test"`
-- Daemon commands work: `soothe-daemon start`, `soothe-daemon doctor`
+- Daemon commands work: `soothed start`, `soothed doctor`
 - WebSocket connection: CLI connects to daemon successfully
 - Plugin loading: daemon loads plugins with new structure
 

@@ -19,7 +19,7 @@ from soothe.daemon.health.models import CheckStatus
 from soothe.daemon.server import SootheDaemon
 
 app = typer.Typer(
-    name="soothe-daemon",
+    name="soothed",
     help="Soothe daemon management - start/stop/status/doctor",
 )
 
@@ -110,7 +110,7 @@ def daemon_stop() -> None:
 
 @app.command("status")
 def daemon_status() -> None:
-    """Show Soothe daemon status."""
+    """Show soothed status."""
     running = SootheDaemon.is_running()
     if not running:
         typer.echo("Daemon status: stopped")

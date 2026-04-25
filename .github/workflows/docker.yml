@@ -15,7 +15,7 @@ on:
 env:
   REGISTRY: registry.cn-hangzhou.aliyuncs.com
   NAMESPACE: lacogito
-  IMAGE_NAME: soothe-daemon
+  IMAGE_NAME: soothed
 
 jobs:
   build-and-push:

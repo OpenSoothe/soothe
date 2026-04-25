@@ -321,7 +321,7 @@ No propagation needed yet — `AgentLoopStateManager(loop_id=None)` auto-generat
 
 ```bash
 # Start daemon
-soothe daemon start
+soothed start
 
 # Test normal query execution (creates loop)
 soothe --no-tui "test query"

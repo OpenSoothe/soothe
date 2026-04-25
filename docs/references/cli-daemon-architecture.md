@@ -8,7 +8,7 @@ Soothe has been refactored from a monolithic package into three independent pack
 packages/
 ├── soothe-sdk (v0.2.0)     # Shared SDK - WebSocket client, protocol, types
 ├── soothe-cli (v0.1.0)     # CLI client - WebSocket-only communication
-└── soothe-daemon (v0.3.0)  # Daemon server - Agent runtime
+└── soothed (v0.3.0)  # Daemon server - Agent runtime
 ```
 
 ## Architecture
@@ -19,7 +19,7 @@ The CLI and daemon communicate via WebSocket only:
 
 ```
 ┌─────────────┐                WebSocket                ┌──────────────┐
-│  soothe-cli │ ──────────────────────────────────────▶ │ soothe-daemon│
+│  soothe-cli │ ──────────────────────────────────────▶ │ soothed│
 │  (Client)   │                                              │  (Server)    │
 │             │ ◀────────────────────────────────────── │              │
 │  Lightweight│                Events/Responses          │  Heavy runtime│
@@ -53,13 +53,13 @@ The CLI and daemon communicate via WebSocket only:
 - **Dependencies**: soothe-sdk, typer, textual, rich, websockets (~10 deps)
 - **NO daemon dependencies**: Zero imports from runtime
 
-**soothe-daemon** (Server):
+**soothed** (Server):
 - Daemon server (WebSocket + HTTP transports)
 - Agent runner and factory
 - Tools and subagents implementations
 - Protocols (planner, policy, durability)
 - Thread persistence
-- **Entry point**: `soothe-daemon` command
+- **Entry point**: `soothed` command
 - **Dependencies**: soothe-sdk + langchain + langgraph + all runtime deps (~50 deps)
 
 ## Installation
@@ -68,10 +68,10 @@ The CLI and daemon communicate via WebSocket only:
 
 ```bash
 # Install both CLI and daemon
-pip install soothe-cli soothe-daemon
+pip install soothe-cli soothed
 
 # Or with optional extras
-pip install soothe-cli soothe-daemon[research,websearch]
+pip install soothe-cli soothed[research,websearch]
 ```
 
 ### Install CLI Only (Lightweight)
@@ -87,7 +87,7 @@ pip install soothe-cli
 
 ```bash
 # Install just the server (for remote deployment)
-pip install soothe-daemon[all]
+pip install soothed[all]
 
 # Includes all optional extras: research, websearch, media, etc.
 ```
@@ -98,19 +98,19 @@ pip install soothe-daemon[all]
 
 ```bash
 # Start daemon in foreground
-soothe-daemon start --foreground
+soothed start --foreground
 
 # Start daemon in background (default)
-soothe-daemon start
+soothed start
 
 # Check daemon status
-soothe-daemon status
+soothed status
 
 # Stop daemon
-soothe-daemon stop
+soothed stop
 
 # Run health checks
-soothe-daemon doctor
+soothed doctor
 ```
 
 ### Use CLI (Client)
@@ -185,7 +185,7 @@ tui:
 
 **After (Split)**:
 - soothe-cli: ~10 dependencies (typer, textual, rich, SDK)
-- soothe-daemon: ~50 dependencies (full runtime)
+- soothed: ~50 dependencies (full runtime)
 - soothe-sdk: ~3 dependencies (pydantic, websockets, langchain-core)
 
 **Result**: CLI users install 80% fewer dependencies.
@@ -193,7 +193,7 @@ tui:
 ### Deployment Flexibility
 
 - **CLI on lightweight machine**: Install only `soothe-cli`, connect to remote daemon
-- **Daemon on server**: Install `soothe-daemon` on powerful server
+- **Daemon on server**: Install `soothed` on powerful server
 - **Full installation**: Both on same machine for local development
 
 ### Architecture Cleanliness
@@ -211,15 +211,15 @@ tui:
 
 | Old | New | Package |
 |-----|-----|---------|
-| `soothe-daemon start` | `soothe-daemon start` | daemon |
-| `soothe-daemon stop` | `soothe-daemon stop` | daemon |
-| `soothe-daemon status` | `soothe-daemon status` | daemon |
-| `soothe-daemon restart` | `soothe-daemon restart` | daemon |
-| `soothe doctor` | `soothe-daemon doctor` | daemon |
+| `soothed start` | `soothed start` | daemon |
+| `soothed stop` | `soothed stop` | daemon |
+| `soothed status` | `soothed status` | daemon |
+| `soothed restart` | `soothed restart` | daemon |
+| `soothe doctor` | `soothed doctor` | daemon |
 | `soothe -p "..."` | `soothe -p "..."` | CLI (unchanged) |
 | `soothe thread list` | `soothe thread list` | CLI (unchanged) |
 
-**Summary**: Daemon/doctor commands moved to `soothe-daemon`. Other commands unchanged in CLI.
+**Summary**: Daemon/doctor commands moved to `soothed`. Other commands unchanged in CLI.
 
 ### Config Changes
 
@@ -259,7 +259,7 @@ Soothe/
 │   ├── soothe-cli/
 │   │   ├── src/soothe_cli/
 │   │   └── pyproject.toml
-│   └── soothe-daemon/
+│   └── soothed/
 │   │   ├── src/soothe_daemon/
 │   │   └── pyproject.toml
 ├── tests/
@@ -280,7 +280,7 @@ cd packages/soothe-cli
 pytest tests/
 
 # Test daemon
-cd packages/soothe-daemon
+cd packages/soothed
 pytest tests/
 
 # Integration tests (all packages)
@@ -299,7 +299,7 @@ cd packages/soothe-cli
 python -m build
 
 # Build daemon
-cd packages/soothe-daemon
+cd packages/soothed
 python -m build
 ```
 

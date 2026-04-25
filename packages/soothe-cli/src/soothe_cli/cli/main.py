@@ -87,7 +87,7 @@ def main(
 
     Run without arguments for interactive TUI mode, or provide a prompt via --prompt/-p option.
 
-    Note: This is the CLI client. Use 'soothe-daemon' command to manage the daemon server.
+    Note: This is the CLI client. Use 'soothed' command to manage the daemon server.
 
     Examples:
         soothe                           # Interactive TUI mode

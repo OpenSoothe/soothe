@@ -337,7 +337,7 @@ async def test_daemon_command_exit_does_not_stop_daemon() -> None:
 
     Per RFC-0013 daemon lifecycle semantics:
     - /exit and /quit should detach client, not stop daemon
-    - Only explicit 'soothe-daemon stop' should shutdown daemon
+    - Only explicit 'soothed stop' should shutdown daemon
     """
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]

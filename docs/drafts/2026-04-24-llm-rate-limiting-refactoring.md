@@ -194,6 +194,6 @@ All verification checks passed:
 
 ## References
 
-- Log analysis: `~/.soothe/logs/soothe-daemon.log` (2026-04-24 17:42:25-17:42:59)
+- Log analysis: `~/.soothe/logs/soothed.log` (2026-04-24 17:42:25-17:42:59)
 - Related RFC: Thread management and concurrency
 - Middleware documentation: `packages/soothe/src/soothe/middleware/__init__.py`

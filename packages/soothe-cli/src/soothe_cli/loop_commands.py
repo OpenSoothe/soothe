@@ -36,7 +36,7 @@ def _require_daemon(ws_url: str) -> None:
     live = asyncio.run(_check_daemon(ws_url))
     if not live:
         typer.echo(
-            "Error: Daemon not running. Start with 'soothe daemon start'.",
+            "Error: Daemon not running. Start with 'soothed start'.",
             err=True,
         )
         sys.exit(1)

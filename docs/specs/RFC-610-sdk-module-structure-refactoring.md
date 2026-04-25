@@ -460,7 +460,7 @@ __all__ = [
 ### Integration Tests
 
 - CLI commands: `soothe --help`, `soothe thread list`, `soothe -p "test"`
-- Daemon commands: `soothe-daemon start`, `soothe-daemon doctor`
+- Daemon commands: `soothed start`, `soothed doctor`
 - WebSocket connection: CLI connects to daemon
 - Plugin loading: daemon loads plugins with new structure
 

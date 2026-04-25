@@ -12,7 +12,7 @@ Soothe maintains multiple log files in `~/.soothe/` for different purposes:
 
 | Log File | Purpose | Configured By |
 |----------|---------|---------------|
-| `~/.soothe/logs/soothe-daemon.log` | Daemon backend logs (agent execution, protocols, tools) | `config.yml` → `logging.file.level` |
+| `~/.soothe/logs/soothed.log` | Daemon backend logs (agent execution, protocols, tools) | `config.yml` → `logging.file.level` |
 | `~/.soothe/logs/soothe-cli.log` | CLI client logs (connection, UI, event handling) | `cli_config.yml` → `logging_level` |
 
 ### Data Directory Structure
@@ -46,8 +46,8 @@ export SOOTHE_DEBUG=true
 export SOOTHE_LOG_LEVEL=DEBUG  # Sets file logging to DEBUG for both daemon and CLI
 
 # Then restart daemon and run CLI
-soothe-daemon stop
-soothe-daemon start
+soothed stop
+soothed start
 soothe
 ```
 
@@ -69,7 +69,7 @@ debug: true
 logging:
   file:
     level: DEBUG        # DEBUG | INFO | WARNING | ERROR
-    path: ""            # Empty = ~/.soothe/logs/soothe-daemon.log
+    path: ""            # Empty = ~/.soothe/logs/soothed.log
     max_bytes: 5242880  # 5 MB before rotation
     backup_count: 3     # Number of rotating backups
 
@@ -116,8 +116,8 @@ logging_level: DEBUG
 Restart daemon to pick up new config:
 
 ```bash
-soothe-daemon stop
-soothe-daemon start
+soothed stop
+soothed start
 ```
 
 CLI picks up `cli_config.yml` on every invocation, no restart needed.
@@ -146,7 +146,7 @@ Verbosity is a **client-side preference** that controls what progress events are
 Watch daemon execution logs in real-time:
 
 ```bash
-tail -f ~/.soothe/logs/soothe-daemon.log
+tail -f ~/.soothe/logs/soothed.log
 ```
 
 **What you'll see with DEBUG level**:
@@ -163,16 +163,16 @@ tail -f ~/.soothe/logs/soothe-daemon.log
 
 ```bash
 # Find errors
-grep -i "error\|exception\|failed" ~/.soothe/logs/soothe-daemon.log
+grep -i "error\|exception\|failed" ~/.soothe/logs/soothed.log
 
 # Find subagent issues
-grep -i "subagent" ~/.soothe/logs/soothe-daemon.log
+grep -i "subagent" ~/.soothe/logs/soothed.log
 
 # Find specific tool issues
-grep -i "tool.*browser\|tool.*wizsearch" ~/.soothe/logs/soothe-daemon.log
+grep -i "tool.*browser\|tool.*wizsearch" ~/.soothe/logs/soothed.log
 
 # Find LLM tracing (requires llm_tracing.enabled: true)
-grep -i "llm_tracing\|prompt\|response" ~/.soothe/logs/soothe-daemon.log
+grep -i "llm_tracing\|prompt\|response" ~/.soothe/logs/soothed.log
 ```
 
 ### 2. Monitor CLI Client Logs
@@ -240,8 +240,8 @@ cat ~/.soothe/data/threads/{thread_id}/manifest.json
 1. Enable debug logging:
 ```bash
 export SOOTHE_LOG_LEVEL=DEBUG
-soothe-daemon stop
-soothe-daemon start
+soothed stop
+soothed start
 ```
 
 2. Run agent with verbose TUI:
@@ -255,7 +255,7 @@ soothe "your query"
 
 3. Monitor daemon logs in real-time:
 ```bash
-tail -f ~/.soothe/logs/soothe-daemon.log
+tail -f ~/.soothe/logs/soothed.log
 ```
 
 4. Look for:
@@ -280,14 +280,14 @@ llm_tracing:
 
 2. Restart daemon:
 ```bash
-soothe-daemon stop
-soothe-daemon start
+soothed stop
+soothed start
 ```
 
 3. Run query and check logs:
 ```bash
 soothe "test query"
-grep -i "llm_tracing\|prompt\|response" ~/.soothe/logs/soothe-daemon.log | tail -100
+grep -i "llm_tracing\|prompt\|response" ~/.soothe/logs/soothed.log | tail -100
 ```
 
 4. Inspect:
@@ -306,13 +306,13 @@ grep -i "llm_tracing\|prompt\|response" ~/.soothe/logs/soothe-daemon.log | tail 
 1. Enable debug in both daemon and CLI:
 ```bash
 export SOOTHE_LOG_LEVEL=DEBUG
-soothe-daemon stop
-soothe-daemon start
+soothed stop
+soothed start
 ```
 
 2. Check daemon WebSocket logs:
 ```bash
-tail -f ~/.soothe/logs/soothe-daemon.log | grep -i "websocket\|transport\|connection"
+tail -f ~/.soothe/logs/soothed.log | grep -i "websocket\|transport\|connection"
 ```
 
 3. Check CLI connection logs:
@@ -349,8 +349,8 @@ verbosity: detailed  # See subagent internals
 
 2. Restart daemon:
 ```bash
-soothe-daemon stop
-soothe-daemon start
+soothed stop
+soothed start
 ```
 
 3. Test subagent:
@@ -360,7 +360,7 @@ soothe "browse example.com"
 
 4. Monitor daemon logs for subagent:
 ```bash
-tail -f ~/.soothe/logs/soothe-daemon.log | grep -i "subagent.*browser"
+tail -f ~/.soothe/logs/soothed.log | grep -i "subagent.*browser"
 ```
 
 5. Look for:
@@ -379,20 +379,20 @@ tail -f ~/.soothe/logs/soothe-daemon.log | grep -i "subagent.*browser"
 1. Enable debug logging:
 ```bash
 export SOOTHE_LOG_LEVEL=DEBUG
-soothe-daemon stop
-soothe-daemon start
+soothed stop
+soothed start
 ```
 
 2. Monitor protocol-specific logs:
 ```bash
 # Memory protocol
-tail -f ~/.soothe/logs/soothe-daemon.log | grep -i "memory.*protocol\|memory.*backend"
+tail -f ~/.soothe/logs/soothed.log | grep -i "memory.*protocol\|memory.*backend"
 
 # Planner protocol
-tail -f ~/.soothe/logs/soothe-daemon.log | grep -i "planner.*protocol\|planner.*backend"
+tail -f ~/.soothe/logs/soothed.log | grep -i "planner.*protocol\|planner.*backend"
 
 # Durability protocol
-tail -f ~/.soothe/logs/soothe-daemon.log | grep -i "durability.*protocol\|checkpoint"
+tail -f ~/.soothe/logs/soothed.log | grep -i "durability.*protocol\|checkpoint"
 ```
 
 3. Inspect backend configuration:
@@ -469,13 +469,13 @@ Analyze agent performance from logs:
 
 ```bash
 # Find slow LLM calls (requires llm_tracing.enabled: true)
-grep -i "latency:" ~/.soothe/logs/soothe-daemon.log | awk '{print $NF}' | sort -n
+grep -i "latency:" ~/.soothe/logs/soothed.log | awk '{print $NF}' | sort -n
 
 # Find token usage patterns
-grep -i "token usage:" ~/.soothe/logs/soothe-daemon.log | awk -F'total=' '{print $2}' | sort -n
+grep -i "token usage:" ~/.soothe/logs/soothed.log | awk -F'total=' '{print $2}' | sort -n
 
 # Find iteration counts
-grep -i "iteration" ~/.soothe/logs/soothe-daemon.log | grep -i "max\|count"
+grep -i "iteration" ~/.soothe/logs/soothed.log | grep -i "max\|count"
 ```
 
 ---
@@ -535,7 +535,7 @@ export SOOTHE_LOG_LEVEL=DEBUG  # Override file logging levels
 
 Soothe automatically rotates log files to prevent disk space issues:
 
-**Daemon logs** (`soothe-daemon.log`):
+**Daemon logs** (`soothed.log`):
 - Max size: 5 MB (configurable via `logging.file.max_bytes`)
 - Backup count: 3 files (configurable via `logging.file.backup_count`)
 - Rotation: Automatic when file reaches max size
@@ -551,7 +551,7 @@ Soothe automatically rotates log files to prevent disk space issues:
 
 ```bash
 # Clear daemon logs
-rm ~/.soothe/logs/soothe-daemon.log*
+rm ~/.soothe/logs/soothed.log*
 
 # Clear CLI logs
 rm ~/.soothe/logs/soothe-cli.log*

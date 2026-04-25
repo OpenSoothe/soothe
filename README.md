@@ -133,13 +133,13 @@ soothe -p "Research the top 5 Python web frameworks and create a comparison tabl
 
 ```bash
 # Start daemon server
-soothe-daemon start
+soothed start
 
 # Check daemon status
-soothe-daemon status
+soothed status
 
 # Stop daemon
-soothe-daemon stop
+soothed stop
 ```
 
 **Command Reference**:
@@ -147,8 +147,8 @@ soothe-daemon stop
 - `soothe` — Interactive client (TUI by default)
 - `soothe -p "query"` — Single-prompt execution
 - `soothe --help` — View all options
-- `soothe-daemon start|stop|status|logs` — Daemon management
-- `soothe-daemon doctor` — Health diagnostics
+- `soothed start|stop|status|logs` — Daemon management
+- `soothed doctor` — Health diagnostics
 
 ## Learn More
 

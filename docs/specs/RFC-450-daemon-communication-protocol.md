@@ -85,9 +85,9 @@ Pub/sub event bus routes events to clients by thread subscriptions.
 
 ### Daemon Persistence
 
-**Startup Triggers**: Auto-start (non-TUI/TUI if daemon not running), manual `soothe-daemon start`
+**Startup Triggers**: Auto-start (non-TUI/TUI if daemon not running), manual `soothed start`
 
-**Shutdown Triggers**: Explicit `soothe-daemon stop`, SIGTERM/SIGKILL, foreground Ctrl+C
+**Shutdown Triggers**: Explicit `soothed stop`, SIGTERM/SIGKILL, foreground Ctrl+C
 
 **NOT Shutdown**: Client exit, disconnect, thread completion, connection loss
 

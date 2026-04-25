@@ -10,7 +10,7 @@
 
 ## Context
 
-The soothe-daemon is a sophisticated background agent runner built on pure asyncio with multi-transport architecture (WebSocket, HTTP REST, Unix socket). While the architecture is well-designed for async concurrency, performance bottleneck analysis has identified **10 critical bottlenecks** that limit scalability under high concurrent load (100+ clients, thousands of concurrent threads).
+The soothed is a sophisticated background agent runner built on pure asyncio with multi-transport architecture (WebSocket, HTTP REST, Unix socket). While the architecture is well-designed for async concurrency, performance bottleneck analysis has identified **10 critical bottlenecks** that limit scalability under high concurrent load (100+ clients, thousands of concurrent threads).
 
 This IG addresses these bottlenecks to enable production-scale deployments while maintaining low latency and predictable resource usage.
 

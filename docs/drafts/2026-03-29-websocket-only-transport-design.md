@@ -140,7 +140,7 @@ transports:
 CLI exits with clear message:
 ```
 Error: Unable to connect to daemon at ws://127.0.0.1:8765
-Hint: Ensure daemon is running with 'soothe daemon start'
+Hint: Ensure daemon is running with 'soothed start'
 ```
 
 Retry logic preserved (existing `_connect_with_retries` adapts to WebSocket).
