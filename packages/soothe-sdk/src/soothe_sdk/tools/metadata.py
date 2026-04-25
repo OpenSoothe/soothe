@@ -79,7 +79,7 @@ def _register(meta: ToolMeta) -> ToolMeta:
 _register(
     ToolMeta(
         name="read_file",
-        display_name="Read File",
+        display_name="ReadFile",
         arg_keys=(
             "file_path",
             "path",
@@ -110,7 +110,7 @@ _register(
 _register(
     ToolMeta(
         name="write_file",
-        display_name="Write File",
+        display_name="WriteFile",
         arg_keys=("file_path", "path"),
         path_arg_keys=("file_path", "path"),
         category="file_ops",
@@ -123,7 +123,7 @@ _register(
 _register(
     ToolMeta(
         name="edit_file",
-        display_name="Edit File",
+        display_name="EditFile",
         arg_keys=("file_path", "path"),
         path_arg_keys=("file_path", "path"),
         category="file_ops",
@@ -136,7 +136,7 @@ _register(
 _register(
     ToolMeta(
         name="ls",
-        display_name="List Files",
+        display_name="ListFiles",
         arg_keys=("path", "path_name", "directory", "target_directory", "dir", "pattern"),
         path_arg_keys=("path", "path_name", "directory", "target_directory", "dir"),
         aliases=("list_files",),
@@ -150,7 +150,7 @@ _register(
 _register(
     ToolMeta(
         name="glob",
-        display_name="Search Files",
+        display_name="Glob",
         arg_keys=("pattern", "path"),
         path_arg_keys=("path",),
         aliases=("search_files",),
@@ -164,7 +164,7 @@ _register(
 _register(
     ToolMeta(
         name="grep",
-        display_name="Search Content",
+        display_name="Grep",
         arg_keys=("pattern", "regex", "regexp"),
         category="file_ops",
         outcome_type="file_read",
@@ -176,7 +176,7 @@ _register(
 _register(
     ToolMeta(
         name="execute",
-        display_name="Shell Execute",
+        display_name="ShellExecute",
         arg_keys=("command", "cmd", "script"),
         aliases=("shell", "bash", "run_command"),
         category="execution",
@@ -189,7 +189,7 @@ _register(
 _register(
     ToolMeta(
         name="web_search",
-        display_name="Web Search",
+        display_name="WebSearch",
         arg_keys=("query",),
         aliases=("search_web",),
         category="web",
@@ -202,7 +202,7 @@ _register(
 _register(
     ToolMeta(
         name="fetch_url",
-        display_name="Web Crawl",
+        display_name="FetchUrl",
         arg_keys=("url",),
         aliases=("crawl_web",),
         category="web",
@@ -231,7 +231,7 @@ _register(
 _register(
     ToolMeta(
         name="delete_file",
-        display_name="Delete File",
+        display_name="DeleteFile",
         arg_keys=("file_path", "path"),
         path_arg_keys=("file_path", "path"),
         category="file_ops",
@@ -243,7 +243,7 @@ _register(
 _register(
     ToolMeta(
         name="file_info",
-        display_name="File Info",
+        display_name="FileInfo",
         arg_keys=("path", "file_path"),
         path_arg_keys=("path", "file_path"),
         category="file_ops",
@@ -255,7 +255,7 @@ _register(
 _register(
     ToolMeta(
         name="edit_file_lines",
-        display_name="Edit File Lines",
+        display_name="EditFileLines",
         arg_keys=("path", "file_path"),
         path_arg_keys=("path", "file_path"),
         category="file_ops",
@@ -267,7 +267,7 @@ _register(
 _register(
     ToolMeta(
         name="insert_lines",
-        display_name="Insert Lines",
+        display_name="InsertLines",
         arg_keys=("path", "file_path"),
         path_arg_keys=("path", "file_path"),
         category="file_ops",
@@ -279,7 +279,7 @@ _register(
 _register(
     ToolMeta(
         name="delete_lines",
-        display_name="Delete Lines",
+        display_name="DeleteLines",
         arg_keys=("path", "file_path"),
         path_arg_keys=("path", "file_path"),
         category="file_ops",
@@ -291,7 +291,7 @@ _register(
 _register(
     ToolMeta(
         name="apply_diff",
-        display_name="Apply Diff",
+        display_name="ApplyDiff",
         arg_keys=("path", "file_path"),
         path_arg_keys=("path", "file_path"),
         category="file_ops",
@@ -307,7 +307,7 @@ _register(
 _register(
     ToolMeta(
         name="run_python",
-        display_name="Run Python",
+        display_name="RunPython",
         arg_keys=("code",),
         category="execution",
         outcome_type="code_exec",
@@ -318,7 +318,7 @@ _register(
 _register(
     ToolMeta(
         name="run_background",
-        display_name="Run Background",
+        display_name="RunBackground",
         arg_keys=("command",),
         category="execution",
         outcome_type="code_exec",
@@ -329,7 +329,7 @@ _register(
 _register(
     ToolMeta(
         name="kill_process",
-        display_name="Kill Process",
+        display_name="KillProcess",
         arg_keys=("pid",),
         category="execution",
         outcome_type="code_exec",
@@ -344,7 +344,7 @@ _register(
 _register(
     ToolMeta(
         name="wizsearch_search",
-        display_name="Multi-Engine Search",
+        display_name="MultiEngineSearch",
         arg_keys=("query",),
         category="web",
         outcome_type="web_search",
@@ -356,7 +356,7 @@ _register(
 _register(
     ToolMeta(
         name="wizsearch_crawl",
-        display_name="Headless Crawl",
+        display_name="HeadlessCrawl",
         arg_keys=("url",),
         category="web",
         outcome_type="web_search",
@@ -388,7 +388,7 @@ _register(
 _register(
     ToolMeta(
         name="analyze_image",
-        display_name="Analyze Image",
+        display_name="AnalyzeImage",
         arg_keys=("image_path",),
         path_arg_keys=("image_path",),
         category="media",
@@ -400,7 +400,7 @@ _register(
 _register(
     ToolMeta(
         name="extract_text_from_image",
-        display_name="Extract Text From Image",
+        display_name="ExtractTextFromImage",
         arg_keys=("image_path",),
         path_arg_keys=("image_path",),
         category="media",
@@ -412,7 +412,7 @@ _register(
 _register(
     ToolMeta(
         name="analyze_video",
-        display_name="Analyze Video",
+        display_name="AnalyzeVideo",
         arg_keys=("video_path",),
         path_arg_keys=("video_path",),
         category="media",
@@ -424,7 +424,7 @@ _register(
 _register(
     ToolMeta(
         name="get_video_info",
-        display_name="Get Video Info",
+        display_name="GetVideoInfo",
         arg_keys=("video_path",),
         path_arg_keys=("video_path",),
         category="media",
@@ -436,7 +436,7 @@ _register(
 _register(
     ToolMeta(
         name="transcribe_audio",
-        display_name="Transcribe Audio",
+        display_name="TranscribeAudio",
         arg_keys=("audio_path",),
         path_arg_keys=("audio_path",),
         category="media",
@@ -448,7 +448,7 @@ _register(
 _register(
     ToolMeta(
         name="audio_qa",
-        display_name="Audio QA",
+        display_name="AudioQA",
         arg_keys=("audio_path",),
         path_arg_keys=("audio_path",),
         category="media",
@@ -464,7 +464,7 @@ _register(
 _register(
     ToolMeta(
         name="inspect_data",
-        display_name="Inspect Data",
+        display_name="InspectData",
         arg_keys=("file_path",),
         path_arg_keys=("file_path",),
         category="file_ops",
@@ -476,7 +476,7 @@ _register(
 _register(
     ToolMeta(
         name="summarize_data",
-        display_name="Summarize Data",
+        display_name="SummarizeData",
         arg_keys=("file_path",),
         path_arg_keys=("file_path",),
         category="file_ops",
@@ -488,7 +488,7 @@ _register(
 _register(
     ToolMeta(
         name="check_data_quality",
-        display_name="Check Data Quality",
+        display_name="CheckDataQuality",
         arg_keys=("file_path",),
         path_arg_keys=("file_path",),
         category="file_ops",
@@ -500,7 +500,7 @@ _register(
 _register(
     ToolMeta(
         name="extract_text",
-        display_name="Extract Text",
+        display_name="ExtractText",
         arg_keys=("file_path",),
         path_arg_keys=("file_path",),
         category="file_ops",
@@ -512,7 +512,7 @@ _register(
 _register(
     ToolMeta(
         name="get_data_info",
-        display_name="Get Data Info",
+        display_name="GetDataInfo",
         arg_keys=("file_path",),
         path_arg_keys=("file_path",),
         category="file_ops",
@@ -524,7 +524,7 @@ _register(
 _register(
     ToolMeta(
         name="ask_about_file",
-        display_name="Ask About File",
+        display_name="AskAboutFile",
         arg_keys=("file_path",),
         path_arg_keys=("file_path",),
         category="file_ops",
@@ -540,7 +540,7 @@ _register(
 _register(
     ToolMeta(
         name="current_datetime",
-        display_name="Current DateTime",
+        display_name="CurrentDateTime",
         category="generic",
         outcome_type="generic",
         source="soothe",
@@ -554,7 +554,7 @@ _register(
 _register(
     ToolMeta(
         name="create_goal",
-        display_name="Create Goal",
+        display_name="CreateGoal",
         arg_keys=("description",),
         category="goals",
         outcome_type="generic",
@@ -565,7 +565,7 @@ _register(
 _register(
     ToolMeta(
         name="list_goals",
-        display_name="List Goals",
+        display_name="ListGoals",
         category="goals",
         outcome_type="generic",
         source="soothe",
@@ -575,7 +575,7 @@ _register(
 _register(
     ToolMeta(
         name="complete_goal",
-        display_name="Complete Goal",
+        display_name="CompleteGoal",
         arg_keys=("goal_id",),
         category="goals",
         outcome_type="generic",
@@ -586,7 +586,7 @@ _register(
 _register(
     ToolMeta(
         name="fail_goal",
-        display_name="Fail Goal",
+        display_name="FailGoal",
         arg_keys=("goal_id",),
         category="goals",
         outcome_type="generic",
@@ -601,7 +601,7 @@ _register(
 _register(
     ToolMeta(
         name="ask_user",
-        display_name="Ask User",
+        display_name="AskUser",
         arg_keys=("questions",),
         category="generic",
         outcome_type="generic",
@@ -612,7 +612,7 @@ _register(
 _register(
     ToolMeta(
         name="compact_conversation",
-        display_name="Compact Conversation",
+        display_name="CompactConversation",
         category="generic",
         outcome_type="generic",
         source="soothe",
@@ -622,7 +622,7 @@ _register(
 _register(
     ToolMeta(
         name="write_todos",
-        display_name="Write Todos",
+        display_name="WriteTodos",
         arg_keys=("todos",),
         category="generic",
         outcome_type="generic",
@@ -642,39 +642,12 @@ def get_tool_meta(name: str) -> ToolMeta | None:
 
 
 def get_tool_display_name(name: str) -> str:
-    """Get user-facing display name for a tool.
-
-    Falls back to ``name.replace("_", " ").title()`` for unknown tools,
-    matching the existing SDK behavior.
-    """
+    """Get user-facing display name for a tool."""
     meta = TOOL_REGISTRY.get(name)
     if meta:
         return meta.get_display_name()
-    return name.replace("_", " ").title()
-
-
-def get_tool_pascal_name(name: str) -> str:
-    """Get PascalCase display name for a tool (e.g., 'SearchFiles').
-
-    This removes spaces from the Title Case display name, producing PascalCase
-    format suitable for tool call headers in the TUI.
-
-    Args:
-        name: Canonical snake_case tool name or alias
-
-    Returns:
-        PascalCase tool name without spaces (e.g., "ReadFile", "ShellExecute")
-
-    Example:
-        >>> get_tool_pascal_name("read_file")
-        "ReadFile"
-        >>> get_tool_pascal_name("execute")
-        "ShellExecute"
-    """
-    meta = TOOL_REGISTRY.get(name)
-    if meta:
-        return meta.get_display_name()
-    return name.replace("_", "").title()
+    # Convert snake_case to TitleCase (no spaces)
+    return name.replace("_", " ").title().replace(" ", "")
 
 
 def get_all_path_arg_keys() -> frozenset[str]:

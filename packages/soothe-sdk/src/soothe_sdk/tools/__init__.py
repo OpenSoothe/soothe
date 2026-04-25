@@ -15,7 +15,7 @@ __all__ = [
     "TOOL_REGISTRY",
     "get_tool_meta",
     "get_all_path_arg_keys",
-    "get_tool_pascal_name",
+    "get_tool_display_name",
     "get_tools_with_header_info",
     "get_tool_categories",
     "get_outcome_type",
@@ -27,7 +27,7 @@ from soothe_sdk.tools.metadata import (
     get_all_path_arg_keys,
     get_outcome_type,
     get_tool_categories,
+    get_tool_display_name,
     get_tool_meta,
-    get_tool_pascal_name,
     get_tools_with_header_info,
 )

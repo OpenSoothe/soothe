@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.core.verbosity import VerbosityTier
-from soothe_sdk.utils import get_tool_pascal_name
+from soothe_sdk.utils import get_tool_display_name
 
 from soothe_cli.cli.stream import DisplayLine, StreamDisplayPipeline
 from soothe_cli.cli.utils import make_tool_block
@@ -223,7 +223,7 @@ class CliRenderer:
 
         self._stderr_begin_icon_block()
 
-        display_name = get_tool_pascal_name(name)
+        display_name = get_tool_display_name(name)
 
         # Pass args directly, including any _raw fallback
         args_str = format_tool_call_args(name, {"args": args, "_raw": args.get("_raw", "")})
