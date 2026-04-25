@@ -27,10 +27,9 @@ providers:
       - deepseek-v3.2
 
   - name: lmstudio
-    provider_type: openai
+    provider_type: lms-openai  # LMStudio compatibility (reasoning_content field, limited tool_choice)
     api_base_url: "http://100.75.70.86:9271/v1"
     api_key: "lm-studio"
-    supports_advanced_tool_choice: false  # LMS only supports string tool_choice values
     models:
       - google/gemma-4-26b-a4b
       - zai-org/glm-4.7-flash

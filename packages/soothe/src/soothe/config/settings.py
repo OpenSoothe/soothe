@@ -425,6 +425,9 @@ class SootheConfig(BaseSettings):
         provider_type = provider_name
         if provider:
             provider_type = provider.provider_type
+            # LMS-OpenAI providers use OpenAI API, but need special handling later
+            actual_provider_type = "openai" if provider_type == "lms-openai" else provider_type
+
             if provider.api_base_url:
                 resolved = _resolve_provider_env(
                     provider.api_base_url,
@@ -433,7 +436,7 @@ class SootheConfig(BaseSettings):
                 )
                 if resolved:
                     kwargs["base_url"] = resolved
-                    if provider_type == "openai":
+                    if actual_provider_type == "openai":
                         kwargs["use_responses_api"] = False
             if provider.api_key:
                 resolved = _resolve_provider_env(
@@ -443,6 +446,9 @@ class SootheConfig(BaseSettings):
                 )
                 if resolved:
                     kwargs["api_key"] = resolved
+
+            # Return actual provider_type for langchain, but keep original for wrapper logic
+            return actual_provider_type, kwargs
         return provider_type, kwargs
 
     def create_chat_model(self, role: str = "default") -> BaseChatModel:
@@ -484,22 +490,17 @@ class SootheConfig(BaseSettings):
 
         model = init_chat_model(init_str, streaming=True, **kwargs)
 
-        # Check provider capability for advanced tool_choice support (LMStudio compatibility)
-        supports_advanced_tool_choice = True  # Default assumption
+        # Check if this is an LMS-OpenAI provider (LMStudio compatibility)
         if provider_name:
             provider = self._find_provider(provider_name)
-            if provider:
-                supports_advanced_tool_choice = provider.supports_advanced_tool_choice
-                if not supports_advanced_tool_choice:
-                    logger.info(
-                        "Provider '%s' doesn't support advanced tool_choice objects, wrapping model for compatibility",
-                        provider_name,
-                    )
-                    from soothe.core.model_wrapper import wrap_model_if_needed
+            if provider and provider.provider_type == "lms-openai":
+                logger.info(
+                    "Provider '%s' is LMS-OpenAI type (LMStudio), applying compatibility wrapper",
+                    provider_name,
+                )
+                from soothe.core.llm.wrappers import LimitedProviderModelWrapper
 
-                    model = wrap_model_if_needed(
-                        model, provider_name, supports_advanced_tool_choice
-                    )
+                model = LimitedProviderModelWrapper(model, provider_name)
 
         self._model_cache[cache_key] = model
         logger.debug("Created and cached model for '%s'", model_str)
@@ -558,21 +559,17 @@ class SootheConfig(BaseSettings):
 
         model = init_chat_model(init_str, streaming=True, **merged_kwargs)
 
-        supports_advanced_tool_choice = True
+        # Check if this is an LMS-OpenAI provider (limited API compatibility)
         if provider_name:
             provider = self._find_provider(provider_name)
-            if provider:
-                supports_advanced_tool_choice = provider.supports_advanced_tool_choice
-                if not supports_advanced_tool_choice:
-                    logger.info(
-                        "Provider '%s' doesn't support advanced tool_choice objects, wrapping model for compatibility",
-                        provider_name,
-                    )
-                    from soothe.core.model_wrapper import wrap_model_if_needed
+            if provider and provider.provider_type == "lms-openai":
+                logger.info(
+                    "Provider '%s' is LMS-OpenAI type, applying compatibility wrapper",
+                    provider_name,
+                )
+                from soothe.core.llm.wrappers import LimitedProviderModelWrapper
 
-                    model = wrap_model_if_needed(
-                        model, provider_name, supports_advanced_tool_choice
-                    )
+                model = LimitedProviderModelWrapper(model, provider_name)
 
         self._model_cache[cache_key] = model
         logger.debug("Created model for explicit spec '%s'", model_str)
@@ -672,7 +669,9 @@ class SootheConfig(BaseSettings):
         (``OPENAI_API_KEY``, ``OLLAMA_HOST``, etc.) if not already present.
         """
         for provider in self.providers:
-            if provider.provider_type == "openai" and provider.api_key:
+            # LMS-OpenAI providers use OpenAI API format
+            provider_type = provider.provider_type
+            if provider_type in ("openai", "lms-openai") and provider.api_key:
                 resolved_key = _resolve_provider_env(
                     provider.api_key,
                     provider_name=provider.name,
@@ -688,7 +687,7 @@ class SootheConfig(BaseSettings):
                     )
                     if resolved_base_url:
                         os.environ.setdefault("OPENAI_BASE_URL", resolved_base_url)
-            elif provider.provider_type == "ollama" and provider.api_base_url:
+            elif provider_type == "ollama" and provider.api_base_url:
                 resolved_base_url = _resolve_provider_env(
                     provider.api_base_url,
                     provider_name=provider.name,

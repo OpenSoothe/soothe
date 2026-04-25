@@ -99,23 +99,9 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         # Initialize intent classifier (IG-226: cognition.intention module)
         if self._config.performance.enabled and self._config.performance.unified_classification:
             fast_model = None
-            supports_advanced_tool_choice = True  # Default assumption
 
             try:
                 fast_model = self._config.create_chat_model("fast")
-
-                # Check provider capability for advanced tool_choice support (LMStudio compatibility)
-                model_str = self._config.resolve_model("fast")
-                provider_name, _, model_name = model_str.partition(":")
-                if provider_name:  # provider:model format
-                    provider = self._config._find_provider(provider_name)
-                    if provider:
-                        supports_advanced_tool_choice = provider.supports_advanced_tool_choice
-                        if not supports_advanced_tool_choice:
-                            logger.info(
-                                "Provider '%s' doesn't support advanced tool_choice objects (json_mode will be forced)",
-                                provider_name,
-                            )
             except Exception:
                 logger.exception(
                     "Failed to create fast model for classification. Classification will be disabled."
@@ -127,7 +113,6 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
                     model=fast_model,
                     assistant_name=self._config.assistant_name,
                     config=self._config,  # IG-143: Pass config for LLM tracing
-                    supports_advanced_tool_choice=supports_advanced_tool_choice,  # LMStudio compatibility
                 )
                 logger.info("[IntentClassifier] Initialized in LLM mode")
             else:
