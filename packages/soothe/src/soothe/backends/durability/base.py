@@ -1,4 +1,4 @@
-"""Base class for durability backends using PersistStore."""
+"""Base class for durability backends using PersistStore (IG-258 Phase 2: async methods)."""
 
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ class BasePersistStoreDurability:
     Provides thread lifecycle management.  State persistence (checkpoints,
     artifacts) is handled by ``RunArtifactStore`` (RFC-0010).
     Subclasses only need to provide a PersistStore instance.
+
+    IG-258 Phase 2: All PersistStore methods are now async.
     """
 
     def __init__(self, persist_store: PersistStore) -> None:
@@ -50,8 +52,8 @@ class BasePersistStoreDurability:
             updated_at=now,
             metadata=metadata,
         )
-        self._store.save(f"thread:{info.thread_id}", info.model_dump(mode="json"))
-        self._update_thread_index(info.thread_id, action="add")
+        await self._store.save(f"thread:{info.thread_id}", info.model_dump(mode="json"))
+        await self._update_thread_index(info.thread_id, action="add")
         return info
 
     async def resume_thread(self, thread_id: str) -> ThreadInfo:
@@ -70,11 +72,11 @@ class BasePersistStoreDurability:
             KeyError: If thread not found.
         """
         # First try exact match
-        data = self._store.load(f"thread:{thread_id}")
+        data = await self._store.load(f"thread:{thread_id}")
         if data is not None:
             info = ThreadInfo.model_validate(data)
             info = info.model_copy(update={"status": "active", "updated_at": datetime.now(tz=UTC)})
-            self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
+            await self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
             return info
 
         # Try prefix matching
@@ -86,39 +88,39 @@ class BasePersistStoreDurability:
         # Return the first match (sorted by updated_at descending for consistency)
         matching_threads.sort(key=lambda t: t.updated_at, reverse=True)
         matched_thread = matching_threads[0]
-        data = self._store.load(f"thread:{matched_thread.thread_id}")
+        data = await self._store.load(f"thread:{matched_thread.thread_id}")
         if data is None:
             msg = f"Thread '{thread_id}' not found"
             raise KeyError(msg)
 
         info = ThreadInfo.model_validate(data)
         info = info.model_copy(update={"status": "active", "updated_at": datetime.now(tz=UTC)})
-        self._store.save(f"thread:{matched_thread.thread_id}", info.model_dump(mode="json"))
+        await self._store.save(f"thread:{matched_thread.thread_id}", info.model_dump(mode="json"))
         return info
 
     async def suspend_thread(self, thread_id: str) -> None:
         """Suspend an active thread."""
-        data = self._store.load(f"thread:{thread_id}")
+        data = await self._store.load(f"thread:{thread_id}")
         if data is None:
             return
 
         info = ThreadInfo.model_validate(data)
         info = info.model_copy(update={"status": "suspended", "updated_at": datetime.now(tz=UTC)})
-        self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
+        await self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
 
     async def archive_thread(self, thread_id: str) -> None:
         """Archive a thread."""
-        data = self._store.load(f"thread:{thread_id}")
+        data = await self._store.load(f"thread:{thread_id}")
         if data is None:
             return
 
         info = ThreadInfo.model_validate(data)
         info = info.model_copy(update={"status": "archived", "updated_at": datetime.now(tz=UTC)})
-        self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
+        await self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
 
     async def get_thread(self, thread_id: str) -> ThreadInfo | None:
         """Load thread information without changing lifecycle status."""
-        data = self._store.load(f"thread:{thread_id}")
+        data = await self._store.load(f"thread:{thread_id}")
         if data is None:
             return None
         return ThreadInfo.model_validate(data)
@@ -140,7 +142,7 @@ class BasePersistStoreDurability:
         Raises:
             KeyError: If thread not found.
         """
-        data = self._store.load(f"thread:{thread_id}")
+        data = await self._store.load(f"thread:{thread_id}")
         if data is None:
             msg = f"Thread '{thread_id}' not found"
             raise KeyError(msg)
@@ -161,7 +163,7 @@ class BasePersistStoreDurability:
                 "updated_at": datetime.now(tz=UTC),
             }
         )
-        self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
+        await self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
 
     async def list_threads(
         self,
@@ -169,13 +171,13 @@ class BasePersistStoreDurability:
     ) -> list[ThreadInfo]:
         """List threads matching a filter."""
         # Load thread index
-        index_data = self._store.load(self._thread_index_key)
+        index_data = await self._store.load(self._thread_index_key)
         thread_ids: list[str] = index_data if isinstance(index_data, list) else []
 
         # Load all threads
         results: list[ThreadInfo] = []
         for tid in thread_ids:
-            data = self._store.load(f"thread:{tid}")
+            data = await self._store.load(f"thread:{tid}")
             if data:
                 results.append(ThreadInfo.model_validate(data))
 
@@ -195,14 +197,14 @@ class BasePersistStoreDurability:
 
         return results
 
-    def _update_thread_index(self, thread_id: str, action: str = "add") -> None:
-        """Update the thread index for list_threads().
+    async def _update_thread_index(self, thread_id: str, action: str = "add") -> None:
+        """Update the thread index for list_threads() (async, IG-258 Phase 2).
 
         Args:
             thread_id: Thread ID to add/remove from index.
             action: "add" or "remove".
         """
-        index_data = self._store.load(self._thread_index_key)
+        index_data = await self._store.load(self._thread_index_key)
         thread_ids: set[str] = set(index_data) if isinstance(index_data, list) else set()
 
         if action == "add":
@@ -210,10 +212,10 @@ class BasePersistStoreDurability:
         elif action == "remove":
             thread_ids.discard(thread_id)
 
-        self._store.save(self._thread_index_key, list(thread_ids))
+        await self._store.save(self._thread_index_key, list(thread_ids))
 
     async def _find_threads_by_prefix(self, prefix: str) -> list[ThreadInfo]:
-        """Find threads whose IDs start with the given prefix.
+        """Find threads whose IDs start with the given prefix (async, IG-258 Phase 2).
 
         Args:
             prefix: Thread ID prefix to search for.
@@ -222,14 +224,14 @@ class BasePersistStoreDurability:
             List of ThreadInfo objects matching the prefix.
         """
         # Load thread index
-        index_data = self._store.load(self._thread_index_key)
+        index_data = await self._store.load(self._thread_index_key)
         thread_ids: list[str] = index_data if isinstance(index_data, list) else []
 
         # Find threads starting with prefix
         matching = []
         for tid in thread_ids:
             if tid.startswith(prefix):
-                data = self._store.load(f"thread:{tid}")
+                data = await self._store.load(f"thread:{tid}")
                 if data:
                     matching.append(ThreadInfo.model_validate(data))
 

@@ -25,7 +25,7 @@ CRITICAL OUTPUT RULES:
 - For "chitchat": set chitchat_response (short friendly reply in user's detected language)
 - For "quiz": set quiz_response (brief factual answer from your knowledge)
 - For "thread_continuation": set reuse_current_goal=true if active_goal exists
-- For "new_goal": set goal_description (normalized task description, 5-15 words)
+- For "new_goal": set goal_description (normalized task description, 5-15 words) AND friendly_message (action-oriented reinterpretation for user, 1-2 sentences)
 - "task_complexity" is secondary: chitchat | quiz | medium | complex
 - "reasoning" is REQUIRED: brief explanation (1-2 sentences)
 - Do not output placeholders, markdown, comments, or extra keys
@@ -50,9 +50,12 @@ Intent classification criteria:
   → task_complexity=medium (follow-up actions)
 
 - new_goal: Standalone tasks requiring tools (file ops, web search, analysis, coding)
-  Examples: "count all readme files", "analyze the codebase", "build authentication system",
+  Examples: "analyze the codebase", "build authentication system",
            "search web for recent AI papers", "read config and extract settings"
   → goal_description required (normalized task description, 5-15 words)
+          Example: "analyze the codebase"
+  → friendly_message required (action-oriented reinterpretation, 1-2 sentences, friendly tone)
+          Example: "I will read the project readme files and show the first 10 lines"
   → task_complexity=medium (default) or complex (architecture/migrations)
 
 Intent precedence (apply in order):
@@ -66,6 +69,7 @@ Required JSON shape:
   "intent_type": "chitchat"|"thread_continuation"|"new_goal"|"quiz",
   "reuse_current_goal": boolean,
   "goal_description": string|null,
+  "friendly_message": string|null,
   "task_complexity": "chitchat"|"quiz"|"medium"|"complex",
   "chitchat_response": string|null,
   "quiz_response": string|null,
@@ -88,7 +92,7 @@ CRITICAL OUTPUT RULES:
 - For "chitchat": set chitchat_response (detect user language from query)
 - For "quiz": set quiz_response (brief factual answer)
 - For "thread_continuation": set reuse_current_goal based on active_goal
-- For "new_goal": set goal_description
+- For "new_goal": set goal_description AND friendly_message (action-oriented reinterpretation)
 - "task_complexity": chitchat | quiz | medium | complex
 - "reasoning" is REQUIRED
 
@@ -103,6 +107,7 @@ Required JSON shape:
   "intent_type": "chitchat"|"thread_continuation"|"new_goal"|"quiz",
   "reuse_current_goal": boolean,
   "goal_description": string|null,
+  "friendly_message": string|null,
   "task_complexity": "chitchat"|"quiz"|"medium"|"complex",
   "chitchat_response": string|null,
   "quiz_response": string|null,

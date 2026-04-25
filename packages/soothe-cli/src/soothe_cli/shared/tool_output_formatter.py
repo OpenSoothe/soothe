@@ -161,6 +161,7 @@ class ToolOutputFormatter:
                 GoalFormatter,
                 MediaFormatter,
                 StructuredFormatter,
+                SubagentFormatter,
                 WebFormatter,
             )
 
@@ -175,6 +176,9 @@ class ToolOutputFormatter:
                 return formatter.format(tool_name, result)
             if category == "execution":
                 formatter = ExecutionFormatter()
+                return formatter.format(tool_name, result)
+            if category == "subagent":
+                formatter = SubagentFormatter()
                 return formatter.format(tool_name, result)
             if category == "media":
                 formatter = MediaFormatter()

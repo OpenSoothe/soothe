@@ -100,6 +100,7 @@ class TransportManager:
                 thread_manager=self._thread_manager,
                 runner=self._runner,
                 soothe_config=self._soothe_config,
+                session_manager=self._session_manager,
             )
             self._transports.append(http_transport)
             logger.debug("Configured HTTP REST transport")

@@ -307,13 +307,15 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         if not thread_id:
             return
         try:
-            thread_data = self._durability._store.load(f"thread:{thread_id}")
+            thread_data = await self._durability._store.load(
+                f"thread:{thread_id}"
+            )  # IG-258 Phase 2: async
             if thread_data:
                 from soothe.protocols.durability import ThreadInfo
 
                 thread_info = ThreadInfo.model_validate(thread_data)
                 thread_info = thread_info.model_copy(update={"updated_at": datetime.now(UTC)})
-                self._durability._store.save(
+                await self._durability._store.save(  # IG-258 Phase 2: async
                     f"thread:{thread_id}", thread_info.model_dump(mode="json")
                 )
                 logger.debug("Thread %s updated_at refreshed", thread_id)

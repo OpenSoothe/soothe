@@ -444,13 +444,23 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
     values = []
     for key_arg in key_args:
         if key_arg in args:
-            value = str(args[key_arg])
+            raw_value = args[key_arg]
+            value = str(raw_value)
             # Convert and abbreviate path arguments
             if _is_path_arg_name(key_arg):
                 value = _display_path_value(value)
             elif len(value) > max_value_length:
                 # Truncate non-path long values
                 value = value[: max_value_length - 3] + "..."
+            # IG-261: Quote string arguments for Task tool (except subagent_type)
+            # Only quote if the original value is a string and not already quoted
+            if (
+                internal == "task"
+                and key_arg != "subagent_type"
+                and isinstance(raw_value, str)
+                and not (value.startswith('"') and value.endswith('"'))
+            ):
+                value = f'"{value}"'
             values.append(value)
 
     if not values:

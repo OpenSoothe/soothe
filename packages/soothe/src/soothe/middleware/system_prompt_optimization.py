@@ -551,21 +551,32 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             )
             return request
 
-        classification: RoutingClassification | None = request.state.get("unified_classification")
+        classification: RoutingClassification | dict | None = request.state.get(
+            "unified_classification"
+        )
         if not classification:
             return request
 
-        complexity = classification.task_complexity
+        # Handle both Pydantic model and dict serialization
+        if isinstance(classification, dict):
+            complexity = classification.get("task_complexity")
+            routing_hint = classification.get("routing_hint")
+            preferred_subagent = classification.get("preferred_subagent")
+            is_plan_only = classification.get("is_plan_only", False)
+        else:
+            complexity = classification.task_complexity
+            routing_hint = getattr(classification, "routing_hint", None)
+            preferred_subagent = getattr(classification, "preferred_subagent", None)
+            is_plan_only = getattr(classification, "is_plan_only", False)
+
         logger.info(
             "Optimizing prompt: complexity=%s, plan_only=%s",
             complexity,
-            classification.is_plan_only if hasattr(classification, "is_plan_only") else False,
+            is_plan_only,
         )
 
         # Check for direct subagent routing hint (preferred_subagent + routing_hint='subagent')
         # IG-192: Inject explicit directive to use task tool when routing hint present
-        routing_hint = getattr(classification, "routing_hint", None)
-        preferred_subagent = getattr(classification, "preferred_subagent", None)
 
         msgs_for_hop = getattr(request, "messages", None) or []
         first_after_user = _last_message_is_human(msgs_for_hop)

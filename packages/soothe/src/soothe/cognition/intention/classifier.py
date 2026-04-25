@@ -444,6 +444,11 @@ class IntentClassifier:
             intent.goal_description = query
             logger.debug("Patched missing goal_description")
 
+        # Patch missing friendly_message (IG-262)
+        if intent.intent_type == "new_goal" and not intent.friendly_message:
+            intent.friendly_message = self._generate_friendly_message(query)
+            logger.debug("Patched missing friendly_message")
+
         return intent
 
     def _generate_chitchat_response(self, query: str) -> str:
@@ -471,6 +476,19 @@ class IntentClassifier:
         # Fallback placeholder - primary path uses piggybacked quiz_response from classification
         # This is only used if LLM classification fails to provide quiz_response
         return f"I'll answer that question: {query}"
+
+    def _generate_friendly_message(self, query: str) -> str:
+        """Generate friendly message fallback (IG-262).
+
+        Args:
+            query: User query text.
+
+        Returns:
+            Friendly task reinterpretation placeholder.
+        """
+        # Fallback placeholder - primary path uses piggybacked friendly_message from classification
+        # This is only used if LLM classification fails to provide friendly_message
+        return f"I will work on: {query}"
 
     def _create_llm_metadata(
         self,

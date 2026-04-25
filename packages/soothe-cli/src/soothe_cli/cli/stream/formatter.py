@@ -318,6 +318,9 @@ def format_reasoning(
     IG-XXX: Shows technical reasoning with "Reasoning:" prefix for clarity.
     Uses solid bullet ● (matching goal) to indicate reasoning is active phase.
 
+    IG-262: Uses level=2 (flat layout) for consistency with judgement lines.
+    Reasoning is a sibling to judgement, not a child.
+
     Args:
         reasoning: Internal technical analysis text.
         namespace: Event namespace.
@@ -330,10 +333,10 @@ def format_reasoning(
     content = f"💭 {reasoning}"
 
     return DisplayLine(
-        level=3,  # Use level 3 for less prominence (subordinate to next_action)
+        level=2,  # IG-262: Use level 2 for flat layout (sibling to judgement, not child)
         content=content,
         icon="●",  # Solid bullet matching goal icon (polish)
-        indent=indent_for_level(3),
+        indent=indent_for_level(2),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
 

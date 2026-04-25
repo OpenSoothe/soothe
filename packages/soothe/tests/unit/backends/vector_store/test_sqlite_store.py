@@ -1,5 +1,6 @@
-"""Unit tests for SQLitePersistStore backend."""
+"""Unit tests for SQLitePersistStore backend (IG-258 Phase 2: async methods)."""
 
+import asyncio
 import os
 import tempfile
 
@@ -32,94 +33,135 @@ class TestSQLitePersistStoreUnit:
         os.unlink(tmp.name)
 
     def test_save_and_load(self) -> None:
-        """Test basic save and load operations."""
-        store = self._make_store()
-        try:
-            store.save("key1", {"data": "value1"})
-            result = store.load("key1")
-            assert result == {"data": "value1"}
-        finally:
-            store.close()
+        """Test basic save and load operations (async, IG-258 Phase 2)."""
+
+        async def _async_test():
+            store = self._make_store()
+            try:
+                await store.save("key1", {"data": "value1"})
+                result = await store.load("key1")
+                assert result == {"data": "value1"}
+            finally:
+                await store.close()
+
+        asyncio.run(_async_test())
 
     def test_load_nonexistent(self) -> None:
-        """Test load returns None for missing key."""
-        store = self._make_store()
-        try:
-            assert store.load("nonexistent") is None
-        finally:
-            store.close()
+        """Test load returns None for missing key (async, IG-258 Phase 2)."""
+
+        async def _async_test():
+            store = self._make_store()
+            try:
+                # Initialize table with a dummy save first (async table creation)
+                await store.save("_init", None)
+                await store.delete("_init")  # Clean up initialization key
+                result = await store.load("nonexistent")
+                assert result is None
+            finally:
+                await store.close()
+
+        asyncio.run(_async_test())
 
     def test_delete(self) -> None:
-        """Test delete removes key."""
-        store = self._make_store()
-        try:
-            store.save("key1", "value")
-            store.delete("key1")
-            assert store.load("key1") is None
-        finally:
-            store.close()
+        """Test delete removes key (async, IG-258 Phase 2)."""
+
+        async def _async_test():
+            store = self._make_store()
+            try:
+                await store.save("key1", "value")
+                await store.delete("key1")
+                result = await store.load("key1")
+                assert result is None
+            finally:
+                await store.close()
+
+        asyncio.run(_async_test())
 
     def test_namespace_isolation(self) -> None:
-        """Test that namespaces isolate keys."""
+        """Test that namespaces isolate keys (async, IG-258 Phase 2)."""
         from soothe.backends.persistence.sqlite_store import SQLitePersistStore
 
-        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        tmp.close()
-        store_a = SQLitePersistStore(db_path=tmp.name, namespace="ns_a")
-        store_b = SQLitePersistStore(db_path=tmp.name, namespace="ns_b")
-        try:
-            store_a.save("shared_key", "value_a")
-            store_b.save("shared_key", "value_b")
-            assert store_a.load("shared_key") == "value_a"
-            assert store_b.load("shared_key") == "value_b"
-            store_a.delete("shared_key")
-            assert store_a.load("shared_key") is None
-            assert store_b.load("shared_key") == "value_b"
-        finally:
-            store_a.close()
-            store_b.close()
-            os.unlink(tmp.name)
+        async def _async_test():
+            tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+            tmp.close()
+            store_a = SQLitePersistStore(db_path=tmp.name, namespace="ns_a")
+            store_b = SQLitePersistStore(db_path=tmp.name, namespace="ns_b")
+            try:
+                await store_a.save("shared_key", "value_a")
+                await store_b.save("shared_key", "value_b")
+                result_a = await store_a.load("shared_key")
+                result_b = await store_b.load("shared_key")
+                assert result_a == "value_a"
+                assert result_b == "value_b"
+                await store_a.delete("shared_key")
+                result_a = await store_a.load("shared_key")
+                result_b = await store_b.load("shared_key")
+                assert result_a is None
+                assert result_b == "value_b"
+            finally:
+                await store_a.close()
+                await store_b.close()
+                os.unlink(tmp.name)
+
+        asyncio.run(_async_test())
 
     def test_upsert_semantics(self) -> None:
-        """Test save overwrites existing key."""
-        store = self._make_store()
-        try:
-            store.save("key1", "first")
-            store.save("key1", "second")
-            assert store.load("key1") == "second"
-        finally:
-            store.close()
+        """Test save overwrites existing key (async, IG-258 Phase 2)."""
+
+        async def _async_test():
+            store = self._make_store()
+            try:
+                await store.save("key1", "first")
+                await store.save("key1", "second")
+                result = await store.load("key1")
+                assert result == "second"
+            finally:
+                await store.close()
+
+        asyncio.run(_async_test())
 
     def test_list_keys(self) -> None:
-        """Test listing keys in namespace."""
-        store = self._make_store()
-        try:
-            store.save("a", 1)
-            store.save("b", 2)
-            keys = store.list_keys()
-            assert set(keys) == {"a", "b"}
-        finally:
-            store.close()
+        """Test listing keys in namespace (async, IG-258 Phase 2)."""
+
+        async def _async_test():
+            store = self._make_store()
+            try:
+                await store.save("a", 1)
+                await store.save("b", 2)
+                keys = await store.list_keys()
+                assert set(keys) == {"a", "b"}
+            finally:
+                await store.close()
+
+        asyncio.run(_async_test())
 
     def test_complex_data_serialization(self) -> None:
-        """Test complex data types serialize correctly."""
-        store = self._make_store()
-        try:
-            data = {
+        """Test complex data structures serialization (async, IG-258 Phase 2)."""
+
+        async def _async_test():
+            store = self._make_store()
+            complex_data = {
                 "list": [1, 2, 3],
                 "nested": {"key": "value"},
                 "number": 42,
                 "bool": True,
                 "null": None,
             }
-            store.save("complex", data)
-            result = store.load("complex")
-            assert result == data
-        finally:
-            store.close()
+            try:
+                await store.save("complex", complex_data)
+                result = await store.load("complex")
+                assert result == complex_data
+            finally:
+                await store.close()
+
+        asyncio.run(_async_test())
 
     def test_close_is_idempotent(self) -> None:
-        """Test close can be called multiple times safely."""
-        store = self._make_store()
-        store.close()
-        store.close()  # Should not raise
+        """Test close can be called multiple times safely (async, IG-258 Phase 2)."""
+
+        async def _async_test():
+            store = self._make_store()
+            await store.close()
+            await store.close()  # Should not raise
+
+        asyncio.run(_async_test())

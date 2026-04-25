@@ -3,18 +3,19 @@
 Manages checkpoint lifecycle: initialize, save, load, recovery.
 RFC-608: Multi-thread spanning with loop_id as primary key.
 RFC-409: Unified global SQLite persistence backend (loop_checkpoints.db).
+IG-258 Phase 2: Connection pooling to eliminate database lock contention.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import sqlite3
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-import aiosqlite
 
 from soothe.cognition.agent_loop.checkpoint import (
     ActWaveRecord,
@@ -49,14 +50,20 @@ class AgentLoopStateManager:
     """Manages AgentLoop checkpoint lifecycle (RFC-608: loop-scoped, multi-thread).
 
     Uses unified global SQLite backend (loop_checkpoints.db) per RFC-409.
+    IG-258 Phase 2: Instance-level connection pooling for concurrent checkpoint operations.
     """
 
-    def __init__(self, loop_id: str | None = None, workspace: Path | None = None) -> None:  # noqa: ARG002
+    def __init__(
+        self, loop_id: str | None = None, workspace: Path | None = None, reader_pool_size: int = 5
+    ) -> None:  # noqa: ARG002
         """Initialize with loop_id (primary key), not thread_id.
+
+        IG-258 Phase 2: Instance-level connection pool (matching SQLitePersistStore pattern).
 
         Args:
             loop_id: Loop identifier (UUID or existing). None generates new UUID.
             workspace: Optional workspace path (not used for checkpoint storage)
+            reader_pool_size: Number of reader connections for concurrent reads (Phase 2).
         """
         self.loop_id = loop_id or str(uuid.uuid4())
         # Checkpoint stored in global loop_checkpoints.db (loop_id as partition key)
@@ -66,8 +73,101 @@ class AgentLoopStateManager:
         )  # For reports/working_memory
         self._checkpoint: AgentLoopCheckpoint | None = None
 
+        # Instance-level connection pool (Phase 2) - matching SQLitePersistStore pattern
+        self._reader_pool_size = reader_pool_size
+        self._writer_conn: sqlite3.Connection | None = None
+        self._reader_pool: list[sqlite3.Connection] = []
+        self._pool_semaphore = asyncio.Semaphore(reader_pool_size)
+        self._init_lock = asyncio.Lock()
+
+    async def _ensure_writer_connection(self) -> sqlite3.Connection:
+        """Lazy writer connection initialization with WAL mode (Phase 2).
+
+        Returns:
+            Active SQLite writer connection.
+        """
+        if self._writer_conn is not None:
+            return self._writer_conn
+
+        async with self._init_lock:
+            if self._writer_conn is not None:
+                return self._writer_conn
+
+            # Initialize writer in thread pool (sync operation)
+            await asyncio.to_thread(self._init_writer_connection_sync)
+
+            return self._writer_conn
+
+    def _init_writer_connection_sync(self) -> None:
+        """Sync writer initialization executed in thread pool."""
+        db_path = Path(self.db_path)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self._writer_conn = sqlite3.connect(
+            str(db_path),
+            check_same_thread=False,
+            timeout=30,
+        )
+        self._writer_conn.execute("PRAGMA journal_mode=WAL")
+        self._writer_conn.execute("PRAGMA foreign_keys=ON")
+        self._writer_conn.row_factory = sqlite3.Row
+
+        # Initialize database schema
+        SQLitePersistenceBackend.initialize_database_sync(db_path)
+
+        logger.info("AgentLoop SQLite writer connection initialized at %s", db_path)
+
+    async def _get_reader_connection(self) -> sqlite3.Connection:
+        """Get reader connection from pool (Phase 2).
+
+        Uses semaphore to limit concurrent reads to pool size.
+
+        Returns:
+            Reader connection from pool.
+        """
+        async with self._init_lock:
+            if not self._reader_pool:
+                # Initialize reader pool
+                await asyncio.to_thread(self._init_reader_pool_sync)
+
+            # Return connection from pool (or create new if pool empty)
+            return (
+                self._reader_pool.pop() if self._reader_pool else await self._create_reader_conn()
+            )
+
+    def _init_reader_pool_sync(self) -> None:
+        """Sync reader pool initialization executed in thread pool."""
+        db_path = Path(self.db_path)
+        for i in range(self._reader_pool_size):
+            conn = sqlite3.connect(
+                str(db_path),
+                check_same_thread=False,
+                timeout=30,
+            )
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.row_factory = sqlite3.Row
+            self._reader_pool.append(conn)
+
+        logger.info("AgentLoop SQLite reader pool initialized: size=%d", self._reader_pool_size)
+
+    async def _create_reader_conn(self) -> sqlite3.Connection:
+        """Create new reader connection if pool empty."""
+        return await asyncio.to_thread(self._create_reader_conn_sync)
+
+    def _create_reader_conn_sync(self) -> sqlite3.Connection:
+        """Sync reader connection creation."""
+        db_path = Path(self.db_path)
+        conn = sqlite3.connect(str(db_path), check_same_thread=False, timeout=30)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.row_factory = sqlite3.Row
+        return conn
+
     async def initialize(self, thread_id: str, max_iterations: int = 10) -> AgentLoopCheckpoint:
         """Create new loop for thread (RFC-608: loop-scoped).
+
+        IG-258 Phase 2: Database schema initialized lazily by writer connection.
 
         Args:
             thread_id: First thread for this loop
@@ -76,9 +176,6 @@ class AgentLoopStateManager:
         Returns:
             New AgentLoopCheckpoint instance (status=ready_for_next_goal)
         """
-        # Initialize global database schema
-        SQLitePersistenceBackend.initialize_database_sync(self.db_path)
-
         now = datetime.now(UTC)
 
         checkpoint = AgentLoopCheckpoint(
@@ -113,6 +210,8 @@ class AgentLoopStateManager:
     async def load(self) -> AgentLoopCheckpoint | None:
         """Load existing loop checkpoint (RFC-608: by loop_id).
 
+        IG-258 Phase 2: Use reader connection pool for concurrent reads.
+
         Returns:
             AgentLoopCheckpoint if exists and valid (v2.0 schema), None otherwise
         """
@@ -120,69 +219,51 @@ class AgentLoopStateManager:
             return None
 
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                # Enable FK constraints and WAL mode
-                await db.execute("PRAGMA foreign_keys=ON")
-                await db.execute("PRAGMA journal_mode=WAL")
+            # Get reader connection from pool (Phase 2)
+            async with AgentLoopStateManager._pool_semaphore:
+                conn = await AgentLoopStateManager._get_reader_connection()
 
-                # Load loop metadata
-                cursor = await db.execute(
-                    """
-                    SELECT thread_ids, current_thread_id, status, current_goal_index,
-                           working_memory_state, thread_health_metrics,
-                           total_goals_completed, total_thread_switches,
-                           total_duration_ms, total_tokens_used,
-                           thread_switch_pending, created_at, updated_at, schema_version
-                    FROM agentloop_loops WHERE loop_id = ?
-                    """,
-                    (self.loop_id,),
+                # Execute query in thread pool
+                row_data = await asyncio.to_thread(
+                    self._load_loop_metadata_sync, conn, self.loop_id
                 )
-                row = await cursor.fetchone()
 
-                if not row:
+                if not row_data:
                     return None
 
                 # Deserialize row
-                thread_ids = json.loads(row[0])
-                current_thread_id = row[1]
-                status = row[2]
-                current_goal_index = row[3]
+                thread_ids = json.loads(row_data[0])
+                current_thread_id = row_data[1]
+                status = row_data[2]
+                current_goal_index = row_data[3]
                 working_memory_state = (
-                    WorkingMemoryState.model_validate_json(row[4])
-                    if row[4]
+                    WorkingMemoryState.model_validate_json(row_data[4])
+                    if row_data[4]
                     else WorkingMemoryState(entries=[], spill_files=[])
                 )
                 thread_health_metrics = (
-                    ThreadHealthMetrics.model_validate_json(row[5])
-                    if row[5]
+                    ThreadHealthMetrics.model_validate_json(row_data[5])
+                    if row_data[5]
                     else ThreadHealthMetrics(
                         thread_id=current_thread_id, last_updated=datetime.now(UTC)
                     )
                 )
-                total_goals_completed = row[6]
-                total_thread_switches = row[7]
-                total_duration_ms = row[8]
-                total_tokens_used = row[9]
-                thread_switch_pending = bool(row[10])
-                created_at = datetime.fromisoformat(row[11])
-                updated_at = datetime.fromisoformat(row[12])
-                schema_version = row[13]
+                total_goals_completed = row_data[6]
+                total_thread_switches = row_data[7]
+                total_duration_ms = row_data[8]
+                total_tokens_used = row_data[9]
+                thread_switch_pending = bool(row_data[10])
+                created_at = datetime.fromisoformat(row_data[11])
+                updated_at = datetime.fromisoformat(row_data[12])
+                schema_version = row_data[13]
 
                 # Load goal_history from goal_records table
-                cursor = await db.execute(
-                    """
-                    SELECT goal_id, loop_id, goal_text, thread_id, iteration, status,
-                           reason_history, act_history, final_report, evidence_summary,
-                           duration_ms, tokens_used, started_at, completed_at
-                    FROM goal_records WHERE loop_id = ?
-                    ORDER BY started_at
-                    """,
-                    (self.loop_id,),
+                goal_rows_data = await asyncio.to_thread(
+                    self._load_goal_records_sync, conn, self.loop_id
                 )
-                goal_rows = await cursor.fetchall()
 
                 goal_history = []
-                for goal_row in goal_rows:
+                for goal_row in goal_rows_data:
                     goal_record = GoalExecutionRecord(
                         goal_id=goal_row[0],
                         goal_text=goal_row[2],
@@ -260,6 +341,35 @@ class AgentLoopStateManager:
             logger.exception("Failed to load loop %s checkpoint", self.loop_id)
             return None
 
+    def _load_loop_metadata_sync(self, conn: sqlite3.Connection, loop_id: str) -> tuple | None:
+        """Sync load of loop metadata executed in thread pool."""
+        cursor = conn.execute(
+            """
+            SELECT thread_ids, current_thread_id, status, current_goal_index,
+                   working_memory_state, thread_health_metrics,
+                   total_goals_completed, total_thread_switches,
+                   total_duration_ms, total_tokens_used,
+                   thread_switch_pending, created_at, updated_at, schema_version
+            FROM agentloop_loops WHERE loop_id = ?
+            """,
+            (loop_id,),
+        )
+        return cursor.fetchone()
+
+    def _load_goal_records_sync(self, conn: sqlite3.Connection, loop_id: str) -> list[tuple]:
+        """Sync load of goal records executed in thread pool."""
+        cursor = conn.execute(
+            """
+            SELECT goal_id, loop_id, goal_text, thread_id, iteration, status,
+                   reason_history, act_history, final_report, evidence_summary,
+                   duration_ms, tokens_used, started_at, completed_at
+            FROM goal_records WHERE loop_id = ?
+            ORDER BY started_at
+            """,
+            (loop_id,),
+        )
+        return cursor.fetchall()
+
     async def save(self, checkpoint: AgentLoopCheckpoint) -> None:
         """Persist loop checkpoint to SQLite (RFC-608: indexed by loop_id).
 
@@ -269,83 +379,17 @@ class AgentLoopStateManager:
         await self._save_checkpoint_to_db(checkpoint)
 
     async def _save_checkpoint_to_db(self, checkpoint: AgentLoopCheckpoint) -> None:
-        """Save checkpoint to SQLite database."""
+        """Save checkpoint to SQLite database.
+
+        IG-258 Phase 2: Use single writer connection for consistency.
+        """
         checkpoint.updated_at = datetime.now(UTC)
 
-        # Database already initialized globally
-        async with aiosqlite.connect(self.db_path) as db:
-            # Enable FK constraints and WAL mode
-            await db.execute("PRAGMA foreign_keys=ON")
-            await db.execute("PRAGMA journal_mode=WAL")
+        # Get writer connection (Phase 2)
+        conn = await self._ensure_writer_connection()
 
-            # Update agentloop_loops table
-            await db.execute(
-                """
-                INSERT OR REPLACE INTO agentloop_loops
-                (loop_id, thread_ids, current_thread_id, status, current_goal_index,
-                 working_memory_state, thread_health_metrics,
-                 total_goals_completed, total_thread_switches,
-                 total_duration_ms, total_tokens_used, thread_switch_pending,
-                 created_at, updated_at, schema_version)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    checkpoint.loop_id,
-                    json.dumps(checkpoint.thread_ids),
-                    checkpoint.current_thread_id,
-                    checkpoint.status,
-                    checkpoint.current_goal_index,
-                    checkpoint.working_memory_state.model_dump_json(),
-                    checkpoint.thread_health_metrics.model_dump_json(),
-                    checkpoint.total_goals_completed,
-                    checkpoint.total_thread_switches,
-                    checkpoint.total_duration_ms,
-                    checkpoint.total_tokens_used,
-                    int(checkpoint.thread_switch_pending),
-                    checkpoint.created_at.isoformat(),
-                    checkpoint.updated_at.isoformat(),
-                    checkpoint.schema_version,
-                ),
-            )
-
-            # Save goal_history to goal_records table
-            for goal_record in checkpoint.goal_history:
-                logger.debug(
-                    "[DEBUG save] Saving goal_record: goal_id=%s, status=%s, iteration=%d, reason_len=%d, act_len=%d, completed_at=%s",
-                    goal_record.goal_id,
-                    goal_record.status,
-                    goal_record.iteration,
-                    len(goal_record.reason_history),
-                    len(goal_record.act_history),
-                    goal_record.completed_at.isoformat() if goal_record.completed_at else None,
-                )
-                await db.execute(
-                    """
-                    INSERT OR REPLACE INTO goal_records
-                    (goal_id, loop_id, goal_text, thread_id, iteration, status,
-                     reason_history, act_history, final_report, evidence_summary,
-                     duration_ms, tokens_used, started_at, completed_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        goal_record.goal_id,
-                        checkpoint.loop_id,
-                        goal_record.goal_text,
-                        goal_record.thread_id,
-                        goal_record.iteration,
-                        goal_record.status,
-                        json.dumps([r.model_dump(mode="json") for r in goal_record.reason_history]),
-                        json.dumps([a.model_dump(mode="json") for a in goal_record.act_history]),
-                        goal_record.final_report,
-                        goal_record.evidence_summary,
-                        goal_record.duration_ms,
-                        goal_record.tokens_used,
-                        goal_record.started_at.isoformat(),
-                        goal_record.completed_at.isoformat() if goal_record.completed_at else None,
-                    ),
-                )
-
-            await db.commit()
+        # Execute save operations in thread pool
+        await asyncio.to_thread(self._save_checkpoint_sync, conn, checkpoint)
 
         self._checkpoint = checkpoint
 
@@ -353,6 +397,96 @@ class AgentLoopStateManager:
         self._sync_metadata_to_disk()
 
         logger.debug("Saved loop %s checkpoint (status %s)", self.loop_id, checkpoint.status)
+
+    def _save_checkpoint_sync(
+        self, conn: sqlite3.Connection, checkpoint: AgentLoopCheckpoint
+    ) -> None:
+        """Sync save of checkpoint executed in thread pool."""
+        # Serialize complex structures to JSON strings
+        thread_ids_json = json.dumps(checkpoint.thread_ids, ensure_ascii=False)
+        working_memory_json = checkpoint.working_memory_state.model_dump_json()
+        thread_health_json = checkpoint.thread_health_metrics.model_dump_json()
+
+        # Update agentloop_loops table
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO agentloop_loops
+            (loop_id, thread_ids, current_thread_id, status, current_goal_index,
+             working_memory_state, thread_health_metrics,
+             total_goals_completed, total_thread_switches,
+             total_duration_ms, total_tokens_used, thread_switch_pending,
+             created_at, updated_at, schema_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                checkpoint.loop_id,
+                thread_ids_json,
+                checkpoint.current_thread_id,
+                checkpoint.status,
+                checkpoint.current_goal_index,
+                working_memory_json,
+                thread_health_json,
+                checkpoint.total_goals_completed,
+                checkpoint.total_thread_switches,
+                checkpoint.total_duration_ms,
+                checkpoint.total_tokens_used,
+                int(checkpoint.thread_switch_pending),
+                checkpoint.created_at.isoformat(),
+                checkpoint.updated_at.isoformat(),
+                checkpoint.schema_version,
+            ),
+        )
+
+        # Save goal_history to goal_records table
+        for goal_record in checkpoint.goal_history:
+            logger.debug(
+                "[DEBUG save] Saving goal_record: goal_id=%s, status=%s, iteration=%d, reason_len=%d, act_len=%d, completed_at=%s",
+                goal_record.goal_id,
+                goal_record.status,
+                goal_record.iteration,
+                len(goal_record.reason_history),
+                len(goal_record.act_history),
+                goal_record.completed_at.isoformat() if goal_record.completed_at else None,
+            )
+
+            # Serialize complex structures to JSON strings
+            reason_history_json = json.dumps(
+                [r.model_dump(mode="json") for r in goal_record.reason_history], ensure_ascii=False
+            )
+            act_history_json = json.dumps(
+                [a.model_dump(mode="json") for a in goal_record.act_history], ensure_ascii=False
+            )
+            completed_at_str = (
+                goal_record.completed_at.isoformat() if goal_record.completed_at else None
+            )
+
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO goal_records
+                (goal_id, loop_id, goal_text, thread_id, iteration, status,
+                 reason_history, act_history, final_report, evidence_summary,
+                 duration_ms, tokens_used, started_at, completed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    goal_record.goal_id,
+                    checkpoint.loop_id,
+                    goal_record.goal_text,
+                    goal_record.thread_id,
+                    goal_record.iteration,
+                    goal_record.status,
+                    reason_history_json,
+                    act_history_json,
+                    goal_record.final_report,
+                    goal_record.evidence_summary,
+                    goal_record.duration_ms,
+                    goal_record.tokens_used,
+                    goal_record.started_at.isoformat(),
+                    completed_at_str,
+                ),
+            )
+
+        conn.commit()
 
     def start_new_goal(self, goal: str, max_iterations: int = 10) -> GoalExecutionRecord:
         """Create new goal record and clear working memory (RFC-608).
