@@ -328,10 +328,10 @@ def _compact_tool_args_display_values(
 ) -> str:
     """Build comma-separated display values from the first tool parameters (values only)."""
     from soothe_sdk.utils import convert_and_abbreviate_path
-    from soothe_sdk.utils.parsing import is_path_argument as _path_arg_name_pattern
+    from soothe_sdk.utils.parsing import PATH_ARG_PATTERN as _PATH_ARG_PATTERN
 
     def _is_path_arg_name(key: str) -> bool:
-        return _path_arg_name_pattern.match(key) is not None
+        return _PATH_ARG_PATTERN.match(key) is not None
 
     def _display_path_value(raw: str) -> str:
         out = convert_and_abbreviate_path(raw)
@@ -387,10 +387,10 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
         'file.txt'
     """
     from soothe_sdk.utils import convert_and_abbreviate_path
-    from soothe_sdk.utils.parsing import is_path_argument as _path_arg_name_pattern
+    from soothe_sdk.utils.parsing import PATH_ARG_PATTERN as _PATH_ARG_PATTERN
 
     def _is_path_arg_name(key: str) -> bool:
-        return _path_arg_name_pattern.match(key) is not None
+        return _PATH_ARG_PATTERN.match(key) is not None
 
     max_value_length = 40  # Max length for displayed values
 

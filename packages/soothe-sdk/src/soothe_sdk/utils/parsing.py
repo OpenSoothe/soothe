@@ -87,13 +87,33 @@ def resolve_provider_env(value: str, *, provider_name: str, field_name: str) -> 
     return resolved
 
 
-is_path_argument = re.compile(r"^(file_path|path|directory|dir|folder|cwd)\b", re.IGNORECASE)
-"""Regex for detecting path-like argument names in tool calls."""
+PATH_ARG_PATTERN = re.compile(r"^(file_path|path|directory|dir|folder|cwd)\b", re.IGNORECASE)
+"""Regex pattern for detecting path-like argument names in tool calls.
+
+Renamed from is_path_argument in IG-XXX (SDK refactoring).
+The original name was misleading - this is a pattern, not a function.
+"""
+
+
+def is_path_argument(text: str) -> bool:
+    """Check if text matches path argument pattern.
+
+    Backward compatibility wrapper for PATH_ARG_PATTERN.
+    Legacy code may call this as a function; new code should use PATH_ARG_PATTERN directly.
+
+    Args:
+        text: Argument name to check.
+
+    Returns:
+        True if text matches path argument pattern.
+    """
+    return bool(PATH_ARG_PATTERN.match(text))
 
 
 __all__ = [
     "parse_autopilot_goals",
     "_TASK_NAME_RE",
     "resolve_provider_env",
+    "PATH_ARG_PATTERN",
     "is_path_argument",
 ]

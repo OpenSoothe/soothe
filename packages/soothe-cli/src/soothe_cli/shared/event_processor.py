@@ -12,15 +12,14 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from soothe_sdk.client.protocol import preview_first
-from soothe_sdk.events import (
+from soothe_sdk.core.events import (
     PLAN_CREATED,
     PLAN_STEP_COMPLETED,
     PLAN_STEP_STARTED,
-    SUBAGENT_RESEARCH_INTERNAL_LLM,
 )
-from soothe_sdk.output_events import extract_output_text, is_output_event
+from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux import classify_event_to_tier
-from soothe_sdk.verbosity import VerbosityTier
+from soothe_sdk.ux.output_events import extract_output_text, is_output_event
 
 from soothe_cli.shared.display_policy import DisplayPolicy, VerbosityLevel, normalize_verbosity
 from soothe_cli.shared.message_processing import (
@@ -700,18 +699,6 @@ class EventProcessor:
     ) -> None:
         """Process protocol/progress events."""
         etype = data.get("type", "")
-
-        # Handle internal context tracking for research events
-        if etype == SUBAGENT_RESEARCH_INTERNAL_LLM:
-            self._state.internal_context_active = True
-            return  # Don't display internal events
-
-        # Exit internal context on non-internal research events
-        if (
-            etype.startswith("soothe.subagent.research.")
-            and etype != SUBAGENT_RESEARCH_INTERNAL_LLM
-        ):
-            self._state.internal_context_active = False
 
         # Tool events are now visible at NORMAL verbosity (RFC-0020 CLI Stream Display Pipeline)
         # They are processed through on_progress_event -> StreamDisplayPipeline

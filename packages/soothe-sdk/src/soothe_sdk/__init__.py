@@ -6,26 +6,32 @@ and client utilities for WebSocket communication with the daemon.
 Following langchain-core pattern: minimal __init__.py (version only).
 Use package-level imports instead of root-level re-exports.
 
-Example imports:
-    from soothe_sdk.plugin import plugin, tool, Manifest
-    from soothe_sdk.client import WebSocketClient
-    from soothe_sdk.events import SootheEvent
-    from soothe_sdk.exceptions import PluginError
-    from soothe_sdk.verbosity import VerbosityTier
-    from soothe_sdk.protocols import PersistStore
-    from soothe_sdk.utils import setup_logging
+Canonical import paths (IG-259 refactoring):
+    from soothe_sdk.core.events import SootheEvent
+    from soothe_sdk.core.types import VerbosityLevel
+    from soothe_sdk.core.verbosity import VerbosityTier
+    from soothe_sdk.core.exceptions import PluginError
+    from soothe_sdk.client.wire import messages_from_wire_dicts
+    from soothe_sdk.ux.output_events import is_output_event
+    from soothe_sdk.tools.metadata import get_tool_meta
+    from soothe_sdk.utils.formatting import format_cli_error
+    from soothe_sdk.plugin import plugin, tool
 """
 
 __version__ = "0.4.0"
 __soothe_required_version__ = ">=0.4.0,<1.0.0"
 
-# Re-export plugin decorators for convenience (fixes community plugin imports)
-# This allows both patterns: `from soothe_sdk import plugin` and `from soothe_sdk.plugin import plugin`
-from soothe_sdk.plugin import plugin, subagent, tool, tool_group  # noqa: F401
+# Minimal exports - version + plugin decorators only
+__all__ = [
+    "__version__",
+    "__soothe_required_version__",
+    # Plugin decorators (convenience re-exports)
+    "plugin",
+    "subagent",
+    "tool",
+    "tool_group",
+]
 
-# No other re-exports - use package imports for clarity and performance
-# Core concepts remain accessible at root level:
-# - soothe_sdk.events (SootheEvent, LifecycleEvent, etc.)
-# - soothe_sdk.exceptions (PluginError, ValidationError, etc.)
-# - soothe_sdk.verbosity (VerbosityTier, should_show)
-# - soothe_sdk.protocols (PersistStore, PolicyProtocol, etc.)
+# Re-export plugin decorators for convenience (langchain-core pattern)
+# Allows: from soothe_sdk import plugin (as well as from soothe_sdk.plugin import plugin)
+from soothe_sdk.plugin import plugin, subagent, tool, tool_group  # noqa: F401

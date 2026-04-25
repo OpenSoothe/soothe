@@ -199,6 +199,12 @@ daemon:
   # Concurrent thread/query limit when multi-threading is enabled (RFC-402)
   max_concurrent_threads: 100
 
+  # IG-258: Concurrent Performance Optimization
+  # Input queue limit prevents unbounded memory growth under high load
+  max_input_queue_size: 1000  # Maximum pending input messages (0 = unlimited)
+  # Message dispatch concurrency limit prevents task explosion
+  max_concurrent_dispatches: 50  # Maximum concurrent message handlers
+
 # =============================================================================
 # Subagents
 # =============================================================================

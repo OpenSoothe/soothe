@@ -92,10 +92,6 @@ class ResearchConfig(BaseModel):
     )
 
 
-# Backward compatibility alias
-InquiryConfig = ResearchConfig
-
-
 # ---------------------------------------------------------------------------
 # Protocol
 # ---------------------------------------------------------------------------

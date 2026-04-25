@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from soothe_sdk.langchain_wire import envelope_langchain_message_dict
+from soothe_sdk.client.wire import envelope_langchain_message_dict
 
 
 def normalize_stream_message(message: Any) -> Any:

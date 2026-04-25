@@ -10,7 +10,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.client.config import SOOTHE_DATA_DIR
-from soothe_sdk.exceptions import ConfigurationError
+from soothe_sdk.core.exceptions import ConfigurationError
 
 from soothe.config import SootheConfig
 

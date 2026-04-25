@@ -32,15 +32,16 @@ RFC-0015: 4-segment naming convention: soothe.<domain>.<component>.<action>
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Literal
 
-from soothe_sdk.events import (
+from soothe_sdk.core.events import (
     LifecycleEvent,
     OutputEvent,
     ProtocolEvent,
     SootheEvent,
 )
-from soothe_sdk.verbosity import VerbosityTier
+from soothe_sdk.core.verbosity import VerbosityTier
 
 # Import ALL event type constants from single source of truth
 from soothe.core.event_constants import (
@@ -460,6 +461,25 @@ class FinalReportEvent(OutputEvent):
 EventHandler = Any  # Callable[[dict[str, Any]], None]
 
 
+class EventPriority(Enum):
+    """Event priority levels for queue overflow management (IG-258).
+
+    Higher priority events are processed first and less likely to be dropped
+    when queues are near capacity.
+
+    Priority levels:
+    - CRITICAL: Never dropped, block if queue full (errors, cancellation)
+    - HIGH: Rarely dropped (tool results, subagent output)
+    - NORMAL: Standard priority (heartbeat, status updates)
+    - LOW: First to drop under pressure (debug, trace events)
+    """
+
+    CRITICAL = 0  # Never drop, block if necessary
+    HIGH = 1  # Rarely drop (tool/subagent results)
+    NORMAL = 2  # Standard priority (heartbeat, status)
+    LOW = 3  # First to drop (debug/trace)
+
+
 @dataclass(frozen=True)
 class EventMeta:
     """Metadata for a registered event type."""
@@ -471,6 +491,7 @@ class EventMeta:
     action: str
     verbosity: VerbosityTier
     summary_template: str = ""
+    priority: EventPriority = EventPriority.NORMAL  # IG-258
 
 
 _DOMAIN_DEFAULT_TIER: dict[str, VerbosityTier] = {
@@ -542,6 +563,7 @@ def _reg(
     model: type[SootheEvent],
     verbosity: VerbosityTier | None = None,
     summary_template: str = "",
+    priority: EventPriority = EventPriority.NORMAL,
 ) -> None:
     """Internal helper for registering core events.
 
@@ -550,6 +572,7 @@ def _reg(
         model: Event model class.
         verbosity: Optional VerbosityTier override.
         summary_template: Optional template for event summaries.
+        priority: Event priority for queue overflow management (IG-258).
     """
     parts = type_string.split(".")
     domain = parts[1] if len(parts) >= 2 else "unknown"
@@ -570,6 +593,7 @@ def _reg(
             action=action,
             verbosity=v,
             summary_template=summary_template,
+            priority=priority,
         )
     )
 
@@ -578,6 +602,7 @@ def register_event(
     event_class: type[SootheEvent],
     verbosity: VerbosityTier | None = None,
     summary_template: str = "",
+    priority: EventPriority = EventPriority.NORMAL,
 ) -> None:
     """Register an event class with the global event registry.
 
@@ -588,7 +613,7 @@ def register_event(
     **Usage**:
 
     ```python
-    from soothe.core.event_catalog import register_event
+    from soothe.core.event_catalog import register_event, EventPriority
     from soothe_sdk.events import SootheEvent
 
 
@@ -597,11 +622,12 @@ def register_event(
         data: str
 
 
-    # Register the event
+    # Register the event with custom priority (IG-258)
     register_event(
         MyCustomEvent,
         verbosity="tool_activity",
         summary_template="Custom event: {data}",
+        priority=EventPriority.HIGH,  # Less likely to be dropped
     )
     ```
 
@@ -609,6 +635,7 @@ def register_event(
         event_class: Event class to register (must have 'type' field with default value).
         verbosity: Optional verbosity category. If not provided, inferred from domain.
         summary_template: Optional template for event summaries (supports field interpolation).
+        priority: Event priority for queue overflow management (IG-258). Default: NORMAL.
 
     Raises:
         KeyError: If event class doesn't have 'type' field with default value.
@@ -626,7 +653,13 @@ def register_event(
         raise KeyError(msg)
 
     # Use internal _reg helper for actual registration
-    _reg(type_string, event_class, verbosity=verbosity, summary_template=summary_template)
+    _reg(
+        type_string,
+        event_class,
+        verbosity=verbosity,
+        summary_template=summary_template,
+        priority=priority,
+    )
 
 
 # -- Lifecycle ---------------------------------------------------------------

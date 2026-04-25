@@ -7,14 +7,8 @@ which represents the minimum verbosity level at which content is visible.
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Literal
 
-VerbosityLevel = Literal["quiet", "minimal", "normal", "detailed", "debug"]
-"""User-configured verbosity level for filtering display content.
-
-Both `minimal` and `normal` are valid verbosity levels that map to VerbosityTier.NORMAL.
-This provides flexibility for user preference without changing behavior.
-"""
+from soothe_sdk.core.types import VerbosityLevel
 
 
 class VerbosityTier(IntEnum):
@@ -71,7 +65,6 @@ def should_show(tier: VerbosityTier, verbosity: VerbosityLevel) -> bool:
 
 
 __all__ = [
-    "VerbosityLevel",
     "VerbosityTier",
     "should_show",
 ]

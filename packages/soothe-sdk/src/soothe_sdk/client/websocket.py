@@ -7,15 +7,13 @@ import logging
 import uuid
 from collections import deque
 from collections.abc import AsyncGenerator
-from typing import Any, Literal
+from typing import Any
 
 import websockets.asyncio.client
 import websockets.exceptions
 
 from soothe_sdk.client.protocol import decode, encode
-
-# Type alias for verbosity levels (RFC-0015, RFC-0022)
-VerbosityLevel = Literal["quiet", "minimal", "normal", "detailed", "debug"]
+from soothe_sdk.core.types import VerbosityLevel
 
 logger = logging.getLogger(__name__)
 
@@ -847,4 +845,4 @@ class WebSocketClient:
             return None
 
 
-__all__ = ["WebSocketClient", "VerbosityLevel"]
+__all__ = ["WebSocketClient"]

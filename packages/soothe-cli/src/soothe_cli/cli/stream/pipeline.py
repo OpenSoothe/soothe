@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 from soothe_sdk.client.protocol import preview_first
-from soothe_sdk.verbosity import VerbosityTier
+from soothe_sdk.core.verbosity import VerbosityTier
 
 from soothe_cli.cli.stream.context import PipelineContext
 from soothe_cli.cli.stream.display_line import DisplayLine
@@ -117,7 +117,7 @@ class StreamDisplayPipeline:
         Returns:
             VerbosityTier for the event.
         """
-        from soothe_sdk.ux import classify_event_to_tier, is_subagent_progress_event
+        from soothe_sdk.ux import classify_event_to_tier
 
         # Goal events - NORMAL
         if is_goal_start_event_type(event_type):
@@ -131,12 +131,9 @@ class StreamDisplayPipeline:
         if event_type in GOAL_COMPLETE_EVENTS:
             return VerbosityTier.QUIET
 
-        # Subagent capability events - DETAILED by default, NORMAL for important progress
-        # IG-192: Use SDK helper to identify important progress events (started/completed/judgement)
+        # Subagent capability events - DETAILED by default
+        # All capability events (started/completed/steps) are DETAILED
         if event_type.startswith("soothe.capability."):
-            if is_subagent_progress_event(event_type):
-                return VerbosityTier.NORMAL
-            # Other capability events (internal steps) - DETAILED
             return VerbosityTier.DETAILED
 
         # soothe.* events: defer to SDK domain-based classification (RFC-0020)

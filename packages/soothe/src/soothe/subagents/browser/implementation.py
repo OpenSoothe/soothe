@@ -18,12 +18,6 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
 from soothe.config import BrowserSubagentConfig
-from soothe.subagents.browser.events import (
-    BrowserCdpEvent,
-    BrowserCompletedEvent,
-    BrowserDispatchedEvent,
-    BrowserStepEvent,
-)
 from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
@@ -264,16 +258,8 @@ def _build_browser_graph(
                         cdp_url = await find_available_cdp()
                         if cdp_url:
                             logger.info("Connecting to existing browser at %s", cdp_url)
-                            _emit(
-                                BrowserCdpEvent(status="connected", cdp_url=cdp_url).to_dict(),
-                                logger,
-                            )
                         else:
                             logger.info("No existing browser found, launching new instance")
-                            _emit(
-                                BrowserCdpEvent(status="not_found").to_dict(),
-                                logger,
-                            )
 
                 if not cdp_url:
                     from soothe.utils.browser_cdp import cleanup_stale_chrome
@@ -331,16 +317,7 @@ def _build_browser_graph(
                         agent.history.is_done(),
                         len(agent.history.history) if agent.history.history else 0,
                     )
-                    _emit(
-                        BrowserStepEvent(
-                            step=step_num,
-                            url=url or "",
-                            action=action_desc,
-                            title=page_title,
-                            is_done=agent.history.is_done(),
-                        ).to_dict(),
-                        logger,
-                    )
+                    # IG-258: Removed browser step event emission - no longer needed
 
                 agent = BrowserAgent(
                     task=task,
@@ -398,10 +375,7 @@ def _build_browser_graph(
                 )
 
                 # Emit completed event (RFC-0020)
-                _emit(
-                    BrowserCompletedEvent(duration_ms=0, success=True).to_dict(),
-                    logger,
-                )
+                # IG-258: Removed browser completed event emission - no longer needed
 
                 # Stop the browser session
                 try:
@@ -422,10 +396,7 @@ def _build_browser_graph(
             result = error_msg
 
             # Emit completed event with failure (RFC-0020)
-            _emit(
-                BrowserCompletedEvent(duration_ms=0, success=False).to_dict(),
-                logger,
-            )
+            # IG-258: Removed browser failed event emission - no longer needed
         finally:
             if ephemeral_profile_dir:
                 import shutil

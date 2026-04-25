@@ -11,7 +11,7 @@ Architecture rationale (IG-254):
   ONE registration → both CLI and TUI automatically work
 
 Usage:
-    from soothe_sdk.output_events import is_output_event, extract_output_text
+    from soothe_sdk.ux.output_events import is_output_event, extract_output_text
 
     # CLI/TUI check if event should be displayed as assistant text
     if is_output_event(event_type):
@@ -21,7 +21,7 @@ Usage:
 
 Extensibility:
     Plugins can register custom output events:
-    from soothe_sdk.output_events import register_output_event
+    from soothe_sdk.ux.output_events import register_output_event
 
     register_output_event(
         "soothe.plugin.custom.response",

@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from soothe_sdk.events import SootheEvent
-from soothe_sdk.verbosity import VerbosityTier
+from soothe_sdk.core.events import SootheEvent
+from soothe_sdk.core.verbosity import VerbosityTier
 
 
 @dataclass(frozen=True)

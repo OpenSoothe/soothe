@@ -204,49 +204,76 @@ ruff format src/soothe_sdk/
 
 ## Architecture
 
-The SDK provides decorator-based APIs for defining plugins (v0.4.0 structure):
+The SDK provides decorator-based APIs for defining plugins with clear folder organization (v0.4.0+ structure, refactored in IG-259):
 
 ```
 soothe_sdk/
-├── __init__.py           # Minimal (version only)
-├── events.py             # Core concept at root
-├── exceptions.py         # Core concept at root
-├── verbosity.py          # Core concept at root
-├── protocols/            # Protocol definitions (stable interfaces)
-├── client/               # Client utilities (WebSocket + config)
-│   ├── protocol.py       # WebSocketClientProtocol
-│   ├── websocket_client.py
-│   └── config.py         # Config constants + types (merged)
-├── plugin/               # Plugin API (decorators + types)
-│   ├── decorators.py     # @plugin, @tool, @tool_group, @subagent (merged)
-│   ├── manifest.py       # PluginManifest (Manifest alias)
-│   ├── context.py        # PluginContext (Context alias)
-│   ├── health.py         # PluginHealth (Health alias)
-│   ├── registry.py       # register_event() API
-│   └── emit.py           # emit_progress(), set_stream_writer()
-├── ux/                   # UX/display helpers
-│   ├── classification.py # classify_event_to_tier
-│   └── internal.py       # Internal content filtering
-├── utils/                # Shared utilities
-│   ├── logging.py
-│   ├── display.py
-│   ├── parsing.py
-│   └── workspace.py
+├── __init__.py              # Version + backward compat re-exports
+├── core/                    # Core domain concepts (NEW)
+│   ├── events.py            # Event classes + 50+ type constants
+│   ├── exceptions.py        # Exception hierarchy
+│   ├── types.py             # VerbosityLevel (single definition)
+│   └── verbosity.py         # VerbosityTier + should_show()
+├── client/                  # Client utilities (WebSocket + wire)
+│   ├── websocket.py         # WebSocketClient
+│   ├── wire.py              # LangChain message normalization (NEW)
+│   ├── config.py            # Config constants + types
+│   ├── session.py           # Connection bootstrap
+│   ├── helpers.py           # Daemon RPC helpers
+│   ├── protocol.py          # IPC encode/decode
+│   └ schemas.py             # Wire-safe schemas
+├── plugin/                  # Plugin API (decorators + types)
+│   ├── decorators.py        # @plugin, @tool, @tool_group, @subagent
+│   ├── manifest.py          # PluginManifest (Manifest alias)
+│   ├── context.py           # PluginContext (Context alias)
+│   ├── health.py            # PluginHealth (Health alias)
+│   ├── registry.py          # register_event() API
+│   ├── emit.py              # emit_progress(), set_stream_writer()
+│   └ depends.py             # library() helper
+├── ux/                      # UX/display helpers
+│   ├── output_events.py     # Output event registry (NEW)
+│   ├── classification.py    # classify_event_to_tier
+│   ├── internal.py          # Internal content filtering
+│   ├── subagent_progress.py # Subagent progress whitelist
+│   └ types.py               # ESSENTIAL_EVENT_TYPES
+├── tools/                   # Tool domain logic (NEW)
+│   └── metadata.py          # Tool display registry (740 lines)
+├── protocols/               # Protocol definitions (stable interfaces)
+│   ├── persistence.py       # PersistStore protocol
+│   ├── vector_store.py      # VectorStoreProtocol
+│   └ policy.py              # PolicyProtocol + Permission classes
+├── utils/                   # Shared utilities
+│   ├── formatting.py        # CLI formatting (renamed from display.py)
+│   ├── logging.py           # Logging setup + GlobalInputHistory
+│   ├── parsing.py           # Goal/env parsing + PATH_ARG_PATTERN
+│   ├── serde.py             # LangGraph checkpoint serde
+│   └── workspace.py         # Workspace validation
+└── (backward compat shims)  # events.py, exceptions.py, verbosity.py, etc.
 ```
 
-**Import Pattern** (v0.4.0):
+**Import Pattern** (v0.4.0+ canonical paths):
 ```python
-# Core concepts - import from root
-from soothe_sdk import __version__
-from soothe_sdk.events import SootheEvent, OutputEvent
-from soothe_sdk.exceptions import SootheSDKError
-from soothe_sdk.verbosity import VerbosityLevel, VerbosityTier
+# Core concepts - import from core package (NEW canonical)
+from soothe_sdk.core.events import SootheEvent, OutputEvent
+from soothe_sdk.core.exceptions import PluginError
+from soothe_sdk.core.types import VerbosityLevel
+from soothe_sdk.core.verbosity import VerbosityTier, should_show
 
 # Purpose packages - import from subpackage
 from soothe_sdk.plugin import plugin, tool, subagent, register_event
 from soothe_sdk.client import WebSocketClient, VerbosityLevel
-from soothe_sdk.ux import classify_event_to_tier
-from soothe_sdk.utils import format_cli_error, setup_logging
+from soothe_sdk.client.wire import messages_from_wire_dicts
+from soothe_sdk.ux.output_events import is_output_event, extract_output_text
+from soothe_sdk.tools.metadata import get_tool_meta, get_tool_display_name
+from soothe_sdk.utils.formatting import format_cli_error, log_preview
+from soothe_sdk.utils.parsing import PATH_ARG_PATTERN, is_path_argument
+from soothe_sdk.protocols import PersistStore, PolicyProtocol
+
+# Backward compatibility - legacy imports still work
+from soothe_sdk.events import SootheEvent  # ✅ Still works (shim re-exports)
+from soothe_sdk.langchain_wire import messages_from_wire_dicts  # ✅ Still works
+from soothe_sdk.utils.display import format_cli_error  # ✅ Still works (shim)
+from soothe_sdk.utils.tool_meta import get_tool_meta  # ✅ Still works (shim)
 ```
 
 ## Key Design Principles

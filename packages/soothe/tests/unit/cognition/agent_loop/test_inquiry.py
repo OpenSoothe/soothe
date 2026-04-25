@@ -7,7 +7,7 @@ import pytest
 from soothe.subagents.research import (
     GatherContext,
     InformationSource,
-    InquiryConfig,
+    ResearchConfig,
     SourceResult,
 )
 
@@ -54,9 +54,9 @@ class TestGatherContext:
         assert len(ctx.knowledge_gaps) == 1
 
 
-class TestInquiryConfig:
+class TestResearchConfig:
     def test_defaults(self) -> None:
-        cfg = InquiryConfig()
+        cfg = ResearchConfig()
         assert cfg.max_loops == 3
         assert cfg.max_sources_per_query == 3
         assert cfg.parallel_queries is True
@@ -65,15 +65,15 @@ class TestInquiryConfig:
         assert "deep" in cfg.source_profiles
 
     def test_custom_config(self) -> None:
-        cfg = InquiryConfig(max_loops=5, max_sources_per_query=2)
+        cfg = ResearchConfig(max_loops=5, max_sources_per_query=2)
         assert cfg.max_loops == 5
         assert cfg.max_sources_per_query == 2
 
     def test_validation_bounds(self) -> None:
         with pytest.raises(ValueError):
-            InquiryConfig(max_loops=0)
+            ResearchConfig(max_loops=0)
         with pytest.raises(ValueError):
-            InquiryConfig(max_loops=11)
+            ResearchConfig(max_loops=11)
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +200,7 @@ class TestSourceRouter:
             MockSource("c", "filesystem", 0.7),
             MockSource("d", "cli", 0.6),
         ]
-        config = InquiryConfig(max_sources_per_query=2)
+        config = ResearchConfig(max_sources_per_query=2)
         router = SourceRouter(sources, config)
         selected = router.select("test query")
         assert len(selected) == 2
@@ -213,7 +213,7 @@ class TestSourceRouter:
             MockSource("fs1", "filesystem", 0.9),
             MockSource("cli1", "cli", 0.9),
         ]
-        config = InquiryConfig()
+        config = ResearchConfig()
         router = SourceRouter(sources, config)
         selected = router.select("test query", domain="code")
         source_types = {s.source_type for s in selected}

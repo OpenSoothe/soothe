@@ -4,8 +4,8 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from soothe_sdk.events import SootheEvent
-from soothe_sdk.verbosity import VerbosityTier
+from soothe_sdk.core.events import SootheEvent
+from soothe_sdk.core.verbosity import VerbosityTier
 
 from soothe.core.event_catalog import EventMeta
 from soothe.daemon.client_session import ClientSessionManager

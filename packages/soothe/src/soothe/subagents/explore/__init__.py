@@ -7,30 +7,10 @@ from typing import Any
 
 from soothe_sdk.plugin import plugin, subagent
 
-from .events import (
-    SUBAGENT_EXPLORE_ASSESSING,
-    SUBAGENT_EXPLORE_COMPLETED,
-    SUBAGENT_EXPLORE_EXECUTING,
-    SUBAGENT_EXPLORE_STARTED,
-    ExploreAssessingEvent,
-    ExploreCompletedEvent,
-    ExploreExecutingEvent,
-    ExploreStartedEvent,
-)
 from .implementation import create_explore_subagent
 from .schemas import ExploreResult, ExploreState, ExploreSubagentConfig, MatchEntry
 
 __all__ = [
-    # Event type constants
-    "SUBAGENT_EXPLORE_ASSESSING",
-    "SUBAGENT_EXPLORE_COMPLETED",
-    "SUBAGENT_EXPLORE_EXECUTING",
-    "SUBAGENT_EXPLORE_STARTED",
-    # Events
-    "ExploreAssessingEvent",
-    "ExploreCompletedEvent",
-    "ExploreExecutingEvent",
-    "ExploreStartedEvent",
     # Schemas
     "ExploreResult",
     "ExploreSubagentConfig",

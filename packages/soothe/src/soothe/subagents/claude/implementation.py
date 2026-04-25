@@ -19,9 +19,6 @@ from langgraph.graph.message import add_messages
 
 from soothe.subagents.claude.events import (
     ClaudeResultEvent,
-    # IG-258: Removed unused event imports
-    ClaudeTextEvent,
-    ClaudeToolUseEvent,
 )
 from soothe.subagents.claude.session_bridge import record_claude_session, resolve_resume_session_id
 from soothe.utils import expand_path

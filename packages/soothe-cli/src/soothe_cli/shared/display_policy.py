@@ -33,6 +33,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from soothe_sdk.core.verbosity import VerbosityLevel, VerbosityTier, should_show
 from soothe_sdk.ux import classify_event_to_tier
 from soothe_sdk.ux.internal import (
     INTERNAL_JSON_KEYS,
@@ -42,7 +43,6 @@ from soothe_sdk.ux.internal import (
     filter_search_data_tags,
     normalize_internal_whitespace,
 )
-from soothe_sdk.verbosity import VerbosityLevel, VerbosityTier, should_show
 
 # =============================================================================
 # Type Definitions

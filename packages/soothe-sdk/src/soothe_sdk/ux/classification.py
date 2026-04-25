@@ -3,8 +3,7 @@
 Extracted from verbosity.py per RFC-610 (IG-185).
 """
 
-from soothe_sdk.ux.subagent_progress import is_subagent_progress_event
-from soothe_sdk.verbosity import VerbosityTier
+from soothe_sdk.core.verbosity import VerbosityTier
 
 
 def _is_legacy_subagent_milestone_event(event_type: str) -> bool:
@@ -41,10 +40,8 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
         <VerbosityTier.NORMAL: 1>
     """
     if event_type.startswith("soothe."):
-        # RFC-210 capability events — align with StreamDisplayPipeline (IG-192, IG-195)
+        # RFC-210 capability events — all DETAILED tier
         if event_type.startswith("soothe.capability."):
-            if is_subagent_progress_event(event_type):
-                return VerbosityTier.NORMAL
             return VerbosityTier.DETAILED
 
         if _is_legacy_subagent_milestone_event(event_type):

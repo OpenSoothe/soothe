@@ -6,6 +6,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe.core.event_catalog import EventPriority
+
 if TYPE_CHECKING:
     from soothe.core.event_catalog import EventMeta
 
@@ -45,10 +47,16 @@ class EventBus:
     ) -> None:
         """Publish event to all subscribers of topic with optional metadata.
 
+        Implements priority-aware overflow strategy (IG-258):
+        - CRITICAL events: Never dropped, block until space available
+        - HIGH events: Rarely dropped, warn if dropped
+        - NORMAL events: Standard drop with warning
+        - LOW events: Silent drop when queue near capacity (80%)
+
         Args:
             topic: Topic identifier (e.g., "thread:abc123")
             event: Event dictionary to broadcast
-            event_meta: Optional EventMeta for filtering (RFC-0022)
+            event_meta: Optional EventMeta for filtering (RFC-0022) and priority (IG-258)
         """
         async with self._lock:
             queues = self._subscribers.get(topic, set()).copy()
@@ -59,11 +67,51 @@ class EventBus:
         # Send (event, event_meta) tuple to queues for filtering (RFC-0022)
         dropped = 0
         for queue in queues:
+            # IG-258: Priority-aware overflow strategy
+            queue_size = queue.qsize()
+            queue_max = 10000  # Default maxsize from client_session.py
+            near_capacity = queue_size > (queue_max * 0.8)  # 80% threshold
+
+            # Get event priority from metadata
+            priority = event_meta.priority if event_meta else EventPriority.NORMAL
+
             try:
+                # LOW priority: Skip when queue near capacity
+                if near_capacity and priority == EventPriority.LOW:
+                    logger.debug(
+                        "Skipping LOW priority event for queue at %d/%d capacity",
+                        queue_size,
+                        queue_max,
+                    )
+                    dropped += 1
+                    continue
+
+                # Try non-blocking put first
                 queue.put_nowait((event, event_meta))
             except asyncio.QueueFull:
-                dropped += 1
-                logger.warning("Queue full for topic %s, dropping event", topic)
+                # CRITICAL events: Block until space available (never drop)
+                if priority == EventPriority.CRITICAL:
+                    logger.warning(
+                        "Queue full for CRITICAL event, blocking until space available (topic=%s)",
+                        topic,
+                    )
+                    await queue.put((event, event_meta))
+                else:
+                    # Other priorities: Drop with appropriate logging
+                    dropped += 1
+                    if priority == EventPriority.HIGH:
+                        logger.error(
+                            "Dropped HIGH priority event due to queue overflow (topic=%s, queue=%d/%d)",
+                            topic,
+                            queue_size,
+                            queue_max,
+                        )
+                    elif priority == EventPriority.NORMAL:
+                        logger.warning(
+                            "Queue full for topic %s, dropping NORMAL priority event",
+                            topic,
+                        )
+                    # LOW priority already handled above with debug log
 
     async def subscribe(self, topic: str, queue: asyncio.Queue[dict[str, Any]]) -> None:
         """Subscribe queue to receive events for topic.
