@@ -1,4 +1,4 @@
-"""PersistStore protocol -- simple key-value persistence interface."""
+"""AsyncPersistStore protocol -- async key-value persistence interface."""
 
 from __future__ import annotations
 

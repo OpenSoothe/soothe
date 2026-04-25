@@ -43,7 +43,7 @@ from ._runner_shared import StreamChunk
 from ._runner_steps import StepLoopMixin
 from ._types import IterationRecord, RunnerState, _generate_thread_id
 
-# Re-export types for backward compatibility
+# Re-export types
 __all__ = [
     "IterationRecord",
     "RunnerState",
