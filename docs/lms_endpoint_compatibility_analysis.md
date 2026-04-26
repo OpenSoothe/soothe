@@ -94,7 +94,7 @@ The chat models include **reasoning tokens** (thinking process) separate from ou
     - text-embedding-nomic-embed-text-v1.5
 ```
 
-**Note**: LMStudio-specific backend (`lms-openai`) has been removed. All compatibility handling is now generic in `soothe.core.llm.wrappers`.
+**Note**: LMStudio-specific backend (`lmstudio`) has been removed. All compatibility handling is now generic in `soothe.core.llm.wrappers`.
 
 ## Soothe's Core LLM Module
 
@@ -248,6 +248,6 @@ Soothe's architecture now handles this scenario with:
 ---
 
 **Test Script**: `test_lms_json_schema.py` (verify LMStudio behavior)
-**Architecture**: Dedicated `lms-openai` backend with specialized LMStudio handling
+**Architecture**: Dedicated `lmstudio` provider type with specialized LMStudio handling
 **Date**: 2026-04-25 (initial), 2026-04-26 (architectural refactor to dedicated backend)
 **Status**: ✅ Complete - Dedicated backend created, config migrated, needs verification

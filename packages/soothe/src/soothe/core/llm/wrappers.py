@@ -375,15 +375,16 @@ class LimitedProviderModelWrapper(BaseChatModel):
 
 def wrap_model_if_needed(
     model: BaseChatModel,
-    provider_name: str,
-    supports_advanced_tool_choice: bool = True,  # noqa: ARG001
+    provider_name: str = "unknown",
 ) -> BaseChatModel:
     """Compatibility helper - no longer wraps models.
+
+    This function is kept for backward compatibility but does nothing.
+    Model wrapping is now handled directly in SootheConfig based on provider_type.
 
     Args:
         model: The original model (returned unchanged).
         provider_name: Provider name (unused).
-        supports_advanced_tool_choice: Ignored (unused).
 
     Returns:
         Original model unchanged.

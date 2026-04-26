@@ -46,7 +46,6 @@ class IntentClassifier:
         model: Fast LLM for classification (e.g., gpt-4o-mini).
         assistant_name: Name used in chitchat responses.
         config: Optional SootheConfig for tracing and provider capabilities.
-        supports_advanced_tool_choice: Whether provider supports OpenAI-style tool_choice objects.
     """
 
     def __init__(
