@@ -11,11 +11,14 @@ import json
 import logging
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
 from soothe_sdk.plugin import plugin
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 

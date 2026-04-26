@@ -10,9 +10,12 @@ import hashlib
 import logging
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from soothe.utils.text_preview import preview_first
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
