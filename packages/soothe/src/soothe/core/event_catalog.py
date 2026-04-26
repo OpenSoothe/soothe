@@ -231,6 +231,8 @@ class AgenticLoopCompletedEvent(LifecycleEvent):
     status: str
     goal_progress: float
     evidence_summary: str
+    # IG-267: Include goal for CLI display trophy message
+    goal: str = ""
     # One-line UI summary for TUI/registry (avoid duplicating streamed full_output).
     completion_summary: str = ""
     # Layer-2 act steps completed in this thread (for goal-done line when pipeline has 0).
