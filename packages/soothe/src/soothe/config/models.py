@@ -214,6 +214,11 @@ class PerformanceConfig(BaseModel):
     parallel_protocol_resolution: bool = True
     """Resolve protocols (context, memory, planner, policy) in parallel during startup."""
 
+    reject_done_at_iteration_zero: bool = False
+    """Guard: Reject 'done' status at iteration 0 with no execution (IG-053).
+    Set true to enforce at least one iteration before completion.
+    Disabled by default to allow conversational goals to complete at iteration 0."""
+
     cache_size: int = 100
     log_timing: bool = False
     slow_query_threshold_ms: int = 3000

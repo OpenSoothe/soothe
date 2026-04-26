@@ -329,3 +329,44 @@ performance:
 3. **Phase 2** (Rate Limiter Timeout) - Secondary, prevents permit monopolization
 
 **Estimate**: 30 minutes total
+
+---
+
+## Configuration Update (2026-04-26)
+
+The iteration-0 guard is now **config-driven** and **disabled by default**.
+
+### Config Field
+- Location: `performance.reject_done_at_iteration_zero`
+- Type: `boolean`
+- Default: `false` (guard disabled)
+- Purpose: Optional enforcement of "at least one iteration before done"
+
+### Behavior Change
+- **Before (IG-053 original)**: Guard hardcoded, always active
+- **After (this update)**: Guard optional, disabled by default
+
+### Enable Guard
+To restore IG-053 original behavior (strict execution policy):
+```yaml
+performance:
+  reject_done_at_iteration_zero: true  # Enable guard
+```
+
+### When to Enable
+Recommended for:
+- Production deployments (prevent fabricated reports)
+- Multi-step workflows requiring evidence
+- Strict execution verification
+
+### When to Disable (Default)
+Recommended for:
+- Conversational agents (trivial goals don't need execution)
+- Direct-answer queries (no tool verification needed)
+- Flexible completion policies
+
+### Implementation Details
+- Config field added to `PerformanceConfig` (models.py)
+- Planner checks `config.performance.reject_done_at_iteration_zero`
+- Guard logic unchanged when enabled (same IG-053 behavior)
+- Synchronized in both config.yml and config.dev.yml

@@ -61,6 +61,7 @@ performance:
   classification_mode: llm
   optimize_system_prompts: true
   parallel_pre_stream: true
+  reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution (IG-053)
 
 # Dev debugging - enable LLM tracing
 llm_tracing:
