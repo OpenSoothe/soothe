@@ -353,11 +353,12 @@ def format_judgement(
 
     IG-089: Shows meaningful judgement info without raw intermediate data.
     IG-XXX: Prominent reasoning display with "Reason:" prefix for clarity.
+    IG-265: Removed [new]/[keep] badge from CLI display (kept in event data for logs).
 
     Args:
         judgement: Human-readable summary of the decision.
         action: Action taken ("continue" or "complete").
-        plan_action: When set, show ``[keep]`` or ``[new]`` before the judgement text.
+        plan_action: Ignored (kept for backward compatibility, appears in logs only).
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
@@ -366,12 +367,8 @@ def format_judgement(
     """
     action_icon = "○" if action == "continue" else "●"  # Polish: ○ for continue, ● for complete
 
-    badge = ""
-    if plan_action in ("keep", "new"):
-        badge = f"[{plan_action}] "
-
-    # Polish: Add "Reason:" prefix to make LLM reasoning prominent
-    content = f"🌟 {badge}{judgement}"
+    # IG-265: Remove badge from CLI display (plan_action kept in event data for logs)
+    content = f"🌟 {judgement}"
 
     return DisplayLine(
         level=2,  # Use level 2 for more prominence (like step headers)
