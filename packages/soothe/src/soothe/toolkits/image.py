@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import io
 import logging
+from typing import TYPE_CHECKING
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
@@ -16,6 +17,9 @@ from soothe_sdk.plugin import plugin
 
 from soothe.utils.tool_error_handler import tool_error_handler
 from soothe.utils.url_validation import validate_url
+
+if TYPE_CHECKING:
+    from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
 
@@ -68,13 +72,21 @@ class ImageAnalysisTool(BaseTool):
         "(default: 'Describe this image in detail')."
     )
     model_name: str = Field(default="gpt-4o")
+    config: SootheConfig | None = Field(default=None, exclude=True)
 
     @tool_error_handler("analyze_image", return_type="str")
     def _run(self, image_path: str, prompt: str = "Describe this image in detail.") -> str:
-        from langchain.chat_models import init_chat_model
-
         b64 = _image_to_base64(image_path)
-        model = init_chat_model(f"openai:{self.model_name}")
+
+        # Use config if available (ensures LimitedProviderModelWrapper applied)
+        if self.config:
+            model = self.config.create_chat_model("image")
+        else:
+            from langchain.chat_models import init_chat_model
+
+            logger.warning("No config provided, limited_openai wrapper NOT applied")
+            model = init_chat_model(f"openai:{self.model_name}")
+
         msg = model.invoke(
             [
                 {
@@ -94,13 +106,20 @@ class ImageAnalysisTool(BaseTool):
 
     @tool_error_handler("analyze_image", return_type="str")
     async def _arun(self, image_path: str, prompt: str = "Describe this image in detail.") -> str:
-        from langchain.chat_models import init_chat_model
-
         # IG-143: Add metadata for tracing
         from soothe.middleware._utils import create_llm_call_metadata
 
         b64 = _image_to_base64(image_path)
-        model = init_chat_model(f"openai:{self.model_name}")
+
+        # Use config if available (ensures LimitedProviderModelWrapper applied)
+        if self.config:
+            model = self.config.create_chat_model("image")
+        else:
+            from langchain.chat_models import init_chat_model
+
+            logger.warning("No config provided, limited_openai wrapper NOT applied")
+            model = init_chat_model(f"openai:{self.model_name}")
+
         msg = await model.ainvoke(
             [
                 {
@@ -135,13 +154,21 @@ class ExtractTextFromImageTool(BaseTool):
         "Extract all visible text from an image via OCR. Provide `image_path` (local path or URL)."
     )
     model_name: str = Field(default="gpt-4o")
+    config: SootheConfig | None = Field(default=None, exclude=True)
 
     @tool_error_handler("extract_text_from_image", return_type="str")
     def _run(self, image_path: str) -> str:
-        from langchain.chat_models import init_chat_model
-
         b64 = _image_to_base64(image_path)
-        model = init_chat_model(f"openai:{self.model_name}")
+
+        # Use config if available (ensures LimitedProviderModelWrapper applied)
+        if self.config:
+            model = self.config.create_chat_model("image")
+        else:
+            from langchain.chat_models import init_chat_model
+
+            logger.warning("No config provided, limited_openai wrapper NOT applied")
+            model = init_chat_model(f"openai:{self.model_name}")
+
         msg = model.invoke(
             [
                 {
@@ -164,10 +191,17 @@ class ExtractTextFromImageTool(BaseTool):
 
     @tool_error_handler("extract_text_from_image", return_type="str")
     async def _arun(self, image_path: str) -> str:
-        from langchain.chat_models import init_chat_model
-
         b64 = _image_to_base64(image_path)
-        model = init_chat_model(f"openai:{self.model_name}")
+
+        # Use config if available (ensures LimitedProviderModelWrapper applied)
+        if self.config:
+            model = self.config.create_chat_model("image")
+        else:
+            from langchain.chat_models import init_chat_model
+
+            logger.warning("No config provided, limited_openai wrapper NOT applied")
+            model = init_chat_model(f"openai:{self.model_name}")
+
         msg = await model.ainvoke(
             [
                 {
@@ -192,8 +226,13 @@ class ExtractTextFromImageTool(BaseTool):
 class ImageToolkit:
     """Toolkit for image analysis operations."""
 
-    def __init__(self) -> None:
-        """Initialize the toolkit."""
+    def __init__(self, config: SootheConfig | None = None) -> None:
+        """Initialize the toolkit.
+
+        Args:
+            config: SootheConfig instance for model creation (ensures LimitedProviderModelWrapper).
+        """
+        self._config = config
 
     def get_tools(self) -> list[BaseTool]:
         """Get list of langchain tools.
@@ -201,7 +240,10 @@ class ImageToolkit:
         Returns:
             List of image analysis tool instances.
         """
-        return [ImageAnalysisTool(), ExtractTextFromImageTool()]
+        return [
+            ImageAnalysisTool(config=self._config),
+            ExtractTextFromImageTool(config=self._config),
+        ]
 
 
 @plugin(name="image", version="1.0.0", description="Image analysis", trust_level="built-in")
@@ -221,7 +263,7 @@ class ImagePlugin:
         Args:
             context: Plugin context with config and logger.
         """
-        toolkit = ImageToolkit()
+        toolkit = ImageToolkit(config=context.config)
         self._tools = toolkit.get_tools()
 
         context.logger.info("Loaded %d image tools", len(self._tools))

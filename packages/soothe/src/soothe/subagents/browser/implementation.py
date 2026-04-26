@@ -23,11 +23,14 @@ from soothe.utils.text_preview import preview_first
 if TYPE_CHECKING:
     from deepagents.middleware.subagents import CompiledSubAgent
 
+    from soothe.config import SootheConfig
+
 logger = logging.getLogger(__name__)
 
 
 async def detect_existing_browser_intent(
     prompt: str,
+    config: SootheConfig | None = None,
     model_name: str | None = None,
     base_url: str | None = None,
     api_key: str | None = None,
@@ -36,14 +39,14 @@ async def detect_existing_browser_intent(
 
     Args:
         prompt: User's task prompt.
-        model_name: Model name for intent detection (e.g., "gpt-4o-mini").
-        base_url: Base URL for the LLM API.
-        api_key: API key for the LLM.
+        config: SootheConfig for model creation (ensures LimitedProviderModelWrapper).
+        model_name: Model name for intent detection (fallback if no config).
+        base_url: Base URL for the LLM API (fallback if no config).
+        api_key: API key for the LLM (fallback if no config).
 
     Returns:
         True if user wants existing browser, False otherwise.
     """
-    from langchain.chat_models import init_chat_model
     from langchain_core.messages import HumanMessage, SystemMessage
 
     detection_prompt = f"""Analyze this user request and determine if the user wants to use an \
@@ -62,14 +65,21 @@ Examples:
 - "Navigate to my company portal using my current session" → yes"""
 
     try:
-        # Use langchain's init_chat_model which properly supports langchain_core messages
-        model = init_chat_model(
-            model=model_name or "gpt-4o-mini",
-            model_provider="openai",
-            base_url=base_url,
-            api_key=api_key,
-            temperature=0.0,
-        )
+        # Use config if available (ensures LimitedProviderModelWrapper applied)
+        if config:
+            model = config.create_chat_model("fast")
+        else:
+            from langchain.chat_models import init_chat_model
+
+            logger.warning("No config provided, limited_openai wrapper NOT applied")
+            model = init_chat_model(
+                model=model_name or "gpt-4o-mini",
+                model_provider="openai",
+                base_url=base_url,
+                api_key=api_key,
+                temperature=0.0,
+            )
+
         messages = [
             SystemMessage(content=detection_prompt),
             HumanMessage(content=prompt),

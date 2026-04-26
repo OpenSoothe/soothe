@@ -51,7 +51,7 @@ class LLMTracingWrapper:
         """
         self._model = model
         self._trace_counter = 0
-        logger.debug("[LLM Tracing Wrapper] Initialized for %s", type(model).__name__)
+        logger.debug("[LLM Trace] Wrapper initialized for %s", type(model).__name__)
 
     async def ainvoke(
         self,
@@ -87,6 +87,21 @@ class LLMTracingWrapper:
             self._log_response(trace_id, response, duration_ms)
             return response
 
+    def with_structured_output(self, schema: Any, **kwargs: Any) -> Any:
+        """Delegate structured output to wrapped model.
+
+        This method is needed for IntentClassifier which wraps the model
+        with LLMTracingWrapper before calling with_structured_output().
+
+        Args:
+            schema: Pydantic schema for structured output.
+            **kwargs: Additional arguments (method, etc.).
+
+        Returns:
+            Runnable with structured output support from underlying model.
+        """
+        return self._model.with_structured_output(schema, **kwargs)
+
     def _next_trace_id(self) -> int:
         """Generate next trace ID."""
         self._trace_counter += 1
@@ -116,61 +131,63 @@ class LLMTracingWrapper:
             message_count = 1
             total_chars = len(str(messages))
 
-        logger.debug(
-            "[LLM Trace #%d] Request: %d messages (%s chars)",
-            trace_id,
-            message_count,
-            self._format_size(total_chars),
-        )
-
-        # Count message types
+        # Build compact message type breakdown
+        msg_type_info = ""
         if hasattr(messages, "__iter__") and not isinstance(messages, str):
             system_count = sum(1 for m in messages if isinstance(m, SystemMessage))
             human_count = sum(1 for m in messages if isinstance(m, HumanMessage))
             ai_count = sum(1 for m in messages if isinstance(m, AIMessage))
 
             if system_count > 0 or human_count > 0 or ai_count > 0:
+                parts = []
+                if system_count > 0:
+                    parts.append(f"sys:{system_count}")
+                if human_count > 0:
+                    parts.append(f"hum:{human_count}")
+                if ai_count > 0:
+                    parts.append(f"ai:{ai_count}")
+                msg_type_info = " [" + ", ".join(parts) + "]"
+
                 # Detect RFC-207 pattern (SystemMessage + HumanMessage)
-                rfc207_pattern = system_count == 1 and human_count == 1 and ai_count == 0
+                if system_count == 1 and human_count == 1 and ai_count == 0:
+                    msg_type_info = " [RFC-207: sys:1, hum:1]"
 
-                logger.debug(
-                    "[LLM Trace #%d] Messages: system=%d, human=%d, ai=%d%s",
-                    trace_id,
-                    system_count,
-                    human_count,
-                    ai_count,
-                    " (RFC-207 separation)" if rfc207_pattern else "",
-                )
+        logger.debug(
+            "[LLM Trace #%d] → %d msg%s (%s)",
+            trace_id,
+            message_count,
+            msg_type_info,
+            self._format_size(total_chars),
+        )
 
-        # Extract metadata tags
+        # Extract and combine metadata into single line
         if config:
             metadata = config.get("metadata", {})
-
             purpose = metadata.get("soothe_call_purpose", "unknown")
-            component = metadata.get("soothe_call_component", "unknown")
-            phase = metadata.get("soothe_call_phase", "unknown")
 
             if purpose != "unknown":
+                component = metadata.get("soothe_call_component", "unknown")
+                phase = metadata.get("soothe_call_phase", "unknown")
                 logger.debug(
-                    "[LLM Trace #%d] Purpose: %s (component=%s, phase=%s)",
+                    "[LLM Trace #%d]   purpose=%s, component=%s, phase=%s",
                     trace_id,
                     purpose,
                     component,
                     phase,
                 )
 
-            # Purpose-specific previews
-            if purpose == "classify" and hasattr(messages, "__iter__"):
-                # Show user query for classification
-                for msg in messages:
-                    if isinstance(msg, HumanMessage):
-                        query_preview = preview_first(str(msg.content), 200)
-                        logger.debug(
-                            "[LLM Trace #%d] Query: %s",
-                            trace_id,
-                            query_preview,
-                        )
-                        break
+                # Purpose-specific previews
+                if purpose == "classify" and hasattr(messages, "__iter__"):
+                    # Show user query for classification
+                    for msg in messages:
+                        if isinstance(msg, HumanMessage):
+                            query_preview = preview_first(str(msg.content), 200)
+                            logger.debug(
+                                "[LLM Trace #%d]   query: %s",
+                                trace_id,
+                                query_preview,
+                            )
+                            break
 
     def _log_response(self, trace_id: int, response: Any, duration_ms: int) -> None:
         """Log response details.
@@ -182,42 +199,44 @@ class LLMTracingWrapper:
         """
         if hasattr(response, "content"):
             preview = preview_first(str(response.content), 200)
-            logger.debug(
-                "[LLM Trace #%d] Response: %dms, preview: %s",
-                trace_id,
-                duration_ms,
-                preview,
-            )
 
-            # Log token usage if available
+            # Build compact info string with tokens and tools
+            info_parts = [f"{duration_ms}ms"]
+
+            # Add token usage if available
             if hasattr(response, "response_metadata"):
                 token_usage = response.response_metadata.get("token_usage", {})
                 if token_usage:
                     prompt_tokens = token_usage.get("prompt_tokens", 0)
                     completion_tokens = token_usage.get("completion_tokens", 0)
                     total_tokens = token_usage.get("total_tokens", 0)
-
-                    logger.debug(
-                        "[LLM Trace #%d] Token usage: prompt=%d, completion=%d, total=%d",
-                        trace_id,
-                        prompt_tokens,
-                        completion_tokens,
-                        total_tokens,
+                    info_parts.append(
+                        f"tok:{total_tokens} (p:{prompt_tokens}, c:{completion_tokens})"
                     )
 
-            # Log tool calls if present
+            # Add tool call count if present
             if hasattr(response, "tool_calls") and response.tool_calls:
                 tool_count = len(response.tool_calls)
+                info_parts.append(f"tools:{tool_count}")
+
+            logger.debug(
+                "[LLM Trace #%d] ← %s | %s",
+                trace_id,
+                ", ".join(info_parts),
+                preview,
+            )
+
+            # Log tool names separately if present (compact line)
+            if hasattr(response, "tool_calls") and response.tool_calls:
                 tool_names = [tc.get("name", "unknown") for tc in response.tool_calls]
                 logger.debug(
-                    "[LLM Trace #%d] Tool calls: %d (%s)",
+                    "[LLM Trace #%d]   tools: %s",
                     trace_id,
-                    tool_count,
                     ", ".join(tool_names[:5]),
                 )
         else:
             logger.debug(
-                "[LLM Trace #%d] Response: %dms (no content field)",
+                "[LLM Trace #%d] ← %dms (no content)",
                 trace_id,
                 duration_ms,
             )
@@ -231,7 +250,7 @@ class LLMTracingWrapper:
             duration_ms: Request duration before failure
         """
         logger.error(
-            "[LLM Trace #%d] Error after %dms: %s: %s",
+            "[LLM Trace #%d] ✗ %dms | %s: %s",
             trace_id,
             duration_ms,
             type(error).__name__,

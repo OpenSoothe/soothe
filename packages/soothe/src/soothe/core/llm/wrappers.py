@@ -71,10 +71,14 @@ class JsonSchemaModelWrapper(Runnable):
         try:
             if hasattr(response, "content") and response.content:
                 json_str = response.content
-            # Fallback: check reasoning_content field (some providers)
-            elif hasattr(response, "reasoning_content") and response.reasoning_content:
-                json_str = response.reasoning_content
-                logger.debug("JSON found in reasoning_content field")
+            # Fallback: check reasoning_content in additional_kwargs (limited_openai providers)
+            elif (
+                hasattr(response, "additional_kwargs")
+                and "reasoning_content" in response.additional_kwargs
+                and response.additional_kwargs["reasoning_content"]
+            ):
+                json_str = response.additional_kwargs["reasoning_content"]
+                logger.debug("JSON found in reasoning_content field (additional_kwargs)")
             else:
                 json_str = str(response)
 
@@ -84,7 +88,9 @@ class JsonSchemaModelWrapper(Runnable):
                     f"Provider returned empty response for json_schema format. "
                     f"Response object: {type(response).__name__}, "
                     f"has content: {hasattr(response, 'content')}, "
-                    f"has reasoning_content: {hasattr(response, 'reasoning_content')}"
+                    f"has additional_kwargs: {hasattr(response, 'additional_kwargs')}, "
+                    f"reasoning_content in additional_kwargs: "
+                    f"{hasattr(response, 'additional_kwargs') and 'reasoning_content' in response.additional_kwargs}"
                 )
 
             # Log response for debugging
@@ -92,8 +98,8 @@ class JsonSchemaModelWrapper(Runnable):
                 "Provider response for json_schema: content='%s', reasoning_content='%s'",
                 preview_first(str(response.content) if hasattr(response, "content") else "", 100),
                 preview_first(
-                    str(response.reasoning_content)
-                    if hasattr(response, "reasoning_content")
+                    str(response.additional_kwargs.get("reasoning_content", ""))
+                    if hasattr(response, "additional_kwargs")
                     else "",
                     100,
                 ),
@@ -113,8 +119,8 @@ class JsonSchemaModelWrapper(Runnable):
                     str(response.content) if hasattr(response, "content") else "N/A", 200
                 ),
                 preview_first(
-                    str(response.reasoning_content)
-                    if hasattr(response, "reasoning_content")
+                    str(response.additional_kwargs.get("reasoning_content", "N/A"))
+                    if hasattr(response, "additional_kwargs")
                     else "N/A",
                     200,
                 ),
@@ -147,10 +153,14 @@ class JsonSchemaModelWrapper(Runnable):
         try:
             if hasattr(response, "content") and response.content:
                 json_str = response.content
-            # Fallback: check reasoning_content field (some providers)
-            elif hasattr(response, "reasoning_content") and response.reasoning_content:
-                json_str = response.reasoning_content
-                logger.debug("JSON found in reasoning_content field")
+            # Fallback: check reasoning_content in additional_kwargs (limited_openai providers)
+            elif (
+                hasattr(response, "additional_kwargs")
+                and "reasoning_content" in response.additional_kwargs
+                and response.additional_kwargs["reasoning_content"]
+            ):
+                json_str = response.additional_kwargs["reasoning_content"]
+                logger.debug("JSON found in reasoning_content field (additional_kwargs)")
             else:
                 json_str = str(response)
 
@@ -160,7 +170,9 @@ class JsonSchemaModelWrapper(Runnable):
                     f"Provider returned empty response for json_schema format. "
                     f"Response object: {type(response).__name__}, "
                     f"has content: {hasattr(response, 'content')}, "
-                    f"has reasoning_content: {hasattr(response, 'reasoning_content')}"
+                    f"has additional_kwargs: {hasattr(response, 'additional_kwargs')}, "
+                    f"reasoning_content in additional_kwargs: "
+                    f"{hasattr(response, 'additional_kwargs') and 'reasoning_content' in response.additional_kwargs}"
                 )
 
             # Log response for debugging
@@ -168,8 +180,8 @@ class JsonSchemaModelWrapper(Runnable):
                 "Provider response for json_schema: content='%s', reasoning_content='%s'",
                 preview_first(str(response.content) if hasattr(response, "content") else "", 100),
                 preview_first(
-                    str(response.reasoning_content)
-                    if hasattr(response, "reasoning_content")
+                    str(response.additional_kwargs.get("reasoning_content", ""))
+                    if hasattr(response, "additional_kwargs")
                     else "",
                     100,
                 ),
@@ -189,8 +201,8 @@ class JsonSchemaModelWrapper(Runnable):
                     str(response.content) if hasattr(response, "content") else "N/A", 200
                 ),
                 preview_first(
-                    str(response.reasoning_content)
-                    if hasattr(response, "reasoning_content")
+                    str(response.additional_kwargs.get("reasoning_content", "N/A"))
+                    if hasattr(response, "additional_kwargs")
                     else "N/A",
                     200,
                 ),
@@ -238,52 +250,56 @@ class LimitedProviderModelWrapper(BaseChatModel):
         self._provider_name = provider_name
 
     def with_structured_output(self, schema: Any, **kwargs: Any) -> Any:
-        """Convert json_mode to json_schema format for limited provider compatibility.
+        """Convert all methods to json_schema format for limited provider compatibility.
 
-        Limited providers reject response_format={"type": "json_object"} but accept
-        response_format={"type": "json_schema", "json_schema": {...}}.
+        Limited OpenAI providers MUST use json_schema format because:
+        - Reject response_format={"type": "json_object"}
+        - Return structured JSON in reasoning_content (additional_kwargs)
+        - Langchain's default function_calling/json_mode don't handle reasoning_content
+
+        We intercept ALL methods and convert to JsonSchemaModelWrapper which:
+        - Injects response_format={"type": "json_schema", ...}
+        - Checks additional_kwargs["reasoning_content"] for JSON parsing
 
         Args:
             schema: Pydantic model class defining the output schema.
-            **kwargs: Method parameter ('json_mode' intercepted and converted).
+            **kwargs: Method parameter (all intercepted and converted).
 
         Returns:
-            Runnable with structured output using json_schema format.
+            JsonSchemaModelWrapper with reasoning_content handling.
         """
         method = kwargs.get("method", "json_mode")
 
         logger.debug(
-            "LimitedProviderModelWrapper converting json_mode to json_schema for provider '%s'",
+            "LimitedProviderModelWrapper converting method='%s' to json_schema for provider '%s'",
+            method,
             self._provider_name,
         )
 
-        if method == "json_mode":
-            # Convert pydantic schema to JSON schema format
-            try:
-                json_schema = schema.model_json_schema()
+        # ALWAYS use JsonSchemaModelWrapper for limited_openai providers
+        # This ensures we check additional_kwargs["reasoning_content"] field
+        try:
+            json_schema = schema.model_json_schema()
 
-                # Build the response_format dict that limited providers accept
-                response_format = {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": schema.__name__,
-                        "strict": True,
-                        "schema": json_schema,
-                    },
-                }
+            # Build the response_format dict that limited providers accept
+            response_format = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": schema.__name__,
+                    "strict": True,
+                    "schema": json_schema,
+                },
+            }
 
-                # Inject response_format into the model's invoke kwargs
-                return JsonSchemaModelWrapper(self._model, response_format, schema)
-            except Exception:
-                logger.debug(
-                    "Failed to convert schema to json_schema format, falling back",
-                    exc_info=True,
-                )
-                # Fallback: return the model and hope the caller handles it
-                return self._model
-
-        # For other methods, just delegate (they will likely fail but let caller handle)
-        return self._model.with_structured_output(schema, **kwargs)
+            # Inject response_format into the model's invoke kwargs
+            return JsonSchemaModelWrapper(self._model, response_format, schema)
+        except Exception:
+            logger.debug(
+                "Failed to convert schema to json_schema format, falling back",
+                exc_info=True,
+            )
+            # Fallback: delegate to base model (may fail with reasoning_content)
+            return self._model.with_structured_output(schema, **kwargs)
 
     def bind_tools(self, tools: list[Any], **kwargs: Any) -> Any:
         """Intercept tool_choice parameter for limited providers.
