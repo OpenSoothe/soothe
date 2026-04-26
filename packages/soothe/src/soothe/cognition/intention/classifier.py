@@ -67,16 +67,17 @@ class IntentClassifier:
 
         # Pre-create structured output models for performance
         if model:
-            self._intent_model = self._create_structured_model(model, IntentClassification)
-            self._routing_model = self._create_structured_model(model, RoutingClassification)
-
-            # Apply LLM tracing wrapper if enabled
+            # Apply LLM tracing wrapper to base model BEFORE structured output conversion
+            # This allows tracing the actual AIMessage response, not the Pydantic result
+            traced_model = model
             if config and hasattr(config, "llm_tracing") and config.llm_tracing.enabled:
                 from soothe.core.llm import LLMTracingWrapper
 
-                self._intent_model = LLMTracingWrapper(self._intent_model)
-                self._routing_model = LLMTracingWrapper(self._routing_model)
-                logger.debug("[IntentClassifier] LLM tracing enabled")
+                traced_model = LLMTracingWrapper(model)
+                logger.debug("[IntentClassifier] LLM tracing enabled for base model")
+
+            self._intent_model = self._create_structured_model(traced_model, IntentClassification)
+            self._routing_model = self._create_structured_model(traced_model, RoutingClassification)
 
             logger.info("[IntentClassifier] Initialized with structured output models")
         else:
