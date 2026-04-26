@@ -42,6 +42,9 @@ GOAL_COMPLETE_EVENTS = {
     "soothe.cognition.agent_loop.completed",
 }
 
+# IG-264: Default goal completion message (skip display to avoid redundancy)
+DEFAULT_GOAL_ACHIEVED_MESSAGE = "Goal achieved successfully"
+
 # Verbosity tier mapping
 _VERBOSITY_TO_TIER = {
     "quiet": VerbosityTier.QUIET,
@@ -639,7 +642,8 @@ class StreamDisplayPipeline:
             )
         else:
             reasoning = event.get("reasoning", "").strip()
-            if reasoning:
+            # IG-264: Skip redundant reasoning when it's the default goal message
+            if reasoning and reasoning != DEFAULT_GOAL_ACHIEVED_MESSAGE:
                 lines.append(
                     format_reasoning(
                         reasoning,

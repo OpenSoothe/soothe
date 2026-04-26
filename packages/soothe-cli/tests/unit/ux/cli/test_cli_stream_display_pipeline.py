@@ -457,7 +457,7 @@ class TestStreamDisplayPipeline:
         assert lines[0].duration_ms == 45200
 
     def test_loop_agent_reason_shown_at_normal(self) -> None:
-        """IG-225: Loop agent Reason event with split reasoning shows assessment/plan lines."""
+        """IG-225: Loop agent Reason event shows judgement + plan reasoning."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         event = {
@@ -472,22 +472,20 @@ class TestStreamDisplayPipeline:
         }
         lines = pipeline.process(event)
 
-        # IG-225: Should show 3 lines: judgement + assessment + plan
-        assert len(lines) == 3
+        # IG-257: Only show 2 lines: judgement + plan (assessment removed)
+        assert len(lines) == 2
         assert "I'll check your config files next." in lines[0].content
-        assert "Assessment:" in lines[1].content
-        assert "Progress looks good" in lines[1].content
-        assert "Plan:" in lines[2].content
-        assert "Continue checking files" in lines[2].content
+        assert "Continue checking files" in lines[1].content
+        # IG-257: No "Plan:" prefix, just emoji + text
+        assert "Plan:" not in lines[1].content
         # RFC-603: Percentage display removed per user request
         assert "80% sure" not in lines[0].content
-        assert lines[0].icon == "→"
-        # IG-225: Assessment and Plan use level=2 (no indent)
+        assert lines[0].icon == "○"
+        # IG-225: Plan uses level=2 (flat, no indent)
         assert lines[1].indent == ""
-        assert lines[2].indent == ""
 
     def test_loop_agent_reason_done_shows_checkmark(self) -> None:
-        """IG-225: Reason event with status=done shows checkmark and split reasoning."""
+        """IG-225: Reason event with status=done shows checkmark and plan reasoning."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         event = {
@@ -502,17 +500,41 @@ class TestStreamDisplayPipeline:
         }
         lines = pipeline.process(event)
 
-        # IG-225: Should show 3 lines for done status
-        assert len(lines) == 3
+        # IG-257: Only show 2 lines for done status: judgement + plan
+        assert len(lines) == 2
         assert "I'm sharing the final result now." in lines[0].content
-        assert "Assessment:" in lines[1].content
-        assert "Plan:" in lines[2].content
+        assert "Share results" in lines[1].content
+        # IG-257: No "Plan:" prefix
+        assert "Plan:" not in lines[1].content
         # RFC-603: Percentage display removed per user request
         assert "95% sure" not in lines[0].content
-        assert lines[0].icon == "✓"  # Checkmark for done status
-        # IG-225: Assessment and Plan use level=2 (no indent)
+        assert lines[0].icon == "●"  # Solid bullet for done status
+        # IG-225: Plan uses level=2 (flat, no indent)
         assert lines[1].indent == ""
-        assert lines[2].indent == ""
+
+    def test_default_goal_achieved_skips_redundant_reasoning(self) -> None:
+        """IG-265: Skip redundant reasoning line for default "Goal achieved successfully"."""
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+
+        event = {
+            "type": "soothe.cognition.agent_loop.reasoned",
+            "status": "done",
+            "progress": 1.0,
+            "confidence": 1.0,
+            "next_action": "Goal achieved successfully",
+            "iteration": 2,
+            "reasoning": "Goal achieved successfully",  # Same as next_action
+            "plan_action": "keep",
+        }
+        lines = pipeline.process(event)
+
+        # IG-265: Should show only 1 line (judgement), skip duplicate reasoning
+        assert len(lines) == 1
+        assert "Goal achieved successfully" in lines[0].content
+        # IG-265: Badge removed from CLI display (kept in event data for logs)
+        assert "[keep]" not in lines[0].content
+        # No second 💭 line (skip duplicate)
+        assert len([l for l in lines if "💭" in l.content]) == 0
 
     def test_step_completed_with_tool_call_count(self) -> None:
         """IG-182: Step completion shows tree child with tool count."""
@@ -605,8 +627,8 @@ class TestStreamDisplayPipeline:
 
         lines1 = pipeline.process(event)
         lines2 = pipeline.process(event)
-        # IG-225: First call shows 3 lines (judgement + assessment + plan)
-        assert len(lines1) == 3
+        # IG-257: First call shows 2 lines (judgement + plan, assessment removed)
+        assert len(lines1) == 2
         # Second call should be deduped (no lines)
         assert lines2 == []
 
