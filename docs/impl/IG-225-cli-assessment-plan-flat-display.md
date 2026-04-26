@@ -10,7 +10,7 @@ Assessment and Plan reasoning messages displayed with unwanted indentation in CL
 
 ```
 ● 🚩 count all readme files
-→ 🌀 [new] List workspace files and search for README files
+→ 🌟 [new] List workspace files and search for README files
   • 💭 Assessment: Need to find all readme files in the project. Will use glob to find files matching README pattern.
   • 💭 Plan: Simple counting task: explore structure, find READMEs, count them.
 ```
@@ -59,14 +59,14 @@ def format_plan_phase_reasoning(...) -> DisplayLine:
 
 **Before**:
 ```
-→ 🌀 [new] List workspace files and search for README files
+→ 🌟 [new] List workspace files and search for README files
   • 💭 Assessment: Need to find all readme files in the project.
   • 💭 Plan: Simple counting task: explore structure, find READMEs, count them.
 ```
 
 **After** (IG-225):
 ```
-→ 🌀 [new] List workspace files and search for README files
+→ 🌟 [new] List workspace files and search for README files
 • 💭 Assessment: Need to find all readme files in the project.
 • 💭 Plan: Simple counting task: explore structure, find READMEs, count them.
 ```

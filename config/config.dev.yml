@@ -1,7 +1,5 @@
 # Development Configuration - Essential dev settings only
 # Inherits defaults from src/soothe/config/config.yml
-
-# Dev environment providers
 providers:
   - name: dashscope
     provider_type: openai
@@ -35,26 +33,23 @@ providers:
       - glm-4.6v-flash
       - nomic-embed
 
-# Dev model routing
-# router:
-#   default: "coding-plan:kimi-k2.5"
-#   fast: "coding-plan:kimi-k2.5"
-#   think: "coding-plan:kimi-k2.5"
-#   image: "coding-plan:qwen3.5-plus"
-#   embedding: "dashscope:multimodal-embedding-v1"
-
 router:
-  default: "mlxserver:glm-4.7-flash"
-  fast: "mlxserver:glm-4.7-flash"
-  think: "mlxserver:glm-4.7-flash"
-  image: "mlxserver:glm-4.6v-flash"
-  embedding: "mlxserver:nomic-embed"
+  default: "coding-plan:kimi-k2.5"
+  fast: "coding-plan:kimi-k2.5"
+  think: "coding-plan:glm-5"
+  image: "coding-plan:qwen3.5-plus"
+  embedding: "dashscope:multimodal-embedding-v1"
 
-# Agentic loop (merged with defaults; see packages/soothe/src/soothe/config/config.yml)
+# router:
+#   default: "mlxserver:glm-4.7-flash"
+#   fast: "mlxserver:glm-4.7-flash"
+#   think: "mlxserver:glm-4.7-flash"
+#   image: "mlxserver:glm-4.6v-flash"
+#   embedding: "mlxserver:nomic-embed"
+
 agentic:
   final_response: adaptive
 
-# Dev performance tuning
 performance:
   enabled: true
   unified_classification: true
@@ -63,12 +58,10 @@ performance:
   parallel_pre_stream: true
   reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution (IG-053)
 
-# Dev debugging - enable LLM tracing
 llm_tracing:
   enabled: true
   log_preview_length: 1000
 
-# Dev daemon configuration - enable HTTP REST for BM-003 benchmark
 daemon:
   max_concurrent_threads: 100
   # IG-258: Concurrent performance optimization
@@ -80,18 +73,15 @@ daemon:
       host: "127.0.0.1"
       port: 8765
     http_rest:
-      enabled: true         # Enable HTTP REST for BM-003 benchmark
+      enabled: true
       host: "127.0.0.1"
       port: 8766
 
-# Subagent overrides (merged with builtin defaults; see packages/soothe/src/soothe/config/config.yml)
 subagents:
   browser:
     config:
       max_steps: 10
 
-# Dev logging - verbose for debugging
-# Daemon file logging uses logging.file.level (independent of client display verbosity)
 logging:
   file:
     level: DEBUG

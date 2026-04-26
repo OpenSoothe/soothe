@@ -76,7 +76,7 @@ Based on IG-256 suppression:
 
 User reported indentation issue on reasoning line:
 ```
-● 🌀 [keep] Report completion...
+● 🌟 [keep] Report completion...
   ● 💭 Successfully read...  ← Has 2-space indent (should be flat)
 ```
 
