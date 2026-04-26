@@ -3,10 +3,12 @@
 These wrappers handle providers with limited OpenAI API compatibility:
 - Only support string tool_choice values, not object format
 - Require json_schema format, not json_object format
-- May return structured output in alternative fields
+- May return structured output in alternative fields (reasoning_content)
 
-Note: LMStudio-specific handling is in dedicated backend `soothe.backends.lms_openai`
-with specialized reasoning_content field extraction.
+Limited OpenAI providers (provider_type='limited_openai'):
+- LMStudio, MLXServer, certain GLM deployments
+- Return structured JSON in reasoning_content field (thinking tokens)
+- Accept json_schema response_format but may return empty content field
 """
 
 from __future__ import annotations
@@ -26,12 +28,12 @@ logger = logging.getLogger(__name__)
 class JsonSchemaModelWrapper(Runnable):
     """Wrapper that injects json_schema response_format and parses JSON output.
 
-    Limited providers require response_format={"type": "json_schema"} not {"type": "json_object"}.
+    Limited OpenAI providers require response_format={"type": "json_schema"} not {"type": "json_object"}.
     Unlike langchain's built-in structured output, we manually parse the JSON response
-    into a Pydantic object.
+    into a Pydantic object, checking both content and reasoning_content fields.
 
-    Note: For LMStudio providers, use `soothe.backends.lms_openai.LMSJsonSchemaWrapper`
-    which checks reasoning_content field.
+    Handles providers that return structured JSON in reasoning_content field:
+    - LMStudio, MLXServer, GLM deployments with thinking tokens
 
     Args:
         model: The base model to wrap.
@@ -216,8 +218,9 @@ class LimitedProviderModelWrapper(BaseChatModel):
     - Accepts response_format={"type": "json_schema", ...}
     - Only accepts string tool_choice values: "none", "auto", "required"
 
-    Note: For LMStudio providers, use `soothe.backends.lms_openai.LMSOpenAIModelWrapper`
-    which includes reasoning_content field handling.
+    Limited OpenAI providers (provider_type='limited_openai'):
+    - LMStudio, MLXServer, GLM deployments with thinking tokens
+    - Return structured JSON in reasoning_content field
 
     Args:
         model: The original BaseChatModel to wrap.
@@ -380,7 +383,7 @@ def wrap_model_if_needed(
     """Compatibility helper - no longer wraps models.
 
     This function is kept for backward compatibility but does nothing.
-    Model wrapping is now handled directly in SootheConfig based on provider_type.
+    Model wrapping is now handled directly in SootheConfig based on provider_type='limited_openai'.
 
     Args:
         model: The original model (returned unchanged).
