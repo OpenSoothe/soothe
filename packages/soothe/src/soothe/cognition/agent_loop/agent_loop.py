@@ -516,14 +516,21 @@ Use all tool results and AI responses available in the conversation history to c
                         workspace=state.workspace,
                         thread_id=state.thread_id,
                     )
+                # IG-267: Don't leak verbose evidence strings to CLI display
+                # Use simple summary for user-visible output_preview
+                if result.success:
+                    output_preview = "Done"
+                    if result.tool_call_count > 0:
+                        output_preview = f"Done [{result.tool_call_count} tools]"
+                else:
+                    output_preview = f"Failed: {result.error[:50]}" if result.error else "Failed"
+
                 yield (
                     "step_completed",
                     {
                         "step_id": result.step_id,
                         "success": result.success,
-                        "output_preview": preview_first(
-                            result.to_evidence_string(), 100
-                        ),  # RFC-211: Use outcome
+                        "output_preview": output_preview,
                         "error": result.error or None,
                         "duration_ms": result.duration_ms,
                         "tool_call_count": result.tool_call_count,

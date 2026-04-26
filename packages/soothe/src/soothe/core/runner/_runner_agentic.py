@@ -569,6 +569,7 @@ class AgenticMixin:
                         status=final_result.status,
                         goal_progress=final_result.goal_progress,
                         evidence_summary=evidence,
+                        goal=display_goal,  # IG-267: Pass goal for CLI trophy display
                         completion_summary=completion_summary,
                         total_steps=n_act_steps,
                         final_stdout_message=final_stdout,
