@@ -151,7 +151,7 @@ plan = Plan(
 When subagent is used in a step, the CLI display shows:
 
 ```
-⏩ Analyze code patterns and dependencies
+❇️ Analyze code patterns and dependencies
   └─ ⚙ Task(claude, "Analyze code patterns and dependencies")
   └─ ✓ Completed (1500ms)
 ```

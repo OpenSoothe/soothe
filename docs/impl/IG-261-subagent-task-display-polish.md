@@ -15,7 +15,7 @@
 
 **Display examples:**
 ```
-⏩ Analyze README structure
+❇️ Analyze README structure
   └─ ⚙ Task(claude, "Read the first 10 lines of README")
   └─ ✓ Completed (150ms)
 ```
@@ -119,7 +119,7 @@ Polish the CLI display for subagent task (Task tool) to show consistent tree-lik
 
 **When Task appears inside a step:**
 ```
-⏩ Analyze README structure
+❇️ Analyze README structure
   └─ ⚙ Task(browser, "query preview")
   └─ ✓ Completed (duration_ms)
 ```
@@ -131,9 +131,9 @@ Polish the CLI display for subagent task (Task tool) to show consistent tree-lik
 ```
 
 **Step header format:**
-- Uses `⏩ {description}` (no "Step:" prefix)
+- Uses `❇️ {description}` (no "Step:" prefix)
 - Icon: Hollow circle `○` for in-progress step
-- Parallel steps: `⏩ {description} (parallel)`
+- Parallel steps: `❇️ {description} (parallel)`
 
 **Result formatting by category:**
 - `subagent` category (task, research): SubagentFormatter → brief "✓ Completed"

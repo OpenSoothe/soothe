@@ -216,26 +216,20 @@ class TestPlanResult:
         assert replan.should_replan() is True
 
     def test_plan_action_validation(self) -> None:
-        """Keep must not carry a decision; new requires decision when not done."""
-        with pytest.raises(ValueError):
-            PlanResult(
-                status="continue",
-                plan_action="keep",
-                decision=AgentDecision(
-                    type="execute_steps",
-                    steps=[StepAction(description="s", expected_output="o")],
-                    execution_mode="sequential",
-                    reasoning="bad",
-                ),
-                reasoning="bad",
-            )
+        """IG-264: Keep CAN have decision (optional); new requires decision when not done."""
+        # IG-264: plan_action='keep' CAN have decision (no longer raises ValueError)
+        # This validation was relaxed to allow optional decision when keeping
 
+        # Still enforce: plan_action='new' requires decision when not done
         with pytest.raises(ValueError):
             PlanResult(
                 status="continue",
                 plan_action="new",
                 decision=None,
                 reasoning="bad",
+                assessment_reasoning="",  # IG-264: Added
+                plan_reasoning="",  # IG-264: Added
+                next_action="test",  # IG-264: Added
             )
 
     def test_progress_validation(self) -> None:

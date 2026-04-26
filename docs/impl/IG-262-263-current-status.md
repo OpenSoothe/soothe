@@ -134,13 +134,13 @@ IMPORTANT: User wants to see actual content, not confirmation messages.
 
 **Before**:
 ```
-● 🌀 [keep] Task complete...
+● 🌟 [keep] Task complete...
   ● 💭 Successfully read...  (2-space indent - wrong!)
 ```
 
 **After**:
 ```
-● 🌀 [keep] Task complete...
+● 🌟 [keep] Task complete...
 ● 💭 Successfully read...  (flat - correct!)
 ```
 
@@ -258,8 +258,8 @@ Discovery: ToolMessage.content ALREADY has actual file content!
 **Expected output**:
 ```
 stderr:
-● ⌯⌲ I'll read the first 10 lines...
-○ 🌀 [new] Read README.md...
+● I'll read the first 10 lines...
+○ 🌟 [new] Read README.md...
   └─ ⚙ Read File(/README.md)
   └─ ✓ Read 5.5 KB (100 lines)  ← Semantic summary (correct)
   └─ Done [1 tools]
@@ -286,12 +286,12 @@ stdout:
 **Result**:
 ```
 stderr output:
-● ⌯⌲ I'll read the first 10 lines...
-○ 🌀 [new] Read README.md from project root...
+● I'll read the first 10 lines...
+○ 🌟 [new] Read README.md from project root...
   └─ ⚙ Read File(/README.md)
   └─ ✓ Read 517 B (10 lines)  ← Semantic summary (correct)
   └─ Done [1 tools] (6.4s)
-● 🌀 [keep] Task complete: README.md first 10 lines retrieved
+● 🌟 [keep] Task complete: README.md first 10 lines retrieved
 ● 💭 Successfully read README.md...  ← NO ACTUAL CONTENT
 
 stdout output:

@@ -52,11 +52,11 @@ After RFC-606 migration, the CLI progressive display output showed:
 **Example Output**:
 ```
 🚩 Goal: Analyze project architecture
-→ 🌀 List root directory structure
+→ 🌟 List root directory structure
 
 • 💭 Reasoning: Goal is straightforward - need to list files
 
-○ ⏩ List all files in the src directory
+○ ❇️ List all files in the src directory
 ● ✅ List all files in the src directory [1 tools] (3.5s)
 
 ● 🏆 Goal complete: Architecture analyzed (5 steps)
@@ -158,11 +158,11 @@ uv run soothe -p "List files in src directory" --no-tui -v normal
 **Expected Progressive Display**:
 ```
 🚩 Goal: List files in src directory
-→ 🌀 List all files in the src directory
+→ 🌟 List all files in the src directory
 
 • 💭 Reasoning: [Assessment] Goal is straightforward
 
-○ ⏩ List all files in the src directory
+○ ❇️ List all files in the src directory
 ● ✅ List all files in the src directory [1 tools] (3.5s)
 
 ● 🏆 List files in src directory (complete, 2 steps) (55.5s)

@@ -13,7 +13,7 @@ User reported two issues in CLI output:
 ### Issue 1: Incorrect Indentation After [keep] Step
 
 ```
-● 🌀 [keep] Task complete - README.md first 10 lines have been read and extracted
+● 🌟 [keep] Task complete - README.md first 10 lines have been read and extracted
   ● 💭 Successfully read README.md, extracted first 10 lines showing project is 'Soothe — Beyond Yet-
 ```
 
@@ -123,13 +123,13 @@ Changed `format_reasoning()` from `level=3` (indented child) to `level=2` (flat 
 
 **Before**:
 ```
-● 🌀 [keep] Task complete...
+● 🌟 [keep] Task complete...
   ● 💭 Successfully read...  (2-space indent - wrong!)
 ```
 
 **After**:
 ```
-● 🌀 [keep] Task complete...
+● 🌟 [keep] Task complete...
 ● 💭 Successfully read...  (flat - correct!)
 ```
 

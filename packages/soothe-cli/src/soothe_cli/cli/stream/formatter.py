@@ -96,7 +96,7 @@ def format_goal_header(
         DisplayLine for goal header.
     """
     # Add inline symbol for goal marker
-    content = f"⌯⌲ {goal}"
+    content = f"{goal}"
     return DisplayLine(
         level=1,
         content=content,
@@ -126,7 +126,7 @@ def format_step_header(
     """
     suffix = " (parallel)" if parallel else ""
     # Add inline symbol for step progression
-    content = f"⏩ {description}{suffix}"
+    content = f"❇️ {description}{suffix}"
     return DisplayLine(
         level=2,
         content=content,
@@ -371,7 +371,7 @@ def format_judgement(
         badge = f"[{plan_action}] "
 
     # Polish: Add "Reason:" prefix to make LLM reasoning prominent
-    content = f"🌀 {badge}{judgement}"
+    content = f"🌟 {badge}{judgement}"
 
     return DisplayLine(
         level=2,  # Use level 2 for more prominence (like step headers)

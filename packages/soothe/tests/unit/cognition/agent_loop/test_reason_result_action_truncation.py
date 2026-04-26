@@ -56,21 +56,19 @@ def test_next_action_uses_plan_action(
     sample_assessment: StatusAssessment,
     sample_plan_result: PlanGeneration,
 ) -> None:
-    """IG-152: next_action should use plan_result.next_action (not concatenation)."""
+    """IG-152: next_action uses plan_result.next_action (concrete action)."""
     planner = LLMPlanner.__new__(LLMPlanner)  # Create instance without __init__
 
     result = planner._combine_results(sample_assessment, sample_plan_result)
 
-    assert result.assessment_reasoning == sample_assessment.brief_reasoning
+    # IG-264: Only plan_result.brief_reasoning used (assessment removed)
+    assert result.assessment_reasoning == ""  # IG-264: Empty
     assert result.plan_reasoning == sample_plan_result.brief_reasoning
-    assert "[Plan]" in result.reasoning
+    assert result.reasoning == sample_plan_result.brief_reasoning
 
-    # Should use plan_result.next_action (concrete action), not assessment.next_action
+    # Should use plan_result.next_action (concrete action)
     assert result.next_action == sample_plan_result.next_action
     assert "Read key implementation files" in result.next_action
-
-    # Should NOT contain assessment.next_action (no duplication)
-    assert "examine the UX module subdirectories" not in result.next_action
 
     # Verify full text preserved (no truncation)
     assert not result.next_action.endswith("tui")  # Should not cut mid-phrase
@@ -79,8 +77,8 @@ def test_next_action_uses_plan_action(
 def test_next_action_preserves_full_text(
     sample_plan_result: PlanGeneration,
 ) -> None:
-    """IG-152: next_action should preserve full text without truncation."""
-    # Create a long action text (>100 chars)
+    """IG-152: next_action should preserve full LLM-generated text without truncation."""
+    # Create a long action text (>100 chars) - LLM-generated for variety
     long_action = (
         "Read key implementation files from cli/, shared/, and tui/ directories "
         "to analyze the renderer protocol implementation patterns "
@@ -98,14 +96,12 @@ def test_next_action_preserves_full_text(
         status="continue",
         goal_progress=0.5,
         confidence=0.8,
-        brief_reasoning="Progress check",
-        next_action="I'll examine the modules",  # Different from plan action
     )
 
     planner = LLMPlanner.__new__(LLMPlanner)
     result = planner._combine_results(assessment, plan_result)
 
-    # Verify full plan action preserved
+    # Verify full plan action preserved (LLM-generated)
     assert result.next_action == long_action
     assert len(result.next_action) > 100  # Exceeds old 100-char limit
     assert "renderer protocol implementation patterns" in result.next_action
@@ -153,33 +149,31 @@ def test_schema_max_length_updated() -> None:
 
 
 def test_early_completion_preserves_action() -> None:
-    """IG-152: Early completion (status=done) should preserve full action."""
+    """IG-264: Early completion (status=done) derives simple completion message."""
     assessment = StatusAssessment(
         status="done",
         goal_progress=1.0,
         confidence=0.95,
-        brief_reasoning="Goal is complete, all modules analyzed",
-        next_action=(
-            "I'll finalize the comprehensive UX architecture summary "
-            "with detailed implementation patterns from cli, shared, and tui modules "
-            "including renderer protocols and display pipeline architecture"
-        ),  # 156 chars
     )
 
+    # IG-264: Early completion derives simple message (no LLM-generated fields)
     result = PlanResult(
         status=assessment.status,
         goal_progress=assessment.goal_progress,
         confidence=assessment.confidence,
-        reasoning=assessment.brief_reasoning,
+        reasoning="Goal achieved successfully",  # IG-264: Derived
+        assessment_reasoning="",  # IG-264: Empty
+        plan_reasoning="",  # IG-264: Empty
         plan_action="keep",
         decision=None,
-        next_action=assessment.next_action,
+        next_action="Task completed successfully",  # IG-264: Derived
     )
 
-    # Verify full text preserved in early completion
-    assert result.next_action == assessment.next_action
-    assert len(result.next_action) > 100  # Exceeds old 100-char limit
-    assert "finalize the comprehensive UX architecture summary" in result.next_action
+    # IG-264: Verify derived completion message
+    assert result.next_action == "Task completed successfully"
+    # IG-264: No longer expecting long LLM-generated text (derived message is concise)
+    # Should NOT contain LLM-generated detailed message (removed)
+    assert "finalize the comprehensive UX architecture" not in result.next_action
 
 
 def test_word_boundary_respect_in_cli_display() -> None:

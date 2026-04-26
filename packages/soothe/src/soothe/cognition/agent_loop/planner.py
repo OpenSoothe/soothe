@@ -725,9 +725,9 @@ class LLMPlanner:
         goal: str,
         iteration: int,
     ) -> Any:
-        """Phase 1: Quick status assessment (RFC-604).
+        """StatusAssessment call: assess goal progress without plan generation (RFC-604).
 
-        Lightweight call to assess goal progress without full plan generation.
+        Lightweight structured output call to evaluate current goal status.
         Generates ~200-250 tokens per call.
 
         Args:
@@ -736,7 +736,7 @@ class LLMPlanner:
             iteration: Current iteration for varied fallback
 
         Returns:
-            StatusAssessment with status, progress, confidence, brief_reasoning, next_action
+            StatusAssessment with status, progress, confidence (IG-264: simplified).
         """
         from soothe.cognition.agent_loop.schemas import StatusAssessment
 
@@ -749,23 +749,21 @@ class LLMPlanner:
                 raise ValueError("StatusAssessment returned None")
 
             logger.debug(
-                "[Assess] status=%s progress=%.0f%% next=%s",
+                "[Assess] status=%s progress=%.0f%% conf=%.0f%%",
                 assessment.status,
                 assessment.goal_progress * 100,
-                assessment.next_action,
+                assessment.confidence * 100,
             )
 
             return assessment
 
         except Exception as e:
             logger.warning("[LLMPlanner] StatusAssessment failed: %s", str(e)[:200])
-            # Fallback: return conservative assessment
+            # Fallback: return conservative assessment (minimal fields)
             return StatusAssessment(
                 status="replan",
                 goal_progress=0.0,
                 confidence=0.5,
-                brief_reasoning="Status assessment failed, proceeding with conservative defaults",
-                next_action="I'll retry with a simpler approach.",
             )
 
     async def _generate_plan(
@@ -775,19 +773,19 @@ class LLMPlanner:
         goal: str,
         iteration: int,
     ) -> Any:
-        """Phase 2: Generate execution plan (RFC-604).
+        """PlanGeneration call: generate execution plan when goal incomplete (RFC-604).
 
-        Conditional call to generate plan when status != "done".
+        Conditional structured output call to generate plan when status != "done".
         Generates ~500-800 tokens per call.
 
         Args:
             messages: Original prompt messages
-            assessment: Phase 1 status assessment
+            assessment: StatusAssessment result from previous call
             goal: Goal description for fallback decision
             iteration: Current iteration for varied fallback
 
         Returns:
-            PlanGeneration with plan_action, decision, brief_reasoning, next_action
+            PlanGeneration with plan_action, decision (IG-264: simplified).
         """
         from langchain_core.messages import SystemMessage
 
@@ -818,12 +816,12 @@ class LLMPlanner:
 
         except Exception as e:
             logger.warning("[LLMPlanner] PlanGeneration failed: %s", str(e)[:200])
-            # Fallback: return default plan
+            # Fallback: return default plan with LLM-like message
             return PlanGeneration(
                 plan_action="new",
                 decision=_default_agent_decision(goal, iteration),
-                brief_reasoning="Plan generation failed, using default plan",
-                next_action="I'll proceed with a fallback plan.",
+                brief_reasoning="Plan generation failed, using fallback",
+                next_action="I'll proceed with a default plan.",
             )
 
     def _combine_results(
@@ -831,34 +829,26 @@ class LLMPlanner:
         assessment: Any,
         plan_result: Any,
     ) -> Any:
-        """Combine Phase 1 and Phase 2 results (RFC-604, IG-152).
+        """Combine StatusAssessment and PlanGeneration results (RFC-604, IG-152).
 
-        Concatenates reasoning and next_action from both phases.
-        Uses smart truncation for user-facing field (word-boundary respect).
+        Uses LLM-generated brief_reasoning and next_action for variety.
 
         Args:
-            assessment: Phase 1 StatusAssessment
-            plan_result: Phase 2 PlanGeneration
+            assessment: StatusAssessment result
+            plan_result: PlanGeneration result
 
         Returns:
-            PlanResult with combined reasoning and both action fields
+            PlanResult with combined reasoning and action fields
         """
         from soothe.cognition.agent_loop.schemas import PlanResult
         from soothe.utils.text_preview import preview_first
 
-        ar = (assessment.brief_reasoning or "").strip()
+        # IG-264: Only use plan_result.brief_reasoning (assessment removed)
         pr = (plan_result.brief_reasoning or "").strip()
-        if ar and pr:
-            reasoning_text = f"{ar} [Plan] {pr}"
-        elif pr:
-            reasoning_text = pr
-        else:
-            reasoning_text = ar
+        reasoning_text = pr
 
         # IG-152: Use plan_result.next_action (concrete, actionable) for user
-        # assessment.next_action is status-based (what LLM thinks should happen)
         # plan_result.next_action is plan-specific (what will actually be executed)
-        # User should see the concrete plan action, not duplication of both
         action_text = plan_result.next_action.strip()
 
         logger.debug(
@@ -866,17 +856,17 @@ class LLMPlanner:
             preview_first(action_text, chars=80),
         )
 
-        # Build final PlanResult
+        # Build final PlanResult (IG-264: assessment_reasoning removed)
         return PlanResult(
             status=assessment.status,
             goal_progress=assessment.goal_progress,
             confidence=assessment.confidence,
-            reasoning=reasoning_text,  # Full reasoning chain (no truncation)
-            assessment_reasoning=ar,
+            reasoning=reasoning_text,
+            assessment_reasoning="",  # IG-264: Empty (assessment removed)
             plan_reasoning=pr,
             plan_action=plan_result.plan_action,
             decision=plan_result.decision,
-            next_action=action_text,  # User sees concrete plan action (no duplication)
+            next_action=action_text,
         )
 
     async def plan(
@@ -885,10 +875,10 @@ class LLMPlanner:
         state: LoopState,
         context: PlanContext,
     ) -> Any:
-        """Plan phase: two-call architecture (RFC-604).
+        """Plan execution using two-call architecture (RFC-604).
 
-        Phase 1: StatusAssessment (lightweight, ~200-250 tokens)
-        Phase 2: PlanGeneration (conditional, ~500-800 tokens)
+        StatusAssessment call: lightweight status check (~200-250 tokens)
+        PlanGeneration call: conditional plan generation (~500-800 tokens)
 
         Returns combined PlanResult with evidence-based metrics applied.
         """
@@ -930,25 +920,22 @@ class LLMPlanner:
                         )
                         assessment.status = "replan"
                         assessment.goal_progress = 0.0
-                        assessment.brief_reasoning = (
-                            "No execution occurred yet - must run at least one iteration"
-                        )
+                        # IG-264: No brief_reasoning field to update
 
                 # Early completion optimization: skip plan generation if status="done"
                 if assessment.status == "done":
                     logger.debug("[Plan] early-complete status=done (skip plan gen)")
-                    # Build PlanResult from assessment only (IG-152: full text, no truncation)
-                    # IG-XXX: No truncation needed for single-phase reasoning (max 100 chars)
+                    # IG-264: Static fallback (no brief_reasoning field)
                     result = PlanResult(
                         status=assessment.status,
                         goal_progress=assessment.goal_progress,
                         confidence=assessment.confidence,
-                        reasoning=assessment.brief_reasoning,  # Single phase, no truncation needed
-                        assessment_reasoning=assessment.brief_reasoning,
-                        plan_reasoning="",
+                        reasoning="Goal achieved successfully",
+                        assessment_reasoning="",  # IG-264: Empty
+                        plan_reasoning="",  # IG-264: Empty
                         plan_action="keep",  # No plan needed
                         decision=None,
-                        next_action=assessment.next_action,  # User sees full action
+                        next_action="Goal achieved successfully",
                     )
                 else:
                     # Plan Generation
@@ -1022,38 +1009,20 @@ class LLMPlanner:
                                 parsed_dict = _try_parse_json_dict(repaired_json)
 
                                 if parsed_dict:
-                                    # Try to parse as StatusAssessment first, then as PlanGeneration
+                                    # IG-264: Parse as StatusAssessment and build PlanResult
                                     try:
                                         assessment = StatusAssessment(**parsed_dict)
-                                        # If status != "done", try to get plan
-                                        if assessment.status != "done":
-                                            # Need to parse plan separately
-                                            # For simplicity, use default decision
-                                            result = PlanResult(
-                                                status=assessment.status,
-                                                goal_progress=assessment.goal_progress,
-                                                confidence=assessment.confidence,
-                                                reasoning=assessment.brief_reasoning,
-                                                assessment_reasoning=assessment.brief_reasoning,
-                                                plan_reasoning="",
-                                                plan_action="new",
-                                                decision=_default_agent_decision(
-                                                    goal, state.iteration
-                                                ),
-                                                next_action=assessment.next_action,
-                                            )
-                                        else:
-                                            result = PlanResult(
-                                                status=assessment.status,
-                                                goal_progress=assessment.goal_progress,
-                                                confidence=assessment.confidence,
-                                                reasoning=assessment.brief_reasoning,
-                                                assessment_reasoning=assessment.brief_reasoning,
-                                                plan_reasoning="",
-                                                plan_action="keep",
-                                                decision=None,
-                                                next_action=assessment.next_action,
-                                            )
+                                        result = PlanResult(
+                                            status=assessment.status,
+                                            goal_progress=assessment.goal_progress,
+                                            confidence=assessment.confidence,
+                                            reasoning="Fallback plan execution",
+                                            assessment_reasoning="",
+                                            plan_reasoning="",
+                                            plan_action="new",
+                                            decision=_default_agent_decision(goal, state.iteration),
+                                            next_action="Proceeding with default plan",
+                                        )
                                     except Exception:
                                         # Fallback: parse as PlanResult directly
                                         result = PlanResult(**parsed_dict)
@@ -1071,8 +1040,10 @@ class LLMPlanner:
                         status="replan",
                         plan_action="new",
                         decision=_default_agent_decision(goal, state.iteration),
-                        reasoning=f"Plan call failed after {max_retries} retries: {error_msg[:100]}",
-                        next_action="I'll retry with a simpler next step.",
+                        reasoning=f"Plan call failed after {max_retries} retries",
+                        assessment_reasoning="",  # IG-264: Not needed
+                        plan_reasoning="",  # IG-264: Not needed
+                        next_action="Retrying with simpler approach",  # IG-264: Derived
                     )
 
         # RFC-603: Apply evidence-based confidence and progress

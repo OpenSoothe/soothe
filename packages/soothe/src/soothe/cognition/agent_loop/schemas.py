@@ -14,11 +14,13 @@ from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 class StepAction(BaseModel):
     """Single step in execution strategy.
 
+    IG-264: Keep execution-critical fields (used by executor).
+
     Attributes:
         id: Unique step identifier (8-char hex)
         description: What this step does
-        tools: Tools to use (optional)
-        subagent: Subagent to invoke (optional)
+        tools: Tools to use (optional, executor hint)
+        subagent: Subagent to invoke (optional, executor hint)
         expected_output: Expected result for evidence accumulation
         dependencies: Step IDs this depends on (for DAG execution)
     """
@@ -27,7 +29,7 @@ class StepAction(BaseModel):
     description: str
     tools: list[str] | None = None
     subagent: str | None = None
-    expected_output: str
+    expected_output: str = "Step completed successfully"
     dependencies: list[str] | None = None
 
 
@@ -35,19 +37,20 @@ class AgentDecision(BaseModel):
     """LLM's decision on next action for goal execution.
 
     Hybrid model: can specify 1 step or N steps.
+    IG-264: Keep execution-critical fields (used by planning_utils).
 
     Attributes:
         type: "execute_steps" or "final"
         steps: Steps to execute (can be 1 or N)
         execution_mode: "parallel", "sequential", or "dependency"
-        reasoning: Why these steps advance toward goal
-        adaptive_granularity: Step granularity chosen by LLM
+        reasoning: Why these steps advance toward goal (used by planning_utils)
+        adaptive_granularity: Step granularity chosen by LLM (used by planning_utils)
     """
 
     type: Literal["execute_steps", "final"]
     steps: list[StepAction]
     execution_mode: Literal["parallel", "sequential", "dependency"]
-    reasoning: str
+    reasoning: str = ""
     adaptive_granularity: Literal["atomic", "semantic"] | None = None
 
     @model_validator(mode="after")
@@ -117,14 +120,14 @@ class PlanResult(BaseModel):
     """Internal analysis (full reasoning chain visible, no truncation).
 
     IG-XXX: Increased from 500 to 1000 chars to show complete reasoning without mid-sentence truncation.
-    Combined reasoning from both phases (assessment + plan) can be 100-200 chars total.
+    Combined reasoning from assessment + plan generation can be 100-200 chars total.
     """
 
     assessment_reasoning: str = Field(default="", max_length=500)
-    """Phase-1 status justification (distinct from plan-phase reasoning)."""
+    """StatusAssessment justification (distinct from plan generation reasoning)."""
 
     plan_reasoning: str = Field(default="", max_length=500)
-    """Phase-2 plan-strategy justification."""
+    """PlanGeneration strategy justification."""
 
     next_action: str = Field(default="", max_length=500)
     """Complete action text from both phases (no truncation, full reasoning chain visible)."""
@@ -135,9 +138,11 @@ class PlanResult(BaseModel):
 
     @model_validator(mode="after")
     def _validate_plan_action(self) -> PlanResult:
-        """Ensure keep/new and decision align when status requires execution."""
-        if self.plan_action == "keep" and self.decision is not None:
-            raise ValueError("plan_action 'keep' requires decision to be None")
+        """Ensure keep/new and decision align when status requires execution.
+
+        IG-264: plan_action='keep' CAN have decision (optional, not enforced).
+        Only enforce that plan_action='new' requires decision when not done.
+        """
         if self.status != "done" and self.plan_action == "new" and self.decision is None:
             raise ValueError("plan_action 'new' requires decision when status is not done")
         return self
@@ -156,49 +161,65 @@ class PlanResult(BaseModel):
 
 
 class StatusAssessment(BaseModel):
-    """Phase 1: Quick progress/status check (RFC-604).
+    """StatusAssessment: quick progress/status check (RFC-604).
 
-    Lightweight schema for status assessment, generates ~200-250 tokens.
+    Lightweight schema for status assessment, generates ~50-80 tokens.
+    IG-264: Minimal fields (status, progress, confidence) - 60% token reduction.
 
     Attributes:
         status: Whether to finish, continue current plan, or replan.
         goal_progress: Estimated progress toward the goal (0.0-1.0).
         confidence: Model confidence in the assessment (0.0-1.0).
-        brief_reasoning: 1-2 sentence status justification (max 100 chars).
-        next_action: User-facing next step description (max 100 chars).
     """
 
     status: Literal["continue", "replan", "done"]
     goal_progress: float = Field(default=0.0, ge=0.0, le=1.0)
     confidence: float = Field(default=0.8, ge=0.0, le=1.0)
 
-    brief_reasoning: str = Field(default="", max_length=100)
-    """1-2 sentence status justification."""
-
-    next_action: str = Field(default="", max_length=300)
-    """User-facing next step description (allows longer text for complex goals)."""
-
 
 class PlanGeneration(BaseModel):
-    """Phase 2: Generate execution plan (conditional) (RFC-604).
+    """PlanGeneration: generate execution plan when goal incomplete (RFC-604).
 
-    Focused schema for plan generation, generates ~500-800 tokens.
+    Conditional schema for plan generation, generates ~400-600 tokens.
+    IG-264: Keep LLM-generated brief_reasoning and next_action for message variety.
 
     Attributes:
         plan_action: Reuse in-flight AgentDecision or supply a new one.
-        decision: New steps to execute.
+        decision: New steps to execute (None when plan_action='keep').
         brief_reasoning: Why this plan strategy was chosen (max 100 chars).
-        next_action: User-facing next step (plan-specific, max 100 chars).
+        next_action: User-facing next step (plan-specific, max 300 chars).
     """
 
     plan_action: Literal["keep", "new"] = "new"
-    decision: AgentDecision
+    decision: AgentDecision | None = None
 
     brief_reasoning: str = Field(default="", max_length=100)
-    """Why this plan strategy was chosen."""
+    """Why this plan strategy was chosen (LLM-generated for variety)."""
 
     next_action: str = Field(default="", max_length=300)
-    """User-facing next step (plan-specific, allows longer concrete actions)."""
+    """User-facing next step (plan-specific, LLM-generated for variety)."""
+
+    @model_validator(mode="after")
+    def _validate_plan_action(self) -> PlanGeneration:
+        """Ensure keep/new and decision align.
+
+        IG-264: plan_action='keep' CAN have decision (optional, not enforced).
+        Only enforce that plan_action='new' requires decision.
+        """
+        if self.plan_action == "new" and self.decision is None:
+            raise ValueError("plan_action 'new' requires decision")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_plan_action(self) -> PlanGeneration:
+        """Ensure keep/new and decision align.
+
+        IG-264: plan_action='keep' CAN have decision (optional, not enforced).
+        Only enforce that plan_action='new' requires decision.
+        """
+        if self.plan_action == "new" and self.decision is None:
+            raise ValueError("plan_action 'new' requires decision")
+        return self
 
 
 class StepResult(BaseModel):

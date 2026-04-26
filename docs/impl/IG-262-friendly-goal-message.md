@@ -10,7 +10,7 @@
 
 User goal queries are displayed as raw text with minimal formatting:
 - Input: "read 10 lines of project readme"
-- Display: "⌯⌲ read 10 lines of project readme"
+- Display: "read 10 lines of project readme"
 
 This feels impersonal and lacks context about what the agent will actually do.
 
@@ -20,7 +20,7 @@ This feels impersonal and lacks context about what the agent will actually do.
 
 Display friendly, action-oriented goal messages that reassure users:
 - Input: "read 10 lines of project readme"
-- Display: "⌯⌲ I will read the project readme files and show the first 10 lines"
+- Display: "I will read the project readme files and show the first 10 lines"
 
 ---
 
