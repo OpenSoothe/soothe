@@ -463,6 +463,7 @@ performance:
   parallel_tool_loading: true        # Load tool groups concurrently at startup
   parallel_subagent_loading: true    # Load subagent specs concurrently at startup
   parallel_protocol_resolution: true # Resolve protocols in parallel at startup
+  reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution (IG-053)
 
 # =============================================================================
 # LLM Tracing

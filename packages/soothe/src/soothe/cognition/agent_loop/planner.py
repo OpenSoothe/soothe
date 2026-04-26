@@ -915,10 +915,16 @@ class LLMPlanner:
                 # Status Assessment
                 assessment = await self._assess_status(messages, goal, state.iteration)
 
-                # IG-053: Guard - Reject "done" status at iteration 0 with no execution
+                # IG-053: Config-driven guard - Reject "done" status at iteration 0 with no execution
                 # Prevents false "done" that causes hanging and fabricated final reports
+                # Default: disabled (allows conversational goals to complete at iteration 0)
                 if assessment.status == "done":
-                    if state.iteration == 0 and len(state.step_results) == 0:
+                    # Check if guard is enabled via config
+                    guard_enabled = False  # Default to disabled per config default
+                    if self._config is not None:
+                        guard_enabled = self._config.performance.reject_done_at_iteration_zero
+
+                    if guard_enabled and state.iteration == 0 and len(state.step_results) == 0:
                         logger.warning(
                             "[Guard] Rejecting 'done' at iteration 0 with no execution - forcing 'replan'"
                         )
