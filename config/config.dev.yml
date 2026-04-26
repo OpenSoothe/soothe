@@ -27,7 +27,7 @@ providers:
       - deepseek-v3.2
 
   - name: mlxserver
-    provider_type: openai
+    provider_type: limited_openai
     api_base_url: "http://100.75.70.86:9271/v1"
     api_key: "fakeapikey"
     models:

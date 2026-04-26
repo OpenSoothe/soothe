@@ -425,8 +425,8 @@ class SootheConfig(BaseSettings):
         provider_type = provider_name
         if provider:
             provider_type = provider.provider_type
-            # LMStudio providers use OpenAI API, but need special handling later
-            actual_provider_type = "openai" if provider_type == "lmstudio" else provider_type
+            # Limited OpenAI providers use OpenAI API, but need special handling later
+            actual_provider_type = "openai" if provider_type == "limited_openai" else provider_type
 
             if provider.api_base_url:
                 resolved = _resolve_provider_env(
@@ -490,12 +490,12 @@ class SootheConfig(BaseSettings):
 
         model = init_chat_model(init_str, streaming=True, **kwargs)
 
-        # Check if this is an LMS-OpenAI provider (LMStudio compatibility)
+        # Check if this is a limited OpenAI provider (limited API compatibility)
         if provider_name:
             provider = self._find_provider(provider_name)
-            if provider and provider.provider_type == "lmstudio":
+            if provider and provider.provider_type == "limited_openai":
                 logger.info(
-                    "Provider '%s' is LMStudio type, applying compatibility wrapper",
+                    "Provider '%s' is limited_openai type, applying compatibility wrapper",
                     provider_name,
                 )
                 from soothe.core.llm.wrappers import LimitedProviderModelWrapper
@@ -559,12 +559,12 @@ class SootheConfig(BaseSettings):
 
         model = init_chat_model(init_str, streaming=True, **merged_kwargs)
 
-        # Check if this is an LMS-OpenAI provider (limited API compatibility)
+        # Check if this is a limited OpenAI provider (limited API compatibility)
         if provider_name:
             provider = self._find_provider(provider_name)
-            if provider and provider.provider_type == "lmstudio":
+            if provider and provider.provider_type == "limited_openai":
                 logger.info(
-                    "Provider '%s' is LMStudio type, applying compatibility wrapper",
+                    "Provider '%s' is limited_openai type, applying compatibility wrapper",
                     provider_name,
                 )
                 from soothe.core.llm.wrappers import LimitedProviderModelWrapper
@@ -669,9 +669,9 @@ class SootheConfig(BaseSettings):
         (``OPENAI_API_KEY``, ``OLLAMA_HOST``, etc.) if not already present.
         """
         for provider in self.providers:
-            # LMS-OpenAI providers use OpenAI API format
+            # Limited OpenAI providers use OpenAI API format
             provider_type = provider.provider_type
-            if provider_type in ("openai", "lmstudio") and provider.api_key:
+            if provider_type in ("openai", "limited_openai") and provider.api_key:
                 resolved_key = _resolve_provider_env(
                     provider.api_key,
                     provider_name=provider.name,
