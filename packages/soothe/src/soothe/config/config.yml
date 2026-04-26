@@ -19,7 +19,6 @@ providers:
       - gpt-4o
       - gpt-4o-mini
       - o3-mini
-    # supports_advanced_tool_choice: true  # Default: true (OpenAI supports full tool_choice objects)
 
   # OpenAI-compatible (DashScope, OpenRouter, vLLM):
   # - name: dashscope
@@ -31,21 +30,19 @@ providers:
   # LMStudio (local models) - LIMITED OpenAI-compatible API:
   # LMStudio only accepts simple string values for tool_choice ("none", "auto", "required")
   # and doesn't support the full object format like {"type": "function", "function": {"name": "..."}}
-  # Set supports_advanced_tool_choice: false to force json_mode for structured output
+  # Use provider_type: lmstudio for LMStudio compatibility handling
   # - name: lmstudio
-  #   provider_type: openai
+  #   provider_type: lmstudio
   #   api_base_url: http://localhost:1234/v1
   #   api_key: "lmstudio"  # LMStudio doesn't require a real API key
   #   models: [google/gemma-4-26b-a4b]
-  #   supports_advanced_tool_choice: false  # Force json_mode for structured output
 
   # Ollama (local models) - LIMITED OpenAI-compatible API:
-  # Ollama also has limited tool_choice support, set supports_advanced_tool_choice: false
-  # - name: ollama
-  #   provider_type: ollama
+  # Ollama also has limited tool_choice support, use provider_type: lmstudio
+  # - name: ollama_lmstudio
+  #   provider_type: lmstudio
   #   api_base_url: http://localhost:11434
   #   models: [llama3.2, qwen3:8b, deepseek-r1:14b, nomic-embed-text:latest]
-  #   supports_advanced_tool_choice: false  # Force json_mode for structured output
 
   # Anthropic:
   # - name: anthropic

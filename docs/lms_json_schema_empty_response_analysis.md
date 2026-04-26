@@ -21,7 +21,7 @@ During real-world testing with LMStudio endpoint (`http://100.75.70.86:9271/v1`)
 ```yaml
 providers:
   - name: lmstudio
-    provider_type: lms-openai  # Triggers LimitedProviderModelWrapper
+    provider_type: lmstudio  # Triggers LimitedProviderModelWrapper
     api_base_url: "http://100.75.70.86:9271/v1"
     api_key: "lm-studio"
     models:

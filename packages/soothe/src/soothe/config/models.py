@@ -43,14 +43,11 @@ class ModelProviderConfig(BaseModel):
             - ``openai``: Standard OpenAI API
             - ``anthropic``: Anthropic Claude API
             - ``ollama``: Ollama local inference
-            - ``lms-openai``: LMStudio and limited OpenAI-compatible APIs that:
+            - ``lmstudio``: LMStudio and limited OpenAI-compatible APIs that:
               * Accept json_schema response_format but return empty content
               * Return structured JSON in reasoning_content field (thinking tokens)
               * Only support string tool_choice values ("none", "auto", "required")
         models: Model names available from this provider (for documentation).
-        supports_advanced_tool_choice: DEPRECATED - Use provider_type="lms-openai"
-            instead for limited OpenAI-compatible providers. Whether this provider
-            supports the full OpenAI-style ``tool_choice`` object format.
     """
 
     name: str

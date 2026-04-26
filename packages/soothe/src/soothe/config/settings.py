@@ -425,8 +425,8 @@ class SootheConfig(BaseSettings):
         provider_type = provider_name
         if provider:
             provider_type = provider.provider_type
-            # LMS-OpenAI providers use OpenAI API, but need special handling later
-            actual_provider_type = "openai" if provider_type == "lms-openai" else provider_type
+            # LMStudio providers use OpenAI API, but need special handling later
+            actual_provider_type = "openai" if provider_type == "lmstudio" else provider_type
 
             if provider.api_base_url:
                 resolved = _resolve_provider_env(
@@ -493,9 +493,9 @@ class SootheConfig(BaseSettings):
         # Check if this is an LMS-OpenAI provider (LMStudio compatibility)
         if provider_name:
             provider = self._find_provider(provider_name)
-            if provider and provider.provider_type == "lms-openai":
+            if provider and provider.provider_type == "lmstudio":
                 logger.info(
-                    "Provider '%s' is LMS-OpenAI type (LMStudio), applying compatibility wrapper",
+                    "Provider '%s' is LMStudio type, applying compatibility wrapper",
                     provider_name,
                 )
                 from soothe.core.llm.wrappers import LimitedProviderModelWrapper
@@ -562,9 +562,9 @@ class SootheConfig(BaseSettings):
         # Check if this is an LMS-OpenAI provider (limited API compatibility)
         if provider_name:
             provider = self._find_provider(provider_name)
-            if provider and provider.provider_type == "lms-openai":
+            if provider and provider.provider_type == "lmstudio":
                 logger.info(
-                    "Provider '%s' is LMS-OpenAI type, applying compatibility wrapper",
+                    "Provider '%s' is LMStudio type, applying compatibility wrapper",
                     provider_name,
                 )
                 from soothe.core.llm.wrappers import LimitedProviderModelWrapper
@@ -671,7 +671,7 @@ class SootheConfig(BaseSettings):
         for provider in self.providers:
             # LMS-OpenAI providers use OpenAI API format
             provider_type = provider.provider_type
-            if provider_type in ("openai", "lms-openai") and provider.api_key:
+            if provider_type in ("openai", "lmstudio") and provider.api_key:
                 resolved_key = _resolve_provider_env(
                     provider.api_key,
                     provider_name=provider.name,
