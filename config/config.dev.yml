@@ -132,32 +132,30 @@ protocols:
 # =============================================================================
 # Persistence Configuration
 # =============================================================================
-# RFC-612: Multi-database PostgreSQL architecture
+# Development: SQLite for local development (simple setup, no external services)
 persistence:
-  default_backend: postgresql  # Use PostgreSQL as default backend
+  default_backend: sqlite  # SQLite for development (PostgreSQL for production)
 
-  postgres_base_dsn: "postgresql://postgres:postgres@localhost:6432"
-
-  postgres_databases:
-    checkpoints: soothe_checkpoints  # LangGraph + AgentLoop checkpoints (IG-055 shared)
-    metadata: soothe_metadata        # Thread metadata (DurabilityProtocol)
-    vectors: soothe_vectors          # pgvector embeddings
-    memory: soothe_memory            # MemU long-term memory
+  # SQLite paths (optional - empty uses $SOOTHE_DATA_DIR/*.db)
+  # metadata_sqlite_path: ""   # Empty = $SOOTHE_DATA_DIR/metadata.db
+  # checkpoint_sqlite_path: "" # Empty = $SOOTHE_DATA_DIR/checkpoints.db
 
 # =============================================================================
 # Vector Store Providers
 # =============================================================================
-# RFC-612: Vector store DSN auto-resolved from persistence.postgres_base_dsn + vectors database
-vector_stores:
-  - name: pgvector_default
-    provider_type: pgvector
-    # DSN auto-resolved from postgres_base_dsn + postgres_databases.vectors
-    # No explicit dsn needed when using RFC-612 multi-database architecture
-    pool_size: 5
-    index_type: hnsw
-
-vector_store_router:
-  default: pgvector_default:soothe_default
+# Note: SQLite doesn't support vector embeddings. For development without pgvector,
+# vectors will be stored in memory or skip embeddings. For vector support in dev,
+# use PostgreSQL or configure a separate pgvector instance.
+# Uncomment below if you have a pgvector instance for development:
+# vector_stores:
+#   - name: pgvector_default
+#     provider_type: pgvector
+#     dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"
+#     pool_size: 5
+#     index_type: hnsw
+#
+# vector_store_router:
+#   default: pgvector_default:soothe_default
 
 subagents:
   browser:
