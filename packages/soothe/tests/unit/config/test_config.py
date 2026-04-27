@@ -3,9 +3,12 @@
 import pytest
 
 from soothe.config import (
+    DurabilityProtocolConfig,
     MCPServerConfig,
     ModelProviderConfig,
     ModelRouter,
+    PersistenceConfig,
+    ProtocolsConfig,
     SootheConfig,
     SubagentConfig,
     ToolsConfig,
@@ -223,6 +226,39 @@ class TestModelRouter:
     def test_unknown_role_fallback(self) -> None:
         cfg = SootheConfig(router=ModelRouter(default="test:model"))
         assert cfg.resolve_model("nonexistent") == "test:model"
+
+    # Backend Inheritance Tests
+    def test_resolve_backend_default_inheritance(self) -> None:
+        """Test 'default' backend inherits from persistence.default_backend."""
+        cfg = SootheConfig(
+            persistence=PersistenceConfig(default_backend="postgresql"),
+            protocols=ProtocolsConfig(durability=DurabilityProtocolConfig(backend="default")),
+        )
+        assert cfg.resolve_backend("default") == "postgresql"
+        assert cfg.resolve_durability_backend() == "postgresql"
+
+    def test_resolve_backend_explicit_override(self) -> None:
+        """Test explicit backend overrides inheritance."""
+        cfg = SootheConfig(
+            persistence=PersistenceConfig(default_backend="postgresql"),
+            protocols=ProtocolsConfig(durability=DurabilityProtocolConfig(backend="sqlite")),
+        )
+        assert cfg.resolve_backend("sqlite") == "sqlite"
+        assert cfg.resolve_durability_backend() == "sqlite"
+
+    def test_resolve_checkpointer_backend_inheritance(self) -> None:
+        """Test checkpointer backend inheritance."""
+        cfg = SootheConfig(
+            persistence=PersistenceConfig(default_backend="postgresql"),
+            protocols=ProtocolsConfig(durability=DurabilityProtocolConfig(checkpointer="default")),
+        )
+        assert cfg.resolve_checkpointer_backend() == "postgresql"
+
+    def test_resolve_backend_concrete_values(self) -> None:
+        """Test concrete backend values pass through unchanged."""
+        cfg = SootheConfig(persistence=PersistenceConfig(default_backend="sqlite"))
+        assert cfg.resolve_backend("postgresql") == "postgresql"
+        assert cfg.resolve_backend("sqlite") == "sqlite"
 
 
 class TestModelProvider:
@@ -608,9 +644,9 @@ class TestToolsSettings:
         assert isinstance(cfg.tools.wizsearch, WebSearchConfig)
 
     def test_web_search_default_engines(self) -> None:
-        """Test that wizsearch default_engines defaults to ['tavily', 'duckduckgo']."""
+        """Test that wizsearch default_engines defaults to ['tavily']."""
         cfg = SootheConfig()
-        assert cfg.tools.wizsearch.default_engines == ["tavily", "duckduckgo"]
+        assert cfg.tools.wizsearch.default_engines == ["tavily"]
         assert cfg.tools.wizsearch.max_results_per_engine == 10
         assert cfg.tools.wizsearch.timeout == 30
         assert cfg.tools.wizsearch.enabled is True
@@ -621,14 +657,14 @@ class TestToolsSettings:
             tools=ToolsConfig(
                 wizsearch=WebSearchConfig(
                     enabled=True,
-                    default_engines=["tavily", "duckduckgo"],
+                    default_engines=["tavily"],
                     max_results_per_engine=15,
                     timeout=45,
                 )
             )
         )
         assert cfg.tools.wizsearch.enabled is True
-        assert cfg.tools.wizsearch.default_engines == ["tavily", "duckduckgo"]
+        assert cfg.tools.wizsearch.default_engines == ["tavily"]
         assert cfg.tools.wizsearch.max_results_per_engine == 15
         assert cfg.tools.wizsearch.timeout == 45
 

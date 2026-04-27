@@ -1,5 +1,5 @@
-# This docker-compose.yml file is used to start the weaviate and ollama services for testing.
-# It is not used in the production environment.
+# Docker Compose for Soothe development environment
+# RFC-612: Multi-database PostgreSQL architecture
 services:
   pgvector:
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/pgvector:pg17
@@ -7,12 +7,13 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: vectordb
+      # RFC-612: No default database - init-db.sql creates multiple databases
+      # POSTGRES_DB: vectordb  # Removed - using multi-database architecture
     ports:
-      - "5432:5432"
+      - "6432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./config/init-db.sql:/docker-entrypoint-initdb.d/10-create-soothe.sql:ro
+      - ./config/init-db.sql:/docker-entrypoint-initdb.d/10-init-databases.sql:ro
 
 volumes:
   postgres_data:

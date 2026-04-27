@@ -1,14 +1,7 @@
-# =============================================================================
-# Soothe Configuration
-# =============================================================================
+# Soothe Configuration Template
 # Use: soothe --config config/config.yml
-# All values are defaults unless noted. Remove sections you don't need.
 
-# =============================================================================
-# Model Providers
-# =============================================================================
-# Define LLM providers. api_key and api_base_url support ${ENV_VAR} syntax.
-# Set at least one provider with its API key.
+# Model Providers - Define LLM providers with API keys (supports ${ENV_VAR} syntax)
 
 providers:
   - name: openai
@@ -27,22 +20,12 @@ providers:
   #   api_key: "${DASHSCOPE_API_KEY}"
   #   models: [qwen-max]
 
-  # LMStudio (local models) - LIMITED OpenAI-compatible API:
-  # LMStudio only accepts simple string values for tool_choice ("none", "auto", "required")
-  # and doesn't support the full object format like {"type": "function", "function": {"name": "..."}}
-  # Use provider_type: lmstudio for LMStudio compatibility handling
+  # LMStudio/Ollama (local models) - Limited tool_choice support, use provider_type: limited_openai
   # - name: lmstudio
-  #   provider_type: lmstudio
+  #   provider_type: limited_openai
   #   api_base_url: http://localhost:1234/v1
-  #   api_key: "lmstudio"  # LMStudio doesn't require a real API key
+  #   api_key: "lmstudio"
   #   models: [google/gemma-4-26b-a4b]
-
-  # Ollama (local models) - LIMITED OpenAI-compatible API:
-  # Ollama also has limited tool_choice support, use provider_type: lmstudio
-  # - name: ollama_lmstudio
-  #   provider_type: lmstudio
-  #   api_base_url: http://localhost:11434
-  #   models: [llama3.2, qwen3:8b, deepseek-r1:14b, nomic-embed-text:latest]
 
   # Anthropic:
   # - name: anthropic
@@ -50,10 +33,7 @@ providers:
   #   api_key: "${ANTHROPIC_API_KEY}"
   #   models: [claude-sonnet-4-20250514]
 
-# =============================================================================
-# Model Router
-# =============================================================================
-# Maps roles to "provider:model". Unset roles fall back to "default".
+# Model Router - Maps purpose roles to "provider:model" (unset roles inherit from "default")
 
 router:
   default: "openai:gpt-4o-mini"
@@ -62,163 +42,82 @@ router:
   image: "openai:gpt-4o"
   embedding: "openai:text-embedding-3-small"
 
-# =============================================================================
-# Agent Behavior
-# =============================================================================
-
-embedding_dims: 1536
-debug: false
-activity_max_lines: 300
-# tui_debug: false   # SOOTHE_TUI_DEBUG — structured TUI trace logs (logger soothe.ux.tui.trace)
-
-# =============================================================================
-# UI Preferences
-# =============================================================================
-# Configure TUI preferences that persist across sessions.
-
-# ui:
-#   theme: langchain  # Theme name (langchain, langchain-light, textual-dark, textual-light, etc.)
-
-# =============================================================================
-# Update Preferences
-# =============================================================================
-# Configure auto-update behavior for CLI updates.
-
-# update:
-#   auto_update: false  # Enable/disable automatic CLI updates
-
-# =============================================================================
-# Autonomous Operation
-# =============================================================================
-# Configure autonomous iteration for long-running tasks. By default, requires
-# explicit user activation per thread for safety.
+# Autonomous Operation - Requires explicit user activation per thread (default: disabled)
 
 autonomous:
-  enabled_by_default: false  # New threads start in autonomous mode
-  max_iterations: 10         # Stop after N iterations without user input
-  max_retries: 2             # Retry failed goals before giving up
-  max_total_goals: 50        # Maximum goals allowed (RFC-0007 §5.6)
-  max_goal_depth: 5          # Maximum hierarchy depth (RFC-0007 §5.6)
-  enable_dynamic_goals: true # Enable/disable dynamic goal creation (RFC-0007 §5.4)
+  enabled_by_default: false
+  max_iterations: 10
+  max_retries: 2
+  max_total_goals: 50        # RFC-0007 §5.6
+  max_goal_depth: 5          # RFC-0007 §5.6
+  enable_dynamic_goals: true # RFC-0007 §5.4
 
-# =============================================================================
 # Agentic Loop Configuration (RFC-201)
-# =============================================================================
 
 agentic:
-  # Maximum loop iterations (default: 10, max: 50)
-  max_iterations: 10
+  max_iterations: 10  # Default: 10, max: 50
+  max_subagent_tasks_per_wave: 2  # Cap task completions per Execute wave (0 = unlimited, 1 = stop double-delegation)
+  agent_loop_output_contract_enabled: true  # CoreAgent omits tool output during Execute phase
+  final_response: adaptive  # adaptive | always_synthesize | always_last_execute (IG-199)
+  prior_conversation_limit: 10  # Prior messages for Plan prompts (isolated threads)
 
-  # Cap subagent ``task`` tool completions per Execute wave (0 = unlimited). Use 1 to stop double-delegation.
-  max_subagent_tasks_per_wave: 2
-
-  # Ask CoreAgent not to paste full tool output again during AgentLoop Execute phase
-  agent_loop_output_contract_enabled: true
-
-  # IG-199: On goal completion — adaptive picks last Execute text vs final CoreAgent report
-  final_response: adaptive  # adaptive | always_synthesize | always_last_execute
-
-  # Maximum prior messages to inject into Plan prompts
-  # Only used when Execute phase uses isolated threads (no checkpoint access)
-  prior_conversation_limit: 10
-
-  # Goal context injection configuration (RFC-609)
-  # Injects previous goal summaries into Plan/Execute phases for continuity
   goal_context:
-    # Number of previous goals for Plan phase (same-thread only)
-    plan_limit: 10  # Default: 10, range: 1-50
-    # Number of previous goals for Execute briefing (thread switch only)
-    execute_limit: 10  # Default: 10, range: 1-50
-    # Enable/disable goal context injection
-    enabled: true  # Default: true
+    plan_limit: 10  # Previous goals for Plan phase (range: 1-50)
+    execute_limit: 10  # Previous goals for Execute briefing (thread switch)
+    enabled: true
 
-  # Working memory for large step outputs (RFC-203)
   working_memory:
-    enabled: false  # Enable/disable working memory
-    max_inline_chars: 2000  # Max inline chars before spill
-    max_entry_chars_before_spill: 4000  # Threshold to spill to disk
+    enabled: false
+    max_inline_chars: 2000
+    max_entry_chars_before_spill: 4000
 
-  # Model context window token limit for percentage calculation (IG-151)
-  context_window_limit: 200000  # Claude models default (200k tokens)
+  context_window_limit: 200000  # Claude models default (IG-151)
 
-# =============================================================================
-# Output Streaming Configuration (RFC-614)
-# =============================================================================
-# Unified streaming framework for daemon → client messaging.
-# Controls real-time transmission of ALL AI outputs (not just final reports).
+# Output Streaming Configuration (RFC-614) - Daemon → client real-time messaging
 
 output_streaming:
-  enabled: true        # Enable streaming for all outputs
-  mode: streaming      # streaming or batch display mode
-  execution_streaming: true   # Stream execution phase (CoreAgent Act responses)
-  synthesis_streaming: true   # Stream synthesis phase (final report generation)
-  tool_response_streaming: false  # Experimental: stream tool responses
+  enabled: true
+  mode: streaming  # streaming | batch
+  execution_streaming: true
+  synthesis_streaming: true
+  tool_response_streaming: false  # Experimental
 
-# =============================================================================
-# Execution Limits
-# =============================================================================
-# Concurrency and resource limits for safe operation.
-# All limits support 0 = unlimited (disable that layer's semaphore).
+# Execution Limits - Concurrency and resource limits (0 = unlimited)
 
 execution:
   concurrency:
-    max_parallel_goals: 1         # Max goals running simultaneously (autonomous mode, 0 = unlimited)
-    max_parallel_steps: 3         # Max parallel plan steps (DAG-aware, 0 = unlimited)
-    max_parallel_subagents: 3     # Max subagents running simultaneously (0 = unlimited, reserved)
-    global_max_llm_calls: 9       # Cross-level LLM call circuit breaker (0 = unlimited)
+    max_parallel_goals: 1
+    max_parallel_steps: 3
+    max_parallel_subagents: 3
+    global_max_llm_calls: 9
     step_parallelism: dependency  # sequential | dependency | max
   recovery:
-    progressive_checkpoints: true   # Save checkpoint after each step/goal (RFC-0010)
-    auto_resume_on_start: false     # Auto-resume incomplete threads on daemon start
+    progressive_checkpoints: true  # RFC-0010
+    auto_resume_on_start: false
 
-# =============================================================================
-# Daemon Multi-Transport Configuration (RFC-0013)
-# =============================================================================
-# Configure daemon communication protocols for CLI, web UIs, and remote access.
-# WebSocket is the required bidirectional transport for all clients.
-# HTTP REST provides optional health checks and CRUD operations.
+# Daemon Multi-Transport Configuration (RFC-0013) - WebSocket (required) + HTTP REST (optional)
 
 daemon:
-  # Transport Layer Configuration
   transports:
-    # WebSocket - Required bidirectional transport for all clients
     websocket:
-      enabled: true         # Enable WebSocket server (default: false)
-      host: "127.0.0.1"     # Bind address (127.0.0.1 = localhost only)
-      port: 8765            # WebSocket port
-      tls_enabled: false    # Enable TLS (wss://) - recommended for remote access
-      tls_cert: null        # Path to TLS certificate file
-      tls_key: null         # Path to TLS private key file
-      cors_origins:         # Allowed CORS origins (pattern matching supported)
-        - "http://localhost:*"
-        - "http://127.0.0.1:*"
-      max_frame_size: 10485760  # Maximum WebSocket frame size in bytes (default: 10MB)
-
-    # HTTP REST API - For CRUD operations and file management
+      enabled: true
+      host: "127.0.0.1"
+      port: 8765
+      tls_enabled: false
+      cors_origins: ["http://localhost:*", "http://127.0.0.1:*"]
+      max_frame_size: 10485760  # 10MB
     http_rest:
-      enabled: false        # Enable HTTP REST server (default: false)
-      host: "127.0.0.1"     # Bind address (127.0.0.1 = localhost only)
-      port: 8766            # HTTP REST port
-      tls_enabled: false    # Enable TLS (https://) - recommended for remote access
-      tls_cert: null        # Path to TLS certificate file
-      tls_key: null         # Path to TLS private key file
-      cors_origins:         # Allowed CORS origins (pattern matching supported)
-        - "http://localhost:*"
-        - "http://127.0.0.1:*"
+      enabled: false
+      host: "127.0.0.1"
+      port: 8766
+      tls_enabled: false
+      cors_origins: ["http://localhost:*", "http://127.0.0.1:*"]
 
-  # Concurrent thread/query limit when multi-threading is enabled (RFC-402)
-  max_concurrent_threads: 100
+  max_concurrent_threads: 100  # RFC-402
+  max_input_queue_size: 1000  # IG-258: Prevents unbounded memory growth
+  max_concurrent_dispatches: 50  # IG-258: Prevents task explosion
 
-  # IG-258: Concurrent Performance Optimization
-  # Input queue limit prevents unbounded memory growth under high load
-  max_input_queue_size: 1000  # Maximum pending input messages (0 = unlimited)
-  # Message dispatch concurrency limit prevents task explosion
-  max_concurrent_dispatches: 50  # Maximum concurrent message handlers
-
-# =============================================================================
-# Subagents
-# =============================================================================
-# All subagents are enabled by default. Set enabled: false to disable.
+# Subagents - Enabled by default (set enabled: false to disable)
 
 subagents:
   browser:
@@ -286,19 +185,8 @@ tools:
   # Enhanced multi-engine search (formerly web_search, now wizsearch)
   wizsearch:
     enabled: true       # wizsearch_search, wizsearch_crawl
-    # NOTE: deepagents provides basic web_search/fetch_url tools
-    # wizsearch provides enhanced multi-engine search and headless crawl capabilities
     default_engines:
-      - tavily          # Requires TAVILY_API_KEY
-      - googleai        # Requires GEMINI_API_KEY
-      # - serper          # Requires SERPER_API_KEY
-      # - duckduckgo      # NO API Key required
-      # - baidu           # Chinese search engine
-      # - wechat          # WeChat article search
-      # - brave           # NO API Key required
-      # - bing            # NO API Key required
-      # - google          # NO API Key required
-      # - searxng         # Self-hosted metasearch engine
+      - tavily          # Requires TAVILY_API_KEY (tavily-only default)
     crawler: wizsearch    # Or jina, requires JINA_API_KEY
     max_results_per_engine: 10
     timeout: 30
@@ -324,13 +212,7 @@ mcp_servers: []
   # - url: http://localhost:3000/mcp
   #   transport: sse
 
-# =============================================================================
-# Plugins
-# =============================================================================
-# Third-party plugins can be loaded via:
-# 1. Python entry points (preferred for published packages)
-# 2. Config declaration (explicit module path)
-# 3. Filesystem (~/.soothe/plugins/)
+# Plugins - Load via entry points, config declaration, or filesystem (~/.soothe/plugins/)
 
 plugins: []
   # Example: Load a plugin via config declaration
@@ -345,104 +227,71 @@ plugins: []
   # - name: execution
   #   enabled: false
 
-# =============================================================================
 # Skills & Memory
-# =============================================================================
 
 skills: []
 memory: []
 
-# =============================================================================
-# Security Configuration
-# =============================================================================
-# Configure filesystem access control and security policies.
+# Security Configuration - Filesystem access control and security policies
 
 security:
-  # Allow access to paths outside the workspace directory
   allow_paths_outside_workspace: true
-  # Require user approval for paths outside workspace (when above is true)
   require_approval_for_outside_paths: false
 
-  # Path-based access control (glob patterns)
-  # Evaluation order: 1) denied_paths (highest priority), 2) allowed_paths, 3) workspace boundary
+  # Path-based access control (glob patterns) - Evaluation: denied_paths > allowed_paths > workspace
   denied_paths:
-    - "~/.ssh/**"           # SSH keys
-    - "~/.gnupg/**"         # GPG keys
-    - "~/.aws/**"           # AWS credentials
-    - "**/.env"             # Environment files
-    - "**/credentials.json" # Credentials files
-    - "**/secrets.json"     # Secrets files
+    - "~/.ssh/**"
+    - "~/.gnupg/**"
+    - "~/.aws/**"
+    - "**/.env"
+    - "**/credentials.json"
+    - "**/secrets.json"
   allowed_paths:
-    - "**"                  # Allow all paths (can be restricted for tighter security)
+    - "**"  # Allow all (restrict for tighter security)
 
-  # File type restrictions
-  denied_file_types: []     # File extensions that are completely denied
-  require_approval_for_file_types:  # File extensions requiring user approval
-    - ".env"
-    - ".pem"
-    - ".key"
-    - ".p12"
-    - ".pfx"
-    - ".crt"
-
-# =============================================================================
-# Protocol Backends
-# =============================================================================
-# Configure the backend implementations for each core protocol.
-# All protocols support multiple backends with different tradeoffs.
+  denied_file_types: []
+  require_approval_for_file_types: [".env", ".pem", ".key", ".p12", ".pfx", ".crt"]
 
 protocols:
-  # Planner Protocol: Task decomposition and execution planning
   planner:
     routing: auto  # auto | always_direct | always_planner | always_claude
 
-  # Policy Protocol: Permission management and access control
   policy:
-    profile: standard  # Named profile from policy_profiles.yml
+    profile: standard
 
-  # Memory Protocol: Cross-thread long-term memory
   memory:
     enabled: true
-    persist_dir: ""   # Empty = ~/.soothe/memory/
-    # Use Soothe's model router roles (configured in router section above)
-    llm_chat_role: fast  # Use fast model for memory operations (default)
-    llm_embed_role: embedding  # Use embedding model for vector operations (default)
-    enable_embeddings: true  # Enable embedding-based similarity search
-    enable_auto_categorization: true  # Enable automatic categorization using LLM
-    enable_category_summaries: true  # Enable category summary generation
+    persist_dir: ""  # Empty = ~/.soothe/memory/
+    llm_chat_role: fast
+    llm_embed_role: embedding
+    enable_embeddings: true
+    enable_auto_categorization: true
+    enable_category_summaries: true
 
-  # Durability Protocol: Thread lifecycle and state persistence
   durability:
-    backend: sqlite  # json | rocksdb | postgresql | sqlite
-    persist_dir: ""  # Empty = SOOTHE_HOME/durability/
-    checkpointer: sqlite  # LangGraph checkpoint backend: postgresql | sqlite | memory
-    thread_inactivity_timeout_hours: 72  # Hours before inactive threads are suspended
+    thread_inactivity_timeout_hours: 72
 
-# =============================================================================
-# Persistence Configuration
-# =============================================================================
-# Unified persistence settings for protocol backends (not vector stores).
-# PostgreSQL is recommended for production deployments.
+# Persistence Configuration - Unified settings for protocol backends (RFC-612 multi-database architecture)
 
 persistence:
-  # Default backend for new protocols (can be overridden per-protocol below)
-  # Options: json (simple files), rocksdb (embedded KV), sqlite (local default), postgresql (production)
-  default_backend: sqlite
+  default_backend: sqlite  # sqlite (development) | postgresql (production)
 
-  # SQLite paths for metadata and checkpoints (used when default_backend is sqlite)
+  # RFC-612: PostgreSQL multi-database architecture (uncomment for postgresql)
+  # postgres_base_dsn: "postgresql://user:pass@host:port"
+  # postgres_databases:
+  #   checkpoints: soothe_checkpoints  # LangGraph + AgentLoop checkpoints
+  #   metadata: soothe_metadata        # DurabilityProtocol ThreadInfo
+  #   vectors: soothe_vectors          # pgvector embeddings
+  #   memory: soothe_memory            # MemU long-term memory
+  # Vector stores: "${PERSISTENCE_POSTGRES_BASE_DSN}/${PERSISTENCE_POSTGRES_VECTORS_DB}"
+
+  # SQLite paths (used when default_backend: sqlite)
   # metadata_sqlite_path: ""   # Empty = $SOOTHE_DATA_DIR/metadata.db
   # checkpoint_sqlite_path: "" # Empty = $SOOTHE_DATA_DIR/checkpoints.db
 
-  # PostgreSQL DSN for Soothe metadata backends
-  # (checkpointer, durability, memory backends)
-  soothe_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
+  # Legacy (deprecated): soothe_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
 
-# =============================================================================
-# Vector Store Providers
-# =============================================================================
-# Define named vector store backends for VectorContext.
-# Similar to LLM providers, each vector store has a type and configuration.
-# Use vector_store_router to assign components to providers.
+# Vector Store Providers - Named backends for VectorContext (similar to LLM providers)
 
 vector_stores:
   - name: pgvector_default
@@ -452,74 +301,51 @@ vector_stores:
     index_type: hnsw
 
 vector_store_router:
-  # Map component roles to "provider_name:collection_name"
-  #
-  # Format: "provider_name:collection_name"
-  # - provider_name must match a name from vector_stores list above
-  # - collection_name is specific to each component
-  #
-  # All roles use pgvector with the configured DSN by default
-  default: pgvector_default:soothe_default
+  default: pgvector_default:soothe_default  # Format: "provider_name:collection_name"
 
-# =============================================================================
-# Performance & Startup
-# =============================================================================
-# Tune agent startup and runtime performance optimizations.
+# Performance & Startup - Tune agent startup and runtime optimizations
 
 performance:
-  enabled: true                      # Master switch for all performance optimizations
-  unified_classification: true       # Enable LLM-based query classification
-  classification_mode: llm           # llm | disabled
-  optimize_system_prompts: true      # Enable dynamic system prompt adjustment
-  template_planning: true            # Use template plans for simple queries
-  parallel_pre_stream: true          # Run memory operations in parallel
-  parallel_tool_loading: true        # Load tool groups concurrently at startup
-  parallel_subagent_loading: true    # Load subagent specs concurrently at startup
-  parallel_protocol_resolution: true # Resolve protocols in parallel at startup
-  reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution (IG-053)
+  enabled: true
+  unified_classification: true
+  classification_mode: llm
+  optimize_system_prompts: true
+  template_planning: true
+  parallel_pre_stream: true
+  parallel_tool_loading: true
+  parallel_subagent_loading: true
+  parallel_protocol_resolution: true
+  reject_done_at_iteration_zero: false  # IG-053
 
-# =============================================================================
-# LLM Tracing
-# =============================================================================
-# Configure LLM request/response tracing for debugging.
-# Logs comprehensive information about LLM calls including prompts, responses,
-# token usage, and latency. Useful for debugging and optimization.
+# LLM Tracing - Request/response tracing for debugging (logs prompts, responses, tokens, latency)
 
 llm_tracing:
-  enabled: false             # Enable LLM tracing middleware
-  log_preview_length: 200    # Maximum characters to log for message previews (50-1000)
+  enabled: false
+  log_preview_length: 200  # Max chars for message previews (50-1000)
 
-# =============================================================================
 # Logging & Observability
-# =============================================================================
-# Configure logging, thread history, and debugging features.
 
 logging:
-  # Backend file logging (Python logging module)
   file:
-    level: INFO              # File logging level (DEBUG, INFO, WARNING, ERROR)
-    path: ""                 # Empty = SOOTHE_HOME/logs/soothe.log
-    max_bytes: 5242880       # 5 MB before rotation
-    backup_count: 3          # Number of rotating backups
+    level: INFO
+    path: ""  # Empty = SOOTHE_HOME/logs/soothe.log
+    max_bytes: 5242880  # 5MB before rotation
+    backup_count: 3
 
-  # Console logging (disabled by default for TUI compatibility)
   console:
-    enabled: false           # Enable to see backend logs in terminal
-    level: WARNING           # Console logging level (typically higher than file)
-    stream: stderr           # stdout or stderr
+    enabled: false  # Disabled by default for TUI compatibility
+    level: WARNING
+    stream: stderr
     format: "%(levelname)-8s %(name)s %(message)s"
 
-  # Progress event visibility (TUI/headless activity display)
   verbosity: normal  # minimal | normal | detailed | debug
 
-  # Thread conversation logging for audit and recovery
   thread_logging:
     enabled: true
-    dir: ""                  # Empty = SOOTHE_DATA_DIR/threads/{thread_id}/logs/
-    retention_days: 30       # Auto-delete threads older than N days
-    max_size_mb: 100         # Max total size (not enforced yet)
+    dir: ""  # Empty = SOOTHE_DATA_DIR/threads/{thread_id}/logs/
+    retention_days: 30
+    max_size_mb: 100
 
-  # Default text preview settings (unified truncation utility)
   preview_defaults:
-    chars: 200               # Default character limit for char-based previews
-    lines: 5                 # Default line limit for line-based previews
+    chars: 200
+    lines: 5

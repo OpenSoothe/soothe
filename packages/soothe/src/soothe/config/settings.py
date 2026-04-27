@@ -386,6 +386,40 @@ class SootheConfig(BaseSettings):
             return value
         return self.router.default
 
+    def resolve_backend(self, backend: str) -> str:
+        """Resolve backend value, inheriting from persistence.default_backend if 'default'.
+
+        Args:
+            backend: Backend value from protocol config ('postgresql', 'sqlite', 'default').
+
+        Returns:
+            Concrete backend value ('postgresql' or 'sqlite').
+
+        Example:
+            config.persistence.default_backend = "postgresql"
+            config.protocols.durability.backend = "default"
+            config.resolve_backend("default")  # Returns "postgresql"
+        """
+        if backend == "default":
+            return self.persistence.default_backend
+        return backend
+
+    def resolve_checkpointer_backend(self) -> str:
+        """Resolve checkpointer backend from protocols.durability.checkpointer.
+
+        Returns:
+            Concrete backend value ('postgresql' or 'sqlite').
+        """
+        return self.resolve_backend(self.protocols.durability.checkpointer)
+
+    def resolve_durability_backend(self) -> str:
+        """Resolve durability backend from protocols.durability.backend.
+
+        Returns:
+            Concrete backend value ('postgresql' or 'sqlite').
+        """
+        return self.resolve_backend(self.protocols.durability.backend)
+
     def get_plugin_config(self, name: str) -> dict[str, Any]:
         """Get plugin-specific configuration.
 
