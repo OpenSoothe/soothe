@@ -145,11 +145,13 @@ class AgentLoop:
         Yields:
             Tuples of (event_type, event_data) for progress updates
         """
-        # Initialize AgentLoop state manager (RFC-205, IG-246: loop_id parameter)
-        state_manager = AgentLoopStateManager(loop_id, Path(workspace) if workspace else None)
+        # Initialize AgentLoop state manager (RFC-205, IG-246: loop_id parameter, IG-055: config)
+        state_manager = AgentLoopStateManager(
+            loop_id, Path(workspace) if workspace else None, config=self.config
+        )
 
-        # Initialize checkpoint anchor manager for execution synchronization
-        anchor_manager = CheckpointAnchorManager(state_manager.loop_id)
+        # Initialize checkpoint anchor manager for execution synchronization (IG-055: pass config)
+        anchor_manager = CheckpointAnchorManager(state_manager.loop_id, config=self.config)
 
         # IG-226: Handle thread continuation intent
         thread_continuation_mode = False

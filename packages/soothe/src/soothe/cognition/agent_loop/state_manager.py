@@ -1,8 +1,9 @@
-"""AgentLoop State Manager (RFC-205, RFC-608).
+"""AgentLoop State Manager (RFC-205, RFC-608, IG-055).
 
 Manages checkpoint lifecycle: initialize, save, load, recovery.
 RFC-608: Multi-thread spanning with loop_id as primary key.
 RFC-409: Unified global SQLite persistence backend (loop_checkpoints.db).
+IG-055: PostgreSQL backend support using soothe_checkpoints database.
 IG-258 Phase 2: Connection pooling to eliminate database lock contention.
 """
 
@@ -42,6 +43,7 @@ if TYPE_CHECKING:
         StepResult,
     )
     from soothe.cognition.agent_loop.working_memory import LoopWorkingMemory
+    from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
 
@@ -49,29 +51,54 @@ logger = logging.getLogger(__name__)
 class AgentLoopStateManager:
     """Manages AgentLoop checkpoint lifecycle (RFC-608: loop-scoped, multi-thread).
 
-    Uses unified global SQLite backend (loop_checkpoints.db) per RFC-409.
-    IG-258 Phase 2: Instance-level connection pooling for concurrent checkpoint operations.
+    IG-055: Configuration-driven backend selection (PostgreSQL or SQLite).
+    Uses PostgreSQL soothe_checkpoints database when configured, SQLite fallback.
+    IG-258 Phase 2: Connection pooling for concurrent checkpoint operations.
     """
 
     def __init__(
-        self, loop_id: str | None = None, workspace: Path | None = None, reader_pool_size: int = 5
+        self,
+        loop_id: str | None = None,
+        workspace: Path | None = None,
+        reader_pool_size: int = 5,
+        config: SootheConfig | None = None,
     ) -> None:  # noqa: ARG002
         """Initialize with loop_id (primary key), not thread_id.
 
-        IG-258 Phase 2: Instance-level connection pool (matching SQLitePersistStore pattern).
+        IG-055: Configuration-driven backend selection.
+        IG-258 Phase 2: Instance-level connection pool.
 
         Args:
             loop_id: Loop identifier (UUID or existing). None generates new UUID.
             workspace: Optional workspace path (not used for checkpoint storage)
             reader_pool_size: Number of reader connections for concurrent reads (Phase 2).
+            config: SootheConfig for backend selection (PostgreSQL vs SQLite).
         """
         self.loop_id = loop_id or str(uuid.uuid4())
-        # Checkpoint stored in global loop_checkpoints.db (loop_id as partition key)
-        self.db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
         self.run_dir = PersistenceDirectoryManager.get_loop_directory(
             self.loop_id
         )  # For reports/working_memory
         self._checkpoint: AgentLoopCheckpoint | None = None
+
+        # IG-055: Backend selection based on persistence.default_backend
+        self._backend_type = "sqlite"  # Default
+        self._postgres_backend = None
+        self._postgres_dsn = None
+
+        if config and config.persistence.default_backend == "postgresql":
+            self._backend_type = "postgresql"
+            self._postgres_dsn = config.resolve_postgres_dsn_for_database("checkpoints")
+            logger.info(
+                "AgentLoop using PostgreSQL backend (soothe_checkpoints database): loop_id=%s",
+                self.loop_id,
+            )
+        else:
+            # SQLite fallback (backward compatibility)
+            self.db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
+            logger.info(
+                "AgentLoop using SQLite backend (loop_checkpoints.db): loop_id=%s",
+                self.loop_id,
+            )
 
         # Instance-level connection pool (Phase 2) - matching SQLitePersistStore pattern
         self._reader_pool_size = reader_pool_size
@@ -80,23 +107,45 @@ class AgentLoopStateManager:
         self._pool_semaphore = asyncio.Semaphore(reader_pool_size)
         self._init_lock = asyncio.Lock()
 
+    async def _ensure_backend_initialized(self) -> None:
+        """Lazy backend initialization (IG-055: PostgreSQL or SQLite).
+
+        Ensures appropriate backend is ready for operations.
+        """
+        if self._backend_type == "postgresql":
+            if self._postgres_backend is None:
+                from soothe.cognition.agent_loop.persistence.postgres_backend import (
+                    PostgreSQLPersistenceBackend,
+                )
+
+                async with self._init_lock:
+                    if self._postgres_backend is None:
+                        self._postgres_backend = PostgreSQLPersistenceBackend(
+                            dsn=self._postgres_dsn, pool_size=self._reader_pool_size
+                        )
+                        # Schema initialization happens in backend
+                        logger.info("AgentLoop PostgreSQL backend ready: loop_id=%s", self.loop_id)
+        else:
+            # SQLite backend initialization
+            if self._writer_conn is None:
+                async with self._init_lock:
+                    if self._writer_conn is None:
+                        await asyncio.to_thread(self._init_writer_connection_sync)
+
     async def _ensure_writer_connection(self) -> sqlite3.Connection:
         """Lazy writer connection initialization with WAL mode (Phase 2).
+
+        IG-055: SQLite-only, PostgreSQL uses connection pool.
 
         Returns:
             Active SQLite writer connection.
         """
-        if self._writer_conn is not None:
-            return self._writer_conn
+        if self._backend_type == "postgresql":
+            # PostgreSQL doesn't use direct writer connection
+            raise RuntimeError("PostgreSQL backend doesn't use writer connection")
 
-        async with self._init_lock:
-            if self._writer_conn is not None:
-                return self._writer_conn
-
-            # Initialize writer in thread pool (sync operation)
-            await asyncio.to_thread(self._init_writer_connection_sync)
-
-            return self._writer_conn
+        await self._ensure_backend_initialized()
+        return self._writer_conn
 
     def _init_writer_connection_sync(self) -> None:
         """Sync writer initialization executed in thread pool."""
@@ -210,11 +259,29 @@ class AgentLoopStateManager:
     async def load(self) -> AgentLoopCheckpoint | None:
         """Load existing loop checkpoint (RFC-608: by loop_id).
 
-        IG-258 Phase 2: Use reader connection pool for concurrent reads.
+        IG-055: Backend-aware load (PostgreSQL or SQLite).
+        IG-258 Phase 2: Use reader connection pool for concurrent reads (SQLite).
 
         Returns:
             AgentLoopCheckpoint if exists and valid (v2.0 schema), None otherwise
         """
+        # IG-055: PostgreSQL backend
+        if self._backend_type == "postgresql":
+            await self._ensure_backend_initialized()
+            checkpoint = await self._postgres_backend.load_checkpoint(self.loop_id)
+
+            if checkpoint:
+                self._checkpoint = checkpoint
+                logger.info(
+                    "Loaded loop %s checkpoint from PostgreSQL (status %s, %d goals, %d threads)",
+                    self.loop_id,
+                    checkpoint.status,
+                    len(checkpoint.goal_history),
+                    len(checkpoint.thread_ids),
+                )
+            return checkpoint
+
+        # SQLite backend (existing implementation)
         if not self.db_path.exists():
             return None
 
@@ -328,7 +395,7 @@ class AgentLoopStateManager:
                         await self._save_checkpoint_to_db(checkpoint)
 
                 logger.info(
-                    "Loaded loop %s checkpoint (status %s, %d goals, %d threads)",
+                    "Loaded loop %s checkpoint from SQLite (status %s, %d goals, %d threads)",
                     self.loop_id,
                     checkpoint.status,
                     len(checkpoint.goal_history),
@@ -379,17 +446,21 @@ class AgentLoopStateManager:
         await self._save_checkpoint_to_db(checkpoint)
 
     async def _save_checkpoint_to_db(self, checkpoint: AgentLoopCheckpoint) -> None:
-        """Save checkpoint to SQLite database.
+        """Save checkpoint to database (IG-055: PostgreSQL or SQLite).
 
-        IG-258 Phase 2: Use single writer connection for consistency.
+        IG-258 Phase 2: Use single writer connection for SQLite consistency.
+        IG-055: PostgreSQL uses connection pool for async operations.
         """
         checkpoint.updated_at = datetime.now(UTC)
 
-        # Get writer connection (Phase 2)
-        conn = await self._ensure_writer_connection()
-
-        # Execute save operations in thread pool
-        await asyncio.to_thread(self._save_checkpoint_sync, conn, checkpoint)
+        if self._backend_type == "postgresql":
+            # PostgreSQL async save
+            await self._ensure_backend_initialized()
+            await self._postgres_backend.save_checkpoint(checkpoint)
+        else:
+            # SQLite save via writer connection
+            conn = await self._ensure_writer_connection()
+            await asyncio.to_thread(self._save_checkpoint_sync, conn, checkpoint)
 
         self._checkpoint = checkpoint
 

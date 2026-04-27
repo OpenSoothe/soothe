@@ -276,20 +276,18 @@ protocols:
 persistence:
   default_backend: sqlite  # sqlite (development) | postgresql (production)
 
-  # RFC-612: PostgreSQL multi-database architecture (uncomment for postgresql)
+  # RFC-612: PostgreSQL multi-database architecture
+  # Uncomment for postgresql production setup:
   # postgres_base_dsn: "postgresql://user:pass@host:port"
   # postgres_databases:
   #   checkpoints: soothe_checkpoints  # LangGraph + AgentLoop checkpoints
   #   metadata: soothe_metadata        # DurabilityProtocol ThreadInfo
   #   vectors: soothe_vectors          # pgvector embeddings
   #   memory: soothe_memory            # MemU long-term memory
-  # Vector stores: "${PERSISTENCE_POSTGRES_BASE_DSN}/${PERSISTENCE_POSTGRES_VECTORS_DB}"
 
   # SQLite paths (used when default_backend: sqlite)
   # metadata_sqlite_path: ""   # Empty = $SOOTHE_DATA_DIR/metadata.db
   # checkpoint_sqlite_path: "" # Empty = $SOOTHE_DATA_DIR/checkpoints.db
-
-  # Legacy (deprecated): soothe_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
 
 # Vector Store Providers - Named backends for VectorContext (similar to LLM providers)
 

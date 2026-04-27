@@ -31,6 +31,7 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
     """Instantiate the DurabilityProtocol implementation from config.
 
     Supports: postgresql, sqlite backends (binary choice).
+    Uses RFC-612 multi-database architecture for PostgreSQL (metadata database).
     """
     backend = config.resolve_durability_backend()  # Resolve inheritance
     if backend == "postgresql":
@@ -38,12 +39,14 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
             from soothe.backends.durability.postgresql import PostgreSQLDurability
             from soothe.backends.persistence import create_persist_store
 
+            # RFC-612: Use dedicated metadata database
+            dsn = config.resolve_postgres_dsn_for_database("metadata")
             persist_store = create_persist_store(
                 backend="postgresql",
-                dsn=config.resolve_persistence_postgres_dsn(),
+                dsn=dsn,
                 namespace="durability",
             )
-            logger.info("Using PostgreSQL durability backend")
+            logger.info("Using PostgreSQL durability backend (metadata database)")
             return PostgreSQLDurability(persist_store=persist_store)
         except Exception as e:
             logger.error(
@@ -54,7 +57,8 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
             )
             raise ConfigurationError(
                 f"PostgreSQL durability backend unavailable: {e}\n"
-                f"Verify postgres_base_dsn configuration and PostgreSQL connectivity."
+                f"Verify postgres_base_dsn and postgres_databases configuration.\n"
+                f"Ensure metadata database is created and accessible."
             )
 
     if backend == "sqlite":
@@ -88,6 +92,7 @@ def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Che
     """Resolve a LangGraph checkpointer from config.
 
     Uses persistence configuration for PostgreSQL or SQLite connection.
+    RFC-612: Uses dedicated checkpoints database for PostgreSQL.
     No fallback to in-memory storage - persistent storage required.
 
     Returns:
@@ -96,14 +101,16 @@ def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Che
     """
     backend = config.resolve_checkpointer_backend()  # Resolve inheritance
     if backend == "postgresql":
-        dsn = config.resolve_persistence_postgres_dsn()
+        # RFC-612: Use dedicated checkpoints database
+        dsn = config.resolve_postgres_dsn_for_database("checkpoints")
         result = _resolve_postgres_checkpointer(dsn)
         if result:
             return result  # (None, pool)
         logger.error("PostgreSQL checkpointer unavailable")
         raise ConfigurationError(
             "PostgreSQL checkpointer requested but failed.\n"
-            "Check DSN configuration and PostgreSQL connectivity.\n"
+            "Check postgres_base_dsn and postgres_databases configuration.\n"
+            "Ensure checkpoints database is created and accessible.\n"
             "No fallback - production requires persistent storage."
         )
 
@@ -137,16 +144,16 @@ def _resolve_sqlite_checkpointer(config: SootheConfig) -> tuple[Checkpointer | N
     try:
         from pathlib import Path
 
-        # Use new checkpoint_sqlite_path for LangGraph checkpoints (langgraph_checkpoints.db)
+        # Use unified checkpoint_sqlite_path for checkpoints (soothe_checkpoints.db)
         db_path = config.persistence.checkpoint_sqlite_path or str(
-            Path(SOOTHE_DATA_DIR) / "langgraph_checkpoints.db"
+            Path(SOOTHE_DATA_DIR) / "soothe_checkpoints.db"
         )
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     except Exception as exc:
         logger.warning("Failed to create SQLite checkpointer path: %s", exc)
         return None
 
-    logger.info("SQLite checkpointer path resolved at %s (langgraph_checkpoints.db)", db_path)
+    logger.info("SQLite checkpointer path resolved at %s (soothe_checkpoints.db)", db_path)
     return (None, db_path)
 
 

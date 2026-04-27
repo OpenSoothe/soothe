@@ -135,14 +135,15 @@ class PersistenceDirectoryManager:
 
     @staticmethod
     def get_loop_checkpoint_path() -> Path:
-        """Get AgentLoop global checkpoint database path.
+        """Get AgentLoop global checkpoint database path (IG-055: unified SQLite).
 
         Returns:
-            Path to global loop_checkpoints.db (managed by AgentLoop).
+            Path to shared soothe_checkpoints.db (managed by AgentLoop + LangGraph).
+            Table: agentloop_checkpoints (separate from LangGraph checkpoint tables).
         """
         from soothe_sdk.client.config import SOOTHE_DATA_DIR
 
-        return Path(SOOTHE_DATA_DIR) / "loop_checkpoints.db"
+        return Path(SOOTHE_DATA_DIR) / "soothe_checkpoints.db"
 
     @staticmethod
     def get_loop_metadata_path(loop_id: str) -> Path:
