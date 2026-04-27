@@ -11,6 +11,7 @@ import contextlib
 import logging
 from typing import Any
 
+import websockets.exceptions
 from soothe_sdk.client.protocol import decode, encode
 
 from soothe.core.event_constants import ERROR
@@ -64,7 +65,10 @@ class DaemonHandlersMixin:
     _cmd_autopilot_dashboard = _cmd_autopilot_dashboard
 
     async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Send a direct response to a specific client when possible."""
+        """Send a direct response to a specific client when possible.
+
+        Handles normal client disconnects gracefully without logging errors.
+        """
         try:
             session = (
                 await self._session_manager.get_session(client_id)
@@ -76,7 +80,14 @@ class DaemonHandlersMixin:
                 return
             if hasattr(client_id, "writer"):
                 await self._send(client_id, msg)
+        except websockets.exceptions.ConnectionClosedOK:
+            # Normal disconnect (code 1000) - expected, no error logging
+            logger.debug("Client %r disconnected normally", client_id)
+        except (websockets.exceptions.ConnectionClosedError, ConnectionError):
+            # Abnormal disconnect - log as warning without full traceback
+            logger.debug("Client %r disconnected unexpectedly", client_id)
         except Exception:
+            # Unexpected error - log with full traceback
             logger.debug("Failed to send direct response to client %r", client_id, exc_info=True)
 
     async def _handle_client(

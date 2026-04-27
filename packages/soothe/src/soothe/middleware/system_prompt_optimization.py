@@ -238,6 +238,26 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                 if tool_section:
                     sections.append(tool_section.strip())
 
+        # IG-268: Scenario-specific guidance (intent/goal-triggered)
+        # Extract intent classification from unified_classification
+        classification = state.get("unified_classification")
+        if classification:
+            intent_type = ""
+            goal_type = ""
+
+            # Handle both Pydantic model and dict serialization
+            if isinstance(classification, dict):
+                intent_type = classification.get("intent_type", "")
+                # goal_type not in RoutingClassification, would need separate goal classification
+            else:
+                intent_type = getattr(classification, "intent_type", "")
+
+            # Build scenario section if applicable
+            if intent_type:
+                scenario_section = self._build_scenario_section(intent_type, goal_type)
+                if scenario_section:
+                    sections.append(scenario_section.strip())
+
         if not sections:
             return ""
 
@@ -503,6 +523,44 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             return None
 
         return "<PROTOCOLS>\n" + "\n".join(content) + "\n</PROTOCOLS>"
+
+    def _build_scenario_section(self, intent_type: str, goal_type: str) -> str | None:
+        """Build scenario-specific guidance section (IG-268).
+
+        Injects targeted guidance based on intent classification and goal type.
+
+        Args:
+            intent_type: Intent classification (chitchat/quiz/thread_continuation/new_goal).
+            goal_type: Goal type classification (architecture_analysis/research_synthesis/etc).
+
+        Returns:
+            Scenario guidance text, or None if no matching scenario.
+        """
+        from soothe.config.prompts import (
+            _ARCHITECTURE_ANALYSIS_GUIDE,
+            _QUIZ_RESPONSE_GUIDE,
+            _RESEARCH_SYNTHESIS_GUIDE,
+            _THREAD_CONTINUATION_GUIDE,
+        )
+
+        # Quiz intent: concise factual answers
+        if intent_type == "quiz":
+            return _QUIZ_RESPONSE_GUIDE
+
+        # Thread continuation: build on prior context
+        if intent_type == "thread_continuation":
+            return _THREAD_CONTINUATION_GUIDE
+
+        # Architecture analysis: structured layers + components
+        if goal_type == "architecture_analysis":
+            return _ARCHITECTURE_ANALYSIS_GUIDE
+
+        # Research synthesis: methodology + findings
+        if goal_type == "research_synthesis":
+            return _RESEARCH_SYNTHESIS_GUIDE
+
+        # No specific scenario guidance
+        return None
 
     def _build_agent_loop_output_contract_section(
         self, config: SootheConfig | None = None

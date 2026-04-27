@@ -602,9 +602,9 @@ class AgenticLoopConfig(BaseModel):
     final_response: AgenticFinalResponseMode = Field(
         default="adaptive",
         description=(
-            "On goal completion: adaptive uses evidence heuristics to choose last Execute text vs "
+            "On goal completion: adaptive uses heuristics to choose last Execute text vs "
             "a final CoreAgent report; always_synthesize always runs the report; always_last_execute "
-            "skips the report when last Execute text exists (fallback to evidence otherwise)"
+            "skips the report when last Execute text exists"
         ),
     )
 

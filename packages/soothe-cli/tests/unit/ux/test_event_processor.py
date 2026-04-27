@@ -332,6 +332,173 @@ class TestEventProcessorOutputEventRouting:
         assert assistant_calls[0][1][0] == "Hello from chitchat"
         assert progress_calls == []
 
+    def test_batch_mode_emits_agent_loop_completed_output(self) -> None:
+        """Batch mode should render final stdout from agent_loop.completed."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="normal", final_output_mode="batch")
+
+        completion_event = {
+            "type": "event",
+            "mode": "custom",
+            "namespace": [],
+            "data": {
+                "type": "soothe.cognition.agent_loop.completed",
+                "status": "done",
+                "goal_progress": 1.0,
+                "final_stdout_message": "Batch final report content",
+            },
+        }
+
+        processor.process_event(completion_event)
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        progress_calls = [c for c in renderer.calls if c[0] == "on_progress_event"]
+        assert len(assistant_calls) == 1
+        assert assistant_calls[0][1][0] == "Batch final report content"
+        assert len(progress_calls) == 1
+        # final_stdout_message is removed before progress callback to avoid duplicate emission in renderer
+        assert "final_stdout_message" not in progress_calls[0][1][1]
+
+    def test_batch_mode_suppresses_final_report_streaming_chunks(self) -> None:
+        """Batch mode should ignore streaming final-report chunks."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="normal", final_output_mode="batch")
+
+        stream_event = {
+            "type": "event",
+            "mode": "custom",
+            "namespace": [],
+            "data": {
+                "type": "soothe.output.final_report.streaming",
+                "content": "stream chunk",
+                "is_chunk": True,
+            },
+        }
+
+        processor.process_event(stream_event)
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert assistant_calls == []
+
+    def test_streaming_mode_drops_completed_final_stdout_from_progress_payload(self) -> None:
+        """Streaming mode should not pass final_stdout_message to progress renderer."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
+
+        completion_event = {
+            "type": "event",
+            "mode": "custom",
+            "namespace": [],
+            "data": {
+                "type": "soothe.cognition.agent_loop.completed",
+                "status": "done",
+                "goal_progress": 1.0,
+                "final_stdout_message": "Batch payload should be dropped in streaming mode",
+            },
+        }
+
+        processor.process_event(completion_event)
+
+        progress_calls = [c for c in renderer.calls if c[0] == "on_progress_event"]
+        assert len(progress_calls) == 1
+        assert "final_stdout_message" not in progress_calls[0][1][1]
+
+    def test_streaming_final_report_preserves_markdown_chunk_boundaries(self) -> None:
+        """Streaming markdown chunks should preserve whitespace/newlines exactly."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
+
+        chunk_1 = "# README Files Count Report\n\n## 1. Executive Summary\n\nThis report "
+        chunk_2 = "documents the comprehensive count.\n\n## 2. Methodology\n"
+
+        processor.process_event(
+            {
+                "type": "event",
+                "mode": "custom",
+                "namespace": [],
+                "data": {
+                    "type": "soothe.output.final_report.streaming",
+                    "content": chunk_1,
+                    "is_chunk": True,
+                },
+            }
+        )
+        processor.process_event(
+            {
+                "type": "event",
+                "mode": "custom",
+                "namespace": [],
+                "data": {
+                    "type": "soothe.output.final_report.streaming",
+                    "content": chunk_2,
+                    "is_chunk": True,
+                },
+            }
+        )
+        # Completion event still flows as progress but should not carry final stdout payload.
+        processor.process_event(
+            {
+                "type": "event",
+                "mode": "custom",
+                "namespace": [],
+                "data": {
+                    "type": "soothe.cognition.agent_loop.completed",
+                    "status": "done",
+                    "goal_progress": 1.0,
+                    "final_stdout_message": chunk_1 + chunk_2,
+                },
+            }
+        )
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert len(assistant_calls) == 2
+        assert assistant_calls[0][1][0] == chunk_1
+        assert assistant_calls[1][1][0] == chunk_2
+        assert assistant_calls[0][2]["is_streaming"] is True
+        assert assistant_calls[1][2]["is_streaming"] is True
+
+        progress_calls = [c for c in renderer.calls if c[0] == "on_progress_event"]
+        assert len(progress_calls) == 1
+        assert progress_calls[0][1][0] == "soothe.cognition.agent_loop.completed"
+        assert "final_stdout_message" not in progress_calls[0][1][1]
+
+    def test_streaming_final_report_preserves_boundaries_when_is_chunk_false(self) -> None:
+        """final_report.streaming should preserve boundaries even when is_chunk is false."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
+
+        processor.process_event(
+            {
+                "type": "event",
+                "mode": "custom",
+                "namespace": [],
+                "data": {
+                    "type": "soothe.output.final_report.streaming",
+                    "content": "# Report\n\n",
+                    "is_chunk": False,
+                },
+            }
+        )
+        processor.process_event(
+            {
+                "type": "event",
+                "mode": "custom",
+                "namespace": [],
+                "data": {
+                    "type": "soothe.output.final_report.streaming",
+                    "content": "## Executive Summary\n\n",
+                    "is_chunk": False,
+                },
+            }
+        )
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert len(assistant_calls) == 2
+        assert assistant_calls[0][1][0] == "# Report\n\n"
+        assert assistant_calls[1][1][0] == "## Executive Summary\n\n"
+        assert assistant_calls[0][2]["is_streaming"] is True
+        assert assistant_calls[1][2]["is_streaming"] is True
+
 
 class TestEventProcessorMessageDeduplication:
     """Tests for message deduplication."""

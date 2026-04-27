@@ -3,6 +3,42 @@
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
+# Scenario-specific guides (IG-268: Intelligent response length control)
+# ---------------------------------------------------------------------------
+
+_ARCHITECTURE_ANALYSIS_GUIDE = """\
+Architecture analysis approach:
+- Start with system overview (purpose, scale, tech stack)
+- Break down layers with specific component names
+- List 5-10 critical components with descriptions
+- Identify design patterns with concrete examples
+- Provide specific library names for dependencies
+"""
+
+_RESEARCH_SYNTHESIS_GUIDE = """\
+Research synthesis approach:
+- Lead with key findings with numbers ("Found X patterns")
+- Describe methodology briefly
+- Connect findings into conclusions
+- Use concrete evidence from tool results
+"""
+
+_THREAD_CONTINUATION_GUIDE = """\
+Thread continuation approach:
+- Reference prior conversation context
+- Build on previous results
+- Provide incremental updates
+- Avoid repeating full context
+"""
+
+_QUIZ_RESPONSE_GUIDE = """\
+Quiz/factual questions:
+- Provide concise factual answer (1-3 sentences)
+- Use your knowledge directly
+- No tool execution needed
+"""
+
+# ---------------------------------------------------------------------------
 # Domain-scoped tool guides (RFC-0016)
 # Updated to use single-purpose tools instead of unified dispatch tools
 # ---------------------------------------------------------------------------

@@ -123,7 +123,8 @@ class SuppressionState:
 
         # Extract final stdout message from loop completion
         payload = dict(data)
-        final_stdout = (payload.pop("final_stdout_message", None) or "").strip()
+        raw_final_stdout = payload.pop("final_stdout_message", None)
+        final_stdout = raw_final_stdout if isinstance(raw_final_stdout, str) else ""
 
         # Note: agentic_final_stdout_emitted flag is set in should_emit_final_report()
         # after checking the condition, not here (order matters for rendering logic)
@@ -153,10 +154,8 @@ class SuppressionState:
         Returns:
             Aggregated response text.
         """
-        if final_stdout:
-            stripped = final_stdout.strip()
-            if stripped:
-                self.full_response.append(stripped)
+        if final_stdout is not None and final_stdout != "":
+            self.full_response.append(final_stdout)
 
         # Join accumulated response
         return "".join(self.full_response)

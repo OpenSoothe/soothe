@@ -100,6 +100,39 @@ def test_agentic_loop_completed_writes_final_stdout_when_multi_step(
     assert r.presentation_engine.final_answer_locked
 
 
+def test_agentic_loop_completed_preserves_markdown_and_token_boundaries(
+    capsys: CaptureFixture[str],
+) -> None:
+    r = CliRenderer()
+    r.on_progress_event(
+        "soothe.cognition.agent_loop.started",
+        {"max_iterations": 5, "thread_id": "t", "goal": "g"},
+        namespace=(),
+    )
+    r.on_progress_event(
+        "soothe.cognition.agent_loop.completed",
+        {
+            "final_stdout_message": (
+                "# Report\n\n"
+                "## 1. Objective\n\n"
+                "Read the first 10 lines.\n\n"
+                "Methodology: first 10 lines exact."
+            ),
+            "thread_id": "t",
+            "status": "done",
+            "goal_progress": 1.0,
+            "evidence_summary": "",
+            "total_steps": 3,
+        },
+        namespace=(),
+    )
+    out = capsys.readouterr().out
+    assert "## 1. Objective" in out
+    assert "first 10 lines" in out
+    assert "##1. Objective" not in out
+    assert "first10 lines" not in out
+
+
 def test_agentic_stdout_stays_suppressed_after_turn_end_until_loop_completed(
     capsys: CaptureFixture[str],
 ) -> None:

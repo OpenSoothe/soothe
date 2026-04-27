@@ -30,6 +30,7 @@ class CLIConfig:
     logging_level: str | None = None
 
     output_format: str = "text"
+    final_output_mode: str = "streaming"
 
     # Paths
     soothe_home: Path = field(default_factory=lambda: Path.home() / ".soothe")
@@ -101,16 +102,28 @@ class CLIConfig:
         daemon_section = data.get("daemon", {})
         transports = daemon_section.get("transports", {})
         websocket = transports.get("websocket", {})
+        websocket_legacy = data.get("websocket", {})
+        ui_section = data.get("ui", {})
 
         raw_level = data.get("logging_level")
         if raw_level is not None and not isinstance(raw_level, str):
             raw_level = None
 
+        raw_final_output_mode = data.get("final_output_mode")
+        if raw_final_output_mode is None and isinstance(ui_section, dict):
+            raw_final_output_mode = ui_section.get("final_output_mode")
+        if not isinstance(raw_final_output_mode, str):
+            raw_final_output_mode = "streaming"
+        final_output_mode = raw_final_output_mode.strip().lower()
+        if final_output_mode not in {"streaming", "batch"}:
+            final_output_mode = "streaming"
+
         return cls(
-            daemon_host=websocket.get("host", "127.0.0.1"),
-            daemon_port=websocket.get("port", 8765),
-            verbosity=data.get("verbosity", "normal"),
+            daemon_host=websocket.get("host", websocket_legacy.get("host", "127.0.0.1")),
+            daemon_port=websocket.get("port", websocket_legacy.get("port", 8765)),
+            verbosity=data.get("verbosity", ui_section.get("verbosity", "normal")),
             logging_level=raw_level,
+            final_output_mode=final_output_mode,
             soothe_home=Path(data.get("home", str(Path.home() / ".soothe"))),
         )
 
@@ -137,6 +150,7 @@ class CLIConfig:
             daemon_port=soothe_config.daemon.transports.websocket.port,
             verbosity=soothe_config.logging.verbosity,
             logging_level=logging_level,
+            final_output_mode="streaming",
             soothe_home=Path(soothe_config.home),
         )
 

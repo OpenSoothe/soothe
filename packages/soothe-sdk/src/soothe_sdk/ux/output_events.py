@@ -54,10 +54,18 @@ def _register_builtin_output_events() -> None:
         lambda data: strip_internal_tags(data.get("content", "")),
     )
 
+    # Final report streaming (IG-268: real-time final report in headless mode)
+    register_output_event(
+        "soothe.output.final_report.streaming",
+        # Preserve raw chunk boundaries; CLI/TUI applies final display filtering once.
+        lambda data: data.get("content", ""),
+    )
+
     # Agent loop final output (RFC-200)
     register_output_event(
         "soothe.cognition.agent_loop.completed",
-        lambda data: strip_internal_tags(data.get("final_stdout_message", "")),
+        # Preserve raw final stdout; avoid double normalization in client processors.
+        lambda data: data.get("final_stdout_message", ""),
     )
 
     # Autonomous mode final report (RFC-300)

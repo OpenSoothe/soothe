@@ -70,6 +70,7 @@ class EventProcessor:
         renderer: RendererProtocol,
         *,
         verbosity: VerbosityLevel = "normal",
+        final_output_mode: str = "streaming",
         presentation_engine: PresentationEngine | None = None,
         tui_debug: bool = False,
     ) -> None:
@@ -84,6 +85,9 @@ class EventProcessor:
         """
         self._renderer = renderer
         self._verbosity = normalize_verbosity(verbosity)
+        self._final_output_mode = (
+            final_output_mode if final_output_mode in {"streaming", "batch"} else "streaming"
+        )
         self._tui_debug = tui_debug
 
         rebind = getattr(renderer, "_rebind_presentation", None)
@@ -703,19 +707,51 @@ class EventProcessor:
         # Tool events are now visible at NORMAL verbosity (RFC-0020 CLI Stream Display Pipeline)
         # They are processed through on_progress_event -> StreamDisplayPipeline
 
-        # Handle output events (chitchat, quiz, final report, etc.) through unified registry
+        # Handle output events (chitchat, quiz, final report streaming, etc.) through unified registry
         # IG-254: Single source of truth for user-visible output events
-        if is_output_event(etype) and etype != "soothe.cognition.agent_loop.completed":
+        # IG-268: Include final_stdout_message from agent_loop.completed (removed exclusion)
+        data_for_progress = data
+        if etype == "soothe.cognition.agent_loop.completed":
+            if self._final_output_mode == "batch":
+                content = extract_output_text(etype, data)
+                if content and self._presentation.tier_visible(
+                    VerbosityTier.QUIET, self._verbosity
+                ):
+                    cleaned = self._clean_assistant_text(content)
+                    if cleaned:
+                        self._emit_assistant_text(
+                            cleaned,
+                            is_main=True,
+                            is_streaming=False,
+                        )
+                        self._presentation.mark_final_answer_locked()
+            # Prevent renderer-side duplicate final emission in both modes:
+            # - streaming mode: final text is emitted via chunk stream
+            # - batch mode: final text is emitted above
+            data_for_progress = dict(data)
+            data_for_progress.pop("final_stdout_message", None)
+            # Continue processing as progress event for status/goal completion lines.
+        elif is_output_event(etype):
+            if (
+                etype == "soothe.output.final_report.streaming"
+                and self._final_output_mode != "streaming"
+            ):
+                return
             content = extract_output_text(etype, data)
             if content and self._presentation.tier_visible(VerbosityTier.QUIET, self._verbosity):
-                cleaned = self._clean_assistant_text(content)
+                # Treat all final_report.streaming payloads as streaming for boundary handling.
+                # Some providers emit mixed chunk/final message shapes under the same event type.
+                is_streaming = etype == "soothe.output.final_report.streaming"
+                cleaned = self._clean_assistant_text(content, is_streaming=is_streaming)
                 if cleaned:
                     self._emit_assistant_text(
                         cleaned,
                         is_main=True,
-                        is_streaming=False,
+                        is_streaming=is_streaming,
                     )
-                    self._presentation.mark_final_answer_locked()
+                    # Only lock final answer for non-streaming events
+                    if not is_streaming:
+                        self._presentation.mark_final_answer_locked()
             return
 
         category = classify_event_to_tier(etype, namespace)
@@ -741,7 +777,7 @@ class EventProcessor:
             error_text = data.get("error", data.get("message", str(etype)))
             self._renderer.on_error(error_text)
         elif self._presentation.tier_visible(category, self._verbosity):
-            self._renderer.on_progress_event(etype, data, namespace=namespace)
+            self._renderer.on_progress_event(etype, data_for_progress, namespace=namespace)
 
     def _handle_plan_created(self, data: dict[str, Any]) -> None:
         """Handle plan creation event."""

@@ -833,6 +833,7 @@ class Executor:
         from soothe.cognition.agent_loop.stream_chunk_normalize import (
             extract_text_from_message_content,
             iter_messages_for_act_aggregation,
+            join_text_fragments,
         )
 
         chunks: list[str] = []
@@ -944,7 +945,7 @@ class Executor:
                 chunks.append(str(chunk.content))
 
         # Final yield with combined output and tool call count
-        yield "".join(chunks), None, tool_call_count, messages
+        yield join_text_fragments(chunks), None, tool_call_count, messages
 
     def _build_sequential_input(self, steps: list) -> str:
         """Build combined input for sequential execution.

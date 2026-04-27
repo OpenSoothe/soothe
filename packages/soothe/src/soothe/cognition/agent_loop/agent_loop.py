@@ -120,7 +120,8 @@ class AgentLoop:
         max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
         loop_id: str | None = None,  # IG-246: explicit loop_id parameter
         plan_conversation_excerpts: list[str] | None = None,
-        intent: Any | None = None,  # IG-226: Intent classification from unified classifier
+        intent: Any
+        | None = None,  # IG-226: Intent classification, IG-268: Response length intelligence
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -229,6 +230,7 @@ class AgentLoop:
             iteration=iteration,  # Use recovered or initial iteration
             max_iterations=max_iterations,
             plan_conversation_excerpts=plan_excerpts,
+            intent=intent,  # IG-268: Pass intent classification for response length intelligence
         )
 
         # IG-226: Set thread continuation flag for working memory context
@@ -323,22 +325,80 @@ class AgentLoop:
                 )
 
                 # RFC-211 / IG-199: Final report — adaptive second CoreAgent turn vs last Execute text
-                final_output = plan_result.full_output or plan_result.evidence_summary
+                # IG-268: NEVER leak internal evidence_summary (verbose step strings) to users
+                # Generate user-friendly summary instead when full_output is empty
+                if plan_result.full_output:
+                    final_output = plan_result.full_output
+                elif state.step_results:
+                    # Generate user-friendly completion summary from successful steps
+                    successful_count = sum(1 for r in state.step_results if r.success)
+                    total_count = len(state.step_results)
+                    final_output = f"Completed {successful_count}/{total_count} steps successfully. {plan_result.next_action or ''}"
+                else:
+                    # No steps executed, use next_action as summary
+                    final_output = plan_result.next_action or "Goal achieved successfully"
+
                 mode = self.config.agentic.final_response
                 run_synth = needs_final_thread_synthesis(state, plan_result, mode)
 
+                # IG-268: Determine response length category from intent and evidence (once for all branches)
+                from soothe.cognition.agent_loop.response_length_policy import (
+                    calculate_evidence_metrics,
+                    determine_response_length,
+                )
+
+                evidence_volume, evidence_diversity = calculate_evidence_metrics(state.step_results)
+
+                # Determine response length category
+                intent_type = "new_goal"  # Default
+                goal_type = "general_synthesis"  # Default
+                task_complexity = "medium"  # Default
+
+                # Extract intent classification metadata if available
+                if state.intent and hasattr(state.intent, "intent_type"):
+                    intent_type = state.intent.intent_type
+                    task_complexity = getattr(state.intent, "task_complexity", "medium")
+
+                # Classify goal type from evidence patterns (reuse synthesis logic)
+                from soothe.cognition.agent_loop.synthesis import SynthesisPhase
+
+                evidence_for_classification = "\n\n".join(
+                    r.to_evidence_string(truncate=False) for r in state.step_results if r.success
+                )
+                goal_type = SynthesisPhase(self.loop_planner._model)._classify_goal_type(
+                    evidence_for_classification
+                )
+
+                length_category = determine_response_length(
+                    intent_type=intent_type,
+                    goal_type=goal_type,
+                    task_complexity=task_complexity,
+                    evidence_volume=evidence_volume,
+                    evidence_diversity=evidence_diversity,
+                )
+
+                logger.info(
+                    "Response length category: %s (%d-%d words, intent=%s, goal_type=%s, evidence_volume=%d chars, diversity=%d steps)",
+                    length_category.value,
+                    length_category.min_words,
+                    length_category.max_words,
+                    intent_type,
+                    goal_type,
+                    evidence_volume,
+                    evidence_diversity,
+                )
+
                 if not run_synth:
+                    # IG-268: Prefer last Execute assistant text, but NEVER leak evidence_summary
                     reuse = (state.last_execute_assistant_text or "").strip()
-                    final_output = (
-                        reuse
-                        or (plan_result.full_output or "").strip()
-                        or (plan_result.evidence_summary or "").strip()
-                    )
-                    logger.info(
-                        "Final response: branch=reuse_execute assistant_chars=%d full_output_chars=%d",
-                        len(reuse),
-                        len(plan_result.full_output or ""),
-                    )
+                    if reuse:
+                        final_output = reuse
+                        logger.info(
+                            "Final response: branch=reuse_execute assistant_chars=%d",
+                            len(reuse),
+                        )
+                    # Keep the user-friendly summary generated at lines 330-339
+                    # Do NOT overwrite with evidence_summary (verbose internal strings)
                 else:
                     logger.info(
                         "Starting final report generation (full_output=%d chars, evidence=%d chars, mode=%s)",
@@ -349,7 +409,11 @@ class AgentLoop:
 
                     try:
                         # Agentic loop sends message to core agent requesting final report
-                        report_request = f"""Based on the complete execution history in this thread, generate a comprehensive final report for the goal: {goal}
+                        report_request = f"""Based on the complete execution history in this thread, generate a final report for the goal: {goal}
+
+RESPONSE LENGTH: {length_category.min_words}-{length_category.max_words} words ({length_category.value} category)
+
+{self._get_length_guidance(length_category)}
 
 The report should:
 1. Summarize what was accomplished
@@ -360,10 +424,11 @@ The report should:
    - For web/research: show actual search results or fetched content
 3. Provide actionable results or deliverables
 4. Be well-structured with clear sections
+5. Match the response length guidance above
 
-IMPORTANT: The user wants to see the actual content retrieved, not just confirmation messages. Extract content from ToolMessage.content in the conversation history and present it comprehensively.
+IMPORTANT: The user wants to see the actual content retrieved, not just confirmation messages. Extract content from ToolMessage.content in the conversation history and present it appropriately for the response length category.
 
-Use all tool results and AI responses available in the conversation history to create a comprehensive, coherent final report."""
+Use all tool results and AI responses available in the conversation history."""
 
                         logger.debug(
                             "[Human Message] Final report request: %s",
@@ -387,6 +452,9 @@ Use all tool results and AI responses available in the conversation history to c
                             chunk_count += 1
                             for msg in iter_messages_for_act_aggregation(chunk):
                                 update_final_report_from_message(accum, msg)
+                            # Yield stream chunks with special event type for final report
+                            # This bypasses runner filtering so all AI text reaches CLI/TUI
+                            yield ("final_report_stream", chunk)
 
                         last_ai_text = resolve_final_report_text(accum)
 
@@ -404,15 +472,27 @@ Use all tool results and AI responses available in the conversation history to c
                                 "Final report generated via CoreAgent (%d chars)", len(final_output)
                             )
                         else:
-                            logger.warning("No AI text response from CoreAgent, using evidence")
+                            logger.warning(
+                                "No AI text response from CoreAgent, keeping user-friendly summary"
+                            )
 
                     except Exception as e:
-                        # Fallback to evidence on failure
-                        logger.warning("Final report generation failed: %s, using evidence", e)
+                        # IG-268: Keep user-friendly summary on failure, NEVER fallback to evidence
+                        logger.warning(
+                            "Final report generation failed: %s, keeping user-friendly summary", e
+                        )
 
-                # Update plan_result with final output
-                if final_output != plan_result.full_output:
-                    plan_result = plan_result.model_copy(update={"full_output": final_output})
+                # Update plan_result with final output and response length category
+                if (
+                    final_output != plan_result.full_output
+                    or plan_result.response_length_category != length_category.value
+                ):
+                    plan_result = plan_result.model_copy(
+                        update={
+                            "full_output": final_output,
+                            "response_length_category": length_category.value,  # IG-268: Include length category for runner
+                        }
+                    )
 
                 # Finalize goal (RFC-608: mark completed, update metrics)
                 await state_manager.finalize_goal(goal_record, final_output)
@@ -689,3 +769,29 @@ Use all tool results and AI responses available in the conversation history to c
             git_status=state.git_status,
             working_memory_excerpt=wm_excerpt,
         )
+
+    def _get_length_guidance(self, length_category) -> str:
+        """Get response length guidance text for the given category.
+
+        Args:
+            length_category: ResponseLengthCategory enum value
+
+        Returns:
+            Guidance text for the response length category
+        """
+        from soothe.cognition.agent_loop.response_length_policy import ResponseLengthCategory
+
+        if length_category == ResponseLengthCategory.BRIEF:
+            return """Be concise: Lead with answer, no preamble, 1-3 sentences.
+Focus on essential information only."""
+        elif length_category == ResponseLengthCategory.CONCISE:
+            return """Be direct: Brief synthesis, 2-4 key points, avoid repetition.
+Provide incremental updates building on prior context."""
+        elif length_category == ResponseLengthCategory.STANDARD:
+            return """Be comprehensive: 3-5 sections, specific numbers, clear structure.
+Include methodology and key findings with concrete evidence."""
+        elif length_category == ResponseLengthCategory.COMPREHENSIVE:
+            return """Be thorough: Full structured report, concrete examples, detailed breakdown.
+Provide complete analysis with all relevant details organized into clear sections."""
+        else:
+            return """Provide a well-structured response matching the task complexity."""
