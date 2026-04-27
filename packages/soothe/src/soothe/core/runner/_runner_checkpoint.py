@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.core.event_catalog import CheckpointSavedEvent, RecoveryResumedEvent
 from soothe.protocols.planner import Plan
 
 from ._runner_shared import StreamChunk, _custom
@@ -112,14 +111,6 @@ class CheckpointMixin:
                         logger.debug("Thread %s updated_at refreshed", state.thread_id)
                 except Exception:
                     logger.debug("Failed to update thread timestamp", exc_info=True)
-
-            yield _custom(
-                CheckpointSavedEvent(
-                    thread_id=state.thread_id,
-                    completed_steps=len(completed),
-                    completed_goals=len(goals_data),
-                ).to_dict()
-            )
         except Exception:
             logger.debug("Checkpoint save failed", exc_info=True)
 
@@ -182,13 +173,12 @@ class CheckpointMixin:
             )
 
         completed_goals = [g["id"] for g in goals_data if g.get("status") == "completed"]
-        yield _custom(
-            RecoveryResumedEvent(
-                thread_id=state.thread_id,
-                completed_steps=list(completed_ids),
-                completed_goals=completed_goals,
-                mode=loaded.get("mode", "single_pass"),
-            ).to_dict()
+        logger.info(
+            "Recovery resumed: %s | Steps: %d | Goals: %d | Mode: %s",
+            state.thread_id,
+            len(completed_ids),
+            len(completed_goals),
+            loaded.get("mode", "single_pass"),
         )
 
     # -- report synthesis ---------------------------------------------------
