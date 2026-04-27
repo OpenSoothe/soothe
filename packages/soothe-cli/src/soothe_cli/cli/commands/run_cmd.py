@@ -23,6 +23,8 @@ def run_impl(
     autonomous: bool,  # noqa: FBT001
     max_iterations: int | None,
     output_format: str,
+    streaming_enabled: bool | None = None,
+    streaming_mode: str | None = None,
 ) -> None:
     """Core implementation for running Soothe agent.
 
@@ -35,6 +37,8 @@ def run_impl(
         autonomous: Enable autonomous iteration mode
         max_iterations: Max iterations for autonomous mode
         output_format: Output format (text or jsonl)
+        streaming_enabled: Override daemon streaming enabled setting (RFC-614)
+        streaming_mode: Override daemon streaming mode ('streaming' or 'batch')
     """
     startup_start = time.perf_counter()
 
@@ -49,6 +53,12 @@ def run_impl(
             checkpointer = getattr(cfg.protocols.durability, "checkpointer", None)
             if checkpointer == "postgresql":
                 logger.info("PostgreSQL checkpointer configured; ensure server is running.")
+
+        # Apply CLI streaming overrides (RFC-614)
+        if streaming_enabled is not None:
+            cfg.output_streaming_enabled = streaming_enabled
+        if streaming_mode is not None:
+            cfg.output_streaming_mode = streaming_mode
 
         startup_elapsed_ms = (time.perf_counter() - startup_start) * 1000
         logger.info("[Startup] ✓ Ready (%.1fms)", startup_elapsed_ms)

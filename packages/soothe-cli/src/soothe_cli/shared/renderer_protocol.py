@@ -40,6 +40,31 @@ class RendererProtocol(Protocol):
         """
         ...
 
+    def on_streaming_output(
+        self,
+        event_type: str,
+        text: str,
+        *,
+        is_chunk: bool,
+        namespace: tuple[str, ...],
+    ) -> None:
+        """Streaming output chunk from unified framework (RFC-614).
+
+        Optional method - default implementation may delegate to on_assistant_text.
+        Implementations may choose different display styles for different event types.
+
+        Args:
+            event_type: Event type string (e.g., "soothe.output.execution.streaming").
+            text: Text content (may be chunk or final).
+            is_chunk: True if partial chunk, False if final.
+            namespace: Namespace tuple for stream context.
+
+        Note:
+            This is optional - default implementation may delegate to on_assistant_text.
+            Implementations may choose different display styles for different event types.
+        """
+        ...
+
     def on_tool_call(
         self,
         name: str,

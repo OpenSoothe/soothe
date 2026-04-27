@@ -74,6 +74,14 @@ def main(
         str,
         typer.Option("--format", "-f", help="Output format for headless mode: text or jsonl."),
     ] = "text",
+    streaming: Annotated[
+        bool | None,
+        typer.Option("--streaming/--no-streaming", help="Enable/disable output streaming."),
+    ] = None,
+    streaming_mode: Annotated[
+        str | None,
+        typer.Option("--streaming-mode", help="Streaming mode: 'streaming' or 'batch'"),
+    ] = None,
     show_help: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--help", "-h", is_flag=True, help="Show this message and exit."),
@@ -117,6 +125,8 @@ def main(
             autonomous=False,
             max_iterations=None,
             output_format=output_format,
+            streaming_enabled=streaming,
+            streaming_mode=streaming_mode,
         )
 
 

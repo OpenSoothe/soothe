@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.protocols.planner import Plan
 
-from ._runner_shared import StreamChunk, _custom
+from ._runner_shared import StreamChunk
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -58,8 +58,11 @@ class CheckpointMixin:
     ) -> AsyncGenerator[StreamChunk]:
         """Save progressive checkpoint for crash recovery (RFC-0010).
 
+        IG-271: checkpoint events removed from normal execution, replaced with logging.
+        Events only emitted conditionally during recovery mode.
+
         Yields:
-            soothe.checkpoint.saved stream event on successful save.
+            No events in normal execution (logging replacement).
         """
         from datetime import UTC, datetime
 
@@ -88,6 +91,7 @@ class CheckpointMixin:
         }
         try:
             store.save_checkpoint(envelope)
+            # IG-271: Replace checkpoint event with compact logging
             logger.debug(
                 "Checkpoint saved: mode=%s status=%s completed=%d", mode, status, len(completed)
             )
@@ -113,6 +117,11 @@ class CheckpointMixin:
                     logger.debug("Failed to update thread timestamp", exc_info=True)
         except Exception:
             logger.debug("Checkpoint save failed", exc_info=True)
+
+        # IG-271: No events emitted in normal execution (logging replacement)
+        # Maintain async generator signature with dummy yield
+        if False:
+            yield
 
     async def _try_recover_checkpoint(
         self,

@@ -20,7 +20,7 @@ class TestCheckpointEventEmission:
 
     @pytest.mark.asyncio
     async def test_checkpoint_saved_event_emitted(self, tmp_path: Path) -> None:
-        """Verify soothe.lifecycle.checkpoint.saved event is emitted on successful save."""
+        """IG-271: checkpoint events removed from normal execution, replaced with logging."""
         # Create a minimal runner with artifact store on state (IG-110)
         config = SootheConfig()
         runner = object.__new__(SootheRunner)
@@ -42,18 +42,8 @@ class TestCheckpointEventEmission:
             )
         ]
 
-        # Should emit exactly one event
-        assert len(events) == 1
-        # StreamChunk is a tuple: ((), "custom", data)
-        event_data = events[0][2]  # Third element is the data dict
-
-        # Verify event structure
-        assert event_data["type"] == "soothe.lifecycle.checkpoint.saved"
-        assert event_data["thread_id"] == "test-thread-123"
-        assert "completed_steps" in event_data
-        assert "completed_goals" in event_data
-        assert isinstance(event_data["completed_steps"], int)
-        assert isinstance(event_data["completed_goals"], int)
+        # IG-271: No events emitted in normal execution (replaced with logging)
+        assert len(events) == 0
 
     @pytest.mark.asyncio
     async def test_checkpoint_event_not_emitted_without_artifact_store(
@@ -85,7 +75,7 @@ class TestCheckpointEventEmission:
 
     @pytest.mark.asyncio
     async def test_checkpoint_event_counts_steps(self, tmp_path: Path) -> None:
-        """Verify completed_steps count is accurate."""
+        """IG-271: checkpoint events removed from normal execution, replaced with logging."""
         # Create a minimal runner with artifact store on state (IG-110)
         config = SootheConfig()
         runner = object.__new__(SootheRunner)
@@ -118,10 +108,8 @@ class TestCheckpointEventEmission:
             )
         ]
 
-        assert len(events) == 1
-        # StreamChunk is a tuple: ((), "custom", data)
-        event_data = events[0][2]  # Third element is the data dict
-        assert event_data["completed_steps"] == 2  # s1 and s2 are completed
+        # IG-271: No events emitted in normal execution (replaced with logging)
+        assert len(events) == 0
 
 
 class TestStepObservationReuse:
@@ -198,6 +186,7 @@ class TestAutonomousObservationReuse:
         runner._context = MagicMock()
         runner._planner = None
         runner._goal_engine = AsyncMock()
+        runner._model = None  # Required for consensus validation check (line 778)
         runner._artifact_store = None
         runner._current_plan = None
         runner._config = SootheConfig()
@@ -235,21 +224,21 @@ class TestAutonomousObservationReuse:
             report=None,
         )
 
-        chunks = [
-            chunk
-            async for chunk in AutonomousMixin._execute_autonomous_goal(
-                runner,
-                goal,
-                parent_state=parent_state,
-                thread_id="thread-1__goal_G_1",
-                user_input="analyze project structure",
-                iteration_records=[],
-                total_iterations=0,
-                parallel_goals=1,
-            )
-        ]
+        # Execute the autonomous goal generator to completion
+        async for _ in AutonomousMixin._execute_autonomous_goal(
+            runner,
+            goal,
+            parent_state=parent_state,
+            thread_id="thread-1__goal_G_1",
+            user_input="analyze project structure",
+            iteration_records=[],
+            total_iterations=0,
+            parallel_goals=1,
+        ):
+            pass
 
-        assert chunks[0][2]["type"] == "soothe.lifecycle.iteration.started"
+        # IG-271: Iteration events removed, replaced with logging
+        # Verify observation reuse without checking for iteration events
         assert observed["context_projection"] is parent_state.context_projection
         assert observed["recalled_memories"] == parent_state.recalled_memories
         assert observed["observation_scope_key"] == "analyze project structure"

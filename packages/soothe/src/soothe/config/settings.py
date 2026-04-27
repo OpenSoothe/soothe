@@ -22,6 +22,7 @@ from soothe.config.models import (
     MCPServerConfig,
     ModelProviderConfig,
     ModelRouter,
+    OutputStreamingConfig,
     PerformanceConfig,
     PersistenceConfig,
     PluginConfig,
@@ -189,6 +190,9 @@ class SootheConfig(BaseSettings):
         default_factory=FilesystemMiddlewareConfig
     )
     """Filesystem middleware configuration."""
+
+    output_streaming: OutputStreamingConfig = Field(default_factory=OutputStreamingConfig)
+    """Unified output streaming configuration (RFC-614)."""
 
     # --- Performance optimization (RFC-0008) ---
 

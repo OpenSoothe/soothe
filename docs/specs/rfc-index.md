@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-04-22  
-**Total RFCs**: 44
+**Last Updated**: 2026-04-27
+**Total RFCs**: 45
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,7 +11,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 28 |
+| Draft | 29 |
 | Implemented | 16 |
 
 ---
@@ -118,6 +118,11 @@ This index reflects the canonical RFC set and defines which files are active for
   - Status: Draft
   - Created: 2026-04-16
 
+- **RFC-614**: [Unified Daemon → Client Streaming Messaging Framework](RFC-614*.md)
+  - Status: Draft
+  - Extends: RFC-450 (Daemon Communication), RFC-401 (Event Processing)
+  - Created: 2026-04-27
+
 ### Daemon & Transport
 
 - **RFC-500**: [CLI TUI Architecture Design](RFC-500*.md)
@@ -200,6 +205,7 @@ This index reflects the canonical RFC set and defines which files are active for
 - RFC-610: SDK Module Structure Refactoring (2026-04-17)
 - RFC-611: Goal context injection (2026-04-22)
 - RFC-612: Persistence Architecture Refactor (2026-04-22)
+- RFC-614: Unified Daemon → Client Streaming Messaging Framework (2026-04-27)
 
 ---
 
