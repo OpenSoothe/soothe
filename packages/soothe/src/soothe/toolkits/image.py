@@ -9,7 +9,7 @@ from __future__ import annotations
 import base64
 import io
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
@@ -19,7 +19,7 @@ from soothe.utils.tool_error_handler import tool_error_handler
 from soothe.utils.url_validation import validate_url
 
 if TYPE_CHECKING:
-    from soothe.config import SootheConfig
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ class ImageAnalysisTool(BaseTool):
         "(default: 'Describe this image in detail')."
     )
     model_name: str = Field(default="gpt-4o")
-    config: SootheConfig | None = Field(default=None, exclude=True)
+    config: Any = Field(default=None, exclude=True)  # SootheConfig for model creation
 
     @tool_error_handler("analyze_image", return_type="str")
     def _run(self, image_path: str, prompt: str = "Describe this image in detail.") -> str:
@@ -154,7 +154,7 @@ class ExtractTextFromImageTool(BaseTool):
         "Extract all visible text from an image via OCR. Provide `image_path` (local path or URL)."
     )
     model_name: str = Field(default="gpt-4o")
-    config: SootheConfig | None = Field(default=None, exclude=True)
+    config: Any = Field(default=None, exclude=True)  # SootheConfig for model creation
 
     @tool_error_handler("extract_text_from_image", return_type="str")
     def _run(self, image_path: str) -> str:
@@ -226,7 +226,7 @@ class ExtractTextFromImageTool(BaseTool):
 class ImageToolkit:
     """Toolkit for image analysis operations."""
 
-    def __init__(self, config: SootheConfig | None = None) -> None:
+    def __init__(self, config: Any = None) -> None:
         """Initialize the toolkit.
 
         Args:
