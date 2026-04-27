@@ -171,9 +171,6 @@ class MessageData:
     cognition_plan_strategy: str | None = None
     """Phase-2 plan reasoning (COGNITION_PLAN only)."""
 
-    cognition_plan_legacy_reasoning: str | None = None
-    """Combined reasoning when structured fields are absent (COGNITION_PLAN only)."""
-
     cognition_goal_snapshot_json: str | None = None
     """JSON blob from ``CognitionGoalTreeMessage.snapshot_dict()`` (COGNITION_GOAL_TREE only)."""
 
@@ -307,7 +304,6 @@ class MessageData:
                     plan_action=self.cognition_plan_action or "new",
                     assessment_reasoning=self.cognition_plan_assessment or "",
                     plan_reasoning=self.cognition_plan_strategy or "",
-                    legacy_reasoning=self.cognition_plan_legacy_reasoning or "",
                     id=self.id,
                 )
 
@@ -388,7 +384,6 @@ class MessageData:
                 cognition_plan_action=widget._plan_action,
                 cognition_plan_assessment=widget._assessment_reasoning,
                 cognition_plan_strategy=widget._plan_reasoning,
-                cognition_plan_legacy_reasoning=widget._legacy_reasoning,
             )
 
         if isinstance(widget, CognitionStepMessage):

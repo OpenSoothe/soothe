@@ -104,7 +104,8 @@ CHITCHAT_STARTED = "soothe.output.chitchat.started"
 CHITCHAT_RESPONSE = "soothe.output.chitchat.responded"
 QUIZ_STARTED = "soothe.output.quiz.started"
 QUIZ_RESPONSE = "soothe.output.quiz.responded"
-FINAL_REPORT = "soothe.output.autonomous.final_report.reported.reported"
+GOAL_COMPLETION_STREAMING = "soothe.output.goal_completion.streaming"
+AUTONOMOUS_GOAL_COMPLETION = "soothe.output.autonomous.goal_completion.reported"
 
 # ============================================================================
 # SYSTEM DOMAIN (soothe.system.*)
@@ -201,7 +202,8 @@ __all__ = [
     "CHITCHAT_RESPONSE",
     "QUIZ_STARTED",
     "QUIZ_RESPONSE",
-    "FINAL_REPORT",
+    "GOAL_COMPLETION_STREAMING",
+    "AUTONOMOUS_GOAL_COMPLETION",
     # System - Daemon
     "DAEMON_HEARTBEAT",
     # System - Autopilot

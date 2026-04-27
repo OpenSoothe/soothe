@@ -15,7 +15,7 @@ class LoopHumanMessage(HumanMessage):
     - Thread tracking (thread_id)
     - Iteration tracking (iteration)
     - Goal context (goal_summary)
-    - Execution phase (phase: "execute_wave", "execute_step", "final_report")
+    - Execution phase (phase: "execute_wave", "execute_step", "goal_completion")
     - Wave tracking (wave_id for execute_wave phase)
 
     All fields are Optional to support all message creation points uniformly,
@@ -43,7 +43,7 @@ class LoopHumanMessage(HumanMessage):
     iteration: int | None = None
     goal_summary: str | None = Field(default=None, max_length=200)
     workspace: str | None = None
-    phase: Literal["execute_wave", "execute_step", "final_report"] | None = None
+    phase: Literal["execute_wave", "execute_step", "goal_completion"] | None = None
     wave_id: str | None = None  # UUID[:8] for wave tracking
 
     # Preserve langchain type discrimination

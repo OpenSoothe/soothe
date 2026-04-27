@@ -1,10 +1,10 @@
 """Tests for CLI shell health state tracking."""
 
-from soothe.tools._internal.shell import (
+from soothe.toolkits._internal.shell import (
     ShellHealthState,
     _shell_health_states,
 )
-from soothe.tools.execution import RunCommandTool
+from soothe.toolkits.execution import RunCommandTool
 
 
 class TestShellHealthState:

@@ -25,6 +25,8 @@ __soothe_required_version__ = ">=0.4.0,<1.0.0"
 __all__ = [
     "__version__",
     "__soothe_required_version__",
+    # Core exception (legacy convenience import)
+    "PluginError",
     # Plugin decorators (convenience re-exports)
     "plugin",
     "subagent",
@@ -34,4 +36,5 @@ __all__ = [
 
 # Re-export plugin decorators for convenience (langchain-core pattern)
 # Allows: from soothe_sdk import plugin (as well as from soothe_sdk.plugin import plugin)
+from soothe_sdk.core.exceptions import PluginError  # noqa: F401
 from soothe_sdk.plugin import plugin, subagent, tool, tool_group  # noqa: F401

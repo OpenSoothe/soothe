@@ -17,12 +17,10 @@ from soothe.core.llm.tracing import LLMTracingWrapper
 from soothe.core.llm.wrappers import (
     JsonSchemaModelWrapper,
     LimitedProviderModelWrapper,
-    wrap_model_if_needed,
 )
 
 __all__ = [
     "LLMTracingWrapper",
     "JsonSchemaModelWrapper",
     "LimitedProviderModelWrapper",
-    "wrap_model_if_needed",
 ]

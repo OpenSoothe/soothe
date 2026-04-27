@@ -17,7 +17,6 @@ class LoopAgentReasonEvent(ProtocolEvent):
     progress: float
     confidence: float
     next_action: str
-    reasoning: str  # Combined assessment + plan chain (backward compatible)
     assessment_reasoning: str = ""
     plan_reasoning: str = ""
     plan_action: Literal["keep", "new"] = "new"

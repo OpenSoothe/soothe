@@ -85,7 +85,7 @@ async def test_get_plan_context_filters_same_thread(goal_context_manager, mock_s
                 status="completed",
                 reason_history=[],
                 act_history=[],
-                final_report="Found bottleneck in db.py",
+                goal_completion="Found bottleneck in db.py",
                 started_at=datetime.now(UTC),
             ),
             GoalExecutionRecord(
@@ -97,7 +97,7 @@ async def test_get_plan_context_filters_same_thread(goal_context_manager, mock_s
                 status="completed",
                 reason_history=[],
                 act_history=[],
-                final_report="Improved performance",
+                goal_completion="Improved performance",
                 started_at=datetime.now(UTC),
             ),
         ],
@@ -135,7 +135,7 @@ async def test_get_plan_context_filters_completed_only(goal_context_manager, moc
                 status="completed",
                 reason_history=[],
                 act_history=[],
-                final_report="Done",
+                goal_completion="Done",
                 started_at=datetime.now(UTC),
             ),
             GoalExecutionRecord(
@@ -147,7 +147,7 @@ async def test_get_plan_context_filters_completed_only(goal_context_manager, moc
                 status="running",  # Not completed
                 reason_history=[],
                 act_history=[],
-                final_report="",
+                goal_completion="",
                 started_at=datetime.now(UTC),
             ),
         ],
@@ -184,7 +184,7 @@ async def test_get_plan_context_respects_limit(goal_context_manager, mock_state_
                 status="completed",
                 reason_history=[],
                 act_history=[],
-                final_report=f"Result {i}",
+                goal_completion=f"Result {i}",
                 started_at=datetime.now(UTC),
             )
             for i in range(15)
@@ -224,7 +224,7 @@ async def test_get_plan_context_config_disabled(mock_state_manager):
                 status="completed",
                 reason_history=[],
                 act_history=[],
-                final_report="Done",
+                goal_completion="Done",
                 started_at=datetime.now(UTC),
             )
         ],
@@ -287,7 +287,7 @@ async def test_get_execute_briefing_clears_flag(goal_context_manager, mock_state
                 status="completed",
                 reason_history=[],
                 act_history=[],
-                final_report="Done",
+                goal_completion="Done",
                 started_at=datetime.now(UTC),
             )
         ],
@@ -328,7 +328,7 @@ async def test_get_execute_briefing_cross_thread(goal_context_manager, mock_stat
                 status="completed",
                 reason_history=[],
                 act_history=[],
-                final_report="Result A",
+                goal_completion="Result A",
                 started_at=datetime.now(UTC),
             ),
             GoalExecutionRecord(
@@ -340,7 +340,7 @@ async def test_get_execute_briefing_cross_thread(goal_context_manager, mock_stat
                 status="completed",
                 reason_history=[],
                 act_history=[],
-                final_report="Result B",
+                goal_completion="Result B",
                 started_at=datetime.now(UTC),
             ),
         ],
@@ -382,7 +382,7 @@ async def test_get_execute_briefing_no_completed_goals(goal_context_manager, moc
                 status="running",  # Not completed
                 reason_history=[],
                 act_history=[],
-                final_report="",
+                goal_completion="",
                 started_at=datetime.now(UTC),
             )
         ],
@@ -423,7 +423,7 @@ async def test_get_execute_briefing_config_disabled(mock_state_manager):
                 status="completed",
                 reason_history=[],
                 act_history=[],
-                final_report="Done",
+                goal_completion="Done",
                 started_at=datetime.now(UTC),
             )
         ],
@@ -579,7 +579,7 @@ def test_format_execute_briefing_structure(goal_context_manager):
             status="completed",
             reason_history=[],
             act_history=[],
-            final_report="Found bottleneck in db.py",
+            goal_completion="Found bottleneck in db.py",
             started_at=datetime.now(UTC),
         )
     ]

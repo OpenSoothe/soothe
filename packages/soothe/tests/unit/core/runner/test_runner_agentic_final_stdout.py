@@ -6,9 +6,10 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from soothe.core.runner._runner_agentic import (
-    _AGENTIC_REPORT_FULL_DISPLAY_MAX,
-    _AGENTIC_REPORT_PREVIEW_MAX,
+    _AGENTIC_GOAL_COMPLETION_FULL_DISPLAY_MAX,
+    _AGENTIC_GOAL_COMPLETION_PREVIEW_MAX,
     _agentic_final_stdout_text,
+    _should_emit_loop_reason_event,
 )
 
 
@@ -110,7 +111,7 @@ def test_returns_none_when_only_list_blob_without_trailing_prose() -> None:
 
 
 def test_exact_threshold_prints_full_without_spool() -> None:
-    body = "x" * _AGENTIC_REPORT_FULL_DISPLAY_MAX
+    body = "x" * _AGENTIC_GOAL_COMPLETION_FULL_DISPLAY_MAX
     out = _agentic_final_stdout_text(
         next_action="I've finished the analysis.",
         full_output=body,
@@ -119,12 +120,12 @@ def test_exact_threshold_prints_full_without_spool() -> None:
         config=_mock_config(),
     )
     assert out == body
-    assert len(out) == _AGENTIC_REPORT_FULL_DISPLAY_MAX
+    assert len(out) == _AGENTIC_GOAL_COMPLETION_FULL_DISPLAY_MAX
 
 
 def test_over_threshold_spools_and_announces_path(tmp_path: Path) -> None:
     root = tmp_path
-    body = "y" * (_AGENTIC_REPORT_FULL_DISPLAY_MAX + 50)
+    body = "y" * (_AGENTIC_GOAL_COMPLETION_FULL_DISPLAY_MAX + 50)
     with patch("soothe.config.SOOTHE_HOME", str(root)):
         out = _agentic_final_stdout_text(
             next_action="I've generated the report.",
@@ -134,18 +135,18 @@ def test_over_threshold_spools_and_announces_path(tmp_path: Path) -> None:
             config=_mock_config(sandboxed=True),
         )
     assert out is not None
-    assert out.startswith("y" * _AGENTIC_REPORT_PREVIEW_MAX)
+    assert out.startswith("y" * _AGENTIC_GOAL_COMPLETION_PREVIEW_MAX)
     assert "..." in out
-    assert "Full report:" in out
+    assert "Goal completion saved to:" in out
     run_dir = root / "data" / "threads" / "thread-a"
-    saved = list(run_dir.glob("final_report_*.md"))
+    saved = list(run_dir.glob("goal_completion_*.md"))
     assert len(saved) == 1
     assert saved[0].read_text(encoding="utf-8") == body
     assert str(saved[0].resolve()) in out
 
 
 def test_over_threshold_without_workspace_skips_write_but_truncates() -> None:
-    body = "z" * (_AGENTIC_REPORT_FULL_DISPLAY_MAX + 10)
+    body = "z" * (_AGENTIC_GOAL_COMPLETION_FULL_DISPLAY_MAX + 10)
     out = _agentic_final_stdout_text(
         next_action="",
         full_output=body,
@@ -155,6 +156,24 @@ def test_over_threshold_without_workspace_skips_write_but_truncates() -> None:
     )
     assert out is not None
     assert "file not written" in out
-    assert "final_report_*.md" in out
-    assert out.startswith("z" * _AGENTIC_REPORT_PREVIEW_MAX)
+    assert "goal_completion_*.md" in out
+    assert out.startswith("z" * _AGENTIC_GOAL_COMPLETION_PREVIEW_MAX)
     assert "..." in out
+
+
+def test_loop_reason_event_suppresses_default_done_message() -> None:
+    assert not _should_emit_loop_reason_event(
+        status="done",
+        next_action="Goal achieved successfully",
+    )
+
+
+def test_loop_reason_event_keeps_non_default_or_in_progress_messages() -> None:
+    assert _should_emit_loop_reason_event(
+        status="done",
+        next_action="Completed analysis and prepared final summary.",
+    )
+    assert _should_emit_loop_reason_event(
+        status="working",
+        next_action="Goal achieved successfully",
+    )

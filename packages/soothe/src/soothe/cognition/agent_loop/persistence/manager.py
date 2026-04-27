@@ -505,7 +505,7 @@ class AgentLoopCheckpointPersistenceManager:
         goal_id: str,
         loop_id: str,
         status: str = "completed",
-        final_report: str = "",
+        goal_completion: str = "",
         evidence_summary: str = "",
         iteration: int = 0,
         duration_ms: int = 0,
@@ -518,7 +518,7 @@ class AgentLoopCheckpointPersistenceManager:
             goal_id: Goal identifier.
             loop_id: AgentLoop identifier.
             status: Final goal status.
-            final_report: Generated final report content.
+            goal_completion: Generated goal completion content.
             evidence_summary: Condensed evidence summary.
             iteration: Final iteration number.
             duration_ms: Goal execution duration.
@@ -537,14 +537,14 @@ class AgentLoopCheckpointPersistenceManager:
             await db.execute(
                 """
                 UPDATE goal_records
-                SET status = ?, iteration = ?, final_report = ?, evidence_summary = ?,
+                SET status = ?, iteration = ?, goal_completion = ?, evidence_summary = ?,
                     duration_ms = ?, tokens_used = ?, completed_at = ?
                 WHERE goal_id = ? AND loop_id = ?
             """,
                 (
                     status,
                     iteration,
-                    final_report,
+                    goal_completion,
                     evidence_summary,
                     duration_ms,
                     tokens_used,

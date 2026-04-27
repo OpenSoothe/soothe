@@ -49,6 +49,7 @@ from soothe.core.event_constants import (
     AGENT_LOOP_STARTED,
     AGENT_LOOP_STEP_COMPLETED,
     AGENT_LOOP_STEP_STARTED,
+    AUTONOMOUS_GOAL_COMPLETION,
     # Cognition - AgentLoop
     AUTOPILLOT_CHECKPOINT_SAVED,
     AUTOPILLOT_DREAMING_ENTERED,
@@ -74,7 +75,6 @@ from soothe.core.event_constants import (
     CHITCHAT_STARTED,
     # System - Daemon
     DAEMON_HEARTBEAT,
-    FINAL_REPORT,
     GOAL_BATCH_STARTED,
     GOAL_COMPLETED,
     # Cognition - Goal
@@ -237,8 +237,8 @@ class AgenticLoopCompletedEvent(LifecycleEvent):
     completion_summary: str = ""
     # Layer-2 act steps completed in this thread (for goal-done line when pipeline has 0).
     total_steps: int = 0
-    # Headless CLI: when max_iterations>1, main assistant stdout is suppressed; surface this once at done.
-    final_stdout_message: str | None = None
+    # IG-273: Headless CLI goal-completion text surfaced on done when stdout is suppressed.
+    goal_completion_message: str | None = None
 
 
 class AgenticStepStartedEvent(LifecycleEvent):
@@ -448,9 +448,11 @@ class QuizResponseEvent(OutputEvent):
     content: str = ""
 
 
-class FinalReportEvent(OutputEvent):
-    type: Literal["soothe.output.autonomous.final_report.reported.reported"] = (
-        "soothe.output.autonomous.final_report.reported.reported"
+class AutonomousGoalCompletionEvent(OutputEvent):
+    """Autonomous-mode goal completion report (RFC-300, IG-273)."""
+
+    type: Literal["soothe.output.autonomous.goal_completion.reported"] = (
+        "soothe.output.autonomous.goal_completion.reported"
     )
     goal_id: str = ""
     description: str = ""
@@ -778,7 +780,7 @@ _reg(CHITCHAT_STARTED, ChitchatStartedEvent, verbosity=VerbosityTier.INTERNAL)
 _reg(CHITCHAT_RESPONSE, ChitchatResponseEvent, verbosity=VerbosityTier.QUIET)
 _reg(QUIZ_STARTED, QuizStartedEvent, verbosity=VerbosityTier.INTERNAL)
 _reg(QUIZ_RESPONSE, QuizResponseEvent, verbosity=VerbosityTier.QUIET)
-_reg(FINAL_REPORT, FinalReportEvent, verbosity=VerbosityTier.QUIET)
+_reg(AUTONOMOUS_GOAL_COMPLETION, AutonomousGoalCompletionEvent, verbosity=VerbosityTier.QUIET)
 
 # -- Autopilot (RFC-204) -------------------------------------------------
 

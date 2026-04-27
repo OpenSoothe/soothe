@@ -707,9 +707,9 @@ class EventProcessor:
         # Tool events are now visible at NORMAL verbosity (RFC-0020 CLI Stream Display Pipeline)
         # They are processed through on_progress_event -> StreamDisplayPipeline
 
-        # Handle output events (chitchat, quiz, final report streaming, etc.) through unified registry
+        # Handle output events (chitchat, quiz, goal completion streaming, etc.) through unified registry
         # IG-254: Single source of truth for user-visible output events
-        # IG-268: Include final_stdout_message from agent_loop.completed (removed exclusion)
+        # IG-268: Include goal_completion_message from agent_loop.completed (removed exclusion)
         data_for_progress = data
         if etype == "soothe.cognition.agent_loop.completed":
             if self._final_output_mode == "batch":
@@ -729,7 +729,7 @@ class EventProcessor:
             # - streaming mode: final text is emitted via chunk stream
             # - batch mode: final text is emitted above
             data_for_progress = dict(data)
-            data_for_progress.pop("final_stdout_message", None)
+            data_for_progress.pop("goal_completion_message", None)
             # Continue processing as progress event for status/goal completion lines.
         elif is_output_event(etype):
             # RFC-614: Unified streaming output handling
@@ -741,8 +741,9 @@ class EventProcessor:
 
             content = extract_output_text(etype, data)
             if content and self._presentation.tier_visible(VerbosityTier.QUIET, self._verbosity):
-                # Determine if this is a streaming chunk
-                is_streaming_chunk = etype.endswith(".streaming") and data.get("is_chunk", True)
+                # Treat all ``*.streaming`` events as streaming text payloads. Some
+                # providers send ``is_chunk=False`` for chunk-like boundaries.
+                is_streaming_chunk = etype.endswith(".streaming")
 
                 # Use unified accumulator with namespace from event parameter
                 display_text = self._state.streaming_accumulator.accumulate(
@@ -899,13 +900,22 @@ class EventProcessor:
         if not config.get("enabled", True):
             return False
 
+        # Non-streaming output events (e.g., chitchat/quiz/responded) are
+        # always eligible when output streaming is enabled globally.
+        if not etype.endswith(".streaming"):
+            return True
+
+        # In batch mode, suppress synthesized goal-completion stream chunks.
+        if config.get("mode") == "batch" and etype == "soothe.output.goal_completion.streaming":
+            return False
+
         # Check specific streaming flags
         if etype == "soothe.output.execution.streaming":
             return config.get("execution_streaming", True)
-        if etype == "soothe.output.synthesis.streaming":
+        if etype == "soothe.output.goal_completion.streaming":
             return config.get("synthesis_streaming", True)
         if etype == "soothe.output.tool_response.streaming":
             return config.get("tool_response_streaming", False)
 
-        # Default: stream all .streaming events when enabled
-        return etype.endswith(".streaming")
+        # Default: stream all remaining *.streaming events when enabled.
+        return True

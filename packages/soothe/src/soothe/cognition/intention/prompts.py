@@ -115,7 +115,7 @@ Required JSON shape:
 }}
 """
 
-# Legacy routing prompt (backward compatible)
+# Routing classification prompt
 ROUTING_PROMPT = """\
 You are {assistant_name}. Classify this request.
 Current time: {current_time}

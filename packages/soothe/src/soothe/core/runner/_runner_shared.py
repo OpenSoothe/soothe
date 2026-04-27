@@ -36,7 +36,7 @@ def _wrap_streaming_output(
     - Custom events bypass IG-119 filtering (mode="custom")
     - Config-driven: returns None if streaming disabled
 
-    Reuses proven pattern from final_report_stream logic.
+    Reuses proven pattern from goal_completion_stream logic.
 
     Args:
         chunk: Raw stream chunk from LangGraph astream (namespace, mode, data).

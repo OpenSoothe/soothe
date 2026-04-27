@@ -33,11 +33,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _AGENTIC_FINAL_STDOUT_CAP = 50_000
+_DEFAULT_GOAL_ACHIEVED_MESSAGE = "Goal achieved successfully"
 # Full normalized body at or below this length is printed without truncation (IG-123, IG-128).
-# Long translations and reports often exceed 8k; keep a high ceiling and spool beyond it.
-_AGENTIC_REPORT_FULL_DISPLAY_MAX = 50_000
+# Long goal-completion bodies (translations, research) often exceed 8k; keep a high
+# ceiling and spool beyond it (IG-273: renamed from "report" terminology).
+_AGENTIC_GOAL_COMPLETION_FULL_DISPLAY_MAX = 50_000
 # When spooling to disk, keep the on-screen preview strictly below the threshold above.
-_AGENTIC_REPORT_PREVIEW_MAX = 48_000
+_AGENTIC_GOAL_COMPLETION_PREVIEW_MAX = 48_000
 
 
 def _strip_leading_python_list_reprs(text: str, *, max_strips: int = 24) -> str:
@@ -75,17 +77,17 @@ def _resolve_agentic_report_run_dir(
     return PersistenceDirectoryManager.get_thread_directory(thread_id)
 
 
-def _spool_agentic_overflow_report(body: str, *, run_dir: Path) -> Path | None:
-    """Write full report to a unique file under ``run_dir``; return path or None on failure."""
+def _spool_agentic_overflow_goal_completion(body: str, *, run_dir: Path) -> Path | None:
+    """Write full goal completion body to a unique file under ``run_dir``; return path or None on failure."""
     try:
         run_dir.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         unique = uuid.uuid4().hex[:10]
-        out = run_dir / f"final_report_{stamp}_{unique}.md"
+        out = run_dir / f"goal_completion_{stamp}_{unique}.md"
         out.write_text(body, encoding="utf-8")
         return out.resolve()
     except OSError:
-        logger.exception("Failed to spool agentic final report to %s", run_dir)
+        logger.exception("Failed to spool agentic goal completion to %s", run_dir)
         return None
 
 
@@ -98,10 +100,10 @@ def _agentic_final_stdout_text(
     config: SootheConfig | None,
     response_length_category: str | None = None,  # IG-268: Intelligent display caps
 ) -> str | None:
-    """Build final stdout for headless CLI after an agentic loop (IG-123, IG-268).
+    """Build final stdout for headless CLI after an agentic loop (IG-123, IG-268, IG-273).
 
-    Prefers normalized ``full_output`` (full report) when present. Long reports are
-    truncated on stdout and spooled to the thread run directory.
+    Prefers normalized ``full_output`` (goal completion body) when present. Long bodies
+    are truncated on stdout and spooled to the thread run directory.
 
     IG-268: Intelligent truncation based on response length category:
     - BRIEF: 500 chars (chitchat, quiz)
@@ -114,7 +116,7 @@ def _agentic_final_stdout_text(
         # IG-268: Intelligent caps based on response length category
         from soothe.cognition.agent_loop.response_length_policy import ResponseLengthCategory
 
-        display_cap = _AGENTIC_REPORT_FULL_DISPLAY_MAX  # Default: 50000
+        display_cap = _AGENTIC_GOAL_COMPLETION_FULL_DISPLAY_MAX  # Default: 50000
 
         # Override caps based on response length category
         if response_length_category:
@@ -142,7 +144,7 @@ def _agentic_final_stdout_text(
             return body
 
         # Preview size scales with category (smaller preview for brief/concise)
-        preview_cap = _AGENTIC_REPORT_PREVIEW_MAX  # Default: 48000
+        preview_cap = _AGENTIC_GOAL_COMPLETION_PREVIEW_MAX  # Default: 48000
         if response_length_category:
             try:
                 category = ResponseLengthCategory(response_length_category)
@@ -166,20 +168,20 @@ def _agentic_final_stdout_text(
             )
         saved: Path | None = None
         if run_dir_hint is not None:
-            saved = _spool_agentic_overflow_report(body, run_dir=run_dir_hint)
+            saved = _spool_agentic_overflow_goal_completion(body, run_dir=run_dir_hint)
         if saved is not None:
-            return f"{preview_text}...\n\nFull report: {saved}"
+            return f"{preview_text}...\n\nGoal completion saved to: {saved}"
         if run_dir_hint is not None:
-            pattern = f"{run_dir_hint.as_posix()}/final_report_*.md"
+            pattern = f"{run_dir_hint.as_posix()}/goal_completion_*.md"
         elif tid:
             from soothe.config import SOOTHE_HOME
 
-            pattern = f"{Path(SOOTHE_HOME).expanduser().resolve().as_posix()}/data/threads/{tid}/final_report_*.md"
+            pattern = f"{Path(SOOTHE_HOME).expanduser().resolve().as_posix()}/data/threads/{tid}/goal_completion_*.md"
         else:
-            pattern = "data/threads/<thread_id>/final_report_*.md"
+            pattern = "data/threads/<thread_id>/goal_completion_*.md"
         return (
-            f"{preview_text}...\n\nFull report: {pattern}\n"
-            f"(file not written; exceeds {_AGENTIC_REPORT_FULL_DISPLAY_MAX} characters — see logs)"
+            f"{preview_text}...\n\nGoal completion file: {pattern}\n"
+            f"(file not written; exceeds {_AGENTIC_GOAL_COMPLETION_FULL_DISPLAY_MAX} characters — see logs)"
         )
 
     summary = (next_action or "").strip()
@@ -307,7 +309,7 @@ def _forward_messages_chunk_for_tool_ui(
     When streaming enabled (RFC-614), forward ALL chunks (wrapper filters empty text).
 
     Config-driven behavior:
-    - No config or streaming disabled: Only tool-related chunks (backward compatible)
+    - No config or streaming disabled: Only tool-related chunks
     - Streaming explicitly enabled: All chunks (wrapper handles filtering)
 
     Args:
@@ -349,6 +351,15 @@ def _clip_agentic_step_description(
     if len(text) <= max_len:
         return text
     return text[: max_len - 1].rstrip() + "…"
+
+
+def _should_emit_loop_reason_event(*, status: str, next_action: str) -> bool:
+    """Whether to forward a loop reason event to clients.
+
+    Suppress synthetic completion-only reason lines so clients don't display
+    the default "Goal achieved successfully" status text.
+    """
+    return not (status == "done" and next_action.strip() == _DEFAULT_GOAL_ACHIEVED_MESSAGE)
 
 
 class AgenticMixin:
@@ -573,13 +584,13 @@ class AgenticMixin:
                 if _forward_messages_chunk_for_tool_ui(event_data, config=self.config):
                     yield event_data
 
-            elif event_type == "final_report_stream":
+            elif event_type == "goal_completion_stream":
                 # Use unified streaming wrapper (RFC-614)
                 from soothe.core.runner._runner_shared import _wrap_streaming_output
 
                 wrapped = _wrap_streaming_output(
                     chunk=event_data,
-                    event_type="soothe.output.synthesis.streaming",
+                    event_type="soothe.output.goal_completion.streaming",
                     config=self.config,
                     namespace=(),
                 )
@@ -591,19 +602,21 @@ class AgenticMixin:
                     yield _custom(custom_data)
 
             elif event_type == "plan":
-                yield _custom(
-                    LoopAgentReasonEvent(
-                        status=event_data["status"],
-                        progress=event_data["progress"],
-                        confidence=event_data["confidence"],
-                        next_action=event_data.get("next_action", ""),
-                        reasoning=event_data.get("reasoning", ""),
-                        assessment_reasoning=event_data.get("assessment_reasoning", ""),
-                        plan_reasoning=event_data.get("plan_reasoning", ""),
-                        plan_action=event_data.get("plan_action", "new"),
-                        iteration=event_data["iteration"],
-                    ).to_dict()
-                )
+                status = str(event_data.get("status", ""))
+                next_action = str(event_data.get("next_action", ""))
+                if _should_emit_loop_reason_event(status=status, next_action=next_action):
+                    yield _custom(
+                        LoopAgentReasonEvent(
+                            status=status,
+                            progress=event_data["progress"],
+                            confidence=event_data["confidence"],
+                            next_action=next_action,
+                            assessment_reasoning=event_data.get("assessment_reasoning", ""),
+                            plan_reasoning=event_data.get("plan_reasoning", ""),
+                            plan_action=event_data.get("plan_action", "new"),
+                            iteration=event_data["iteration"],
+                        ).to_dict()
+                    )
 
             elif event_type == "iteration_completed":
                 # Internal - used for debugging only
@@ -666,7 +679,7 @@ class AgenticMixin:
                         goal=display_goal,  # IG-267: Pass goal for CLI trophy display
                         completion_summary=completion_summary,
                         total_steps=n_act_steps,
-                        final_stdout_message=final_stdout,
+                        goal_completion_message=final_stdout,
                     ).to_dict()
                 )
 

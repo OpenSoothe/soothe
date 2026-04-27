@@ -242,7 +242,6 @@ def format_subagent_milestone(
 def format_subagent_done(
     summary: str,
     duration_s: float,
-    result_preview: str = "",
     *,
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
@@ -250,12 +249,11 @@ def format_subagent_done(
     """Format a subagent completion line with metrics.
 
     IG-256: Restored verbose format with triple success markers and separate result display.
-    Result preview parameter is ignored - results show via separate tool events.
+    Results show via separate tool events.
 
     Args:
         summary: Completion summary with subagent-specific metrics (e.g., "success", "$1.23").
         duration_s: Duration in seconds.
-        result_preview: Ignored (kept for backward compatibility).
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
@@ -264,9 +262,7 @@ def format_subagent_done(
     """
     duration_ms = int(duration_s * 1000)
 
-    # IG-256: Verbose format restored - triple success markers, result shows separately
-    # Format: "✓ ✅ ✓ {summary}"
-    # result_preview is ignored - let result show via separate tool execution events
+    # IG-256: Verbose format restored - triple success markers
     content = f"✓ ✅ ✓ {summary}"
 
     return DisplayLine(
@@ -307,58 +303,21 @@ def format_plan_phase_reasoning(
     )
 
 
-def format_reasoning(
-    reasoning: str,
-    *,
-    namespace: tuple[str, ...] = (),
-    verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
-) -> DisplayLine:
-    """Format a reasoning line for LLM decision internal analysis.
-
-    IG-XXX: Shows technical reasoning with "Reasoning:" prefix for clarity.
-    Uses solid bullet ● (matching goal) to indicate reasoning is active phase.
-
-    IG-262: Uses level=2 (flat layout) for consistency with judgement lines.
-    Reasoning is a sibling to judgement, not a child.
-
-    Args:
-        reasoning: Internal technical analysis text.
-        namespace: Event namespace.
-        verbosity_tier: Current verbosity tier.
-
-    Returns:
-        DisplayLine for reasoning.
-    """
-    # Polish: Add "Reasoning:" prefix to make internal analysis visible
-    content = f"💭 {reasoning}"
-
-    return DisplayLine(
-        level=2,  # IG-262: Use level 2 for flat layout (sibling to judgement, not child)
-        content=content,
-        icon="●",  # Solid bullet matching goal icon (polish)
-        indent=indent_for_level(2),
-        source_prefix=_derive_source_prefix(namespace, verbosity_tier),
-    )
-
-
 def format_judgement(
     judgement: str,
     action: str,
     *,
-    plan_action: str | None = None,
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
 ) -> DisplayLine:
     """Format a judgement line for LLM decision reasoning.
 
     IG-089: Shows meaningful judgement info without raw intermediate data.
-    IG-XXX: Prominent reasoning display with "Reason:" prefix for clarity.
     IG-265: Removed [new]/[keep] badge from CLI display (kept in event data for logs).
 
     Args:
         judgement: Human-readable summary of the decision.
         action: Action taken ("continue" or "complete").
-        plan_action: Ignored (kept for backward compatibility, appears in logs only).
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
@@ -367,7 +326,6 @@ def format_judgement(
     """
     action_icon = "○" if action == "continue" else "●"  # Polish: ○ for continue, ● for complete
 
-    # IG-265: Remove badge from CLI display (plan_action kept in event data for logs)
     content = f"🌟 {judgement}"
 
     return DisplayLine(
@@ -489,7 +447,6 @@ __all__ = [
     "format_goal_header",
     "format_judgement",
     "format_plan_phase_reasoning",
-    "format_reasoning",
     "format_step_done",
     "format_step_header",
     "format_subagent_done",

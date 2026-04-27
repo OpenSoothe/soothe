@@ -33,7 +33,7 @@ class IntentClassifier:
 
     Pure LLM-driven classification with conversation context:
     - Intent classification (chitchat/thread_continuation/new_goal)
-    - Routing classification (backward compatible)
+    - Routing classification (task complexity for execution path selection)
     - No keyword heuristics or language detection shortcuts
 
     Single structured LLM call (~2-4s latency) with:
@@ -173,7 +173,7 @@ class IntentClassifier:
         *,
         recent_messages: list[Any] | None = None,
     ) -> RoutingClassification:
-        """Legacy routing classification for backward compatibility.
+        """Routing classification for execution path selection.
 
         Args:
             query: User input text.

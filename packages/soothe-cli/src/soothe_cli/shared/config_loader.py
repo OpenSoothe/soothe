@@ -19,7 +19,7 @@ def load_config(config_path: str | None = None) -> CLIConfig:
 
     Client settings (WebSocket endpoint, progress verbosity, etc.) always come from
     :data:`~soothe_cli.config.cli_config.CLI_CONFIG_FILE`. The optional ``config_path``
-    argument is accepted for backward compatibility with existing ``--config`` flags
+    argument is accepted for compatibility with existing ``--config`` flags
     but is **ignored**; a warning is logged when it is non-``None``.
 
     Args:

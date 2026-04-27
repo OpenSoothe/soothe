@@ -92,6 +92,7 @@ AGENT_LOOP_STEP_STARTED = "soothe.cognition.agent_loop.step.started"
 AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
 AGENT_LOOP_GOAL_STARTED = "soothe.cognition.agent_loop.started"
 AGENT_LOOP_GOAL_COMPLETED = "soothe.cognition.agent_loop.completed"
+GOAL_COMPLETION_STREAMING_EVENT = "soothe.output.goal_completion.streaming"
 
 _hitl_adapter_cache: TypeAdapter | None = None
 """Lazy singleton for the HITL request validator."""
@@ -229,7 +230,7 @@ def _extract_custom_output_text(data: dict[str, Any]) -> str | None:
     """Extract assistant-visible text from daemon custom output events.
 
     Uses unified output event registry (IG-254) for single source of truth.
-    All user-visible output events (chitchat, quiz, final report, etc.) are
+    All user-visible output events (chitchat, quiz, goal completion, etc.) are
     registered in soothe_sdk.output_events and queried here.
     """
     from soothe_sdk.ux.output_events import extract_output_text
@@ -821,7 +822,10 @@ async def execute_task_textual(
     # when multiple subagents stream in parallel
     pending_text_by_namespace: dict[tuple, str] = {}
     assistant_message_by_namespace: dict[tuple, Any] = {}
-    final_report_stream_by_namespace: dict[tuple, AssistantMessage] = {}
+    goal_completion_stream_by_namespace: dict[tuple, AssistantMessage] = {}
+    # True while execute-phase steps are active for the namespace.
+    # In normal verbosity, execute-phase AIMessage prose is suppressed.
+    execute_phase_active_by_namespace: dict[tuple, bool] = {}
 
     # Clear media from tracker after creating the message
     if image_tracker:
@@ -1130,6 +1134,10 @@ async def execute_task_textual(
                         block_type = block.get("type")
 
                         if block_type == "text":
+                            if pv in {"quiet", "normal"} and execute_phase_active_by_namespace.get(
+                                ns_key, False
+                            ):
+                                continue
                             if suppress_subgraph_assistant_text:
                                 continue
                             text = block.get("text", "")
@@ -1371,6 +1379,7 @@ async def execute_task_textual(
                             continue
 
                         if event_type == AGENT_LOOP_GOAL_COMPLETED:
+                            execute_phase_active_by_namespace[ns_key] = False
                             tr = adapter._goal_tree_by_namespace.get(ns_key)
                             if tr is not None:
                                 tr.set_loop_finished(
@@ -1383,7 +1392,7 @@ async def execute_task_textual(
 
                         if output_text := _extract_custom_output_text(data):
                             if (
-                                event_type == "soothe.output.synthesis.streaming"
+                                event_type == GOAL_COMPLETION_STREAMING_EVENT
                                 and final_output_mode != "streaming"
                             ):
                                 continue
@@ -1394,9 +1403,9 @@ async def execute_task_textual(
                                 continue
                             pending_text = pending_text_by_namespace.get(ns_key, "")
                             existing_msg = assistant_message_by_namespace.get(ns_key)
-                            stream_msg = final_report_stream_by_namespace.get(ns_key)
+                            stream_msg = goal_completion_stream_by_namespace.get(ns_key)
                             is_synthesis_stream_chunk = (
-                                event_type == "soothe.output.synthesis.streaming"
+                                event_type == GOAL_COMPLETION_STREAMING_EVENT
                                 and bool(data.get("is_chunk", False))
                             )
 
@@ -1419,7 +1428,7 @@ async def execute_task_textual(
                                         adapter._set_active_message(msg_id)
                                     stream_msg = AssistantMessage(id=msg_id)
                                     await adapter._mount_message(stream_msg)
-                                    final_report_stream_by_namespace[ns_key] = stream_msg
+                                    goal_completion_stream_by_namespace[ns_key] = stream_msg
 
                                 await stream_msg.append_content(output_text)
                                 continue
@@ -1434,7 +1443,7 @@ async def execute_task_textual(
                                     adapter._sync_message_content(
                                         stream_msg.id, stream_msg._content
                                     )
-                                final_report_stream_by_namespace.pop(ns_key, None)
+                                goal_completion_stream_by_namespace.pop(ns_key, None)
                                 if adapter._set_active_message:
                                     adapter._set_active_message(None)
                                 if adapter._set_spinner:
@@ -1502,6 +1511,7 @@ async def execute_task_textual(
                             step_id = str(data.get("step_id", "")).strip()
                             description = str(data.get("description", "")).strip()
                             if step_id:
+                                execute_phase_active_by_namespace[ns_key] = True
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
                                     await _flush_assistant_text_ns(
@@ -1529,6 +1539,7 @@ async def execute_task_textual(
                         if event_type == AGENT_LOOP_STEP_COMPLETED:
                             step_id = str(data.get("step_id", "")).strip()
                             if step_id:
+                                execute_phase_active_by_namespace[ns_key] = False
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
                                     await _flush_assistant_text_ns(
@@ -1599,7 +1610,6 @@ async def execute_task_textual(
                                 plan_action=str(plan_action),
                                 assessment_reasoning=str(data.get("assessment_reasoning", "")),
                                 plan_reasoning=str(data.get("plan_reasoning", "")),
-                                legacy_reasoning=str(data.get("reasoning", "")),
                                 id=f"plan-{uuid.uuid4().hex[:8]}",
                             )
                             await adapter._mount_message(plan_widget)
@@ -1645,11 +1655,11 @@ async def execute_task_textual(
                     await _flush_assistant_text_ns(
                         adapter, pending_text, ns_key, assistant_message_by_namespace
                     )
-            for ns_key, stream_msg in list(final_report_stream_by_namespace.items()):
+            for ns_key, stream_msg in list(goal_completion_stream_by_namespace.items()):
                 await stream_msg.stop_stream()
                 if adapter._sync_message_content and stream_msg.id:
                     adapter._sync_message_content(stream_msg.id, stream_msg._content)
-                final_report_stream_by_namespace.pop(ns_key, None)
+                goal_completion_stream_by_namespace.pop(ns_key, None)
             pending_text_by_namespace.clear()
             assistant_message_by_namespace.clear()
 

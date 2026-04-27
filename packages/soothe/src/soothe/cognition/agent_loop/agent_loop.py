@@ -10,7 +10,10 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.agent_loop.anchor_manager import CheckpointAnchorManager
 from soothe.cognition.agent_loop.executor import Executor
-from soothe.cognition.agent_loop.final_response_policy import needs_final_thread_synthesis
+from soothe.cognition.agent_loop.final_response_policy import (
+    needs_final_thread_synthesis,
+    should_return_goal_completion_directly,
+)
 from soothe.cognition.agent_loop.goal_context_manager import GoalContextManager
 from soothe.cognition.agent_loop.messages import LoopHumanMessage
 from soothe.cognition.agent_loop.planning_utils import _default_agent_decision
@@ -18,10 +21,10 @@ from soothe.cognition.agent_loop.reason import PlanPhase
 from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, PlanResult
 from soothe.cognition.agent_loop.state_manager import AgentLoopStateManager
 from soothe.cognition.agent_loop.stream_chunk_normalize import (
-    FinalReportAccumState,
+    GoalCompletionAccumState,
     iter_messages_for_act_aggregation,
-    resolve_final_report_text,
-    update_final_report_from_message,
+    resolve_goal_completion_text,
+    update_goal_completion_from_message,
 )
 from soothe.cognition.agent_loop.working_memory import LoopWorkingMemory
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
@@ -107,7 +110,6 @@ class AgentLoop:
             evidence_summary="",
             goal_progress=0.0,
             confidence=0.0,
-            reasoning="No result produced",
             next_action="I need to stop here before completion.",
         )
 
@@ -298,8 +300,7 @@ class AgentLoop:
                     "status": plan_result.status,
                     "progress": plan_result.goal_progress,
                     "confidence": plan_result.confidence,
-                    "next_action": plan_result.next_action,  # Full action (no truncation)
-                    "reasoning": plan_result.reasoning,  # Combined chain (backward compatible)
+                    "next_action": plan_result.next_action,
                     "assessment_reasoning": plan_result.assessment_reasoning,
                     "plan_reasoning": plan_result.plan_reasoning,
                     "plan_action": plan_result.plan_action,
@@ -324,7 +325,7 @@ class AgentLoop:
                     working_memory=state.working_memory,
                 )
 
-                # RFC-211 / IG-199: Final report — adaptive second CoreAgent turn vs last Execute text
+                # RFC-211 / IG-199: Goal completion — adaptive second CoreAgent turn vs last Execute text
                 # IG-268: NEVER leak internal evidence_summary (verbose step strings) to users
                 # Generate user-friendly summary instead when full_output is empty
                 if plan_result.full_output:
@@ -337,9 +338,6 @@ class AgentLoop:
                 else:
                     # No steps executed, use next_action as summary
                     final_output = plan_result.next_action or "Goal achieved successfully"
-
-                mode = self.config.agentic.final_response
-                run_synth = needs_final_thread_synthesis(state, plan_result, mode)
 
                 # IG-268: Determine response length category from intent and evidence (once for all branches)
                 from soothe.cognition.agent_loop.response_length_policy import (
@@ -388,34 +386,44 @@ class AgentLoop:
                     evidence_diversity,
                 )
 
-                if not run_synth:
-                    # IG-268: Prefer last Execute assistant text, but NEVER leak evidence_summary
+                mode = self.config.agentic.final_response
+                direct_goal_completion = should_return_goal_completion_directly(
+                    state,
+                    plan_result,
+                    mode,
+                    response_length_category=length_category.value,
+                )
+                # ``needs_final_thread_synthesis`` already handles every mode
+                # (including ``always_synthesize``); no extra branch needed.
+                run_goal_completion_synthesis = (
+                    not direct_goal_completion
+                    and needs_final_thread_synthesis(state, plan_result, mode)
+                )
+
+                if direct_goal_completion:
                     reuse = (state.last_execute_assistant_text or "").strip()
-                    if reuse:
-                        final_output = reuse
-                        logger.info(
-                            "Final response: branch=reuse_execute assistant_chars=%d",
-                            len(reuse),
-                        )
-                    # Keep the user-friendly summary generated at lines 330-339
-                    # Do NOT overwrite with evidence_summary (verbose internal strings)
-                else:
+                    final_output = reuse
                     logger.info(
-                        "Starting final report generation (full_output=%d chars, evidence=%d chars, mode=%s)",
+                        "Goal completion: branch=direct_execute assistant_chars=%d",
+                        len(reuse),
+                    )
+                elif run_goal_completion_synthesis:
+                    logger.info(
+                        "Starting goal completion generation (full_output=%d chars, evidence=%d chars, mode=%s)",
                         len(plan_result.full_output or ""),
                         len(plan_result.evidence_summary or ""),
                         mode,
                     )
 
                     try:
-                        # Agentic loop sends message to core agent requesting final report
-                        report_request = f"""Based on the complete execution history in this thread, generate a final report for the goal: {goal}
+                        # Agentic loop sends message to core agent requesting goal completion response.
+                        goal_completion_request = f"""Based on the complete execution history in this thread, generate a goal completion response for: {goal}
 
 RESPONSE LENGTH: {length_category.min_words}-{length_category.max_words} words ({length_category.value} category)
 
 {self._get_length_guidance(length_category)}
 
-The report should:
+The response should:
 1. Summarize what was accomplished
 2. **Include actual content** from content-retrieval tools (read_file, web_search, fetch_url, ls, glob, etc.)
    - ToolMessage.content contains the actual file content, search results, etc.
@@ -431,17 +439,17 @@ IMPORTANT: The user wants to see the actual content retrieved, not just confirma
 Use all tool results and AI responses available in the conversation history."""
 
                         logger.debug(
-                            "[Human Message] Final report request: %s",
-                            log_preview(report_request, chars=150),
+                            "[Human Message] Goal completion request: %s",
+                            log_preview(goal_completion_request, chars=150),
                         )
                         human_msg = LoopHumanMessage(
-                            content=report_request,
+                            content=goal_completion_request,
                             thread_id=state.thread_id,
                             iteration=state.iteration,  # Final iteration
                             goal_summary=state.goal[:200] if state.goal else None,
-                            phase="final_report",
+                            phase="goal_completion",
                         )
-                        accum = FinalReportAccumState()
+                        accum = GoalCompletionAccumState()
                         chunk_count = 0
                         async for chunk in self.core_agent.astream(
                             {"messages": [human_msg]},
@@ -451,12 +459,12 @@ Use all tool results and AI responses available in the conversation history."""
                         ):
                             chunk_count += 1
                             for msg in iter_messages_for_act_aggregation(chunk):
-                                update_final_report_from_message(accum, msg)
-                            # Yield stream chunks with special event type for final report
+                                update_goal_completion_from_message(accum, msg)
+                            # Yield stream chunks with special event type for goal completion
                             # This bypasses runner filtering so all AI text reaches CLI/TUI
-                            yield ("final_report_stream", chunk)
+                            yield ("goal_completion_stream", chunk)
 
-                        last_ai_text = resolve_final_report_text(accum)
+                        last_ai_text = resolve_goal_completion_text(accum)
 
                         logger.info(
                             "Stream completed: %d chunks, %d AI messages, accumulated_chunks=%d chars, final_ai_message=%d chars, selected=%d chars",
@@ -469,7 +477,8 @@ Use all tool results and AI responses available in the conversation history."""
                         if last_ai_text:
                             final_output = last_ai_text
                             logger.info(
-                                "Final report generated via CoreAgent (%d chars)", len(final_output)
+                                "Goal completion generated via CoreAgent (%d chars)",
+                                len(final_output),
                             )
                         else:
                             logger.warning(
@@ -479,8 +488,15 @@ Use all tool results and AI responses available in the conversation history."""
                     except Exception as e:
                         # IG-268: Keep user-friendly summary on failure, NEVER fallback to evidence
                         logger.warning(
-                            "Final report generation failed: %s, keeping user-friendly summary", e
+                            "Goal completion generation failed: %s, keeping user-friendly summary",
+                            e,
                         )
+                else:
+                    # Keep the user-friendly summary generated above.
+                    logger.info(
+                        "Goal completion: branch=summary_fallback chars=%d",
+                        len(final_output or ""),
+                    )
 
                 # Update plan_result with final output and response length category
                 if (
@@ -720,7 +736,6 @@ Use all tool results and AI responses available in the conversation history."""
             evidence_summary=state.evidence_summary,
             goal_progress=0.0,
             confidence=0.0,
-            reasoning="Max iterations reached without completion",
             next_action="I've hit the iteration limit; I'll pause here.",
         )
         yield (

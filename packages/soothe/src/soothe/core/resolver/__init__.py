@@ -3,7 +3,7 @@
 Protocol resolution (memory, planner, policy) lives here.
 Tool/subagent resolution is in ``_resolver_tools.py`` and infrastructure
 (durability, checkpointer) in ``_resolver_infra.py``.  All public names
-are re-exported for backward compatibility.
+are re-exported here for convenience.
 """
 
 from __future__ import annotations

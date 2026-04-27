@@ -19,7 +19,7 @@ class SuppressionState:
     This tracks execution state to suppress intermediate LLM responses on stdout
     during multi-step execution. Tool calls and tool results on stderr are still
     rendered by ``CliRenderer`` at normal+ verbosity; only assistant streaming text
-    is accumulated for the final report.
+    is accumulated for the goal completion output.
 
     Usage:
         # In renderer state:
@@ -32,8 +32,8 @@ class SuppressionState:
         # Track from events:
         suppression.track_from_event(event_type, data)
 
-        # Get final report:
-        if suppression.should_emit_final_report(event_type, final_stdout):
+        # Get goal completion:
+        if suppression.should_emit_goal_completion(event_type, final_stdout):
             text = suppression.get_final_response(final_stdout)
             # ... emit text ...
     """
@@ -48,7 +48,7 @@ class SuppressionState:
     # Track if final stdout already emitted (prevent duplicate emission)
     agentic_final_stdout_emitted: bool = False
 
-    # Accumulated response text for final report
+    # Accumulated response text for the goal completion output
     full_response: list[str] = field(default_factory=list)
 
     def should_suppress_output(self) -> bool:
@@ -61,19 +61,19 @@ class SuppressionState:
             self.agentic_stdout_suppressed and not self.agentic_final_stdout_emitted
         )
 
-    def should_emit_final_report(
+    def should_emit_goal_completion(
         self,
         event_type: str,
         final_stdout: str,
     ) -> bool:
-        """Check if final report should be emitted on loop completion.
+        """Check if goal completion should be emitted on loop completion.
 
         Args:
             event_type: Event type string.
             final_stdout: Final stdout message from event data.
 
         Returns:
-            True if final report should be emitted.
+            True if goal completion should be emitted.
         """
         if event_type != "soothe.cognition.agent_loop.completed":
             return False
@@ -121,12 +121,12 @@ class SuppressionState:
             if iteration >= 1 and not self.agentic_final_stdout_emitted:
                 self.agentic_stdout_suppressed = True
 
-        # Extract final stdout message from loop completion
+        # Extract goal completion message from loop completion
         payload = dict(data)
-        raw_final_stdout = payload.pop("final_stdout_message", None)
+        raw_final_stdout = payload.pop("goal_completion_message", None)
         final_stdout = raw_final_stdout if isinstance(raw_final_stdout, str) else ""
 
-        # Note: agentic_final_stdout_emitted flag is set in should_emit_final_report()
+        # Note: agentic_final_stdout_emitted flag is set in should_emit_goal_completion()
         # after checking the condition, not here (order matters for rendering logic)
 
         return final_stdout

@@ -64,7 +64,7 @@ class _OptimizationState(TypedDict):
     """
 
     messages: Annotated[list[AnyMessage], add_messages]
-    unified_classification: NotRequired[Any]  # Type: RoutingClassification (deprecated field name)
+    unified_classification: NotRequired[Any]  # Type: RoutingClassification
 
 
 class SystemPromptOptimizationMiddleware(AgentMiddleware):

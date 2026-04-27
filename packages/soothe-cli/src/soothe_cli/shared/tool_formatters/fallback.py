@@ -18,7 +18,7 @@ class FallbackFormatter(BaseFormatter):
     """Fallback formatter for unknown tools.
 
     Provides simple truncation for tools that don't have specific formatters,
-    maintaining backward compatibility with existing tool outputs.
+    preserving consistent tool output formatting.
     """
 
     def format(self, tool_name: str, result: Any) -> ToolBrief:  # noqa: ARG002

@@ -451,7 +451,7 @@ class GoalEngine:
                     exc_info=True,
                 )
 
-        # Fallback: Simple retry logic (backward compatible)
+        # Fallback: Simple retry logic
         if allow_retry and goal.retry_count < goal.max_retries:
             goal.retry_count += 1
             goal.status = "pending"

@@ -3,6 +3,7 @@
 from soothe.cognition.agent_loop.final_response_policy import (
     assemble_assistant_text_from_stream_messages,
     needs_final_thread_synthesis,
+    should_return_goal_completion_directly,
 )
 from soothe.cognition.agent_loop.schemas import LoopState, PlanResult, StepResult
 from soothe.cognition.agent_loop.synthesis import evidence_requires_final_synthesis
@@ -141,3 +142,178 @@ def test_assemble_assistant_prefers_chunk_stream_over_final_message() -> None:
         AIMessage(content=""),
     ]
     assert assemble_assistant_text_from_stream_messages(messages) == "hello"
+
+
+def test_direct_goal_completion_prefers_rich_execute_text_even_when_evidence_heavy() -> None:
+    state = LoopState(
+        goal="g",
+        thread_id="t",
+        step_results=_heavy_step_results(16),
+        last_execute_assistant_text=(
+            "## Result\n\n"
+            "Here are the first 10 lines:\n\n"
+            "```\n"
+            "1 line one\n2 line two\n3 line three\n4 line four\n5 line five\n"
+            "```\n"
+        ),
+        last_execute_wave_parallel_multi_step=False,
+        last_wave_hit_subagent_cap=False,
+    )
+    assert (
+        should_return_goal_completion_directly(
+            state,
+            _plan_done(),
+            "adaptive",
+            response_length_category="standard",
+        )
+        is True
+    )
+
+
+def test_direct_goal_completion_respects_always_synthesize_mode() -> None:
+    state = LoopState(
+        goal="g",
+        thread_id="t",
+        step_results=[],
+        last_execute_assistant_text="Ready answer from execute phase.",
+    )
+    assert (
+        should_return_goal_completion_directly(
+            state,
+            _plan_done(),
+            "always_synthesize",
+            response_length_category="brief",
+        )
+        is False
+    )
+
+
+def test_direct_goal_completion_always_last_execute_with_text() -> None:
+    """``always_last_execute`` direct-returns whenever Execute text is present."""
+    state = LoopState(
+        goal="g",
+        thread_id="t",
+        step_results=_heavy_step_results(16),  # evidence would normally veto
+        last_execute_assistant_text="Short note.",
+        last_execute_wave_parallel_multi_step=True,  # heuristics would normally veto
+        last_wave_hit_subagent_cap=True,
+    )
+    assert (
+        should_return_goal_completion_directly(
+            state,
+            _plan_done(),
+            "always_last_execute",
+            response_length_category="comprehensive",
+        )
+        is True
+    )
+
+
+def test_direct_goal_completion_always_last_execute_empty_text_falls_back() -> None:
+    """``always_last_execute`` with no Execute text cannot direct-return; caller uses summary."""
+    state = LoopState(
+        goal="g",
+        thread_id="t",
+        step_results=[],
+        last_execute_assistant_text=None,
+    )
+    assert (
+        should_return_goal_completion_directly(
+            state,
+            _plan_done(),
+            "always_last_execute",
+        )
+        is False
+    )
+
+
+def test_direct_goal_completion_vetoes_on_parallel_multi_step_wave() -> None:
+    state = LoopState(
+        goal="g",
+        thread_id="t",
+        step_results=_heavy_step_results(16),
+        last_execute_assistant_text="Some execute text that looks plausible enough.",
+        last_execute_wave_parallel_multi_step=True,
+    )
+    assert (
+        should_return_goal_completion_directly(
+            state,
+            _plan_done(),
+            "adaptive",
+            response_length_category="standard",
+        )
+        is False
+    )
+
+
+def test_direct_goal_completion_vetoes_on_subagent_cap_hit() -> None:
+    state = LoopState(
+        goal="g",
+        thread_id="t",
+        step_results=_heavy_step_results(16),
+        last_execute_assistant_text="Some execute text that looks plausible enough.",
+        last_wave_hit_subagent_cap=True,
+    )
+    assert (
+        should_return_goal_completion_directly(
+            state,
+            _plan_done(),
+            "adaptive",
+            response_length_category="standard",
+        )
+        is False
+    )
+
+
+def test_direct_goal_completion_rejects_short_plain_text_under_evidence_heavy_run() -> None:
+    """Short prose without code fences / list structure is insufficient for direct return."""
+    state = LoopState(
+        goal="g",
+        thread_id="t",
+        step_results=_heavy_step_results(16),
+        last_execute_assistant_text="Task looks done to me.",  # ~6 words, no structure
+        last_execute_wave_parallel_multi_step=False,
+        last_wave_hit_subagent_cap=False,
+    )
+    assert (
+        should_return_goal_completion_directly(
+            state,
+            _plan_done(),
+            "adaptive",
+            response_length_category="standard",  # 300 word floor
+        )
+        is False
+    )
+
+
+def test_direct_goal_completion_rejects_when_no_overlap_with_plan_output() -> None:
+    """If planner full_output shares no substantive tokens with Execute text, veto direct return."""
+    plan = PlanResult(
+        status="done",
+        evidence_summary="ev",
+        goal_progress=1.0,
+        confidence=0.9,
+        reasoning="",
+        next_action="done",
+        plan_action="new",
+        full_output=(
+            "Sensor readings have been collected across dormitory rooms and uploaded to "
+            "archive cluster Tango for reconciliation with baseline."
+        ),
+    )
+    rich_but_off_topic = " ".join(["apple banana mango pear grape orange berry melon"] * 40)
+    state = LoopState(
+        goal="g",
+        thread_id="t",
+        step_results=_heavy_step_results(16),  # heavy → evidence heuristic fires
+        last_execute_assistant_text=rich_but_off_topic,
+    )
+    assert (
+        should_return_goal_completion_directly(
+            state,
+            plan,
+            "adaptive",
+            response_length_category="standard",
+        )
+        is False
+    )

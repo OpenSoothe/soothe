@@ -193,6 +193,7 @@ class LLMTracingMiddleware(AgentMiddleware):
             # Compact response summary in dict format
             resp_summary = {
                 "duration_ms": duration_ms,
+                "message_type": type(ai_message).__name__,
                 "preview": self._preview(ai_message.content),
             }
 
@@ -214,10 +215,17 @@ class LLMTracingMiddleware(AgentMiddleware):
 
             logger.debug("[LLM Trace #%d] Response: %s", trace_id, resp_summary)
         else:
+            fallback_type = None
+            if messages:
+                fallback_type = type(messages[-1]).__name__
             logger.debug(
                 "[LLM Trace #%d] Response: %s",
                 trace_id,
-                {"duration_ms": duration_ms, "error": "no AI message"},
+                {
+                    "duration_ms": duration_ms,
+                    "message_type": fallback_type,
+                    "error": "no AI message",
+                },
             )
 
     def _log_error(self, trace_id: int, error: Exception, duration_ms: int) -> None:
