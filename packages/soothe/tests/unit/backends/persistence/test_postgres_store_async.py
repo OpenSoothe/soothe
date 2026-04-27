@@ -12,7 +12,7 @@ class TestPostgreSQLPersistStoreAsync:
     @pytest.fixture
     async def postgres_store(self):
         """Create PostgreSQL store instance for testing."""
-        # Skip if PostgreSQL not available
+        # Skip if psycopg_pool not installed
         pytest.importorskip("psycopg_pool")
 
         from soothe.backends.persistence.postgres_store import PostgreSQLPersistStore
@@ -23,11 +23,27 @@ class TestPostgreSQLPersistStoreAsync:
             "postgresql://postgres:postgres@localhost:5432/soothe_test",
         )
 
-        store = PostgreSQLPersistStore(dsn=dsn, namespace="test_async")
+        # Create store with timeout parameter in DSN
+        # Add connect_timeout=2 to fail fast if database unavailable
+        timeout_dsn = dsn if "connect_timeout" in dsn else f"{dsn}?connect_timeout=2"
+
+        store = PostgreSQLPersistStore(dsn=timeout_dsn, namespace="test_async")
+
+        # Try to initialize connection pool to verify database is available
         try:
+            # Trigger pool initialization with a simple operation
+            await asyncio.wait_for(store.save("_connection_test", "test"), timeout=5.0)
+            await asyncio.wait_for(store.delete("_connection_test"), timeout=5.0)
             yield store
-        finally:
+        except (TimeoutError, Exception) as e:
+            # Skip test if database connection fails or times out
             await store.close()
+            pytest.skip(f"PostgreSQL database not available: {e}")
+        finally:
+            try:
+                await store.close()
+            except Exception:
+                pass  # Already closed in timeout case
 
     def test_class_can_be_imported(self) -> None:
         """Test that PostgreSQLPersistStore class can be imported."""
@@ -156,10 +172,20 @@ class TestPostgreSQLPersistStoreAsync:
             "postgresql://postgres:postgres@localhost:5432/soothe_test",
         )
 
-        store_a = PostgreSQLPersistStore(dsn=dsn, namespace="ns_a")
-        store_b = PostgreSQLPersistStore(dsn=dsn, namespace="ns_b")
+        # Add timeout to DSN for faster failure detection
+        timeout_dsn = dsn if "connect_timeout" in dsn else f"{dsn}?connect_timeout=2"
+
+        store_a = PostgreSQLPersistStore(dsn=timeout_dsn, namespace="ns_a")
+        store_b = PostgreSQLPersistStore(dsn=timeout_dsn, namespace="ns_b")
 
         try:
+            # Test connection with timeout
+            try:
+                await asyncio.wait_for(store_a.save("_test_conn", "test"), timeout=5.0)
+                await store_a.delete("_test_conn")
+            except (TimeoutError, Exception) as e:
+                pytest.skip(f"PostgreSQL database not available: {e}")
+
             await store_a.save("shared_key", "value_a")
             await store_b.save("shared_key", "value_b")
 
@@ -197,15 +223,21 @@ class TestPostgreSQLPersistStoreAsync:
             "postgresql://postgres:postgres@localhost:5432/soothe_test",
         )
 
+        # Add timeout to DSN for faster failure detection
+        timeout_dsn = dsn if "connect_timeout" in dsn else f"{dsn}?connect_timeout=2"
+
         # Custom pool size
-        store = PostgreSQLPersistStore(dsn=dsn, namespace="test_pool", pool_size=5)
+        store = PostgreSQLPersistStore(dsn=timeout_dsn, namespace="test_pool", pool_size=5)
 
         try:
             # Pool should not be initialized yet (lazy)
             assert store._pool is None
 
-            # Trigger initialization
-            await store.save("init_test", "data")
+            # Test connection with timeout
+            try:
+                await asyncio.wait_for(store.save("init_test", "data"), timeout=5.0)
+            except (TimeoutError, Exception) as e:
+                pytest.skip(f"PostgreSQL database not available: {e}")
 
             # Pool should now be initialized
             assert store._pool is not None

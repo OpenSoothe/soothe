@@ -41,7 +41,7 @@ async def test_checkpoint_anchor_manager_capture_start_anchor(tmp_path):
         PersistenceDirectoryManager.ensure_directories_exist()
 
         # Register loop first (required for FK constraint)
-        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        persistence_manager = AgentLoopCheckpointPersistenceManager(None)
         await persistence_manager.register_loop(
             loop_id="test_loop",
             thread_ids=["thread_001"],
@@ -99,7 +99,7 @@ async def test_checkpoint_anchor_manager_capture_end_anchor_with_summary(tmp_pat
         PersistenceDirectoryManager.ensure_directories_exist()
 
         # Register loop first (required for FK constraint)
-        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        persistence_manager = AgentLoopCheckpointPersistenceManager(None)
         await persistence_manager.register_loop(
             loop_id="test_loop",
             thread_ids=["thread_001"],
@@ -159,7 +159,7 @@ async def test_failed_branch_manager_detect_failure(tmp_path):
         PersistenceDirectoryManager.ensure_directories_exist()
 
         # Register loop first (required for FK constraint)
-        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        persistence_manager = AgentLoopCheckpointPersistenceManager(None)
         await persistence_manager.register_loop(
             loop_id="test_loop",
             thread_ids=["thread_001"],

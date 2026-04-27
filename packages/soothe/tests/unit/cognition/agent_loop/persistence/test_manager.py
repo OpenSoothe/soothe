@@ -69,7 +69,7 @@ async def test_directory_manager_paths(tmp_path):
         assert loop_dir == tmp_path / "data" / "loops" / "loop_abc"
 
         loop_checkpoint = PersistenceDirectoryManager.get_loop_checkpoint_path()
-        assert loop_checkpoint == tmp_path / "data" / "loop_checkpoints.db"
+        assert loop_checkpoint == tmp_path / "data" / "soothe_checkpoints.db"
 
     finally:
         config.SOOTHE_HOME = original_home
@@ -141,7 +141,7 @@ async def test_persistence_manager_save_checkpoint_anchor(tmp_path):
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
-        manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        manager = AgentLoopCheckpointPersistenceManager(None)
 
         # Use unique loop_id to avoid global database conflicts
         unique_loop_id = f"test_loop_{uuid.uuid4().hex[:8]}"
@@ -192,7 +192,7 @@ async def test_persistence_manager_save_checkpoint_anchor_with_summary(tmp_path)
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
-        manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        manager = AgentLoopCheckpointPersistenceManager(None)
 
         execution_summary = {
             "status": "success",
@@ -250,7 +250,7 @@ async def test_persistence_manager_save_failed_branch(tmp_path):
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
-        manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        manager = AgentLoopCheckpointPersistenceManager(None)
 
         # Use unique IDs to avoid global database conflicts
         unique_id = uuid.uuid4().hex[:8]
@@ -310,7 +310,7 @@ async def test_persistence_manager_update_branch_analysis(tmp_path):
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
-        manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        manager = AgentLoopCheckpointPersistenceManager(None)
 
         # Use unique IDs to avoid conflicts across tests
         unique_id = uuid.uuid4().hex[:8]
@@ -388,7 +388,7 @@ async def test_persistence_manager_get_thread_checkpoints_for_loop(tmp_path):
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
-        manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        manager = AgentLoopCheckpointPersistenceManager(None)
 
         # Use unique loop_id to avoid global database conflicts
         unique_loop_id = f"test_loop_threads_{uuid.uuid4().hex[:8]}"

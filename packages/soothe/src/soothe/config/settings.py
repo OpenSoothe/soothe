@@ -582,7 +582,7 @@ class SootheConfig(BaseSettings):
                     "Provider '%s' is limited_openai type, applying compatibility wrapper",
                     provider_name,
                 )
-                from soothe.core.llm.wrappers import LimitedProviderModelWrapper
+                from soothe.utils.llm.wrappers import LimitedProviderModelWrapper
 
                 model = LimitedProviderModelWrapper(model, provider_name)
 
@@ -651,7 +651,7 @@ class SootheConfig(BaseSettings):
                     "Provider '%s' is limited_openai type, applying compatibility wrapper",
                     provider_name,
                 )
-                from soothe.core.llm.wrappers import LimitedProviderModelWrapper
+                from soothe.utils.llm.wrappers import LimitedProviderModelWrapper
 
                 model = LimitedProviderModelWrapper(model, provider_name)
 

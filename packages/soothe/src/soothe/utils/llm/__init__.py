@@ -1,4 +1,4 @@
-"""Core LLM adaptation module for Soothe.
+"""LLM adaptation utilities for Soothe.
 
 This module consolidates all LLM-related adaptation and compatibility handling:
 
@@ -13,8 +13,8 @@ Architecture:
 
 from __future__ import annotations
 
-from soothe.core.llm.tracing import LLMTracingWrapper
-from soothe.core.llm.wrappers import (
+from soothe.utils.llm.tracing import LLMTracingWrapper
+from soothe.utils.llm.wrappers import (
     JsonSchemaModelWrapper,
     LimitedProviderModelWrapper,
 )

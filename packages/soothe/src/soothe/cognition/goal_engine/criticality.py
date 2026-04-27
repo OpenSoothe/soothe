@@ -93,7 +93,7 @@ async def _evaluate_with_llm(
     from soothe.middleware._utils import create_llm_call_metadata
 
     if config and hasattr(config, "llm_tracing") and config.llm_tracing.enabled:
-        from soothe.core.llm import LLMTracingWrapper
+        from soothe.utils.llm import LLMTracingWrapper
 
         model = LLMTracingWrapper(model)
 
