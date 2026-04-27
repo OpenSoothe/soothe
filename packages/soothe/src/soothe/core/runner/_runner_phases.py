@@ -17,21 +17,14 @@ from soothe_sdk.core.exceptions import ConfigurationError
 
 from soothe.core.event_catalog import (
     ChitchatResponseEvent,
-    ChitchatStartedEvent,
-    MemoryRecalledEvent,
-    MemoryStoredEvent,
     PlanCreatedEvent,
     PlanReflectedEvent,
     PlanStepCompletedEvent,
     PlanStepStartedEvent,
-    PolicyCheckedEvent,
-    PolicyDeniedEvent,
     QuizResponseEvent,
-    QuizStartedEvent,
     ThreadCreatedEvent,
     ThreadEndedEvent,
     ThreadResumedEvent,
-    ThreadSavedEvent,
     ThreadStartedEvent,
 )
 from soothe.protocols.planner import PlanContext, StepResult
@@ -121,7 +114,7 @@ class PhasesMixin:
         populated for chitchat queries (via post-processing fallback), so
         this method should never need a second LLM call.
         """
-        yield _custom(ChitchatStartedEvent(query=user_input[:100]).to_dict())
+        logger.info("Chitchat: %s", user_input[:50])
 
         piggybacked = getattr(classification, "chitchat_response", None)
         if piggybacked:
@@ -159,7 +152,7 @@ class PhasesMixin:
         Returns:
             StreamChunk events for quiz start and response.
         """
-        yield _custom(QuizStartedEvent(query=user_input[:100]).to_dict())
+        logger.info("Quiz: %s", user_input[:50])
 
         # Use piggybacked response if available (primary path)
         piggybacked = getattr(classification, "quiz_response", None)
@@ -714,21 +707,9 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                         thread_id=state.thread_id,
                     ),
                 )
-                yield _custom(
-                    PolicyCheckedEvent(
-                        action="user_request",
-                        verdict=decision.verdict,
-                        profile=self._config.protocols.policy.profile,
-                    ).to_dict()
-                )
+                logger.debug("Policy checked: user_request → %s", decision.verdict)
                 if decision.verdict == "deny":
-                    yield _custom(
-                        PolicyDeniedEvent(
-                            action="user_request",
-                            reason=decision.reason,
-                            profile=self._config.protocols.policy.profile,
-                        ).to_dict()
-                    )
+                    logger.info("Policy denied: user_request | Reason: %s", decision.reason)
                     return
             except Exception:
                 logger.debug("Policy check failed", exc_info=True)
@@ -747,23 +728,18 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                 state.recalled_memories = memory_items
 
                 if memory_items:
-                    yield _custom(
-                        MemoryRecalledEvent(
-                            count=len(memory_items),
-                            query=user_input[:100],
-                        ).to_dict()
+                    logger.debug(
+                        "Memory recalled: %d items | Query: %s", len(memory_items), user_input[:50]
                     )
             else:
                 if self._memory:
                     try:
                         items = await self._memory.recall(user_input, limit=5)
                         state.recalled_memories = items
-                        yield _custom(
-                            MemoryRecalledEvent(
-                                count=len(items),
-                                query=user_input[:100],
-                            ).to_dict()
-                        )
+                        if items:
+                            logger.debug(
+                                "Memory recalled: %d items | Query: %s", len(items), user_input[:50]
+                            )
                     except Exception:
                         logger.debug("Memory recall failed", exc_info=True)
 
@@ -854,11 +830,10 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                         source_thread=state.thread_id,
                     )
                 )
-                yield _custom(
-                    MemoryStoredEvent(
-                        id="auto",
-                        source_thread=state.thread_id,
-                    ).to_dict()
+                logger.debug(
+                    "Memory stored: %d chars | Thread: %s",
+                    len(response_text[:500]),
+                    state.thread_id,
                 )
             except Exception:
                 logger.debug("Memory storage failed", exc_info=True)
@@ -912,7 +887,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                 yield chunk
             if self._artifact_store:
                 self._artifact_store.update_status("completed")
-            yield _custom(ThreadSavedEvent(thread_id=state.thread_id).to_dict())
+            logger.debug("Thread saved: %s", state.thread_id)
         except Exception:
             logger.debug("State persistence failed", exc_info=True)
 

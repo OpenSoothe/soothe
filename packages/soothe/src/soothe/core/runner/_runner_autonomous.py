@@ -17,19 +17,9 @@ from soothe.cognition.agent_loop.schemas import PlanResult
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.event_catalog import (
     FinalReportEvent,
-    GoalBatchStartedEvent,
-    GoalCompletedEvent,
-    GoalCreatedEvent,
-    GoalDeferredEvent,
-    GoalDirectivesAppliedEvent,
-    GoalFailedEvent,
-    GoalReportEvent,
-    IterationCompletedEvent,
-    IterationStartedEvent,
     PlanCreatedEvent,
     PlanReflectedEvent,
     ThreadEndedEvent,
-    ThreadSavedEvent,
 )
 from soothe.protocols.planner import StepResult
 
@@ -171,9 +161,11 @@ class AutonomousMixin(GoalDirectivesMixin):
             # Store intent classification on state for goal creation logic
             state.intent_classification = intent_classification
 
-            # Yield intent event for observability
-            yield _custom(
-                {"type": "soothe.intent.classified", "data": intent_classification.model_dump()}
+            # Log intent classification (removed event emission)
+            logger.info(
+                "Intent: %s (confidence: %.2f)",
+                intent_classification.intent_type,
+                getattr(intent_classification, "confidence", 1.0),
             )
 
             # Fast path for chitchat - skip goal engine and planning
@@ -220,12 +212,8 @@ class AutonomousMixin(GoalDirectivesMixin):
                             "[IG-226] Thread continuation: reusing active goal %s",
                             goal.id,
                         )
-                        yield _custom(
-                            {
-                                "type": "soothe.intent.goal_reused",
-                                "goal_id": goal.id,
-                                "description": goal.description,
-                            }
+                        logger.debug(
+                            "Goal reused: %s | Description: %s", goal.id, goal.description[:50]
                         )
                     else:
                         # No active goal, create new goal despite thread_continuation
@@ -254,14 +242,9 @@ class AutonomousMixin(GoalDirectivesMixin):
         if goal and (not intent or intent.intent_type == "new_goal"):
             # IG-262: Include friendly message from intent classification
             friendly_message = intent.friendly_message if intent else None
-            yield _custom(
-                GoalCreatedEvent(
-                    goal_id=goal.id,
-                    description=goal.description,
-                    priority=goal.priority,
-                    friendly_message=friendly_message,
-                ).to_dict()
-            )
+            logger.info("Goal %s created: %s", goal.id, goal.description[:50])
+            if friendly_message:
+                logger.debug("Goal friendly message: %s", friendly_message[:100])
 
         from soothe.cognition.goal_engine.proposal_queue import ProposalQueue
 
@@ -279,11 +262,10 @@ class AutonomousMixin(GoalDirectivesMixin):
                 break
 
             if len(ready_goals) > 1:
-                yield _custom(
-                    GoalBatchStartedEvent(
-                        goal_ids=[g.id for g in ready_goals],
-                        parallel_count=len(ready_goals),
-                    ).to_dict()
+                logger.info(
+                    "Goal batch: %d goals ready | IDs: %s",
+                    len(ready_goals),
+                    [g.id for g in ready_goals],
                 )
 
             if len(ready_goals) == 1:
@@ -333,13 +315,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                     if isinstance(result, Exception):
                         logger.exception("Goal %s failed: %s", g.id, result)
                         await self._goal_engine.fail_goal(g.id, error=str(result))
-                        yield _custom(
-                            GoalFailedEvent(
-                                goal_id=g.id,
-                                error=str(result),
-                                retry_count=0,
-                            ).to_dict()
-                        )
+                        logger.info("Goal %s failed: %s", g.id, str(result)[:100])
                     else:
                         for chunk in collected.get(g.id, []):
                             yield chunk
@@ -367,17 +343,9 @@ class AutonomousMixin(GoalDirectivesMixin):
                 yield chunk
             if state.artifact_store:
                 state.artifact_store.update_status("completed")
-            yield _custom(ThreadSavedEvent(thread_id=state.thread_id).to_dict())
+            logger.debug("Thread saved: %s", state.thread_id)
         except Exception:
             logger.debug("Final state persistence failed", exc_info=True)
-
-        # RFC-204: Emit status change event
-        yield _custom(
-            {
-                "type": "soothe.system.autopilot.status_changed",
-                "state": "idle" if self._goal_engine.is_complete() else "running",
-            }
-        )
 
         # RFC-204: Check for scheduled tasks and enter dreaming mode if enabled
         if self._goal_engine and self._goal_engine.is_complete():
@@ -415,14 +383,7 @@ class AutonomousMixin(GoalDirectivesMixin):
 
         from ._types import IterationRecord, RunnerState
 
-        yield _custom(
-            IterationStartedEvent(
-                iteration=total_iterations,
-                goal_id=goal.id,
-                goal_description=goal.description,
-                parallel_goals=parallel_goals,
-            ).to_dict()
-        )
+        logger.info("Iteration %d started | Goal: %s", total_iterations, goal.id)
 
         iter_start = perf_counter()
         current_input = goal.description
@@ -494,15 +455,13 @@ class AutonomousMixin(GoalDirectivesMixin):
                 duration_ms = int((perf_counter() - iter_start) * 1000)
                 goal_result.duration_ms = duration_ms
 
-                # Emit goal report
-                yield _custom(
-                    GoalReportEvent(
-                        goal_id=goal.id,
-                        step_count=goal_result.iteration_count,
-                        completed=1 if goal_result.status == "completed" else 0,
-                        failed=1 if goal_result.status == "failed" else 0,
-                        summary=goal_result.evidence_summary[:200],
-                    ).to_dict()
+                # Emit goal report (removed event emission)
+                logger.debug(
+                    "Goal %s report: %d steps | Status: %s | Summary: %s",
+                    goal.id,
+                    goal_result.iteration_count,
+                    goal_result.status,
+                    goal_result.evidence_summary[:50],
                 )
 
                 # Update goal report
@@ -518,15 +477,13 @@ class AutonomousMixin(GoalDirectivesMixin):
                 # Complete or fail goal based on PlanResult
                 if goal_result.status == "completed":
                     await self._goal_engine.complete_goal(goal.id)
-                    yield _custom(GoalCompletedEvent(goal_id=goal.id).to_dict())
+                    logger.info("Goal %s completed", goal.id)
                 else:
                     await self._goal_engine.fail_goal(
                         goal.id, error="AgentLoop did not achieve goal"
                     )
-                    yield _custom(
-                        GoalFailedEvent(
-                            goal_id=goal.id, error="Not achieved", retry_count=goal.retry_count
-                        ).to_dict()
+                    logger.info(
+                        "Goal %s failed: Not achieved (retry %d)", goal.id, goal.retry_count
                     )
 
                 # Store memory
@@ -590,12 +547,11 @@ class AutonomousMixin(GoalDirectivesMixin):
                                 current_goal=goal,
                             )
 
-                            yield _custom(
-                                GoalDirectivesAppliedEvent(
-                                    goal_id=goal.id,
-                                    directives_count=len(reflection.goal_directives),
-                                    changes=goal_changes,
-                                ).to_dict()
+                            logger.debug(
+                                "Goal %s directives: %d applied | Changes: %s",
+                                goal.id,
+                                len(reflection.goal_directives),
+                                str(goal_changes)[:50] if goal_changes else "none",
                             )
 
                             # Check if current goal dependencies still satisfied
@@ -615,12 +571,9 @@ class AutonomousMixin(GoalDirectivesMixin):
                                     )
                                     # Reset goal to pending
                                     goal.status = "pending"
-                                    yield _custom(
-                                        GoalDeferredEvent(
-                                            goal_id=goal.id,
-                                            reason="Dependencies added but not completed",
-                                            plan_preserved=True,
-                                        ).to_dict()
+                                    logger.info(
+                                        "Goal %s deferred: Dependencies added but not completed",
+                                        goal.id,
                                     )
 
                             # Save checkpoint after goal mutations
@@ -634,15 +587,14 @@ class AutonomousMixin(GoalDirectivesMixin):
                     except Exception:
                         logger.debug("GoalEngine reflection failed", exc_info=True)
 
-                # Emit iteration completed
+                # Emit iteration completed (removed event emission)
                 duration_ms = int((perf_counter() - iter_start) * 1000)
-                yield _custom(
-                    IterationCompletedEvent(
-                        iteration=total_iterations,
-                        goal_id=goal.id,
-                        outcome=goal_result.status,
-                        duration_ms=duration_ms,
-                    ).to_dict()
+                logger.debug(
+                    "Iteration %d completed | Goal: %s | Outcome: %s | Duration: %dms",
+                    total_iterations,
+                    goal.id,
+                    goal_result.status,
+                    duration_ms,
                 )
 
                 # Return early - AgentLoop handled everything
@@ -770,12 +722,11 @@ class AutonomousMixin(GoalDirectivesMixin):
                                 current_goal=goal,
                             )
 
-                            yield _custom(
-                                GoalDirectivesAppliedEvent(
-                                    goal_id=goal.id,
-                                    directives_count=len(reflection.goal_directives),
-                                    changes=goal_changes,
-                                ).to_dict()
+                            logger.debug(
+                                "Goal %s directives: %d applied | Changes: %s",
+                                goal.id,
+                                len(reflection.goal_directives),
+                                str(goal_changes)[:50] if goal_changes else "none",
                             )
 
                             # CRITICAL: Handle DAG state changes
@@ -796,13 +747,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                                 # the planner can decide whether to create a new plan or revise the existing one.
                                 # The existing plan provides context for the next iteration.
 
-                                yield _custom(
-                                    GoalDeferredEvent(
-                                        goal_id=goal.id,
-                                        reason="dependencies_added",
-                                        plan_preserved=iter_state.plan is not None,
-                                    ).to_dict()
-                                )
+                                logger.info("Goal %s deferred: Dependencies added", goal.id)
 
                                 # Save checkpoint and exit - scheduler will pick up prerequisite goals
                                 async for chunk in self._save_checkpoint(
@@ -971,14 +916,12 @@ class AutonomousMixin(GoalDirectivesMixin):
                     )
                     goal.report = goal_report
 
-                    yield _custom(
-                        GoalReportEvent(
-                            goal_id=goal.id,
-                            step_count=len(sr_list),
-                            completed=n_completed,
-                            failed=n_failed,
-                            summary=goal_report.summary[:200],
-                        ).to_dict()
+                    logger.info(
+                        "Goal %s report: %d/%d steps completed | Summary: %s",
+                        goal.id,
+                        n_completed,
+                        len(sr_list),
+                        goal_report.summary[:50],
                     )
 
                 # RFC-204: Process proposals queued by Layer 2 tools before completing
@@ -1001,11 +944,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                     yield chunk
                 logger.debug("Post-goal checkpoint saved for goal %s", goal.id)
 
-                yield _custom(
-                    GoalCompletedEvent(
-                        goal_id=goal.id,
-                    ).to_dict()
-                )
+                logger.info("Goal %s completed", goal.id)
 
                 # RFC-204: Webhook notification for goal completion
                 await self._send_autopilot_webhook(
