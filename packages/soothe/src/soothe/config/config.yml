@@ -290,13 +290,29 @@ persistence:
   # checkpoint_sqlite_path: "" # Empty = $SOOTHE_DATA_DIR/checkpoints.db
 
 # Vector Store Providers - Named backends for VectorContext (similar to LLM providers)
+# Supports multiple providers: pgvector (production), sqlite_vec (development), weaviate
 
 vector_stores:
+  # PostgreSQL with pgvector extension (production, recommended)
   - name: pgvector_default
     provider_type: pgvector
     dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"  # Required for pgvector
     pool_size: 5
-    index_type: hnsw
+    index_type: hnsw  # hnsw or ivfflat
+
+  # SQLite with sqlite-vec extension (development, no external service required)
+  # - name: sqlite_vec_default
+  #   provider_type: sqlite_vec
+  #   db_path: ""  # Optional: Empty uses $SOOTHE_DATA_DIR/vector.db
+  #   vector_size: 1536  # Embedding dimension (adjust for your model)
+  #   distance: cosine  # Distance metric: cosine, l2, or ip (inner product)
+
+  # Weaviate vector database (alternative, cloud or self-hosted)
+  # - name: weaviate_default
+  #   provider_type: weaviate
+  #   url: "http://localhost:8080"  # Weaviate server URL
+  #   api_key: ""  # Optional: For Weaviate Cloud
+  #   grpc_port: 50051  # gRPC port for better performance
 
 vector_store_router:
   default: pgvector_default:soothe_default  # Format: "provider_name:collection_name"
