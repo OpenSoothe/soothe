@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -287,6 +288,21 @@ def _format_progress_event_lines_for_tui(
         return rendered
 
     return []
+
+
+def _repair_concatenated_output_text(text: str) -> str:
+    """Repair common markdown/text concat artifacts before final TUI render."""
+    repaired = text
+    repaired = re.sub(r"(?<!\n)(?=##+\s*\d)", "\n\n", repaired)
+    repaired = re.sub(r"(?<!\n)(?=##+\s*[A-Za-z])", "\n\n", repaired)
+    repaired = re.sub(r"(?<=##)(?=\d)", " ", repaired)
+    repaired = re.sub(r"(?<=[A-Za-z])(?=\d{1,3}\b)", " ", repaired)
+    repaired = re.sub(r"(##[^\n]*[a-z])(?=[A-Z])", r"\1\n\n", repaired)
+    repaired = re.sub(r"(?<!\n)(?=\d+\.\s+\*\*)", "\n", repaired)
+    repaired = re.sub(r"(?<=[A-Za-z])(?=-\s+\*\*)", "\n", repaired)
+    repaired = re.sub(r"(?<=[A-Za-z0-9])(?=-\s)", "\n", repaired)
+    repaired = re.sub(r"(?<=\d)(?=[#<])", "\n", repaired)
+    return repaired
 
 
 class TextualUIAdapter:
@@ -1367,7 +1383,7 @@ async def execute_task_textual(
 
                         if output_text := _extract_custom_output_text(data):
                             if (
-                                event_type == "soothe.output.final_report.streaming"
+                                event_type == "soothe.output.synthesis.streaming"
                                 and final_output_mode != "streaming"
                             ):
                                 continue
@@ -1379,12 +1395,12 @@ async def execute_task_textual(
                             pending_text = pending_text_by_namespace.get(ns_key, "")
                             existing_msg = assistant_message_by_namespace.get(ns_key)
                             stream_msg = final_report_stream_by_namespace.get(ns_key)
-                            is_final_report_stream_chunk = (
-                                event_type == "soothe.output.final_report.streaming"
+                            is_synthesis_stream_chunk = (
+                                event_type == "soothe.output.synthesis.streaming"
                                 and bool(data.get("is_chunk", False))
                             )
 
-                            if is_final_report_stream_chunk:
+                            if is_synthesis_stream_chunk:
                                 if pending_text:
                                     await _flush_assistant_text_ns(
                                         adapter,
@@ -1465,12 +1481,16 @@ async def execute_task_textual(
                             # Only create new message if no existing one or content differs
                             if not existing_msg or output_normalized != pending_normalized:
                                 output_widget = AssistantMessage(
-                                    output_text, id=f"asst-{uuid.uuid4().hex[:8]}"
+                                    _repair_concatenated_output_text(output_text),
+                                    id=f"asst-{uuid.uuid4().hex[:8]}",
                                 )
                                 await adapter._mount_message(output_widget)
                                 await output_widget.write_initial_content()
                                 if adapter._sync_message_content and output_widget.id:
-                                    adapter._sync_message_content(output_widget.id, output_text)
+                                    adapter._sync_message_content(
+                                        output_widget.id,
+                                        _repair_concatenated_output_text(output_text),
+                                    )
 
                             if adapter._set_active_message:
                                 adapter._set_active_message(None)
@@ -2040,20 +2060,24 @@ async def _flush_assistant_text_ns(
     Finalizes the streaming by stopping the MarkdownStream.
     If no message exists yet, creates one with the full content.
     """
-    if not text.strip():
+    repaired_text = _repair_concatenated_output_text(text)
+    if not repaired_text.strip():
         return
 
     current_msg = assistant_message_by_namespace.get(ns_key)
     if current_msg is None:
         # No message was created during streaming - create one with full content
         msg_id = f"asst-{uuid.uuid4().hex[:8]}"
-        current_msg = AssistantMessage(text, id=msg_id)
+        current_msg = AssistantMessage(repaired_text, id=msg_id)
         await adapter._mount_message(current_msg)
         await current_msg.write_initial_content()
         assistant_message_by_namespace[ns_key] = current_msg
     else:
         # Stop the stream to finalize the content
         await current_msg.stop_stream()
+        # Normalize final rendered content after stream completion.
+        if repaired_text != current_msg._content:
+            await current_msg.set_content(repaired_text)
 
     # When the AssistantMessage was first mounted and recorded in the
     # MessageStore, it had empty content (streaming hadn't started yet).

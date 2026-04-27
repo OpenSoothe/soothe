@@ -15,7 +15,7 @@ from typing import Any
 
 from soothe.core.event_constants import ERROR
 from soothe.core.workspace_resolution import resolve_workspace_for_stream
-from soothe.foundation import extract_text_from_ai_message, strip_internal_tags
+from soothe.foundation import extract_text_from_ai_message
 from soothe.logging import ThreadLogger
 
 logger = logging.getLogger(__name__)
@@ -803,24 +803,17 @@ class QueryEngine:
 
     @staticmethod
     def extract_custom_output_text(data: dict[str, Any]) -> str | None:
-        """Extract assistant-visible output text from custom protocol events."""
-        from soothe.core.event_catalog import (
-            AGENT_LOOP_COMPLETED,
-            CHITCHAT_RESPONSE,
-            FINAL_REPORT,
-        )
+        """Extract assistant-visible output text from custom protocol events.
+
+        Handles both final events and streaming chunks (RFC-614):
+        - Final events: strip internal tags for clean display
+        - Streaming chunks: preserve raw boundaries for client concatenation
+
+        Delegates to SDK registry (single source of truth).
+        """
+        from soothe_sdk.ux.output_events import extract_output_text
 
         event_type = str(data.get("type", ""))
-        if event_type == CHITCHAT_RESPONSE:
-            content = data.get("content", "")
-            cleaned = strip_internal_tags(str(content))
-            return cleaned or None
-        if event_type == AGENT_LOOP_COMPLETED:
-            content = data.get("final_stdout_message", "")
-            cleaned = strip_internal_tags(str(content))
-            return cleaned or None
-        if event_type == FINAL_REPORT:
-            content = data.get("content", data.get("summary", ""))
-            cleaned = strip_internal_tags(str(content))
-            return cleaned or None
-        return None
+        # Use SDK registry for all output events (both final and streaming)
+        # Registry handles boundary preservation logic per event type
+        return extract_output_text(event_type, data)

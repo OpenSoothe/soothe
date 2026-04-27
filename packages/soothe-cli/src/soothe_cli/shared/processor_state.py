@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from soothe_sdk.client.schemas import Plan
 
+    from soothe_cli.shared.stream_accumulator import StreamingTextAccumulator
+
 
 @dataclass
 class ProcessorState:
@@ -54,6 +56,14 @@ class ProcessorState:
     # Deduplication for tool results (prevents duplicate display)
     emitted_tool_result_ids: set[str] = field(default_factory=set)
 
+    # Unified streaming text accumulator (RFC-614)
+    streaming_accumulator: StreamingTextAccumulator = field(
+        default_factory=lambda: __import__(
+            "soothe_cli.shared.stream_accumulator", fromlist=["StreamingTextAccumulator"]
+        ).StreamingTextAccumulator()
+    )
+    """Unified streaming text accumulator with namespace isolation."""
+
     def reset_turn(self) -> None:
         """Reset per-turn state.
 
@@ -64,6 +74,8 @@ class ProcessorState:
         self.tool_call_start_times.clear()
         self.emitted_tool_call_ids.clear()
         self.emitted_tool_result_ids.clear()
+        self.streaming_accumulator.finalize_all()
+        self.streaming_accumulator.clear()
 
     def clear_session(self) -> None:
         """Clear all session state.
@@ -78,3 +90,4 @@ class ProcessorState:
         self.tool_call_start_times.clear()
         self.emitted_tool_call_ids.clear()
         self.emitted_tool_result_ids.clear()
+        self.streaming_accumulator.clear()

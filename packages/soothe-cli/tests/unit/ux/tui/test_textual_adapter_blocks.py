@@ -9,6 +9,7 @@ from soothe_cli.tui.textual_adapter import (
     _defer_first_tool_card_mount_until_final_stream_chunk,
     _defer_tool_card_for_empty_streaming_args,
     _expand_nonstandard_tool_blocks,
+    _repair_concatenated_output_text,
     _tui_effective_ai_blocks,
 )
 
@@ -204,3 +205,16 @@ def test_tool_calls_visible_on_nested_namespace_without_direct_route() -> None:
             "id": "call-sub",
         }
     ]
+
+
+def test_repair_concatenated_output_text_common_artifacts() -> None:
+    raw = (
+        "# Report##1. Objective and Methodology first10 lines."
+        " Read file- **Content Type**\n```1# Soothe\n23<div>```"
+    )
+    fixed = _repair_concatenated_output_text(raw)
+    assert "## 1. Objective" in fixed or "##1. Objective" in fixed
+    assert "first 10 lines" in fixed
+    assert "Read file\n- **Content Type**" in fixed
+    assert "```1\n# Soothe" in fixed or "```\n1\n# Soothe" in fixed
+    assert "23\n<div>" in fixed

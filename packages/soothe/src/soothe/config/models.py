@@ -940,6 +940,39 @@ class SecurityConfig(BaseModel):
     )
 
 
+class OutputStreamingConfig(BaseModel):
+    """Configuration for unified output streaming behavior (RFC-614).
+
+    Controls streaming mode for all AI outputs (not just final reports) across
+    daemon and client layers. Propagated from daemon config to runner, with
+    CLI override capability.
+
+    Args:
+        enabled: Enable streaming mode for all AI outputs.
+            When False, outputs are emitted as complete messages only.
+        mode: Display mode - "streaming" shows real-time chunks, "batch" accumulates
+            silently and shows final output.
+        execution_streaming: Stream execution phase AI text (CoreAgent responses during Act).
+        synthesis_streaming: Stream synthesis phase AI text (final report generation).
+        tool_response_streaming: Stream tool result processing AI text (experimental).
+    """
+
+    enabled: bool = True
+    """Enable streaming mode for all AI outputs."""
+
+    mode: Literal["streaming", "batch"] = "streaming"
+    """Display mode - streaming shows chunks, batch shows final output only."""
+
+    execution_streaming: bool = True
+    """Stream execution phase AI text."""
+
+    synthesis_streaming: bool = True
+    """Stream synthesis phase AI text."""
+
+    tool_response_streaming: bool = False
+    """Stream tool result processing AI text (experimental, may cause UI fragmentation)."""
+
+
 # ---------------------------------------------------------------------------
 # Model Knowledge Cutoff Constants (RFC-104)
 # ---------------------------------------------------------------------------

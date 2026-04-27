@@ -732,26 +732,44 @@ class EventProcessor:
             data_for_progress.pop("final_stdout_message", None)
             # Continue processing as progress event for status/goal completion lines.
         elif is_output_event(etype):
-            if (
-                etype == "soothe.output.final_report.streaming"
-                and self._final_output_mode != "streaming"
-            ):
+            # RFC-614: Unified streaming output handling
+            streaming_config = self._get_effective_streaming_config()
+
+            # Skip if streaming disabled for this event type
+            if not self._should_stream_event_type(etype, streaming_config):
                 return
+
             content = extract_output_text(etype, data)
             if content and self._presentation.tier_visible(VerbosityTier.QUIET, self._verbosity):
-                # Treat all final_report.streaming payloads as streaming for boundary handling.
-                # Some providers emit mixed chunk/final message shapes under the same event type.
-                is_streaming = etype == "soothe.output.final_report.streaming"
-                cleaned = self._clean_assistant_text(content, is_streaming=is_streaming)
-                if cleaned:
-                    self._emit_assistant_text(
-                        cleaned,
-                        is_main=True,
-                        is_streaming=is_streaming,
+                # Determine if this is a streaming chunk
+                is_streaming_chunk = etype.endswith(".streaming") and data.get("is_chunk", True)
+
+                # Use unified accumulator with namespace from event parameter
+                display_text = self._state.streaming_accumulator.accumulate(
+                    etype,
+                    content,
+                    namespace=namespace,  # Use namespace from _handle_custom_event parameter
+                    is_chunk=is_streaming_chunk,
+                )
+
+                if display_text:
+                    # Clean and display
+                    cleaned = self._clean_assistant_text(
+                        display_text,
+                        is_streaming=is_streaming_chunk,
                     )
-                    # Only lock final answer for non-streaming events
-                    if not is_streaming:
-                        self._presentation.mark_final_answer_locked()
+                    if cleaned:
+                        self._emit_assistant_text(
+                            cleaned,
+                            is_main=True,
+                            is_streaming=is_streaming_chunk,
+                        )
+
+                # Lock final answer for non-streaming final events
+                if not is_streaming_chunk:
+                    self._presentation.mark_final_answer_locked()
+                    # Finalize stream
+                    self._state.streaming_accumulator.finalize_stream(etype, namespace=namespace)
             return
 
         category = classify_event_to_tier(etype, namespace)
@@ -845,3 +863,49 @@ class EventProcessor:
         if self._verbosity == "quiet":
             return self._policy.extract_quiet_answer(text)
         return text
+
+    def _get_effective_streaming_config(self) -> Any:
+        """Get effective streaming config with defaults (RFC-614).
+
+        Since EventProcessor doesn't have direct access to CLI config,
+        we use sensible defaults based on initialization parameters.
+
+        Returns:
+            Dict with enabled, mode, execution_streaming, synthesis_streaming fields.
+        """
+        # Use defaults - streaming is enabled by default per RFC-614
+        # final_output_mode controls batch/streaming display mode
+        config = {
+            "enabled": True,
+            "mode": self._final_output_mode
+            if self._final_output_mode in {"streaming", "batch"}
+            else "streaming",
+            "execution_streaming": True,
+            "synthesis_streaming": True,
+        }
+
+        return config
+
+    def _should_stream_event_type(self, etype: str, config: dict[str, Any]) -> bool:
+        """Check if event type should be streamed based on config (RFC-614).
+
+        Args:
+            etype: Event type string.
+            config: Effective config dict with enabled, mode, per-phase flags.
+
+        Returns:
+            True if event should be streamed/processed, False to skip.
+        """
+        if not config.get("enabled", True):
+            return False
+
+        # Check specific streaming flags
+        if etype == "soothe.output.execution.streaming":
+            return config.get("execution_streaming", True)
+        if etype == "soothe.output.synthesis.streaming":
+            return config.get("synthesis_streaming", True)
+        if etype == "soothe.output.tool_response.streaming":
+            return config.get("tool_response_streaming", False)
+
+        # Default: stream all .streaming events when enabled
+        return etype.endswith(".streaming")

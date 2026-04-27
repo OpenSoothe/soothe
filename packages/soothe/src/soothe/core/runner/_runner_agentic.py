@@ -296,8 +296,33 @@ def _is_ai_tool_invocation_messages_chunk(chunk: object) -> bool:
     return _message_has_tool_invocation_metadata(data[0])
 
 
-def _forward_messages_chunk_for_tool_ui(chunk: object) -> bool:
-    """Whether to forward a ``stream_event`` messages chunk to WebSocket / TUI."""
+def _forward_messages_chunk_for_tool_ui(
+    chunk: object,
+    *,
+    config: Any | None = None,
+) -> bool:
+    """Whether to forward a ``stream_event`` messages chunk to WebSocket / TUI.
+
+    IG-119: Forward tool results and AI tool-call metadata.
+    When streaming enabled (RFC-614), forward ALL chunks (wrapper filters empty text).
+
+    Config-driven behavior:
+    - No config or streaming disabled: Only tool-related chunks (backward compatible)
+    - Streaming explicitly enabled: All chunks (wrapper handles filtering)
+
+    Args:
+        chunk: Deepagents stream chunk ``(namespace, mode, data)``.
+        config: Optional SootheConfig to check streaming enabled flag.
+
+    Returns:
+        True if chunk should be forwarded.
+    """
+    # When config provided and streaming explicitly enabled, forward all chunks
+    if config and hasattr(config, "output_streaming") and config.output_streaming.enabled:
+        # RFC-614: Forward all chunks when streaming enabled (wrapper filters)
+        return True
+
+    # Default/backward-compatible behavior: Only forward tool-related chunks (IG-119)
     return _is_tool_stream_chunk(chunk) or _is_ai_tool_invocation_messages_chunk(chunk)
 
 
@@ -403,9 +428,12 @@ class AgenticMixin:
                 intent_classification.reuse_current_goal,
             )
 
-            # Yield intent event for observability (IG-226)
-            yield _custom(
-                {"type": "soothe.intent.classified", "data": intent_classification.model_dump()}
+            # IG-271: Intent event removed, replaced with compact logging
+            logger.debug(
+                "Intent classified: %s (confidence: %.2f) - %s",
+                intent_classification.intent_type,
+                getattr(intent_classification, "confidence", 1.0),
+                user_input[:50],
             )
 
             # Handle chitchat intent
@@ -539,35 +567,28 @@ class AgenticMixin:
                 )
 
             elif event_type == "stream_event":
-                # Forward tool results and AI tool-call metadata — not plain AIMessage text
-                # (IG-119) — so TUI can show tool args before ToolMessage (RFC-0020).
-                if _forward_messages_chunk_for_tool_ui(event_data):
+                # Config-driven forwarding (RFC-614)
+                # When streaming disabled: Only tool-related chunks (IG-119)
+                # When streaming enabled: All chunks (wrapper filters empty text)
+                if _forward_messages_chunk_for_tool_ui(event_data, config=self.config):
                     yield event_data
 
             elif event_type == "final_report_stream":
-                # Extract AI text from messages-mode chunks and stream as output events
-                # This bypasses IG-119 filtering so user sees real-time final report
-                from soothe.cognition.agent_loop.stream_chunk_normalize import (
-                    extract_text_from_message_content,
-                    iter_messages_for_act_aggregation,
+                # Use unified streaming wrapper (RFC-614)
+                from soothe.core.runner._runner_shared import _wrap_streaming_output
+
+                wrapped = _wrap_streaming_output(
+                    chunk=event_data,
+                    event_type="soothe.output.synthesis.streaming",
+                    config=self.config,
+                    namespace=(),
                 )
-
-                # event_data is (namespace, mode, data) from LangGraph astream
-                for msg in iter_messages_for_act_aggregation(event_data):
-                    # Extract text from AIMessage/AIMessageChunk
-                    from langchain_core.messages import AIMessage, AIMessageChunk
-
-                    if isinstance(msg, (AIMessage, AIMessageChunk)):
-                        text = extract_text_from_message_content(msg.content)
-                        if text and text.strip():
-                            # Stream as custom output event (bypasses IG-119 filter)
-                            yield _custom(
-                                {
-                                    "type": "soothe.output.final_report.streaming",
-                                    "content": text,
-                                    "is_chunk": isinstance(msg, AIMessageChunk),
-                                }
-                            )
+                if wrapped:
+                    # wrapped is 3-tuple (namespace, mode, data)
+                    # Extract custom data for 2-tuple format expected by runner
+                    _ns, _mode, custom_data = wrapped
+                    # Yield as custom event for runner processing
+                    yield _custom(custom_data)
 
             elif event_type == "plan":
                 yield _custom(

@@ -50,6 +50,14 @@ router:
 agentic:
   final_response: adaptive
 
+# Output streaming configuration (RFC-614)
+output_streaming:
+  enabled: true        # Enable streaming for all outputs
+  mode: streaming      # streaming or batch display mode
+  execution_streaming: true   # Stream execution phase
+  synthesis_streaming: true   # Stream synthesis phase
+  tool_response_streaming: false  # Experimental: stream tool responses
+
 performance:
   enabled: true
   unified_classification: true

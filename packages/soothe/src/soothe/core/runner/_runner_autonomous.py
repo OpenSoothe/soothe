@@ -17,6 +17,7 @@ from soothe.cognition.agent_loop.schemas import PlanResult
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.event_catalog import (
     FinalReportEvent,
+    GoalFailedEvent,
     PlanCreatedEvent,
     PlanReflectedEvent,
     ThreadEndedEvent,
@@ -114,13 +115,8 @@ class AutonomousMixin(GoalDirectivesMixin):
 
             # Check if goals were discovered
             if not self._goal_engine.list_goals():
-                yield _custom(
-                    {
-                        "type": "soothe.autopilot.error",
-                        "code": "NO_GOALS",
-                        "message": "No goals found in autopilot directory",
-                    }
-                )
+                # IG-271: Autopilot error event removed, replaced with logging
+                logger.warning("Autopilot: No goals found in autopilot directory")
                 return
         if self._intent_classifier:
             # IG-226: Load recent messages for conversation context
@@ -607,6 +603,9 @@ class AutonomousMixin(GoalDirectivesMixin):
             goal.id,
         )
 
+        # IG-271: Replace iteration event with compact logging
+        logger.info("Iteration %d started | Goal: %s", total_iterations, goal.id)
+
         try:
             iter_state = RunnerState()
             canonical_tid = parent_state.thread_id
@@ -807,12 +806,12 @@ class AutonomousMixin(GoalDirectivesMixin):
                             goal.id,
                             reason=f"Send-back budget exhausted ({max_sb} rounds)",
                         )
-                        yield _custom(
-                            {
-                                "type": "soothe.system.autopilot.goal.suspending",
-                                "goal_id": goal.id,
-                                "reason": f"Budget exhausted: {c_reasoning[:100]}",
-                            }
+                        # IG-271: Autopilot suspending event removed, replaced with logging
+                        logger.info(
+                            "Goal %s suspending: Budget exhausted (%d rounds) - %s",
+                            goal.id,
+                            max_sb,
+                            c_reasoning[:100],
                         )
                         async for chunk in self._save_checkpoint(
                             parent_state, user_input=user_input, mode="autonomous"
@@ -834,13 +833,8 @@ class AutonomousMixin(GoalDirectivesMixin):
                 else:
                     # Accepted — mark as validated
                     await self._goal_engine.validate_goal(goal.id)
-                    yield _custom(
-                        {
-                            "type": "soothe.system.autopilot.goal.validating",
-                            "goal_id": goal.id,
-                            "confidence": 1.0,
-                        }
-                    )
+                    # IG-271: Autopilot validating event removed, replaced with logging
+                    logger.debug("Goal %s validating: consensus check passed", goal.id)
 
             record = IterationRecord(
                 iteration=total_iterations,
@@ -854,13 +848,13 @@ class AutonomousMixin(GoalDirectivesMixin):
             await self._store_iteration_record(record, canonical_tid)
 
             duration_ms = int((perf_counter() - iter_start) * 1000)
-            yield _custom(
-                IterationCompletedEvent(
-                    iteration=total_iterations,
-                    goal_id=goal.id,
-                    outcome=record.outcome,
-                    duration_ms=duration_ms,
-                ).to_dict()
+            # IG-271: Replace iteration event with compact logging
+            logger.debug(
+                "Iteration %d completed | Goal: %s | Outcome: %s | Duration: %dms",
+                total_iterations,
+                goal.id,
+                record.outcome,
+                duration_ms,
             )
 
             if not should_continue:
@@ -971,6 +965,19 @@ class AutonomousMixin(GoalDirectivesMixin):
                 except Exception:
                     logger.debug("Plan revision failed", exc_info=True)
 
+            # IG-271: Replace iteration event with compact logging
+            duration_ms = int((perf_counter() - iter_start) * 1000)
+            outcome = (
+                "completed" if not reflection or not reflection.should_revise else "needs_revision"
+            )
+            logger.debug(
+                "Iteration %d completed | Goal: %s | Outcome: %s | Duration: %dms",
+                total_iterations,
+                goal.id,
+                outcome,
+                duration_ms,
+            )
+
         except Exception as exc:
             logger.exception("Error during autonomous goal %s", goal.id)
             from soothe.utils.error_format import emit_error_event
@@ -1051,13 +1058,8 @@ class AutonomousMixin(GoalDirectivesMixin):
                     reason = proposal.payload.get("reason", "Unknown blocker")
                     if self._goal_engine:
                         await self._goal_engine.block_goal(goal_id, reason=reason)
-                    _custom(
-                        {
-                            "type": "soothe.system.autopilot.goal.blocking",
-                            "goal_id": goal_id,
-                            "reason": reason[:200],
-                        }
-                    )
+                    # IG-271: Autopilot blocking event removed, replaced with logging
+                    logger.debug("Goal %s blocking: %s", goal_id, reason[:200])
 
             except Exception:
                 logger.debug("Failed to process proposal: %s", proposal.type, exc_info=True)
@@ -1210,17 +1212,9 @@ class AutonomousMixin(GoalDirectivesMixin):
             if not relationships:
                 return []
 
-            events = []
+            # IG-271: Relationship detecting events removed, replaced with logging
+            # Log relationships instead of emitting events
             for rel in relationships:
-                events.append(
-                    {
-                        "type": "soothe.system.autopilot.relationship.detecting",
-                        "from_goal": rel.source_id,
-                        "to_goal": rel.target_id,
-                        "relationship_type": rel.rel_type,
-                        "confidence": rel.confidence,
-                    }
-                )
                 logger.info(
                     "Relationship detected: %s %s %s (confidence=%.2f)",
                     rel.source_id,
@@ -1234,7 +1228,8 @@ class AutonomousMixin(GoalDirectivesMixin):
             logger.debug("Relationship detection failed", exc_info=True)
             return []
 
-        return events
+        # Return empty list (no events emitted per IG-271)
+        return []
 
     async def _check_scheduled_and_dream(
         self,

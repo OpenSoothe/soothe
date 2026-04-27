@@ -359,7 +359,7 @@ class TestEventProcessorOutputEventRouting:
         # final_stdout_message is removed before progress callback to avoid duplicate emission in renderer
         assert "final_stdout_message" not in progress_calls[0][1][1]
 
-    def test_batch_mode_suppresses_final_report_streaming_chunks(self) -> None:
+    def test_batch_mode_suppresses_synthesis_streaming_chunks(self) -> None:
         """Batch mode should ignore streaming final-report chunks."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal", final_output_mode="batch")
@@ -369,7 +369,7 @@ class TestEventProcessorOutputEventRouting:
             "mode": "custom",
             "namespace": [],
             "data": {
-                "type": "soothe.output.final_report.streaming",
+                "type": "soothe.output.synthesis.streaming",
                 "content": "stream chunk",
                 "is_chunk": True,
             },
@@ -417,7 +417,7 @@ class TestEventProcessorOutputEventRouting:
                 "mode": "custom",
                 "namespace": [],
                 "data": {
-                    "type": "soothe.output.final_report.streaming",
+                    "type": "soothe.output.synthesis.streaming",
                     "content": chunk_1,
                     "is_chunk": True,
                 },
@@ -429,7 +429,7 @@ class TestEventProcessorOutputEventRouting:
                 "mode": "custom",
                 "namespace": [],
                 "data": {
-                    "type": "soothe.output.final_report.streaming",
+                    "type": "soothe.output.synthesis.streaming",
                     "content": chunk_2,
                     "is_chunk": True,
                 },
@@ -463,7 +463,7 @@ class TestEventProcessorOutputEventRouting:
         assert "final_stdout_message" not in progress_calls[0][1][1]
 
     def test_streaming_final_report_preserves_boundaries_when_is_chunk_false(self) -> None:
-        """final_report.streaming should preserve boundaries even when is_chunk is false."""
+        """synthesis.streaming should preserve boundaries even when is_chunk is false."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
 
@@ -473,7 +473,7 @@ class TestEventProcessorOutputEventRouting:
                 "mode": "custom",
                 "namespace": [],
                 "data": {
-                    "type": "soothe.output.final_report.streaming",
+                    "type": "soothe.output.synthesis.streaming",
                     "content": "# Report\n\n",
                     "is_chunk": False,
                 },
@@ -485,7 +485,7 @@ class TestEventProcessorOutputEventRouting:
                 "mode": "custom",
                 "namespace": [],
                 "data": {
-                    "type": "soothe.output.final_report.streaming",
+                    "type": "soothe.output.synthesis.streaming",
                     "content": "## Executive Summary\n\n",
                     "is_chunk": False,
                 },

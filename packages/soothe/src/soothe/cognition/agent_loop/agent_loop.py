@@ -555,6 +555,22 @@ Use all tool results and AI responses available in the conversation history."""
                 state=state,
             ):
                 if isinstance(item, tuple) and len(item) == _STREAM_CHUNK_LEN:
+                    # Wrap execution streaming as custom output event (RFC-614)
+                    # Lazy import to avoid circular dependency
+                    from soothe.core.runner._runner_shared import _wrap_streaming_output
+
+                    wrapped = _wrap_streaming_output(
+                        chunk=item,
+                        event_type="soothe.output.execution.streaming",
+                        config=self.config,
+                        namespace=(),  # Main agent namespace
+                    )
+                    if wrapped:
+                        # wrapped is 3-tuple (namespace, mode, data)
+                        # Convert to 2-tuple for run_with_progress format
+                        _ns, _mode, custom_data = wrapped
+                        yield ("custom_output", custom_data)
+                    # Also yield raw stream_event for tool UI (existing behavior)
                     yield ("stream_event", item)
                 else:
                     step_results.append(item)

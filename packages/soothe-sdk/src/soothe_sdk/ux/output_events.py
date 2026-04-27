@@ -54,10 +54,23 @@ def _register_builtin_output_events() -> None:
         lambda data: strip_internal_tags(data.get("content", "")),
     )
 
-    # Final report streaming (IG-268: real-time final report in headless mode)
+    # Execution streaming (RFC-614)
     register_output_event(
-        "soothe.output.final_report.streaming",
-        # Preserve raw chunk boundaries; CLI/TUI applies final display filtering once.
+        "soothe.output.execution.streaming",
+        # Preserve raw chunk boundaries for proper concatenation.
+        lambda data: data.get("content", ""),
+    )
+
+    # Synthesis streaming (RFC-614 unified final report)
+    register_output_event(
+        "soothe.output.synthesis.streaming",
+        # Preserve raw chunk boundaries for proper concatenation.
+        lambda data: data.get("content", ""),
+    )
+
+    # Tool response streaming (RFC-614, experimental)
+    register_output_event(
+        "soothe.output.tool_response.streaming",
         lambda data: data.get("content", ""),
     )
 

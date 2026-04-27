@@ -215,6 +215,28 @@ class CliRenderer:
         self._state.needs_stdout_newline = True
         self._state.stderr_blank_before_next_icon_block = True
 
+    def on_streaming_output(
+        self,
+        event_type: str,
+        text: str,
+        *,
+        is_chunk: bool,
+        namespace: tuple[str, ...],
+    ) -> None:
+        """Handle streaming output from unified framework (RFC-614).
+
+        Default implementation: delegate to on_assistant_text.
+        CLI renderer treats all streaming output as assistant text.
+
+        Args:
+            event_type: Event type string (e.g., "soothe.output.execution.streaming").
+            text: Text content (may be chunk or final).
+            is_chunk: True if partial chunk, False if final.
+            namespace: Namespace tuple for stream context (ignored in CLI headless mode).
+        """
+        # Delegate to on_assistant_text for unified display
+        self.on_assistant_text(text, is_main=True, is_streaming=is_chunk)
+
     def on_tool_call(
         self,
         name: str,
@@ -453,7 +475,7 @@ class CliRenderer:
         # Fallback flush: if agentic suppression was active but no explicit
         # final stdout event was emitted, write buffered streamed chunks now.
         # This covers runs where final report arrived only through
-        # soothe.output.final_report.streaming chunks.
+        # soothe.output.synthesis.streaming chunks (RFC-614 unified framework).
         if (
             was_multi_step
             and accumulated_response

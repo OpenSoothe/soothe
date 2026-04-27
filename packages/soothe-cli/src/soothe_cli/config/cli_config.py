@@ -32,6 +32,13 @@ class CLIConfig:
     output_format: str = "text"
     final_output_mode: str = "streaming"
 
+    # Output streaming overrides (RFC-614)
+    output_streaming_enabled: bool | None = None
+    """Override daemon streaming enabled setting."""
+
+    output_streaming_mode: str | None = None
+    """Override daemon streaming mode: 'streaming' or 'batch'."""
+
     # Paths
     soothe_home: Path = field(default_factory=lambda: Path.home() / ".soothe")
 

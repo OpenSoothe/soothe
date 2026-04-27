@@ -14,6 +14,8 @@ import websockets.exceptions
 from soothe_sdk.core.types import VerbosityLevel
 
 if TYPE_CHECKING:
+    from soothe.config import SootheConfig
+    from soothe.config.models import OutputStreamingConfig
     from soothe.core.event_catalog import EventMeta
     from soothe.daemon.event_bus import EventBus
     from soothe.daemon.transports.base import TransportServer
@@ -37,6 +39,7 @@ class ClientSession:
         sender_task: Background task that sends events to the client
         verbosity: Client verbosity preference (RFC-0022)
         detach_requested: Whether client explicitly requested detach (RFC-0013)
+        config: Optional SootheConfig for effective streaming config (RFC-614)
     """
 
     client_id: str
@@ -49,6 +52,35 @@ class ClientSession:
     sender_task: asyncio.Task[None] | None = None
     verbosity: VerbosityLevel = "normal"  # RFC-0022: client verbosity preference
     detach_requested: bool = False  # RFC-0013: client explicitly requested detach
+    config: SootheConfig | None = None  # RFC-614: daemon config reference
+
+    def get_effective_streaming_config(
+        self, cli_overrides: dict[str, Any] | None = None
+    ) -> OutputStreamingConfig:
+        """Get effective streaming config with CLI overrides (RFC-614).
+
+        Args:
+            cli_overrides: Optional dict with output_streaming_enabled, output_streaming_mode
+
+        Returns:
+            Effective OutputStreamingConfig with overrides applied.
+        """
+        if self.config is None:
+            # Return defaults if no config
+            from soothe.config.models import OutputStreamingConfig
+
+            return OutputStreamingConfig()
+
+        config = self.config.output_streaming
+
+        if cli_overrides:
+            # Apply CLI overrides (per-session override)
+            if cli_overrides.get("output_streaming_enabled") is not None:
+                config.enabled = cli_overrides["output_streaming_enabled"]
+            if cli_overrides.get("output_streaming_mode") is not None:
+                config.mode = cli_overrides["output_streaming_mode"]
+
+        return config
 
 
 class ClientSessionManager:

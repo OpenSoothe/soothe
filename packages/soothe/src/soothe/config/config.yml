@@ -142,6 +142,19 @@ agentic:
   context_window_limit: 200000  # Claude models default (200k tokens)
 
 # =============================================================================
+# Output Streaming Configuration (RFC-614)
+# =============================================================================
+# Unified streaming framework for daemon → client messaging.
+# Controls real-time transmission of ALL AI outputs (not just final reports).
+
+output_streaming:
+  enabled: true        # Enable streaming for all outputs
+  mode: streaming      # streaming or batch display mode
+  execution_streaming: true   # Stream execution phase (CoreAgent Act responses)
+  synthesis_streaming: true   # Stream synthesis phase (final report generation)
+  tool_response_streaming: false  # Experimental: stream tool responses
+
+# =============================================================================
 # Execution Limits
 # =============================================================================
 # Concurrency and resource limits for safe operation.
