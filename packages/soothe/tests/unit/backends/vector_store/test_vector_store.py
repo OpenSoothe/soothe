@@ -397,6 +397,134 @@ class TestWeaviateVectorStoreUnit:
             pytest.skip("weaviate dependencies not installed")
 
 
+class TestSQLiteVecStoreUnit:
+    """Unit tests for SQLiteVecStore focusing on interface compliance."""
+
+    def test_class_can_be_imported(self) -> None:
+        """Test that SQLiteVecStore class can be imported."""
+        from soothe.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        assert SQLiteVecStore is not None
+
+    def test_initialization_signature(self) -> None:
+        """Test that __init__ has expected signature."""
+        import inspect
+
+        from soothe.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        init_sig = inspect.signature(SQLiteVecStore.__init__)
+        params = list(init_sig.parameters.keys())
+
+        # Should have these parameters
+        assert "self" in params
+        assert "collection" in params
+        assert "db_path" in params
+        assert "vector_size" in params
+        assert "distance" in params
+
+        # Check defaults
+        assert init_sig.parameters["collection"].default == "soothe_vectors"
+        assert init_sig.parameters["db_path"].default is None
+        assert init_sig.parameters["vector_size"].default == 1536
+        assert init_sig.parameters["distance"].default == "cosine"
+
+    def test_required_methods_exist(self) -> None:
+        """Test that all required methods exist on the class."""
+        from soothe.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        required_methods = [
+            "create_collection",
+            "insert",
+            "search",
+            "delete",
+            "update",
+            "get",
+            "list_records",
+            "delete_collection",
+            "reset",
+            "close",
+        ]
+
+        for method_name in required_methods:
+            assert hasattr(SQLiteVecStore, method_name), f"Missing method: {method_name}"
+            assert callable(getattr(SQLiteVecStore, method_name)), (
+                f"Method not callable: {method_name}"
+            )
+
+    def test_can_instantiate_without_connection(self) -> None:
+        """Test that class can be instantiated without immediate connection."""
+        from soothe.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        store = SQLiteVecStore(
+            collection="test_collection",
+            db_path="/tmp/test.db",
+            vector_size=768,
+            distance="l2",
+        )
+
+        assert store._collection == "test_collection"
+        assert store._db_path == "/tmp/test.db"
+        assert store._vector_size == 768
+        assert store._distance == "l2"
+        assert store._conn is None  # Lazy connection
+        assert store._has_vec_ext is False  # Not loaded yet
+
+    def test_vector_packing_function(self) -> None:
+        """Test _pack_vector utility function."""
+        from soothe.backends.vector_store.sqlite_vec import _pack_vector
+
+        # Test packing a simple vector
+        vector = [1.0, 2.0, 3.0, 4.0]
+        packed = _pack_vector(vector)
+
+        # Should return bytes
+        assert isinstance(packed, bytes)
+        assert len(packed) == len(vector) * 4  # 4 bytes per float32
+
+    def test_similarity_functions(self) -> None:
+        """Test similarity/distance computation functions."""
+        from soothe.backends.vector_store.sqlite_vec import (
+            _cosine_similarity,
+            _ip_similarity,
+            _l2_distance,
+        )
+
+        a = [1.0, 0.0, 0.0]
+        b = [0.0, 1.0, 0.0]
+        c = [1.0, 0.0, 0.0]
+
+        # Cosine similarity
+        assert _cosine_similarity(a, b) == 0.0  # Orthogonal
+        assert _cosine_similarity(a, c) == 1.0  # Same vector
+
+        # L2 distance
+        assert _l2_distance(a, c) == 0.0  # Same vector
+        assert _l2_distance(a, b) == 2.0**0.5  # sqrt(2)
+
+        # Inner product
+        assert _ip_similarity(a, b) == 0.0  # Orthogonal
+        assert _ip_similarity(a, c) == 1.0  # Same vector
+
+    def test_filter_matching(self) -> None:
+        """Test _match_filters utility function."""
+        from soothe.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        payload = {"type": "document", "category": "test"}
+
+        # Should match when all filters match
+        assert SQLiteVecStore._match_filters(payload, {"type": "document"})
+        assert SQLiteVecStore._match_filters(
+            payload, {"type": "document", "category": "test"}
+        )
+
+        # Should not match when any filter doesn't match
+        assert not SQLiteVecStore._match_filters(payload, {"type": "image"})
+        assert not SQLiteVecStore._match_filters(payload, {"type": "document", "category": "other"})
+
+        # Should match empty filters (no constraints)
+        assert SQLiteVecStore._match_filters(payload, {})
+
+
 class TestVectorStoreFactory:
     """Tests for create_vector_store factory function."""
 
@@ -434,6 +562,28 @@ class TestVectorStoreFactory:
         except ImportError:
             pytest.skip("weaviate dependencies not installed")
 
+    def test_creates_sqlite_vec_store(self) -> None:
+        """Test that factory creates SQLiteVecStore."""
+        import os
+        import tempfile
+
+        from soothe.backends.vector_store import create_vector_store
+        from soothe.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        try:
+            store = create_vector_store(
+                provider="sqlite_vec",
+                collection="test_collection",
+                config={"db_path": tmp.name, "vector_size": 1536},
+            )
+
+            assert isinstance(store, SQLiteVecStore)
+            assert store._collection == "test_collection"
+        finally:
+            os.unlink(tmp.name)
+
     def test_raises_error_for_unknown_provider(self) -> None:
         """Test that factory raises error for unknown provider."""
         from soothe.backends.vector_store import create_vector_store
@@ -460,3 +610,19 @@ class TestVectorStoreFactory:
 
         except ImportError:
             pytest.skip("pgvector dependencies not installed")
+
+    def test_sqlite_vec_factory_with_defaults(self) -> None:
+        """Test that factory creates SQLiteVecStore with default config."""
+        from soothe.backends.vector_store import create_vector_store
+        from soothe.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        store = create_vector_store(
+            provider="sqlite_vec",
+            collection="default_collection",
+        )
+
+        assert isinstance(store, SQLiteVecStore)
+        assert store._collection == "default_collection"
+        # Default vector_size and distance from SQLiteVecStore.__init__
+        assert store._vector_size == 1536
+        assert store._distance == "cosine"
