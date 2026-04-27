@@ -7,7 +7,6 @@ Uses StreamDisplayPipeline for RFC-0020 compliant progress display.
 
 from __future__ import annotations
 
-import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -21,6 +20,7 @@ from soothe_cli.cli.utils import make_tool_block
 from soothe_cli.shared.display_policy import VerbosityLevel, normalize_verbosity
 from soothe_cli.shared.message_processing import format_tool_call_args
 from soothe_cli.shared.presentation_engine import PresentationEngine
+from soothe_cli.shared.renderer_base import RendererBase
 from soothe_cli.shared.suppression_state import SuppressionState
 
 if TYPE_CHECKING:
@@ -50,7 +50,7 @@ class CliRendererState:
     stderr_blank_before_next_icon_block: bool = False
 
 
-class CliRenderer:
+class CliRenderer(RendererBase):
     """CLI renderer for headless stdout/stderr output.
 
     Implements RendererProtocol callbacks for CLI mode:
@@ -58,6 +58,8 @@ class CliRenderer:
     - Tool calls/results -> stderr (flat stream)
     - Progress events -> stderr via StreamDisplayPipeline
     - Errors -> stderr
+
+    Inherits from RendererBase for unified text repair logic.
 
     Spacing: Soothe-originated stderr lines (icons from the pipeline, tools, results,
     errors) call `_stderr_begin_icon_block()`, which inserts one blank stderr line only
@@ -81,6 +83,7 @@ class CliRenderer:
             verbosity: Progress visibility level.
             presentation_engine: Shared presentation engine (optional).
         """
+        super().__init__()
         self._verbosity = normalize_verbosity(verbosity)
         self._state = CliRendererState()
         self._presentation = presentation_engine or PresentationEngine()
@@ -139,27 +142,12 @@ class CliRenderer:
         sys.stderr.flush()
         self._state.stderr_just_written = True
 
-    @staticmethod
-    def _repair_concatenated_final_output(text: str) -> str:
-        """Repair common concat artifacts in final assistant output."""
-        repaired = text
-        repaired = re.sub(r"(?<!\n)(?=##+\s*\d)", "\n\n", repaired)
-        repaired = re.sub(r"(?<!\n)(?=##+\s*[A-Za-z])", "\n\n", repaired)
-        repaired = re.sub(r"(?<=##)(?=\d)", " ", repaired)
-        repaired = re.sub(r"(?<=[A-Za-z])(?=\d{1,3}\b)", " ", repaired)
-        repaired = re.sub(r"(##[^\n]*[a-z])(?=[A-Z])", r"\1\n\n", repaired)
-        repaired = re.sub(r"(?<!\n)(?=\d+\.\s+\*\*)", "\n", repaired)
-        repaired = re.sub(r"(?<=[A-Za-z])(?=-\s+\*\*)", "\n", repaired)
-        repaired = re.sub(r"(?<=[A-Za-z0-9])(?=-\s)", "\n", repaired)
-        repaired = re.sub(r"(?<=\d)(?=[#<])", "\n", repaired)
-        return repaired
-
     def _write_stdout_goal_completion(self, text: str) -> None:
         """Write aggregated goal-completion answer to stdout."""
         if text == "":
             return
 
-        repaired = self._repair_concatenated_final_output(text)
+        repaired = self.repair_concatenated_output(text)
         self._state.suppression.full_response.append(repaired)
 
         # Add newline before goal completion if stderr was just written (IG-273)
@@ -202,7 +190,7 @@ class CliRenderer:
             return
 
         # Emit only on final iteration (after flags cleared)
-        payload = text if is_streaming else self._repair_concatenated_final_output(text)
+        payload = text if is_streaming else self.repair_concatenated_output(text)
         self._state.suppression.full_response.append(payload)
 
         if self._state.stderr_just_written:
