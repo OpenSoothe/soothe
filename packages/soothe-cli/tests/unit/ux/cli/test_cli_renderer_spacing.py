@@ -86,7 +86,7 @@ def test_agentic_loop_completed_writes_final_stdout_when_multi_step(
     r.on_progress_event(
         "soothe.cognition.agent_loop.completed",
         {
-            "final_stdout_message": "Found 92 README files.",
+            "goal_completion_message": "Found 92 README files.",
             "thread_id": "t",
             "status": "done",
             "goal_progress": 1.0,
@@ -112,7 +112,7 @@ def test_agentic_loop_completed_preserves_markdown_and_token_boundaries(
     r.on_progress_event(
         "soothe.cognition.agent_loop.completed",
         {
-            "final_stdout_message": (
+            "goal_completion_message": (
                 "# Report\n\n"
                 "## 1. Objective\n\n"
                 "Read the first 10 lines.\n\n"
@@ -150,7 +150,7 @@ def test_agentic_stdout_stays_suppressed_after_turn_end_until_loop_completed(
     r.on_progress_event(
         "soothe.cognition.agent_loop.completed",
         {
-            "final_stdout_message": "Found 12 README.md files (project only).",
+            "goal_completion_message": "Found 12 README.md files (project only).",
             "thread_id": "t",
             "status": "done",
             "goal_progress": 1.0,
@@ -188,7 +188,7 @@ def test_max_iter_one_multi_step_plan_suppresses_stdout_after_turn_end(
     r.on_progress_event(
         "soothe.cognition.agent_loop.completed",
         {
-            "final_stdout_message": "Found 12 README.md files (project only).",
+            "goal_completion_message": "Found 12 README.md files (project only).",
             "thread_id": "t",
             "status": "done",
             "goal_progress": 1.0,
@@ -212,7 +212,7 @@ def test_agentic_loop_completed_skips_final_stdout_without_multi_step(
     r.on_progress_event(
         "soothe.cognition.agent_loop.completed",
         {
-            "final_stdout_message": "Found 92 README files.",
+            "goal_completion_message": "Found 92 README files.",
             "thread_id": "t",
             "status": "done",
             "goal_progress": 1.0,

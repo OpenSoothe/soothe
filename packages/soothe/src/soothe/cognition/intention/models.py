@@ -14,10 +14,7 @@ from pydantic import BaseModel, Field
 
 
 class RoutingClassification(BaseModel):
-    """Legacy routing classification (backward compatible with UnifiedClassification).
-
-    Routing complexity classification used for execution path selection.
-    Deprecated in favor of IntentClassification, but maintained for compatibility.
+    """Routing complexity classification for execution path selection.
 
     Args:
         task_complexity: Routing complexity (chitchat | medium | complex).
@@ -88,7 +85,7 @@ class IntentClassification(BaseModel):
     reasoning: str = Field(description="LLM reasoning explaining classification decision")
 
     def to_routing_classification(self) -> RoutingClassification:
-        """Convert to legacy RoutingClassification for backward compatibility.
+        """Convert to RoutingClassification for execution path selection.
 
         Returns:
             RoutingClassification with routing attributes from intent.

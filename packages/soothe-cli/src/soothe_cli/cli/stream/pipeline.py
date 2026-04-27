@@ -16,7 +16,6 @@ from soothe_cli.cli.stream.formatter import (
     format_goal_header,
     format_judgement,
     format_plan_phase_reasoning,
-    format_reasoning,
     format_step_done,
     format_step_header,
     format_subagent_done,
@@ -41,9 +40,6 @@ BATCH_STEP_COMPLETED = "soothe.cognition.plan.batch.completed"
 GOAL_COMPLETE_EVENTS = {
     "soothe.cognition.agent_loop.completed",
 }
-
-# IG-264: Default goal completion message (skip display to avoid redundancy)
-DEFAULT_GOAL_ACHIEVED_MESSAGE = "Goal achieved successfully"
 
 # Verbosity tier mapping
 _VERBOSITY_TO_TIER = {
@@ -400,7 +396,6 @@ class StreamDisplayPipeline:
             format_subagent_done(
                 preview_first(summary, 70),  # Increased from 50 for richer metrics
                 duration_s,
-                result_preview=result_preview,
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
             )
@@ -615,14 +610,10 @@ class StreamDisplayPipeline:
         # Determine action type
         action = "complete" if status == "done" else "continue"
 
-        raw_plan_action = event.get("plan_action")
-        plan_action_kw: str | None = raw_plan_action if raw_plan_action in ("keep", "new") else None
-
         lines = [
             format_judgement(
                 action_text,
                 action,
-                plan_action=plan_action_kw,
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
             )
@@ -640,17 +631,6 @@ class StreamDisplayPipeline:
                     verbosity_tier=self._verbosity_tier,
                 )
             )
-        else:
-            reasoning = event.get("reasoning", "").strip()
-            # IG-264: Skip redundant reasoning when it's the default goal message
-            if reasoning and reasoning != DEFAULT_GOAL_ACHIEVED_MESSAGE:
-                lines.append(
-                    format_reasoning(
-                        reasoning,
-                        namespace=self._current_namespace,
-                        verbosity_tier=self._verbosity_tier,
-                    )
-                )
 
         return lines
 

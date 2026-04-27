@@ -40,7 +40,7 @@ class ProcessorState:
     # Thread identifier from daemon
     thread_id: str = ""
 
-    # Multi-step plan suppression flag (suppress step text, show final report)
+    # Multi-step plan suppression flag (suppress step text, show goal completion)
     multi_step_active: bool = False
 
     # Internal context tracking (suppress internal LLM responses)

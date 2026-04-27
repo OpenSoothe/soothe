@@ -5,7 +5,7 @@ Use `SootheFilesystemMiddleware` from `soothe.middleware.filesystem` instead, wh
 provides these tools via `StructuredTool.from_function()` with proper Schema classes.
 
 The `FileOpsPlugin` in this module delegates to `SootheFilesystemMiddleware` for all
-tool creation. The BaseTool classes below are kept for backward compatibility with
+tool creation. The BaseTool classes below are retained for
 existing tests, but are not used in production code paths.
 """
 

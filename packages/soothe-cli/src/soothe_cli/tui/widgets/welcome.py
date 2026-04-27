@@ -88,8 +88,7 @@ class WelcomeBanner(Static):
             **kwargs: Additional arguments passed to parent.
         """
         # Avoid collision with Widget._thread_id (Textual internal int)
-        # Note: Parameter named thread_id for backward compatibility with build_stream_config
-        # which maps loop_id to thread_id in langgraph's configurable dict
+        # Parameter named thread_id to match langgraph's configurable dict convention
         self._cli_loop_id: str | None = thread_id
         self._mcp_tool_count = mcp_tool_count
         self._connecting = connecting

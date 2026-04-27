@@ -17,13 +17,12 @@ def test_on_loop_agent_reason_extracts_next_action():
     }
 
     lines = pipeline.process(event)
-    # IG-225: Should show 3 lines (judgement + assessment + plan)
-    assert len(lines) == 3
+    # IG-257: 2 lines (judgement + plan reasoning, assessment removed from display)
+    assert len(lines) == 2
     assert "Gathering metrics" in lines[0].content
     # RFC-603: Percentage display removed per user request
     assert "85% sure" not in lines[0].content
-    assert "Assessment:" in lines[1].content
-    assert "Plan:" in lines[2].content
+    assert "Continue gathering" in lines[1].content
 
 
 def test_on_loop_agent_reason_derives_from_status():
@@ -47,8 +46,8 @@ def test_on_loop_agent_reason_derives_from_status():
         }
 
         lines = pipeline.process(event)
-        # IG-225: Should show 3 lines (judgement + assessment + plan)
-        assert len(lines) == 3, f"Failed for status={status}"
+        # IG-257: 2 lines (judgement + plan reasoning, assessment removed from display)
+        assert len(lines) == 2, f"Failed for status={status}"
         assert expected_text in lines[0].content, f"Failed for status={status}"
 
     # Unknown/invalid status should return empty (skip emission)
@@ -74,9 +73,9 @@ def test_on_loop_agent_reason_deduplicates_repeated():
         "plan_reasoning": "Continue working",
     }
 
-    # First emission - IG-225: 3 lines
+    # First emission - IG-257: 2 lines
     lines1 = pipeline.process(event)
-    assert len(lines1) == 3
+    assert len(lines1) == 2
 
     # Same action within 5s should be suppressed
     lines2 = pipeline.process(event)
@@ -97,8 +96,8 @@ def test_on_loop_agent_reason_formats_confidence():
     }
 
     lines = pipeline.process(event)
-    # IG-225: Should show 3 lines
-    assert len(lines) == 3
+    # IG-257: Should show 2 lines
+    assert len(lines) == 2
     # RFC-603: Percentage display removed per user request
     assert "92% sure" not in lines[0].content
 
@@ -117,8 +116,8 @@ def test_on_loop_agent_reason_defaults_confidence_when_missing():
         "plan_reasoning": "Continue analyzing",
     }
     lines1 = pipeline.process(event1)
-    # IG-225: Should show 3 lines
-    assert len(lines1) == 3
+    # IG-257: Should show 2 lines
+    assert len(lines1) == 2
     # RFC-603: Percentage display removed per user request
     assert "80% sure" not in lines1[0].content
 
@@ -131,8 +130,8 @@ def test_on_loop_agent_reason_defaults_confidence_when_missing():
         "plan_reasoning": "Continue processing",
     }
     lines2 = pipeline.process(event2)
-    # IG-225: Should show 3 lines
-    assert len(lines2) == 3
+    # IG-257: Should show 2 lines
+    assert len(lines2) == 2
     # RFC-603: Percentage display removed per user request
     assert "80% sure" not in lines2[0].content
 
@@ -164,8 +163,8 @@ def test_on_loop_agent_reason_uses_complete_action_for_done():
     }
 
     lines = pipeline.process(event)
-    # IG-225: Should show 3 lines
-    assert len(lines) == 3
+    # IG-257: Should show 2 lines
+    assert len(lines) == 2
     # format_judgement uses "✓" icon for "complete" action
     assert lines[0].icon == "✓"
 
@@ -184,7 +183,7 @@ def test_on_loop_agent_reason_uses_continue_icon_for_working():
     }
 
     lines = pipeline.process(event)
-    # IG-225: Should show 3 lines
-    assert len(lines) == 3
+    # IG-257: Should show 2 lines
+    assert len(lines) == 2
     # format_judgement uses "→" icon for "continue" action
     assert lines[0].icon == "→"

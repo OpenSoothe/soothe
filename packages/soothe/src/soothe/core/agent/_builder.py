@@ -325,7 +325,7 @@ def create_soothe_agent(
 ) -> CoreAgent:
     """Factory that creates Soothe's Layer 1 CoreAgent runtime.
 
-    This is a thin wrapper delegating to AgentBuilder for backward compatibility.
+    This is a thin wrapper delegating to AgentBuilder.
     See AgentBuilder.build() for full parameter documentation.
 
     Note: Goal management (GoalEngine, goal_tools) is NOT included.

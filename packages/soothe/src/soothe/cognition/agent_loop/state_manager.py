@@ -273,7 +273,7 @@ class AgentLoopStateManager:
                         status=goal_row[5],
                         reason_history=json.loads(goal_row[6]) if goal_row[6] else [],
                         act_history=json.loads(goal_row[7]) if goal_row[7] else [],
-                        final_report=goal_row[8] or "",
+                        goal_completion=goal_row[8] or "",
                         evidence_summary=goal_row[9] or "",
                         duration_ms=goal_row[10],
                         tokens_used=goal_row[11],
@@ -361,7 +361,7 @@ class AgentLoopStateManager:
         cursor = conn.execute(
             """
             SELECT goal_id, loop_id, goal_text, thread_id, iteration, status,
-                   reason_history, act_history, final_report, evidence_summary,
+                   reason_history, act_history, goal_completion, evidence_summary,
                    duration_ms, tokens_used, started_at, completed_at
             FROM goal_records WHERE loop_id = ?
             ORDER BY started_at
@@ -464,7 +464,7 @@ class AgentLoopStateManager:
                 """
                 INSERT OR REPLACE INTO goal_records
                 (goal_id, loop_id, goal_text, thread_id, iteration, status,
-                 reason_history, act_history, final_report, evidence_summary,
+                 reason_history, act_history, goal_completion, evidence_summary,
                  duration_ms, tokens_used, started_at, completed_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -477,7 +477,7 @@ class AgentLoopStateManager:
                     goal_record.status,
                     reason_history_json,
                     act_history_json,
-                    goal_record.final_report,
+                    goal_record.goal_completion,
                     goal_record.evidence_summary,
                     goal_record.duration_ms,
                     goal_record.tokens_used,
@@ -527,7 +527,7 @@ class AgentLoopStateManager:
             status="running",  # Implicit
             reason_history=[],
             act_history=[],
-            final_report="",
+            goal_completion="",
             evidence_summary="",
             duration_ms=0,
             tokens_used=0,
@@ -540,12 +540,12 @@ class AgentLoopStateManager:
 
         return goal_record
 
-    async def finalize_goal(self, goal_record: GoalExecutionRecord, final_report: str) -> None:
+    async def finalize_goal(self, goal_record: GoalExecutionRecord, goal_completion: str) -> None:
         """Mark goal completed, update loop metrics (RFC-608).
 
         Args:
             goal_record: Goal execution record to finalize
-            final_report: Generated final report content
+            goal_completion: Generated goal completion content
         """
         if self._checkpoint is None:
             return
@@ -573,7 +573,7 @@ class AgentLoopStateManager:
 
         # Update goal record status (modify history object directly)
         target_goal.status = "completed"
-        target_goal.final_report = final_report
+        target_goal.goal_completion = goal_completion
         target_goal.completed_at = datetime.now(UTC)
 
         logger.debug(
@@ -640,7 +640,7 @@ class AgentLoopStateManager:
         )
 
     def inject_previous_goal_context(self, limit: int = 1) -> list[str]:
-        """Inject previous goal final_report into Plan phase (RFC-608: same-thread continuation).
+        """Inject previous goal completion into Plan phase (RFC-608: same-thread continuation).
 
         Args:
             limit: Number of previous goals to inject (default: 1)
@@ -666,7 +666,7 @@ class AgentLoopStateManager:
                 f"Goal: {goal.goal_text}\n"
                 f"Status: {goal.status}\n"
                 f"Thread: {goal.thread_id}\n"
-                f"Output:\n{goal.final_report}\n"
+                f"Output:\n{goal.goal_completion}\n"
                 f"</previous_goal>"
             )
             context_blocks.append(context_block)
@@ -700,7 +700,7 @@ class AgentLoopStateManager:
         documents = []
         for goal_record in checkpoint.goal_history:
             if goal_record.thread_id in previous_thread_ids:
-                doc_text = f"{goal_record.goal_text}\n{goal_record.final_report}"
+                doc_text = f"{goal_record.goal_text}\n{goal_record.goal_completion}"
                 documents.append(
                     {
                         "thread_id": goal_record.thread_id,
@@ -787,7 +787,8 @@ class AgentLoopStateManager:
             timestamp=datetime.now(UTC),
             goal_text=state.goal,
             prior_step_outputs=self._derive_prior_step_outputs(target_goal),
-            reasoning=plan_result.reasoning,
+            assessment_reasoning=plan_result.assessment_reasoning,
+            plan_reasoning=plan_result.plan_reasoning,
             status=plan_result.status,
             goal_progress=plan_result.goal_progress,
             decision=decision.model_dump() if decision else None,

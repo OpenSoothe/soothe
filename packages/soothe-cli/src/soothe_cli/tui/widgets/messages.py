@@ -1909,7 +1909,6 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
         plan_action: str = "new",
         assessment_reasoning: str = "",
         plan_reasoning: str = "",
-        legacy_reasoning: str = "",
         **kwargs: Any,
     ) -> None:
         """Initialize a plan-reason card.
@@ -1921,7 +1920,6 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
             plan_action: ``keep`` or ``new`` (execution strategy).
             assessment_reasoning: Phase-1 status justification.
             plan_reasoning: Phase-2 plan-strategy text.
-            legacy_reasoning: Combined reasoning when structured fields are absent.
             **kwargs: Passed to ``Vertical``.
         """
         super().__init__(**kwargs)
@@ -1931,7 +1929,6 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
         self._plan_action = plan_action if plan_action in ("keep", "new") else "new"
         self._assessment_reasoning = assessment_reasoning.strip()
         self._plan_reasoning = plan_reasoning.strip()
-        self._legacy_reasoning = legacy_reasoning.strip()
 
     def compose(self) -> ComposeResult:
         prefix = get_glyphs().tool_prefix

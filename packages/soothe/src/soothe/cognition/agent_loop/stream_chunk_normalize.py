@@ -139,16 +139,16 @@ def iter_messages_for_act_aggregation(chunk: Any) -> Iterator[BaseMessage]:
 
 
 @dataclass
-class FinalReportAccumState:
-    """Mutable accumulators for adaptive final-report streaming."""
+class GoalCompletionAccumState:
+    """Mutable accumulators for adaptive goal-completion streaming."""
 
     accumulated_chunks: str = ""
     final_ai_message_text: str = ""
     ai_msg_count: int = 0
 
 
-def update_final_report_from_message(state: FinalReportAccumState, msg: BaseMessage) -> None:
-    """Update final-report accumulators from one streamed AI message (chunk or final).
+def update_goal_completion_from_message(state: GoalCompletionAccumState, msg: BaseMessage) -> None:
+    """Update goal-completion accumulators from one streamed AI message.
 
     Prefers accumulated chunk text over a sparse final :class:`~langchain_core.messages.AIMessage`
     when both exist (same policy as the previous inline loop in ``AgentLoop``).
@@ -173,7 +173,7 @@ def update_final_report_from_message(state: FinalReportAccumState, msg: BaseMess
         state.final_ai_message_text = extracted
 
 
-def resolve_final_report_text(state: FinalReportAccumState) -> str:
+def resolve_goal_completion_text(state: GoalCompletionAccumState) -> str:
     """Choose longer of accumulated chunk text vs final non-chunk AI text."""
     if len(state.accumulated_chunks) >= len(state.final_ai_message_text):
         return state.accumulated_chunks
@@ -181,11 +181,11 @@ def resolve_final_report_text(state: FinalReportAccumState) -> str:
 
 
 __all__ = [
-    "FinalReportAccumState",
+    "GoalCompletionAccumState",
     "extract_text_from_message_content",
     "iter_messages_for_act_aggregation",
     "join_text_fragments",
     "parse_tuple_stream_chunk",
-    "resolve_final_report_text",
-    "update_final_report_from_message",
+    "resolve_goal_completion_text",
+    "update_goal_completion_from_message",
 ]

@@ -115,8 +115,8 @@ class TestLoopHumanMessageConstruction:
         msg2 = LoopHumanMessage(content="Test", phase="execute_step")
         assert msg2.phase == "execute_step"
 
-        msg3 = LoopHumanMessage(content="Test", phase="final_report")
-        assert msg3.phase == "final_report"
+        msg3 = LoopHumanMessage(content="Test", phase="goal_completion")
+        assert msg3.phase == "goal_completion"
 
         # Invalid phase should raise validation error
         with pytest.raises(Exception):  # Pydantic ValidationError

@@ -390,22 +390,3 @@ class LimitedProviderModelWrapper(BaseChatModel):
     def __getattr__(self, name: str) -> Any:
         """Delegate any other attributes to the wrapped model."""
         return getattr(self._model, name)
-
-
-def wrap_model_if_needed(
-    model: BaseChatModel,
-    provider_name: str = "unknown",
-) -> BaseChatModel:
-    """Compatibility helper - no longer wraps models.
-
-    This function is kept for backward compatibility but does nothing.
-    Model wrapping is now handled directly in SootheConfig based on provider_type='limited_openai'.
-
-    Args:
-        model: The original model (returned unchanged).
-        provider_name: Provider name (unused).
-
-    Returns:
-        Original model unchanged.
-    """
-    return model

@@ -67,25 +67,25 @@ response_length_category: str | None = None  # brief/concise/standard/comprehens
 
 ---
 
-### 3. Final Report Generation Integration
+### 3. Goal Completion Generation Integration
 
 **File**: `packages/soothe/src/soothe/cognition/agent_loop/agent_loop.py`
 
 **Changes** (IG-268):
 - Pass intent classification through loop state
 - Determine response length category at goal completion (once for all branches)
-- Inject word count ranges into final report request to CoreAgent
+- Inject word count ranges into goal completion request to CoreAgent
 - Add `_get_length_guidance()` helper method
 
 **Example prompt injection**:
 ```python
-report_request = f"""Based on the complete execution history, generate a final report for: {goal}
+goal_completion_request = f"""Based on the complete execution history, generate a goal completion response for: {goal}
 
 RESPONSE LENGTH: {length_category.min_words}-{length_category.max_words} words ({length_category.value} category)
 
 {self._get_length_guidance(length_category)}
 
-The report should:
+The response should:
 1. Summarize what was accomplished
 2. Include actual content from tools
 3. Match the response length guidance above

@@ -112,7 +112,8 @@ class TestClassifyEventToTier:
         """Output events classify to QUIET (always visible)."""
         assert classify_event_to_tier("soothe.output.chitchat.response") == VerbosityTier.QUIET
         assert (
-            classify_event_to_tier("soothe.output.autonomous.final_report") == VerbosityTier.QUIET
+            classify_event_to_tier("soothe.output.autonomous.goal_completion.reported")
+            == VerbosityTier.QUIET
         )
         assert classify_event_to_tier("soothe.output.chitchat.started") == VerbosityTier.INTERNAL
 
@@ -141,10 +142,12 @@ class TestClassifyEventToTier:
         assert classify_event_to_tier("soothe.subagent.research.completed") == VerbosityTier.NORMAL
 
     def test_classify_capability_events(self) -> None:
-        """RFC-210 capability events: milestones NORMAL, stream internals DETAILED (IG-195)."""
-        assert classify_event_to_tier("soothe.capability.browser.started") == VerbosityTier.NORMAL
-        assert classify_event_to_tier("soothe.capability.claude.started") == VerbosityTier.NORMAL
-        assert classify_event_to_tier("soothe.capability.claude.completed") == VerbosityTier.NORMAL
+        """RFC-210 capability events classify to DETAILED."""
+        assert classify_event_to_tier("soothe.capability.browser.started") == VerbosityTier.DETAILED
+        assert classify_event_to_tier("soothe.capability.claude.started") == VerbosityTier.DETAILED
+        assert (
+            classify_event_to_tier("soothe.capability.claude.completed") == VerbosityTier.DETAILED
+        )
         assert (
             classify_event_to_tier("soothe.capability.claude.text.running")
             == VerbosityTier.DETAILED

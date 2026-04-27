@@ -739,7 +739,6 @@ def parse_plan_response_text(response: str, goal: str, iteration: int = 0) -> An
             status="replan",
             plan_action="new",
             decision=_default_agent_decision(goal, iteration),
-            reasoning="Failed to parse model response",
             next_action="I'll try again with a simpler plan.",
         )
 
@@ -754,7 +753,6 @@ def parse_plan_response_text(response: str, goal: str, iteration: int = 0) -> An
             status="continue",
             plan_action="new",
             decision=decision,
-            reasoning=decision.reasoning,
             next_action="I'll run the steps in this plan next.",
         )
 
@@ -765,8 +763,6 @@ def parse_plan_response_text(response: str, goal: str, iteration: int = 0) -> An
     plan_action = data.get("plan_action", "new")
     if plan_action not in ("keep", "new"):
         plan_action = "new"
-
-    reasoning = str(data.get("reasoning", "") or "")
 
     next_action = str(data.get("next_action", "") or "").strip()
 
@@ -792,7 +788,6 @@ def parse_plan_response_text(response: str, goal: str, iteration: int = 0) -> An
             decision=decision,
             goal_progress=float(data.get("goal_progress", 0.0)),
             confidence=float(data.get("confidence", 0.8)),
-            reasoning=reasoning,
             next_action=next_action,
             evidence_summary=str(data.get("evidence_summary", "") or ""),
         )
@@ -802,6 +797,5 @@ def parse_plan_response_text(response: str, goal: str, iteration: int = 0) -> An
             status="replan",
             plan_action="new",
             decision=_default_agent_decision(goal, iteration),
-            reasoning="Invalid plan payload",
             next_action="I'll adjust and try a cleaner plan.",
         )

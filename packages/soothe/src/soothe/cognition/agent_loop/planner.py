@@ -845,7 +845,6 @@ class LLMPlanner:
 
         # IG-264: Only use plan_result.brief_reasoning (assessment removed)
         pr = (plan_result.brief_reasoning or "").strip()
-        reasoning_text = pr
 
         # IG-152: Use plan_result.next_action (concrete, actionable) for user
         # plan_result.next_action is plan-specific (what will actually be executed)
@@ -861,7 +860,6 @@ class LLMPlanner:
             status=assessment.status,
             goal_progress=assessment.goal_progress,
             confidence=assessment.confidence,
-            reasoning=reasoning_text,
             assessment_reasoning="",  # IG-264: Empty (assessment removed)
             plan_reasoning=pr,
             plan_action=plan_result.plan_action,
@@ -930,7 +928,6 @@ class LLMPlanner:
                         status=assessment.status,
                         goal_progress=assessment.goal_progress,
                         confidence=assessment.confidence,
-                        reasoning="Goal achieved successfully",
                         assessment_reasoning="",  # IG-264: Empty
                         plan_reasoning="",  # IG-264: Empty
                         plan_action="keep",  # No plan needed
@@ -1016,7 +1013,6 @@ class LLMPlanner:
                                             status=assessment.status,
                                             goal_progress=assessment.goal_progress,
                                             confidence=assessment.confidence,
-                                            reasoning="Fallback plan execution",
                                             assessment_reasoning="",
                                             plan_reasoning="",
                                             plan_action="new",
@@ -1040,7 +1036,6 @@ class LLMPlanner:
                         status="replan",
                         plan_action="new",
                         decision=_default_agent_decision(goal, state.iteration),
-                        reasoning=f"Plan call failed after {max_retries} retries",
                         assessment_reasoning="",  # IG-264: Not needed
                         plan_reasoning="",  # IG-264: Not needed
                         next_action="Retrying with simpler approach",  # IG-264: Derived

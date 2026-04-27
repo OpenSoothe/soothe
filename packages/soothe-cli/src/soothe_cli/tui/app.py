@@ -3657,7 +3657,6 @@ class SootheApp(App):
                         cognition_plan_action=plan_action,
                         cognition_plan_assessment=str(event_data.get("assessment_reasoning") or ""),
                         cognition_plan_strategy=str(event_data.get("plan_reasoning") or ""),
-                        cognition_plan_legacy_reasoning=str(event_data.get("reasoning") or ""),
                     )
                 if event_type == "soothe.cognition.agent_loop.started":
                     goal_snapshot = {

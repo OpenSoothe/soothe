@@ -8,7 +8,7 @@ IG-226: Unified intent classification system with three-tier classification:
 This module provides:
 - IntentClassification: Primary intent classification model
 - IntentClassifier: LLM-driven classifier with conversation context
-- RoutingClassification: Legacy routing classification (backward compatible)
+- RoutingClassification: Routing complexity classification for execution path selection
 
 Architecture:
 - Pure LLM-driven classification (no keyword heuristics)

@@ -16,7 +16,7 @@ from soothe.cognition.agent_loop import AgentLoop
 from soothe.cognition.agent_loop.schemas import PlanResult
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.event_catalog import (
-    FinalReportEvent,
+    AutonomousGoalCompletionEvent,
     GoalFailedEvent,
     PlanCreatedEvent,
     PlanReflectedEvent,
@@ -180,7 +180,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                     yield chunk
                 return
 
-            # Convert IntentClassification to RoutingClassification for compatibility
+            # Convert IntentClassification to RoutingClassification for routing
             state.unified_classification = intent_classification.to_routing_classification()
         else:
             state.unified_classification = None
@@ -317,11 +317,11 @@ class AutonomousMixin(GoalDirectivesMixin):
                             yield chunk
                 total_iterations += len(ready_goals)
 
-        # Emit final report for CLI (RFC-0010 / IG-027)
+        # Emit autonomous goal completion event for CLI (RFC-0010 / IG-027 / IG-273)
         root_report = getattr(goal, "report", None)
         if root_report and hasattr(root_report, "summary") and root_report.summary:
             yield _custom(
-                FinalReportEvent(
+                AutonomousGoalCompletionEvent(
                     goal_id=goal.id,
                     description=goal.description,
                     status=root_report.status,
@@ -596,8 +596,8 @@ class AutonomousMixin(GoalDirectivesMixin):
                 # Return early - AgentLoop handled everything
                 return
 
-        # Fallback: Legacy execution path (backward compatibility)
-        # Keep existing code for goals without LoopPlannerProtocol planner
+        # Fallback: Non-AgentLoop execution path
+        # For goals without LoopPlannerProtocol planner
         logger.warning(
             "[GoalEngine] Using legacy execution path (no AgentLoop) for goal %s - violates RFC architecture",
             goal.id,

@@ -81,7 +81,8 @@ class ReasonStepRecord(BaseModel):
     )
 
     # Reasoning
-    reasoning: str
+    assessment_reasoning: str = ""
+    plan_reasoning: str = ""
     status: Literal["done", "continue", "replan"]
     goal_progress: float
 
@@ -213,7 +214,7 @@ class GoalExecutionRecord(BaseModel):
     act_history: list[ActWaveRecord] = Field(default_factory=list)
 
     # Goal output
-    final_report: str = ""
+    goal_completion: str = ""
     evidence_summary: str = ""
 
     # Metrics

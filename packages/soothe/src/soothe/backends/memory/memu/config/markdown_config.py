@@ -172,7 +172,7 @@ def get_config_manager() -> MarkdownConfigManager:
     return _config_manager
 
 
-# Maintain backward compatible API functions
+# Module-level API functions
 
 
 def detect_file_type(filename: str, content: str = "") -> str:  # noqa: ARG001

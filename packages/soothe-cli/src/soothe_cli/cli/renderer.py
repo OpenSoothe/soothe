@@ -154,15 +154,15 @@ class CliRenderer:
         repaired = re.sub(r"(?<=\d)(?=[#<])", "\n", repaired)
         return repaired
 
-    def _write_stdout_final_report(self, text: str) -> None:
-        """Write aggregated final answer to stdout (multi-step headless mode only)."""
+    def _write_stdout_goal_completion(self, text: str) -> None:
+        """Write aggregated goal-completion answer to stdout."""
         if text == "":
             return
 
         repaired = self._repair_concatenated_final_output(text)
         self._state.suppression.full_response.append(repaired)
 
-        # Add newline before final report if stderr was just written (goal completion)
+        # Add newline before goal completion if stderr was just written (IG-273)
         if self._state.stderr_just_written:
             sys.stdout.write("\n")
             self._state.stderr_just_written = False
@@ -197,7 +197,7 @@ class CliRenderer:
 
         # HARD BLOCK: No text during multi-step execution (IG-143)
         if self._state.suppression.should_suppress_output():
-            # Accumulate for final report instead
+            # Accumulate for the goal completion output instead
             self._state.suppression.accumulate_text(text)
             return
 
@@ -375,17 +375,17 @@ class CliRenderer:
         final_stdout = self._state.suppression.track_from_event(event_type, data)
 
         payload = dict(data)
-        payload.pop("final_stdout_message", None)
+        payload.pop("goal_completion_message", None)
 
         # Build event dict for pipeline
         event = {"type": event_type, **payload}
         lines = self._pipeline.process(event)
         self.write_lines(lines)
 
-        # Emit final report on loop completion (IG-143)
-        if self._state.suppression.should_emit_final_report(event_type, final_stdout):
+        # Emit goal completion on loop completion (IG-143, IG-273)
+        if self._state.suppression.should_emit_goal_completion(event_type, final_stdout):
             response = self._state.suppression.get_final_response(final_stdout)
-            self._write_stdout_final_report(response)
+            self._write_stdout_goal_completion(response)
 
     def on_plan_created(self, plan: Plan) -> None:
         """Write plan creation to stderr.
@@ -474,15 +474,15 @@ class CliRenderer:
 
         # Fallback flush: if agentic suppression was active but no explicit
         # final stdout event was emitted, write buffered streamed chunks now.
-        # This covers runs where final report arrived only through
-        # soothe.output.synthesis.streaming chunks (RFC-614 unified framework).
+        # This covers runs where the goal completion body arrived only through
+        # ``soothe.output.goal_completion.streaming`` chunks (IG-273).
         if (
             was_multi_step
             and accumulated_response
             and self._state.suppression.agentic_stdout_suppressed
             and not self._state.suppression.agentic_final_stdout_emitted
         ):
-            self._write_stdout_final_report("".join(accumulated_response))
+            self._write_stdout_goal_completion("".join(accumulated_response))
             return
 
         # Multi-step mode intentionally suppresses step body output in headless CLI

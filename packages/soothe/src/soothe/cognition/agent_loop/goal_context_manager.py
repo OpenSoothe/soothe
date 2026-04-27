@@ -72,7 +72,7 @@ class GoalContextManager:
             Goal: <query>
             Status: completed
             Thread: <thread_id>
-            Output: <final_report>
+            Output: <goal_completion>
             </previous_goal>
         """
         # Check if feature enabled
@@ -104,7 +104,7 @@ class GoalContextManager:
                     f"Goal: {goal.goal_text}\n"
                     f"Status: {goal.status}\n"
                     f"Thread: {goal.thread_id}\n"
-                    f"Output:\n{goal.final_report}\n"
+                    f"Output:\n{goal.goal_completion}\n"
                     f"</previous_goal>"
                 )
                 context_blocks.append(context_block)
@@ -189,9 +189,9 @@ class GoalContextManager:
         sections = ["## Previous Goal Context (Thread Switch Recovery)\n\n"]
 
         for i, goal in enumerate(goals, 1):
-            key_findings = self._extract_key_findings(goal.final_report)
-            critical_files = self._extract_critical_files(goal.final_report)
-            result_summary = self._extract_result_summary(goal.final_report)
+            key_findings = self._extract_key_findings(goal.goal_completion)
+            critical_files = self._extract_critical_files(goal.goal_completion)
+            result_summary = self._extract_result_summary(goal.goal_completion)
 
             sections.append(
                 f"**Goal {i}** ({goal.thread_id}, {goal.status} in {goal.iteration} iterations):\n"
@@ -215,7 +215,7 @@ class GoalContextManager:
         Heuristic: Extract first 3 bullet points or numbered items.
 
         Args:
-            report: Goal final_report content
+            report: Goal completion content
 
         Returns:
             Condensed key findings (max 150 chars)
@@ -254,7 +254,7 @@ class GoalContextManager:
         Pattern: filename.py:number or filename.py
 
         Args:
-            report: Goal final_report content
+            report: Goal completion content
 
         Returns:
             Comma-separated file list (max 5 files)
@@ -280,7 +280,7 @@ class GoalContextManager:
         last substantive line before trailing whitespace.
 
         Args:
-            report: Goal final_report content
+            report: Goal completion content
 
         Returns:
             Result summary (max 100 chars)

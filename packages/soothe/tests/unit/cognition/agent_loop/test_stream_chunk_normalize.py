@@ -5,13 +5,13 @@ from __future__ import annotations
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from soothe.cognition.agent_loop.stream_chunk_normalize import (
-    FinalReportAccumState,
+    GoalCompletionAccumState,
     extract_text_from_message_content,
     iter_messages_for_act_aggregation,
     join_text_fragments,
     parse_tuple_stream_chunk,
-    resolve_final_report_text,
-    update_final_report_from_message,
+    resolve_goal_completion_text,
+    update_goal_completion_from_message,
 )
 from soothe.core.agent._core import _normalize_layer1_input
 
@@ -75,18 +75,25 @@ def test_iter_messages_legacy_list_data() -> None:
     assert list(iter_messages_for_act_aggregation(chunk)) == [msg]
 
 
-def test_final_report_accumulator_prefers_longer_chunk_stream() -> None:
-    state = FinalReportAccumState()
-    update_final_report_from_message(state, AIMessageChunk(content="chunk"))
-    update_final_report_from_message(state, AIMessage(content="short"))
-    assert resolve_final_report_text(state) == "chunk"
+def test_goal_completion_accumulator_prefers_longer_chunk_stream() -> None:
+    state = GoalCompletionAccumState()
+    update_goal_completion_from_message(state, AIMessageChunk(content="chunk"))
+    update_goal_completion_from_message(state, AIMessage(content="short"))
+    assert resolve_goal_completion_text(state) == "chunk"
 
 
-def test_final_report_accumulator_prefers_final_when_longer() -> None:
-    state = FinalReportAccumState()
-    update_final_report_from_message(state, AIMessageChunk(content="a"))
-    update_final_report_from_message(state, AIMessage(content="longer final text"))
-    assert resolve_final_report_text(state) == "longer final text"
+def test_goal_completion_accumulator_prefers_final_when_longer() -> None:
+    state = GoalCompletionAccumState()
+    update_goal_completion_from_message(state, AIMessageChunk(content="a"))
+    update_goal_completion_from_message(state, AIMessage(content="longer final text"))
+    assert resolve_goal_completion_text(state) == "longer final text"
+
+
+def test_goal_completion_accumulator_tracks_chunked_text() -> None:
+    state = GoalCompletionAccumState()
+    update_goal_completion_from_message(state, AIMessageChunk(content="goal "))
+    update_goal_completion_from_message(state, AIMessageChunk(content="completion"))
+    assert resolve_goal_completion_text(state) == "goal completion"
 
 
 def test_normalize_layer1_input_wraps_string() -> None:

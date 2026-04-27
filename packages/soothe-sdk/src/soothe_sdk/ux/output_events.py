@@ -61,9 +61,12 @@ def _register_builtin_output_events() -> None:
         lambda data: data.get("content", ""),
     )
 
-    # Synthesis streaming (RFC-614 unified final report)
+    # Synthesis streaming removed in IG-273; superseded by
+    # ``soothe.output.goal_completion.streaming`` below.
+
+    # Goal completion streaming (IG-273)
     register_output_event(
-        "soothe.output.synthesis.streaming",
+        "soothe.output.goal_completion.streaming",
         # Preserve raw chunk boundaries for proper concatenation.
         lambda data: data.get("content", ""),
     )
@@ -77,13 +80,13 @@ def _register_builtin_output_events() -> None:
     # Agent loop final output (RFC-200)
     register_output_event(
         "soothe.cognition.agent_loop.completed",
-        # Preserve raw final stdout; avoid double normalization in client processors.
-        lambda data: data.get("final_stdout_message", ""),
+        # Preserve raw goal-completion payload from completed event.
+        lambda data: data.get("goal_completion_message", ""),
     )
 
-    # Autonomous mode final report (RFC-300)
+    # Autonomous mode goal completion (RFC-300, IG-273)
     register_output_event(
-        "soothe.output.autonomous.final_report.reported.reported",
+        "soothe.output.autonomous.goal_completion.reported",
         lambda data: strip_internal_tags(data.get("content", data.get("summary", ""))),
     )
 

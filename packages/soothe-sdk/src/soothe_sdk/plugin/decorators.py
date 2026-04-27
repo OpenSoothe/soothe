@@ -14,13 +14,14 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
+from soothe_sdk.core.exceptions import PluginError
 from soothe_sdk.plugin.manifest import PluginManifest as Manifest
 
 
 def plugin(
-    name: str,
-    version: str,
-    description: str,
+    name: str | None = None,
+    version: str | None = None,
+    description: str | None = None,
     author: str = "",
     homepage: str = "",
     repository: str = "",
@@ -68,6 +69,13 @@ def plugin(
     """
 
     def decorator(cls: type) -> type:
+        if not name:
+            raise PluginError("Plugin name is required")
+        if not version:
+            raise PluginError("Plugin version is required")
+        if not description:
+            raise PluginError("Plugin description is required")
+
         # Create and attach manifest
         cls._plugin_manifest = Manifest(
             name=name,
@@ -83,6 +91,16 @@ def plugin(
             config_requirements=config_requirements or [],
             trust_level=trust_level,
         )
+        # Legacy metadata used by older tests and plugin scaffolds.
+        cls._plugin_metadata = {
+            "name": name,
+            "version": version,
+            "description": description,
+            "author": author,
+            "homepage": homepage,
+            "repository": repository,
+            "license": license,
+        }
 
         # Add manifest property
         @property
@@ -181,6 +199,7 @@ def tool(
         func._tool_group = group
         func._tool_system_context = system_context  # RFC-210
         func._tool_triggers = triggers or []  # RFC-210
+        func._tool_metadata = {"name": name, "description": description}
 
         @wraps(func)
         async def async_wrapper(self, *args, **kwargs):
@@ -207,6 +226,7 @@ def tool(
         wrapper._tool_group = group
         wrapper._tool_system_context = system_context  # RFC-210
         wrapper._tool_triggers = triggers or []  # RFC-210
+        wrapper._tool_metadata = {"name": name, "description": description}
 
         return wrapper
 
@@ -341,6 +361,7 @@ def subagent(
         func._subagent_model = model
         func._subagent_system_context = system_context  # RFC-210
         func._subagent_triggers = triggers or []  # RFC-210
+        func._subagent_metadata = {"name": name, "description": description, "model": model}
 
         @wraps(func)
         async def wrapper(self, model, config, context, **kwargs):
@@ -354,6 +375,7 @@ def subagent(
         wrapper._subagent_model = model
         wrapper._subagent_system_context = system_context  # RFC-210
         wrapper._subagent_triggers = triggers or []  # RFC-210
+        wrapper._subagent_metadata = {"name": name, "description": description, "model": model}
 
         return wrapper
 

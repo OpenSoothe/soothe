@@ -13,7 +13,6 @@ def test_cognition_plan_message_store_round_trip() -> None:
         plan_action="new",
         assessment_reasoning="Progress looks good.",
         plan_reasoning="Need to verify imports.",
-        legacy_reasoning="",
         id="msg-plan-01",
     )
     md = MessageData.from_widget(w)

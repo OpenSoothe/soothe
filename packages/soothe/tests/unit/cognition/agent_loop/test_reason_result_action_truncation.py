@@ -64,7 +64,6 @@ def test_next_action_uses_plan_action(
     # IG-264: Only plan_result.brief_reasoning used (assessment removed)
     assert result.assessment_reasoning == ""  # IG-264: Empty
     assert result.plan_reasoning == sample_plan_result.brief_reasoning
-    assert result.reasoning == sample_plan_result.brief_reasoning
 
     # Should use plan_result.next_action (concrete action)
     assert result.next_action == sample_plan_result.next_action
@@ -137,7 +136,6 @@ def test_schema_max_length_updated() -> None:
         status="continue",
         goal_progress=0.5,
         confidence=0.8,
-        reasoning="Test reasoning",
         plan_action="new",
         decision=decision,
         next_action=long_action,
@@ -161,7 +159,6 @@ def test_early_completion_preserves_action() -> None:
         status=assessment.status,
         goal_progress=assessment.goal_progress,
         confidence=assessment.confidence,
-        reasoning="Goal achieved successfully",  # IG-264: Derived
         assessment_reasoning="",  # IG-264: Empty
         plan_reasoning="",  # IG-264: Empty
         plan_action="keep",
