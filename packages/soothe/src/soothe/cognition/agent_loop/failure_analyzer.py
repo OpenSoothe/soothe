@@ -86,7 +86,7 @@ Provide analysis in JSON format:
             branch["analyzed_at"] = datetime.now(UTC)
 
             # Save updated branch to persistence
-            persistence_manager = AgentLoopCheckpointPersistenceManager()
+            persistence_manager = AgentLoopCheckpointPersistenceManager(config=self.config)
             await persistence_manager.update_branch_analysis(
                 branch_id=branch["branch_id"],
                 loop_id=branch["loop_id"],

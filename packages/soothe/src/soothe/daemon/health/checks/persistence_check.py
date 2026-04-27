@@ -1,6 +1,5 @@
 """Persistence layer health check implementation."""
 
-import contextlib
 import shutil
 from pathlib import Path
 
@@ -29,7 +28,7 @@ def _check_postgresql_import() -> CheckResult:
 
 
 def _check_postgresql_connection(config: SootheConfig | None) -> CheckResult:
-    """Check PostgreSQL connection if configured."""
+    """Check PostgreSQL connection if configured (RFC-612 multi-database support)."""
     if config is None:
         return CheckResult(
             name="postgresql_connection",
@@ -39,23 +38,30 @@ def _check_postgresql_connection(config: SootheConfig | None) -> CheckResult:
 
     # Check if PostgreSQL is configured for any backend
     uses_postgres = False
-    dsn = None
+    databases_to_check = []
+
+    # RFC-612: Check if using multi-database architecture
+    if config.persistence.postgres_base_dsn:
+        uses_postgres = True
+        # Check all databases in postgres_databases mapping
+        databases_to_check = list(config.persistence.postgres_databases.keys())
 
     # Check durability backend
-    if (
+    elif (
         hasattr(config, "protocols")
         and hasattr(config.protocols, "durability")
         and config.protocols.durability.backend == "postgresql"
     ):
         uses_postgres = True
-        with contextlib.suppress(Exception):
-            dsn = config.resolve_persistence_postgres_dsn()
+        databases_to_check = ["metadata"]  # Legacy: check metadata database
 
     # Check vector stores for PGVector
     if hasattr(config, "vector_stores"):
         for vs in config.vector_stores:
             if vs.provider_type == "pgvector":
                 uses_postgres = True
+                if "vectors" not in databases_to_check:
+                    databases_to_check.append("vectors")
                 break
 
     if not uses_postgres:
@@ -65,68 +71,75 @@ def _check_postgresql_connection(config: SootheConfig | None) -> CheckResult:
             message="PostgreSQL not configured",
         )
 
-    # Try to connect if DSN is available
-    if not dsn:
+    # Try to connect to each database
+    connection_results = {}
+    successful_connections = []
+
+    for db_key in databases_to_check:
+        try:
+            dsn = config.resolve_postgres_dsn_for_database(db_key)
+            import psycopg
+            from psycopg.rows import dict_row
+
+            with psycopg.connect(dsn, row_factory=dict_row) as conn, conn.cursor() as cur:
+                cur.execute("SELECT version()")
+                result = cur.fetchone()
+                version = result["version"] if result else "unknown"
+                connection_results[db_key] = {
+                    "status": "ok",
+                    "dsn": dsn.split("/")[-1],  # Show database name only
+                    "version": version.split(",")[0] if version else "unknown",
+                }
+                successful_connections.append(db_key)
+
+        except ValueError as e:
+            connection_results[db_key] = {
+                "status": "error",
+                "message": str(e),
+            }
+        except ImportError:
+            return CheckResult(
+                name="postgresql_connection",
+                status=CheckStatus.ERROR,
+                message="PostgreSQL driver not installed but required by config",
+                details={"remediation": "Install psycopg package"},
+            )
+        except Exception as e:
+            connection_results[db_key] = {
+                "status": "error",
+                "message": f"Connection failed: {e}",
+            }
+
+    # Report overall status
+    if len(successful_connections) == len(databases_to_check):
+        return CheckResult(
+            name="postgresql_connection",
+            status=CheckStatus.OK,
+            message=f"PostgreSQL multi-database connection successful ({len(successful_connections)} databases)",
+            details={"databases": connection_results},
+        )
+
+    if len(successful_connections) > 0:
+        failed = [db for db in databases_to_check if db not in successful_connections]
         return CheckResult(
             name="postgresql_connection",
             status=CheckStatus.WARNING,
-            message="PostgreSQL configured but DSN not available",
-            details={"remediation": "Check persistence.postgres_dsn in config"},
-        )
-
-    try:
-        import psycopg
-        from psycopg.rows import dict_row
-
-        with psycopg.connect(dsn, row_factory=dict_row) as conn, conn.cursor() as cur:
-            cur.execute("SELECT version()")
-            result = cur.fetchone()
-
-            version = result["version"] if result else "unknown"
-
-            return CheckResult(
-                name="postgresql_connection",
-                status=CheckStatus.OK,
-                message="PostgreSQL connection successful",
-                details={"version": version.split(",")[0] if version else "unknown"},
-            )
-
-    except ImportError:
-        return CheckResult(
-            name="postgresql_connection",
-            status=CheckStatus.ERROR,
-            message="PostgreSQL driver not installed but required by config",
-            details={"remediation": "Install psycopg package"},
-        )
-    except Exception as e:
-        return CheckResult(
-            name="postgresql_connection",
-            status=CheckStatus.ERROR,
-            message=f"PostgreSQL connection failed: {e}",
+            message=f"PostgreSQL partial connection: {len(successful_connections)}/{len(databases_to_check)} databases",
             details={
-                "impact": "Durability and vector stores using PostgreSQL unavailable",
-                "remediation": "Check PostgreSQL is running and DSN is correct",
+                "databases": connection_results,
+                "remediation": f"Check database connectivity for: {', '.join(failed)}",
             },
         )
 
-
-def _check_rocksdb_import() -> CheckResult:
-    """Check if RocksDB is importable."""
-    try:
-        import rocksdb  # noqa: F401
-
-        return CheckResult(
-            name="rocksdb_import",
-            status=CheckStatus.OK,
-            message="RocksDB driver available",
-        )
-    except ImportError:
-        return CheckResult(
-            name="rocksdb_import",
-            status=CheckStatus.INFO,
-            message="RocksDB driver not installed (optional)",
-            details={"remediation": "Install python-rocksdb for RocksDB durability"},
-        )
+    return CheckResult(
+        name="postgresql_connection",
+        status=CheckStatus.ERROR,
+        message="PostgreSQL configured but all database connections failed",
+        details={
+            "databases": connection_results,
+            "remediation": "Check postgres_base_dsn and ensure all databases are created",
+        },
+    )
 
 
 def _check_filesystem_permissions() -> CheckResult:
@@ -202,7 +215,7 @@ def _check_disk_space() -> CheckResult:
 
 
 async def check_persistence(config: SootheConfig | None = None) -> CategoryResult:
-    """Check persistence layer (PostgreSQL, RocksDB, filesystem).
+    """Check persistence layer (PostgreSQL, filesystem).
 
     Args:
         config: SootheConfig instance
@@ -213,7 +226,6 @@ async def check_persistence(config: SootheConfig | None = None) -> CategoryResul
     checks = [
         _check_postgresql_import(),
         _check_postgresql_connection(config),
-        _check_rocksdb_import(),
         _check_filesystem_permissions(),
         _check_disk_space(),
     ]

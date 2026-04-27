@@ -92,6 +92,11 @@ github = [
 dashscope = [
     "dashscope>=1.20.0",
 ]
+# PostgreSQL backend (optional - for persistent storage)
+postgres = [
+    "psycopg[binary,pool]>=3.2.0",
+    "langgraph-checkpoint-postgres>=2.0.0",
+]
 # CLI client (optional - for interactive usage)
 cli = [
     "soothe-cli>=0.4.0",
@@ -104,7 +109,7 @@ dev = [
     "mypy>=1.0.0",
 ]
 all = [
-    "soothe[research,websearch,tabular,document,media,video,claude,github,dashscope,cli]",
+    "soothe[research,websearch,tabular,document,media,video,claude,github,dashscope,postgres,cli]",
 ]
 
 [project.scripts]

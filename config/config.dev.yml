@@ -136,10 +136,10 @@ protocols:
 persistence:
   default_backend: postgresql  # Use PostgreSQL as default backend
 
-  postgres_base_dsn: "postgresql://postgres:postgres@localhost:5432"
+  postgres_base_dsn: "postgresql://postgres:postgres@localhost:6432"
 
   postgres_databases:
-    checkpoints: soothe_checkpoints  # LangGraph + AgentLoop checkpoints
+    checkpoints: soothe_checkpoints  # LangGraph + AgentLoop checkpoints (IG-055 shared)
     metadata: soothe_metadata        # Thread metadata (DurabilityProtocol)
     vectors: soothe_vectors          # pgvector embeddings
     memory: soothe_memory            # MemU long-term memory
@@ -147,11 +147,12 @@ persistence:
 # =============================================================================
 # Vector Store Providers
 # =============================================================================
-# RFC-612: Use separate vectors database (pgvector extension requires dedicated DB)
+# RFC-612: Vector store DSN auto-resolved from persistence.postgres_base_dsn + vectors database
 vector_stores:
   - name: pgvector_default
     provider_type: pgvector
-    dsn: "${PERSISTENCE_POSTGRES_BASE_DSN}/${PERSISTENCE_POSTGRES_VECTORS_DB}"
+    # DSN auto-resolved from postgres_base_dsn + postgres_databases.vectors
+    # No explicit dsn needed when using RFC-612 multi-database architecture
     pool_size: 5
     index_type: hnsw
 

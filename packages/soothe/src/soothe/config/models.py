@@ -324,22 +324,53 @@ class ToolsConfig(BaseModel):
 class PersistenceConfig(BaseModel):
     """Unified persistence settings for protocol backends.
 
+    RFC-612: Multi-database PostgreSQL architecture for lifecycle isolation,
+    backup granularity, and pgvector extension requirements.
+
     Args:
-        soothe_postgres_dsn: PostgreSQL DSN used by persistence/checkpointer/
-            durability metadata storage.
+        postgres_base_dsn: Base PostgreSQL DSN without database name (RFC-612).
+            Example: "postgresql://user:pass@host:port"
+            Used with postgres_databases to construct full DSNs for each component.
+        postgres_databases: Named database mapping for each component (RFC-612).
+            Maps component names to database names.
+            Default: {"checkpoints": "soothe_checkpoints", "metadata": "soothe_metadata",
+                      "vectors": "soothe_vectors", "memory": "soothe_memory"}
+        soothe_postgres_dsn: Legacy single-database DSN (deprecated).
+            Use postgres_base_dsn + postgres_databases instead.
         default_backend: Default backend for new protocols (can be overridden).
         metadata_sqlite_path: Path for ThreadInfo metadata storage (SQLitePersistStore).
             None defaults to $SOOTHE_DATA_DIR/metadata.db.
-        checkpoint_sqlite_path: Path for LangGraph conversation checkpoints (AsyncSqliteSaver).
-            None defaults to $SOOTHE_DATA_DIR/langgraph_checkpoints.db.
+        checkpoint_sqlite_path: Path for shared checkpoints database (LangGraph + AgentLoop).
+            None defaults to $SOOTHE_DATA_DIR/soothe_checkpoints.db (IG-055 unified SQLite).
     """
 
+    # RFC-612: Multi-database architecture
+    postgres_base_dsn: str | None = None
+    """Base PostgreSQL DSN without database name (RFC-612)."""
+
+    postgres_databases: dict[str, str] = {
+        "checkpoints": "soothe_checkpoints",
+        "metadata": "soothe_metadata",
+        "vectors": "soothe_vectors",
+        "memory": "soothe_memory",
+    }
+    """Named database mapping for each component (RFC-612).
+
+    Note: AgentLoop checkpoints use the same 'checkpoints' database as LangGraph
+    with separate table names for schema isolation.
+    """
+
+    # Legacy single-database DSN (deprecated, kept for backward compatibility)
     soothe_postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/soothe"
+    """Legacy single-database DSN (deprecated). Use postgres_base_dsn instead."""
+
     default_backend: Literal["postgresql", "sqlite"] = "sqlite"
 
-    # Split databases for clear separation (metadata.db + langgraph_checkpoints.db + loop_checkpoints.db)
+    # IG-055: Unified SQLite architecture (metadata.db + soothe_checkpoints.db)
     metadata_sqlite_path: str | None = None  # None = $SOOTHE_DATA_DIR/metadata.db
-    checkpoint_sqlite_path: str | None = None  # None = $SOOTHE_DATA_DIR/langgraph_checkpoints.db
+    checkpoint_sqlite_path: str | None = (
+        None  # None = $SOOTHE_DATA_DIR/soothe_checkpoints.db (shared)
+    )
 
 
 class MemUConfig(BaseModel):

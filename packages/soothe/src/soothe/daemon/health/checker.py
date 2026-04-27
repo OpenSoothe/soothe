@@ -149,7 +149,7 @@ class HealthChecker:
         return await check_daemon(self.config)
 
     async def check_persistence(self) -> CategoryResult:
-        """Check persistence layer (PostgreSQL, RocksDB, filesystem).
+        """Check persistence layer (PostgreSQL, filesystem).
 
         Returns:
             CategoryResult with persistence check results

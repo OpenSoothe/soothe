@@ -4,6 +4,7 @@ Creates failed branches on iteration failure detection, preserving
 execution path for learning analysis and smart retry.
 
 RFC-611: AgentLoop Checkpoint Tree Architecture
+IG-055: Backend-agnostic persistence with config-driven backend selection
 """
 
 from __future__ import annotations
@@ -18,20 +19,23 @@ from soothe.cognition.agent_loop.persistence.manager import AgentLoopCheckpointP
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
+    from soothe.config import SootheConfig
+
 logger = logging.getLogger(__name__)
 
 
 class FailedBranchManager:
     """Manager for failed branch creation and management."""
 
-    def __init__(self, loop_id: str) -> None:
+    def __init__(self, loop_id: str, config: SootheConfig | None = None) -> None:
         """Initialize branch manager.
 
         Args:
             loop_id: AgentLoop identifier.
+            config: SootheConfig for backend selection. If None, defaults to SQLite.
         """
         self.loop_id = loop_id
-        self.persistence_manager = AgentLoopCheckpointPersistenceManager()
+        self.persistence_manager = AgentLoopCheckpointPersistenceManager(config=config)
 
     async def detect_iteration_failure(
         self,

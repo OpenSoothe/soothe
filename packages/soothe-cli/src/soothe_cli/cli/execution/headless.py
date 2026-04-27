@@ -29,7 +29,7 @@ def run_headless(
 ) -> None:
     """Run a single prompt with streaming output and progress events.
 
-    Connects to running daemon via WebSocket if available to avoid RocksDB lock conflicts.
+    Connects to running daemon via WebSocket if available to avoid database lock conflicts.
     Auto-starts daemon if not running (RFC-0013 daemon lifecycle).
 
     Note (RFC-0013): Daemon persists after request completion. Use 'soothed stop'

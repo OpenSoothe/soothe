@@ -461,11 +461,12 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
         config = {"configurable": {"thread_id": thread_id}}
 
         try:
-            # IG-238: Remove as_node parameter - LangGraph auto-determines node context
-            # The "agent" node doesn't exist in create_deep_agent graph structure
+            # LangGraph requires as_node when update is ambiguous (multiple message types)
+            # Use "agent" node context for chitchat updates
             await self._agent.graph.aupdate_state(
                 config,
                 {"messages": [HumanMessage(content=user_input), AIMessage(content=response)]},
+                as_node="agent",
             )
             logger.debug("Chitchat exchange saved to checkpointer for thread %s", thread_id)
         except Exception:

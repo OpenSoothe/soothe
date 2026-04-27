@@ -220,12 +220,54 @@ class SootheConfig(BaseSettings):
 
     # --- Persistence helpers ---
 
+    def resolve_postgres_dsn_for_database(self, db_key: str) -> str:
+        """Resolve PostgreSQL DSN for a specific database component (RFC-612).
+
+        Constructs full DSN from base_dsn + database name, with environment
+        variable resolution and backward compatibility fallback.
+
+        Args:
+            db_key: Database component key (e.g., "checkpoints", "metadata", "vectors", "memory").
+
+        Returns:
+            Full PostgreSQL DSN for the specified database.
+
+        Raises:
+            ValueError: If db_key is not in postgres_databases mapping.
+        """
+        # Check for RFC-612 multi-database configuration
+        if self.persistence.postgres_base_dsn:
+            base_dsn = _resolve_env(self.persistence.postgres_base_dsn)
+
+            # Get database name for the key
+            db_name = self.persistence.postgres_databases.get(db_key)
+            if not db_name:
+                raise ValueError(
+                    f"Database key '{db_key}' not found in postgres_databases mapping. "
+                    f"Available keys: {list(self.persistence.postgres_databases.keys())}"
+                )
+
+            # Construct full DSN: base_dsn/database_name
+            return f"{base_dsn}/{db_name}"
+
+        # Backward compatibility: use legacy single-database DSN
+        return _resolve_env(self.persistence.soothe_postgres_dsn)
+
     def resolve_persistence_postgres_dsn(self) -> str:
         """Resolve the effective PostgreSQL DSN for persistence components.
+
+        Uses RFC-612 multi-database architecture if postgres_base_dsn is set,
+        otherwise falls back to legacy soothe_postgres_dsn for backward compatibility.
 
         Returns:
             The configured DSN for context/memory/durability/checkpointer.
         """
+        # Prefer RFC-612 multi-database configuration
+        if self.persistence.postgres_base_dsn:
+            # Use checkpoints database as default for checkpointer
+            return self.resolve_postgres_dsn_for_database("checkpoints")
+
+        # Backward compatibility: legacy single-database DSN
         return _resolve_env(self.persistence.soothe_postgres_dsn)
 
     # --- Vector store helpers ---
@@ -295,6 +337,10 @@ class SootheConfig(BaseSettings):
                 )
                 if resolved:
                     kwargs["dsn"] = resolved
+            # RFC-612: Auto-resolve vectors database if no explicit DSN
+            elif self.persistence.postgres_base_dsn:
+                kwargs["dsn"] = self.resolve_postgres_dsn_for_database("vectors")
+
             kwargs["pool_size"] = provider.pool_size
             kwargs["index_type"] = provider.index_type
 
