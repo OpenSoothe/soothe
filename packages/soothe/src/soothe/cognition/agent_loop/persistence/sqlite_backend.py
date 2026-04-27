@@ -247,6 +247,29 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             self._get_anchors_range_sync, self._writer_conn, loop_id, start, end
         )
 
+    def _deserialize_anchor_json_fields(self, row_dict: dict[str, Any]) -> dict[str, Any]:
+        """Deserialize JSON fields in anchor row."""
+        # Deserialize tools_executed if present and not None
+        if "tools_executed" in row_dict and row_dict["tools_executed"] is not None:
+            row_dict["tools_executed"] = json.loads(row_dict["tools_executed"])
+        return row_dict
+
+    def _deserialize_branch_json_fields(self, row_dict: dict[str, Any]) -> dict[str, Any]:
+        """Deserialize JSON fields in branch row."""
+        # Deserialize execution_path if present and not None
+        if "execution_path" in row_dict and row_dict["execution_path"] is not None:
+            row_dict["execution_path"] = json.loads(row_dict["execution_path"])
+        # Deserialize failure_insights if present and not None
+        if "failure_insights" in row_dict and row_dict["failure_insights"] is not None:
+            row_dict["failure_insights"] = json.loads(row_dict["failure_insights"])
+        # Deserialize avoid_patterns if present and not None
+        if "avoid_patterns" in row_dict and row_dict["avoid_patterns"] is not None:
+            row_dict["avoid_patterns"] = json.loads(row_dict["avoid_patterns"])
+        # Deserialize suggested_adjustments if present and not None
+        if "suggested_adjustments" in row_dict and row_dict["suggested_adjustments"] is not None:
+            row_dict["suggested_adjustments"] = json.loads(row_dict["suggested_adjustments"])
+        return row_dict
+
     def _get_anchors_range_sync(
         self, conn: sqlite3.Connection, loop_id: str, start: int, end: int
     ) -> list[dict[str, Any]]:
@@ -263,7 +286,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             (loop_id, start, end),
         )
         rows = cursor.fetchall()
-        return [dict(row) for row in rows]
+        return [self._deserialize_anchor_json_fields(dict(row)) for row in rows]
 
     async def get_thread_checkpoints_for_loop(
         self, loop_id: str, thread_id: str
@@ -275,22 +298,43 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         )
 
     def _get_thread_checkpoints_sync(
-        self, conn: sqlite3.Connection, loop_id: str, thread_id: str
+        self, conn: sqlite3.Connection, loop_id: str, thread_id: str | None
     ) -> list[dict[str, Any]]:
-        """Sync query thread checkpoints."""
-        cursor = conn.execute(
-            """
-            SELECT anchor_id, loop_id, iteration, thread_id, checkpoint_id, checkpoint_ns,
-                   anchor_type, timestamp, iteration_status, next_action_summary,
-                   tools_executed, reasoning_decision
-            FROM checkpoint_anchors
-            WHERE loop_id = ? AND thread_id = ?
-            ORDER BY iteration ASC
-        """,
-            (loop_id, thread_id),
-        )
+        """Sync query thread checkpoints.
+
+        Args:
+            conn: SQLite connection
+            loop_id: Loop identifier
+            thread_id: Thread identifier (None = query all threads)
+        """
+        if thread_id is None:
+            # Query all threads for this loop
+            cursor = conn.execute(
+                """
+                SELECT anchor_id, loop_id, iteration, thread_id, checkpoint_id, checkpoint_ns,
+                       anchor_type, timestamp, iteration_status, next_action_summary,
+                       tools_executed, reasoning_decision
+                FROM checkpoint_anchors
+                WHERE loop_id = ?
+                ORDER BY iteration ASC
+            """,
+                (loop_id,),
+            )
+        else:
+            # Query specific thread
+            cursor = conn.execute(
+                """
+                SELECT anchor_id, loop_id, iteration, thread_id, checkpoint_id, checkpoint_ns,
+                       anchor_type, timestamp, iteration_status, next_action_summary,
+                       tools_executed, reasoning_decision
+                FROM checkpoint_anchors
+                WHERE loop_id = ? AND thread_id = ?
+                ORDER BY iteration ASC
+            """,
+                (loop_id, thread_id),
+            )
         rows = cursor.fetchall()
-        return [dict(row) for row in rows]
+        return [self._deserialize_anchor_json_fields(dict(row)) for row in rows]
 
     async def save_failed_branch(
         self,
@@ -429,7 +473,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             (loop_id, limit),
         )
         rows = cursor.fetchall()
-        return [dict(row) for row in rows]
+        return [self._deserialize_branch_json_fields(dict(row)) for row in rows]
 
     async def prune_old_branches(self, loop_id: str, max_age_days: int = 30) -> int:
         """Prune old failed branches."""
