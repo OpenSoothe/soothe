@@ -143,19 +143,17 @@ persistence:
 # =============================================================================
 # Vector Store Providers
 # =============================================================================
-# Note: SQLite doesn't support vector embeddings. For development without pgvector,
-# vectors will be stored in memory or skip embeddings. For vector support in dev,
-# use PostgreSQL or configure a separate pgvector instance.
-# Uncomment below if you have a pgvector instance for development:
-# vector_stores:
-#   - name: pgvector_default
-#     provider_type: pgvector
-#     dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"
-#     pool_size: 5
-#     index_type: hnsw
-#
-# vector_store_router:
-#   default: pgvector_default:soothe_default
+# Development: SQLite with sqlite-vec extension for local vector embeddings
+# sqlite-vec provides vector similarity search without PostgreSQL/pgvector dependency
+vector_stores:
+  - name: sqlite_vec_default
+    provider_type: sqlite_vec
+    # db_path: ""  # Optional: Empty uses $SOOTHE_DATA_DIR/vector.db
+    vector_size: 1536  # OpenAI embedding dimension (adjust for your model)
+    distance: cosine   # Distance metric: cosine, l2, or ip (inner product)
+
+vector_store_router:
+  default: sqlite_vec_default:soothe_default  # Format: "provider_name:collection_name"
 
 subagents:
   browser:
