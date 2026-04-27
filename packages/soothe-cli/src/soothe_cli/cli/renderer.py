@@ -7,6 +7,7 @@ Uses StreamDisplayPipeline for RFC-0020 compliant progress display.
 
 from __future__ import annotations
 
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -138,21 +139,36 @@ class CliRenderer:
         sys.stderr.flush()
         self._state.stderr_just_written = True
 
+    @staticmethod
+    def _repair_concatenated_final_output(text: str) -> str:
+        """Repair common concat artifacts in final assistant output."""
+        repaired = text
+        repaired = re.sub(r"(?<!\n)(?=##+\s*\d)", "\n\n", repaired)
+        repaired = re.sub(r"(?<!\n)(?=##+\s*[A-Za-z])", "\n\n", repaired)
+        repaired = re.sub(r"(?<=##)(?=\d)", " ", repaired)
+        repaired = re.sub(r"(?<=[A-Za-z])(?=\d{1,3}\b)", " ", repaired)
+        repaired = re.sub(r"(##[^\n]*[a-z])(?=[A-Z])", r"\1\n\n", repaired)
+        repaired = re.sub(r"(?<!\n)(?=\d+\.\s+\*\*)", "\n", repaired)
+        repaired = re.sub(r"(?<=[A-Za-z])(?=-\s+\*\*)", "\n", repaired)
+        repaired = re.sub(r"(?<=[A-Za-z0-9])(?=-\s)", "\n", repaired)
+        repaired = re.sub(r"(?<=\d)(?=[#<])", "\n", repaired)
+        return repaired
+
     def _write_stdout_final_report(self, text: str) -> None:
         """Write aggregated final answer to stdout (multi-step headless mode only)."""
-        stripped = text.strip()
-        if not stripped:
+        if text == "":
             return
 
-        self._state.suppression.full_response.append(stripped)
+        repaired = self._repair_concatenated_final_output(text)
+        self._state.suppression.full_response.append(repaired)
 
         # Add newline before final report if stderr was just written (goal completion)
         if self._state.stderr_just_written:
             sys.stdout.write("\n")
             self._state.stderr_just_written = False
 
-        sys.stdout.write(stripped)
-        if not stripped.endswith("\n"):
+        sys.stdout.write(repaired)
+        if not repaired.endswith("\n"):
             sys.stdout.write("\n")
         sys.stdout.flush()
         self._state.needs_stdout_newline = True
@@ -164,7 +180,7 @@ class CliRenderer:
         text: str,
         *,
         is_main: bool,
-        is_streaming: bool,  # noqa: ARG002
+        is_streaming: bool,
     ) -> None:
         """Write assistant text to stdout.
 
@@ -186,14 +202,15 @@ class CliRenderer:
             return
 
         # Emit only on final iteration (after flags cleared)
-        self._state.suppression.full_response.append(text)
+        payload = text if is_streaming else self._repair_concatenated_final_output(text)
+        self._state.suppression.full_response.append(payload)
 
         if self._state.stderr_just_written:
             self._state.stderr_just_written = False
 
         # LLM stream: do not inject extra blank lines (spacing before icon stderr
         # is handled in _stderr_begin_icon_block when progress resumes).
-        sys.stdout.write(text)
+        sys.stdout.write(payload)
         sys.stdout.flush()
         self._state.needs_stdout_newline = True
         self._state.stderr_blank_before_next_icon_block = True
@@ -433,7 +450,21 @@ class CliRenderer:
         self._state.needs_stdout_newline = False
         self._state.suppression.reset_turn()
 
-        # Multi-step mode intentionally suppresses step body output in headless CLI.
+        # Fallback flush: if agentic suppression was active but no explicit
+        # final stdout event was emitted, write buffered streamed chunks now.
+        # This covers runs where final report arrived only through
+        # soothe.output.final_report.streaming chunks.
+        if (
+            was_multi_step
+            and accumulated_response
+            and self._state.suppression.agentic_stdout_suppressed
+            and not self._state.suppression.agentic_final_stdout_emitted
+        ):
+            self._write_stdout_final_report("".join(accumulated_response))
+            return
+
+        # Multi-step mode intentionally suppresses step body output in headless CLI
+        # unless fallback flush above is triggered.
         # For single-step mode, keep existing newline flush behavior.
         if (not was_multi_step) and accumulated_response:
             sys.stdout.write("\n")

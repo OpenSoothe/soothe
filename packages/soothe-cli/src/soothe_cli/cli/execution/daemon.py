@@ -48,6 +48,7 @@ async def run_headless_via_daemon(
     ws_url = websocket_url_from_config(cfg)
     client = WebSocketClient(url=ws_url)
     verbosity = cfg.logging.verbosity
+    final_output_mode = getattr(cfg, "final_output_mode", "streaming")
 
     try:
         await connect_websocket_with_retries(client)
@@ -84,7 +85,12 @@ async def run_headless_via_daemon(
         # for pipeline + message gating (RFC-502).
         presentation = PresentationEngine()
         renderer = CliRenderer(verbosity=verbosity, presentation_engine=presentation)
-        processor = EventProcessor(renderer, verbosity=verbosity, presentation_engine=presentation)
+        processor = EventProcessor(
+            renderer,
+            verbosity=verbosity,
+            final_output_mode=final_output_mode,
+            presentation_engine=presentation,
+        )
 
         has_error = False
         query_started = False  # Track if we've seen the query start running

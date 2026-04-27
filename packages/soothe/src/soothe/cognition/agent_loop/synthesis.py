@@ -59,7 +59,7 @@ def evidence_requires_final_synthesis(state: LoopState, plan_result: PlanResult)
 
 
 class SynthesisPhase:
-    """Generate comprehensive final reports from evidence.
+    """Generate comprehensive final reports from execution results.
 
     Trigger criteria (all must be met):
     1. ≥2 successful steps

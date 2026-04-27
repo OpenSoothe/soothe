@@ -15,6 +15,7 @@
 #   - detailed: Protocol events, tool calls, SUBAGENT INTERNALS/STEP PROGRESS
 #   - debug: Everything including thinking, heartbeats
 verbosity: normal
+final_output_mode: streaming  # streaming | batch
 
 # Optional: Python logging level for ~/.soothe/logs/soothe-cli.log only (does not change TUI
 # progress verbosity above). When omitted, level follows verbosity. SOOTHE_LOG_LEVEL overrides.

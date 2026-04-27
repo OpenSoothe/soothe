@@ -8,6 +8,7 @@ from soothe.cognition.agent_loop.stream_chunk_normalize import (
     FinalReportAccumState,
     extract_text_from_message_content,
     iter_messages_for_act_aggregation,
+    join_text_fragments,
     parse_tuple_stream_chunk,
     resolve_final_report_text,
     update_final_report_from_message,
@@ -22,6 +23,18 @@ def test_extract_text_from_message_content_str_and_blocks() -> None:
         == "abc"
     )
     assert extract_text_from_message_content(None) == ""
+
+
+def test_join_text_fragments_preserves_common_boundaries() -> None:
+    assert join_text_fragments(["first", "10"]) == "first 10"
+    assert join_text_fragments(["Report", "## Executive"]) == "Report\n## Executive"
+    assert join_text_fragments(["1", "# Heading"]) == "1\n# Heading"
+    assert join_text_fragments(["23", "<div>"]) == "23\n<div>"
+
+
+def test_extract_text_from_message_content_repairs_fragment_boundaries() -> None:
+    content = [{"type": "text", "text": "Report"}, {"type": "text", "text": "## Executive"}]
+    assert extract_text_from_message_content(content) == "Report\n## Executive"
 
 
 def test_parse_tuple_stream_chunk_two_and_three() -> None:

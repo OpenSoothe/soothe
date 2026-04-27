@@ -135,6 +135,8 @@ class PlanResult(BaseModel):
     plan_action: Literal["keep", "new"] = "new"
     decision: AgentDecision | None = None
     full_output: str | None = None
+    response_length_category: str | None = None
+    """Response length category for synthesis (brief/concise/standard/comprehensive). IG-268."""
 
     @model_validator(mode="after")
     def _validate_plan_action(self) -> PlanResult:
@@ -438,6 +440,7 @@ class LoopState(BaseModel):
     last_execute_assistant_text: str | None = None
     last_execute_wave_parallel_multi_step: bool = False
     thread_continuation: bool = False  # IG-226: Thread continuation mode flag
+    intent: Any | None = None  # IG-268: Intent classification for response length intelligence
 
     def add_step_result(self, result: StepResult) -> None:
         """Add step result and update completed set.

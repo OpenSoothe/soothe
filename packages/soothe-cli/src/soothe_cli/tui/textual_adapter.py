@@ -716,7 +716,13 @@ async def execute_task_textual(
 
     hitl_request_adapter = _get_hitl_request_adapter(HITLRequest)
     ask_user_adapter = _get_ask_user_adapter()
-    pv = normalize_verbosity(load_config().verbosity)
+    cli_cfg = load_config()
+    pv = normalize_verbosity(cli_cfg.verbosity)
+    final_output_mode = (
+        cli_cfg.final_output_mode
+        if cli_cfg.final_output_mode in {"streaming", "batch"}
+        else "streaming"
+    )
     show_tool_ui = should_show_tool_call_ui(pv)
     logger.debug(
         "TUI turn: verbosity=%r show_tool_ui=%s (tool-call rows follow this flag)",
@@ -799,6 +805,7 @@ async def execute_task_textual(
     # when multiple subagents stream in parallel
     pending_text_by_namespace: dict[tuple, str] = {}
     assistant_message_by_namespace: dict[tuple, Any] = {}
+    final_report_stream_by_namespace: dict[tuple, AssistantMessage] = {}
 
     # Clear media from tracker after creating the message
     if image_tracker:
@@ -1359,8 +1366,64 @@ async def execute_task_textual(
                                 adapter._goal_tree_by_namespace.pop(ns_key, None)
 
                         if output_text := _extract_custom_output_text(data):
+                            if (
+                                event_type == "soothe.output.final_report.streaming"
+                                and final_output_mode != "streaming"
+                            ):
+                                continue
+                            if (
+                                event_type == "soothe.cognition.agent_loop.completed"
+                                and final_output_mode != "batch"
+                            ):
+                                continue
                             pending_text = pending_text_by_namespace.get(ns_key, "")
                             existing_msg = assistant_message_by_namespace.get(ns_key)
+                            stream_msg = final_report_stream_by_namespace.get(ns_key)
+                            is_final_report_stream_chunk = (
+                                event_type == "soothe.output.final_report.streaming"
+                                and bool(data.get("is_chunk", False))
+                            )
+
+                            if is_final_report_stream_chunk:
+                                if pending_text:
+                                    await _flush_assistant_text_ns(
+                                        adapter,
+                                        pending_text,
+                                        ns_key,
+                                        assistant_message_by_namespace,
+                                    )
+                                    pending_text_by_namespace[ns_key] = ""
+                                    assistant_message_by_namespace.pop(ns_key, None)
+
+                                if stream_msg is None:
+                                    if adapter._set_spinner:
+                                        await adapter._set_spinner(None)
+                                    msg_id = f"asst-{uuid.uuid4().hex[:8]}"
+                                    if adapter._set_active_message:
+                                        adapter._set_active_message(msg_id)
+                                    stream_msg = AssistantMessage(id=msg_id)
+                                    await adapter._mount_message(stream_msg)
+                                    final_report_stream_by_namespace[ns_key] = stream_msg
+
+                                await stream_msg.append_content(output_text)
+                                continue
+
+                            if stream_msg is not None:
+                                # Flush terminal non-chunk event into existing final-report stream card.
+                                # Some providers send one final non-chunk payload after streamed chunks.
+                                if output_text and output_text not in stream_msg._content:
+                                    await stream_msg.append_content(output_text)
+                                await stream_msg.stop_stream()
+                                if adapter._sync_message_content and stream_msg.id:
+                                    adapter._sync_message_content(
+                                        stream_msg.id, stream_msg._content
+                                    )
+                                final_report_stream_by_namespace.pop(ns_key, None)
+                                if adapter._set_active_message:
+                                    adapter._set_active_message(None)
+                                if adapter._set_spinner:
+                                    await adapter._set_spinner(None)
+                                continue
 
                             # Avoid duplicate messages when output matches streamed text (IG-251)
                             pending_normalized = pending_text.strip()
@@ -1562,6 +1625,11 @@ async def execute_task_textual(
                     await _flush_assistant_text_ns(
                         adapter, pending_text, ns_key, assistant_message_by_namespace
                     )
+            for ns_key, stream_msg in list(final_report_stream_by_namespace.items()):
+                await stream_msg.stop_stream()
+                if adapter._sync_message_content and stream_msg.id:
+                    adapter._sync_message_content(stream_msg.id, stream_msg._content)
+                final_report_stream_by_namespace.pop(ns_key, None)
             pending_text_by_namespace.clear()
             assistant_message_by_namespace.clear()
 
