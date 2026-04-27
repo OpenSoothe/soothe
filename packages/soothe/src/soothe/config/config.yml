@@ -121,7 +121,7 @@ daemon:
 
 subagents:
   browser:
-    enabled: true
+    enabled: false
     config:
       max_steps: 10  # Browser-use agent loop limit per delegated task
       runtime_dir: ""  # Empty = use SOOTHE_HOME/agents/browser/

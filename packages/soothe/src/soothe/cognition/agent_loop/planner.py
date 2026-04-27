@@ -736,7 +736,7 @@ class LLMPlanner:
             iteration: Current iteration for varied fallback
 
         Returns:
-            StatusAssessment with status, progress, confidence (IG-264: simplified).
+            StatusAssessment with status, progress, confidence.
         """
         from soothe.cognition.agent_loop.schemas import StatusAssessment
 
@@ -764,6 +764,7 @@ class LLMPlanner:
                 status="replan",
                 goal_progress=0.0,
                 confidence=0.5,
+                require_goal_completion=False,  # Default: skip synthesis
             )
 
     async def _generate_plan(
@@ -785,7 +786,7 @@ class LLMPlanner:
             iteration: Current iteration for varied fallback
 
         Returns:
-            PlanGeneration with plan_action, decision (IG-264: simplified).
+            PlanGeneration with plan_action, decision.
         """
         from langchain_core.messages import SystemMessage
 
@@ -824,6 +825,56 @@ class LLMPlanner:
                 next_action="I'll proceed with a default plan.",
             )
 
+    def _should_require_goal_completion(self, state: LoopState) -> bool:
+        """Determine if goal completion synthesis is needed.
+
+        Returns False when last AIMessage is sufficient, avoiding extra LLM call.
+        """
+        # Complex execution patterns require synthesis
+        if state.last_execute_wave_parallel_multi_step:
+            logger.debug("[GoalCompletion] True: parallel multi-step")
+            return True
+
+        if state.last_wave_hit_subagent_cap:
+            logger.debug("[GoalCompletion] True: subagent cap")
+            return True
+
+        assistant = (state.last_execute_assistant_text or "").strip()
+        if not assistant:
+            logger.debug("[GoalCompletion] True: no output")
+            return True
+
+        import re
+
+        word_count = len(re.findall(r"\S+", assistant))
+
+        # Low word count needs enrichment
+        if word_count < 150:
+            logger.debug("[GoalCompletion] True: low words=%d", word_count)
+            return True
+
+        evidence_chars = len(state.evidence_summary or "")
+
+        # High evidence with moderate output needs synthesis
+        if evidence_chars > 5000:
+            if word_count >= 300:
+                logger.debug(
+                    "[GoalCompletion] False: rich output words=%d evidence=%d",
+                    word_count,
+                    evidence_chars,
+                )
+                return False
+            logger.debug(
+                "[GoalCompletion] True: high evidence=%d words=%d", evidence_chars, word_count
+            )
+            return True
+
+        # Sufficient output, skip synthesis
+        logger.debug(
+            "[GoalCompletion] False: sufficient words=%d evidence=%d", word_count, evidence_chars
+        )
+        return False
+
     def _combine_results(
         self,
         assessment: Any,
@@ -846,8 +897,7 @@ class LLMPlanner:
         # IG-264: Only use plan_result.brief_reasoning (assessment removed)
         pr = (plan_result.brief_reasoning or "").strip()
 
-        # IG-152: Use plan_result.next_action (concrete, actionable) for user
-        # plan_result.next_action is plan-specific (what will actually be executed)
+        # Use plan_result.next_action (concrete, actionable)
         action_text = plan_result.next_action.strip()
 
         logger.debug(
@@ -855,16 +905,17 @@ class LLMPlanner:
             preview_first(action_text, chars=80),
         )
 
-        # Build final PlanResult (IG-264: assessment_reasoning removed)
+        # Build final PlanResult
         return PlanResult(
             status=assessment.status,
             goal_progress=assessment.goal_progress,
             confidence=assessment.confidence,
-            assessment_reasoning="",  # IG-264: Empty (assessment removed)
+            assessment_reasoning="",
             plan_reasoning=pr,
             plan_action=plan_result.plan_action,
             decision=plan_result.decision,
             next_action=action_text,
+            require_goal_completion=assessment.require_goal_completion,
         )
 
     async def plan(
@@ -884,66 +935,64 @@ class LLMPlanner:
 
         messages = self._prompt_builder.build_plan_messages(goal, state, context)
 
-        # Compact input summary
         msg_types = [type(m).__name__ for m in messages]
-
         human_preview = ""
         for msg in messages:
-            if isinstance(msg, HumanMessage):  # Works for LoopHumanMessage too
+            if isinstance(msg, HumanMessage):
                 human_preview = create_output_summary(msg.content, first_chars=200, last_chars=100)
                 break
         logger.debug("[Plan] msgs=%d types=%s human=%s", len(messages), msg_types, human_preview)
 
-        # RFC-604 Layer 3: Retry logic with fallback
         max_retries = 3
         result = None
 
         for attempt in range(max_retries):
             try:
-                # Status Assessment
                 assessment = await self._assess_status(messages, goal, state.iteration)
 
-                # IG-053: Config-driven guard - Reject "done" status at iteration 0 with no execution
-                # Prevents false "done" that causes hanging and fabricated final reports
-                # Default: disabled (allows conversational goals to complete at iteration 0)
+                # Guard against false "done" at iteration 0
                 if assessment.status == "done":
-                    # Check if guard is enabled via config
-                    guard_enabled = False  # Default to disabled per config default
+                    guard_enabled = False
                     if self._config is not None:
                         guard_enabled = self._config.performance.reject_done_at_iteration_zero
 
                     if guard_enabled and state.iteration == 0 and len(state.step_results) == 0:
-                        logger.warning(
-                            "[Guard] Rejecting 'done' at iteration 0 with no execution - forcing 'replan'"
-                        )
+                        logger.warning("[Guard] Reject 'done' at iter=0 no execution")
                         assessment.status = "replan"
                         assessment.goal_progress = 0.0
-                        # IG-264: No brief_reasoning field to update
 
-                # Early completion optimization: skip plan generation if status="done"
+                # Early completion: skip plan generation
                 if assessment.status == "done":
-                    logger.debug("[Plan] early-complete status=done (skip plan gen)")
-                    # IG-264: Static fallback (no brief_reasoning field)
+                    logger.debug("[Plan] early-complete skip plan gen")
+
+                    require_goal_completion = self._should_require_goal_completion(state)
+
+                    logger.debug(
+                        "[Plan] require_goal_completion=%s (assistant_chars=%d evidence_chars=%d)",
+                        require_goal_completion,
+                        len(state.last_execute_assistant_text or ""),
+                        len(state.evidence_summary or ""),
+                    )
+
                     result = PlanResult(
                         status=assessment.status,
                         goal_progress=assessment.goal_progress,
                         confidence=assessment.confidence,
-                        assessment_reasoning="",  # IG-264: Empty
-                        plan_reasoning="",  # IG-264: Empty
-                        plan_action="keep",  # No plan needed
+                        assessment_reasoning="",
+                        plan_reasoning="",
+                        plan_action="keep",
                         decision=None,
                         next_action="Goal achieved successfully",
+                        require_goal_completion=require_goal_completion,
+                        full_output=state.last_execute_assistant_text,
                     )
                 else:
-                    # Plan Generation
                     plan_result = await self._generate_plan(
                         messages, assessment, goal, state.iteration
                     )
 
-                    # Combine results
                     result = self._combine_results(assessment, plan_result)
 
-                # Success
                 decision_info = ""
                 if result.decision:
                     decision_info = (
@@ -957,7 +1006,7 @@ class LLMPlanner:
                     result.confidence * 100,
                     decision_info,
                 )
-                break  # Success, exit retry loop
+                break
 
             except Exception as e:
                 error_type = type(e).__name__
@@ -1006,7 +1055,7 @@ class LLMPlanner:
                                 parsed_dict = _try_parse_json_dict(repaired_json)
 
                                 if parsed_dict:
-                                    # IG-264: Parse as StatusAssessment and build PlanResult
+                                    # Parse as StatusAssessment and build PlanResult
                                     try:
                                         assessment = StatusAssessment(**parsed_dict)
                                         result = PlanResult(
@@ -1036,9 +1085,9 @@ class LLMPlanner:
                         status="replan",
                         plan_action="new",
                         decision=_default_agent_decision(goal, state.iteration),
-                        assessment_reasoning="",  # IG-264: Not needed
-                        plan_reasoning="",  # IG-264: Not needed
-                        next_action="Retrying with simpler approach",  # IG-264: Derived
+                        assessment_reasoning="",
+                        plan_reasoning="",
+                        next_action="Retrying with simpler approach",
                     )
 
         # RFC-603: Apply evidence-based confidence and progress

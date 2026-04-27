@@ -10,9 +10,9 @@ RFC-611: AgentLoop Checkpoint Tree Architecture
 IG-243: Checkpoint Tree Integration Testing
 """
 
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
-from contextlib import contextmanager
 
 import pytest
 
@@ -33,8 +33,9 @@ def mock_soothe_home(tmp_path):
 
     Ensures tests use isolated database in tmp_path instead of ~/.soothe/.
     """
-    import soothe.config.env as env_config
     import soothe_sdk.client.config as sdk_config
+
+    import soothe.config.env as env_config
 
     original_home = env_config.SOOTHE_HOME
     original_sdk_home = sdk_config.SOOTHE_HOME
@@ -190,7 +191,6 @@ async def test_complete_smart_retry_workflow(tmp_path):
         assert len(successful_anchors) >= 1  # iteration 0
 
 
-
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_multiple_failures_with_learning_accumulation(tmp_path):
@@ -266,7 +266,6 @@ async def test_multiple_failures_with_learning_accumulation(tmp_path):
         assert branches[0]["branch_id"] != branches[1]["branch_id"]
         assert branches[0]["iteration"] == 2
         assert branches[1]["iteration"] == 4
-
 
 
 @pytest.mark.integration
@@ -347,4 +346,3 @@ async def test_branch_pruning_retention_policy(tmp_path):
         branches = await persistence_manager.get_failed_branches_for_loop(loop_id)
         assert len(branches) == 1  # Recent branch preserved
         assert branches[0]["branch_id"] == "branch_recent"
-

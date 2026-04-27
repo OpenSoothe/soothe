@@ -157,6 +157,7 @@ vector_store_router:
 
 subagents:
   browser:
+    enabled: false
     config:
       max_steps: 10
 

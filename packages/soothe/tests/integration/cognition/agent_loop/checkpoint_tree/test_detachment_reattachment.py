@@ -10,9 +10,9 @@ RFC-503: Loop-First User Experience
 IG-243: Checkpoint Tree Integration Testing
 """
 
+from contextlib import contextmanager
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
-from contextlib import contextmanager
 
 import pytest
 
@@ -37,8 +37,9 @@ def mock_soothe_home(tmp_path):
 
     Ensures tests use isolated database in tmp_path instead of ~/.soothe/.
     """
-    import soothe.config.env as env_config
     import soothe_sdk.client.config as sdk_config
+
+    import soothe.config.env as env_config
 
     original_home = env_config.SOOTHE_HOME
     original_sdk_home = sdk_config.SOOTHE_HOME

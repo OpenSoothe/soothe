@@ -122,8 +122,7 @@ class AgentLoop:
         max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
         loop_id: str | None = None,  # IG-246: explicit loop_id parameter
         plan_conversation_excerpts: list[str] | None = None,
-        intent: Any
-        | None = None,  # IG-226: Intent classification, IG-268: Response length intelligence
+        intent: Any | None = None,  # Intent classification
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -234,7 +233,7 @@ class AgentLoop:
             iteration=iteration,  # Use recovered or initial iteration
             max_iterations=max_iterations,
             plan_conversation_excerpts=plan_excerpts,
-            intent=intent,  # IG-268: Pass intent classification for response length intelligence
+            intent=intent,
         )
 
         # IG-226: Set thread continuation flag for working memory context
@@ -328,7 +327,7 @@ class AgentLoop:
                 )
 
                 # RFC-211 / IG-199: Goal completion — adaptive second CoreAgent turn vs last Execute text
-                # IG-268: NEVER leak internal evidence_summary (verbose step strings) to users
+                # NEVER leak internal evidence_summary to users
                 # Generate user-friendly summary instead when full_output is empty
                 if plan_result.full_output:
                     final_output = plan_result.full_output
@@ -341,7 +340,7 @@ class AgentLoop:
                     # No steps executed, use next_action as summary
                     final_output = plan_result.next_action or "Goal achieved successfully"
 
-                # IG-268: Determine response length category from intent and evidence (once for all branches)
+                # Determine response length category from intent and evidence
                 from soothe.cognition.agent_loop.response_length_policy import (
                     calculate_evidence_metrics,
                     determine_response_length,
@@ -388,38 +387,44 @@ class AgentLoop:
                     evidence_diversity,
                 )
 
-                mode = self.config.agentic.final_response
-                direct_goal_completion = should_return_goal_completion_directly(
-                    state,
-                    plan_result,
-                    mode,
-                    response_length_category=length_category.value,
-                )
-                # ``needs_final_thread_synthesis`` already handles every mode
-                # (including ``always_synthesize``); no extra branch needed.
-                run_goal_completion_synthesis = (
-                    not direct_goal_completion
-                    and needs_final_thread_synthesis(state, plan_result, mode)
-                )
-
-                if direct_goal_completion:
+                # Use planner's decision to skip goal completion LLM call when possible
+                if not plan_result.require_goal_completion:
                     reuse = (state.last_execute_assistant_text or "").strip()
                     final_output = reuse
                     logger.info(
-                        "Goal completion: branch=direct_execute assistant_chars=%d",
+                        "Goal completion: branch=planner_skip assistant_chars=%d",
                         len(reuse),
                     )
-                elif run_goal_completion_synthesis:
-                    logger.info(
-                        "Starting goal completion generation (full_output=%d chars, evidence=%d chars, mode=%s)",
-                        len(plan_result.full_output or ""),
-                        len(plan_result.evidence_summary or ""),
+                else:
+                    # Always use adaptive mode
+                    mode = "adaptive"
+                    direct_goal_completion = should_return_goal_completion_directly(
+                        state,
+                        plan_result,
                         mode,
+                        response_length_category=length_category.value,
+                    )
+                    run_goal_completion_synthesis = (
+                        not direct_goal_completion
+                        and needs_final_thread_synthesis(state, plan_result, mode)
                     )
 
-                    try:
-                        # Agentic loop sends message to core agent requesting goal completion response.
-                        goal_completion_request = f"""Based on the complete execution history in this thread, generate a goal completion response for: {goal}
+                    if direct_goal_completion:
+                        reuse = (state.last_execute_assistant_text or "").strip()
+                        final_output = reuse
+                        logger.info(
+                            "Goal completion: branch=direct assistant_chars=%d",
+                            len(reuse),
+                        )
+                    elif run_goal_completion_synthesis:
+                        logger.info(
+                            "Goal completion: branch=synthesis full_output=%d chars evidence=%d chars",
+                            len(plan_result.full_output or ""),
+                            len(plan_result.evidence_summary or ""),
+                        )
+
+                        try:
+                            goal_completion_request = f"""Based on the complete execution history in this thread, generate a goal completion response for: {goal}
 
 RESPONSE LENGTH: {length_category.min_words}-{length_category.max_words} words ({length_category.value} category)
 
@@ -440,67 +445,56 @@ IMPORTANT: The user wants to see the actual content retrieved, not just confirma
 
 Use all tool results and AI responses available in the conversation history."""
 
-                        logger.debug(
-                            "[Human Message] Goal completion request: %s",
-                            log_preview(goal_completion_request, chars=150),
-                        )
-                        human_msg = LoopHumanMessage(
-                            content=goal_completion_request,
-                            thread_id=state.thread_id,
-                            iteration=state.iteration,  # Final iteration
-                            goal_summary=state.goal[:200] if state.goal else None,
-                            phase="goal_completion",
-                        )
-                        accum = GoalCompletionAccumState()
-                        chunk_count = 0
-                        async for chunk in self.core_agent.astream(
-                            {"messages": [human_msg]},
-                            config={"configurable": {"thread_id": state.thread_id}},
-                            stream_mode=["messages"],
-                            subgraphs=False,
-                        ):
-                            chunk_count += 1
-                            for msg in iter_messages_for_act_aggregation(chunk):
-                                update_goal_completion_from_message(accum, msg)
-                            # Yield stream chunks with special event type for goal completion
-                            # This bypasses runner filtering so all AI text reaches CLI/TUI
-                            yield ("goal_completion_stream", chunk)
+                            logger.debug(
+                                "[Human Message] Goal completion request: %s",
+                                log_preview(goal_completion_request, chars=150),
+                            )
+                            human_msg = LoopHumanMessage(
+                                content=goal_completion_request,
+                                thread_id=state.thread_id,
+                                iteration=state.iteration,  # Final iteration
+                                goal_summary=state.goal[:200] if state.goal else None,
+                                phase="goal_completion",
+                            )
+                            accum = GoalCompletionAccumState()
+                            chunk_count = 0
+                            async for chunk in self.core_agent.astream(
+                                {"messages": [human_msg]},
+                                config={"configurable": {"thread_id": state.thread_id}},
+                                stream_mode=["messages"],
+                                subgraphs=False,
+                            ):
+                                chunk_count += 1
+                                for msg in iter_messages_for_act_aggregation(chunk):
+                                    update_goal_completion_from_message(accum, msg)
+                                # Yield stream chunks with special event type for goal completion
+                                # This bypasses runner filtering so all AI text reaches CLI/TUI
+                                yield ("goal_completion_stream", chunk)
 
-                        last_ai_text = resolve_goal_completion_text(accum)
+                            last_ai_text = resolve_goal_completion_text(accum)
 
-                        logger.info(
-                            "Stream completed: %d chunks, %d AI messages, accumulated_chunks=%d chars, final_ai_message=%d chars, selected=%d chars",
-                            chunk_count,
-                            accum.ai_msg_count,
-                            len(accum.accumulated_chunks),
-                            len(accum.final_ai_message_text),
-                            len(last_ai_text),
-                        )
-                        if last_ai_text:
-                            final_output = last_ai_text
                             logger.info(
-                                "Goal completion generated via CoreAgent (%d chars)",
-                                len(final_output),
+                                "Stream: chunks=%d ai_msgs=%d chars=%d",
+                                chunk_count,
+                                accum.ai_msg_count,
+                                len(last_ai_text),
                             )
-                        else:
-                            logger.warning(
-                                "No AI text response from CoreAgent, keeping user-friendly summary"
-                            )
+                            if last_ai_text:
+                                final_output = last_ai_text
+                                logger.info(
+                                    "Goal completion: synthesis=%d chars", len(final_output)
+                                )
+                            else:
+                                logger.warning("No AI text from CoreAgent")
 
-                    except Exception as e:
-                        # IG-268: Keep user-friendly summary on failure, NEVER fallback to evidence
-                        logger.warning(
-                            "Goal completion generation failed: %s, keeping user-friendly summary",
-                            e,
+                        except Exception as e:
+                            logger.warning("Goal completion failed: %s", e)
+                    else:
+                        logger.info(
+                            "Goal completion: branch=summary chars=%d", len(final_output or "")
                         )
-                else:
-                    # Keep the user-friendly summary generated above.
-                    logger.info(
-                        "Goal completion: branch=summary_fallback chars=%d",
-                        len(final_output or ""),
-                    )
 
-                # Update plan_result with final output and response length category
+                # Update plan_result with final output
                 if (
                     final_output != plan_result.full_output
                     or plan_result.response_length_category != length_category.value
@@ -508,14 +502,14 @@ Use all tool results and AI responses available in the conversation history."""
                     plan_result = plan_result.model_copy(
                         update={
                             "full_output": final_output,
-                            "response_length_category": length_category.value,  # IG-268: Include length category for runner
+                            "response_length_category": length_category.value,
                         }
                     )
 
-                # Finalize goal (RFC-608: mark completed, update metrics)
+                # Finalize goal
                 await state_manager.finalize_goal(goal_record, final_output)
                 logger.info(
-                    "[✓] Goal achieved in %d iterations (%dms)",
+                    "Goal completed: iterations=%d duration=%dms",
                     state.iteration,
                     state.total_duration_ms,
                 )
@@ -630,7 +624,7 @@ Use all tool results and AI responses available in the conversation history."""
                         workspace=state.workspace,
                         thread_id=state.thread_id,
                     )
-                # IG-267: Don't leak verbose evidence strings to CLI display
+                # Don't leak verbose evidence strings to CLI display
                 # Use simple summary for user-visible output_preview
                 if result.success:
                     output_preview = "Done"
