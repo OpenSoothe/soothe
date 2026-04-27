@@ -12,6 +12,7 @@ IG-243: Checkpoint Tree Integration Testing
 
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
+from contextlib import contextmanager
 
 import pytest
 
@@ -30,6 +31,31 @@ from soothe.core.event_constants import (
 from soothe.core.event_replay import reconstruct_event_stream
 
 
+@contextmanager
+def mock_soothe_home(tmp_path):
+    """Context manager to mock both SOOTHE_HOME variables (daemon and SDK).
+
+    Ensures tests use isolated database in tmp_path instead of ~/.soothe/.
+    """
+    import soothe.config.env as env_config
+    import soothe_sdk.client.config as sdk_config
+
+    original_home = env_config.SOOTHE_HOME
+    original_sdk_home = sdk_config.SOOTHE_HOME
+    original_sdk_data_dir = sdk_config.SOOTHE_DATA_DIR
+
+    env_config.SOOTHE_HOME = str(tmp_path)
+    sdk_config.SOOTHE_HOME = str(tmp_path)
+    sdk_config.SOOTHE_DATA_DIR = str(tmp_path / "data")
+
+    try:
+        yield
+    finally:
+        env_config.SOOTHE_HOME = original_home
+        sdk_config.SOOTHE_HOME = original_sdk_home
+        sdk_config.SOOTHE_DATA_DIR = original_sdk_data_dir
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_loop_detachment_continues_execution(tmp_path):
@@ -42,14 +68,9 @@ async def test_loop_detachment_continues_execution(tmp_path):
     4. Execute goal 2 while detached
     5. Verify loop status remains 'running'
     """
-    import soothe.config.env as env_config
-
-    original_home = env_config.SOOTHE_HOME
-    env_config.SOOTHE_HOME = str(tmp_path)
-
-    try:
+    with mock_soothe_home(tmp_path):
         PersistenceDirectoryManager.ensure_directories_exist()
-        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        persistence_manager = AgentLoopCheckpointPersistenceManager()  # Defaults to SQLite
         loop_id = "test_detach_loop"
 
         # Register the loop first (required for FK constraint)
@@ -164,9 +185,6 @@ async def test_loop_detachment_continues_execution(tmp_path):
         assert len(iteration_1_end) == 1
         assert iteration_1_end[0]["iteration_status"] == "success"
 
-    finally:
-        env_config.SOOTHE_HOME = original_home
-
 
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -180,14 +198,9 @@ async def test_loop_reattachment_history_replay(tmp_path):
     4. Receive history_replay event with complete event stream
     5. Verify all goals/iterations/branches reconstructed
     """
-    import soothe.config.env as env_config
-
-    original_home = env_config.SOOTHE_HOME
-    env_config.SOOTHE_HOME = str(tmp_path)
-
-    try:
+    with mock_soothe_home(tmp_path):
         PersistenceDirectoryManager.ensure_directories_exist()
-        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        persistence_manager = AgentLoopCheckpointPersistenceManager()  # Defaults to SQLite
         loop_id = "test_reattach_loop"
 
         # Register the loop first (required for FK constraint)
@@ -309,9 +322,6 @@ async def test_loop_reattachment_history_replay(tmp_path):
         timestamps = [e.get("timestamp", datetime.min) for e in event_stream]
         assert timestamps == sorted(timestamps)
 
-    finally:
-        env_config.SOOTHE_HOME = original_home
-
 
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -324,14 +334,9 @@ async def test_loop_reattachment_with_thread_switch(tmp_path):
     3. Reattach client
     4. Verify THREAD_SWITCHED events in replay
     """
-    import soothe.config.env as env_config
-
-    original_home = env_config.SOOTHE_HOME
-    env_config.SOOTHE_HOME = str(tmp_path)
-
-    try:
+    with mock_soothe_home(tmp_path):
         PersistenceDirectoryManager.ensure_directories_exist()
-        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        persistence_manager = AgentLoopCheckpointPersistenceManager()  # Defaults to SQLite
         loop_id = "test_thread_switch_loop"
 
         # Register the loop first (required for FK constraint)
@@ -442,6 +447,3 @@ async def test_loop_reattachment_with_thread_switch(tmp_path):
         thread_checkpoints = await persistence_manager.get_thread_checkpoints_for_loop(loop_id)
         assert "thread_001" in thread_checkpoints
         assert "thread_002" in thread_checkpoints
-
-    finally:
-        env_config.SOOTHE_HOME = original_home

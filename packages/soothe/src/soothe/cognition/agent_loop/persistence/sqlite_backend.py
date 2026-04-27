@@ -248,14 +248,23 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         )
 
     def _deserialize_anchor_json_fields(self, row_dict: dict[str, Any]) -> dict[str, Any]:
-        """Deserialize JSON fields in anchor row."""
+        """Deserialize JSON fields and timestamp fields in anchor row."""
+        from datetime import datetime
+
         # Deserialize tools_executed if present and not None
         if "tools_executed" in row_dict and row_dict["tools_executed"] is not None:
             row_dict["tools_executed"] = json.loads(row_dict["tools_executed"])
+
+        # Deserialize timestamp field from ISO string to datetime
+        if "timestamp" in row_dict and row_dict["timestamp"] is not None:
+            row_dict["timestamp"] = datetime.fromisoformat(row_dict["timestamp"])
+
         return row_dict
 
     def _deserialize_branch_json_fields(self, row_dict: dict[str, Any]) -> dict[str, Any]:
-        """Deserialize JSON fields in branch row."""
+        """Deserialize JSON fields and timestamp fields in branch row."""
+        from datetime import datetime
+
         # Deserialize execution_path if present and not None
         if "execution_path" in row_dict and row_dict["execution_path"] is not None:
             row_dict["execution_path"] = json.loads(row_dict["execution_path"])
@@ -268,6 +277,13 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         # Deserialize suggested_adjustments if present and not None
         if "suggested_adjustments" in row_dict and row_dict["suggested_adjustments"] is not None:
             row_dict["suggested_adjustments"] = json.loads(row_dict["suggested_adjustments"])
+
+        # Deserialize timestamp fields from ISO strings to datetime objects
+        timestamp_fields = ["created_at", "analyzed_at", "pruned_at", "retry_initiated_at"]
+        for field in timestamp_fields:
+            if field in row_dict and row_dict[field] is not None:
+                row_dict[field] = datetime.fromisoformat(row_dict[field])
+
         return row_dict
 
     def _get_anchors_range_sync(

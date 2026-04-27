@@ -12,6 +12,7 @@ IG-243: Checkpoint Tree Integration Testing
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
+from contextlib import contextmanager
 
 import pytest
 
@@ -26,6 +27,31 @@ from soothe.cognition.agent_loop.persistence.manager import (
 )
 
 
+@contextmanager
+def mock_soothe_home(tmp_path):
+    """Context manager to mock both SOOTHE_HOME variables (daemon and SDK).
+
+    Ensures tests use isolated database in tmp_path instead of ~/.soothe/.
+    """
+    import soothe.config.env as env_config
+    import soothe_sdk.client.config as sdk_config
+
+    original_home = env_config.SOOTHE_HOME
+    original_sdk_home = sdk_config.SOOTHE_HOME
+    original_sdk_data_dir = sdk_config.SOOTHE_DATA_DIR
+
+    env_config.SOOTHE_HOME = str(tmp_path)
+    sdk_config.SOOTHE_HOME = str(tmp_path)
+    sdk_config.SOOTHE_DATA_DIR = str(tmp_path / "data")
+
+    try:
+        yield
+    finally:
+        env_config.SOOTHE_HOME = original_home
+        sdk_config.SOOTHE_HOME = original_sdk_home
+        sdk_config.SOOTHE_DATA_DIR = original_sdk_data_dir
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_complete_smart_retry_workflow(tmp_path):
@@ -38,16 +64,10 @@ async def test_complete_smart_retry_workflow(tmp_path):
     4. Smart retry executed with learning
     5. Retry succeeds with adjusted approach
     """
-    # Mock SOOTHE_HOME to temp directory
-    import soothe.config.env as env_config
-
-    original_home = env_config.SOOTHE_HOME
-    env_config.SOOTHE_HOME = str(tmp_path)
-
-    try:
+    with mock_soothe_home(tmp_path):
         # Setup persistence
         PersistenceDirectoryManager.ensure_directories_exist()
-        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        persistence_manager = AgentLoopCheckpointPersistenceManager()  # Defaults to SQLite
         loop_id = "test_retry_loop"
 
         # Register the loop first (required for FK constraint)
@@ -169,8 +189,6 @@ async def test_complete_smart_retry_workflow(tmp_path):
         successful_anchors = [a for a in anchors if a.get("iteration_status") == "success"]
         assert len(successful_anchors) >= 1  # iteration 0
 
-    finally:
-        env_config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.integration
@@ -184,14 +202,9 @@ async def test_multiple_failures_with_learning_accumulation(tmp_path):
     3. Both branches preserved for learning
     4. Smart retry uses accumulated insights
     """
-    import soothe.config.env as env_config
-
-    original_home = env_config.SOOTHE_HOME
-    env_config.SOOTHE_HOME = str(tmp_path)
-
-    try:
+    with mock_soothe_home(tmp_path):
         PersistenceDirectoryManager.ensure_directories_exist()
-        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        persistence_manager = AgentLoopCheckpointPersistenceManager()  # Defaults to SQLite
         loop_id = "test_multi_failure_loop"
 
         # Register the loop first (required for FK constraint)
@@ -254,8 +267,6 @@ async def test_multiple_failures_with_learning_accumulation(tmp_path):
         assert branches[0]["iteration"] == 2
         assert branches[1]["iteration"] == 4
 
-    finally:
-        env_config.SOOTHE_HOME = original_home
 
 
 @pytest.mark.integration
@@ -270,14 +281,9 @@ async def test_branch_pruning_retention_policy(tmp_path):
     """
     from datetime import timedelta
 
-    import soothe.config.env as env_config
-
-    original_home = env_config.SOOTHE_HOME
-    env_config.SOOTHE_HOME = str(tmp_path)
-
-    try:
+    with mock_soothe_home(tmp_path):
         PersistenceDirectoryManager.ensure_directories_exist()
-        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        persistence_manager = AgentLoopCheckpointPersistenceManager()  # Defaults to SQLite
         loop_id = "test_prune_loop"
 
         # Register the loop first (required for FK constraint)
@@ -342,5 +348,3 @@ async def test_branch_pruning_retention_policy(tmp_path):
         assert len(branches) == 1  # Recent branch preserved
         assert branches[0]["branch_id"] == "branch_recent"
 
-    finally:
-        env_config.SOOTHE_HOME = original_home
