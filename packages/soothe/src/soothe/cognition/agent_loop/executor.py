@@ -921,6 +921,7 @@ class Executor:
                         f", cached={file_ref}" if file_ref else "",
                     )
                 elif isinstance(msg, AIMessageChunk):
+                    messages.append(msg)  # Collect chunks for assistant text extraction
                     t = extract_text_from_message_content(msg.content)
                     if t:
                         chunks.append(t)

@@ -108,6 +108,8 @@ class PlanResult(BaseModel):
         decision: New steps to run when plan_action is new; None when keep.
         evidence_summary: Accumulated evidence text (often filled after parsing).
         full_output: Final user-visible answer when status is done.
+        require_goal_completion: Whether extra goal completion LLM call is needed.
+            Propagated from StatusAssessment. When False, last AIMessage can be used directly.
     """
 
     status: Literal["continue", "replan", "done"]
@@ -129,6 +131,9 @@ class PlanResult(BaseModel):
     full_output: str | None = None
     response_length_category: str | None = None
     """Response length category for synthesis (brief/concise/standard/comprehensive). IG-268."""
+
+    require_goal_completion: bool = Field(default=False)
+    """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
 
     @model_validator(mode="after")
     def _validate_plan_action(self) -> PlanResult:
@@ -164,11 +169,16 @@ class StatusAssessment(BaseModel):
         status: Whether to finish, continue current plan, or replan.
         goal_progress: Estimated progress toward the goal (0.0-1.0).
         confidence: Model confidence in the assessment (0.0-1.0).
+        require_goal_completion: Whether an extra goal completion LLM call is needed.
+            When False, the last AIMessage from execution can be used as goal completion.
+            Only relevant when status="done".
     """
 
     status: Literal["continue", "replan", "done"]
     goal_progress: float = Field(default=0.0, ge=0.0, le=1.0)
     confidence: float = Field(default=0.8, ge=0.0, le=1.0)
+    require_goal_completion: bool = Field(default=False)
+    """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
 
 
 class PlanGeneration(BaseModel):

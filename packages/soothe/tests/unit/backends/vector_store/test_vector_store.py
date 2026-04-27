@@ -513,9 +513,7 @@ class TestSQLiteVecStoreUnit:
 
         # Should match when all filters match
         assert SQLiteVecStore._match_filters(payload, {"type": "document"})
-        assert SQLiteVecStore._match_filters(
-            payload, {"type": "document", "category": "test"}
-        )
+        assert SQLiteVecStore._match_filters(payload, {"type": "document", "category": "test"})
 
         # Should not match when any filter doesn't match
         assert not SQLiteVecStore._match_filters(payload, {"type": "image"})
