@@ -32,7 +32,8 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
 
     Supports: postgresql, sqlite backends (binary choice).
     """
-    if config.protocols.durability.backend == "postgresql":
+    backend = config.resolve_durability_backend()  # Resolve inheritance
+    if backend == "postgresql":
         try:
             from soothe.backends.durability.postgresql import PostgreSQLDurability
             from soothe.backends.persistence import create_persist_store
@@ -56,7 +57,7 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
                 f"Verify postgres_base_dsn configuration and PostgreSQL connectivity."
             )
 
-    if config.protocols.durability.backend == "sqlite":
+    if backend == "sqlite":
         try:
             from soothe.backends.durability.sqlite import SQLiteDurability
 
@@ -74,8 +75,7 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
             )
 
     raise ConfigurationError(
-        f"Unknown durability backend: {config.protocols.durability.backend}\n"
-        f"Supported backends: postgresql, sqlite"
+        f"Unknown durability backend: {backend}\nSupported backends: postgresql, sqlite"
     )
 
 
@@ -94,7 +94,7 @@ def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Che
         A tuple of (checkpointer, connection_resource) for PostgreSQL, or just the checkpointer for SQLite.
         The connection_resource must be closed during cleanup (e.g., via runner.cleanup()).
     """
-    backend = config.protocols.durability.checkpointer
+    backend = config.resolve_checkpointer_backend()  # Resolve inheritance
     if backend == "postgresql":
         dsn = config.resolve_persistence_postgres_dsn()
         result = _resolve_postgres_checkpointer(dsn)

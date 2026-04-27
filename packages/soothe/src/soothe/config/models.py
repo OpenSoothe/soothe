@@ -287,7 +287,7 @@ class WebSearchConfig(ToolConfig):
     Note: The crawler runs in headless mode by default (BrowserConfig default in wizsearch backend).
     """
 
-    default_engines: list[str] = Field(default_factory=lambda: ["tavily", "duckduckgo"])
+    default_engines: list[str] = Field(default_factory=lambda: ["tavily"])
     max_results_per_engine: int = 10
     timeout: int = 30
 
@@ -407,13 +407,15 @@ class DurabilityProtocolConfig(BaseModel):
 
     Args:
         backend: Durability backend for thread lifecycle and metadata.
+            Use 'default' to inherit from persistence.default_backend.
         checkpointer: LangGraph checkpoint backend (consistent naming).
+            Use 'default' to inherit from persistence.default_backend.
         persist_dir: Directory for durability persistence.
         thread_inactivity_timeout_hours: Hours before an active thread with no updates is marked as suspended.
     """
 
-    backend: Literal["postgresql", "sqlite"] = "sqlite"
-    checkpointer: Literal["postgresql", "sqlite", "memory"] = "sqlite"
+    backend: Literal["postgresql", "sqlite", "default"] = "default"
+    checkpointer: Literal["postgresql", "sqlite", "default"] = "default"
     persist_dir: str | None = None
     thread_inactivity_timeout_hours: int = Field(default=72, ge=1, le=720)
 

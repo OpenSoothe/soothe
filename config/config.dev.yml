@@ -85,6 +85,79 @@ daemon:
       host: "127.0.0.1"
       port: 8766
 
+# =============================================================================
+# Tools Configuration
+# =============================================================================
+tools:
+  execution:
+    enabled: true
+  file_ops:
+    enabled: true
+  datetime:
+    enabled: true
+  data:
+    enabled: true
+  wizsearch:
+    enabled: true
+    default_engines:
+      - tavily
+  research:
+    enabled: true
+  image:
+    enabled: true
+  audio:
+    enabled: false
+  video:
+    enabled: false
+
+# =============================================================================
+# Protocol Backends
+# =============================================================================
+protocols:
+  planner:
+    routing: auto
+  policy:
+    profile: standard
+  memory:
+    enabled: true
+    persist_dir: ""
+    llm_chat_role: fast
+    llm_embed_role: embedding
+    enable_embeddings: true
+    enable_auto_categorization: true
+    enable_category_summaries: true
+  durability:
+    thread_inactivity_timeout_hours: 72
+
+# =============================================================================
+# Persistence Configuration
+# =============================================================================
+# RFC-612: Multi-database PostgreSQL architecture
+persistence:
+  default_backend: postgresql  # Use PostgreSQL as default backend
+
+  postgres_base_dsn: "postgresql://postgres:postgres@localhost:5432"
+
+  postgres_databases:
+    checkpoints: soothe_checkpoints  # LangGraph + AgentLoop checkpoints
+    metadata: soothe_metadata        # Thread metadata (DurabilityProtocol)
+    vectors: soothe_vectors          # pgvector embeddings
+    memory: soothe_memory            # MemU long-term memory
+
+# =============================================================================
+# Vector Store Providers
+# =============================================================================
+# RFC-612: Use separate vectors database (pgvector extension requires dedicated DB)
+vector_stores:
+  - name: pgvector_default
+    provider_type: pgvector
+    dsn: "${PERSISTENCE_POSTGRES_BASE_DSN}/${PERSISTENCE_POSTGRES_VECTORS_DB}"
+    pool_size: 5
+    index_type: hnsw
+
+vector_store_router:
+  default: pgvector_default:soothe_default
+
 subagents:
   browser:
     config:

@@ -204,17 +204,6 @@ class PlanGeneration(BaseModel):
             raise ValueError("plan_action 'new' requires decision")
         return self
 
-    @model_validator(mode="after")
-    def _validate_plan_action(self) -> PlanGeneration:
-        """Ensure keep/new and decision align.
-
-        IG-264: plan_action='keep' CAN have decision (optional, not enforced).
-        Only enforce that plan_action='new' requires decision.
-        """
-        if self.plan_action == "new" and self.decision is None:
-            raise ValueError("plan_action 'new' requires decision")
-        return self
-
 
 class StepResult(BaseModel):
     """Result from executing a single step.

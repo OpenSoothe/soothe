@@ -262,7 +262,7 @@ async def perform_wizsearch_search(
     from wizsearch import WizSearch, WizSearchConfig
 
     # Default engines if not provided
-    default_engines = engines or ["tavily", "duckduckgo"]
+    default_engines = engines or ["tavily"]
 
     config_kwargs: dict[str, object] = {
         "max_results_per_engine": max_results_per_engine,

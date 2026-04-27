@@ -50,7 +50,7 @@ class WizsearchSearchTool(BaseTool):
 
     default_max_results_per_engine: int = Field(default=10)
     default_timeout: int = Field(default=30)
-    default_engines: list[str] = Field(default_factory=lambda: ["tavily", "duckduckgo"])
+    default_engines: list[str] = Field(default_factory=lambda: ["tavily"])
     config: dict[str, Any] = Field(default_factory=dict)
     debug_mode: bool = False
 
@@ -283,7 +283,7 @@ class WizsearchPlugin:
         context.logger.info(
             "Loaded %d wizsearch tools (engines=%s)",
             len(self._tools),
-            wizsearch_config.get("default_engines", ["tavily", "duckduckgo"]),
+            wizsearch_config.get("default_engines", ["tavily"]),
         )
 
     def get_tools(self) -> list[BaseTool]:
