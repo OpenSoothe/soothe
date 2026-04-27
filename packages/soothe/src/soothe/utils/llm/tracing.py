@@ -30,7 +30,7 @@ class LLMTracingWrapper:
     - Direct model invocations that need tracing but don't go through CoreAgent
 
     Example:
-        >>> from soothe.core.llm import LLMTracingWrapper
+        >>> from soothe.utils.llm import LLMTracingWrapper
         >>> wrapped_model = LLMTracingWrapper(model)
         >>> response = await wrapped_model.ainvoke(
         ...     messages,
