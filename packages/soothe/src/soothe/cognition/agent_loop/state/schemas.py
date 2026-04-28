@@ -129,8 +129,6 @@ class PlanResult(BaseModel):
     plan_action: Literal["keep", "new"] = "new"
     decision: AgentDecision | None = None
     full_output: str | None = None
-    response_length_category: str | None = None
-    """Response length category for synthesis (brief/concise/standard/comprehensive). IG-268."""
 
     require_goal_completion: bool = Field(default=False)
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
