@@ -48,7 +48,7 @@ async def run_headless_via_daemon(
     ws_url = websocket_url_from_config(cfg)
     client = WebSocketClient(url=ws_url)
     verbosity = cfg.logging.verbosity
-    final_output_mode = getattr(cfg, "final_output_mode", "streaming")
+    final_output_mode = getattr(cfg, "final_output_mode", "batch")
 
     try:
         await connect_websocket_with_retries(client)

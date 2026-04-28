@@ -328,7 +328,7 @@ def integration_config(test_config: SootheConfig) -> SootheConfig:
     test_config.autonomous.max_iterations = 5
 
     # Disable unified classification for tests to avoid model compatibility issues
-    test_config.performance.unified_classification = False
+    test_config.agentic.unified_classification = False
 
     return test_config
 

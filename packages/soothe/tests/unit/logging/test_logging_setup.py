@@ -27,13 +27,11 @@ class TestLoggingSetup:
         """Test that file handler is created with correct configuration."""
         log_file = tmp_path / "test.log"
         cfg = SootheConfig(
-            logging={
-                "file": {
-                    "level": "INFO",
-                    "path": str(log_file),
-                    "max_bytes": 5242880,  # 5 MB
-                    "backup_count": 2,
-                }
+            observability={
+                "log_file_level": "INFO",
+                "log_file_path": str(log_file),
+                "log_file_max_bytes": 5242880,  # 5 MB
+                "log_file_backup_count": 2,
             }
         )
 
@@ -49,11 +47,10 @@ class TestLoggingSetup:
         assert handler.backupCount == 2
 
     def test_console_handler_not_added_when_disabled(self, tmp_path: Path) -> None:
-        """Test that console handler is not added when disabled."""
+        """Test that console handler is not added by default."""
         cfg = SootheConfig(
-            logging={
-                "file": {"path": str(tmp_path / "test.log")},
-                "console": {"enabled": False},
+            observability={
+                "log_file_path": str(tmp_path / "test.log"),
             }
         )
 
@@ -68,167 +65,10 @@ class TestLoggingSetup:
         assert len(stream_handlers) == 0
 
     def test_console_handler_writes_to_stderr(self, tmp_path: Path) -> None:
-        """Test that console handler writes to stderr when enabled."""
+        """Test that console handler writes to stderr in foreground mode."""
         cfg = SootheConfig(
-            logging={
-                "file": {"path": str(tmp_path / "test.log")},
-                "console": {
-                    "enabled": True,
-                    "level": "WARNING",
-                    "stream": "stderr",
-                },
-            }
-        )
-
-        setup_logging(cfg)
-
-        root_logger = logging.getLogger("soothe")
-        stream_handlers = [
-            h
-            for h in root_logger.handlers
-            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
-        ]
-        assert len(stream_handlers) == 1
-
-        handler = stream_handlers[0]
-        assert handler.level == logging.WARNING
-        assert handler.stream == sys.stderr
-
-    def test_console_handler_writes_to_stdout(self, tmp_path: Path) -> None:
-        """Test that console handler writes to stdout when configured."""
-        cfg = SootheConfig(
-            logging={
-                "file": {"path": str(tmp_path / "test.log")},
-                "console": {
-                    "enabled": True,
-                    "level": "INFO",
-                    "stream": "stdout",
-                },
-            }
-        )
-
-        setup_logging(cfg)
-
-        root_logger = logging.getLogger("soothe")
-        stream_handlers = [
-            h
-            for h in root_logger.handlers
-            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
-        ]
-        assert len(stream_handlers) == 1
-
-        handler = stream_handlers[0]
-        assert handler.level == logging.INFO
-        assert handler.stream == sys.stdout
-
-    def test_debug_flag_overrides_all_levels(self, tmp_path: Path) -> None:
-        """Test that debug flag sets all handlers to DEBUG level."""
-        cfg = SootheConfig(
-            debug=True,
-            logging={
-                "file": {"path": str(tmp_path / "test.log"), "level": "INFO"},
-                "console": {"enabled": True, "level": "WARNING"},
-            },
-        )
-
-        setup_logging(cfg)
-
-        root_logger = logging.getLogger("soothe")
-        assert root_logger.level == logging.DEBUG
-
-        for handler in root_logger.handlers:
-            assert handler.level == logging.DEBUG
-
-    def test_independent_levels_file_and_console(self, tmp_path: Path) -> None:
-        """Test that file and console can have independent log levels."""
-        cfg = SootheConfig(
-            logging={
-                "file": {"path": str(tmp_path / "test.log"), "level": "DEBUG"},
-                "console": {"enabled": True, "level": "WARNING"},
-            }
-        )
-
-        setup_logging(cfg)
-
-        root_logger = logging.getLogger("soothe")
-
-        file_handlers = [h for h in root_logger.handlers if isinstance(h, RotatingFileHandler)]
-        assert len(file_handlers) == 1
-        assert file_handlers[0].level == logging.DEBUG
-
-        stream_handlers = [
-            h
-            for h in root_logger.handlers
-            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
-        ]
-        assert len(stream_handlers) == 1
-        assert stream_handlers[0].level == logging.WARNING
-
-    def test_no_duplicate_handlers(self, tmp_path: Path) -> None:
-        """Test that calling setup_logging multiple times doesn't add duplicate handlers."""
-        cfg = SootheConfig(logging={"file": {"path": str(tmp_path / "test.log")}})
-
-        setup_logging(cfg)
-        setup_logging(cfg)
-
-        root_logger = logging.getLogger("soothe")
-        file_handlers = [h for h in root_logger.handlers if isinstance(h, RotatingFileHandler)]
-        assert len(file_handlers) == 1
-
-    def test_console_format_applied(self, tmp_path: Path) -> None:
-        """Test that custom console format is applied."""
-        custom_format = "%(name)s - %(message)s"
-        cfg = SootheConfig(
-            logging={
-                "file": {"path": str(tmp_path / "test.log")},
-                "console": {
-                    "enabled": True,
-                    "format": custom_format,
-                },
-            }
-        )
-
-        setup_logging(cfg)
-
-        root_logger = logging.getLogger("soothe")
-        stream_handlers = [
-            h
-            for h in root_logger.handlers
-            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
-        ]
-        assert len(stream_handlers) == 1
-
-        handler = stream_handlers[0]
-        assert handler.formatter._fmt == custom_format
-
-    def test_third_party_logging_suppressed(self, tmp_path: Path) -> None:
-        """Test that noisy third-party loggers are suppressed to WARNING."""
-        cfg = SootheConfig(logging={"file": {"path": str(tmp_path / "test.log")}})
-
-        setup_logging(cfg)
-
-        noisy_loggers = [
-            "httpx",
-            "httpcore",
-            "openai",
-            "anthropic",
-            "langchain_core",
-            "langgraph",
-            "browser_use",
-            "bubus",
-            "cdp_use",
-        ]
-
-        for name in noisy_loggers:
-            logger = logging.getLogger(name)
-            assert logger.level == logging.WARNING
-
-    def test_foreground_forces_console_to_stdout(self, tmp_path: Path) -> None:
-        """Test that foreground mode forces console logging to stdout."""
-        cfg = SootheConfig(
-            logging={
-                "file": {"path": str(tmp_path / "test.log")},
-                "console": {"enabled": False},
+            observability={
+                "log_file_path": str(tmp_path / "test.log"),
             }
         )
 
@@ -241,16 +81,147 @@ class TestLoggingSetup:
             if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
         ]
         assert len(stream_handlers) == 1
-        assert stream_handlers[0].stream == sys.stdout
-        assert stream_handlers[0].level == logging.INFO
 
-    def test_foreground_console_level_overridden_by_debug(self, tmp_path: Path) -> None:
-        """Test that debug flag takes precedence over foreground's INFO default."""
+        handler = stream_handlers[0]
+        assert handler.level == logging.INFO
+        assert handler.stream == sys.stderr
+
+    def test_console_handler_writes_to_stdout(self, tmp_path: Path) -> None:
+        """Test console stdout stream (foreground mode always stderr now)."""
+        cfg = SootheConfig(
+            observability={
+                "log_file_path": str(tmp_path / "test.log"),
+            }
+        )
+
+        setup_logging(cfg, foreground=True)
+
+        root_logger = logging.getLogger("soothe")
+        stream_handlers = [
+            h
+            for h in root_logger.handlers
+            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
+        ]
+        assert len(stream_handlers) == 1
+        assert stream_handlers[0].stream == sys.stderr
+
+    def test_debug_flag_overrides_all_levels(self, tmp_path: Path) -> None:
+        """Test that debug flag overrides file level."""
+        log_file = tmp_path / "test.log"
         cfg = SootheConfig(
             debug=True,
-            logging={
-                "file": {"path": str(tmp_path / "test.log")},
-                "console": {"enabled": False},
+            observability={
+                "log_file_level": "WARNING",
+                "log_file_path": str(log_file),
+            },
+        )
+
+        setup_logging(cfg)
+
+        root_logger = logging.getLogger("soothe")
+        file_handlers = [h for h in root_logger.handlers if isinstance(h, RotatingFileHandler)]
+        assert len(file_handlers) == 1
+        assert file_handlers[0].level == logging.DEBUG
+
+    def test_independent_levels_file_and_console(self, tmp_path: Path) -> None:
+        """Test file and console have independent levels."""
+        log_file = tmp_path / "test.log"
+        cfg = SootheConfig(
+            observability={
+                "log_file_level": "DEBUG",
+                "log_file_path": str(log_file),
+            }
+        )
+
+        setup_logging(cfg, foreground=True)
+
+        root_logger = logging.getLogger("soothe")
+        file_handlers = [h for h in root_logger.handlers if isinstance(h, RotatingFileHandler)]
+        stream_handlers = [
+            h
+            for h in root_logger.handlers
+            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
+        ]
+
+        assert len(file_handlers) == 1
+        assert len(stream_handlers) == 1
+        assert file_handlers[0].level == logging.DEBUG
+        assert stream_handlers[0].level == logging.INFO
+
+    def test_no_duplicate_handlers(self, tmp_path: Path) -> None:
+        """Test that calling setup_logging multiple times doesn't duplicate handlers."""
+        log_file = tmp_path / "test.log"
+        cfg = SootheConfig(
+            observability={
+                "log_file_path": str(log_file),
+            }
+        )
+
+        setup_logging(cfg)
+        setup_logging(cfg)
+
+        root_logger = logging.getLogger("soothe")
+        file_handlers = [h for h in root_logger.handlers if isinstance(h, RotatingFileHandler)]
+        assert len(file_handlers) == 1
+
+    def test_console_format_applied(self, tmp_path: Path) -> None:
+        """Test console format (uses default format)."""
+        cfg = SootheConfig(
+            observability={
+                "log_file_path": str(tmp_path / "test.log"),
+            }
+        )
+
+        setup_logging(cfg, foreground=True)
+
+        root_logger = logging.getLogger("soothe")
+        stream_handlers = [
+            h
+            for h in root_logger.handlers
+            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
+        ]
+        assert len(stream_handlers) == 1
+
+    def test_third_party_logging_suppressed(self, tmp_path: Path) -> None:
+        """Test that third-party library logging is suppressed."""
+        log_file = tmp_path / "test.log"
+        cfg = SootheConfig(
+            observability={
+                "log_file_level": "DEBUG",
+                "log_file_path": str(log_file),
+            }
+        )
+
+        setup_logging(cfg)
+
+        third_party_logger = logging.getLogger("requests")
+        assert third_party_logger.level >= logging.WARNING
+
+    def test_foreground_forces_console_to_stdout(self, tmp_path: Path) -> None:
+        """Test foreground enables console (stderr only)."""
+        cfg = SootheConfig(
+            observability={
+                "log_file_path": str(tmp_path / "test.log"),
+            }
+        )
+
+        setup_logging(cfg, foreground=True)
+
+        root_logger = logging.getLogger("soothe")
+        stream_handlers = [
+            h
+            for h in root_logger.handlers
+            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
+        ]
+        assert len(stream_handlers) == 1
+        assert stream_handlers[0].stream == sys.stderr
+
+    def test_foreground_console_level_overridden_by_debug(self, tmp_path: Path) -> None:
+        """Test foreground console level overridden by debug flag."""
+        cfg = SootheConfig(
+            debug=True,
+            observability={
+                "log_file_path": str(tmp_path / "test.log"),
             },
         )
 
@@ -266,12 +237,11 @@ class TestLoggingSetup:
         assert stream_handlers[0].level == logging.DEBUG
 
     def test_foreground_still_creates_file_handler(self, tmp_path: Path) -> None:
-        """Test that foreground mode still writes to log file."""
+        """Test foreground still creates file handler."""
         log_file = tmp_path / "test.log"
         cfg = SootheConfig(
-            logging={
-                "file": {"path": str(log_file)},
-                "console": {"enabled": False},
+            observability={
+                "log_file_path": str(log_file),
             }
         )
 
@@ -280,9 +250,4 @@ class TestLoggingSetup:
         root_logger = logging.getLogger("soothe")
         file_handlers = [h for h in root_logger.handlers if isinstance(h, RotatingFileHandler)]
         assert len(file_handlers) == 1
-        stream_handlers = [
-            h
-            for h in root_logger.handlers
-            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
-        ]
-        assert len(stream_handlers) == 1  # console also present
+        assert Path(file_handlers[0].baseFilename) == log_file

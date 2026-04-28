@@ -48,7 +48,7 @@ def _wrap_streaming_output(
         Custom event chunk if streaming enabled and has text, None otherwise.
     """
     # Config check: Early return if streaming disabled (minimal overhead)
-    if config and not config.output_streaming.enabled:
+    if config and not config.agentic.output_streaming:
         return None
 
     # Extract AI text from messages-mode chunks

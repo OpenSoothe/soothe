@@ -16,7 +16,7 @@ async def test_query_complexity_classification(test_config: SootheConfig, requir
 
     try:
         # Test that unified classifier is initialized if performance is enabled
-        if test_config.performance.enabled and test_config.performance.unified_classification:
+        if test_config.agentic.performance_enabled and test_config.agentic.unified_classification:
             assert runner._unified_classifier is not None, (
                 "Unified classifier should be initialized"
             )
@@ -73,12 +73,12 @@ async def test_conditional_context_projection(test_config: SootheConfig, require
 @pytest.mark.asyncio
 async def test_parallel_execution(test_config: SootheConfig, requires_llm_api):
     """Test that parallel execution works for medium/complex queries."""
-    test_config.performance.enabled = True
+    test_config.agentic.performance_enabled = True
     runner = SootheRunner(test_config)
 
     try:
         # Verify configuration
-        assert test_config.performance.enabled is True
+        assert test_config.agentic.performance_enabled is True
 
         # Parallel execution is handled internally in the runner
         # This test verifies the configuration is correct

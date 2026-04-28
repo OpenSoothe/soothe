@@ -180,52 +180,6 @@ class ComplexityThresholds(BaseModel):
     use_tiktoken: bool = False
 
 
-class PerformanceConfig(BaseModel):
-    """Performance optimization configuration (RFC-0008, RFC-0012).
-
-    Args:
-        enabled: Master switch for all performance optimizations.
-        unified_classification: Enable LLM-based unified classification.
-        classification_mode: Classification mode for unified system.
-            ``llm`` uses fast model for classification (default).
-            ``disabled`` returns default classification.
-        template_planning: Use template plans for simple queries.
-        parallel_pre_stream: Run memory/context operations in parallel.
-        cache_size: LRU cache size for embeddings (future).
-        log_timing: Log detailed timing information.
-        slow_query_threshold_ms: Threshold for slow query warnings.
-        thresholds: Query classification thresholds.
-    """
-
-    enabled: bool = True
-    unified_classification: bool = True
-    classification_mode: Literal["llm", "disabled"] = "llm"
-    template_planning: bool = True
-    parallel_pre_stream: bool = True
-
-    optimize_system_prompts: bool = True
-    """Enable dynamic system prompt adjustment based on LLM query classification."""
-
-    parallel_tool_loading: bool = True
-    """Load tool groups concurrently via ThreadPoolExecutor at startup."""
-
-    parallel_subagent_loading: bool = True
-    """Load subagent specs concurrently via ThreadPoolExecutor at startup."""
-
-    parallel_protocol_resolution: bool = True
-    """Resolve protocols (context, memory, planner, policy) in parallel during startup."""
-
-    reject_done_at_iteration_zero: bool = False
-    """Guard: Reject 'done' status at iteration 0 with no execution (IG-053).
-    Set true to enforce at least one iteration before completion.
-    Disabled by default to allow conversational goals to complete at iteration 0."""
-
-    cache_size: int = 100
-    log_timing: bool = False
-    slow_query_threshold_ms: int = 3000
-    thresholds: ComplexityThresholds = Field(default_factory=ComplexityThresholds)
-
-
 class BrowserSubagentConfig(BaseModel):
     """Configuration for the browser subagent runtime.
 
@@ -590,6 +544,21 @@ class GoalContextConfig(BaseModel):
     enabled: bool = Field(default=True, description="Enable goal context injection")
 
 
+class ReportOutputConfig(BaseModel):
+    """Configuration for report output behavior.
+
+    Args:
+        display_threshold: Max chars to display in terminal. Reports larger than this
+            are saved to file with preview. Set to 0 to always save to file.
+        preview_chars: Number of chars to show in terminal preview when report is saved to file.
+        synthesis_max_chars: Max chars for LLM-synthesized reports. Set to 0 for unlimited.
+    """
+
+    display_threshold: int = Field(default=20000, ge=0, le=100000)
+    preview_chars: int = Field(default=500, ge=0, le=5000)
+    synthesis_max_chars: int = Field(default=0, ge=0, le=50000)
+
+
 AgenticFinalResponseMode = Literal["adaptive", "always_synthesize", "always_last_execute"]
 
 
@@ -606,6 +575,13 @@ class AgenticLoopConfig(BaseModel):
         planning: Planning configuration.
         early_termination: Early termination configuration.
         working_memory: Working memory / spill configuration (RFC-203).
+        goal_context: Goal context injection for Plan/Execute phases (RFC-609).
+        report_output: Goal report display and synthesis limits.
+        output_streaming: Enable streaming mode for all AI outputs (true=stream, false=batch).
+        reject_done_at_iteration_zero: Guard against premature completion at iteration 0.
+
+    Note: Performance optimizations (unified_classification, optimize_system_prompts, parallel_pre_stream)
+    are always enabled by design and not configurable.
     """
 
     enabled: bool = Field(
@@ -657,6 +633,17 @@ class AgenticLoopConfig(BaseModel):
         le=1_000_000,
     )
 
+    output_streaming: bool = Field(
+        default=False,
+        description="Enable streaming mode for all AI outputs (true=stream chunks, false=batch final only)",
+    )
+
+    # Performance optimization fields (simplified - only essential user-facing controls)
+    reject_done_at_iteration_zero: bool = Field(
+        default=False,
+        description="Guard: Reject 'done' at iteration 0 with no execution (IG-053)",
+    )
+
     planning: PlanningConfig = Field(
         default_factory=PlanningConfig,
         description="Planning configuration",
@@ -675,6 +662,11 @@ class AgenticLoopConfig(BaseModel):
     goal_context: GoalContextConfig = Field(
         default_factory=GoalContextConfig,
         description="Goal context injection for Plan/Execute phases (RFC-609)",
+    )
+
+    report_output: ReportOutputConfig = Field(
+        default_factory=ReportOutputConfig,
+        description="Terminal/file behavior for synthesized goal reports",
     )
 
 
@@ -742,21 +734,6 @@ class ThreadLoggingConfig(BaseModel):
     max_size_mb: int = 100
 
 
-class ReportOutputConfig(BaseModel):
-    """Configuration for report output behavior.
-
-    Args:
-        display_threshold: Max chars to display in terminal. Reports larger than this
-            are saved to file with preview. Set to 0 to always save to file.
-        preview_chars: Number of chars to show in terminal preview when report is saved to file.
-        synthesis_max_chars: Max chars for LLM-synthesized reports. Set to 0 for unlimited.
-    """
-
-    display_threshold: int = Field(default=20000, ge=0, le=100000)
-    preview_chars: int = Field(default=500, ge=0, le=5000)
-    synthesis_max_chars: int = Field(default=0, ge=0, le=50000)
-
-
 class PreviewDefaults(BaseModel):
     """Default settings for the unified text preview utility.
 
@@ -772,26 +749,92 @@ class PreviewDefaults(BaseModel):
     """Default line limit for line-based previews."""
 
 
-class LoggingConfig(BaseModel):
-    """Logging and observability configuration.
+class ObservabilityConfig(BaseModel):
+    """Unified observability configuration for debugging and monitoring.
+
+    Consolidates LLM tracing, logging, and verbosity settings into a single section
+    for better discoverability and simplified configuration.
 
     Args:
-        file: File logging configuration.
-        console: Console logging configuration.
-        verbosity: Verbosity level (TUI/headless activity display).
-        thread_logging: Thread logging configuration.
-        global_history: Global cross-thread input history configuration.
-        report_output: Report output configuration.
-        preview_defaults: Default settings for text preview utility.
+        llm_tracing_enabled: Enable LLM request/response tracing middleware for debugging.
+        llm_tracing_preview_length: Maximum characters to log for message previews in trace logs.
+        log_file_level: Logging level for file output (DEBUG, INFO, WARNING, ERROR).
+        log_file_path: Log file path (empty = SOOTHE_HOME/logs/soothed.log).
+        log_file_max_bytes: Maximum file size before rotation (default: 5 MB).
+        log_file_backup_count: Number of rotating backup files.
+        verbosity: Verbosity level for TUI/headless activity display (quiet, normal, detailed, debug).
+        thread_logging_enabled: Whether thread-specific logging is enabled.
+        thread_logging_retention_days: Days to retain thread logs before cleanup.
+        thread_logging_max_size_mb: Maximum total size for thread logs directory.
     """
 
-    file: FileLoggingConfig = Field(default_factory=FileLoggingConfig)
-    console: ConsoleLoggingConfig = Field(default_factory=ConsoleLoggingConfig)
-    verbosity: Literal["quiet", "normal", "detailed", "debug"] = "normal"
-    thread_logging: ThreadLoggingConfig = Field(default_factory=ThreadLoggingConfig)
-    global_history: GlobalHistoryConfig = Field(default_factory=GlobalHistoryConfig)
-    report_output: ReportOutputConfig = Field(default_factory=ReportOutputConfig)
-    preview_defaults: PreviewDefaults = Field(default_factory=PreviewDefaults)
+    # LLM tracing settings
+    llm_tracing_enabled: bool = Field(
+        default=False,
+        description="Enable LLM request/response tracing middleware for debugging",
+    )
+
+    llm_tracing_preview_length: int = Field(
+        default=200,
+        ge=50,
+        le=1000,
+        description="Maximum characters to log for message previews in trace logs",
+    )
+
+    # File logging settings
+    log_file_level: str = Field(
+        default="INFO",
+        description="Logging level for file output (DEBUG, INFO, WARNING, ERROR)",
+    )
+
+    log_file_path: str | None = Field(
+        default=None,
+        description="Log file path (empty = SOOTHE_HOME/logs/soothed.log)",
+    )
+
+    log_file_max_bytes: int = Field(
+        default=5242880,  # 5 MB
+        description="Maximum file size before rotation",
+    )
+
+    log_file_backup_count: int = Field(
+        default=3,
+        description="Number of rotating backup files",
+    )
+
+    console: ConsoleLoggingConfig = Field(
+        default_factory=ConsoleLoggingConfig,
+        description="Console logging for daemon foreground and optional stderr/stdout logging",
+    )
+
+    global_history: GlobalHistoryConfig = Field(
+        default_factory=GlobalHistoryConfig,
+        description="Global cross-thread input history (TUI navigation)",
+    )
+
+    # Verbosity settings
+    verbosity: Literal["quiet", "normal", "detailed", "debug"] = Field(
+        default="normal",
+        description="Verbosity level for TUI/headless activity display",
+    )
+
+    # Thread logging settings
+    thread_logging_enabled: bool = Field(
+        default=True,
+        description="Whether thread-specific logging is enabled",
+    )
+
+    thread_logging_retention_days: int = Field(
+        default=30,
+        ge=1,
+        description="Days to retain thread logs before cleanup",
+    )
+
+    thread_logging_max_size_mb: int = Field(
+        default=100,
+        ge=1,
+        description="Maximum total size for thread logs directory",
+    )
 
 
 class RecoveryConfig(BaseModel):
@@ -836,26 +879,18 @@ class ExecutionConfig(BaseModel):
         concurrency: Concurrency limits for parallel execution.
         recovery: Failure recovery settings.
         tool_result_cache: Tool result cache settings (RFC-211).
+        llm_rpm_limit: Soft cap on LLM HTTP requests per minute (middleware sliding window).
+        llm_concurrent_limit: Max concurrent in-flight LLM calls per thread.
+        llm_call_timeout_seconds: Per-LLM-call timeout for rate-limit middleware.
     """
 
     concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
     recovery: RecoveryConfig = Field(default_factory=RecoveryConfig)
     tool_result_cache: ToolResultCacheConfig = Field(default_factory=ToolResultCacheConfig)
 
-
-class LLMTracingConfig(BaseModel):
-    """Configuration for LLM request/response tracing middleware.
-
-    Args:
-        enabled: Enable LLM tracing middleware for debugging.
-        log_preview_length: Maximum characters to log for message previews.
-    """
-
-    enabled: bool = False
-    """Enable LLM tracing middleware for debugging."""
-
-    log_preview_length: int = Field(default=200, ge=50, le=1000)
-    """Maximum characters to log for message previews."""
+    llm_rpm_limit: int = Field(default=120, ge=1, le=10_000)
+    llm_concurrent_limit: int = Field(default=10, ge=1, le=500)
+    llm_call_timeout_seconds: int = Field(default=60, ge=5, le=3600)
 
 
 class AutopilotConfig(BaseModel):
@@ -971,39 +1006,6 @@ class SecurityConfig(BaseModel):
     require_approval_for_file_types: list[str] = Field(
         default_factory=lambda: [".env", ".pem", ".key", ".p12", ".pfx", ".crt"]
     )
-
-
-class OutputStreamingConfig(BaseModel):
-    """Configuration for unified output streaming behavior (RFC-614).
-
-    Controls streaming mode for all AI outputs (not just final reports) across
-    daemon and client layers. Propagated from daemon config to runner, with
-    CLI override capability.
-
-    Args:
-        enabled: Enable streaming mode for all AI outputs.
-            When False, outputs are emitted as complete messages only.
-        mode: Display mode - "streaming" shows real-time chunks, "batch" accumulates
-            silently and shows final output.
-        execution_streaming: Stream execution phase AI text (CoreAgent responses during Act).
-        synthesis_streaming: Stream synthesis phase AI text (final report generation).
-        tool_response_streaming: Stream tool result processing AI text (experimental).
-    """
-
-    enabled: bool = True
-    """Enable streaming mode for all AI outputs."""
-
-    mode: Literal["streaming", "batch"] = "streaming"
-    """Display mode - streaming shows chunks, batch shows final output only."""
-
-    execution_streaming: bool = True
-    """Stream execution phase AI text."""
-
-    synthesis_streaming: bool = True
-    """Stream synthesis phase AI text."""
-
-    tool_response_streaming: bool = False
-    """Stream tool result processing AI text (experimental, may cause UI fragmentation)."""
 
 
 # ---------------------------------------------------------------------------

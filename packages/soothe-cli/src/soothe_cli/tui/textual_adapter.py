@@ -724,7 +724,7 @@ async def execute_task_textual(
     final_output_mode = (
         cli_cfg.final_output_mode
         if cli_cfg.final_output_mode in {"streaming", "batch"}
-        else "streaming"
+        else "batch"
     )
     show_tool_ui = should_show_tool_call_ui(pv)
     logger.debug(

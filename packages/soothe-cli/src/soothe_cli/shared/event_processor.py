@@ -72,7 +72,7 @@ class EventProcessor:
         renderer: RendererProtocol,
         *,
         verbosity: VerbosityLevel = "normal",
-        final_output_mode: str = "streaming",
+        final_output_mode: str = "batch",
         presentation_engine: PresentationEngine | None = None,
         tui_debug: bool = False,
     ) -> None:
@@ -88,7 +88,7 @@ class EventProcessor:
         self._renderer = renderer
         self._verbosity = normalize_verbosity(verbosity)
         self._final_output_mode = (
-            final_output_mode if final_output_mode in {"streaming", "batch"} else "streaming"
+            final_output_mode if final_output_mode in {"streaming", "batch"} else "batch"
         )
         self._tui_debug = tui_debug
 
@@ -728,6 +728,21 @@ class EventProcessor:
                         )
                         # If streamed chunks already rendered, finalize without replay.
                         if stream_state and stream_state.accumulated_text.strip():
+                            pending_tail = (
+                                getattr(stream_state, "pending_fragment", "") or ""
+                            ).strip()
+                            if pending_tail:
+                                cleaned_tail = self._clean_assistant_text(
+                                    pending_tail,
+                                    is_streaming=True,
+                                )
+                                if cleaned_tail:
+                                    self._emit_assistant_text(
+                                        cleaned_tail,
+                                        is_main=True,
+                                        is_streaming=True,
+                                    )
+                                stream_state.pending_fragment = ""
                             self._presentation.mark_final_answer_locked()
                             self._state.streaming_accumulator.finalize_stream(
                                 _GOAL_COMPLETION_STREAMING_EVENT,
@@ -876,7 +891,7 @@ class EventProcessor:
             "enabled": True,
             "mode": self._final_output_mode
             if self._final_output_mode in {"streaming", "batch"}
-            else "streaming",
+            else "batch",
             "synthesis_streaming": True,
         }
 

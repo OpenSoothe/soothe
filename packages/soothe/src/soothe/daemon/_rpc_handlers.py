@@ -187,7 +187,7 @@ async def _cmd_config(self, thread_id: str | None, params: dict) -> dict[str, An
             for p in (self._runner.config.providers or [])
         ],
         "workspace_dir": str(self._runner.config.workspace_dir or ""),
-        "verbosity": str(self._runner.config.logging.verbosity),
+        "verbosity": str(self._runner.config.observability.verbosity),
     }
     return {"config": config_data}
 

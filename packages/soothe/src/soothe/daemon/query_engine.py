@@ -79,8 +79,8 @@ class QueryEngine:
         if not d._thread_logger or d._thread_logger._thread_id != thread_id:
             d._thread_logger = ThreadLogger(
                 thread_id=thread_id,
-                retention_days=d._config.logging.thread_logging.retention_days,
-                max_size_mb=d._config.logging.thread_logging.max_size_mb,
+                retention_days=d._config.observability.thread_logging_retention_days,
+                max_size_mb=d._config.observability.thread_logging_max_size_mb,
             )
 
         if d._thread_logger:
@@ -362,8 +362,8 @@ class QueryEngine:
                 if final_thread_id and final_thread_id != thread_id:
                     d._thread_logger = ThreadLogger(
                         thread_id=final_thread_id,
-                        retention_days=d._config.logging.thread_logging.retention_days,
-                        max_size_mb=d._config.logging.thread_logging.max_size_mb,
+                        retention_days=d._config.observability.thread_logging_retention_days,
+                        max_size_mb=d._config.observability.thread_logging_max_size_mb,
                     )
                     d._thread_logger.log_user_input(text)
 
@@ -434,8 +434,8 @@ class QueryEngine:
         if not d._thread_logger or d._thread_logger._thread_id != thread_id:
             d._thread_logger = ThreadLogger(
                 thread_id=thread_id,
-                retention_days=d._config.logging.thread_logging.retention_days,
-                max_size_mb=d._config.logging.thread_logging.max_size_mb,
+                retention_days=d._config.observability.thread_logging_retention_days,
+                max_size_mb=d._config.observability.thread_logging_max_size_mb,
             )
 
         if d._thread_logger:
@@ -590,8 +590,8 @@ class QueryEngine:
                 if final_thread_id and final_thread_id != thread_id:
                     d._thread_logger = ThreadLogger(
                         thread_id=final_thread_id,
-                        retention_days=d._config.logging.thread_logging.retention_days,
-                        max_size_mb=d._config.logging.thread_logging.max_size_mb,
+                        retention_days=d._config.observability.thread_logging_retention_days,
+                        max_size_mb=d._config.observability.thread_logging_max_size_mb,
                     )
                     d._thread_logger.log_user_input(text)
 

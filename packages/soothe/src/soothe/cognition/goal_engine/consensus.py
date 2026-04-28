@@ -53,7 +53,7 @@ async def evaluate_goal_completion(
     # IG-143: Wrap model with tracing if enabled
     from soothe.middleware._utils import create_llm_call_metadata
 
-    if config and hasattr(config, "llm_tracing") and config.llm_tracing.enabled:
+    if config and hasattr(config, "llm_tracing") and config.observability.llm_tracing_enabled:
         from soothe.utils.llm import LLMTracingWrapper
 
         model = LLMTracingWrapper(model)

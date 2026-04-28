@@ -96,29 +96,26 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         self._config = config or SootheConfig()
         self._checkpointer_pool = None  # Will be set if using PostgreSQL
 
-        # Initialize intent classifier (IG-226: cognition.intention module)
-        if self._config.performance.enabled and self._config.performance.unified_classification:
+        # Initialize intent classifier (IG-226: cognition.intention module).
+        # Unified classification is always enabled; classifier is omitted only if fast model is unavailable.
+        fast_model = None
+        try:
+            fast_model = self._config.create_chat_model("fast")
+        except Exception:
+            logger.exception(
+                "Failed to create fast model for classification. Classification will be disabled."
+            )
             fast_model = None
 
-            try:
-                fast_model = self._config.create_chat_model("fast")
-            except Exception:
-                logger.exception(
-                    "Failed to create fast model for classification. Classification will be disabled."
-                )
-                fast_model = None
-
-            if fast_model:
-                self._intent_classifier = IntentClassifier(
-                    model=fast_model,
-                    assistant_name=self._config.assistant_name,
-                    config=self._config,  # IG-143: Pass config for LLM tracing
-                )
-                logger.info("[IntentClassifier] Initialized in LLM mode")
-            else:
-                logger.warning("No fast model available, classification disabled")
-                self._intent_classifier = None
+        if fast_model:
+            self._intent_classifier = IntentClassifier(
+                model=fast_model,
+                assistant_name=self._config.assistant_name,
+                config=self._config,  # IG-143: Pass config for LLM tracing
+            )
+            logger.info("[IntentClassifier] Initialized in LLM mode")
         else:
+            logger.warning("No fast model available, classification disabled")
             self._intent_classifier = None
 
         checkpointer_start = time.perf_counter()

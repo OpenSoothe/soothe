@@ -46,7 +46,7 @@ dependencies = [
     "pyperclip>=1.8.0",
     "python-dotenv>=1.0.0,<2.0.0",
     "pyyaml>=6.0.0,<7.0.0",
-    "requests>=2.31.0",
+    "requests>=2.32.3",
     "uvicorn[standard]>=0.24.0",
     "websockets>=12.0",
 ]
