@@ -137,8 +137,13 @@ class CheckpointMixin:
             state: Current runner state to populate with recovered data.
 
         Yields:
-            Recovery stream events.
+            Recovery stream events (currently no events emitted, but signature
+            maintained for future checkpoint recovery events).
         """
+        # Maintain async generator signature with dummy yield (no events currently)
+        if False:
+            yield
+
         self._ensure_artifact_store(state)
         store = getattr(state, "artifact_store", None)
         if not store:
