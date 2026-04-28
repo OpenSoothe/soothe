@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from soothe.protocols.planner import Plan, PlanStep
-
 from soothe_cli.cli.renderer import CliRenderer
 from soothe_cli.cli.stream.display_line import DisplayLine
 
@@ -47,18 +45,14 @@ def test_consecutive_stderr_icon_lines_no_blank_between_blocks(capsys: CaptureFi
     assert "○ Step" in captured.err
 
 
-def test_multi_step_suppresses_assistant_text_and_no_turn_end_replay(
-    capsys: CaptureFixture[str],
-) -> None:
+def test_turn_end_clears_assistant_buffer(capsys: CaptureFixture[str]) -> None:
     r = CliRenderer()
-    r._state.suppression.multi_step_active = True
-
     r.on_assistant_text("intermediate step body", is_main=True, is_streaming=True)
     r.on_assistant_text("final step dump", is_main=True, is_streaming=False)
+    assert r._state.full_response
     r.on_turn_end()
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
+    assert r._state.full_response == []
+    _ = capsys.readouterr()
 
 
 def test_tool_result_structured_payload_is_summarized(capsys: CaptureFixture[str]) -> None:
@@ -74,9 +68,7 @@ def test_tool_result_structured_payload_is_summarized(capsys: CaptureFixture[str
     assert "structured payload" in captured.err
 
 
-def test_agentic_loop_completed_writes_final_stdout_when_multi_step(
-    capsys: CaptureFixture[str],
-) -> None:
+def test_agentic_loop_completed_keeps_passthrough_stdout(capsys: CaptureFixture[str]) -> None:
     r = CliRenderer()
     r.on_progress_event(
         "soothe.cognition.agent_loop.started",
@@ -97,7 +89,7 @@ def test_agentic_loop_completed_writes_final_stdout_when_multi_step(
     )
     captured = capsys.readouterr()
     assert "Found 92 README" in captured.out
-    assert r.presentation_engine.final_answer_locked
+    assert not r.presentation_engine.final_answer_locked
 
 
 def test_agentic_loop_completed_preserves_markdown_and_token_boundaries(
@@ -137,10 +129,7 @@ def test_agentic_loop_completed_preserves_markdown_and_token_boundaries(
     assert "first10 lines" not in out
 
 
-def test_agentic_stdout_stays_suppressed_after_turn_end_until_loop_completed(
-    capsys: CaptureFixture[str],
-) -> None:
-    """Idle/on_turn_end clears multi_step but must not unlock agentic stdout early (test-case1)."""
+def test_agentic_stdout_visible_after_turn_end(capsys: CaptureFixture[str]) -> None:
     r = CliRenderer()
     r.on_progress_event(
         "soothe.cognition.agent_loop.started",
@@ -148,9 +137,8 @@ def test_agentic_stdout_stays_suppressed_after_turn_end_until_loop_completed(
         namespace=(),
     )
     r.on_turn_end()
-    assert not r._state.suppression.multi_step_active
-    r.on_assistant_text("RAW_LIST_SHOULD_NOT_LEAK", is_main=True, is_streaming=False)
-    assert "RAW_LIST" not in capsys.readouterr().out
+    r.on_assistant_text("RAW_LIST_SHOULD_LEAK", is_main=True, is_streaming=False)
+    assert "RAW_LIST_SHOULD_LEAK" in capsys.readouterr().out
     r.on_assistant_text("Found 12 README.md files (project only).", is_main=True, is_streaming=False)
     r.on_progress_event(
         "soothe.cognition.agent_loop.completed",
@@ -166,29 +154,16 @@ def test_agentic_stdout_stays_suppressed_after_turn_end_until_loop_completed(
     assert "Found 12 README" in capsys.readouterr().out
 
 
-def test_max_iter_one_multi_step_plan_suppresses_stdout_after_turn_end(
-    capsys: CaptureFixture[str],
-) -> None:
-    """max_iterations=1 does not arm suppression in loop.started; multi-step plan must (test-case1)."""
+def test_max_iter_one_no_client_suppression_after_turn_end(capsys: CaptureFixture[str]) -> None:
     r = CliRenderer()
     r.on_progress_event(
         "soothe.cognition.agent_loop.started",
         {"max_iterations": 1, "thread_id": "t", "goal": "count readmes"},
         namespace=(),
     )
-    plan = Plan(
-        goal="count readmes",
-        steps=[
-            PlanStep(id="1", description="glob"),
-            PlanStep(id="2", description="summarize"),
-        ],
-    )
-    r.on_plan_created(plan)
     r.on_turn_end()
-    assert not r._state.suppression.multi_step_active
-    assert r._state.suppression.agentic_stdout_suppressed
-    r.on_assistant_text("RAW_LIST_SHOULD_NOT_LEAK", is_main=True, is_streaming=False)
-    assert "RAW_LIST" not in capsys.readouterr().out
+    r.on_assistant_text("RAW_LIST_SHOULD_LEAK", is_main=True, is_streaming=False)
+    assert "RAW_LIST_SHOULD_LEAK" in capsys.readouterr().out
     r.on_assistant_text("Found 12 README.md files (project only).", is_main=True, is_streaming=False)
     r.on_progress_event(
         "soothe.cognition.agent_loop.completed",

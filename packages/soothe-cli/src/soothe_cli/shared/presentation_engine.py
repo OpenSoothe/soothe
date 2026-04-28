@@ -1,6 +1,6 @@
 """Unified presentation decisions for CLI/TUI surfaces.
 
-This module centralizes display-time suppression and summarization rules so
+This module centralizes display-time deduplication and summarization rules so
 renderers stay focused on output transport (stdout/stderr or widgets).
 """
 
@@ -18,14 +18,14 @@ from soothe_cli.shared.display_policy import VerbosityLevel
 
 @dataclass
 class PresentationState:
-    """Stateful suppression metadata for presentation decisions."""
+    """Stateful metadata for presentation decisions."""
 
     last_reason_key: str = ""
     last_reason_at_s: float = 0.0
     last_reason_by_step: dict[str, float] | None = None
     final_answer_locked: bool = False
 
-    # Action deduplication tracking (IG-143)
+    # Action deduplication tracking.
     last_action_text: str = ""
     last_action_time: float = 0.0
 

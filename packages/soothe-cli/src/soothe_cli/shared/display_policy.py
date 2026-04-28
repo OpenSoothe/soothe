@@ -22,9 +22,6 @@ Usage:
 
     if policy.should_show_event(event_type, data):
         render_event(data)
-
-    if policy.should_show_assistant_text(text, is_main=True):
-        display_text(policy.filter_content(text))
 """
 
 from __future__ import annotations
@@ -229,38 +226,6 @@ class DisplayPolicy:
     def is_in_internal_context(self) -> bool:
         """Check if currently in an internal processing context."""
         return self.internal_context_active
-
-    # ==========================================================================
-    # Assistant Text Filtering
-    # ==========================================================================
-
-    def should_show_assistant_text(
-        self,
-        text: str,  # noqa: ARG002
-        *,
-        is_main: bool,
-        is_multi_step_active: bool = False,
-    ) -> bool:
-        """Determine if assistant text should be displayed.
-
-        Args:
-            text: The text content
-            is_main: True if from main agent
-            is_multi_step_active: True if in multi-step plan execution
-
-        Returns:
-            True if the text should be shown
-        """
-        # During internal context, suppress non-main agent text
-        if self.internal_context_active and not is_main:
-            return False
-
-        # During multi-step plans, suppress intermediate main agent text
-        if is_multi_step_active and is_main:
-            return False
-
-        # Check verbosity
-        return self._should_show_tier(VerbosityTier.QUIET)
 
     def filter_content(self, text: str, *, preserve_boundary_whitespace: bool = False) -> str:
         """Filter internal content from text for display.

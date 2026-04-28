@@ -96,7 +96,7 @@ def format_goal_header(
         DisplayLine for goal header.
     """
     # Add inline symbol for goal marker
-    content = f"🔴 {goal}"
+    content = f"📍 {goal}"
     return DisplayLine(
         level=1,
         content=content,

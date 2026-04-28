@@ -3990,7 +3990,6 @@ class SootheApp(App):
         from soothe_cli.shared.config_loader import load_config
         from soothe_cli.shared.display_policy import normalize_verbosity
         from soothe_cli.shared.message_processing import extract_tool_args_dict
-        from soothe_cli.shared.suppression_state import SuppressionState
 
         pv = normalize_verbosity(load_config().verbosity)
         progress_pipeline = StreamDisplayPipeline(verbosity=pv)
@@ -3998,7 +3997,6 @@ class SootheApp(App):
         assistant_cards_by_ns: dict[tuple[Any, ...], AssistantMessage] = {}
         last_user_text_by_ns: dict[tuple[Any, ...], str] = {}
         last_ai_chunk_by_ns: dict[tuple[Any, ...], str] = {}
-        suppression = SuppressionState()
 
         try:
             # Use iter_turn_chunks to read events (same as active turn execution)
@@ -4016,12 +4014,7 @@ class SootheApp(App):
                     if card is not None:
                         await card.stop_stream()
 
-                # Handle status events for suppression state reset
                 if mode == "status":
-                    if isinstance(data, dict):
-                        state = data.get("state", "")
-                        if state in {"idle", "stopped"}:
-                            suppression.reset_turn()
                     continue
 
                 if mode == "messages":
@@ -4068,14 +4061,6 @@ class SootheApp(App):
                     if isinstance(message, (AIMessage, AIMessageChunk)):
                         extracted = extract_ai_text_for_display(message)
                         if extracted:
-                            # IG-274: Suppress intermediate AIMessage during multi-step execution
-                            # or execute-phase (matches CLI behavior from IG-143 + execute-phase)
-                            if suppression.should_suppress_output(ns_key):
-                                # Accumulate for goal completion output
-                                suppression.accumulate_text(extracted, ns_key)
-                                continue
-
-                            # Normal display logic (only when suppression inactive)
                             # Deduplicate immediate replayed AI chunks after reconnect/resubscribe.
                             if last_ai_chunk_by_ns.get(ns_key) == extracted:
                                 if getattr(message, "chunk_position", None) == "last":
@@ -4109,12 +4094,6 @@ class SootheApp(App):
                 for event_payload in payloads:
                     event_type = event_payload.get("type", "")
 
-                    # IG-274: Track suppression state from events
-                    suppression.track_from_event(event_type, event_payload)
-
-                    # Unified execute-phase tracking (IG-143 + execute-phase)
-                    suppression.track_execute_phase_from_event(event_type, ns_key)
-
                     event_for_pipeline = dict(event_payload)
                     event_for_pipeline["namespace"] = list(namespace)
                     lines = progress_pipeline.process(event_for_pipeline)
@@ -4122,18 +4101,6 @@ class SootheApp(App):
                         rendered = line.format().lstrip("\n").rstrip()
                         if rendered:
                             await self._mount_message(AppMessage(rendered))
-
-                    # IG-274: Emit goal completion when suppression ends
-                    if suppression.should_emit_goal_completion(event_type):
-                        response = suppression.get_final_response(ns_key)
-                        if response:
-                            asst = assistant_cards_by_ns.get(ns_key)
-                            if asst is None:
-                                asst = AssistantMessage(id=f"asst-goal-{uuid.uuid4().hex[:8]}")
-                                await self._mount_message(asst)
-                                assistant_cards_by_ns[ns_key] = asst
-                            await asst.append_content(response)
-                            await asst.stop_stream()
 
         except asyncio.CancelledError:
             logger.info("Background event consumer cancelled")

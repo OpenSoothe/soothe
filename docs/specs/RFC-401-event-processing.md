@@ -16,6 +16,8 @@
 
 This RFC defines the interface contracts for Soothe's event processing system, including the typed event protocol, unified event processor architecture, and daemon-side filtering. It consolidates the progress event protocol (RFC-0015), unified event processing (RFC-0019), and daemon-side filtering (RFC-0022) into a single implementation interface specification.
 
+**IG-304 amendment**: For AgentLoop execution, daemon-side emission is the primary suppression boundary for execute-phase assistant prose. Client processors render normalized output events and tool telemetry; they are not the authoritative suppression boundary for execute-phase prose correctness.
+
 ---
 
 ## 2. Scope and Non-Goals
@@ -28,6 +30,7 @@ This RFC defines:
 * Event registry interface for O(1) dispatch
 * RendererProtocol for mode-agnostic display
 * Daemon-side filtering protocol with verbosity integration
+* Daemon-side output-contract filtering for execute-phase suppression
 * EventProcessor unified processing architecture
 * Integration boundary with PresentationEngine
 
@@ -310,6 +313,17 @@ class EventBus:
   "verbosity": "string (echoes preference)"
 }
 ```
+
+### 6.6 Daemon Output Contract for AgentLoop
+
+Daemon emission must enforce these rules for AgentLoop runs:
+
+1. Forward message-mode stream chunks required for tool UI (`ToolMessage` and AI tool-call metadata).
+2. Do not forward execute-phase assistant prose as user-facing output events.
+3. Emit user-facing final answer text through explicit output events:
+   - `soothe.output.goal_completion.streaming`
+   - `soothe.output.goal_completion.responded`
+4. Keep lifecycle/progress events (`soothe.cognition.agent_loop.*`) separate from final answer payloads.
 
 ---
 
