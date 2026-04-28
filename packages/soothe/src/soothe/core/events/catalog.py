@@ -237,8 +237,6 @@ class AgenticLoopCompletedEvent(LifecycleEvent):
     completion_summary: str = ""
     # Layer-2 act steps completed in this thread (for goal-done line when pipeline has 0).
     total_steps: int = 0
-    # IG-273: Headless CLI goal-completion text surfaced on done when stdout is suppressed.
-    goal_completion_message: str | None = None
 
 
 class AgenticStepStartedEvent(LifecycleEvent):
@@ -445,6 +443,13 @@ class QuizResponseEvent(OutputEvent):
     """Quiz response generated (IG-250)."""
 
     type: Literal["soothe.output.quiz.responded"] = "soothe.output.quiz.responded"
+    content: str = ""
+
+
+class GoalCompletionRespondedEvent(OutputEvent):
+    """Goal completion final output body."""
+
+    type: Literal["soothe.output.goal_completion.responded"] = "soothe.output.goal_completion.responded"
     content: str = ""
 
 
