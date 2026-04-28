@@ -459,8 +459,8 @@ class TestEventProcessorOutputEventRouting:
         assert assistant_calls[0][2]["is_streaming"] is True
         assert assistant_calls[1][2]["is_streaming"] is True
 
-    def test_streaming_goal_completion_repairs_cross_chunk_heading_boundaries(self) -> None:
-        """Streaming should repair heading glue introduced by chunk boundaries."""
+    def test_streaming_goal_completion_keeps_raw_cross_chunk_heading_boundaries(self) -> None:
+        """Streaming should preserve raw heading chunk boundaries without repair."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
 
@@ -504,14 +504,14 @@ class TestEventProcessorOutputEventRouting:
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert len(assistant_calls) == 3
         assert assistant_calls[0][1][0] == "# README Coverage Analysis Report"
-        assert assistant_calls[1][1][0] == "\n\n## Summary"
-        assert assistant_calls[2][1][0] == "\n\n### 1. Documentation Distribution"
+        assert assistant_calls[1][1][0] == "## Summary"
+        assert assistant_calls[2][1][0] == "###1. Documentation Distribution"
         assert assistant_calls[0][2]["is_streaming"] is True
         assert assistant_calls[1][2]["is_streaming"] is True
         assert assistant_calls[2][2]["is_streaming"] is True
 
-    def test_streaming_goal_completion_repairs_heading_to_paragraph_and_bold_glue(self) -> None:
-        """Streaming should preserve separation across heading/body and bold/body boundaries."""
+    def test_streaming_goal_completion_keeps_raw_heading_and_bold_boundaries(self) -> None:
+        """Streaming should preserve raw chunk boundaries for heading/body and bold/body."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
 
@@ -538,9 +538,9 @@ class TestEventProcessorOutputEventRouting:
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert len(assistant_calls) == 4
         assert assistant_calls[0][1][0] == "## Executive Summary"
-        assert assistant_calls[1][1][0].startswith("\n\nAnalysis of README coverage")
+        assert assistant_calls[1][1][0] == "Analysis of README coverage across packages."
         assert assistant_calls[2][1][0] == "Total Packages Analyzed:**3**"
-        assert assistant_calls[3][1][0].startswith(" Packages with README")
+        assert assistant_calls[3][1][0] == "Packages with README: 3"
 
 
 class TestEventProcessorMessageDeduplication:

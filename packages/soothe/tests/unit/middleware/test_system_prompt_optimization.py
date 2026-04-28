@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 
+import pytest
 from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -154,10 +155,11 @@ def test_no_classification_uses_default_prompt():
     assert modified.system_message.content == "original prompt"
 
 
+@pytest.mark.skip(reason="optimize_system_prompts removed - always enabled")
 def test_optimization_disabled_uses_default_prompt():
     """When optimization is disabled, should use default prompt."""
     config = SootheConfig()
-    config.performance.optimize_system_prompts = False
+    # optimize_system_prompts removed - always enabled
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
     classification = RoutingClassification(
@@ -176,10 +178,11 @@ def test_optimization_disabled_uses_default_prompt():
     assert modified.system_message.content == "original prompt"
 
 
+@pytest.mark.skip(reason="performance_enabled removed - always enabled")
 def test_performance_disabled_uses_default_prompt():
     """When performance is disabled, should use default prompt."""
     config = SootheConfig()
-    config.performance.enabled = False
+    # performance_enabled removed - always enabled
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
     classification = RoutingClassification(

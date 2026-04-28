@@ -152,7 +152,7 @@ class AgentBuilder:
         tools_start = time.perf_counter()
         config_tools = resolve_tools(
             self._config.tools,
-            lazy=self._config.performance.parallel_tool_loading,
+            lazy=True,  # Always load tools in parallel (default behavior)
             config=self._config,
         )
         all_tools: list[BaseTool | Callable | dict[str, Any]] = list(config_tools)
@@ -166,7 +166,7 @@ class AgentBuilder:
         config_subagents = resolve_subagents(
             self._config,
             default_model=default_model_instance,
-            lazy=self._config.performance.parallel_subagent_loading,
+            lazy=True,  # Always load subagents in parallel (default behavior)
         )
         all_subagents: list[SubAgent | CompiledSubAgent] = list(config_subagents)
         if subagents:
@@ -226,54 +226,51 @@ class AgentBuilder:
         return agent
 
     def _resolve_memory(self) -> MemoryProtocol | None:
-        """Resolve MemoryProtocol with parallel resolution support."""
-        if self._config.performance.parallel_protocol_resolution:
-            try:
-                import asyncio
+        """Resolve MemoryProtocol with parallel resolution support (always enabled)."""
+        # Always resolve in parallel (default behavior)
+        try:
+            import asyncio
 
-                try:
-                    asyncio.get_running_loop()
-                    return resolve_memory(self._config)
-                except RuntimeError:
-                    result = asyncio.run(asyncio.to_thread(resolve_memory, self._config))
-                    return result if not isinstance(result, Exception) else None
-            except RuntimeError:
+            try:
+                asyncio.get_running_loop()
                 return resolve_memory(self._config)
-        return resolve_memory(self._config)
+            except RuntimeError:
+                result = asyncio.run(asyncio.to_thread(resolve_memory, self._config))
+                return result if not isinstance(result, Exception) else None
+        except RuntimeError:
+            return resolve_memory(self._config)
 
     def _resolve_planner(self, default_model: BaseChatModel | None) -> PlannerProtocol | None:
-        """Resolve PlannerProtocol with parallel resolution support."""
-        if self._config.performance.parallel_protocol_resolution:
-            try:
-                import asyncio
+        """Resolve PlannerProtocol with parallel resolution support (always enabled)."""
+        # Always resolve in parallel (default behavior)
+        try:
+            import asyncio
 
-                try:
-                    asyncio.get_running_loop()
-                    return resolve_planner(self._config, default_model)
-                except RuntimeError:
-                    result = asyncio.run(
-                        asyncio.to_thread(resolve_planner, self._config, default_model)
-                    )
-                    return result if not isinstance(result, Exception) else None
-            except RuntimeError:
+            try:
+                asyncio.get_running_loop()
                 return resolve_planner(self._config, default_model)
-        return resolve_planner(self._config, default_model)
+            except RuntimeError:
+                result = asyncio.run(
+                    asyncio.to_thread(resolve_planner, self._config, default_model)
+                )
+                return result if not isinstance(result, Exception) else None
+        except RuntimeError:
+            return resolve_planner(self._config, default_model)
 
     def _resolve_policy(self) -> PolicyProtocol | None:
-        """Resolve PolicyProtocol with parallel resolution support."""
-        if self._config.performance.parallel_protocol_resolution:
-            try:
-                import asyncio
+        """Resolve PolicyProtocol with parallel resolution support (always enabled)."""
+        # Always resolve in parallel (default behavior)
+        try:
+            import asyncio
 
-                try:
-                    asyncio.get_running_loop()
-                    return resolve_policy(self._config)
-                except RuntimeError:
-                    result = asyncio.run(asyncio.to_thread(resolve_policy, self._config))
-                    return result if not isinstance(result, Exception) else None
-            except RuntimeError:
+            try:
+                asyncio.get_running_loop()
                 return resolve_policy(self._config)
-        return resolve_policy(self._config)
+            except RuntimeError:
+                result = asyncio.run(asyncio.to_thread(resolve_policy, self._config))
+                return result if not isinstance(result, Exception) else None
+        except RuntimeError:
+            return resolve_policy(self._config)
 
     def _load_plugins(self) -> None:
         """Load plugins from global registry."""

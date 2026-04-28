@@ -263,8 +263,8 @@ class MessageRouter:
                 d._thread_registry.set_workspace(resumed_thread_id, Path(d._daemon_workspace))
             reg.thread_logger = ThreadLogger(
                 thread_id=resumed_thread_id,
-                retention_days=d._config.logging.thread_logging.retention_days,
-                max_size_mb=d._config.logging.thread_logging.max_size_mb,
+                retention_days=d._config.observability.thread_logging_retention_days,
+                max_size_mb=d._config.observability.thread_logging_max_size_mb,
             )
             d._thread_logger = reg.thread_logger
 

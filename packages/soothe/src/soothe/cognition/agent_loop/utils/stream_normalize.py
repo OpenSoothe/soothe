@@ -24,47 +24,8 @@ _LIST_MIN_LEN = 2
 
 
 def join_text_fragments(parts: list[str]) -> str:
-    """Join text fragments while preserving common word/markdown boundaries.
-
-    LangGraph/LLM chunking can emit adjacent fragments without explicit boundary
-    characters. A plain `''.join(parts)` may collapse tokens such as `first10`
-    or markdown headings like `Report##`.
-    """
-    if not parts:
-        return ""
-    if len(parts) == 1:
-        return parts[0]
-
-    out = [parts[0]]
-    for part in parts[1:]:
-        if not part:
-            continue
-        prev = out[-1]
-        if not prev:
-            out[-1] = part
-            continue
-
-        prev_last = prev[-1]
-        next_first = part[0]
-
-        # Keep explicit whitespace/newline boundaries untouched.
-        if prev_last.isspace() or next_first.isspace():
-            out.append(part)
-            continue
-        # Preserve markdown/code boundary before heading/list/html markers.
-        if next_first in "#<":
-            out.append("\n" + part)
-            continue
-        # Preserve human-readable token boundary for alpha<->digit transitions.
-        if (prev_last.isalpha() and next_first.isdigit()) or (
-            prev_last.isdigit() and next_first.isalpha()
-        ):
-            out.append(" " + part)
-            continue
-
-        out.append(part)
-
-    return "".join(out)
+    """Join text fragments without any boundary repair."""
+    return "".join(parts) if parts else ""
 
 
 def extract_text_from_message_content(content: Any) -> str:

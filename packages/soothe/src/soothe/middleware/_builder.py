@@ -35,10 +35,7 @@ def _build_tool_registries(
     Returns:
         Tuple of (trigger_registry, context_registry), or (None, None) if not configured.
     """
-    # Only create registries if system prompt optimization is enabled
-    if not config.performance.enabled or not config.performance.optimize_system_prompts:
-        return None, None
-
+    # Tool registries always created (optimizations always enabled)
     try:
         from soothe.core.context.tool_registry import ToolContextRegistry
         from soothe.core.context.trigger_registry import ToolTriggerRegistry
@@ -82,7 +79,7 @@ def build_soothe_middleware_stack(
 
     4. **LLMTracingMiddleware** - Traces LLM request/response lifecycle for
        debugging. Logs request details, response details, and latency metrics.
-       Enabled via SOOTHE_LOG_LEVEL=DEBUG or config.llm_tracing.enabled=True.
+       Enabled via SOOTHE_LOG_LEVEL=DEBUG or config.observability.llm_tracing_enabled=True.
 
     5. **ExecutionHintsMiddleware** - Injects Layer 2 execution hints
        (soothe_step_tools, soothe_step_subagent, soothe_step_expected_output)
@@ -126,32 +123,25 @@ def build_soothe_middleware_stack(
         )
         logger.debug("[Middleware] Policy enforcement enabled")
 
-    # 2. System prompt optimization (requires unified_classification from Layer 2)
-    # Only enabled when both performance flags are set
-    if (
-        config.performance.enabled
-        and config.performance.optimize_system_prompts
-        and config.performance.unified_classification
-    ):
-        # Create tool registries for dynamic context injection (RFC-210)
-        trigger_registry, context_registry = _build_tool_registries(config)
+    # 2. System prompt optimization (requires unified_classification from AgentLoop pre-stream)
+    trigger_registry, context_registry = _build_tool_registries(config)
 
-        stack.append(
-            SystemPromptOptimizationMiddleware(
-                config=config,
-                tool_trigger_registry=trigger_registry,
-                tool_context_registry=context_registry,
-            )
+    stack.append(
+        SystemPromptOptimizationMiddleware(
+            config=config,
+            tool_trigger_registry=trigger_registry,
+            tool_context_registry=context_registry,
         )
-        logger.info("[Middleware] System prompt optimization enabled")
+    )
+    logger.info("[Middleware] System prompt optimization enabled")
 
     # 3. LLM rate limiting (throttles API calls, not threads)
     # This prevents thread hanging by blocking only LLM calls, not entire threads
     # IG-053: Add timeout to prevent semaphore monopolization
     # IG-258 Phase 2: Thread-local rate limiting (parameter name change)
-    rpm = getattr(config.performance, "llm_rpm_limit", 120)
-    concurrent = getattr(config.performance, "llm_concurrent_limit", 10)
-    timeout = getattr(config.performance, "llm_call_timeout_seconds", 60)
+    rpm = config.execution.llm_rpm_limit
+    concurrent = config.execution.llm_concurrent_limit
+    timeout = config.execution.llm_call_timeout_seconds
     stack.append(
         LLMRateLimitMiddleware(
             requests_per_minute=rpm,
@@ -172,15 +162,9 @@ def build_soothe_middleware_stack(
     import os
 
     log_level = os.environ.get("SOOTHE_LOG_LEVEL", "INFO")
-    llm_tracing_enabled = log_level == "DEBUG" or (
-        hasattr(config, "llm_tracing") and config.llm_tracing.enabled
-    )
+    llm_tracing_enabled = log_level == "DEBUG" or config.observability.llm_tracing_enabled
     if llm_tracing_enabled:
-        preview_length = (
-            getattr(config.llm_tracing, "log_preview_length", 200)
-            if hasattr(config, "llm_tracing")
-            else 200
-        )
+        preview_length = config.observability.llm_tracing_preview_length
         stack.append(LLMTracingMiddleware(log_preview_length=preview_length))
         logger.debug("[Middleware] LLM tracing enabled")
 

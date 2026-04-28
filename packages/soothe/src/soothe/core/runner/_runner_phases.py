@@ -712,13 +712,16 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
             except Exception:
                 logger.debug("Policy check failed", exc_info=True)
 
-        should_run_memory = not self._config.performance.enabled or complexity in (
+        skip_memory_for_simple = getattr(
+            self._config.agentic, "skip_memory_recall_for_simple", True
+        )
+        should_run_memory = (not skip_memory_for_simple) or complexity in (
             "medium",
             "complex",
         )
 
         if should_run_memory:
-            if self._config.performance.enabled and self._config.performance.parallel_pre_stream:
+            if complexity in ("medium", "complex"):
                 memory_items, _ = await self._pre_stream_parallel_memory_context(
                     user_input, complexity
                 )
@@ -729,17 +732,16 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                     logger.debug(
                         "Memory recalled: %d items | Query: %s", len(memory_items), user_input[:50]
                     )
-            else:
-                if self._memory:
-                    try:
-                        items = await self._memory.recall(user_input, limit=5)
-                        state.recalled_memories = items
-                        if items:
-                            logger.debug(
-                                "Memory recalled: %d items | Query: %s", len(items), user_input[:50]
-                            )
-                    except Exception:
-                        logger.debug("Memory recall failed", exc_info=True)
+            elif self._memory:
+                try:
+                    items = await self._memory.recall(user_input, limit=5)
+                    state.recalled_memories = items
+                    if items:
+                        logger.debug(
+                            "Memory recalled: %d items | Query: %s", len(items), user_input[:50]
+                        )
+                except Exception:
+                    logger.debug("Memory recall failed", exc_info=True)
 
         # Collect context for system prompt XML injection (RFC-104)
         if complexity in ("medium", "complex"):

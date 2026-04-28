@@ -13,9 +13,6 @@ from typing import TYPE_CHECKING, Any
 from soothe.cognition.agent_loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
-from soothe.cognition.agent_loop.state.persistence.postgres_backend import (
-    PostgreSQLPersistenceBackend,
-)
 from soothe.cognition.agent_loop.state.persistence.sqlite_backend import SQLitePersistenceBackend
 
 if TYPE_CHECKING:
@@ -45,6 +42,15 @@ class AgentLoopCheckpointPersistenceManager:
 
         # Initialize backend instance
         if backend_type == "postgresql":
+            try:
+                from soothe.cognition.agent_loop.state.persistence.postgres_backend import (
+                    PostgreSQLPersistenceBackend,
+                )
+            except ModuleNotFoundError as exc:
+                raise RuntimeError(
+                    "PostgreSQL persistence backend requires optional dependency "
+                    "`psycopg`. Install soothe with postgres extras."
+                ) from exc
             dsn = config.resolve_postgres_dsn_for_database("checkpoints")
             self._backend = PostgreSQLPersistenceBackend(dsn=dsn, pool_size=10)
         else:

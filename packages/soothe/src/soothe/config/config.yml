@@ -73,18 +73,27 @@ agentic:
 
   context_window_limit: 200000  # Claude models default (IG-151)
 
-# Output Streaming Configuration (RFC-614) - Daemon → client real-time messaging
+  output_streaming: false  # Default batch output for AgentLoop responses (true=stream chunks, false=batch final only)
 
-output_streaming:
-  enabled: true
-  mode: streaming  # streaming | batch
-  execution_streaming: true
-  synthesis_streaming: true
-  tool_response_streaming: false  # Experimental
+  # Performance guard - only user-facing control (performance optimizations always enabled by design)
+  reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution
+
+  report_output:
+    display_threshold: 20000
+    preview_chars: 500
+    synthesis_max_chars: 0  # 0 = unlimited LLM-synthesized goal reports
+
+# Output Streaming Configuration (simplified RFC-614)
+
+# Single boolean in agentic section controls streaming behavior
+# See agentic.output_streaming field below
 
 # Execution Limits - Concurrency and resource limits (0 = unlimited)
 
 execution:
+  llm_rpm_limit: 120
+  llm_concurrent_limit: 10
+  llm_call_timeout_seconds: 60
   concurrency:
     max_parallel_goals: 1
     max_parallel_steps: 3
@@ -94,6 +103,35 @@ execution:
   recovery:
     progressive_checkpoints: true  # RFC-0010
     auto_resume_on_start: false
+
+# Observability Configuration - Unified debugging and monitoring settings
+
+observability:
+  llm_tracing_enabled: false  # Enable LLM request/response tracing for debugging
+  llm_tracing_preview_length: 200  # Max chars for message previews in trace logs
+
+  log_file_level: INFO  # Logging level for file output (DEBUG, INFO, WARNING, ERROR)
+  log_file_path: null  # Log file path (empty = SOOTHE_HOME/logs/soothed.log)
+  log_file_max_bytes: 5242880  # 5 MB - Maximum file size before rotation
+  log_file_backup_count: 3  # Number of rotating backup files
+
+  console:
+    enabled: false
+    level: WARNING
+    stream: stderr
+    format: "%(levelname)-8s %(name)s %(message)s"
+
+  global_history:
+    enabled: true
+    max_size: 5000
+    dedup_window: 10
+    retention_days: 90
+
+  verbosity: normal  # Verbosity level: quiet, normal, detailed, debug
+
+  thread_logging_enabled: true  # Whether thread-specific logging is enabled
+  thread_logging_retention_days: 30  # Days to retain thread logs before cleanup
+  thread_logging_max_size_mb: 100  # Maximum total size for thread logs directory
 
 # Daemon Multi-Transport Configuration (RFC-0013) - WebSocket (required) + HTTP REST (optional)
 
@@ -317,49 +355,6 @@ vector_stores:
 vector_store_router:
   default: sqlite_vec_default:soothe_default  # Format: "provider_name:collection_name"
 
-# Performance & Startup - Tune agent startup and runtime optimizations
+# Logging Configuration - File and console logging settings
 
-performance:
-  enabled: true
-  unified_classification: true
-  classification_mode: llm
-  optimize_system_prompts: true
-  template_planning: true
-  parallel_pre_stream: true
-  parallel_tool_loading: true
-  parallel_subagent_loading: true
-  parallel_protocol_resolution: true
-  reject_done_at_iteration_zero: false  # IG-053
-
-# LLM Tracing - Request/response tracing for debugging (logs prompts, responses, tokens, latency)
-
-llm_tracing:
-  enabled: false
-  log_preview_length: 200  # Max chars for message previews (50-1000)
-
-# Logging & Observability
-
-logging:
-  file:
-    level: INFO
-    path: ""  # Empty = SOOTHE_HOME/logs/soothe.log
-    max_bytes: 5242880  # 5MB before rotation
-    backup_count: 3
-
-  console:
-    enabled: false  # Disabled by default for TUI compatibility
-    level: WARNING
-    stream: stderr
-    format: "%(levelname)-8s %(name)s %(message)s"
-
-  verbosity: normal  # minimal | normal | detailed | debug
-
-  thread_logging:
-    enabled: true
-    dir: ""  # Empty = SOOTHE_DATA_DIR/threads/{thread_id}/logs/
-    retention_days: 30
-    max_size_mb: 100
-
-  preview_defaults:
-    chars: 200
-    lines: 5
+# Note: All logging and observability settings are now unified in the 'observability' section above

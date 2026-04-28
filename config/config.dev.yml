@@ -49,26 +49,30 @@ router:
 
 agentic:
   final_response: adaptive
+  output_streaming: true  # Default batch output for AgentLoop responses (true=stream, false=batch)
+  reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution
 
-# Output streaming configuration (RFC-614)
-output_streaming:
-  enabled: true        # Enable streaming for all outputs
-  mode: streaming      # streaming or batch display mode
-  execution_streaming: true   # Stream execution phase
-  synthesis_streaming: true   # Stream synthesis phase
-  tool_response_streaming: false  # Experimental: stream tool responses
+execution:
+  llm_rpm_limit: 120
+  llm_concurrent_limit: 10
+  llm_call_timeout_seconds: 60
 
-performance:
-  enabled: true
-  unified_classification: true
-  classification_mode: llm
-  optimize_system_prompts: true
-  parallel_pre_stream: true
-  reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution (IG-053)
-
-llm_tracing:
-  enabled: true
-  log_preview_length: 1000
+observability:
+  llm_tracing_enabled: true
+  llm_tracing_preview_length: 1000
+  log_file_level: DEBUG
+  verbosity: normal
+  console:
+    enabled: false
+    level: WARNING
+    stream: stderr
+  global_history:
+    enabled: true
+    max_size: 5000
+    dedup_window: 10
+    retention_days: 90
+  thread_logging_enabled: true
+  thread_logging_retention_days: 30
 
 daemon:
   max_concurrent_threads: 100
@@ -161,9 +165,4 @@ subagents:
     config:
       max_steps: 10
 
-logging:
-  file:
-    level: DEBUG
-  thread_logging:
-    enabled: true
-    retention_days: 30
+# Note: Logging configuration moved to observability section above

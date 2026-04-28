@@ -15,18 +15,18 @@ from soothe.config.models import (
     AgenticLoopConfig,
     AutonomousConfig,
     AutopilotConfig,
+    ConsoleLoggingConfig,
     ExecutionConfig,
     FilesystemMiddlewareConfig,
-    LLMTracingConfig,
-    LoggingConfig,
+    GlobalHistoryConfig,
     MCPServerConfig,
     ModelProviderConfig,
     ModelRouter,
-    OutputStreamingConfig,
-    PerformanceConfig,
+    ObservabilityConfig,
     PersistenceConfig,
     PluginConfig,
     ProtocolsConfig,
+    ReportOutputConfig,
     SecurityConfig,
     SubagentConfig,
     ToolsConfig,
@@ -40,6 +40,65 @@ from soothe.config.prompts import _DEFAULT_SYSTEM_PROMPT
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings
     from langchain_core.language_models import BaseChatModel
+
+
+class _SootheConfigLoggingFileView:
+    """Maps flat ``observability.log_file_*`` fields to legacy ``logging.file`` shape."""
+
+    __slots__ = ("_cfg",)
+
+    def __init__(self, cfg: SootheConfig) -> None:
+        self._cfg = cfg
+
+    @property
+    def level(self) -> str:
+        return self._cfg.observability.log_file_level
+
+    @property
+    def path(self) -> str | None:
+        return self._cfg.observability.log_file_path
+
+    @property
+    def max_bytes(self) -> int:
+        return self._cfg.observability.log_file_max_bytes
+
+    @property
+    def backup_count(self) -> int:
+        return self._cfg.observability.log_file_backup_count
+
+
+class SootheConfigLoggingView:
+    """Read-through facade for legacy ``config.logging.*`` access paths."""
+
+    __slots__ = ("_cfg",)
+
+    def __init__(self, cfg: SootheConfig) -> None:
+        self._cfg = cfg
+
+    @property
+    def verbosity(self) -> str:
+        return self._cfg.observability.verbosity
+
+    @property
+    def file(self) -> _SootheConfigLoggingFileView:
+        return _SootheConfigLoggingFileView(self._cfg)
+
+    @property
+    def console(self) -> ConsoleLoggingConfig:
+        return self._cfg.observability.console
+
+    @property
+    def global_history(self) -> GlobalHistoryConfig:
+        return self._cfg.observability.global_history
+
+    @property
+    def report_output(self) -> ReportOutputConfig:
+        return self._cfg.agentic.report_output
+
+    @property
+    def level(self) -> str:
+        """Top-level file log level (CLI compatibility)."""
+        return self._cfg.observability.log_file_level
 
 
 class SootheConfig(BaseSettings):
@@ -94,6 +153,42 @@ class SootheConfig(BaseSettings):
     Builtin subagents (browser, claude) are added automatically.
     Plugin-discovered subagents are merged during config validation.
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _merge_legacy_logging_yaml(cls, data: Any) -> Any:
+        """Accept deprecated top-level ``logging:`` YAML into observability/agentic."""
+        if not isinstance(data, dict):
+            return data
+        legacy = data.pop("logging", None)
+        if not isinstance(legacy, dict):
+            return data
+        obs: dict[str, Any] = dict(data.get("observability") or {})
+        if "verbosity" in legacy:
+            obs["verbosity"] = legacy["verbosity"]
+        file_cfg = legacy.get("file")
+        if isinstance(file_cfg, dict):
+            if "level" in file_cfg:
+                obs["log_file_level"] = file_cfg["level"]
+            if "path" in file_cfg:
+                obs["log_file_path"] = file_cfg["path"]
+            if "max_bytes" in file_cfg:
+                obs["log_file_max_bytes"] = file_cfg["max_bytes"]
+            if "backup_count" in file_cfg:
+                obs["log_file_backup_count"] = file_cfg["backup_count"]
+        console_cfg = legacy.get("console")
+        if isinstance(console_cfg, dict):
+            obs["console"] = {**(obs.get("console") or {}), **console_cfg}
+        gh_cfg = legacy.get("global_history")
+        if isinstance(gh_cfg, dict):
+            obs["global_history"] = {**(obs.get("global_history") or {}), **gh_cfg}
+        data["observability"] = obs
+        ro = legacy.get("report_output")
+        if isinstance(ro, dict):
+            agentic = dict(data.get("agentic") or {})
+            agentic["report_output"] = {**(agentic.get("report_output") or {}), **ro}
+            data["agentic"] = agentic
+        return data
 
     @model_validator(mode="after")
     def _merge_subagents(self) -> SootheConfig:
@@ -174,14 +269,11 @@ class SootheConfig(BaseSettings):
     agentic: AgenticLoopConfig = Field(default_factory=AgenticLoopConfig)
     """Agentic loop configuration (RFC-0008)."""
 
-    logging: LoggingConfig = Field(default_factory=LoggingConfig)
-    """Logging and observability configuration."""
-
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     """Execution limits configuration."""
 
-    llm_tracing: LLMTracingConfig = Field(default_factory=LLMTracingConfig)
-    """LLM request/response tracing configuration for debugging."""
+    observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
+    """Unified observability configuration for debugging and monitoring."""
 
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     """Security policy configuration."""
@@ -190,14 +282,6 @@ class SootheConfig(BaseSettings):
         default_factory=FilesystemMiddlewareConfig
     )
     """Filesystem middleware configuration."""
-
-    output_streaming: OutputStreamingConfig = Field(default_factory=OutputStreamingConfig)
-    """Unified output streaming configuration (RFC-614)."""
-
-    # --- Performance optimization (RFC-0008) ---
-
-    performance: PerformanceConfig = Field(default_factory=PerformanceConfig)
-    """Performance optimization configuration."""
 
     # --- Daemon configuration (RFC-0013) ---
 
@@ -217,6 +301,11 @@ class SootheConfig(BaseSettings):
 
     _vector_store_cache: dict[str, Any] = {}
     """Cache for vector store instances."""
+
+    @property
+    def logging(self) -> SootheConfigLoggingView:
+        """Legacy access path: maps to ``observability`` and ``agentic.report_output``."""
+        return SootheConfigLoggingView(self)
 
     # --- Persistence helpers ---
 

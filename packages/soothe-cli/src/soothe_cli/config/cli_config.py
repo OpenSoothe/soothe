@@ -30,7 +30,7 @@ class CLIConfig:
     logging_level: str | None = None
 
     output_format: str = "text"
-    final_output_mode: str = "streaming"
+    final_output_mode: str = "batch"
 
     # Output streaming overrides (RFC-614)
     output_streaming_enabled: bool | None = None
@@ -120,10 +120,10 @@ class CLIConfig:
         if raw_final_output_mode is None and isinstance(ui_section, dict):
             raw_final_output_mode = ui_section.get("final_output_mode")
         if not isinstance(raw_final_output_mode, str):
-            raw_final_output_mode = "streaming"
+            raw_final_output_mode = "batch"
         final_output_mode = raw_final_output_mode.strip().lower()
         if final_output_mode not in {"streaming", "batch"}:
-            final_output_mode = "streaming"
+            final_output_mode = "batch"
 
         return cls(
             daemon_host=websocket.get("host", websocket_legacy.get("host", "127.0.0.1")),
@@ -155,9 +155,9 @@ class CLIConfig:
         return cls(
             daemon_host=soothe_config.daemon.transports.websocket.host,
             daemon_port=soothe_config.daemon.transports.websocket.port,
-            verbosity=soothe_config.logging.verbosity,
+            verbosity=soothe_config.observability.verbosity,
             logging_level=logging_level,
-            final_output_mode="streaming",
+            final_output_mode="batch",
             soothe_home=Path(soothe_config.home),
         )
 

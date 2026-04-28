@@ -596,19 +596,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Returns:
             Modified request with optimized system prompt.
         """
-        if (
-            not self._config.performance.enabled
-            or not self._config.performance.optimize_system_prompts
-            or not self._config.performance.unified_classification
-        ):
-            logger.debug(
-                "System prompt optimization disabled (enabled=%s, optimize=%s, classification=%s)",
-                self._config.performance.enabled,
-                self._config.performance.optimize_system_prompts,
-                self._config.performance.unified_classification,
-            )
-            return request
-
+        # Performance optimizations always enabled by design - no config checks needed
         classification: RoutingClassification | dict | None = request.state.get(
             "unified_classification"
         )
