@@ -10,7 +10,16 @@
 
 ## Abstract
 
-This RFC defines a unified streaming messaging framework enabling real-time transmission of all AI outputs (not just final reports) from daemon to client. The framework generalizes the proven `final_report_stream` pattern through a reusable streaming wrapper helper, configuration-driven behavior control, and proper content concatenation with whitespace boundary preservation. This eliminates the current limitation where IG-119 filtering blocks plain AIMessage chunks, preventing users from seeing execution progress in real-time.
+This RFC defines a unified streaming messaging framework for daemon-to-client output delivery, with explicit separation between execution telemetry and user-facing final output text. The framework standardizes output events, configuration-driven display behavior, and content concatenation with whitespace boundary preservation.
+
+### IG-304 Amendment (2026-04-28)
+
+Daemon output emission now owns suppression boundaries for AgentLoop execution:
+
+1. Execute-phase assistant prose is suppressed at daemon emission and is not streamed as user-visible output.
+2. Message-mode forwarding remains tool-focused (`ToolMessage` + AI tool-call metadata) for live tool UI.
+3. User-facing completion text is emitted through explicit goal-completion output events (`soothe.output.goal_completion.*`).
+4. Clients consume the normalized output contract; they should not be the primary suppression authority for execute-phase prose.
 
 **Key Design Principles**:
 1. **Unified streaming wrapper**: Reuse custom event pattern to bypass IG-119 filtering
@@ -43,7 +52,7 @@ Users cannot see agent execution progress in real-time. All intermediate AI reas
 
 ### Goals
 
-1. **Universal streaming**: Enable streaming for ALL AI outputs (execution, synthesis, tool responses)
+1. **Contracted streaming**: Stream only user-facing output events and tool UI telemetry; do not stream execute-phase prose
 2. **Configuration control**: Global enable/disable, streaming/batch modes, per-phase flags
 3. **Proper concatenation**: Whitespace boundary preservation for markdown formatting
 4. **Concurrency safety**: Namespace-based isolation for parallel subagent streams
@@ -56,6 +65,7 @@ Users cannot see agent execution progress in real-time. All intermediate AI reas
 - Transport layer changes (WebSocket already bidirectional, RFC-450)
 - Event naming taxonomy (RFC-403 covers naming conventions)
 - UI display logic (CLI/TUI implementation details, RFC-500)
+- Client-side suppression as primary correctness boundary for AgentLoop execute-phase prose
 
 ## Architectural Design
 
@@ -86,9 +96,9 @@ Users cannot see agent execution progress in real-time. All intermediate AI reas
 ```
 
 **Layer Responsibilities**:
-- **Layer 3**: Configuration determines whether streaming enabled, mode (streaming/batch), and per-phase flags
-- **Layer 2**: Runner generates streaming events using unified wrapper, respects IG-119 filtering config
-- **Layer 1**: Daemon broadcasts via EventBus, Client accumulates with boundary preservation
+- **Layer 3**: Configuration determines whether output streaming is enabled and mode (streaming/batch)
+- **Layer 2**: Runner emits explicit output events for user-facing content and forwards tool UI stream chunks
+- **Layer 1**: Daemon broadcasts normalized events; Client renders/accumulates according to output contract
 
 ### Integration with Existing RFCs
 
@@ -124,8 +134,8 @@ class OutputStreamingConfig(BaseModel):
     mode: Literal["streaming", "batch"] = "streaming"
     """Display mode: streaming (real-time chunks) or batch (accumulate silently)."""
 
-    execution_streaming: bool = True
-    """Stream execution phase AI text (CoreAgent responses during Act)."""
+    execution_streaming: bool = False
+    """Reserved toggle. Execute-phase prose remains daemon-suppressed by default contract."""
 
     synthesis_streaming: bool = True
     """Stream synthesis phase AI text (final report generation)."""
@@ -269,15 +279,9 @@ def extract_output_text(event_type: str, data: dict) -> str | None:
 
 **Extension for Streaming Events**:
 ```python
-# Execution streaming
+# Goal completion streaming
 register_output_event(
-    "soothe.output.execution.streaming",
-    lambda data: data.get("content", ""),  # Preserve boundaries
-)
-
-# Synthesis streaming (replaces final_report.streaming)
-register_output_event(
-    "soothe.output.synthesis.streaming",
+    "soothe.output.goal_completion.streaming",
     lambda data: data.get("content", ""),
 )
 
@@ -287,9 +291,9 @@ register_output_event(
     lambda data: data.get("content", ""),
 )
 
-# Backward compatibility: Keep existing final_report.streaming
+# Final goal completion output
 register_output_event(
-    "soothe.output.final_report.streaming",
+    "soothe.output.goal_completion.responded",
     lambda data: data.get("content", ""),
 )
 ```
@@ -319,27 +323,23 @@ register_output_event(
 ### Phase 2: Runner Layer (Stream Generation)
 
 **Files Modified**:
-1. `packages/soothe/src/soothe/core/runner/_runner_shared.py` - Add `_wrap_streaming_output()` helper
-2. `packages/soothe/src/soothe/core/runner/_runner_agentic.py` - Refactor IG-119 filtering, use wrapper
-3. `packages/soothe/src/soothe/cognition/agent_loop/agent_loop.py` - Execution streaming
+1. `packages/soothe/src/soothe/core/runner/_runner_shared.py` - Keep reusable output wrapper helpers
+2. `packages/soothe/src/soothe/core/runner/_runner_agentic.py` - Enforce tool-only stream forwarding for message chunks
+3. `packages/soothe/src/soothe/cognition/agent_loop/core/agent_loop.py` - Avoid execute-phase user-output event emission
 
 **Unified Wrapper Pattern**:
 - Reuse `_custom()` helper from `_runner_shared.py` line 16-18
 - Mirror `final_report_stream` extraction logic (`_runner_agentic.py` lines 547-570)
 - Config-aware: Check `config.output_streaming.enabled` before wrapping
 
-**IG-119 Filtering Refactor**:
+**AgentLoop stream forwarding contract**:
 ```python
 def _forward_messages_chunk_for_tool_ui(
     chunk: object,
     *,
     config: SootheConfig | None = None,
 ) -> bool:
-    """Config-aware forwarding.
-
-    When streaming disabled: Only forward tool-related chunks (existing behavior).
-    When streaming enabled: Forward ALL chunks (wrapper will filter).
-    """
+    """Forward tool-related chunks only."""
 ```
 
 ### Phase 3: SDK Registry Extension
@@ -348,10 +348,9 @@ def _forward_messages_chunk_for_tool_ui(
 1. `packages/soothe-sdk/src/soothe_sdk/ux/output_events.py` - Register all streaming events
 
 **Naming Convention** (RFC-403):
-- `soothe.output.execution.streaming` - Execution phase AI text
-- `soothe.output.synthesis.streaming` - Synthesis phase AI text
+- `soothe.output.goal_completion.streaming` - Goal completion streaming text
+- `soothe.output.goal_completion.responded` - Goal completion final output
 - `soothe.output.tool_response.streaming` - Tool result processing (experimental)
-- Preserve `soothe.output.final_report.streaming` for backward compatibility
 
 ### Phase 4: Daemon Layer (Broadcast)
 
@@ -511,14 +510,13 @@ Concurrent execution: A and B isolated (no chunk interleaving)
 ### Existing Event Semantics
 
 **Preserved Events**:
-- `soothe.output.final_report.streaming` - Keep registered, backward compatibility
 - `soothe.output.chitchat.responded` - Final-only (no changes)
 - `soothe.output.quiz.responded` - Final-only (no changes)
-- `soothe.cognition.agent_loop.completed` - Final stdout message (no changes)
+- `soothe.cognition.agent_loop.completed` - Completion lifecycle event (control/progress)
 
-**New Events** (Preferred):
-- `soothe.output.execution.streaming` - Execution phase (RFC-614)
-- `soothe.output.synthesis.streaming` - Synthesis phase (RFC-614)
+**Preferred AgentLoop output events**:
+- `soothe.output.goal_completion.streaming` - Streaming final answer content
+- `soothe.output.goal_completion.responded` - Final answer payload
 
 **Migration Path**:
 - Existing code expecting `final_report_stream` continues working
@@ -532,9 +530,9 @@ Concurrent execution: A and B isolated (no chunk interleaving)
 - `mode: streaming` - Current CLI/TUI behavior
 - Performance impact minimal when disabled (early config check)
 
-**IG-119 Filtering**:
-- When `enabled: false` - Existing behavior (only tool-related chunks)
-- When `enabled: true` - Forward all chunks (wrapper filters)
+**Message chunk forwarding**:
+- Tool/UI chunks are forwarded from daemon.
+- Execute-phase prose is suppressed at daemon emission and is not forwarded as user output.
 
 ## Performance Considerations
 
@@ -789,6 +787,7 @@ soothe --no-streaming "Write a report"
 **Authors**: Soothe Team
 
 **Revision History**:
+- v1.1 (2026-04-28): IG-304 amendment — daemon-side suppression isolation, tool-only message forwarding, goal-completion output contract
 - v1.0 (2026-04-27): Initial RFC draft for unified streaming framework
 
 ---

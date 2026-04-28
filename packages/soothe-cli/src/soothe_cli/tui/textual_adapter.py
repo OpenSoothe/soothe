@@ -53,7 +53,6 @@ from soothe_cli.shared.essential_events import (
 from soothe_cli.shared.message_processing import accumulate_tool_call_chunks, extract_tool_args_dict
 from soothe_cli.shared.renderer_base import RendererBase
 from soothe_cli.shared.subagent_routing import parse_subagent_from_input
-from soothe_cli.shared.suppression_state import SuppressionState
 from soothe_cli.shared.tool_call_resolution import build_streaming_args_overlay
 from soothe_cli.shared.tool_card_payload import extract_tool_result_card_payload
 from soothe_cli.tui._ask_user_types import AskUserRequest
@@ -810,8 +809,6 @@ async def execute_task_textual(
     pending_text_by_namespace: dict[tuple, str] = {}
     assistant_message_by_namespace: dict[tuple, Any] = {}
     goal_completion_stream_by_namespace: dict[tuple, AssistantMessage] = {}
-    # Unified suppression state for execute-phase tracking (replaces local dict)
-    suppression_state = SuppressionState()
 
     # Clear media from tracker after creating the message
     if image_tracker:
@@ -1120,12 +1117,6 @@ async def execute_task_textual(
                         block_type = block.get("type")
 
                         if block_type == "text":
-                            # Unified execute-phase suppression (IG-143 + execute-phase)
-                            if pv in {
-                                "quiet",
-                                "normal",
-                            } and suppression_state.should_suppress_output(ns_key):
-                                continue
                             if suppress_subgraph_assistant_text:
                                 continue
                             text = block.get("text", "")
@@ -1367,8 +1358,6 @@ async def execute_task_textual(
                             continue
 
                         if event_type == AGENT_LOOP_GOAL_COMPLETED:
-                            # Unified execute-phase tracking
-                            suppression_state.track_execute_phase_from_event(event_type, ns_key)
                             tr = adapter._goal_tree_by_namespace.get(ns_key)
                             if tr is not None:
                                 tr.set_loop_finished(
@@ -1499,8 +1488,6 @@ async def execute_task_textual(
                             step_id = str(data.get("step_id", "")).strip()
                             description = str(data.get("description", "")).strip()
                             if step_id:
-                                # Unified execute-phase tracking
-                                suppression_state.track_execute_phase_from_event(event_type, ns_key)
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
                                     await _flush_assistant_text_ns(
@@ -1528,8 +1515,6 @@ async def execute_task_textual(
                         if event_type == AGENT_LOOP_STEP_COMPLETED:
                             step_id = str(data.get("step_id", "")).strip()
                             if step_id:
-                                # Unified execute-phase tracking
-                                suppression_state.track_execute_phase_from_event(event_type, ns_key)
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
                                     await _flush_assistant_text_ns(

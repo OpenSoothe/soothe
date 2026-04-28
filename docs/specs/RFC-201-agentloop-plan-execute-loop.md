@@ -405,6 +405,14 @@ async def execute(decision: AgentDecision, state: LoopState):
 
 **Mechanism**: Layer 2 contract suffix in executor. Better Plan decisions (metrics-aware) reduce post-delegation summary tendency.
 
+### Execute-Phase Output Suppression Contract (IG-304)
+
+Execute-phase assistant prose is internal orchestration output and should not be emitted as user-facing output events. AgentLoop must:
+
+1. keep tool activity observable via message-mode tool chunks/events,
+2. emit final user-facing answer text through goal-completion output events only,
+3. avoid relying on client-side suppression to hide execute-phase prose.
+
 ### Premature Continue Detection
 
 **Problem**: Plan decides `continue` after satisfactory Execute output, triggering unnecessary iteration.
@@ -468,12 +476,13 @@ Layer 2 does not own backoff policy. It produces high-fidelity execution evidenc
 
 | Event | Description |
 |-------|-------------|
-| `soothe.agentic.loop.started` | AgentLoop execution began |
-| `soothe.agentic.iteration.started` | Iteration began |
+| `soothe.cognition.agent_loop.started` | AgentLoop execution began |
 | `soothe.cognition.agent_loop.plan` | PLAN phase completed (PlanResult) |
-| `soothe.agentic.execute.started` | EXECUTE phase began |
-| `soothe.agentic.execute.step_completed` | Step completed |
-| `soothe.agentic.loop.completed` | Loop completed |
+| `soothe.cognition.agent_loop.step.started` | EXECUTE step began |
+| `soothe.cognition.agent_loop.step.completed` | EXECUTE step completed |
+| `soothe.output.goal_completion.streaming` | Streaming final answer chunk |
+| `soothe.output.goal_completion.responded` | Final answer payload |
+| `soothe.cognition.agent_loop.completed` | Loop completed lifecycle event |
 
 ---
 

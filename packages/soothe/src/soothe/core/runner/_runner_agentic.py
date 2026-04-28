@@ -259,31 +259,20 @@ def _is_ai_tool_invocation_messages_chunk(chunk: object) -> bool:
 
 def _forward_messages_chunk_for_tool_ui(
     chunk: object,
-    *,
-    config: Any | None = None,
 ) -> bool:
     """Whether to forward a ``stream_event`` messages chunk to WebSocket / TUI.
 
-    IG-119: Forward tool results and AI tool-call metadata.
-    When streaming enabled (RFC-614), forward ALL chunks (wrapper filters empty text).
-
-    Config-driven behavior:
-    - No config or streaming disabled: Only tool-related chunks
-    - Streaming explicitly enabled: All chunks (wrapper handles filtering)
+    IG-304: Daemon-side suppression isolation.
+    Always forward tool-related chunks only (tool results + AI tool-call metadata).
+    Execute-phase assistant prose is suppressed server-side and should not be
+    streamed to clients as user-facing text.
 
     Args:
         chunk: Deepagents stream chunk ``(namespace, mode, data)``.
-        config: Optional SootheConfig to check streaming enabled flag.
 
     Returns:
         True if chunk should be forwarded.
     """
-    # When config provided and streaming explicitly enabled, forward all chunks
-    if config and hasattr(config, "output_streaming") and config.output_streaming.enabled:
-        # RFC-614: Forward all chunks when streaming enabled (wrapper filters)
-        return True
-
-    # Default/backward-compatible behavior: Only forward tool-related chunks (IG-119)
     return _is_tool_stream_chunk(chunk) or _is_ai_tool_invocation_messages_chunk(chunk)
 
 
@@ -537,10 +526,8 @@ class AgenticMixin:
                 )
 
             elif event_type == "stream_event":
-                # Config-driven forwarding (RFC-614)
-                # When streaming disabled: Only tool-related chunks (IG-119)
-                # When streaming enabled: All chunks (wrapper filters empty text)
-                if _forward_messages_chunk_for_tool_ui(event_data, config=self.config):
+                # IG-304: Daemon-side suppression isolation; tool-only forwarding.
+                if _forward_messages_chunk_for_tool_ui(event_data):
                     yield event_data
 
             elif event_type == "goal_completion_stream":

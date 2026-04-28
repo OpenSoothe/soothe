@@ -40,15 +40,8 @@ class ProcessorState:
     # Thread identifier from daemon
     thread_id: str = ""
 
-    # Multi-step plan suppression flag (suppress step text, show goal completion)
-    multi_step_active: bool = False
-
     # Internal context tracking (suppress internal LLM responses)
     internal_context_active: bool = False
-
-    # Execute-phase tracking (namespace-aware)
-    # True during agent_loop.step execution (tool calls, file ops)
-    execute_phase_active_by_namespace: dict[tuple, bool] = field(default_factory=dict)
 
     # Tool call timing for duration display (RFC-0020)
     # Maps tool_call_id -> start_timestamp
@@ -82,7 +75,6 @@ class ProcessorState:
         self.tool_call_start_times.clear()
         self.emitted_tool_call_ids.clear()
         self.emitted_tool_result_ids.clear()
-        self.execute_phase_active_by_namespace.clear()
         self.streaming_accumulator.finalize_all()
         self.streaming_accumulator.clear()
         self.final_output_emitted_by_namespace.clear()
@@ -95,9 +87,7 @@ class ProcessorState:
         self.seen_message_ids.clear()
         self.pending_tool_calls.clear()
         self.current_plan = None
-        self.multi_step_active = False
         self.internal_context_active = False
-        self.execute_phase_active_by_namespace.clear()
         self.tool_call_start_times.clear()
         self.emitted_tool_call_ids.clear()
         self.emitted_tool_result_ids.clear()

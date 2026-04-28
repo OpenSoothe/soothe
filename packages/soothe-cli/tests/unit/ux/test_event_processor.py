@@ -107,35 +107,30 @@ class TestProcessorState:
         assert state.name_map == {}
         assert state.current_plan is None
         assert state.thread_id == ""
-        assert state.multi_step_active is False
 
     def test_reset_turn(self):
         """Test reset_turn clears turn-specific state."""
         state = ProcessorState()
         state.pending_tool_calls["tc1"] = {"name": "test", "args_str": "{}", "emitted": False}
         state.seen_message_ids.add("msg1")
-        state.multi_step_active = True
 
         state.reset_turn()
 
         assert state.pending_tool_calls == {}
-        # seen_message_ids and multi_step_active preserved
+        # seen_message_ids preserved
         assert "msg1" in state.seen_message_ids
-        assert state.multi_step_active is True
 
     def test_clear_session(self):
         """Test clear_session resets all session state."""
         state = ProcessorState()
         state.pending_tool_calls["tc1"] = {"name": "test"}
         state.seen_message_ids.add("msg1")
-        state.multi_step_active = True
         state.current_plan = MagicMock()
 
         state.clear_session()
 
         assert state.pending_tool_calls == {}
         assert state.seen_message_ids == set()
-        assert state.multi_step_active is False
         assert state.current_plan is None
 
 
@@ -232,59 +227,12 @@ class TestEventProcessorPlanHandling:
         plan_calls = [c for c in renderer.calls if c[0] == "on_plan_created"]
         assert len(plan_calls) == 1
 
-    def test_multi_step_plan_sets_flag(self):
-        """Test multi-step plan sets multi_step_active flag."""
-        renderer = MockRenderer()
-        processor = EventProcessor(renderer)
-
-        plan_data = {
-            "type": PLAN_CREATED,
-            "goal": "Multi-step goal",
-            "steps": [
-                {"id": "1", "description": "Step 1"},
-                {"id": "2", "description": "Step 2"},
-            ],
-        }
-
-        processor.process_event(
-            {
-                "type": "event",
-                "mode": "custom",
-                "namespace": [],
-                "data": plan_data,
-            }
-        )
-
-        assert processor.multi_step_active is True
-
-    def test_single_step_plan_no_flag(self):
-        """Test single-step plan doesn't set multi_step_active."""
-        renderer = MockRenderer()
-        processor = EventProcessor(renderer)
-
-        plan_data = {
-            "type": PLAN_CREATED,
-            "goal": "Single step",
-            "steps": [{"id": "1", "description": "Only step"}],
-        }
-
-        processor.process_event(
-            {
-                "type": "event",
-                "mode": "custom",
-                "namespace": [],
-                "data": plan_data,
-            }
-        )
-
-        assert processor.multi_step_active is False
-
 
 class TestEventProcessorOutputEventRouting:
     """Tests for output-event routing behavior."""
 
     def test_agent_loop_completed_routes_to_progress_event(self) -> None:
-        """Agent-loop completion must flow through progress-event suppression path."""
+        """Agent-loop completion must flow through progress-event routing."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal")
 

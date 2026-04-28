@@ -73,3 +73,10 @@ def test_forward_combines_tool_message_and_ai_tool_invocation() -> None:
     ai_plain = ((), "messages", (AIMessage(content="hi"), {}))
     assert _forward_messages_chunk_for_tool_ui(tool_chunk) is True
     assert _forward_messages_chunk_for_tool_ui(ai_plain) is False
+
+
+def test_forward_remains_tool_only_for_plain_ai_messages() -> None:
+    tool_chunk = ((), "messages", (ToolMessage(content="ok", tool_call_id="c1", name="ls"), {}))
+    ai_plain = ((), "messages", (AIMessage(content="hi"), {}))
+    assert _forward_messages_chunk_for_tool_ui(tool_chunk) is True
+    assert _forward_messages_chunk_for_tool_ui(ai_plain) is False

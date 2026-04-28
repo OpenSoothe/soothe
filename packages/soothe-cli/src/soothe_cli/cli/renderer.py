@@ -21,7 +21,6 @@ from soothe_cli.shared.display_policy import VerbosityLevel, normalize_verbosity
 from soothe_cli.shared.message_processing import format_tool_call_args
 from soothe_cli.shared.presentation_engine import PresentationEngine
 from soothe_cli.shared.renderer_base import RendererBase
-from soothe_cli.shared.suppression_state import SuppressionState
 
 if TYPE_CHECKING:
     from soothe_sdk.client.schemas import Plan
@@ -37,8 +36,8 @@ class CliRendererState:
     # Track if stderr was just written (to add spacing before next stdout)
     stderr_just_written: bool = False
 
-    # Multi-step/agentic suppression state (IG-143)
-    suppression: SuppressionState = field(default_factory=SuppressionState)
+    # Per-turn assistant output accumulation for diagnostics/tests.
+    full_response: list[str] = field(default_factory=list)
 
     # Track current plan for status display
     current_plan: Plan | None = None
@@ -103,12 +102,7 @@ class CliRenderer(RendererBase):
     @property
     def full_response(self) -> list[str]:
         """Get accumulated response text."""
-        return self._state.suppression.full_response
-
-    @property
-    def multi_step_active(self) -> bool:
-        """Whether multi-step plan is active."""
-        return self._state.suppression.multi_step_active
+        return self._state.full_response
 
     @property
     def presentation_engine(self) -> PresentationEngine:
@@ -142,27 +136,6 @@ class CliRenderer(RendererBase):
         sys.stderr.flush()
         self._state.stderr_just_written = True
 
-    def _write_stdout_goal_completion(self, text: str) -> None:
-        """Write aggregated goal-completion answer to stdout."""
-        if text == "":
-            return
-
-        repaired = self.repair_concatenated_output(text)
-        self._state.suppression.full_response.append(repaired)
-
-        # Add newline before goal completion if stderr was just written (IG-273)
-        if self._state.stderr_just_written:
-            sys.stdout.write("\n")
-            self._state.stderr_just_written = False
-
-        sys.stdout.write(repaired)
-        if not repaired.endswith("\n"):
-            sys.stdout.write("\n")
-        sys.stdout.flush()
-        self._state.needs_stdout_newline = True
-        self._state.stderr_blank_before_next_icon_block = True
-        self._presentation.mark_final_answer_locked()
-
     def on_assistant_text(
         self,
         text: str,
@@ -172,8 +145,8 @@ class CliRenderer(RendererBase):
     ) -> None:
         """Write assistant text to stdout.
 
-        HARD SUPPRESS during multi-step execution or execute-phase to prevent
-        intermediate LLM response text from flooding output (IG-143 + execute-phase).
+        Write assistant text directly. Daemon-side output contract now owns
+        execute-phase suppression boundaries (IG-304).
 
         Args:
             text: Text content to display.
@@ -183,17 +156,8 @@ class CliRenderer(RendererBase):
         if not is_main:
             return  # Subagent text not shown in CLI headless mode
 
-        # HARD BLOCK: No text during multi-step or execute-phase (IG-143 + execute-phase)
-        # CLI headless only shows main agent (namespace = ())
-        namespace = ()
-        if self._state.suppression.should_suppress_output(namespace):
-            # Accumulate for the goal completion output instead
-            self._state.suppression.accumulate_text(text, namespace)
-            return
-
-        # Emit only on final iteration (after flags cleared)
         payload = text if is_streaming else self.repair_concatenated_output(text)
-        self._state.suppression.full_response.append(payload)
+        self._state.full_response.append(payload)
 
         if self._state.stderr_just_written:
             self._state.stderr_just_written = False
@@ -246,10 +210,6 @@ class CliRenderer(RendererBase):
         if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
             return
 
-        # Multi-step / agentic suppression applies to assistant stdout only (IG-143).
-        # Tool calls and results still stream to stderr at normal+ verbosity so headless
-        # runs show the same tool activity as the TUI.
-
         self._stderr_begin_icon_block()
 
         display_name = get_tool_display_name(name)
@@ -294,8 +254,6 @@ class CliRenderer(RendererBase):
         """
         if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
             return
-
-        # See on_tool_call: do not suppress stderr tool results during multi-step runs.
 
         self._stderr_begin_icon_block()
 
@@ -361,21 +319,10 @@ class CliRenderer(RendererBase):
             data: Event payload.
             namespace: Subagent namespace.
         """
-        # Track suppression state from event (IG-143 + execute-phase)
-        self._state.suppression.track_from_event(event_type, data)
-
-        # Track execute-phase from step events (unified suppression logic)
-        self._state.suppression.track_execute_phase_from_event(event_type, namespace)
-
         # Build event dict for pipeline
         event = {"type": event_type, **data}
         lines = self._pipeline.process(event)
         self.write_lines(lines)
-
-        # Emit goal completion on loop completion (IG-143, IG-273)
-        if self._state.suppression.should_emit_goal_completion(event_type):
-            response = self._state.suppression.get_final_response(namespace)
-            self._write_stdout_goal_completion(response)
 
     def on_plan_created(self, plan: Plan) -> None:
         """Write plan creation to stderr.
@@ -384,7 +331,6 @@ class CliRenderer(RendererBase):
             plan: Created plan object.
         """
         self._state.current_plan = plan
-        self._state.suppression.track_from_plan(len(plan.steps))
 
         # Use pipeline for consistent formatting
         event = {
@@ -449,40 +395,9 @@ class CliRenderer(RendererBase):
         self.write_lines(lines)
 
     def on_turn_end(self) -> None:
-        """Finalize output on turn end.
-
-        If multi_step_active was suppressing output, flush the accumulated
-        response to stdout now that the plan is complete.
-        """
-        # Capture state BEFORE resetting
-        was_multi_step = self._state.suppression.multi_step_active
-        accumulated_response = list(self._state.suppression.full_response)
-        had_agentic_suppression = self._state.suppression.agentic_stdout_suppressed
-        had_final_emit = self._state.suppression.agentic_final_stdout_emitted
-
-        # Reset state for next turn FIRST (before output logic)
+        """Finalize turn-local renderer state."""
         self._state.needs_stdout_newline = False
-        self._state.suppression.reset_turn()
-
-        # Fallback flush: if agentic suppression was active but no explicit
-        # final stdout event was emitted, write buffered streamed chunks now.
-        # This covers runs where the goal completion body arrived only through
-        # ``soothe.output.goal_completion.streaming`` chunks (IG-273).
-        if (
-            was_multi_step
-            and accumulated_response
-            and had_agentic_suppression
-            and not had_final_emit
-        ):
-            self._write_stdout_goal_completion("".join(accumulated_response))
-            return
-
-        # Multi-step mode intentionally suppresses step body output in headless CLI
-        # unless fallback flush above is triggered.
-        # For single-step mode, keep existing newline flush behavior.
-        if (not was_multi_step) and accumulated_response:
-            sys.stdout.write("\n")
-            sys.stdout.flush()
+        self._state.full_response.clear()
 
     def _stderr_begin_icon_block(self) -> None:
         """Prepare stderr for Soothe icon lines (progress, tools, tool results).
