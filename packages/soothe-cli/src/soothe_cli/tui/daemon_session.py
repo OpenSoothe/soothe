@@ -32,8 +32,9 @@ class DaemonStateSnapshot:
 class TuiDaemonSession:
     """Own the daemon websocket session used by the TUI."""
 
-    def __init__(self, cfg: Any) -> None:
+    def __init__(self, cfg: Any, *, workspace: str | None = None) -> None:
         self._cfg = cfg
+        self._workspace = workspace
         ws_url = websocket_url_from_config(cfg)
         self._client = WebSocketClient(url=ws_url)
         self._rpc_client = WebSocketClient(url=ws_url)
@@ -60,6 +61,7 @@ class TuiDaemonSession:
             self._client,
             resume_thread_id=resume_thread_id,
             verbosity=self._cfg.logging.verbosity,
+            workspace=self._workspace,
         )
         if status_event.get("type") == "error":
             raise RuntimeError(str(status_event.get("message", "daemon bootstrap failed")))

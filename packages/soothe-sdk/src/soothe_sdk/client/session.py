@@ -83,6 +83,7 @@ async def bootstrap_thread_session(
     *,
     resume_thread_id: str | None,
     verbosity: str,
+    workspace: str | Path | None = None,
     daemon_ready_timeout_s: float = _DAEMON_READY_TIMEOUT_S,
     thread_status_timeout_s: float = _SESSION_BOOTSTRAP_TIMEOUT_S,
     subscription_timeout_s: float = _SESSION_BOOTSTRAP_TIMEOUT_S,
@@ -93,6 +94,8 @@ async def bootstrap_thread_session(
         client: ``WebSocketClient`` instance (connected).
         resume_thread_id: If set, send ``resume_thread``; else ``new_thread``.
         verbosity: Subscription / progress verbosity string.
+        workspace: Optional workspace override used for ``new_thread``/
+            ``resume_thread``. Defaults to the client process cwd.
         daemon_ready_timeout_s: Max seconds for daemon ready handshake.
         thread_status_timeout_s: Max seconds to obtain a status with ``thread_id``.
         subscription_timeout_s: Max seconds for subscription confirmation.
@@ -110,10 +113,16 @@ async def bootstrap_thread_session(
     await client.request_daemon_ready()
     await client.wait_for_daemon_ready(ready_timeout_s=daemon_ready_timeout_s)
 
+    workspace_path = (
+        str(Path.cwd().resolve())
+        if workspace is None
+        else str(Path(workspace).expanduser().resolve())
+    )
+
     if resume_thread_id:
-        await client.send_resume_thread(resume_thread_id, workspace=str(Path.cwd().resolve()))
+        await client.send_resume_thread(resume_thread_id, workspace=workspace_path)
     else:
-        await client.send_new_thread(workspace=str(Path.cwd().resolve()))
+        await client.send_new_thread(workspace=workspace_path)
 
     status_event = await _wait_for_thread_status(client, timeout_s=thread_status_timeout_s)
 
