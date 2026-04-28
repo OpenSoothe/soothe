@@ -4,7 +4,7 @@
 **Title**: CLI TUI Architecture Design
 **Status**: Implemented
 **Created**: 2026-03-12
-**Updated**: 2026-03-28
+**Updated**: 2026-04-29
 **Related**: RFC-000, RFC-001, RFC-400, RFC-402
 
 ## Abstract
@@ -58,6 +58,13 @@ LangGraph `(namespace, mode, data)` 3-tuple:
 | `custom` | `()` (main) | Protocol orchestration events (`soothe.plan.*`, `soothe.policy.*`) |
 
 **Naming**: `soothe.<component>.<action>`. Subagent: `soothe.<subagent>.<action>`, Protocol: `soothe.<protocol>.<action>`.
+
+**AgentLoop output contract note** (IG-304, RFC-614):
+- Execute-phase assistant prose is daemon-suppressed for user-facing output.
+- Live execute observability is carried by tool telemetry (`ToolMessage` + AI tool-call metadata).
+- Final user-facing answer text is emitted via:
+  - `soothe.output.goal_completion.streaming`
+  - `soothe.output.goal_completion.responded`
 
 ### Protocol Custom Events
 

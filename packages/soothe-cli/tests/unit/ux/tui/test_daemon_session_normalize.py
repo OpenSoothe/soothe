@@ -11,6 +11,16 @@ from soothe_sdk.langchain_wire import envelope_langchain_message_dict
 from soothe_cli.tui.daemon_session import TuiDaemonSession
 
 
+class _StubEventClient:
+    def __init__(self, events: list[dict]) -> None:
+        self._events = list(events)
+
+    async def read_event(self) -> dict | None:
+        if not self._events:
+            return None
+        return self._events.pop(0)
+
+
 def test_envelope_wraps_flat_ai_message_dict() -> None:
     """Flat model_dump-style dict must become messages_from_dict-compatible."""
     flat = _serialize_for_json(AIMessage(content="hello", id="m1"))
@@ -127,3 +137,39 @@ async def test_get_thread_messages_returns_empty_without_thread_id() -> None:
 
     assert await session.get_thread_messages("", include_events=True) == []
     request_response.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_iter_turn_chunks_filters_non_active_thread_events() -> None:
+    """Daemon turn stream should ignore events from other thread IDs."""
+    session = object.__new__(TuiDaemonSession)
+    session._thread_id = "thread-main"
+    session._read_lock = asyncio.Lock()
+    session._streaming = False
+    session._client = _StubEventClient(
+        [
+            {"type": "status", "state": "running", "thread_id": "thread-other"},
+            {
+                "type": "event",
+                "thread_id": "thread-other",
+                "namespace": [],
+                "mode": "messages",
+                "data": ("other", {}),
+            },
+            {"type": "status", "state": "running", "thread_id": "thread-main"},
+            {
+                "type": "event",
+                "thread_id": "thread-main",
+                "namespace": [],
+                "mode": "messages",
+                "data": ("main", {}),
+            },
+            {"type": "status", "state": "idle", "thread_id": "thread-other"},
+            {"type": "status", "state": "idle", "thread_id": "thread-main"},
+        ]
+    )
+
+    chunks = [chunk async for chunk in session.iter_turn_chunks()]
+
+    assert chunks == [((), "messages", ("main", {}))]
+    assert session._thread_id == "thread-main"

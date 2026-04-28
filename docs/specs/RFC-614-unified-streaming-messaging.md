@@ -23,7 +23,7 @@ Daemon output emission now owns suppression boundaries for AgentLoop execution:
 
 **Key Design Principles**:
 1. **Unified streaming wrapper**: Reuse custom event pattern to bypass IG-119 filtering
-2. **Configuration-driven**: Global enable/disable, streaming/batch modes, per-phase control
+2. **Configuration-driven**: Global enable/disable plus streaming/batch display mode
 3. **Boundary preservation**: Maintain whitespace for markdown formatting during concatenation
 4. **Namespace isolation**: Prevent interleaving concurrent streams from parallel subagents
 5. **Backward compatibility**: Preserve existing event semantics while extending capabilities
@@ -42,18 +42,18 @@ The runner's IG-119 filtering logic (`_runner_agentic.py` lines 541-545) blocks 
 - Only works for synthesis phase (final report generation)
 
 **Missing Streaming for Other Phases**:
-- Execution phase AI responses (CoreAgent responses during Act): No streaming
-- Tool result processing: No streaming
+- Execute-phase assistant prose (CoreAgent Act narration): Suppressed by daemon contract
+- Tool result processing output events (`soothe.output.tool_response.streaming`): Not enabled by default
 - Chitchat/quiz responses: Final-only (no intermediate chunks)
-- Custom plugin outputs: No streaming infrastructure
+- Custom plugin outputs: Supported via output-event registry but require explicit registration/emission
 
 **User Experience Gap**:
-Users cannot see agent execution progress in real-time. All intermediate AI reasoning appears at completion, reducing transparency for long-running workflows.
+Users cannot see execute-phase assistant prose in real-time by design; only tool telemetry and explicit goal-completion output events are user-facing.
 
 ### Goals
 
 1. **Contracted streaming**: Stream only user-facing output events and tool UI telemetry; do not stream execute-phase prose
-2. **Configuration control**: Global enable/disable, streaming/batch modes, per-phase flags
+2. **Configuration control**: Global enable/disable and streaming/batch display mode
 3. **Proper concatenation**: Whitespace boundary preservation for markdown formatting
 4. **Concurrency safety**: Namespace-based isolation for parallel subagent streams
 5. **Extensibility**: Plugin-friendly registration mechanism for custom streaming events
@@ -114,7 +114,7 @@ Users cannot see agent execution progress in real-time. All intermediate AI reas
 
 **RFC-403 (Unified Event Naming)**:
 - Follows 4-segment naming: `soothe.output.<phase>.streaming`
-- New domains: `execution.streaming`, `synthesis.streaming`, `tool_response.streaming`
+- Active domains in this contract: `goal_completion.streaming`, `tool_response.streaming`
 
 ### Core Abstractions
 
@@ -134,8 +134,8 @@ class OutputStreamingConfig(BaseModel):
     mode: Literal["streaming", "batch"] = "streaming"
     """Display mode: streaming (real-time chunks) or batch (accumulate silently)."""
 
-    execution_streaming: bool = False
-    """Reserved toggle. Execute-phase prose remains daemon-suppressed by default contract."""
+    execution_streaming: bool = True
+    """Backward-compatibility field; execute-phase prose remains daemon-suppressed by contract."""
 
     synthesis_streaming: bool = True
     """Stream synthesis phase AI text (final report generation)."""
@@ -205,7 +205,7 @@ class StreamingTextAccumulator:
 
     Architecture Pattern (mirrors tool call accumulation from RFC-211):
     - Track by (event_type + namespace) to prevent interleaving
-    - Preserve whitespace boundaries for markdown formatting
+    - Preserve whitespace boundaries and stitch unsafe cross-chunk boundaries
     - Finalize on non-chunk event or turn completion
     - Clear state after finalization
 
@@ -230,7 +230,7 @@ class StreamingTextAccumulator:
         """Accumulate streaming chunk and return displayable text.
 
         Boundary Preservation:
-        - is_chunk=True: Return raw content (preserve boundaries)
+        - is_chunk=True: Return chunk content with boundary-safe stitching
         - is_chunk=False: Return accumulated text (final message)
 
         Args:
@@ -259,7 +259,7 @@ class StreamingTextAccumulator:
 
 **State Machine Logic**:
 1. **Initialization**: Create new `StreamingAccumState` for unseen (event_type, namespace)
-2. **Chunk handling**: Accumulate content, preserve boundaries, return raw chunk
+2. **Chunk handling**: Accumulate content, apply minimal boundary stitching, return display chunk
 3. **Final message**: Mark inactive, return full accumulated text
 4. **Finalization**: Mark inactive, prevent further accumulation
 5. **Clear**: Remove state after final display
@@ -336,8 +336,6 @@ register_output_event(
 ```python
 def _forward_messages_chunk_for_tool_ui(
     chunk: object,
-    *,
-    config: SootheConfig | None = None,
 ) -> bool:
     """Forward tool-related chunks only."""
 ```
@@ -421,7 +419,7 @@ def _clean_assistant_text(self, text: str, is_streaming: bool) -> str:
 **Test Coverage**:
 1. **Unit tests**: Accumulator state machine, boundary preservation, namespace isolation
 2. **Integration tests**: Config propagation, event generation, end-to-end streaming
-3. **Manual scenarios**: Config testing, execution/synthesis streaming, batch mode
+3. **Manual scenarios**: Config testing, execute-phase suppression + tool telemetry, goal-completion streaming, batch mode
 
 **Verification**:
 Run `./scripts/verify_finally.sh` (formatting + linting + 900+ unit tests).
@@ -437,7 +435,7 @@ Run `./scripts/verify_finally.sh` (formatting + linting + 900+ unit tests).
 output_streaming:
   enabled: true        # Global streaming enable/disable
   mode: streaming      # streaming or batch display mode
-  execution_streaming: true   # Stream execution phase (CoreAgent Act responses)
+  execution_streaming: true   # Backward-compatible field; execute prose remains daemon-suppressed
   synthesis_streaming: true   # Stream synthesis phase (final report generation)
   tool_response_streaming: false  # Experimental: stream tool result processing
 ```
@@ -445,7 +443,7 @@ output_streaming:
 **Default Values**:
 - `enabled: true` - Maintain current behavior (backward compatibility)
 - `mode: streaming` - Real-time chunks (existing user expectation)
-- `execution_streaming: true` - New capability (enabled by default)
+- `execution_streaming: true` - Backward-compatible field (no execute-prose forwarding effect)
 - `synthesis_streaming: true` - Replaces `final_report_stream` (backward compatible)
 - `tool_response_streaming: false` - Experimental (may cause UI fragmentation)
 
@@ -475,7 +473,7 @@ soothe --streaming-mode batch "query"      # Accumulate silently
 1. LangGraph.astream() → (namespace, mode, data) chunks
    ↓
 2. Runner._wrap_streaming_output() → Custom event wrapping
-   ↓ (event_type: "soothe.output.execution.streaming", content: "text", is_chunk: True)
+   ↓ (event_type: "soothe.output.goal_completion.streaming", content: "text", is_chunk: True)
 3. QueryEngine._broadcast() → EventBus.publish
    ↓ (topic: "thread:{thread_id}", event: {...})
 4. EventBus → ClientSession.event_queue (priority-aware overflow)
@@ -494,11 +492,11 @@ soothe --streaming-mode batch "query"      # Accumulate silently
 ```
 Main Agent:
   namespace: ()
-  → streams["soothe.output.execution.streaming", ()] → AccumState A
+  → streams["soothe.output.goal_completion.streaming", ()] → AccumState A
 
 Subagent Browser:
   namespace: ("browser",)
-  → streams["soothe.output.execution.streaming", ("browser",)] → AccumState B
+  → streams["soothe.output.goal_completion.streaming", ("browser",)] → AccumState B
 
 Concurrent execution: A and B isolated (no chunk interleaving)
 ```
@@ -520,7 +518,7 @@ Concurrent execution: A and B isolated (no chunk interleaving)
 
 **Migration Path**:
 - Existing code expecting `final_report_stream` continues working
-- New code should use `synthesis.streaming` naming
+- New code should use `goal_completion.streaming` naming
 - Gradual migration, no breaking changes
 
 ### Default Behavior
@@ -552,7 +550,7 @@ def _wrap_streaming_output(..., config: SootheConfig | None = None):
 ### Priority-Aware Overflow (RFC-401, IG-258)
 
 **Streaming Event Priority**:
-- Execution/synthesis streaming: `EventPriority.NORMAL`
+- Goal-completion streaming: `EventPriority.NORMAL`
 - Tool response streaming: `EventPriority.LOW` (experimental, may drop on overflow)
 - Final events: `EventPriority.HIGH` (never dropped)
 
@@ -630,7 +628,7 @@ wrapped = _wrap_streaming_output(
 ### Integration Tests
 
 **End-to-End Streaming** (`test_unified_streaming.py`):
-1. Execution streaming enabled (chunks emitted)
+1. Goal-completion streaming enabled (chunks emitted)
 2. Streaming disabled (no custom streaming events)
 3. Config override behavior (CLI flags override daemon)
 4. Boundary preservation end-to-end (markdown formatting)
@@ -644,8 +642,8 @@ wrapped = _wrap_streaming_output(
    - CLI override: `--no-streaming` → verify override works
 
 2. **Execution Streaming**:
-   - Run agentic query → verify execution phase streams
-   - Run with concurrent subagents → verify no interleaving
+   - Run agentic query → verify execute-phase prose is suppressed
+   - Verify tool telemetry still streams during execution
 
 3. **Synthesis Streaming**:
    - Run query requiring synthesis → verify final report streams
@@ -662,8 +660,8 @@ wrapped = _wrap_streaming_output(
 ## Success Criteria
 
 1. **Functional Requirements**:
-   - All AI outputs stream when enabled
-   - Config controls streaming globally and per-phase
+   - Only contracted user-facing outputs stream when enabled
+   - Config controls streaming globally and by display mode
    - CLI flags override daemon config
    - Whitespace boundaries preserved for markdown
    - Concurrent streams isolated (no interleaving)
@@ -719,7 +717,7 @@ from soothe.core.runner._runner_shared import _wrap_streaming_output
 
 wrapped = _wrap_streaming_output(
     chunk=item,
-    event_type="soothe.output.execution.streaming",
+    event_type="soothe.output.goal_completion.streaming",
     config=self.config,
 )
 
@@ -787,6 +785,7 @@ soothe --no-streaming "Write a report"
 **Authors**: Soothe Team
 
 **Revision History**:
+- v1.2 (2026-04-29): Consistency polish — aligned examples/config semantics with daemon-side execute-phase suppression and goal-completion streaming contract
 - v1.1 (2026-04-28): IG-304 amendment — daemon-side suppression isolation, tool-only message forwarding, goal-completion output contract
 - v1.0 (2026-04-27): Initial RFC draft for unified streaming framework
 

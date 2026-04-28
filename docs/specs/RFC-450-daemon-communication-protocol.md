@@ -14,6 +14,7 @@
 This RFC defines a WebSocket-based daemon communication protocol serving all clients (local CLI/TUI and remote/web) through a unified transport. HTTP REST retained for health checks and stateless CRUD. The protocol specifies JSON message format, security requirements, and implementation interface, eliminating Unix domain socket complexity while enabling local and remote connectivity.
 
 **Updates**:
+- **2026-04-29**: Clarified stream-event payload semantics for AgentLoop: daemon forwards tool telemetry and explicit goal-completion output events; execute-phase assistant prose suppression is enforced at emission boundary (see RFC-401 §6.6, RFC-614).
 - **2026-04-14**: Added `models_list` / `models_list_response` so clients list models from the daemon host `SootheConfig`; `input` may carry optional `model` and `model_params` for a per-turn override resolved on the daemon.
 - **2026-04-14**: Added `skills_list` / `skills_list_response` and `invoke_skill` / `invoke_skill_response` RPCs for remote-safe skill metadata and invocation; ordering rule for `invoke_skill` (response before stream events for that turn).
 - **2026-03-29**: Simplified to WebSocket-only bidirectional streaming, removed Unix socket (stability issues)
@@ -170,7 +171,7 @@ All messages JSON with required `type` field.
 |------|--------|-------------|
 | `status` | `state` (req), `thread_id` (req), `client_id` (req), `input_history` (opt) | Daemon state (`idle`, `running`, `stopped`, `stopping`, `detached`) |
 | `subscription_confirmed` | `thread_id` (req), `client_id` (req) | Thread subscription confirmed |
-| `event` | `thread_id` (req), `namespace` (req), `mode` (req), `data` (req) | Stream event from SootheRunner |
+| `event` | `thread_id` (req), `namespace` (req), `mode` (req), `data` (req) | Stream event from SootheRunner (payload semantics defined by RFC-401/RFC-614 output contract) |
 | `command_response` | `content` (req) | Slash command output |
 | `error` | `code` (req), `message` (req), `details` (opt) | Protocol error |
 | `skills_list_response` | `skills` (req, array of `{name, description, source?, version?}`), `request_id` (opt) | Catalog rows for autocomplete and listings |
