@@ -71,17 +71,16 @@ def _register_builtin_output_events() -> None:
         lambda data: data.get("content", ""),
     )
 
+    # Goal completion final output (hard cutover)
+    register_output_event(
+        "soothe.output.goal_completion.responded",
+        lambda data: data.get("content", ""),
+    )
+
     # Tool response streaming (RFC-614, experimental)
     register_output_event(
         "soothe.output.tool_response.streaming",
         lambda data: data.get("content", ""),
-    )
-
-    # Agent loop final output (RFC-200)
-    register_output_event(
-        "soothe.cognition.agent_loop.completed",
-        # Preserve raw goal-completion payload from completed event.
-        lambda data: data.get("goal_completion_message", ""),
     )
 
     # Autonomous mode goal completion (RFC-300, IG-273)

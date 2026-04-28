@@ -628,6 +628,14 @@ class AgenticMixin:
                     if text:
                         final_stdout = text
 
+                if final_stdout:
+                    yield _custom(
+                        {
+                            "type": "soothe.output.goal_completion.responded",
+                            "content": final_stdout,
+                        }
+                    )
+
                 yield _custom(
                     AgenticLoopCompletedEvent(
                         thread_id=tid,
@@ -637,7 +645,6 @@ class AgenticMixin:
                         goal=display_goal,  # IG-267: Pass goal for CLI trophy display
                         completion_summary=completion_summary,
                         total_steps=n_act_steps,
-                        goal_completion_message=final_stdout,
                     ).to_dict()
                 )
 

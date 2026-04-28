@@ -33,8 +33,8 @@ class SuppressionState:
         suppression.track_from_event(event_type, data)
 
         # Get goal completion:
-        if suppression.should_emit_goal_completion(event_type, final_stdout):
-            text = suppression.get_final_response(final_stdout)
+        if suppression.should_emit_goal_completion(event_type):
+            text = suppression.get_final_response()
             # ... emit text ...
     """
 
@@ -78,21 +78,15 @@ class SuppressionState:
     def should_emit_goal_completion(
         self,
         event_type: str,
-        final_stdout: str,
     ) -> bool:
         """Check if goal completion should be emitted on loop completion.
 
         Args:
             event_type: Event type string.
-            final_stdout: Final stdout message from event data.
-
         Returns:
             True if goal completion should be emitted.
         """
         if event_type != "soothe.cognition.agent_loop.completed":
-            return False
-
-        if not final_stdout:
             return False
 
         if self.agentic_final_stdout_emitted:
@@ -105,15 +99,13 @@ class SuppressionState:
 
         return should_emit
 
-    def track_from_event(self, event_type: str, data: dict) -> str:
+    def track_from_event(self, event_type: str, data: dict) -> None:
         """Track suppression state from progress event.
 
         Args:
             event_type: Event type string.
             data: Event payload dict.
 
-        Returns:
-            Final stdout message if present (for emission after tracking).
         """
         # Track suppression state from agentic loop start.
         # Suppress intermediate output only when max_iterations > 1 (multi-step mode).
@@ -135,15 +127,8 @@ class SuppressionState:
             if iteration >= 1 and not self.agentic_final_stdout_emitted:
                 self.agentic_stdout_suppressed = True
 
-        # Extract goal completion message from loop completion
-        payload = dict(data)
-        raw_final_stdout = payload.pop("goal_completion_message", None)
-        final_stdout = raw_final_stdout if isinstance(raw_final_stdout, str) else ""
-
         # Note: agentic_final_stdout_emitted flag is set in should_emit_goal_completion()
         # after checking the condition, not here (order matters for rendering logic)
-
-        return final_stdout
 
     def track_from_plan(self, num_steps: int) -> None:
         """Track suppression state from plan creation.
@@ -180,11 +165,10 @@ class SuppressionState:
         ):
             self.execute_phase_active_by_namespace[namespace] = False
 
-    def get_final_response(self, final_stdout: str | None = None, namespace: tuple = ()) -> str:
+    def get_final_response(self, namespace: tuple = ()) -> str:
         """Get accumulated final response text.
 
         Args:
-            final_stdout: Optional final stdout message to append.
             namespace: Namespace tuple for agent context.
 
         Returns:
@@ -192,9 +176,6 @@ class SuppressionState:
         """
         # Use namespace-specific accumulator if tracking
         accumulator = self.full_response_by_namespace.get(namespace, self.full_response)
-
-        if final_stdout is not None and final_stdout != "":
-            accumulator.append(final_stdout)
 
         return "".join(accumulator)
 

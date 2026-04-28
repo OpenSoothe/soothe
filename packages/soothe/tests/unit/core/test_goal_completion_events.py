@@ -1,10 +1,10 @@
-"""Wire-contract tests for IG-273 goal completion events.
+"""Wire-contract tests for goal completion events.
 
 Covers:
-- ``AgenticLoopCompletedEvent`` exposes ``goal_completion_message`` (IG-273).
+- ``AgenticLoopCompletedEvent`` is control-only (no final answer payload).
 - ``AutonomousGoalCompletionEvent`` emits the canonical
   ``soothe.output.autonomous.goal_completion.reported`` type string.
-- The SDK re-exports ``AUTONOMOUS_GOAL_COMPLETION`` and ``GOAL_COMPLETION_STREAMING``.
+- The SDK re-exports goal completion output constants.
 """
 
 from __future__ import annotations
@@ -15,17 +15,16 @@ from soothe.core.events import (
 )
 
 
-def test_agentic_loop_completed_event_goal_completion_message_field() -> None:
+def test_agentic_loop_completed_event_has_no_goal_completion_message_field() -> None:
     ev = AgenticLoopCompletedEvent(
         thread_id="t-1",
         status="done",
         goal_progress=1.0,
         evidence_summary="ev",
-        goal_completion_message="All done. Here is the answer.",
     )
     d = ev.to_dict()
     assert d["type"] == "soothe.cognition.agent_loop.completed"
-    assert d["goal_completion_message"] == "All done. Here is the answer."
+    assert "goal_completion_message" not in d
 
 
 def test_agentic_loop_completed_event_none_when_unset() -> None:
@@ -56,8 +55,10 @@ def test_autonomous_goal_completion_event_emits_canonical_type_string() -> None:
 def test_sdk_public_reexports_goal_completion_streaming_and_autonomous_goal_completion() -> None:
     from soothe_sdk.core import (
         AUTONOMOUS_GOAL_COMPLETION,
+        GOAL_COMPLETION_RESPONDED,
         GOAL_COMPLETION_STREAMING,
     )
 
     assert GOAL_COMPLETION_STREAMING == "soothe.output.goal_completion.streaming"
+    assert GOAL_COMPLETION_RESPONDED == "soothe.output.goal_completion.responded"
     assert AUTONOMOUS_GOAL_COMPLETION == "soothe.output.autonomous.goal_completion.reported"

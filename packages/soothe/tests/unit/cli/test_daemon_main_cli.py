@@ -78,6 +78,8 @@ def test_start_background_success(monkeypatch, tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert popen_called["value"] is True
     assert "Daemon started successfully" in result.stdout
+    assert "PID: 4242" in result.stdout
+    assert "soothe.sock" in result.stdout
 
 
 def test_stop_reports_not_running(monkeypatch) -> None:

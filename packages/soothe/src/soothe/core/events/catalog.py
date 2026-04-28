@@ -77,6 +77,7 @@ from .constants import (
     DAEMON_HEARTBEAT,
     GOAL_BATCH_STARTED,
     GOAL_COMPLETED,
+    GOAL_COMPLETION_RESPONDED,
     # Cognition - Goal
     GOAL_CREATED,
     GOAL_DEFERRED,
@@ -449,7 +450,9 @@ class QuizResponseEvent(OutputEvent):
 class GoalCompletionRespondedEvent(OutputEvent):
     """Goal completion final output body."""
 
-    type: Literal["soothe.output.goal_completion.responded"] = "soothe.output.goal_completion.responded"
+    type: Literal["soothe.output.goal_completion.responded"] = (
+        "soothe.output.goal_completion.responded"
+    )
     content: str = ""
 
 
@@ -785,6 +788,7 @@ _reg(CHITCHAT_STARTED, ChitchatStartedEvent, verbosity=VerbosityTier.INTERNAL)
 _reg(CHITCHAT_RESPONSE, ChitchatResponseEvent, verbosity=VerbosityTier.QUIET)
 _reg(QUIZ_STARTED, QuizStartedEvent, verbosity=VerbosityTier.INTERNAL)
 _reg(QUIZ_RESPONSE, QuizResponseEvent, verbosity=VerbosityTier.QUIET)
+_reg(GOAL_COMPLETION_RESPONDED, GoalCompletionRespondedEvent, verbosity=VerbosityTier.QUIET)
 _reg(AUTONOMOUS_GOAL_COMPLETION, AutonomousGoalCompletionEvent, verbosity=VerbosityTier.QUIET)
 
 # -- Autopilot (RFC-204) -------------------------------------------------

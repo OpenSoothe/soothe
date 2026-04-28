@@ -68,6 +68,10 @@ class ProcessorState:
     )
     """Unified streaming text accumulator with namespace isolation."""
 
+    # Exactly-once final-output guard keyed by namespace
+    final_output_emitted_by_namespace: set[tuple[str, ...]] = field(default_factory=set)
+    """Namespaces that already emitted final goal completion output this turn."""
+
     def reset_turn(self) -> None:
         """Reset per-turn state.
 
@@ -81,6 +85,7 @@ class ProcessorState:
         self.execute_phase_active_by_namespace.clear()
         self.streaming_accumulator.finalize_all()
         self.streaming_accumulator.clear()
+        self.final_output_emitted_by_namespace.clear()
 
     def clear_session(self) -> None:
         """Clear all session state.
@@ -97,3 +102,4 @@ class ProcessorState:
         self.emitted_tool_call_ids.clear()
         self.emitted_tool_result_ids.clear()
         self.streaming_accumulator.clear()
+        self.final_output_emitted_by_namespace.clear()
