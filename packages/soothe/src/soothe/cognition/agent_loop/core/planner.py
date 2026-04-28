@@ -829,56 +829,6 @@ class LLMPlanner:
                 next_action="I'll proceed with a default plan.",
             )
 
-    def _should_require_goal_completion(self, state: LoopState) -> bool:
-        """Determine if goal completion synthesis is needed.
-
-        Returns False when last AIMessage is sufficient, avoiding extra LLM call.
-        """
-        # Complex execution patterns require synthesis
-        if state.last_execute_wave_parallel_multi_step:
-            logger.debug("GoalCompletion: True (parallel multi-step)")
-            return True
-
-        if state.last_wave_hit_subagent_cap:
-            logger.debug("GoalCompletion: True (subagent cap)")
-            return True
-
-        assistant = (state.last_execute_assistant_text or "").strip()
-        if not assistant:
-            logger.debug("GoalCompletion: True (no output)")
-            return True
-
-        import re
-
-        word_count = len(re.findall(r"\S+", assistant))
-
-        # Low word count needs enrichment
-        if word_count < 150:
-            logger.debug("GoalCompletion: True (low words=%d)", word_count)
-            return True
-
-        evidence_chars = len(state.evidence_summary or "")
-
-        # High evidence with moderate output needs synthesis
-        if evidence_chars > 5000:
-            if word_count >= 300:
-                logger.debug(
-                    "GoalCompletion: False (rich output words=%d evidence=%d)",
-                    word_count,
-                    evidence_chars,
-                )
-                return False
-            logger.debug(
-                "GoalCompletion: True (high evidence=%d words=%d)", evidence_chars, word_count
-            )
-            return True
-
-        # Sufficient output, skip synthesis
-        logger.debug(
-            "GoalCompletion: False (sufficient words=%d evidence=%d)", word_count, evidence_chars
-        )
-        return False
-
     def _combine_results(
         self,
         assessment: Any,
@@ -962,17 +912,26 @@ class LLMPlanner:
                         assessment.status = "replan"
                         assessment.goal_progress = 0.0
 
-                # Early completion: skip plan generation
+                # Early completion: apply hybrid decision logic (IG-298)
                 if assessment.status == "done":
-                    logger.debug("Plan early-complete skip plan gen")
+                    logger.debug("Plan early-complete: applying hybrid logic")
 
-                    require_goal_completion = self._should_require_goal_completion(state)
+                    # Import hybrid decision policy
+                    from soothe.cognition.agent_loop.policies.goal_completion_policy import (
+                        determine_goal_completion_needs,
+                    )
+
+                    # Hybrid decision: LLM primary, heuristic fallback
+                    require_completion = determine_goal_completion_needs(
+                        llm_decision=assessment.require_goal_completion,
+                        state=state,
+                        mode="hybrid",  # Default mode (configurable in future)
+                    )
 
                     logger.debug(
-                        "Plan require_goal_completion=%s (assistant_chars=%d evidence_chars=%d)",
-                        require_goal_completion,
-                        len(state.last_execute_assistant_text or ""),
-                        len(state.evidence_summary or ""),
+                        "Plan hybrid: LLM=%s final=%s",
+                        assessment.require_goal_completion,
+                        require_completion,
                     )
 
                     result = PlanResult(
@@ -984,7 +943,7 @@ class LLMPlanner:
                         plan_action="keep",
                         decision=None,
                         next_action="Goal achieved successfully",
-                        require_goal_completion=require_goal_completion,
+                        require_goal_completion=require_completion,  # Hybrid decision
                         full_output=state.last_execute_assistant_text,
                     )
                 else:
