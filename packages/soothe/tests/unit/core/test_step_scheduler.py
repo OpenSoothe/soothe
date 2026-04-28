@@ -2,7 +2,7 @@
 
 import pytest
 
-from soothe.core.step_scheduler import StepScheduler
+from soothe.core.scheduling import StepScheduler
 from soothe.protocols.planner import Plan, PlanStep
 
 

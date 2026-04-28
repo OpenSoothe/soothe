@@ -7,7 +7,7 @@ import pytest
 from soothe_sdk.core.events import SootheEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 
-from soothe.core.event_catalog import EventMeta
+from soothe.core.events import EventMeta
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
 

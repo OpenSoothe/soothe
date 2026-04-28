@@ -177,7 +177,7 @@ class WorkspaceAwareBackend:
                     )
 
         # Fallback to ContextVar (for non-tool operations)
-        from soothe.core.filesystem import FrameworkFilesystem
+        from .framework_filesystem import FrameworkFilesystem
 
         current_workspace = FrameworkFilesystem.get_current_workspace()
         if current_workspace:
@@ -196,7 +196,7 @@ class WorkspaceAwareBackend:
         Returns:
             NormalizedPathBackend for current context.
         """
-        from soothe.core.filesystem import FrameworkFilesystem
+        from .framework_filesystem import FrameworkFilesystem
 
         current_workspace = FrameworkFilesystem.get_current_workspace()
         if current_workspace:

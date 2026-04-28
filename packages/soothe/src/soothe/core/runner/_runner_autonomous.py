@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from soothe.cognition.agent_loop import AgentLoop
 from soothe.cognition.agent_loop.state.schemas import PlanResult
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
-from soothe.core.event_catalog import (
+from soothe.core.events import (
     AutonomousGoalCompletionEvent,
     GoalFailedEvent,
     PlanCreatedEvent,
@@ -236,7 +236,7 @@ class AutonomousMixin(GoalDirectivesMixin):
 
         # Only emit goal created event if goal was actually created
         if goal and (not intent or intent.intent_type == "new_goal"):
-            # IG-262: Include friendly message from intent classification
+            # IG-287: Include friendly message from intent classification
             friendly_message = intent.friendly_message if intent else None
             logger.info("Goal %s created: %s", goal.id, goal.description[:50])
             if friendly_message:

@@ -228,6 +228,7 @@ All implementation guides are in `docs/impl/`. Recent guides:
 | IG-047 | Module Self-Containment Refactoring | ✅ Completed |
 | IG-051 | Plugin API Implementation | ✅ Completed |
 | IG-052 | RFC-600 Event System Optimization | ✅ Completed |
+| IG-276 | Core Directory Refactoring | ✅ Completed |
 
 **See all guides**: Check `docs/impl/` directory.
 
@@ -414,7 +415,14 @@ The `thirdparty/` directory contains source code of upstream dependencies for **
 
 ## 🔄 Recent Changes
 
-### IG-052: Event System Optimization (Just Completed)
+### IG-276: Core Directory Refactoring (Just Completed)
+- Refactored 15 root-level utility files into 5 purpose-driven packages
+- Created `events/`, `workspace/`, `context/`, `scheduling/`, `persistence/` packages
+- Organized code following IG-047 Module Self-Containment pattern
+- Maintained 100% backward compatibility through lazy loading facade
+- Updated core/README.md with new structure
+
+### IG-052: Event System Optimization
 - Created `register_event()` public API
 - Migrated plugin/tool/subagent events to self-registration
 - Reduced `event_catalog.py` by 12% (105 lines)
@@ -430,6 +438,27 @@ The `thirdparty/` directory contains source code of upstream dependencies for **
 - Moved events into their respective modules
 - Converted tools to packages
 - Eliminated redundant plugin shims
+
+---
+
+## 📝 Implementation Guide (IG) Numbering System
+
+Implementation Guides (IGs) track all implementation work in `docs/impl/`.
+
+**Numbering Rules:**
+1. **Sequential Assignment**: Each IG gets next available sequential number (currently IG-277-294 renumbered from duplicates, IG-295+ available for new work)
+2. **No Duplicate Numbers**: Every IG must have unique number
+3. **Document Creation**: Create IG before starting implementation work
+4. **Naming Format**: `IG-XXX-brief-title.md` (XXX = 3-digit number, brief-title = short description)
+5. **Reference Format**: Use `(IG-XXX)` in code comments, CHANGELOG.md, documentation
+6. **Archive Threshold**: Archive completed IG batches (e.g., IG-001-050.tar.gz) to maintain manageable file count
+
+**Current IG Range**: IG-001-276 (completed), IG-277-294 (renumbered duplicates), IG-295+ (available for new work)
+
+**Example:**
+- Create: `docs/impl/IG-295-my-new-feature.md`
+- Reference in code: `# Implemented per IG-295`
+- Reference in CHANGELOG: `- Feature added (IG-295)`
 
 ---
 

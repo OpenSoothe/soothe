@@ -9,7 +9,7 @@ Covers:
 
 from __future__ import annotations
 
-from soothe.core.event_catalog import (
+from soothe.core.events import (
     AgenticLoopCompletedEvent,
     AutonomousGoalCompletionEvent,
 )

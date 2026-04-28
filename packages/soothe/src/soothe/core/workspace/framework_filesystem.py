@@ -51,7 +51,7 @@ class FrameworkFilesystem:
         Returns:
             Initialized FilesystemBackend instance (workspace-aware wrapper).
         """
-        from soothe.core.workspace_aware_backend import WorkspaceAwareBackend
+        from soothe.core.workspace.backend import WorkspaceAwareBackend
         from soothe.utils import expand_path
 
         resolved_workspace = expand_path(config.workspace_dir)

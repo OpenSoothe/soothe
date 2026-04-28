@@ -15,7 +15,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command, Interrupt
 from soothe_sdk.core.exceptions import ConfigurationError
 
-from soothe.core.event_catalog import (
+from soothe.core.events import (
     ChitchatResponseEvent,
     PlanCreatedEvent,
     PlanReflectedEvent,
@@ -608,7 +608,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
         Ensures ``_pre_stream_planning`` / ``PlanContext`` and ``_stream_phase``
         always see an absolute directory, even if the caller omitted workspace.
         """
-        from soothe.core.workspace_resolution import resolve_workspace_for_stream
+        from soothe.core.workspace import resolve_workspace_for_stream
 
         raw = getattr(state, "workspace", None)
         if isinstance(raw, str):

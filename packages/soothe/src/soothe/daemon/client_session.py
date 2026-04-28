@@ -16,7 +16,7 @@ from soothe_sdk.core.types import VerbosityLevel
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
     from soothe.config.models import OutputStreamingConfig
-    from soothe.core.event_catalog import EventMeta
+    from soothe.core.events import EventMeta
     from soothe.daemon.event_bus import EventBus
     from soothe.daemon.transports.base import TransportServer
 

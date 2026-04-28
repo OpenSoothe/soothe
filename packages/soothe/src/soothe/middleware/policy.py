@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from langchain.agents.middleware.types import AgentMiddleware, ToolCallRequest
 from langchain_core.messages import ToolMessage
 
-from soothe.core.event_catalog import PolicyCheckedEvent, PolicyDeniedEvent
+from soothe.core.events import PolicyCheckedEvent, PolicyDeniedEvent
 from soothe.protocols.policy import (
     ActionRequest,
     PermissionSet,

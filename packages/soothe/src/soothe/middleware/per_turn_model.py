@@ -9,7 +9,7 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware.types import ModelRequest, ModelResponse
 
-from soothe.core.stream_model_context import get_stream_model_override
+from soothe.core.context.model_override import get_stream_model_override
 
 logger = logging.getLogger(__name__)
 

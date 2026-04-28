@@ -15,7 +15,7 @@ from soothe.cognition.agent_loop import AgentLoop
 from soothe.cognition.agent_loop.utils.events import LoopAgentReasonEvent
 from soothe.config import SootheConfig
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
-from soothe.core.event_catalog import (
+from soothe.core.events import (
     AgenticLoopCompletedEvent,
     AgenticLoopStartedEvent,
     AgenticStepCompletedEvent,
@@ -490,7 +490,7 @@ class AgenticMixin:
                 # For agentic loop, goal description is passed as-is
 
         # Emit loop started event (Level 1)
-        # IG-262: Use friendly_message from intent classification if available
+        # IG-287: Use friendly_message from intent classification if available
         display_goal = (
             intent_classification.friendly_message
             if (intent_classification and intent_classification.friendly_message)

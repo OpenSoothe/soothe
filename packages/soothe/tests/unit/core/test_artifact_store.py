@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from soothe.core.artifact_store import ArtifactEntry, RunArtifactStore, RunManifest
+from soothe.core.persistence import ArtifactEntry, RunArtifactStore, RunManifest
 from soothe.protocols.planner import GoalReport, StepReport
 
 

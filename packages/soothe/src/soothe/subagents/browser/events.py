@@ -61,7 +61,7 @@ class BrowserCdpEvent(SubagentEvent):
 # Register all browser events with the global registry
 from soothe_sdk.core.verbosity import VerbosityTier  # noqa: E402
 
-from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.events import register_event  # noqa: E402
 
 # Dispatch/Complete events visible at NORMAL
 register_event(

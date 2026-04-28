@@ -433,7 +433,7 @@ async def test_event_priority_overflow_strategy():
 
     Scenario: Flood 12k events (exceeds 10k queue capacity)
     """
-    from soothe.core.event_catalog import EventMeta, EventPriority
+    from soothe.core.events import EventMeta, EventPriority
     from soothe.daemon.event_bus import EventBus
 
     bus = EventBus()
@@ -654,7 +654,7 @@ async def test_phase1_full_integration():
     Scenario: 50 clients, sustained 5-second operation with mixed load
     """
     from soothe.config import SootheConfig
-    from soothe.core.event_catalog import EventMeta, EventPriority
+    from soothe.core.events import EventMeta, EventPriority
     from soothe.daemon.event_bus import EventBus
     from soothe.daemon.server import SootheDaemonServer
 

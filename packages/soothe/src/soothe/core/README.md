@@ -19,9 +19,15 @@ No transport or UI dependencies.
 │  agent/        CoreAgent (deepagents)              │
 │  runner/       AgentLoop Orchestration             │
 │  thread/       Thread lifecycle, execution, rate    │
-│  middleware/   5-middleware stack around CoreAgent  │
-│  resolver/     Checkpointer, durability, tool wire  │
-│  foundation/   Base types, events, verbosity        │
+│  events/       Event system (constants, models)    │
+│  workspace/    Workspace resolution & backends     │
+│  context/      Tool context & model override       │
+│  scheduling/   Concurrency & step scheduling       │
+│  persistence/  Artifact store & policy             │
+│  middleware/   5-middleware stack around CoreAgent │
+│  resolver/     Checkpointer, durability, tool wire │
+│  prompts/      System prompt building              │
+│  event_replay/ Event replay & reconstruction       │
 └──────────────────────┬──────────────────────────────┘
                        │ uses
 ┌──────────────────────▼──────────────────────────────┐
@@ -43,31 +49,95 @@ No transport or UI dependencies.
 | `agent/` | `CoreAgent` wraps `create_deep_agent()`. Owns the deepagents/langgraph boundary. 5 Soothe-specific middlewares injected here. |
 | `runner/` | `AgentLoop` orchestration — protocol pre/post processing, agentic loop (RFC-200), autonomous iteration (RFC-200), DAG step execution, checkpointing. Decomposed into mixins (`_runner_*.py`). |
 | `thread/` | Thread lifecycle manager, concurrent executor with rate limiting. Used by daemon and runner. |
+| `events/` | Event system — centralized event constants, models, registry, and `register_event()` API. Self-contained module following IG-047. |
+| `workspace/` | Workspace management — resolution, validation, workspace-aware backends, and `FrameworkFilesystem` singleton. Unified package for all workspace-related functionality. |
+| `context/` | Context management — tool context registry, trigger registry for system message injection, and stream model override for per-async-task model swapping. |
+| `scheduling/` | Execution scheduling — concurrency control (hierarchical semaphores), DAG-based step scheduler, and tool caching utilities. |
+| `persistence/` | Persistence & policy — artifact store for run artifacts, and configuration-driven policy implementation. |
 | `middleware/` | `SoothePolicyMiddleware`, `SystemPromptOptimizationMiddleware`, `ExecutionHintsMiddleware`, `WorkspaceContextMiddleware`, `SubagentContextMiddleware`. |
 | `resolver/` | Wires protocols from config: checkpointer, durability, goal engine, tools. |
-| `foundation/` | Framework-wide base primitives (see below). |
-| `workspace.py` | `resolve_daemon_workspace()`, `validate_client_workspace()` — path resolution helpers. |
-| `filesystem.py` | `FrameworkFilesystem` — deepagents `BackendProtocol` wrapper for sandboxed file ops. |
-| `workspace_aware_backend.py` | Workspace-scoped backend for tool execution. |
-| `artifact_store.py` | Run artifact store (attached to `RunnerState`). |
-| `concurrency.py` | `ConcurrencyController` — semaphore-based goal/step/LLM limits. |
-| `step_scheduler.py` | DAG-based step scheduler for parallel plan execution. |
-| `unified_classifier.py` | Fast-model complexity classifier (RFC-0012). |
-| `config_driven.py` | `ConfigDrivenPolicy` — policy protocol default implementation. |
-| `lazy_tools.py` | Lazy tool group resolver for `soothe_step_tools`. |
-| `event_catalog.py` | Event registry, constants, `register_event()`, `custom_event()`. |
+| `prompts/` | System prompt building — `PromptBuilder`, context XML generation, prompt template loading. |
+| `event_replay/` | Event replay and state reconstruction utilities. |
 
 ---
 
-## foundation/ subpackage
+## Package Structure (IG-276 Refactoring)
 
-Contains the smallest framework primitives that are imported by every layer.
+Following IG-047 Module Self-Containment pattern, all core functionality is organized into purpose-driven packages:
 
-| Module | Contents |
-|--------|----------|
-| `base_events.py` | `SootheEvent`, `LifecycleEvent`, `ProtocolEvent`, `SubagentEvent`, `OutputEvent`, `ErrorEvent` |
-| `types.py` | `INVALID_WORKSPACE_DIRS` — security constant |
-| `verbosity_tier.py` | `VerbosityTier` enum, `should_show()`, `classify_event_to_tier()` |
+### `events/` Package
+**Purpose:** Centralized event system infrastructure
+
+Contents:
+- `constants.py` — All event type string constants (60+ constants)
+- `catalog.py` — Event models, registry, `register_event()` API
+- `__init__.py` — Re-exports all event constants, models, and registry functions
+
+Example:
+```python
+from soothe.core.events import THREAD_CREATED, register_event
+from soothe.core.events import ThreadCreatedEvent, EventRegistry
+```
+
+### `workspace/` Package
+**Purpose:** Unified workspace resolution, validation, and backend management
+
+Contents:
+- `resolution.py` — Daemon/client workspace validation
+- `stream_resolution.py` — Unified stream resolution for runner
+- `backend.py` — Workspace-aware backend wrapper
+- `framework_filesystem.py` — Singleton filesystem backend
+- `__init__.py` — Re-exports all workspace APIs
+
+Example:
+```python
+from soothe.core.workspace import (
+    FrameworkFilesystem,
+    resolve_daemon_workspace,
+    WorkspaceAwareBackend,
+)
+```
+
+### `context/` Package
+**Purpose:** Tool context and trigger registries for system message injection
+
+Contents:
+- `tool_registry.py` — Tool context fragments registry
+- `trigger_registry.py` — Tool trigger mappings
+- `model_override.py` — Per-async-task model override via ContextVar
+- `__init__.py` — Re-exports all context APIs
+
+Example:
+```python
+from soothe.core.context import ToolContextRegistry, attach_stream_model_override
+```
+
+### `scheduling/` Package
+**Purpose:** Execution scheduling and concurrency control
+
+Contents:
+- `concurrency.py` — Hierarchical semaphore-based concurrency control
+- `step_scheduler.py` — DAG-based plan step scheduler
+- `tool_cache.py` — LRU-style tool caching utilities
+- `__init__.py` — Re-exports all scheduling APIs
+
+Example:
+```python
+from soothe.core.scheduling import ConcurrencyController, StepScheduler
+```
+
+### `persistence/` Package
+**Purpose:** Persistence and configuration-driven policy
+
+Contents:
+- `artifact_store.py` — Run artifact management
+- `config_policy.py` — ConfigDrivenPolicy implementation
+- `__init__.py` — Re-exports all persistence APIs
+
+Example:
+```python
+from soothe.core.persistence import RunArtifactStore, ConfigDrivenPolicy
+```
 
 ---
 
@@ -80,9 +150,12 @@ from soothe.core import create_soothe_agent # Agent factory
 from soothe.core import ConfigDrivenPolicy  # Policy implementation
 from soothe.core import FrameworkFilesystem # File backend
 from soothe.core import resolve_daemon_workspace, validate_client_workspace
+from soothe.core import ResolvedWorkspace, resolve_workspace_for_stream
 ```
 
 All exports are lazy-loaded in `__init__.py` to keep startup fast.
+
+**Backward Compatibility:** All imports continue to work unchanged. The lazy loading facade maintains the same public API while internally routing to the new packages.
 
 ---
 
@@ -130,3 +203,11 @@ SootheRunner.astream(user_input)
 - `soothe.ux.cli` — constructs `SootheRunner` for headless runs
 - `soothe.ux.tui` — constructs `SootheRunner` for interactive sessions
 - `tests/` — unit and integration tests
+
+---
+
+## Refactoring History
+
+- **IG-276 (2026-04-28):** Core directory refactoring — organized 15 root files into 5 purpose-driven packages (events, workspace, context, scheduling, persistence) following IG-047 Module Self-Containment pattern. Zero breaking changes through lazy loading facade.
+
+- **IG-047:** Module Self-Containment — established pattern for self-contained modules with events, plugin, and implementation together.

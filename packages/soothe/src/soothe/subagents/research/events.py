@@ -174,7 +174,7 @@ class ResearchJudgementEvent(SootheEvent):
 # Register all research events with the global registry
 from soothe_sdk.core.verbosity import VerbosityTier  # noqa: E402
 
-from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.events import register_event  # noqa: E402
 
 # Dispatch/Complete events visible at NORMAL (user wants to see start/end)
 register_event(
