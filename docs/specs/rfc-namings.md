@@ -42,7 +42,6 @@ This document defines the terminology and naming conventions used in this projec
 | `ContextMiddleware` | deepagents `AgentMiddleware` that manages `ContextProtocol` integration. | RFC-001 |
 | `DurabilityProtocol` | Protocol for thread lifecycle management and state persistence. | RFC-001 |
 | `ThreadInfo` | Data model for thread state (id, status, timestamps, metadata). | RFC-001 |
-| `RemoteAgentProtocol` | Protocol for invoking remote agents (ACP, A2A, LangGraph). | RFC-001 |
 | `ConcurrencyPolicy` | Data model controlling parallel execution of steps, subagents, and tools. | RFC-001 |
 | `StepResult` | Data model for a completed plan step's output and status. | RFC-001 |
 

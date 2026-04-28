@@ -153,7 +153,6 @@ packages/
 | `cognition/planning/` | PlannerProtocol (Simple, Subagent, Claude, Auto) |
 | `backends/policy/` | PolicyProtocol (ConfigDrivenPolicy) |
 | `backends/durability/` | DurabilityProtocol (Json, RocksDB, PostgreSQL) |
-| `core/remote_agent/` | RemoteAgentProtocol (LangGraphRemoteAgent) |
 | `backends/persistence/` | PersistStore for context/memory/durability |
 | `backends/vector_store/` | VectorStoreProtocol (PGVector, Weaviate, InMemory) |
 

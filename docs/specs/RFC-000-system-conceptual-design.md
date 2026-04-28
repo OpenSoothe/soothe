@@ -60,7 +60,7 @@ Soothe operates through a hierarchical execution model with three distinct layer
 |  - Layer 1: CoreAgent Runtime                        |
 |  - ContextProtocol, MemoryProtocol,                  |
 |    PlannerProtocol, PolicyProtocol,                  |
-|    DurabilityProtocol, RemoteAgentProtocol           |
+|    DurabilityProtocol                                |
 +------------------------------------------------------+
 |  deepagents (agent framework)                        |
 |  - BackendProtocol, AgentMiddleware,                 |
@@ -128,10 +128,6 @@ Checks whether a given action (tool call, subagent spawn, MCP connect) is permit
 ### Durability (`DurabilityProtocol`)
 
 Persists and restores agent state including thread lifecycle management (create/resume/suspend/archive). The protocol is backend-agnostic; the default implementation uses LangGraph Checkpointer + BaseStore.
-
-### Remote Agent (`RemoteAgentProtocol`)
-
-Invokes a remote agent and returns results. Implementations for ACP, A2A, and LangGraph RemoteGraph. Future: each will be wrapped as a deepagents `CompiledSubAgent` for uniform access via the `task` tool. Current: `LangGraphRemoteAgent` uses direct `RemoteAgentProtocol` access; wrapping will be implemented when ACP/A2A backends are added.
 
 ### Plan (data model)
 
@@ -215,6 +211,6 @@ This is the foundational Conceptual Design spec. All subsequent Architecture Des
 - [RFC Index](./rfc-index.md) - All RFCs
 - [RFC-200](./RFC-200-autonomous-goal-management.md) - Layer 3: Autonomous Goal Management
 - [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - Layer 2: AgentLoop Plan-Execute Loop
-- [RFC-400](./RFC-400-context-protocol-architecture.md) through [RFC-410](./RFC-410-remote-agent-protocol-architecture.md) - Core protocol architecture set
+- [RFC-400](./RFC-400-context-protocol-architecture.md) through [RFC-408](./RFC-408-durability-protocol-architecture.md) - Core protocol architecture set
 
 **Note**: RFC consolidation completed 2026-04-17. Canonical merged RFCs are maintained in `docs/specs/`; legacy files are retained for historical context with explicit redirects.

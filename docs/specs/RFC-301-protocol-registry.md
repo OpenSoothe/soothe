@@ -12,7 +12,7 @@
 
 ## 1. Abstract
 
-This RFC defines the interface contracts for Soothe's protocol layer excluding Context and Memory (covered in RFC-400 and RFC-402). It specifies PlannerProtocol, PolicyProtocol, DurabilityProtocol, RemoteAgentProtocol, and VectorStoreProtocol with their data structures, method signatures, and implementation patterns.
+This RFC defines the interface contracts for Soothe's protocol layer excluding Context and Memory (covered in RFC-400 and RFC-402). It specifies PlannerProtocol, PolicyProtocol, DurabilityProtocol, and VectorStoreProtocol with their data structures, method signatures, and implementation patterns.
 
 ---
 
@@ -22,7 +22,7 @@ This RFC defines the interface contracts for Soothe's protocol layer excluding C
 
 This RFC defines:
 
-* Interface contracts for 5 core protocols
+* Interface contracts for 4 core protocols
 * Data structures used across protocol implementations
 * Naming conventions for protocol implementations
 * Backend discovery and configuration patterns
@@ -59,7 +59,6 @@ Pattern: `{Method}{Protocol}` where `{Method}` describes the implementation appr
 | PlannerProtocol | `LLMPlanner` | `LLMPlanner` (after IG-150 consolidation) |
 | PolicyProtocol | `{Source}Policy` | `ConfigDrivenPolicy`, `DatabasePolicy` |
 | DurabilityProtocol | `{Store}Durability` | `JsonDurability`, `PostgreSQLDurability` |
-| RemoteAgentProtocol | `{Transport}RemoteAgent` | `LangGraphRemoteAgent`, `A2ARemoteAgent` |
 | VectorStoreProtocol | `{Provider}VectorStore` | `PGVectorStore`, `WeaviateStore`, `InMemoryVectorStore` |
 
 ### 4.2 Configuration Keys
@@ -286,33 +285,7 @@ class DurabilityProtocol(Protocol):
         ...
 ```
 
-### 6.4 RemoteAgentProtocol
-
-```python
-@runtime_checkable
-class RemoteAgentProtocol(Protocol):
-    async def invoke(
-        self,
-        task: str,
-        context: dict[str, Any] | None = None,
-    ) -> str:
-        """Invoke remote agent, return result."""
-        ...
-
-    async def stream(
-        self,
-        task: str,
-        context: dict[str, Any] | None = None,
-    ) -> AsyncIterator[str]:
-        """Stream results from remote agent."""
-        ...
-
-    async def health_check(self) -> bool:
-        """Check if remote agent is reachable."""
-        ...
-```
-
-### 6.5 VectorStoreProtocol
+### 6.4 VectorStoreProtocol
 
 ```python
 @runtime_checkable

@@ -13,7 +13,6 @@ RFC Mapping:
 - RFC-405 → RFC-404 (PlannerProtocol)
 - RFC-407 → RFC-406 (PolicyProtocol)
 - RFC-409 → RFC-203 (CheckpointEnvelope moved to Layer 2)
-- RFC-411, RFC-412, RFC-413 → RFC-410 (RemoteAgentProtocol)
 """
 
 import re
@@ -34,9 +33,6 @@ RFC_MAPPING = {
     "405": "404",
     "407": "406",
     "409": "203",  # Moved to Layer 2
-    "411": "410",
-    "412": "410",
-    "413": "410",
 }
 
 def update_rfc_references(content: str) -> str:
