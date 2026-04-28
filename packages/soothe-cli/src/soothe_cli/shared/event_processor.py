@@ -781,8 +781,6 @@ class EventProcessor:
 
         category = classify_event_to_tier(etype, namespace)
 
-        # IG-304: client-side suppression/execute-phase gating removed.
-
         # Update plan state and call specific hooks
         if etype == PLAN_CREATED:
             self._handle_plan_created(data)
@@ -870,7 +868,7 @@ class EventProcessor:
         we use sensible defaults based on initialization parameters.
 
         Returns:
-            Dict with enabled, mode, execution_streaming, synthesis_streaming fields.
+            Dict with enabled, mode, and synthesis_streaming fields.
         """
         # Use defaults - streaming is enabled by default per RFC-614
         # final_output_mode controls batch/streaming display mode
@@ -879,7 +877,6 @@ class EventProcessor:
             "mode": self._final_output_mode
             if self._final_output_mode in {"streaming", "batch"}
             else "streaming",
-            "execution_streaming": True,
             "synthesis_streaming": True,
         }
 
@@ -908,8 +905,6 @@ class EventProcessor:
             return False
 
         # Check specific streaming flags
-        if etype == "soothe.output.execution.streaming":
-            return config.get("execution_streaming", True)
         if etype == "soothe.output.goal_completion.streaming":
             return config.get("synthesis_streaming", True)
         if etype == "soothe.output.tool_response.streaming":
