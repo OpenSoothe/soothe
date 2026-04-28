@@ -4092,8 +4092,6 @@ class SootheApp(App):
                         payloads.append(value)
 
                 for event_payload in payloads:
-                    event_type = event_payload.get("type", "")
-
                     event_for_pipeline = dict(event_payload)
                     event_for_pipeline["namespace"] = list(namespace)
                     lines = progress_pipeline.process(event_for_pipeline)

@@ -54,7 +54,7 @@ class RendererProtocol(Protocol):
         Implementations may choose different display styles for different event types.
 
         Args:
-            event_type: Event type string (e.g., "soothe.output.execution.streaming").
+            event_type: Event type string.
             text: Text content (may be chunk or final).
             is_chunk: True if partial chunk, False if final.
             namespace: Namespace tuple for stream context.

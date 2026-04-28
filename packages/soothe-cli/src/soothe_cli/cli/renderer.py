@@ -145,8 +145,8 @@ class CliRenderer(RendererBase):
     ) -> None:
         """Write assistant text to stdout.
 
-        Write assistant text directly. Daemon-side output contract now owns
-        execute-phase suppression boundaries (IG-304).
+        Write assistant text directly. Daemon-side output contract decides
+        which assistant text reaches clients.
 
         Args:
             text: Text content to display.
@@ -183,7 +183,7 @@ class CliRenderer(RendererBase):
         CLI renderer treats all streaming output as assistant text.
 
         Args:
-            event_type: Event type string (e.g., "soothe.output.execution.streaming").
+            event_type: Event type string.
             text: Text content (may be chunk or final).
             is_chunk: True if partial chunk, False if final.
             namespace: Namespace tuple for stream context (ignored in CLI headless mode).
