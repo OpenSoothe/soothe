@@ -70,10 +70,7 @@ class AgentLoopCheckpointPersistenceManager:
         """
         await self._backend.register_loop(loop_id, thread_ids, current_thread_id, status)
         logger.debug(
-            "Registered loop: loop=%s threads=%s current_thread=%s",
-            loop_id,
-            thread_ids,
-            current_thread_id,
+            "Registered loop: loop=%s threads=%s current=%s", loop_id, thread_ids, current_thread_id
         )
 
     async def save_checkpoint_anchor(
@@ -107,7 +104,7 @@ class AgentLoopCheckpointPersistenceManager:
             execution_summary,
         )
         logger.debug(
-            "Saved checkpoint anchor: loop=%s iteration=%d thread=%s checkpoint=%s type=%s",
+            "Saved anchor: loop=%s iter=%d thread=%s checkpoint=%s type=%s",
             loop_id,
             iteration,
             thread_id,
@@ -303,7 +300,7 @@ class AgentLoopCheckpointPersistenceManager:
             goal_id, loop_id, goal_text, thread_id, iteration, status, started_at_iso
         )
         logger.debug(
-            "Saved goal record: goal=%s loop=%s thread=%s status=%s",
+            "Saved goal: id=%s loop=%s thread=%s status=%s",
             goal_id,
             loop_id,
             thread_id,
@@ -347,7 +344,7 @@ class AgentLoopCheckpointPersistenceManager:
             completed_at_iso,
         )
         logger.debug(
-            "Updated goal record: goal=%s loop=%s status=%s duration=%dms",
+            "Updated goal: id=%s loop=%s status=%s dur=%dms",
             goal_id,
             loop_id,
             status,
@@ -459,7 +456,7 @@ class AgentLoopCheckpointPersistenceManager:
         md_path.write_text("\n".join(md_parts), encoding="utf-8")
 
         logger.debug(
-            "Wrote step report markdown: step=%s goal=%s loop=%s path=%s",
+            "Wrote step report: step=%s goal=%s loop=%s path=%s",
             step_id,
             goal_id,
             loop_id,

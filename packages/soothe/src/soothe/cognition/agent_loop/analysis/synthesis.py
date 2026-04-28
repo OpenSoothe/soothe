@@ -1,7 +1,14 @@
-"""Synthesis phase for comprehensive final report generation (RFC-603).
+"""Synthesis execution logic for comprehensive final report generation (RFC-603, IG-296).
 
-This module implements an optional synthesis phase that generates comprehensive
-final reports from accumulated evidence using evidence-based trigger criteria.
+This module contains ONLY execution logic:
+- SynthesisPhase class (LLM calls, goal classification, prompt building)
+- Implementation of synthesis generation
+
+Decision logic moved to synthesis_policy.py (IG-296).
+
+Separation of concerns:
+- policies/synthesis_policy.py: Decision logic ("should we synthesize?")
+- analysis/synthesis.py: Execution logic ("how to synthesize?")
 """
 
 from __future__ import annotations
@@ -9,53 +16,17 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from soothe.cognition.agent_loop.policies.synthesis_policy import evidence_requires_final_synthesis
 from soothe.cognition.agent_loop.state.schemas import LoopState, PlanResult
 from soothe.cognition.agent_loop.utils.messages import LoopHumanMessage
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
 
-# Synthesis trigger thresholds (internal constants, not exposed to users)
-_SYNTHESIS_MIN_STEPS = 2
-_SYNTHESIS_MIN_SUCCESS_RATE = 0.6
-_SYNTHESIS_MIN_EVIDENCE_LENGTH = 500
-_SYNTHESIS_MIN_UNIQUE_STEPS = 2
-
-# Goal classification thresholds
+# Goal classification thresholds (internal constants for execution logic)
 _MIN_DIRECTORIES_FOR_ARCHITECTURE = 3
 _MIN_FINDINGS_FOR_RESEARCH = 3
 _MIN_CODE_MENTIONS_FOR_IMPLEMENTATION = 5
-
-
-def evidence_requires_final_synthesis(state: LoopState, plan_result: PlanResult) -> bool:
-    """Return True when accumulated step evidence warrants a consolidated synthesis pass.
-
-    Uses the same evidence-based thresholds as ``SynthesisPhase.should_synthesize`` (RFC-603).
-
-    Args:
-        state: Loop state with accumulated step results.
-        plan_result: Final plan result (reserved for future hints).
-
-    Returns:
-        True if a final thread synthesis should run based on evidence volume and diversity.
-    """
-    _ = plan_result
-    if len(state.step_results) < _SYNTHESIS_MIN_STEPS:
-        return False
-
-    successful_steps = [r for r in state.step_results if r.success]
-    if not successful_steps:
-        return False
-    success_rate = len(successful_steps) / len(state.step_results)
-    if success_rate < _SYNTHESIS_MIN_SUCCESS_RATE:
-        return False
-
-    total_evidence_length = sum(len(r.to_evidence_string(truncate=False)) for r in successful_steps)
-    if total_evidence_length < _SYNTHESIS_MIN_EVIDENCE_LENGTH:
-        return False
-
-    unique_step_ids = {r.step_id for r in successful_steps}
-    return len(unique_step_ids) >= _SYNTHESIS_MIN_UNIQUE_STEPS
 
 
 class SynthesisPhase:

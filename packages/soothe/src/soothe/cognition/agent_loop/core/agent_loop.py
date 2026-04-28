@@ -9,24 +9,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.agent_loop.branching.anchor_manager import CheckpointAnchorManager
+from soothe.cognition.agent_loop.completion.goal_completion import GoalCompletionModule
 from soothe.cognition.agent_loop.context.goal_context_manager import GoalContextManager
 from soothe.cognition.agent_loop.core.executor import Executor
 from soothe.cognition.agent_loop.core.plan_phase import PlanPhase
-from soothe.cognition.agent_loop.policies.final_response_policy import (
-    needs_final_thread_synthesis,
-    should_return_goal_completion_directly,
-)
 from soothe.cognition.agent_loop.state.schemas import AgentDecision, LoopState, PlanResult
 from soothe.cognition.agent_loop.state.state_manager import AgentLoopStateManager
 from soothe.cognition.agent_loop.state.working_memory import LoopWorkingMemory
-from soothe.cognition.agent_loop.utils.messages import LoopHumanMessage
 from soothe.cognition.agent_loop.utils.reflection import _default_agent_decision
-from soothe.cognition.agent_loop.utils.stream_normalize import (
-    GoalCompletionAccumState,
-    iter_messages_for_act_aggregation,
-    resolve_goal_completion_text,
-    update_goal_completion_from_message,
-)
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.utils.text_preview import log_preview, preview_first
@@ -217,7 +207,7 @@ class AgentLoop:
             checkpoint.status = "running"
 
             logger.debug(
-                "[DEBUG agent_loop] Created goal_record id=%s, goal_history index=%d, object_id=%d",
+                "created goal: id=%s idx=%d obj=%d",
                 goal_record.goal_id,
                 checkpoint.current_goal_index,
                 id(goal_record),
@@ -326,188 +316,25 @@ class AgentLoop:
                     working_memory=state.working_memory,
                 )
 
-                # RFC-211 / IG-199: Goal completion — adaptive second CoreAgent turn vs last Execute text
-                # NEVER leak internal evidence_summary to users
-                # Generate user-friendly summary instead when full_output is empty
-                if plan_result.full_output:
-                    final_output = plan_result.full_output
-                elif state.step_results:
-                    # Generate user-friendly completion summary from successful steps
-                    successful_count = sum(1 for r in state.step_results if r.success)
-                    total_count = len(state.step_results)
-                    final_output = f"Completed {successful_count}/{total_count} steps successfully. {plan_result.next_action or ''}"
-                else:
-                    # No steps executed, use next_action as summary
-                    final_output = plan_result.next_action or "Goal achieved successfully"
-
-                # Determine response length category from intent and evidence
-                from soothe.cognition.agent_loop.policies.response_length_policy import (
-                    calculate_evidence_metrics,
-                    determine_response_length,
+                # RFC-615 / IG-297: Goal completion — delegate to GoalCompletionModule
+                # Simplified from ~200 lines to ~10 lines of module orchestration
+                completion_module = GoalCompletionModule(
+                    self.core_agent,
+                    self.loop_planner._model,
+                    self.config,
                 )
 
-                evidence_volume, evidence_diversity = calculate_evidence_metrics(state.step_results)
-
-                # Determine response length category
-                intent_type = "new_goal"  # Default
-                goal_type = "general_synthesis"  # Default
-                task_complexity = "medium"  # Default
-
-                # Extract intent classification metadata if available
-                if state.intent and hasattr(state.intent, "intent_type"):
-                    intent_type = state.intent.intent_type
-                    task_complexity = getattr(state.intent, "task_complexity", "medium")
-
-                # Classify goal type from evidence patterns (reuse synthesis logic)
-                from soothe.cognition.agent_loop.analysis.synthesis import SynthesisPhase
-
-                evidence_for_classification = "\n\n".join(
-                    r.to_evidence_string(truncate=False) for r in state.step_results if r.success
-                )
-                goal_type = SynthesisPhase(self.loop_planner._model)._classify_goal_type(
-                    evidence_for_classification
+                # Complete goal with modular strategy pattern
+                updated_result, stream_gen = await completion_module.complete_goal(
+                    goal, state, plan_result
                 )
 
-                length_category = determine_response_length(
-                    intent_type=intent_type,
-                    goal_type=goal_type,
-                    task_complexity=task_complexity,
-                    evidence_volume=evidence_volume,
-                    evidence_diversity=evidence_diversity,
-                )
+                # Yield stream chunks (for synthesis strategy)
+                async for chunk in stream_gen:
+                    yield chunk
 
-                logger.info(
-                    "Response length category: %s (%d-%d words, intent=%s, goal_type=%s, evidence_volume=%d chars, diversity=%d steps)",
-                    length_category.value,
-                    length_category.min_words,
-                    length_category.max_words,
-                    intent_type,
-                    goal_type,
-                    evidence_volume,
-                    evidence_diversity,
-                )
-
-                # Use planner's decision to skip goal completion LLM call when possible
-                if not plan_result.require_goal_completion:
-                    reuse = (state.last_execute_assistant_text or "").strip()
-                    final_output = reuse
-                    logger.info(
-                        "Goal completion: branch=planner_skip assistant_chars=%d",
-                        len(reuse),
-                    )
-                else:
-                    # Always use adaptive mode
-                    mode = "adaptive"
-                    direct_goal_completion = should_return_goal_completion_directly(
-                        state,
-                        plan_result,
-                        mode,
-                        response_length_category=length_category.value,
-                    )
-                    run_goal_completion_synthesis = (
-                        not direct_goal_completion
-                        and needs_final_thread_synthesis(state, plan_result, mode)
-                    )
-
-                    if direct_goal_completion:
-                        reuse = (state.last_execute_assistant_text or "").strip()
-                        final_output = reuse
-                        logger.info(
-                            "Goal completion: branch=direct assistant_chars=%d",
-                            len(reuse),
-                        )
-                    elif run_goal_completion_synthesis:
-                        logger.info(
-                            "Goal completion: branch=synthesis full_output=%d chars evidence=%d chars",
-                            len(plan_result.full_output or ""),
-                            len(plan_result.evidence_summary or ""),
-                        )
-
-                        try:
-                            goal_completion_request = f"""Based on the complete execution history in this thread, generate a goal completion response for: {goal}
-
-RESPONSE LENGTH: {length_category.min_words}-{length_category.max_words} words ({length_category.value} category)
-
-{self._get_length_guidance(length_category)}
-
-The response should:
-1. Summarize what was accomplished
-2. **Include actual content** from content-retrieval tools (read_file, web_search, fetch_url, ls, glob, etc.)
-   - ToolMessage.content contains the actual file content, search results, etc.
-   - Extract and present this actual content directly, not just summaries
-   - For file reading: show the actual file content (with line numbers if applicable)
-   - For web/research: show actual search results or fetched content
-3. Provide actionable results or deliverables
-4. Be well-structured with clear sections
-5. Match the response length guidance above
-
-IMPORTANT: The user wants to see the actual content retrieved, not just confirmation messages. Extract content from ToolMessage.content in the conversation history and present it appropriately for the response length category.
-
-Use all tool results and AI responses available in the conversation history."""
-
-                            logger.debug(
-                                "[Human Message] Goal completion request: %s",
-                                log_preview(goal_completion_request, chars=150),
-                            )
-                            human_msg = LoopHumanMessage(
-                                content=goal_completion_request,
-                                thread_id=state.thread_id,
-                                iteration=state.iteration,  # Final iteration
-                                goal_summary=state.goal[:200] if state.goal else None,
-                                phase="goal_completion",
-                            )
-                            accum = GoalCompletionAccumState()
-                            chunk_count = 0
-                            async for chunk in self.core_agent.astream(
-                                {"messages": [human_msg]},
-                                config={"configurable": {"thread_id": state.thread_id}},
-                                stream_mode=["messages"],
-                                subgraphs=False,
-                            ):
-                                chunk_count += 1
-                                for msg in iter_messages_for_act_aggregation(chunk):
-                                    update_goal_completion_from_message(accum, msg)
-                                # Yield stream chunks with special event type for goal completion
-                                # This bypasses runner filtering so all AI text reaches CLI/TUI
-                                yield ("goal_completion_stream", chunk)
-
-                            last_ai_text = resolve_goal_completion_text(accum)
-
-                            logger.info(
-                                "Stream: chunks=%d ai_msgs=%d chars=%d",
-                                chunk_count,
-                                accum.ai_msg_count,
-                                len(last_ai_text),
-                            )
-                            if last_ai_text:
-                                final_output = last_ai_text
-                                logger.info(
-                                    "Goal completion: synthesis=%d chars", len(final_output)
-                                )
-                            else:
-                                logger.warning("No AI text from CoreAgent")
-
-                        except Exception as e:
-                            logger.warning("Goal completion failed: %s", e)
-                    else:
-                        logger.info(
-                            "Goal completion: branch=summary chars=%d", len(final_output or "")
-                        )
-
-                # Update plan_result with final output
-                if (
-                    final_output != plan_result.full_output
-                    or plan_result.response_length_category != length_category.value
-                ):
-                    plan_result = plan_result.model_copy(
-                        update={
-                            "full_output": final_output,
-                            "response_length_category": length_category.value,
-                        }
-                    )
-
-                # Finalize goal
-                await state_manager.finalize_goal(goal_record, final_output)
+                # Finalize goal with final output
+                await state_manager.finalize_goal(goal_record, updated_result.full_output)
                 logger.info(
                     "Goal completed: iterations=%d duration=%dms",
                     state.iteration,
@@ -516,7 +343,7 @@ Use all tool results and AI responses available in the conversation history."""
                 yield (
                     "completed",
                     {
-                        "result": plan_result,
+                        "result": updated_result,
                         "step_results_count": len(state.step_results),
                     },
                 )
@@ -796,31 +623,3 @@ Use all tool results and AI responses available in the conversation history."""
             git_status=state.git_status,
             working_memory_excerpt=wm_excerpt,
         )
-
-    def _get_length_guidance(self, length_category) -> str:
-        """Get response length guidance text for the given category.
-
-        Args:
-            length_category: ResponseLengthCategory enum value
-
-        Returns:
-            Guidance text for the response length category
-        """
-        from soothe.cognition.agent_loop.policies.response_length_policy import (
-            ResponseLengthCategory,
-        )
-
-        if length_category == ResponseLengthCategory.BRIEF:
-            return """Be concise: Lead with answer, no preamble, 1-3 sentences.
-Focus on essential information only."""
-        elif length_category == ResponseLengthCategory.CONCISE:
-            return """Be direct: Brief synthesis, 2-4 key points, avoid repetition.
-Provide incremental updates building on prior context."""
-        elif length_category == ResponseLengthCategory.STANDARD:
-            return """Be comprehensive: 3-5 sections, specific numbers, clear structure.
-Include methodology and key findings with concrete evidence."""
-        elif length_category == ResponseLengthCategory.COMPREHENSIVE:
-            return """Be thorough: Full structured report, concrete examples, detailed breakdown.
-Provide complete analysis with all relevant details organized into clear sections."""
-        else:
-            return """Provide a well-structured response matching the task complexity."""

@@ -1,8 +1,8 @@
-"""Tests for adaptive AgentLoop final response policy (IG-199)."""
+"""Tests for synthesis policy (IG-199, IG-296)."""
 
-from soothe.cognition.agent_loop.analysis.synthesis import evidence_requires_final_synthesis
-from soothe.cognition.agent_loop.policies.final_response_policy import (
+from soothe.cognition.agent_loop.policies.synthesis_policy import (
     assemble_assistant_text_from_stream_messages,
+    evidence_requires_final_synthesis,
     needs_final_thread_synthesis,
     should_return_goal_completion_directly,
 )

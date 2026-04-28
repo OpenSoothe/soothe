@@ -199,7 +199,7 @@ def _repair_truncated_json(text: str) -> str:
 
     if repair:
         logger.debug(
-            "[JSON-Repair] added %d chars (%s) to truncated JSON",
+            "JSON-Repair added %d chars (%s) to truncated JSON",
             len(repair),
             repair,
         )
@@ -238,7 +238,7 @@ def _load_llm_json_dict(response: str) -> dict[str, Any]:
         parsed = _try_parse_json_dict(cand)
         if parsed is not None:
             if cand != candidates[0]:
-                logger.debug("Parsed LLM JSON using fallback candidate (length=%d)", len(cand))
+                logger.debug("Parsed LLM JSON using fallback candidate: len=%d", len(cand))
             return parsed
         try:
             loaded = json.loads(_strip_trailing_commas_json(cand))

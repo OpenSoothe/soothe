@@ -265,4 +265,5 @@ class AgentLoopCheckpoint(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    schema_version: str = "2.0"  # RFC-608: v2.0 for multi-thread
+    # Metadata (informational only, no migration logic)
+    schema_version: str = "3.1"  # Current schema version

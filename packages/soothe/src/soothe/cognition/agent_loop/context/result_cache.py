@@ -124,12 +124,12 @@ class ToolResultCache:
         file_path = self.cache_dir / f"{tool_call_id}.json"
 
         if not file_path.exists():
-            logger.debug("Cache miss for tool result %s", tool_call_id)
+            logger.debug("Cache miss: tool_result=%s", tool_call_id)
             return None
 
         try:
             data = json.loads(file_path.read_text(encoding="utf-8"))
-            logger.debug("Cache hit for tool result %s", tool_call_id)
+            logger.debug("Cache hit: tool_result=%s", tool_call_id)
             return data
         except (json.JSONDecodeError, OSError):
             logger.exception("Failed to load cached tool result %s", tool_call_id)

@@ -131,7 +131,7 @@ class ThreadSwitchPolicyManager:
         # Placeholder for custom trigger evaluation
         # Could use safe expression parser or predefined operators
         # Example: {"trigger_condition": "custom_metrics.error_rate > threshold"}
-        logger.debug("Custom trigger '%s' evaluation (placeholder)", trigger.trigger_name)
+        logger.debug("Custom trigger eval: %s (placeholder)", trigger.trigger_name)
 
         # Safe custom metric evaluation (predefined operators only)
         try:

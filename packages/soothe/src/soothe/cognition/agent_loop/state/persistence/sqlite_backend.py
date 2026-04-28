@@ -30,8 +30,6 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
     IG-055: Backend-agnostic implementation with instance-level connection pooling.
     """
 
-    SCHEMA_VERSION = "3.1"
-
     def __init__(self, db_path: Path, pool_size: int = 5) -> None:
         """Initialize SQLite backend with connection pool.
 
@@ -230,7 +228,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         )
         conn.commit()
         logger.debug(
-            "Saved anchor: loop=%s iteration=%d thread=%s checkpoint=%s type=%s",
+            "Saved anchor: loop=%s iter=%d thread=%s checkpoint=%s type=%s",
             loop_id,
             iteration,
             thread_id,
@@ -411,7 +409,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             ),
         )
         conn.commit()
-        logger.debug("Saved branch: branch=%s loop=%s iteration=%d", branch_id, loop_id, iteration)
+        logger.debug("Saved branch: branch=%s loop=%s iter=%d", branch_id, loop_id, iteration)
 
     async def update_branch_analysis(
         self,
@@ -462,7 +460,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             ),
         )
         conn.commit()
-        logger.debug("Updated branch analysis: branch=%s loop=%s", branch_id, loop_id)
+        logger.debug("Updated branch: branch=%s loop=%s", branch_id, loop_id)
 
     async def get_failed_branches_for_loop(
         self, loop_id: str, limit: int = 10
@@ -569,7 +567,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         )
         conn.commit()
         logger.debug(
-            "Saved goal: goal=%s loop=%s iteration=%d status=%s",
+            "Saved goal: id=%s loop=%s iter=%d status=%s",
             goal_id,
             loop_id,
             iteration,
@@ -639,7 +637,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         )
         conn.commit()
         logger.debug(
-            "Updated goal: goal=%s loop=%s status=%s duration=%dms",
+            "Updated goal: id=%s loop=%s status=%s dur=%dms",
             goal_id,
             loop_id,
             status,
@@ -802,41 +800,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
 
             db.commit()
 
-        # Migrate existing records to current schema version
-        SQLitePersistenceBackend.migrate_schema_version(db_path)
-
         logger.info("Initialized SQLite database schema at %s", db_path)
-
-    @staticmethod
-    def migrate_schema_version(db_path: Path, target_version: str = "3.1") -> None:
-        """Migrate existing loop records to target schema version.
-
-        Args:
-            db_path: Path to SQLite database file.
-            target_version: Target schema version (default: 3.1)
-        """
-        if not db_path.exists():
-            return
-
-        with sqlite3.connect(db_path) as db:
-            db.execute("PRAGMA foreign_keys=ON")
-
-            # Check if there are any loops
-            count_result = db.execute("SELECT COUNT(*) FROM agentloop_loops").fetchone()
-            loop_count = count_result[0] if count_result else 0
-
-            if loop_count == 0:
-                return
-
-            # Update schema version for all loops
-            logger.info(
-                "Migrating schema version to %s for %d existing loops",
-                target_version,
-                loop_count,
-            )
-            db.execute("UPDATE agentloop_loops SET schema_version = ?", (target_version,))
-            db.commit()
-            logger.info("Schema migration completed successfully")
 
     @staticmethod
     async def initialize_database(db_path: Path) -> None:
