@@ -23,12 +23,12 @@ from soothe.cognition.agent_loop.state.persistence.directory_manager import (
 from soothe.cognition.agent_loop.state.persistence.manager import (
     AgentLoopCheckpointPersistenceManager,
 )
-from soothe.core.event_constants import (
+from soothe.core.event_replay import reconstruct_event_stream
+from soothe.core.events import (
     BRANCH_CREATED,
     ITERATION_COMPLETED,
     ITERATION_STARTED,
 )
-from soothe.core.event_replay import reconstruct_event_stream
 
 
 @contextmanager
@@ -436,7 +436,7 @@ async def test_loop_reattachment_with_thread_switch(tmp_path):
         event_stream = await reconstruct_event_stream(loop_id, persistence_manager)
 
         # Verify THREAD_SWITCHED event
-        from soothe.core.event_constants import THREAD_SWITCHED
+        from soothe.core.events import THREAD_SWITCHED
 
         thread_switch_events = [e for e in event_stream if e["type"] == THREAD_SWITCHED]
         assert len(thread_switch_events) == 1

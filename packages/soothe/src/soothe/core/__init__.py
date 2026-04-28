@@ -32,7 +32,8 @@ def __getattr__(name: str) -> Any:
 
         return SootheRunner
     if name == "ConfigDrivenPolicy":
-        from soothe.core.config_driven import ConfigDrivenPolicy
+        # NEW: Import from persistence package
+        from soothe.core.persistence import ConfigDrivenPolicy
 
         return ConfigDrivenPolicy
     if name == "PromptBuilder":
@@ -44,23 +45,28 @@ def __getattr__(name: str) -> Any:
 
         return INVALID_WORKSPACE_DIRS
     if name == "resolve_daemon_workspace":
+        # NEW: Import from workspace package
         from soothe.core.workspace import resolve_daemon_workspace
 
         return resolve_daemon_workspace
     if name == "validate_client_workspace":
+        # NEW: Import from workspace package
         from soothe.core.workspace import validate_client_workspace
 
         return validate_client_workspace
     if name == "ResolvedWorkspace":
-        from soothe.core.workspace_resolution import ResolvedWorkspace
+        # NEW: Import from workspace package
+        from soothe.core.workspace import ResolvedWorkspace
 
         return ResolvedWorkspace
     if name == "resolve_workspace_for_stream":
-        from soothe.core.workspace_resolution import resolve_workspace_for_stream
+        # NEW: Import from workspace package
+        from soothe.core.workspace import resolve_workspace_for_stream
 
         return resolve_workspace_for_stream
     if name == "FrameworkFilesystem":
-        from soothe.core.filesystem import FrameworkFilesystem
+        # NEW: Import from workspace package
+        from soothe.core.workspace import FrameworkFilesystem
 
         return FrameworkFilesystem
 

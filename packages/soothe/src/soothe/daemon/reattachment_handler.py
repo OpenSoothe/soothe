@@ -15,11 +15,11 @@ from typing import Any
 from soothe.cognition.agent_loop.state.persistence.manager import (
     AgentLoopCheckpointPersistenceManager,
 )
-from soothe.core.event_constants import HISTORY_REPLAY_COMPLETE, LOOP_REATTACHED
 from soothe.core.event_replay import (
     enrich_events_with_coreagent_details,
     reconstruct_event_stream,
 )
+from soothe.core.events import HISTORY_REPLAY_COMPLETE, LOOP_REATTACHED
 
 logger = logging.getLogger(__name__)
 

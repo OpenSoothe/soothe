@@ -559,7 +559,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """
         from datetime import UTC, datetime
 
-        from soothe.core.event_catalog import DaemonHeartbeatEvent
+        from soothe.core.events import DaemonHeartbeatEvent
 
         while self._running:
             await asyncio.sleep(_HEARTBEAT_INTERVAL_S)
@@ -762,7 +762,7 @@ class SootheDaemon(DaemonHandlersMixin):
             thread_id = self._runner.current_thread_id if self._runner else None
 
         # Get event metadata for filtering (RFC-0022)
-        from soothe.core.event_catalog import REGISTRY
+        from soothe.core.events import REGISTRY
 
         # For custom events, the actual event type is inside data["type"]
         event_type_for_meta = msg_type

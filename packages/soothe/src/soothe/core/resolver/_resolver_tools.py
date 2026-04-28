@@ -196,7 +196,7 @@ def _resolve_single_tool_group(name: str, config: SootheConfig | None = None) ->
     """
     import time
 
-    from soothe.core.lazy_tools import cache_tools, get_cached_tools
+    from soothe.core.scheduling.tool_cache import cache_tools, get_cached_tools
 
     cached = get_cached_tools(name)
     if cached is not None:

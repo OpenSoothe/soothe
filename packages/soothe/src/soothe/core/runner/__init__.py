@@ -31,7 +31,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
-from soothe.core.workspace_resolution import resolve_workspace_for_stream
+from soothe.core.workspace import resolve_workspace_for_stream
 from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
 
@@ -84,12 +84,12 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
         from soothe.cognition.intention import IntentClassifier
         from soothe.core.agent import create_soothe_agent
-        from soothe.core.concurrency import ConcurrencyController
         from soothe.core.resolver import (
             resolve_checkpointer,
             resolve_durability,
             resolve_goal_engine,
         )
+        from soothe.core.scheduling import ConcurrencyController
 
         init_start = time.perf_counter()
 

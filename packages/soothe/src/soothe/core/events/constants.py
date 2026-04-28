@@ -10,7 +10,7 @@ Architecture:
 RFC-0015: 4-segment naming convention: soothe.<domain>.<component>.<action>
 
 Usage:
-    from soothe.core.event_constants import GOAL_CREATED, BRANCH_CREATED
+    from soothe.core.events import GOAL_CREATED, BRANCH_CREATED
 
     # For comparisons, routing, event emission
     if event_type == GOAL_CREATED:

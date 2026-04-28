@@ -10,7 +10,7 @@ import logging
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
-from soothe.core.event_catalog import (
+from soothe.core.events import (
     PlanBatchStartedEvent,
     PlanDagSnapshotEvent,
     PlanStepCompletedEvent,
@@ -56,7 +56,7 @@ class StepLoopMixin:
         """
         import asyncio
 
-        from soothe.core.step_scheduler import StepScheduler
+        from soothe.core.scheduling import StepScheduler
 
         scheduler = StepScheduler(plan)
         parallelism = self._concurrency.step_parallelism

@@ -90,7 +90,7 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
         >>> classify_event_to_tier("thinking.heartbeat", namespace=())
         <VerbosityTier.DEBUG: 3>
     """
-    from soothe.core.event_catalog import REGISTRY
+    from soothe.core.events import REGISTRY
 
     if event_type.startswith("soothe."):
         return REGISTRY.get_verbosity(event_type)

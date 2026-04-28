@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 
     from soothe.cognition.intention import RoutingClassification  # IG-226
     from soothe.config import SootheConfig
-    from soothe.core.tool_context_registry import ToolContextRegistry
-    from soothe.core.tool_trigger_registry import ToolTriggerRegistry
+    from soothe.core.context.tool_registry import ToolContextRegistry
+    from soothe.core.context.trigger_registry import ToolTriggerRegistry
     from soothe.protocols.memory import MemoryItem
 
 logger = logging.getLogger(__name__)

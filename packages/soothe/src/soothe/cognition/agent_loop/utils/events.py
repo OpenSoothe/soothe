@@ -6,7 +6,7 @@ from typing import Literal
 
 from soothe_sdk.core.events import ProtocolEvent
 
-from soothe.core.event_catalog import VerbosityTier, register_event
+from soothe.core.events import VerbosityTier, register_event
 
 
 class LoopAgentReasonEvent(ProtocolEvent):

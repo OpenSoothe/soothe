@@ -17,11 +17,11 @@ and imported here for registry.
 **Usage:**
 
 For type-safe event emission (recommended):
-    from soothe.core.event_catalog import ThreadCreatedEvent, PlanStepStartedEvent
+    from soothe.core.events import ThreadCreatedEvent, PlanStepStartedEvent
     yield custom_event(ThreadCreatedEvent(thread_id=tid).to_dict())
 
 For event type string constants:
-    from soothe.core.event_constants import THREAD_CREATED, PLAN_STEP_STARTED
+    from soothe.core.events import THREAD_CREATED, PLAN_STEP_STARTED
     # Use constants for comparisons, routing, etc.
     if event_type == THREAD_CREATED:
         ...
@@ -44,7 +44,7 @@ from soothe_sdk.core.events import (
 from soothe_sdk.core.verbosity import VerbosityTier
 
 # Import ALL event type constants from single source of truth
-from soothe.core.event_constants import (
+from .constants import (
     AGENT_LOOP_COMPLETED,
     AGENT_LOOP_STARTED,
     AGENT_LOOP_STEP_COMPLETED,
@@ -222,7 +222,7 @@ class AgenticLoopStartedEvent(LifecycleEvent):
     thread_id: str
     goal: str
     max_iterations: int
-    friendly_message: str | None = None  # IG-262: User-friendly task reinterpretation
+    friendly_message: str | None = None  # IG-287: User-friendly task reinterpretation
 
 
 class AgenticLoopCompletedEvent(LifecycleEvent):
@@ -353,7 +353,7 @@ class GoalCreatedEvent(ProtocolEvent):
     goal_id: str = ""
     description: str = ""
     priority: int | str = ""
-    friendly_message: str | None = None  # IG-262: User-friendly task reinterpretation
+    friendly_message: str | None = None  # IG-287: User-friendly task reinterpretation
 
 
 class GoalCompletedEvent(ProtocolEvent):
@@ -619,7 +619,7 @@ def register_event(
     **Usage**:
 
     ```python
-    from soothe.core.event_catalog import register_event, EventPriority
+    from soothe.core.events import register_event, EventPriority
     from soothe_sdk.events import SootheEvent
 
 

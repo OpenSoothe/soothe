@@ -11,8 +11,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.core.event_catalog import custom_event
-from soothe.core.event_constants import BRANCH_RETRY_STARTED
+from soothe.core.events import BRANCH_RETRY_STARTED, custom_event
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver

@@ -13,8 +13,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from soothe.core.event_constants import ERROR
-from soothe.core.workspace_resolution import resolve_workspace_for_stream
+from soothe.core.events import ERROR
+from soothe.core.workspace import resolve_workspace_for_stream
 from soothe.foundation import extract_text_from_ai_message
 from soothe.logging import ThreadLogger
 
@@ -148,7 +148,7 @@ class QueryEngine:
         full_response: list[str] = []
 
         async def _run_stream() -> None:
-            from soothe.core.stream_model_context import (
+            from soothe.core.context.model_override import (
                 attach_stream_model_override,
                 reset_stream_model_override,
             )
@@ -510,7 +510,7 @@ class QueryEngine:
         full_response: list[str] = []
 
         async def _run_stream() -> None:
-            from soothe.core.stream_model_context import (
+            from soothe.core.context.model_override import (
                 attach_stream_model_override,
                 reset_stream_model_override,
             )

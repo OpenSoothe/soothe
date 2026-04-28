@@ -9,10 +9,10 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.core.event_catalog import EventPriority
+from soothe.core.events import EventPriority
 
 if TYPE_CHECKING:
-    from soothe.core.event_catalog import EventMeta
+    from soothe.core.events import EventMeta
 
 logger = logging.getLogger(__name__)
 

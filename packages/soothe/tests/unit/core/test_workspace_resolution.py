@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe.core.workspace_resolution import ResolvedWorkspace, resolve_workspace_for_stream
+from soothe.core.workspace import ResolvedWorkspace, resolve_workspace_for_stream
 
 
 def test_resolve_prefers_explicit_over_thread_and_config(tmp_path: Path, monkeypatch) -> None:

@@ -431,7 +431,7 @@ class IntentClassifier:
             intent.goal_description = query
             logger.debug("Patched missing goal_description")
 
-        # Patch missing friendly_message (IG-262)
+        # Patch missing friendly_message (IG-287)
         if intent.intent_type == "new_goal" and not intent.friendly_message:
             intent.friendly_message = self._generate_friendly_message(query)
             logger.debug("Patched missing friendly_message")
@@ -465,7 +465,7 @@ class IntentClassifier:
         return f"I'll answer that question: {query}"
 
     def _generate_friendly_message(self, query: str) -> str:
-        """Generate friendly message fallback (IG-262).
+        """Generate friendly message fallback (IG-287).
 
         Args:
             query: User query text.

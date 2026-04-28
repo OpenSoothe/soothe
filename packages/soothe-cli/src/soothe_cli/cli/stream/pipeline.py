@@ -196,7 +196,7 @@ class StreamDisplayPipeline:
         Returns:
             Display lines for goal header.
         """
-        # IG-262: Prefer friendly_message over goal/goal_description
+        # IG-287: Prefer friendly_message over goal/goal_description
         friendly_message = event.get("friendly_message")
         goal = friendly_message or event.get("goal", event.get("goal_description", ""))
         if not goal:

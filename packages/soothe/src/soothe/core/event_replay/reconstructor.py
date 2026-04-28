@@ -15,7 +15,7 @@ from typing import Any
 from soothe.cognition.agent_loop.state.persistence.manager import (
     AgentLoopCheckpointPersistenceManager,
 )
-from soothe.core.event_constants import (
+from soothe.core.events import (
     BRANCH_ANALYZED,
     BRANCH_CREATED,
     BRANCH_RETRY_STARTED,

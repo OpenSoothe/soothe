@@ -40,7 +40,7 @@ class RoutingClassification(BaseModel):
 
 
 class IntentClassification(BaseModel):
-    """Primary intent classification model (IG-226, IG-250, IG-262).
+    """Primary intent classification model (IG-226, IG-250, IG-287).
 
     LLM-driven query intent classification determining execution path and goal handling.
     Four-tier classification system with conversation context awareness.
@@ -49,7 +49,7 @@ class IntentClassification(BaseModel):
         intent_type: Primary intent (chitchat | thread_continuation | new_goal | quiz).
         reuse_current_goal: Whether to reuse active goal in current thread.
         goal_description: Normalized goal description for GoalEngine.
-        friendly_message: User-friendly reinterpretation for display (IG-262).
+        friendly_message: User-friendly reinterpretation for display (IG-287).
         task_complexity: Secondary routing complexity level.
         chitchat_response: Direct response for chitchat queries.
         quiz_response: Direct response for quiz/trivia queries.
@@ -69,7 +69,7 @@ class IntentClassification(BaseModel):
     )
     friendly_message: str | None = Field(
         default=None,
-        description="User-friendly task reinterpretation for display (new_goal only, IG-262)",
+        description="User-friendly task reinterpretation for display (new_goal only, IG-287)",
     )
     task_complexity: Literal["chitchat", "quiz", "medium", "complex"] = Field(
         description="Secondary routing complexity level for execution path refinement"

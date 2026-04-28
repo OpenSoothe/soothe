@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.core.event_catalog import AgenticStepCompletedEvent, AgenticStepStartedEvent
+from soothe.core.events import AgenticStepCompletedEvent, AgenticStepStartedEvent
 
 
 def test_agentic_step_started_includes_step_id_in_dict() -> None:

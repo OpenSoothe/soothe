@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.core.artifact_store import RunArtifactStore
+from soothe.core.persistence import RunArtifactStore
 from soothe.core.runner import RunnerState, SootheRunner
 from soothe.core.runner._runner_autonomous import AutonomousMixin
 from soothe.protocols.planner import Plan, PlanStep
