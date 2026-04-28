@@ -4069,10 +4069,10 @@ class SootheApp(App):
                         extracted = extract_ai_text_for_display(message)
                         if extracted:
                             # IG-274: Suppress intermediate AIMessage during multi-step execution
-                            # (matches CLI behavior from IG-143)
-                            if suppression.should_suppress_output():
+                            # or execute-phase (matches CLI behavior from IG-143 + execute-phase)
+                            if suppression.should_suppress_output(ns_key):
                                 # Accumulate for goal completion output
-                                suppression.accumulate_text(extracted)
+                                suppression.accumulate_text(extracted, ns_key)
                                 continue
 
                             # Normal display logic (only when suppression inactive)
@@ -4112,6 +4112,9 @@ class SootheApp(App):
                     # IG-274: Track suppression state from events
                     final_stdout = suppression.track_from_event(event_type, event_payload)
 
+                    # Unified execute-phase tracking (IG-143 + execute-phase)
+                    suppression.track_execute_phase_from_event(event_type, ns_key)
+
                     event_for_pipeline = dict(event_payload)
                     event_for_pipeline["namespace"] = list(namespace)
                     lines = progress_pipeline.process(event_for_pipeline)
@@ -4122,7 +4125,7 @@ class SootheApp(App):
 
                     # IG-274: Emit goal completion when suppression ends
                     if suppression.should_emit_goal_completion(event_type, final_stdout):
-                        response = suppression.get_final_response(final_stdout)
+                        response = suppression.get_final_response(final_stdout, ns_key)
                         if response:
                             asst = assistant_cards_by_ns.get(ns_key)
                             if asst is None:

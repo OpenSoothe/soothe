@@ -172,8 +172,8 @@ class CliRenderer(RendererBase):
     ) -> None:
         """Write assistant text to stdout.
 
-        HARD SUPPRESS during multi-step execution to prevent intermediate
-        LLM response text from flooding output (IG-143).
+        HARD SUPPRESS during multi-step execution or execute-phase to prevent
+        intermediate LLM response text from flooding output (IG-143 + execute-phase).
 
         Args:
             text: Text content to display.
@@ -183,10 +183,12 @@ class CliRenderer(RendererBase):
         if not is_main:
             return  # Subagent text not shown in CLI headless mode
 
-        # HARD BLOCK: No text during multi-step execution (IG-143)
-        if self._state.suppression.should_suppress_output():
+        # HARD BLOCK: No text during multi-step or execute-phase (IG-143 + execute-phase)
+        # CLI headless only shows main agent (namespace = ())
+        namespace = ()
+        if self._state.suppression.should_suppress_output(namespace):
             # Accumulate for the goal completion output instead
-            self._state.suppression.accumulate_text(text)
+            self._state.suppression.accumulate_text(text, namespace)
             return
 
         # Emit only on final iteration (after flags cleared)
@@ -350,7 +352,7 @@ class CliRenderer(RendererBase):
         event_type: str,
         data: dict[str, Any],
         *,
-        namespace: tuple[str, ...],  # noqa: ARG002
+        namespace: tuple[str, ...],
     ) -> None:
         """Write progress event to stderr using StreamDisplayPipeline.
 
@@ -359,8 +361,11 @@ class CliRenderer(RendererBase):
             data: Event payload.
             namespace: Subagent namespace.
         """
-        # Track suppression state from event (IG-143)
+        # Track suppression state from event (IG-143 + execute-phase)
         final_stdout = self._state.suppression.track_from_event(event_type, data)
+
+        # Track execute-phase from step events (unified suppression logic)
+        self._state.suppression.track_execute_phase_from_event(event_type, namespace)
 
         payload = dict(data)
         payload.pop("goal_completion_message", None)
@@ -372,7 +377,7 @@ class CliRenderer(RendererBase):
 
         # Emit goal completion on loop completion (IG-143, IG-273)
         if self._state.suppression.should_emit_goal_completion(event_type, final_stdout):
-            response = self._state.suppression.get_final_response(final_stdout)
+            response = self._state.suppression.get_final_response(final_stdout, namespace)
             self._write_stdout_goal_completion(response)
 
     def on_plan_created(self, plan: Plan) -> None:

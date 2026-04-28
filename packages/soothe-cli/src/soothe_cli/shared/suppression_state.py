@@ -51,14 +51,28 @@ class SuppressionState:
     # Accumulated response text for the goal completion output
     full_response: list[str] = field(default_factory=list)
 
-    def should_suppress_output(self) -> bool:
+    # Execute-phase tracking (namespace-aware)
+    # True during agent_loop.step execution (tool calls, file ops)
+    # Suppresses AIMessage prose in quiet/normal verbosity
+    execute_phase_active_by_namespace: dict[tuple, bool] = field(default_factory=dict)
+
+    # Per-namespace response accumulators (for execute-phase text buffering)
+    full_response_by_namespace: dict[tuple, list[str]] = field(default_factory=dict)
+
+    def should_suppress_output(self, namespace: tuple = ()) -> bool:
         """Check if output should be suppressed.
 
+        Args:
+            namespace: Namespace tuple for agent context (default: () for main agent).
+
         Returns:
-            True if multi-step or agentic loop is active and suppressing.
+            True if multi-step, agentic loop, or execute-phase is active.
         """
-        return self.multi_step_active or (
-            self.agentic_stdout_suppressed and not self.agentic_final_stdout_emitted
+        execute_phase = self.execute_phase_active_by_namespace.get(namespace, False)
+        return (
+            self.multi_step_active
+            or (self.agentic_stdout_suppressed and not self.agentic_final_stdout_emitted)
+            or execute_phase
         )
 
     def should_emit_goal_completion(
@@ -145,28 +159,57 @@ class SuppressionState:
             self.agentic_stdout_suppressed = True
             self.agentic_final_stdout_emitted = False
 
-    def get_final_response(self, final_stdout: str | None = None) -> str:
+    def track_execute_phase_from_event(self, event_type: str, namespace: tuple = ()) -> None:
+        """Track execute-phase state from agent_loop.step events.
+
+        Execute-phase suppresses AIMessage prose during tool execution steps,
+        allowing only synthesis/reasoning text to display.
+
+        Args:
+            event_type: Event type string.
+            namespace: Namespace tuple for agent context.
+        """
+        if event_type == "soothe.cognition.agent_loop.step.started":
+            self.execute_phase_active_by_namespace[namespace] = True
+            # Initialize response accumulator for namespace if needed
+            if namespace not in self.full_response_by_namespace:
+                self.full_response_by_namespace[namespace] = []
+        elif event_type in (
+            "soothe.cognition.agent_loop.step.completed",
+            "soothe.cognition.agent_loop.completed",
+        ):
+            self.execute_phase_active_by_namespace[namespace] = False
+
+    def get_final_response(self, final_stdout: str | None = None, namespace: tuple = ()) -> str:
         """Get accumulated final response text.
 
         Args:
             final_stdout: Optional final stdout message to append.
+            namespace: Namespace tuple for agent context.
 
         Returns:
             Aggregated response text.
         """
+        # Use namespace-specific accumulator if tracking
+        accumulator = self.full_response_by_namespace.get(namespace, self.full_response)
+
         if final_stdout is not None and final_stdout != "":
-            self.full_response.append(final_stdout)
+            accumulator.append(final_stdout)
 
-        # Join accumulated response
-        return "".join(self.full_response)
+        return "".join(accumulator)
 
-    def accumulate_text(self, text: str) -> None:
+    def accumulate_text(self, text: str, namespace: tuple = ()) -> None:
         """Accumulate text for final response.
 
         Args:
             text: Text chunk to accumulate.
+            namespace: Namespace tuple for agent context.
         """
-        self.full_response.append(text)
+        # Use namespace-specific accumulator if tracking, else global
+        if namespace in self.full_response_by_namespace:
+            self.full_response_by_namespace[namespace].append(text)
+        else:
+            self.full_response.append(text)
 
     def reset_turn(self) -> None:
         """Reset state for next turn.
@@ -175,7 +218,10 @@ class SuppressionState:
         Clears suppression flags and accumulated response.
         """
         self.multi_step_active = False
-        self.full_response = []
+        self.full_response.clear()
+        # Clear execute-phase state
+        self.execute_phase_active_by_namespace.clear()
+        self.full_response_by_namespace.clear()
 
     def reset_session(self) -> None:
         """Reset all session state.
@@ -185,4 +231,7 @@ class SuppressionState:
         self.multi_step_active = False
         self.agentic_stdout_suppressed = False
         self.agentic_final_stdout_emitted = False
-        self.full_response = []
+        self.full_response.clear()
+        # Clear execute-phase state
+        self.execute_phase_active_by_namespace.clear()
+        self.full_response_by_namespace.clear()
