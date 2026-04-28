@@ -105,6 +105,7 @@ CHITCHAT_RESPONSE = "soothe.output.chitchat.responded"
 QUIZ_STARTED = "soothe.output.quiz.started"
 QUIZ_RESPONSE = "soothe.output.quiz.responded"
 GOAL_COMPLETION_STREAMING = "soothe.output.goal_completion.streaming"
+GOAL_COMPLETION_RESPONDED = "soothe.output.goal_completion.responded"
 AUTONOMOUS_GOAL_COMPLETION = "soothe.output.autonomous.goal_completion.reported"
 
 # ============================================================================
@@ -203,6 +204,7 @@ __all__ = [
     "QUIZ_STARTED",
     "QUIZ_RESPONSE",
     "GOAL_COMPLETION_STREAMING",
+    "GOAL_COMPLETION_RESPONDED",
     "AUTONOMOUS_GOAL_COMPLETION",
     # System - Daemon
     "DAEMON_HEARTBEAT",
