@@ -62,7 +62,7 @@ class PlanPhase:
             pre_llm["done_steps"] = [s.step_id for s in context.completed_steps[:5]]
         if state.action_history:
             pre_llm["actions"] = state.get_recent_actions(3)
-        logger.debug("[Plan] pre-LLM: %s", pre_llm)
+        logger.debug("Plan pre-LLM: %s", pre_llm)
 
         logger.info(
             "[Plan] iter=%d calling LLM (history=%d, results=%d)",

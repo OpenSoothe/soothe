@@ -94,7 +94,7 @@ def reflect_heuristic(
         parts.append(f"Blocked by dependencies: {blocked}")
 
     logger.debug(
-        "[Reflect] completed=%d failed=%d blocked=%d direct=%d",
+        "Reflect: completed=%d failed=%d blocked=%d direct=%d",
         completed,
         len(failed_list),
         len(blocked),

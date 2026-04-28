@@ -116,11 +116,7 @@ class SmartRetryManager:
             new_versions={},  # No new versions (restoring existing)
         )
 
-        logger.debug(
-            "Restored checkpoint: thread=%s checkpoint=%s",
-            thread_id,
-            checkpoint_id,
-        )
+        logger.debug("Restored checkpoint: thread=%s checkpoint=%s", thread_id, checkpoint_id)
 
     def build_retry_context(
         self,

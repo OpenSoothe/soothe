@@ -1,4 +1,14 @@
-"""Adaptive final user response policy when AgentLoop reaches goal completion (IG-199)."""
+"""Synthesis policy for determining when to generate final reports (RFC-603, IG-296).
+
+This module contains ALL synthesis decision logic:
+- When to synthesize (evidence thresholds, planner recommendations)
+- Whether to return results directly vs. run synthesis
+- Goal completion policy
+
+Separation of concerns:
+- This module: Decision logic ("should we synthesize?")
+- analysis/synthesis.py: Execution logic ("how to synthesize?")
+"""
 
 from __future__ import annotations
 
@@ -7,12 +17,17 @@ from typing import Literal
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 
-from soothe.cognition.agent_loop.analysis.synthesis import evidence_requires_final_synthesis
 from soothe.cognition.agent_loop.policies.response_length_policy import ResponseLengthCategory
 from soothe.cognition.agent_loop.state.schemas import LoopState, PlanResult
 
 # Keep in sync with ``AgenticFinalResponseMode`` in ``soothe.config.models`` (avoid circular import).
 FinalResponseMode = Literal["adaptive", "always_synthesize", "always_last_execute"]
+
+# Synthesis trigger thresholds (IG-296, moved from synthesis.py)
+_SYNTHESIS_MIN_STEPS = 2
+_SYNTHESIS_MIN_SUCCESS_RATE = 0.6
+_SYNTHESIS_MIN_EVIDENCE_LENGTH = 500
+_SYNTHESIS_MIN_UNIQUE_STEPS = 2
 
 # Structural fallbacks below the word-count floor (IG-273).
 _STRUCTURED_PAYLOAD_MIN_LINES = 6
@@ -29,6 +44,44 @@ def _min_word_floor(category: str | None) -> int:
         return ResponseLengthCategory(category).min_words if category else 150
     except ValueError:
         return 150
+
+
+def evidence_requires_final_synthesis(state: LoopState, plan_result: PlanResult) -> bool:
+    """Return True when synthesis is needed based on planner recommendation or evidence thresholds.
+
+    Priority (IG-295):
+    1. Planner's explicit request (require_goal_completion=True)
+    2. Evidence-based thresholds (step count, evidence length, success rate)
+
+    Args:
+        state: Loop state with accumulated step results.
+        plan_result: Final plan result with planner's synthesis recommendation.
+
+    Returns:
+        True if synthesis should run based on planner recommendation or evidence volume and diversity.
+    """
+    # Honor planner's explicit goal completion request (IG-295)
+    # This ensures single-step goals with low word count get synthesis enrichment
+    if plan_result.require_goal_completion:
+        return True
+
+    # Evidence-based thresholds (RFC-603)
+    if len(state.step_results) < _SYNTHESIS_MIN_STEPS:
+        return False
+
+    successful_steps = [r for r in state.step_results if r.success]
+    if not successful_steps:
+        return False
+    success_rate = len(successful_steps) / len(state.step_results)
+    if success_rate < _SYNTHESIS_MIN_SUCCESS_RATE:
+        return False
+
+    total_evidence_length = sum(len(r.to_evidence_string(truncate=False)) for r in successful_steps)
+    if total_evidence_length < _SYNTHESIS_MIN_EVIDENCE_LENGTH:
+        return False
+
+    unique_step_ids = {r.step_id for r in successful_steps}
+    return len(unique_step_ids) >= _SYNTHESIS_MIN_UNIQUE_STEPS
 
 
 def assemble_assistant_text_from_stream_messages(messages: list[BaseMessage]) -> str:

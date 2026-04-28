@@ -147,7 +147,7 @@ class GoalContextManager:
 
             # Check thread switch flag
             if not checkpoint.thread_switch_pending:
-                logger.debug("Execute briefing skipped: no thread switch pending")
+                logger.debug("Execute briefing skipped: no thread switch")
                 return None
 
             # Clear flag (briefing will be injected this execution)

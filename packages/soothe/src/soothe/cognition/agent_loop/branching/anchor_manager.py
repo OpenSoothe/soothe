@@ -76,7 +76,7 @@ class CheckpointAnchorManager:
         )
 
         logger.debug(
-            "Captured iteration start anchor: loop=%s iteration=%d thread=%s checkpoint=%s",
+            "Captured iter_start anchor: loop=%s iter=%d thread=%s checkpoint=%s",
             self.loop_id,
             iteration,
             thread_id,
@@ -125,7 +125,7 @@ class CheckpointAnchorManager:
         )
 
         logger.debug(
-            "Captured iteration end anchor: loop=%s iteration=%d thread=%s checkpoint=%s status=%s",
+            "Captured iter_end anchor: loop=%s iter=%d thread=%s checkpoint=%s status=%s",
             self.loop_id,
             iteration,
             thread_id,

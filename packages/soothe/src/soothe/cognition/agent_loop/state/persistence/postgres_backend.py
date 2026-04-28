@@ -252,7 +252,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                     (loop_id, thread_id, status, json.dumps(checkpoint_data)),
                 )
 
-                logger.debug("Saved AgentLoop checkpoint: loop_id=%s", loop_id)
+                logger.debug("Saved checkpoint: loop=%s", loop_id)
 
     async def load_checkpoint(self, loop_id: str) -> AgentLoopCheckpoint | None:
         """Load AgentLoop checkpoint from PostgreSQL.
@@ -301,7 +301,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                     (loop_id,),
                 )
 
-                logger.debug("Deleted AgentLoop checkpoint: loop_id=%s", loop_id)
+                logger.debug("Deleted checkpoint: loop=%s", loop_id)
 
     async def list_checkpoints(
         self, thread_id: str | None = None, status: str | None = None
@@ -498,7 +498,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                 )
 
                 logger.debug(
-                    "Saved checkpoint anchor: loop=%s iteration=%d thread=%s checkpoint=%s type=%s",
+                    "Saved anchor: loop=%s iter=%d thread=%s checkpoint=%s type=%s",
                     loop_id,
                     iteration,
                     thread_id,
@@ -617,7 +617,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                 )
 
                 logger.debug(
-                    "Saved failed branch: branch=%s loop=%s iteration=%d thread=%s",
+                    "Saved branch: branch=%s loop=%s iter=%d thread=%s",
                     branch_id,
                     loop_id,
                     iteration,
@@ -664,7 +664,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                     ),
                 )
 
-                logger.debug("Updated branch analysis: branch=%s loop=%s", branch_id, loop_id)
+                logger.debug("Updated branch: branch=%s loop=%s", branch_id, loop_id)
 
     async def get_failed_branches_for_loop(
         self, loop_id: str, limit: int = 10
@@ -773,7 +773,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                 )
 
                 logger.debug(
-                    "Saved goal record: goal=%s loop=%s iteration=%d status=%s",
+                    "Saved goal: id=%s loop=%s iter=%d status=%s",
                     goal_id,
                     loop_id,
                     iteration,
@@ -834,7 +834,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                 )
 
                 logger.debug(
-                    "Updated goal record: goal=%s loop=%s status=%s duration=%dms",
+                    "Updated goal: id=%s loop=%s status=%s dur=%dms",
                     goal_id,
                     loop_id,
                     status,

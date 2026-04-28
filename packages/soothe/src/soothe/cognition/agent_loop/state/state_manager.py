@@ -242,7 +242,7 @@ class AgentLoopStateManager:
             total_tokens_used=0,
             created_at=now,
             updated_at=now,
-            schema_version="3.1",  # Match SCHEMA_VERSION constant
+            schema_version="3.1",  # Current schema version (informational)
         )
 
         self._checkpoint = checkpoint
@@ -282,6 +282,9 @@ class AgentLoopStateManager:
             return checkpoint
 
         # SQLite backend (existing implementation)
+        # Ensure backend is initialized before attempting load
+        await self._ensure_backend_initialized()
+
         if not self.db_path.exists():
             return None
 
@@ -467,7 +470,7 @@ class AgentLoopStateManager:
         # Sync metadata to filesystem (denormalized cache for CLI)
         self._sync_metadata_to_disk()
 
-        logger.debug("Saved loop %s checkpoint (status %s)", self.loop_id, checkpoint.status)
+        logger.debug("Saved loop checkpoint: loop=%s status=%s", self.loop_id, checkpoint.status)
 
     def _save_checkpoint_sync(
         self, conn: sqlite3.Connection, checkpoint: AgentLoopCheckpoint
@@ -511,13 +514,13 @@ class AgentLoopStateManager:
         # Save goal_history to goal_records table
         for goal_record in checkpoint.goal_history:
             logger.debug(
-                "[DEBUG save] Saving goal_record: goal_id=%s, status=%s, iteration=%d, reason_len=%d, act_len=%d, completed_at=%s",
+                "save goal: id=%s status=%s iter=%d reason=%d act=%d done=%s",
                 goal_record.goal_id,
                 goal_record.status,
                 goal_record.iteration,
                 len(goal_record.reason_history),
                 len(goal_record.act_history),
-                goal_record.completed_at.isoformat() if goal_record.completed_at else None,
+                goal_record.completed_at.isoformat() if goal_record.completed_at else "None",
             )
 
             # Serialize complex structures to JSON strings
@@ -637,7 +640,7 @@ class AgentLoopStateManager:
             return
 
         logger.debug(
-            "[DEBUG finalize_goal] Found target_goal in history: goal_id=%s, object_same=%s",
+            "finalize_goal: found id=%s same_obj=%s",
             target_goal.goal_id,
             target_goal is goal_record,
         )
@@ -648,8 +651,8 @@ class AgentLoopStateManager:
         target_goal.completed_at = datetime.now(UTC)
 
         logger.debug(
-            "[DEBUG finalize_goal] Modified target_goal: status=%s, iteration=%d, reason_history_len=%d, act_history_len=%d",
-            target_goal.status,
+            "finalize_goal: modified id=%s iter=%d reason=%d act=%d",
+            target_goal.goal_id,
             target_goal.iteration,
             len(target_goal.reason_history),
             len(target_goal.act_history),
@@ -847,7 +850,7 @@ class AgentLoopStateManager:
             return
 
         logger.debug(
-            "[DEBUG record_iteration] Found target_goal in history: goal_id=%s, object_same=%s",
+            "record_iteration: found id=%s same_obj=%s",
             target_goal.goal_id,
             target_goal is goal_record,
         )
@@ -868,7 +871,7 @@ class AgentLoopStateManager:
         target_goal.reason_history.append(reason_record)
 
         logger.debug(
-            "[DEBUG record_iteration] Added reason_record to target_goal, reason_history_len=%d",
+            "record_iteration: added reason=%d",
             len(target_goal.reason_history),
         )
 
@@ -877,7 +880,7 @@ class AgentLoopStateManager:
         target_goal.act_history.append(act_record)
 
         logger.debug(
-            "[DEBUG record_iteration] Added act_record to target_goal, act_history_len=%d",
+            "record_iteration: added act=%d",
             len(target_goal.act_history),
         )
 
@@ -891,7 +894,7 @@ class AgentLoopStateManager:
         target_goal.tokens_used = state.total_tokens_used
 
         logger.debug(
-            "[DEBUG record_iteration] Updated target_goal: iteration=%d, duration_ms=%d, tokens=%d",
+            "record_iteration: updated iter=%d dur=%dms tok=%d",
             target_goal.iteration,
             target_goal.duration_ms,
             target_goal.tokens_used,
@@ -1050,4 +1053,4 @@ class AgentLoopStateManager:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         metadata_path = self.run_dir / "metadata.json"
         metadata_path.write_text(json.dumps(metadata, indent=2))
-        logger.debug("Synced metadata to disk: %s", metadata_path)
+        logger.debug("Synced metadata: %s", metadata_path)

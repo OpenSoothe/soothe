@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, BaseMessage
 
-from soothe.cognition.agent_loop.policies.final_response_policy import (
+from soothe.cognition.agent_loop.policies.synthesis_policy import (
     assemble_assistant_text_from_stream_messages,
 )
 from soothe.cognition.agent_loop.state.schemas import (
@@ -185,7 +185,7 @@ class Executor:
             actual_tokens = token_usage["total"]
             state.total_tokens_used += actual_tokens
             logger.debug(
-                "[Tokens] LLM actual=%d (prompt=%d completion=%d)",
+                "tokens: actual=%d prompt=%d completion=%d",
                 actual_tokens,
                 token_usage.get("prompt", 0),
                 token_usage.get("completion", 0),
@@ -196,7 +196,7 @@ class Executor:
 
             estimated_tokens = count_tokens(output)
             state.total_tokens_used += estimated_tokens
-            logger.debug("[Tokens] tiktoken estimated=%d", estimated_tokens)
+            logger.debug("tokens: tiktoken=%d", estimated_tokens)
 
         # Use configurable context limit (IG-151)
         if self._config is not None:
@@ -464,7 +464,7 @@ class Executor:
 
         # Compact input summary log
         logger.debug(
-            "[Execute-Seq] steps=%d thread=%s workspace=%s desc_len=%d",
+            "execute-seq: steps=%d thread=%s workspace=%s desc_len=%d",
             len(steps),
             state.thread_id[:12] if state.thread_id else "none",
             state.workspace[:30] if state.workspace else "none",
@@ -499,7 +499,7 @@ class Executor:
                     logger.info("Execute briefing injected (%d chars)", len(goal_briefing))
             configurable.update(await self._claude_runner_config_extras(state.thread_id))
 
-            logger.debug("[Human Message] %s", log_preview(combined_description, chars=150))
+            logger.debug("human msg: %s", log_preview(combined_description, chars=150))
             human_msg = LoopHumanMessage(
                 content=combined_description,
                 thread_id=state.thread_id,
@@ -533,7 +533,7 @@ class Executor:
 
             # Compact wave completion summary log
             logger.debug(
-                "[Wave-Seq] duration=%dms output=%d events=%d tools=%d subagents=%d cap=%s",
+                "wave-seq: dur=%dms out=%d evts=%d tools=%d subagents=%d cap=%s",
                 duration_ms,
                 len(output),
                 event_count,
@@ -668,7 +668,7 @@ class Executor:
 
         try:
             logger.debug(
-                "Executing step %s: %s [hints: tools=%s, subagent=%s]",
+                "execute step: id=%s desc=%s hints: tools=%s subagent=%s",
                 step.id,
                 preview_first(step.description, 100),
                 step.tools,

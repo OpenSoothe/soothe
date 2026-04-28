@@ -60,7 +60,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.cognition.agent_loop.core.agent_loop.needs_final_thread_synthesis",
+            "soothe.cognition.agent_loop.policies.synthesis_policy.needs_final_thread_synthesis",
             return_value=False,
         ),
     ):
@@ -130,11 +130,11 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.cognition.agent_loop.core.agent_loop.needs_final_thread_synthesis",
+            "soothe.cognition.agent_loop.policies.synthesis_policy.needs_final_thread_synthesis",
             return_value=True,
         ),
         patch(
-            "soothe.cognition.agent_loop.core.agent_loop.should_return_goal_completion_directly",
+            "soothe.cognition.agent_loop.policies.synthesis_policy.should_return_goal_completion_directly",
             return_value=True,
         ),
     ):

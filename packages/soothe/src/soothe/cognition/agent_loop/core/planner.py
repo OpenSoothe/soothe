@@ -753,7 +753,7 @@ class LLMPlanner:
                 raise ValueError("StatusAssessment returned None")
 
             logger.debug(
-                "[Assess] status=%s progress=%.0f%% conf=%.0f%%",
+                "Assess: status=%s prog=%.0f%% conf=%.0f%%",
                 assessment.status,
                 assessment.goal_progress * 100,
                 assessment.confidence * 100,
@@ -811,7 +811,7 @@ class LLMPlanner:
                 raise ValueError("PlanGeneration returned None")
 
             logger.debug(
-                "[Plan] plan_action=%s steps=%d next_action=%s",
+                "Plan: action=%s steps=%d next=%s",
                 plan_result.plan_action,
                 len(plan_result.decision.steps) if plan_result.decision else 0,
                 preview_first(plan_result.next_action, chars=80),
@@ -836,16 +836,16 @@ class LLMPlanner:
         """
         # Complex execution patterns require synthesis
         if state.last_execute_wave_parallel_multi_step:
-            logger.debug("[GoalCompletion] True: parallel multi-step")
+            logger.debug("GoalCompletion: True (parallel multi-step)")
             return True
 
         if state.last_wave_hit_subagent_cap:
-            logger.debug("[GoalCompletion] True: subagent cap")
+            logger.debug("GoalCompletion: True (subagent cap)")
             return True
 
         assistant = (state.last_execute_assistant_text or "").strip()
         if not assistant:
-            logger.debug("[GoalCompletion] True: no output")
+            logger.debug("GoalCompletion: True (no output)")
             return True
 
         import re
@@ -854,7 +854,7 @@ class LLMPlanner:
 
         # Low word count needs enrichment
         if word_count < 150:
-            logger.debug("[GoalCompletion] True: low words=%d", word_count)
+            logger.debug("GoalCompletion: True (low words=%d)", word_count)
             return True
 
         evidence_chars = len(state.evidence_summary or "")
@@ -863,19 +863,19 @@ class LLMPlanner:
         if evidence_chars > 5000:
             if word_count >= 300:
                 logger.debug(
-                    "[GoalCompletion] False: rich output words=%d evidence=%d",
+                    "GoalCompletion: False (rich output words=%d evidence=%d)",
                     word_count,
                     evidence_chars,
                 )
                 return False
             logger.debug(
-                "[GoalCompletion] True: high evidence=%d words=%d", evidence_chars, word_count
+                "GoalCompletion: True (high evidence=%d words=%d)", evidence_chars, word_count
             )
             return True
 
         # Sufficient output, skip synthesis
         logger.debug(
-            "[GoalCompletion] False: sufficient words=%d evidence=%d", word_count, evidence_chars
+            "GoalCompletion: False (sufficient words=%d evidence=%d)", word_count, evidence_chars
         )
         return False
 
@@ -904,10 +904,7 @@ class LLMPlanner:
         # Use plan_result.next_action (concrete, actionable)
         action_text = plan_result.next_action.strip()
 
-        logger.debug(
-            "[Plan] plan_action=%s",
-            preview_first(action_text, chars=80),
-        )
+        logger.debug("Plan action: %s", preview_first(action_text, chars=80))
 
         # Build final PlanResult
         return PlanResult(
@@ -945,7 +942,7 @@ class LLMPlanner:
             if isinstance(msg, HumanMessage):
                 human_preview = create_output_summary(msg.content, first_chars=200, last_chars=100)
                 break
-        logger.debug("[Plan] msgs=%d types=%s human=%s", len(messages), msg_types, human_preview)
+        logger.debug("Plan msgs=%d types=%s human=%s", len(messages), msg_types, human_preview)
 
         max_retries = 3
         result = None
@@ -967,12 +964,12 @@ class LLMPlanner:
 
                 # Early completion: skip plan generation
                 if assessment.status == "done":
-                    logger.debug("[Plan] early-complete skip plan gen")
+                    logger.debug("Plan early-complete skip plan gen")
 
                     require_goal_completion = self._should_require_goal_completion(state)
 
                     logger.debug(
-                        "[Plan] require_goal_completion=%s (assistant_chars=%d evidence_chars=%d)",
+                        "Plan require_goal_completion=%s (assistant_chars=%d evidence_chars=%d)",
                         require_goal_completion,
                         len(state.last_execute_assistant_text or ""),
                         len(state.evidence_summary or ""),
@@ -1003,7 +1000,7 @@ class LLMPlanner:
                         f" steps={len(result.decision.steps)} mode={result.decision.execution_mode}"
                     )
                 logger.debug(
-                    "[Plan] result status=%s plan=%s prog=%.0f%% conf=%.0f%%%s",
+                    "Plan result: status=%s plan=%s prog=%.0f%% conf=%.0f%%%s",
                     result.status,
                     result.plan_action,
                     result.goal_progress * 100,
@@ -1024,7 +1021,7 @@ class LLMPlanner:
                     if input_value_match:
                         truncated_json = input_value_match.group(1)
                         logger.debug(
-                            "[Retry] invalid JSON len=%d preview=%s",
+                            "Retry invalid JSON: len=%d preview=%s",
                             len(truncated_json),
                             create_output_summary(truncated_json, first_chars=400, last_chars=200),
                         )
@@ -1045,7 +1042,7 @@ class LLMPlanner:
                             raw_content = _extract_text_content(response.content)
 
                             logger.debug(
-                                "[Retry] raw response len=%d preview=%s",
+                                "Retry raw response: len=%d preview=%s",
                                 len(raw_content),
                                 create_output_summary(raw_content, first_chars=250, last_chars=150),
                             )
@@ -1077,7 +1074,7 @@ class LLMPlanner:
                                         result = PlanResult(**parsed_dict)
 
                                     logger.info(
-                                        "[Retry] manual JSON parse OK attempt %d", attempt + 1
+                                        "Retry manual JSON parse OK: attempt %d", attempt + 1
                                     )
                                     break
                         except Exception as fallback_error:
