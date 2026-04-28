@@ -69,7 +69,8 @@ def convert_and_abbreviate_path(path: str, base_dir: str | None = None) -> str:
     home = Path.home()
     try:
         if p.is_absolute() and str(p).startswith(str(home)):
-            abbrev = "~" + str(p.relative_to(home))
+            rel = p.relative_to(home)
+            abbrev = "~" if str(rel) == "." else f"~/{rel}"
             return abbrev
     except ValueError:
         pass
