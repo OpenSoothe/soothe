@@ -775,6 +775,20 @@ class EventProcessor:
 
         category = classify_event_to_tier(etype, namespace)
 
+        # Track execute-phase for ALL iterations (single and multi)
+        # Execute-phase suppresses AIMessage prose during tool execution steps
+        if etype in (
+            "soothe.cognition.agent_loop.step.started",
+            "soothe.cognition.agent_loop.step.completed",
+            "soothe.cognition.agent_loop.completed",
+        ):
+            self._state.execute_phase_active_by_namespace[namespace] = (
+                etype == "soothe.cognition.agent_loop.step.started"
+            )
+            # Track in renderer's suppression state
+            if hasattr(self._renderer, "_state") and hasattr(self._renderer._state, "suppression"):
+                self._renderer._state.suppression.track_execute_phase_from_event(etype, namespace)
+
         # Check for multi-step plan from PLAN_CREATED event
         if etype == PLAN_CREATED and len(data.get("steps", [])) > 1:
             self._state.multi_step_active = True

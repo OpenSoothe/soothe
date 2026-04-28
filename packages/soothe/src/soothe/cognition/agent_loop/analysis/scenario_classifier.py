@@ -200,8 +200,8 @@ OUTPUT FORMAT (JSON):
 }}
 
 EXAMPLE OUTPUT:
-{
-        "scenario": "code_architecture_design",
+{{
+    "scenario": "code_architecture_design",
     "sections": ["Summary", "Component Analysis", "Key Findings", "Recommendations"],
     "contextual_focus": [
         "Compare monolithic vs modular approach",
@@ -209,11 +209,11 @@ EXAMPLE OUTPUT:
         "Quantify component complexity metrics"
     ],
     "evidence_emphasis": "Include module relationship diagrams and code snippets showing key dependencies"
-}
+}}
 
 ANOTHER EXAMPLE (custom):
-{
-        "scenario": "custom",
+{{
+    "scenario": "custom",
     "sections": ["Recipe Overview", "Ingredient Analysis", "Cooking Instructions", "Recommendations"],
     "contextual_focus": [
         "Group recipes by cuisine and difficulty",
@@ -221,7 +221,7 @@ ANOTHER EXAMPLE (custom):
         "Provide time-based recommendations"
     ],
     "evidence_emphasis": "Include full recipe content, ingredient lists, and cooking times from web search results"
-}"""
+}}"""
 
 
 def _get_scenario_description(scenario_name: str) -> str:
