@@ -111,7 +111,7 @@ def resolve_planner(
 
     planner_model = fast_model or planner_model
 
-    from soothe.cognition.agent_loop.planner import LLMPlanner
+    from soothe.cognition.agent_loop.core.planner import LLMPlanner
 
     return LLMPlanner(model=planner_model, config=config)
 

@@ -1,23 +1,28 @@
 """AgentLoop - Plan-Execute execution (RFC-201, RFC-205)."""
 
-from .agent_loop import AgentLoop
-from .checkpoint import (
+# Core orchestration
+from .core.agent_loop import AgentLoop
+
+# State management
+from .state.checkpoint import (
     ActWaveRecord,
     AgentLoopCheckpoint,
     ReasonStepRecord,
     StepExecutionRecord,
     WorkingMemoryState,
 )
-from .communication import GoalCommunicationHelper
-from .schemas import (
+from .state.schemas import (
     AgentDecision,
     LoopState,
     PlanResult,
     StepAction,
     StepResult,
 )
-from .state_manager import AgentLoopStateManager
-from .working_memory import LoopWorkingMemory
+from .state.state_manager import AgentLoopStateManager
+from .state.working_memory import LoopWorkingMemory
+
+# Support utilities
+from .utils.communication import GoalCommunicationHelper
 
 __all__ = [
     "ActWaveRecord",

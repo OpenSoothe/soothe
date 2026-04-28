@@ -347,7 +347,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """
         from datetime import datetime, timedelta
 
-        from soothe.cognition.agent_loop.persistence.directory_manager import (
+        from soothe.cognition.agent_loop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
 

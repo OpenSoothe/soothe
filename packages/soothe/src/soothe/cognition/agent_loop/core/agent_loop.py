@@ -1,0 +1,826 @@
+"""Main AgentLoop orchestration (RFC-201)."""
+
+from __future__ import annotations
+
+import logging
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from soothe.cognition.agent_loop.branching.anchor_manager import CheckpointAnchorManager
+from soothe.cognition.agent_loop.context.goal_context_manager import GoalContextManager
+from soothe.cognition.agent_loop.core.executor import Executor
+from soothe.cognition.agent_loop.core.plan_phase import PlanPhase
+from soothe.cognition.agent_loop.policies.final_response_policy import (
+    needs_final_thread_synthesis,
+    should_return_goal_completion_directly,
+)
+from soothe.cognition.agent_loop.state.schemas import AgentDecision, LoopState, PlanResult
+from soothe.cognition.agent_loop.state.state_manager import AgentLoopStateManager
+from soothe.cognition.agent_loop.state.working_memory import LoopWorkingMemory
+from soothe.cognition.agent_loop.utils.messages import LoopHumanMessage
+from soothe.cognition.agent_loop.utils.reflection import _default_agent_decision
+from soothe.cognition.agent_loop.utils.stream_normalize import (
+    GoalCompletionAccumState,
+    iter_messages_for_act_aggregation,
+    resolve_goal_completion_text,
+    update_goal_completion_from_message,
+)
+from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+from soothe.protocols.planner import PlanContext, StepResult
+from soothe.utils.text_preview import log_preview, preview_first
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
+    from soothe.config import SootheConfig
+    from soothe.core.agent import CoreAgent
+    from soothe.protocols.loop_planner import LoopPlannerProtocol
+
+logger = logging.getLogger(__name__)
+
+# Stream chunk format: (namespace: tuple, mode: str, data: Any)
+_STREAM_CHUNK_LEN = 3
+
+
+class AgentLoop:
+    """Agentic goal execution using Plan-and-Execute pattern.
+
+    The Plan phase combines planning, progress assessment, and goal-distance estimation.
+    The Execute phase runs steps via Layer 1 CoreAgent with thread isolation.
+
+    Attributes:
+        core_agent: Layer 1 CoreAgent for step execution
+        loop_planner: Protocol for the Plan phase (one LLM call per iteration)
+        config: Soothe configuration
+    """
+
+    def __init__(
+        self,
+        core_agent: CoreAgent,
+        loop_planner: LoopPlannerProtocol,
+        config: SootheConfig,
+    ) -> None:
+        """Initialize AgentLoop.
+
+        Args:
+            core_agent: Layer 1 CoreAgent runtime
+            loop_planner: Plan-phase implementation (planning + assessment)
+            config: Soothe configuration
+        """
+        self.core_agent = core_agent
+        self.loop_planner = loop_planner
+        self.config = config
+
+        self.plan_phase = PlanPhase(loop_planner)
+        self.executor = Executor(
+            core_agent,
+            max_parallel_steps=config.execution.concurrency.max_parallel_steps,
+            config=config,
+            # Executor receives GoalContextManager per-run (created in run_with_progress)
+        )
+
+    async def run(
+        self,
+        goal: str,
+        thread_id: str,
+        max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
+    ) -> PlanResult:
+        """Run Plan → Execute loop for goal execution.
+
+        Args:
+            goal: Goal description to execute
+            thread_id: Thread context for execution
+            max_iterations: Maximum loop iterations (default: 8)
+
+        Returns:
+            PlanResult with final status and evidence
+        """
+        final_result = None
+        async for event_type, event_data in self.run_with_progress(
+            goal, thread_id, max_iterations=max_iterations
+        ):
+            if event_type == "completed":
+                final_result = event_data["result"] if isinstance(event_data, dict) else event_data
+        return final_result or PlanResult(
+            status="replan",
+            plan_action="new",
+            decision=_default_agent_decision(goal),
+            evidence_summary="",
+            goal_progress=0.0,
+            confidence=0.0,
+            next_action="I need to stop here before completion.",
+        )
+
+    async def run_with_progress(
+        self,
+        goal: str,
+        thread_id: str,
+        workspace: str | None = None,
+        git_status: dict[str, Any] | None = None,
+        max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
+        loop_id: str | None = None,  # IG-246: explicit loop_id parameter
+        plan_conversation_excerpts: list[str] | None = None,
+        intent: Any | None = None,  # Intent classification
+    ) -> AsyncGenerator[tuple[str, Any], None]:
+        """Run loop with progress events (RFC-0020 compliant).
+
+        Yields progress events during execution for display.
+
+        Args:
+            goal: Goal description to execute
+            thread_id: Thread context for execution
+            workspace: Thread-specific workspace path (RFC-103)
+            git_status: Optional git snapshot for RFC-104-aligned Reason prompts.
+            max_iterations: Maximum loop iterations (default: 8)
+            loop_id: Optional loop_id (None → auto-generate UUID)
+            plan_conversation_excerpts: Prior thread lines (User/Assistant) for Plan phase (IG-128).
+            intent: IntentClassification from unified classifier (IG-226). Determines goal handling:
+                - thread_continuation: Adjust iteration behavior, reuse working memory
+                - new_goal: Normal goal execution flow
+                - chitchat: Should not reach here (handled in runner)
+
+        Yields:
+            Tuples of (event_type, event_data) for progress updates
+        """
+        # Initialize AgentLoop state manager (RFC-205, IG-246: loop_id parameter, IG-055: config)
+        state_manager = AgentLoopStateManager(
+            loop_id, Path(workspace) if workspace else None, config=self.config
+        )
+
+        # Initialize checkpoint anchor manager for execution synchronization (IG-055: pass config)
+        anchor_manager = CheckpointAnchorManager(state_manager.loop_id, config=self.config)
+
+        # IG-226: Handle thread continuation intent
+        thread_continuation_mode = False
+        if intent and hasattr(intent, "intent_type"):
+            if intent.intent_type == "thread_continuation":
+                thread_continuation_mode = True
+                logger.info(
+                    "[AgentLoop] Thread continuation mode: reuse_current_goal=%s",
+                    intent.reuse_current_goal if hasattr(intent, "reuse_current_goal") else False,
+                )
+                # Thread continuation may benefit from fewer iterations (follow-up actions)
+                # but keep max_iterations unchanged for now - let Plan phase determine completion
+
+        # RFC-609: Create GoalContextManager for goal-level context injection
+        from soothe.config.models import GoalContextConfig
+
+        goal_context_config = getattr(self.config.agentic, "goal_context", GoalContextConfig())
+        goal_context_manager = GoalContextManager(state_manager, goal_context_config)
+
+        # Try to recover from checkpoint (RFC-608: loop-scoped)
+        checkpoint = await state_manager.load()
+        if checkpoint and checkpoint.status == "running":
+            # Get current goal iteration (RFC-608: per-goal tracking)
+            current_goal_index = checkpoint.current_goal_index
+            if current_goal_index >= 0 and current_goal_index < len(checkpoint.goal_history):
+                goal_record = checkpoint.goal_history[current_goal_index]
+                iteration = goal_record.iteration
+                logger.info(
+                    "Recovering from checkpoint at iteration %d (goal: %s)",
+                    iteration,
+                    goal_record.goal_id,
+                )
+            else:
+                # No active goal in recovered checkpoint - invalid state
+                # Treat as new checkpoint instead of failing
+                logger.warning(
+                    "Checkpoint has invalid goal index %d (history length: %d), initializing fresh state",
+                    current_goal_index,
+                    len(checkpoint.goal_history),
+                )
+                checkpoint = await state_manager.initialize(thread_id, max_iterations)
+                iteration = 0
+                goal_record = None
+
+            # Derive prior conversation from step outputs (RFC-205)
+            prior_outputs = state_manager.derive_plan_conversation(limit=10)
+            # RFC-609: Add goal-level context to plan excerpts
+            plan_goal_excerpts = await goal_context_manager.get_plan_context()
+            runner_prior = list(plan_conversation_excerpts or [])
+            plan_excerpts = plan_goal_excerpts + runner_prior + list(prior_outputs)
+        else:
+            # Initialize new checkpoint (RFC-608: pass thread_id, not goal)
+            checkpoint = await state_manager.initialize(thread_id, max_iterations)
+            iteration = 0  # New goal starts at iteration 0
+            # RFC-609: Inject previous goal context for Plan phase
+            plan_goal_excerpts = await goal_context_manager.get_plan_context()
+            # Prior Human/Assistant turns from LangGraph checkpointer (IG-128, IG-198)
+            runner_prior = list(plan_conversation_excerpts or [])
+            plan_excerpts = plan_goal_excerpts + runner_prior
+            # Create new goal_record for this goal execution
+            goal_record = state_manager.start_new_goal(goal, max_iterations)
+            checkpoint.goal_history.append(goal_record)  # Append FIRST
+            checkpoint.current_goal_index = len(checkpoint.goal_history) - 1  # Compute index AFTER
+            checkpoint.status = "running"
+
+            logger.debug(
+                "[DEBUG agent_loop] Created goal_record id=%s, goal_history index=%d, object_id=%d",
+                goal_record.goal_id,
+                checkpoint.current_goal_index,
+                id(goal_record),
+            )
+
+            await state_manager.save(checkpoint)
+
+        state = LoopState(
+            goal=goal,
+            thread_id=thread_id,
+            workspace=workspace,
+            git_status=git_status,
+            iteration=iteration,  # Use recovered or initial iteration
+            max_iterations=max_iterations,
+            plan_conversation_excerpts=plan_excerpts,
+            intent=intent,
+        )
+
+        # IG-226: Set thread continuation flag for working memory context
+        if thread_continuation_mode:
+            state.thread_continuation = True  # Add flag to LoopState if it exists
+            logger.debug("[AgentLoop] Thread continuation flag set for working memory enhancement")
+
+        wm_cfg = self.config.agentic.working_memory
+        if wm_cfg.enabled:
+            state.working_memory = LoopWorkingMemory(
+                thread_id=thread_id,
+                max_inline_chars=wm_cfg.max_inline_chars,
+                max_entry_chars_before_spill=wm_cfg.max_entry_chars_before_spill,
+            )
+
+            # IG-226: Thread continuation working memory enhancement
+            # Reuse current thread's working memory content more aggressively
+            if thread_continuation_mode:
+                logger.info("[AgentLoop] Thread continuation: working memory context reuse enabled")
+                # Working memory will automatically load from thread persistence
+                # No special handling needed - it already loads existing entries
+
+        logger.info(
+            "[Goal] %s (max_iterations=%d, iteration=%d, thread_continuation=%s)",
+            log_preview(goal, 80),
+            max_iterations,
+            state.iteration,
+            thread_continuation_mode,
+        )
+
+        while state.iteration < state.max_iterations:
+            iteration_start = time.perf_counter()
+
+            yield (
+                "iteration_started",
+                {
+                    "iteration": state.iteration,
+                    "max_iterations": max_iterations,
+                },
+            )
+
+            # Capture iteration start checkpoint anchor (RFC-611)
+            try:
+                await anchor_manager.capture_iteration_start_anchor(
+                    iteration=state.iteration,
+                    thread_id=state.thread_id,
+                    checkpointer=self.core_agent.graph.checkpointer,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to capture iteration start anchor",
+                    exc_info=True,
+                )
+
+            plan_result = await self.plan_phase.plan(
+                goal=goal,
+                state=state,
+                context=self._build_plan_context(state),
+            )
+
+            yield (
+                "plan",
+                {
+                    "iteration": state.iteration,
+                    "status": plan_result.status,
+                    "progress": plan_result.goal_progress,
+                    "confidence": plan_result.confidence,
+                    "next_action": plan_result.next_action,
+                    "assessment_reasoning": plan_result.assessment_reasoning,
+                    "plan_reasoning": plan_result.plan_reasoning,
+                    "plan_action": plan_result.plan_action,
+                },
+            )
+
+            if plan_result.is_done():
+                state.previous_plan = plan_result
+                iteration_completed = state.iteration  # Capture pre-increment value
+                state.iteration += 1
+                state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
+
+                # Record iteration for goals completing immediately (IG-054)
+                # This preserves Plan phase reasoning even when no Act phase executed
+                await state_manager.record_iteration(
+                    goal_record=goal_record,
+                    iteration=iteration_completed,  # Pre-increment value (0 for immediate completion)
+                    plan_result=plan_result,
+                    decision=None,  # No decision was executed
+                    step_results=[],  # Empty - no Act phase executed
+                    state=state,
+                    working_memory=state.working_memory,
+                )
+
+                # RFC-211 / IG-199: Goal completion — adaptive second CoreAgent turn vs last Execute text
+                # NEVER leak internal evidence_summary to users
+                # Generate user-friendly summary instead when full_output is empty
+                if plan_result.full_output:
+                    final_output = plan_result.full_output
+                elif state.step_results:
+                    # Generate user-friendly completion summary from successful steps
+                    successful_count = sum(1 for r in state.step_results if r.success)
+                    total_count = len(state.step_results)
+                    final_output = f"Completed {successful_count}/{total_count} steps successfully. {plan_result.next_action or ''}"
+                else:
+                    # No steps executed, use next_action as summary
+                    final_output = plan_result.next_action or "Goal achieved successfully"
+
+                # Determine response length category from intent and evidence
+                from soothe.cognition.agent_loop.policies.response_length_policy import (
+                    calculate_evidence_metrics,
+                    determine_response_length,
+                )
+
+                evidence_volume, evidence_diversity = calculate_evidence_metrics(state.step_results)
+
+                # Determine response length category
+                intent_type = "new_goal"  # Default
+                goal_type = "general_synthesis"  # Default
+                task_complexity = "medium"  # Default
+
+                # Extract intent classification metadata if available
+                if state.intent and hasattr(state.intent, "intent_type"):
+                    intent_type = state.intent.intent_type
+                    task_complexity = getattr(state.intent, "task_complexity", "medium")
+
+                # Classify goal type from evidence patterns (reuse synthesis logic)
+                from soothe.cognition.agent_loop.analysis.synthesis import SynthesisPhase
+
+                evidence_for_classification = "\n\n".join(
+                    r.to_evidence_string(truncate=False) for r in state.step_results if r.success
+                )
+                goal_type = SynthesisPhase(self.loop_planner._model)._classify_goal_type(
+                    evidence_for_classification
+                )
+
+                length_category = determine_response_length(
+                    intent_type=intent_type,
+                    goal_type=goal_type,
+                    task_complexity=task_complexity,
+                    evidence_volume=evidence_volume,
+                    evidence_diversity=evidence_diversity,
+                )
+
+                logger.info(
+                    "Response length category: %s (%d-%d words, intent=%s, goal_type=%s, evidence_volume=%d chars, diversity=%d steps)",
+                    length_category.value,
+                    length_category.min_words,
+                    length_category.max_words,
+                    intent_type,
+                    goal_type,
+                    evidence_volume,
+                    evidence_diversity,
+                )
+
+                # Use planner's decision to skip goal completion LLM call when possible
+                if not plan_result.require_goal_completion:
+                    reuse = (state.last_execute_assistant_text or "").strip()
+                    final_output = reuse
+                    logger.info(
+                        "Goal completion: branch=planner_skip assistant_chars=%d",
+                        len(reuse),
+                    )
+                else:
+                    # Always use adaptive mode
+                    mode = "adaptive"
+                    direct_goal_completion = should_return_goal_completion_directly(
+                        state,
+                        plan_result,
+                        mode,
+                        response_length_category=length_category.value,
+                    )
+                    run_goal_completion_synthesis = (
+                        not direct_goal_completion
+                        and needs_final_thread_synthesis(state, plan_result, mode)
+                    )
+
+                    if direct_goal_completion:
+                        reuse = (state.last_execute_assistant_text or "").strip()
+                        final_output = reuse
+                        logger.info(
+                            "Goal completion: branch=direct assistant_chars=%d",
+                            len(reuse),
+                        )
+                    elif run_goal_completion_synthesis:
+                        logger.info(
+                            "Goal completion: branch=synthesis full_output=%d chars evidence=%d chars",
+                            len(plan_result.full_output or ""),
+                            len(plan_result.evidence_summary or ""),
+                        )
+
+                        try:
+                            goal_completion_request = f"""Based on the complete execution history in this thread, generate a goal completion response for: {goal}
+
+RESPONSE LENGTH: {length_category.min_words}-{length_category.max_words} words ({length_category.value} category)
+
+{self._get_length_guidance(length_category)}
+
+The response should:
+1. Summarize what was accomplished
+2. **Include actual content** from content-retrieval tools (read_file, web_search, fetch_url, ls, glob, etc.)
+   - ToolMessage.content contains the actual file content, search results, etc.
+   - Extract and present this actual content directly, not just summaries
+   - For file reading: show the actual file content (with line numbers if applicable)
+   - For web/research: show actual search results or fetched content
+3. Provide actionable results or deliverables
+4. Be well-structured with clear sections
+5. Match the response length guidance above
+
+IMPORTANT: The user wants to see the actual content retrieved, not just confirmation messages. Extract content from ToolMessage.content in the conversation history and present it appropriately for the response length category.
+
+Use all tool results and AI responses available in the conversation history."""
+
+                            logger.debug(
+                                "[Human Message] Goal completion request: %s",
+                                log_preview(goal_completion_request, chars=150),
+                            )
+                            human_msg = LoopHumanMessage(
+                                content=goal_completion_request,
+                                thread_id=state.thread_id,
+                                iteration=state.iteration,  # Final iteration
+                                goal_summary=state.goal[:200] if state.goal else None,
+                                phase="goal_completion",
+                            )
+                            accum = GoalCompletionAccumState()
+                            chunk_count = 0
+                            async for chunk in self.core_agent.astream(
+                                {"messages": [human_msg]},
+                                config={"configurable": {"thread_id": state.thread_id}},
+                                stream_mode=["messages"],
+                                subgraphs=False,
+                            ):
+                                chunk_count += 1
+                                for msg in iter_messages_for_act_aggregation(chunk):
+                                    update_goal_completion_from_message(accum, msg)
+                                # Yield stream chunks with special event type for goal completion
+                                # This bypasses runner filtering so all AI text reaches CLI/TUI
+                                yield ("goal_completion_stream", chunk)
+
+                            last_ai_text = resolve_goal_completion_text(accum)
+
+                            logger.info(
+                                "Stream: chunks=%d ai_msgs=%d chars=%d",
+                                chunk_count,
+                                accum.ai_msg_count,
+                                len(last_ai_text),
+                            )
+                            if last_ai_text:
+                                final_output = last_ai_text
+                                logger.info(
+                                    "Goal completion: synthesis=%d chars", len(final_output)
+                                )
+                            else:
+                                logger.warning("No AI text from CoreAgent")
+
+                        except Exception as e:
+                            logger.warning("Goal completion failed: %s", e)
+                    else:
+                        logger.info(
+                            "Goal completion: branch=summary chars=%d", len(final_output or "")
+                        )
+
+                # Update plan_result with final output
+                if (
+                    final_output != plan_result.full_output
+                    or plan_result.response_length_category != length_category.value
+                ):
+                    plan_result = plan_result.model_copy(
+                        update={
+                            "full_output": final_output,
+                            "response_length_category": length_category.value,
+                        }
+                    )
+
+                # Finalize goal
+                await state_manager.finalize_goal(goal_record, final_output)
+                logger.info(
+                    "Goal completed: iterations=%d duration=%dms",
+                    state.iteration,
+                    state.total_duration_ms,
+                )
+                yield (
+                    "completed",
+                    {
+                        "result": plan_result,
+                        "step_results_count": len(state.step_results),
+                    },
+                )
+                return
+
+            decision = self._resolve_decision(plan_result, state)
+            if decision is None:
+                logger.error("[Reason] No executable decision after reason phase; aborting loop")
+                yield (
+                    "fatal_error",
+                    {"error": "Reason phase returned no executable plan", "step_id": ""},
+                )
+                return
+
+            if plan_result.plan_action == "new":
+                state.completed_step_ids.clear()
+                state.current_decision = decision
+
+            yield (
+                "plan_decision",
+                {
+                    "iteration": state.iteration,
+                    "steps": [
+                        {"id": s.id, "description": preview_first(s.description, 80)}
+                        for s in decision.steps
+                    ],
+                    "execution_mode": decision.execution_mode,
+                },
+            )
+
+            ready_steps = decision.get_ready_steps(state.completed_step_ids)
+            for step in ready_steps:
+                yield (
+                    "step_started",
+                    {"step_id": step.id, "description": step.description},
+                )
+
+            step_results = []
+            # RFC-609: Create Executor with GoalContextManager for this run
+            run_executor = Executor(
+                self.core_agent,
+                max_parallel_steps=self.config.execution.concurrency.max_parallel_steps,
+                config=self.config,
+                goal_context_manager=goal_context_manager,
+            )
+            async for item in run_executor.execute(
+                decision=decision,
+                state=state,
+            ):
+                if isinstance(item, tuple) and len(item) == _STREAM_CHUNK_LEN:
+                    # Wrap execution streaming as custom output event (RFC-614)
+                    # Lazy import to avoid circular dependency
+                    from soothe.core.runner._runner_shared import _wrap_streaming_output
+
+                    wrapped = _wrap_streaming_output(
+                        chunk=item,
+                        event_type="soothe.output.execution.streaming",
+                        config=self.config,
+                        namespace=(),  # Main agent namespace
+                    )
+                    if wrapped:
+                        # wrapped is 3-tuple (namespace, mode, data)
+                        # Convert to 2-tuple for run_with_progress format
+                        _ns, _mode, custom_data = wrapped
+                        yield ("custom_output", custom_data)
+                    # Also yield raw stream_event for tool UI (existing behavior)
+                    yield ("stream_event", item)
+                else:
+                    step_results.append(item)
+
+            fatal_errors = [r for r in step_results if r.error_type == "fatal"]
+            if fatal_errors:
+                logger.error(
+                    "Fatal error detected, aborting loop: %s",
+                    fatal_errors[0].error,
+                )
+                # Mark goal as failed (RFC-608: update goal_record status)
+                goal_record.status = "failed"
+                goal_record.completed_at = datetime.now(UTC)
+                checkpoint.status = "ready_for_next_goal"
+                checkpoint.thread_health_metrics.consecutive_goal_failures += 1
+                checkpoint.thread_health_metrics.last_goal_status = "failed"
+                await state_manager.save(checkpoint)
+                yield (
+                    "fatal_error",
+                    {
+                        "error": fatal_errors[0].error,
+                        "step_id": fatal_errors[0].step_id,
+                    },
+                )
+                return
+
+            step_desc = {s.id: s.description for s in decision.steps}
+            for result in step_results:
+                state.add_step_result(result)
+                if state.working_memory is not None:
+                    # RFC-211: Use outcome metadata for working memory
+                    outcome_summary = result.to_evidence_string(truncate=True)
+                    state.working_memory.record_step_result(
+                        step_id=result.step_id,
+                        description=step_desc.get(result.step_id, ""),
+                        output=outcome_summary,  # Use outcome summary
+                        error=result.error,
+                        success=result.success,
+                        workspace=state.workspace,
+                        thread_id=state.thread_id,
+                    )
+                # Don't leak verbose evidence strings to CLI display
+                # Use simple summary for user-visible output_preview
+                if result.success:
+                    output_preview = "Done"
+                    if result.tool_call_count > 0:
+                        output_preview = f"Done [{result.tool_call_count} tools]"
+                else:
+                    output_preview = f"Failed: {result.error[:50]}" if result.error else "Failed"
+
+                yield (
+                    "step_completed",
+                    {
+                        "step_id": result.step_id,
+                        "success": result.success,
+                        "output_preview": output_preview,
+                        "error": result.error or None,
+                        "duration_ms": result.duration_ms,
+                        "tool_call_count": result.tool_call_count,
+                    },
+                )
+
+            state.last_wave_tool_call_count = sum(r.tool_call_count for r in step_results)
+            state.last_wave_subagent_task_count = sum(
+                r.subagent_task_completions for r in step_results
+            )
+            state.last_wave_hit_subagent_cap = any(r.hit_subagent_cap for r in step_results)
+
+            state.previous_plan = plan_result
+
+            # Capture iteration BEFORE increment for event/checkpoint consistency
+            iteration_completed = state.iteration
+            state.iteration += 1
+            state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
+
+            # Record iteration to checkpoint (RFC-205) with pre-increment value
+            await state_manager.record_iteration(
+                goal_record=goal_record,
+                iteration=iteration_completed,  # Use pre-increment value
+                plan_result=plan_result,
+                decision=decision,
+                step_results=step_results,
+                state=state,
+                working_memory=state.working_memory,
+            )
+
+            # Capture iteration end checkpoint anchor (RFC-611)
+            # Build execution summary from plan_result and step_results
+            execution_summary = {
+                "status": getattr(plan_result, "status", "success"),
+                "next_action_summary": getattr(plan_result, "next_action", None),
+                "tools_executed": [
+                    f"execute({sr.step_id})" for sr in step_results if hasattr(sr, "step_id")
+                ],
+                "reasoning_decision": getattr(decision, "reasoning", None),
+            }
+
+            try:
+                await anchor_manager.capture_iteration_end_anchor(
+                    iteration=iteration_completed,  # Use pre-increment value
+                    thread_id=state.thread_id,
+                    checkpointer=self.core_agent.graph.checkpointer,
+                    execution_summary=execution_summary,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to capture iteration end anchor",
+                    exc_info=True,
+                )
+
+            yield (
+                "iteration_completed",
+                {
+                    "iteration": iteration_completed,  # Use pre-increment value
+                    "status": plan_result.status,
+                    "progress": plan_result.goal_progress,
+                    "next_action": plan_result.next_action,  # Full action (no truncation)
+                },
+            )
+
+            ready_after = decision.get_ready_steps(state.completed_step_ids)
+            if ready_after:
+                logger.info(
+                    "[→] %d step(s) remaining in current plan; next cycle will re-reason",
+                    len(ready_after),
+                )
+            state.current_decision = decision
+
+        logger.warning(
+            "[⚠] Max iterations (%d) reached (progress=%.0f%%)",
+            state.max_iterations,
+            state.previous_plan.goal_progress * 100 if state.previous_plan else 0,
+        )
+
+        # Mark goal as failed due to max iterations (RFC-608)
+        goal_record.status = "failed"
+        goal_record.completed_at = datetime.now(UTC)
+        checkpoint.status = "ready_for_next_goal"
+        checkpoint.thread_health_metrics.consecutive_goal_failures += 1
+        checkpoint.thread_health_metrics.last_goal_status = "failed"
+        await state_manager.save(checkpoint)
+
+        result = state.previous_plan or PlanResult(
+            status="replan",
+            plan_action="new",
+            decision=_default_agent_decision(state.goal),
+            evidence_summary=state.evidence_summary,
+            goal_progress=0.0,
+            confidence=0.0,
+            next_action="I've hit the iteration limit; I'll pause here.",
+        )
+        yield (
+            "completed",
+            {
+                "result": result,
+                "step_results_count": len(state.step_results),
+            },
+        )
+
+    def _resolve_decision(
+        self,
+        plan_result: PlanResult,
+        state: LoopState,
+    ) -> AgentDecision | None:
+        """Pick the AgentDecision to execute for this Execute phase."""
+        if plan_result.plan_action == "keep":
+            if state.current_decision is None:
+                logger.warning(
+                    "[Plan] plan_action=keep but no current_decision; falling back to new decision"
+                )
+                return plan_result.decision
+            return state.current_decision
+        return plan_result.decision
+
+    def _build_plan_context(self, state: LoopState) -> PlanContext:
+        """Build planning context with available capabilities and completed steps.
+
+        Args:
+            state: Current loop state with step results
+
+        Returns:
+            PlanContext with tools, subagents, and completed steps for the reasoner
+        """
+        available_tools = []
+        if hasattr(self.core_agent, "tools") and isinstance(self.core_agent.tools, dict):
+            available_tools = list(self.core_agent.tools.keys())
+
+        available_subagents = [name for name, cfg in self.config.subagents.items() if cfg.enabled]
+
+        completed_steps = [
+            StepResult(
+                step_id=r.step_id,
+                outcome=r.outcome if r.success else {"type": "error", "error": r.error or ""},
+                success=r.success,
+                duration_ms=r.duration_ms,
+            )
+            for r in state.step_results
+        ]
+
+        wm_excerpt: str | None = None
+        if state.working_memory is not None:
+            rendered = state.working_memory.render_for_reason().strip()
+            if rendered:
+                wm_excerpt = rendered
+
+        return PlanContext(
+            available_capabilities=available_tools + available_subagents,
+            recent_messages=list(state.plan_conversation_excerpts),
+            completed_steps=completed_steps,
+            workspace=state.workspace,
+            git_status=state.git_status,
+            working_memory_excerpt=wm_excerpt,
+        )
+
+    def _get_length_guidance(self, length_category) -> str:
+        """Get response length guidance text for the given category.
+
+        Args:
+            length_category: ResponseLengthCategory enum value
+
+        Returns:
+            Guidance text for the response length category
+        """
+        from soothe.cognition.agent_loop.policies.response_length_policy import (
+            ResponseLengthCategory,
+        )
+
+        if length_category == ResponseLengthCategory.BRIEF:
+            return """Be concise: Lead with answer, no preamble, 1-3 sentences.
+Focus on essential information only."""
+        elif length_category == ResponseLengthCategory.CONCISE:
+            return """Be direct: Brief synthesis, 2-4 key points, avoid repetition.
+Provide incremental updates building on prior context."""
+        elif length_category == ResponseLengthCategory.STANDARD:
+            return """Be comprehensive: 3-5 sections, specific numbers, clear structure.
+Include methodology and key findings with concrete evidence."""
+        elif length_category == ResponseLengthCategory.COMPREHENSIVE:
+            return """Be thorough: Full structured report, concrete examples, detailed breakdown.
+Provide complete analysis with all relevant details organized into clear sections."""
+        else:
+            return """Provide a well-structured response matching the task complexity."""

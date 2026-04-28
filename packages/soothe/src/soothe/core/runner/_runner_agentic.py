@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.agent_loop import AgentLoop
-from soothe.cognition.agent_loop.events import LoopAgentReasonEvent
+from soothe.cognition.agent_loop.utils.events import LoopAgentReasonEvent
 from soothe.config import SootheConfig
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.event_catalog import (
@@ -68,7 +68,7 @@ def _resolve_agentic_report_run_dir(
 
     Uses new isolated directory structure (RFC-409).
     """
-    from soothe.cognition.agent_loop.persistence.directory_manager import (
+    from soothe.cognition.agent_loop.state.persistence.directory_manager import (
         PersistenceDirectoryManager,
     )
     from soothe.config import SOOTHE_HOME
@@ -114,7 +114,9 @@ def _agentic_final_stdout_text(
     body = _normalize_agentic_body(full_output)
     if body:
         # IG-268: Intelligent caps based on response length category
-        from soothe.cognition.agent_loop.response_length_policy import ResponseLengthCategory
+        from soothe.cognition.agent_loop.policies.response_length_policy import (
+            ResponseLengthCategory,
+        )
 
         display_cap = _AGENTIC_GOAL_COMPLETION_FULL_DISPLAY_MAX  # Default: 50000
 

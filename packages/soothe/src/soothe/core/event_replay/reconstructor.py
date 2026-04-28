@@ -12,7 +12,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from soothe.cognition.agent_loop.persistence.manager import (
+from soothe.cognition.agent_loop.state.persistence.manager import (
     AgentLoopCheckpointPersistenceManager,
 )
 from soothe.core.event_constants import (

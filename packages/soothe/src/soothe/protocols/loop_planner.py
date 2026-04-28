@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from soothe.cognition.agent_loop.schemas import LoopState, PlanResult
+from soothe.cognition.agent_loop.state.schemas import LoopState, PlanResult
 from soothe.protocols.planner import PlanContext
 
 

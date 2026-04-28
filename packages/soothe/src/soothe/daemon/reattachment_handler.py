@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.cognition.agent_loop.persistence.manager import (
+from soothe.cognition.agent_loop.state.persistence.manager import (
     AgentLoopCheckpointPersistenceManager,
 )
 from soothe.core.event_constants import HISTORY_REPLAY_COMPLETE, LOOP_REATTACHED

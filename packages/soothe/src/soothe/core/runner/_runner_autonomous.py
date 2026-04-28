@@ -13,7 +13,7 @@ from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.agent_loop import AgentLoop
-from soothe.cognition.agent_loop.schemas import PlanResult
+from soothe.cognition.agent_loop.state.schemas import PlanResult
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.event_catalog import (
     AutonomousGoalCompletionEvent,

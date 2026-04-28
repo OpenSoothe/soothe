@@ -54,7 +54,7 @@ def _wrap_streaming_output(
     # Extract AI text from messages-mode chunks
     from langchain_core.messages import AIMessage, AIMessageChunk
 
-    from soothe.cognition.agent_loop.stream_chunk_normalize import (
+    from soothe.cognition.agent_loop.utils.stream_normalize import (
         extract_text_from_message_content,
         iter_messages_for_act_aggregation,
     )
