@@ -8,11 +8,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from soothe.cognition.agent_loop.analysis.synthesis import SynthesisGenerator
 from soothe.cognition.agent_loop.branching.anchor_manager import CheckpointAnchorManager
-from soothe.cognition.agent_loop.completion.goal_completion import GoalCompletionModule
 from soothe.cognition.agent_loop.context.goal_context_manager import GoalContextManager
 from soothe.cognition.agent_loop.core.executor import Executor
+from soothe.cognition.agent_loop.core.fallback_summary import generate_user_fallback_summary
 from soothe.cognition.agent_loop.core.plan_phase import PlanPhase
+from soothe.cognition.agent_loop.policies.goal_completion_policy import (
+    determine_completion_action,
+)
 from soothe.cognition.agent_loop.state.schemas import AgentDecision, LoopState, PlanResult
 from soothe.cognition.agent_loop.state.state_manager import AgentLoopStateManager
 from soothe.cognition.agent_loop.state.working_memory import LoopWorkingMemory
@@ -316,29 +320,98 @@ class AgentLoop:
                     working_memory=state.working_memory,
                 )
 
-                # RFC-615 / IG-297: Goal completion — delegate to GoalCompletionModule
-                # Simplified from ~200 lines to ~10 lines of module orchestration
-                completion_module = GoalCompletionModule(
-                    self.core_agent,
-                    self.loop_planner._model,
-                    self.config,
+                # RFC-615 / IG-299: Goal completion — consolidated decision + execution
+                # Simplified from 8 files to 3 files (policy, synthesis, fallback)
+
+                # 1. Create synthesis generator for categorization and execution
+                synthesis_gen = SynthesisGenerator(self.loop_planner._model, self.core_agent)
+
+                # 2. Categorize response length
+                intent_type = "new_goal"
+                task_complexity = "medium"
+                if state.intent and hasattr(state.intent, "intent_type"):
+                    intent_type = state.intent.intent_type
+                    task_complexity = getattr(state.intent, "task_complexity", "medium")
+
+                length_category = synthesis_gen.categorize_response_length(
+                    state, intent_type, task_complexity
                 )
 
-                # Complete goal with modular strategy pattern
-                updated_result, stream_gen = await completion_module.complete_goal(
-                    goal, state, plan_result
+                # 3. Decision: determine action
+                action, precomputed_text = determine_completion_action(
+                    state,
+                    plan_result,
+                    self.config.agentic.final_response,
+                    length_category.value,
                 )
 
-                # Yield stream chunks (for synthesis strategy)
-                async for chunk in stream_gen:
-                    yield chunk
+                # 4. Execution: based on action
+                final_output = None
+
+                if action == "skip" or action == "direct":
+                    # Use precomputed Execute text
+                    final_output = precomputed_text
+                    logger.info(
+                        "Goal completion: action=%s chars=%d", action, len(final_output or "")
+                    )
+                elif action == "synthesize":
+                    # Stream synthesis generation
+                    logger.info("Goal completion: action=synthesis starting stream")
+                    # Import stream accumulation utilities
+                    from soothe.cognition.agent_loop.utils.stream_normalize import (
+                        GoalCompletionAccumState,
+                        iter_messages_for_act_aggregation,
+                        resolve_goal_completion_text,
+                        update_goal_completion_from_message,
+                    )
+
+                    # Stream and accumulate
+                    accum = GoalCompletionAccumState()
+                    chunk_count = 0
+
+                    async for chunk in synthesis_gen.generate_synthesis(
+                        goal, state, plan_result, length_category
+                    ):
+                        chunk_count += 1
+                        # Extract messages from stream chunk
+                        for msg in iter_messages_for_act_aggregation(chunk):
+                            update_goal_completion_from_message(accum, msg)
+                        # Yield stream chunks
+                        yield chunk
+
+                    # Resolve final text after stream exhausted
+                    final_output = resolve_goal_completion_text(accum)
+
+                    logger.info(
+                        "Synthesis stream: chunks=%d ai_msgs=%d chars=%d",
+                        chunk_count,
+                        accum.ai_msg_count,
+                        len(final_output or ""),
+                    )
+
+                    if not final_output:
+                        logger.warning("No synthesis text from CoreAgent, using fallback")
+                        final_output = generate_user_fallback_summary(state, plan_result)
+                elif action == "summary":
+                    # Generate fallback summary
+                    final_output = generate_user_fallback_summary(state, plan_result)
+                    logger.info("Goal completion: action=summary chars=%d", len(final_output or ""))
+
+                # 5. Update PlanResult with final output
+                updated_result = plan_result.model_copy(
+                    update={
+                        "full_output": final_output,
+                        "response_length_category": length_category.value,
+                    }
+                )
 
                 # Finalize goal with final output
                 await state_manager.finalize_goal(goal_record, updated_result.full_output)
                 logger.info(
-                    "Goal completed: iterations=%d duration=%dms",
+                    "Goal completed: iterations=%d duration=%dms action=%s",
                     state.iteration,
                     state.total_duration_ms,
+                    action,
                 )
                 yield (
                     "completed",

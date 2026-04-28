@@ -9,11 +9,8 @@ import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage, AIMessageChunk
 
-from soothe.cognition.agent_loop.policies.synthesis_policy import (
-    assemble_assistant_text_from_stream_messages,
-)
 from soothe.cognition.agent_loop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -137,8 +134,52 @@ class Executor:
         if parallel_multi_step:
             state.last_execute_assistant_text = None
             return
-        text = assemble_assistant_text_from_stream_messages(messages)
+        text = self._assemble_assistant_text_from_stream_messages(messages)
         state.last_execute_assistant_text = text if text else None
+
+
+    def _assemble_assistant_text_from_stream_messages(self, messages: list[BaseMessage]) -> str:
+        """Extract assistant-visible text from CoreAgent stream message list.
+
+        Matches the selection rules used for AgentLoop final-report streaming: prefer
+        concatenated ``AIMessageChunk`` text over a trailing non-chunk ``AIMessage``.
+
+        Args:
+            messages: Messages collected from ``_stream_and_collect`` (AI entries only).
+
+        Returns:
+            Stripped assistant text, or empty string if none.
+        """
+        accumulated_chunks = ""
+        final_ai_message_text = ""
+        for msg in messages:
+            if not isinstance(msg, (AIMessage, AIMessageChunk)):
+                continue
+            content = msg.content
+            extracted_text = ""
+            if isinstance(content, str):
+                extracted_text = content
+            elif isinstance(content, list):
+                parts: list[str] = []
+                for block in content:
+                    if isinstance(block, dict) and "text" in block:
+                        parts.append(block["text"])
+                    elif isinstance(block, str):
+                        parts.append(block)
+                extracted_text = "".join(parts)
+
+            if isinstance(msg, AIMessageChunk) and extracted_text:
+                accumulated_chunks += extracted_text
+            elif isinstance(msg, AIMessage) and extracted_text:
+                final_ai_message_text = extracted_text
+
+        last_ai_text = (
+            accumulated_chunks
+            if len(accumulated_chunks) >= len(final_ai_message_text)
+            else final_ai_message_text
+        )
+        return last_ai_text.strip()
+
 
     def _aggregate_wave_metrics(
         self,

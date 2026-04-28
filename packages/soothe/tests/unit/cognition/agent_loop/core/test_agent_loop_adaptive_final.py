@@ -1,4 +1,4 @@
-"""AgentLoop adaptive final response wiring (IG-199)."""
+"""AgentLoop adaptive final response wiring (IG-199, IG-299)."""
 
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -33,6 +33,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
             next_action="done",
             plan_action="new",
             full_output="from plan full_output",
+            require_goal_completion=False,  # IG-299: Planner says skip synthesis
         )
 
     mock_gr = Mock()
@@ -59,10 +60,6 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
             "soothe.cognition.agent_loop.core.agent_loop.GoalContextManager",
             return_value=mock_gcm,
         ),
-        patch(
-            "soothe.cognition.agent_loop.policies.synthesis_policy.needs_final_thread_synthesis",
-            return_value=False,
-        ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
         loop.plan_phase.plan = fake_plan
@@ -81,7 +78,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
 
 @pytest.mark.asyncio
 async def test_done_skips_goal_completion_synthesis_when_direct_return_selected() -> None:
-    """Direct goal completion should bypass synthesis even if legacy policy asks for it."""
+    """Direct goal completion should bypass synthesis when planner recommends it."""
     calls = 0
 
     async def counting_astream(*args, **kwargs):  # noqa: ARG002
@@ -102,7 +99,8 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
             reasoning="",
             next_action="done",
             plan_action="new",
-            full_output="",
+            full_output="from plan full_output",
+            require_goal_completion=False,  # IG-299: Planner says skip synthesis
         )
 
     mock_gr = Mock()
@@ -130,16 +128,13 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.cognition.agent_loop.policies.synthesis_policy.needs_final_thread_synthesis",
-            return_value=True,
-        ),
-        patch(
-            "soothe.cognition.agent_loop.policies.synthesis_policy.should_return_goal_completion_directly",
-            return_value=True,
+            "soothe.cognition.agent_loop.policies.goal_completion_policy.determine_completion_action",
+            return_value=("skip", "from plan full_output"),
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
         loop.plan_phase.plan = fake_plan
+
         events = [
             evt
             async for evt in loop.run_with_progress(
@@ -149,4 +144,4 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
         ]
 
     assert events
-    assert calls == 0
+    assert calls == 0, "synthesis should not run when planner recommends direct return"
