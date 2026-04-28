@@ -4110,7 +4110,7 @@ class SootheApp(App):
                     event_type = event_payload.get("type", "")
 
                     # IG-274: Track suppression state from events
-                    final_stdout = suppression.track_from_event(event_type, event_payload)
+                    suppression.track_from_event(event_type, event_payload)
 
                     # Unified execute-phase tracking (IG-143 + execute-phase)
                     suppression.track_execute_phase_from_event(event_type, ns_key)
@@ -4124,8 +4124,8 @@ class SootheApp(App):
                             await self._mount_message(AppMessage(rendered))
 
                     # IG-274: Emit goal completion when suppression ends
-                    if suppression.should_emit_goal_completion(event_type, final_stdout):
-                        response = suppression.get_final_response(final_stdout, ns_key)
+                    if suppression.should_emit_goal_completion(event_type):
+                        response = suppression.get_final_response(ns_key)
                         if response:
                             asst = assistant_cards_by_ns.get(ns_key)
                             if asst is None:

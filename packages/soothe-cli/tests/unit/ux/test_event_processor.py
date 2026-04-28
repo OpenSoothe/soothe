@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from unittest.mock import MagicMock
 
-from soothe.core.event_catalog import PLAN_CREATED
+from soothe.core.events import PLAN_CREATED
 
 from soothe_cli.shared.event_processor import EventProcessor
 from soothe_cli.shared.processor_state import ProcessorState
@@ -297,7 +297,6 @@ class TestEventProcessorOutputEventRouting:
                 "thread_id": "t",
                 "status": "done",
                 "goal_progress": 1.0,
-                "goal_completion_message": "# Goal Completion\n\n1\tline one",
             },
         }
 
@@ -332,8 +331,8 @@ class TestEventProcessorOutputEventRouting:
         assert assistant_calls[0][1][0] == "Hello from chitchat"
         assert progress_calls == []
 
-    def test_batch_mode_emits_agent_loop_completed_output(self) -> None:
-        """Batch mode should render final stdout from agent_loop.completed."""
+    def test_batch_mode_emits_goal_completion_responded_output(self) -> None:
+        """Batch mode should render final stdout from output responded event."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal", final_output_mode="batch")
 
@@ -342,10 +341,8 @@ class TestEventProcessorOutputEventRouting:
             "mode": "custom",
             "namespace": [],
             "data": {
-                "type": "soothe.cognition.agent_loop.completed",
-                "status": "done",
-                "goal_progress": 1.0,
-                "goal_completion_message": "Batch goal completion content",
+                "type": "soothe.output.goal_completion.responded",
+                "content": "Batch goal completion content",
             },
         }
 
@@ -355,9 +352,7 @@ class TestEventProcessorOutputEventRouting:
         progress_calls = [c for c in renderer.calls if c[0] == "on_progress_event"]
         assert len(assistant_calls) == 1
         assert assistant_calls[0][1][0] == "Batch goal completion content"
-        assert len(progress_calls) == 1
-        # goal_completion_message is removed before progress callback to avoid duplicate emission
-        assert "goal_completion_message" not in progress_calls[0][1][1]
+        assert progress_calls == []
 
     def test_batch_mode_suppresses_synthesis_streaming_chunks(self) -> None:
         """Batch mode should ignore streaming final-report chunks."""
@@ -401,8 +396,8 @@ class TestEventProcessorOutputEventRouting:
         assert len(assistant_calls) == 1
         assert assistant_calls[0][1][0] == "goal completion chunk"
 
-    def test_streaming_mode_drops_completed_final_stdout_from_progress_payload(self) -> None:
-        """Streaming mode should not pass goal_completion_message to progress renderer."""
+    def test_streaming_mode_completed_event_stays_progress_only(self) -> None:
+        """Completed event remains progress-only in streaming mode."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
 
@@ -414,7 +409,6 @@ class TestEventProcessorOutputEventRouting:
                 "type": "soothe.cognition.agent_loop.completed",
                 "status": "done",
                 "goal_progress": 1.0,
-                "goal_completion_message": "Batch payload should be dropped in streaming mode",
             },
         }
 
@@ -422,7 +416,8 @@ class TestEventProcessorOutputEventRouting:
 
         progress_calls = [c for c in renderer.calls if c[0] == "on_progress_event"]
         assert len(progress_calls) == 1
-        assert "goal_completion_message" not in progress_calls[0][1][1]
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert assistant_calls == []
 
     def test_streaming_goal_completion_preserves_markdown_chunk_boundaries(self) -> None:
         """Streaming markdown chunks should preserve whitespace/newlines exactly."""
@@ -456,17 +451,15 @@ class TestEventProcessorOutputEventRouting:
                 },
             }
         )
-        # Completion event still flows as progress but should not carry final stdout payload.
+        # Final responded event should not replay duplicated full text after chunks.
         processor.process_event(
             {
                 "type": "event",
                 "mode": "custom",
                 "namespace": [],
                 "data": {
-                    "type": "soothe.cognition.agent_loop.completed",
-                    "status": "done",
-                    "goal_progress": 1.0,
-                    "goal_completion_message": chunk_1 + chunk_2,
+                    "type": "soothe.output.goal_completion.responded",
+                    "content": chunk_1 + chunk_2,
                 },
             }
         )
@@ -479,9 +472,7 @@ class TestEventProcessorOutputEventRouting:
         assert assistant_calls[1][2]["is_streaming"] is True
 
         progress_calls = [c for c in renderer.calls if c[0] == "on_progress_event"]
-        assert len(progress_calls) == 1
-        assert progress_calls[0][1][0] == "soothe.cognition.agent_loop.completed"
-        assert "goal_completion_message" not in progress_calls[0][1][1]
+        assert progress_calls == []
 
     def test_streaming_goal_completion_preserves_boundaries_when_is_chunk_false(self) -> None:
         """synthesis streaming should preserve boundaries even when is_chunk is false."""

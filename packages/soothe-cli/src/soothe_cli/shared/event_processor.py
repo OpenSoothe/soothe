@@ -49,6 +49,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MSG_PAIR_LEN = 2
+_GOAL_COMPLETION_STREAMING_EVENT = "soothe.output.goal_completion.streaming"
+_GOAL_COMPLETION_RESPONDED_EVENT = "soothe.output.goal_completion.responded"
 
 
 class EventProcessor:
@@ -707,31 +709,9 @@ class EventProcessor:
         # Tool events are now visible at NORMAL verbosity (RFC-0020 CLI Stream Display Pipeline)
         # They are processed through on_progress_event -> StreamDisplayPipeline
 
-        # Handle output events (chitchat, quiz, goal completion streaming, etc.) through unified registry
-        # IG-254: Single source of truth for user-visible output events
-        # IG-268: Include goal_completion_message from agent_loop.completed (removed exclusion)
-        data_for_progress = data
-        if etype == "soothe.cognition.agent_loop.completed":
-            if self._final_output_mode == "batch":
-                content = extract_output_text(etype, data)
-                if content and self._presentation.tier_visible(
-                    VerbosityTier.QUIET, self._verbosity
-                ):
-                    cleaned = self._clean_assistant_text(content)
-                    if cleaned:
-                        self._emit_assistant_text(
-                            cleaned,
-                            is_main=True,
-                            is_streaming=False,
-                        )
-                        self._presentation.mark_final_answer_locked()
-            # Prevent renderer-side duplicate final emission in both modes:
-            # - streaming mode: final text is emitted via chunk stream
-            # - batch mode: final text is emitted above
-            data_for_progress = dict(data)
-            data_for_progress.pop("goal_completion_message", None)
-            # Continue processing as progress event for status/goal completion lines.
-        elif is_output_event(etype):
+        # Handle output events (chitchat, quiz, goal completion streaming/responded, etc.)
+        # through unified registry (IG-254).
+        if is_output_event(etype):
             # RFC-614: Unified streaming output handling
             streaming_config = self._get_effective_streaming_config()
 
@@ -741,6 +721,37 @@ class EventProcessor:
 
             content = extract_output_text(etype, data)
             if content and self._presentation.tier_visible(VerbosityTier.QUIET, self._verbosity):
+                # Hard cutover: final goal completion answer comes only from
+                # soothe.output.goal_completion.responded.
+                if etype == _GOAL_COMPLETION_RESPONDED_EVENT:
+                    if namespace in self._state.final_output_emitted_by_namespace:
+                        return
+
+                    if streaming_config.get("mode") == "streaming":
+                        stream_state = self._state.streaming_accumulator.streams.get(
+                            (_GOAL_COMPLETION_STREAMING_EVENT, namespace)
+                        )
+                        # If streamed chunks already rendered, finalize without replay.
+                        if stream_state and stream_state.accumulated_text.strip():
+                            self._presentation.mark_final_answer_locked()
+                            self._state.streaming_accumulator.finalize_stream(
+                                _GOAL_COMPLETION_STREAMING_EVENT,
+                                namespace=namespace,
+                            )
+                            self._state.final_output_emitted_by_namespace.add(namespace)
+                            return
+
+                    cleaned = self._clean_assistant_text(content, is_streaming=False)
+                    if cleaned:
+                        self._emit_assistant_text(
+                            cleaned,
+                            is_main=True,
+                            is_streaming=False,
+                        )
+                    self._presentation.mark_final_answer_locked()
+                    self._state.final_output_emitted_by_namespace.add(namespace)
+                    return
+
                 # Treat all ``*.streaming`` events as streaming text payloads. Some
                 # providers send ``is_chunk=False`` for chunk-like boundaries.
                 is_streaming_chunk = etype.endswith(".streaming")
@@ -810,7 +821,7 @@ class EventProcessor:
             error_text = data.get("error", data.get("message", str(etype)))
             self._renderer.on_error(error_text)
         elif self._presentation.tier_visible(category, self._verbosity):
-            self._renderer.on_progress_event(etype, data_for_progress, namespace=namespace)
+            self._renderer.on_progress_event(etype, data, namespace=namespace)
 
     def _handle_plan_created(self, data: dict[str, Any]) -> None:
         """Handle plan creation event."""

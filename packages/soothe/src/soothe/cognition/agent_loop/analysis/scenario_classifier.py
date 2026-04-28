@@ -7,6 +7,7 @@ using fast model with structured output.
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, model_validator
@@ -78,6 +79,8 @@ BUILTIN_SCENARIOS = {
         "Key Points",
     ],
 }
+
+_JSON_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.IGNORECASE | re.DOTALL)
 
 
 class ScenarioClassification(BaseModel):
@@ -248,6 +251,73 @@ def _get_scenario_description(scenario_name: str) -> str:
     return descriptions.get(scenario_name, "General synthesis")
 
 
+def _coerce_response_text(content: object) -> str:
+    """Normalize model response content into a parseable text payload."""
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        chunks: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                chunks.append(block)
+            elif isinstance(block, dict):
+                text = block.get("text")
+                if isinstance(text, str):
+                    chunks.append(text)
+        if chunks:
+            return "".join(chunks)
+
+    return str(content)
+
+
+def _iter_json_candidates(raw_text: str) -> list[str]:
+    """Yield likely JSON payload candidates from model response text."""
+    candidates: list[str] = []
+    text = raw_text.strip()
+    if text:
+        candidates.append(text)
+
+    # Most common failure mode: fenced markdown JSON block.
+    for match in _JSON_FENCE_PATTERN.finditer(raw_text):
+        fenced = match.group(1).strip()
+        if fenced:
+            candidates.append(fenced)
+
+    # If prose surrounds JSON, take first/last object envelope.
+    first_brace = raw_text.find("{")
+    last_brace = raw_text.rfind("}")
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        candidates.append(raw_text[first_brace : last_brace + 1].strip())
+
+    # Preserve order, remove duplicates.
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if candidate and candidate not in seen:
+            seen.add(candidate)
+            deduped.append(candidate)
+    return deduped
+
+
+def _parse_classification_response(content: object) -> ScenarioClassification:
+    """Parse classification response from raw/fenced/wrapped JSON content."""
+    response_text = _coerce_response_text(content)
+    last_error: Exception | None = None
+
+    for candidate in _iter_json_candidates(response_text):
+        try:
+            return ScenarioClassification.model_validate_json(candidate)
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            continue
+
+    if last_error is not None:
+        raise last_error
+
+    raise ValueError("Empty scenario classification response")
+
+
 async def classify_synthesis_scenario(
     goal: str,
     state: LoopState,
@@ -289,7 +359,7 @@ async def classify_synthesis_scenario(
         response = await llm_client.ainvoke([HumanMessage(content=prompt)])
 
         # Parse JSON response into ScenarioClassification
-        classification = ScenarioClassification.parse_raw(response.content)
+        classification = _parse_classification_response(response.content)
 
         logger.info(
             "Scenario classifier: scenario=%s sections=%d focus_items=%d",

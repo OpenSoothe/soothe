@@ -95,6 +95,7 @@ MESSAGE_SENT = "soothe.protocol.message.sent"
 CHITCHAT_RESPONSE = "soothe.output.chitchat.responded"
 QUIZ_RESPONSE = "soothe.output.quiz.responded"
 GOAL_COMPLETION_STREAMING = "soothe.output.goal_completion.streaming"
+GOAL_COMPLETION_RESPONDED = "soothe.output.goal_completion.responded"
 AUTONOMOUS_GOAL_COMPLETION = "soothe.output.autonomous.goal_completion.reported"
 
 # Agent loop configuration constants
@@ -132,6 +133,7 @@ __all__ = [
     "CHITCHAT_RESPONSE",
     "QUIZ_RESPONSE",
     "GOAL_COMPLETION_STREAMING",
+    "GOAL_COMPLETION_RESPONDED",
     "AUTONOMOUS_GOAL_COMPLETION",
     # Constants
     "DEFAULT_AGENT_LOOP_MAX_ITERATIONS",

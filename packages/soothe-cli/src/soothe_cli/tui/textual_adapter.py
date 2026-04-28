@@ -94,6 +94,7 @@ AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
 AGENT_LOOP_GOAL_STARTED = "soothe.cognition.agent_loop.started"
 AGENT_LOOP_GOAL_COMPLETED = "soothe.cognition.agent_loop.completed"
 GOAL_COMPLETION_STREAMING_EVENT = "soothe.output.goal_completion.streaming"
+GOAL_COMPLETION_RESPONDED_EVENT = "soothe.output.goal_completion.responded"
 
 _hitl_adapter_cache: TypeAdapter | None = None
 """Lazy singleton for the HITL request validator."""
@@ -1384,11 +1385,6 @@ async def execute_task_textual(
                                 and final_output_mode != "streaming"
                             ):
                                 continue
-                            if (
-                                event_type == "soothe.cognition.agent_loop.completed"
-                                and final_output_mode != "batch"
-                            ):
-                                continue
                             pending_text = pending_text_by_namespace.get(ns_key, "")
                             existing_msg = assistant_message_by_namespace.get(ns_key)
                             stream_msg = goal_completion_stream_by_namespace.get(ns_key)
@@ -1424,7 +1420,11 @@ async def execute_task_textual(
                             if stream_msg is not None:
                                 # Flush terminal non-chunk event into existing final-report stream card.
                                 # Some providers send one final non-chunk payload after streamed chunks.
-                                if output_text and output_text not in stream_msg._content:
+                                if (
+                                    event_type != GOAL_COMPLETION_RESPONDED_EVENT
+                                    and output_text
+                                    and output_text not in stream_msg._content
+                                ):
                                     await stream_msg.append_content(output_text)
                                 await stream_msg.stop_stream()
                                 if adapter._sync_message_content and stream_msg.id:

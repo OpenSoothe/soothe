@@ -80,11 +80,12 @@ def daemon_start(
     for _ in range(120):
         if SootheDaemon.is_running():
             pid = SootheDaemon.find_pid()
-            typer.echo("Daemon started successfully")
-            if pid:
-                typer.echo(f"PID: {pid}")
-            typer.echo(f"Socket: {Path(SOOTHE_HOME).expanduser() / 'soothe.sock'}")
-            typer.echo("Status: running")
+            socket_path = Path(SOOTHE_HOME).expanduser() / "soothe.sock"
+
+            # Compact success message
+            pid_str = f"PID: {pid}" if pid else "PID: unknown"
+            socket_str = f"socket: {socket_path}"
+            typer.echo(f"Daemon started successfully ({pid_str}, {socket_str})")
             return
         time.sleep(0.1)
 

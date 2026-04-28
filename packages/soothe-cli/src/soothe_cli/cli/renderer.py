@@ -362,22 +362,19 @@ class CliRenderer(RendererBase):
             namespace: Subagent namespace.
         """
         # Track suppression state from event (IG-143 + execute-phase)
-        final_stdout = self._state.suppression.track_from_event(event_type, data)
+        self._state.suppression.track_from_event(event_type, data)
 
         # Track execute-phase from step events (unified suppression logic)
         self._state.suppression.track_execute_phase_from_event(event_type, namespace)
 
-        payload = dict(data)
-        payload.pop("goal_completion_message", None)
-
         # Build event dict for pipeline
-        event = {"type": event_type, **payload}
+        event = {"type": event_type, **data}
         lines = self._pipeline.process(event)
         self.write_lines(lines)
 
         # Emit goal completion on loop completion (IG-143, IG-273)
-        if self._state.suppression.should_emit_goal_completion(event_type, final_stdout):
-            response = self._state.suppression.get_final_response(final_stdout, namespace)
+        if self._state.suppression.should_emit_goal_completion(event_type):
+            response = self._state.suppression.get_final_response(namespace)
             self._write_stdout_goal_completion(response)
 
     def on_plan_created(self, plan: Plan) -> None:
@@ -459,7 +456,9 @@ class CliRenderer(RendererBase):
         """
         # Capture state BEFORE resetting
         was_multi_step = self._state.suppression.multi_step_active
-        accumulated_response = self._state.suppression.full_response
+        accumulated_response = list(self._state.suppression.full_response)
+        had_agentic_suppression = self._state.suppression.agentic_stdout_suppressed
+        had_final_emit = self._state.suppression.agentic_final_stdout_emitted
 
         # Reset state for next turn FIRST (before output logic)
         self._state.needs_stdout_newline = False
@@ -472,8 +471,8 @@ class CliRenderer(RendererBase):
         if (
             was_multi_step
             and accumulated_response
-            and self._state.suppression.agentic_stdout_suppressed
-            and not self._state.suppression.agentic_final_stdout_emitted
+            and had_agentic_suppression
+            and not had_final_emit
         ):
             self._write_stdout_goal_completion("".join(accumulated_response))
             return
