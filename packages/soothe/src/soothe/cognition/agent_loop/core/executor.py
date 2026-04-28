@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import AIMessage, BaseMessage, AIMessageChunk
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 
 from soothe.cognition.agent_loop.state.schemas import (
     AgentDecision,
@@ -137,7 +137,6 @@ class Executor:
         text = self._assemble_assistant_text_from_stream_messages(messages)
         state.last_execute_assistant_text = text if text else None
 
-
     def _assemble_assistant_text_from_stream_messages(self, messages: list[BaseMessage]) -> str:
         """Extract assistant-visible text from CoreAgent stream message list.
 
@@ -179,7 +178,6 @@ class Executor:
             else final_ai_message_text
         )
         return last_ai_text.strip()
-
 
     def _aggregate_wave_metrics(
         self,

@@ -1,25 +1,23 @@
-"""Synthesis execution logic for comprehensive final report generation (RFC-603, IG-299).
+"""Synthesis execution logic for comprehensive final report generation (RFC-603, RFC-616, IG-300).
 
-Consolidated execution module merging:
-- SynthesisPhase (goal classification, LLM calls)
-- ResponseCategorizer (response length categorization)
-- SynthesisExecutor (streaming generation)
+Consolidated execution module:
+- Scenario classification (Phase 1 via ScenarioClassifier)
+- Synthesis generation (Phase 2 via CoreAgent streaming)
 
-Separation of concerns (IG-299):
+Separation of concerns (IG-300):
 - policies/goal_completion_policy.py: Decision logic ("should we synthesize?")
+- analysis/scenario_classifier.py: Classification logic ("what scenario?")
 - analysis/synthesis.py: Execution logic ("how to synthesize?")
 """
 
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING
 
-from soothe.cognition.agent_loop.policies.response_length_policy import (
-    ResponseLengthCategory,
-    calculate_evidence_metrics,
-    determine_response_length,
+from soothe.cognition.agent_loop.analysis.scenario_classifier import (
+    ScenarioClassification,
+    classify_synthesis_scenario,
 )
 from soothe.cognition.agent_loop.state.schemas import LoopState, PlanResult
 from soothe.cognition.agent_loop.utils.messages import LoopHumanMessage
@@ -33,115 +31,71 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Goal classification thresholds (internal constants for execution logic)
-_MIN_DIRECTORIES_FOR_ARCHITECTURE = 3
-_MIN_FINDINGS_FOR_RESEARCH = 3
-_MIN_CODE_MENTIONS_FOR_IMPLEMENTATION = 5
-
 
 class SynthesisGenerator:
-    """Generate synthesis reports from execution evidence (IG-299).
+    """Generate synthesis reports from execution evidence (RFC-616, IG-300).
 
-    Consolidated class merging SynthesisPhase, ResponseCategorizer, SynthesisExecutor.
+    Two-phase synthesis system:
+    - Phase 1: ScenarioClassifier determines scenario + structure
+    - Phase 2: CoreAgent generates synthesis following scenario template
 
-    Responsibilities:
-    - Goal classification from evidence patterns
-    - Response length categorization from metrics
-    - LLM synthesis generation with streaming
+    Removed legacy components (IG-300):
+    - Keyword-based goal_type classification
+    - Response length categorization
+    - Length-based guidance
     """
 
     def __init__(self, llm_client: BaseChatModel, core_agent: CoreAgent) -> None:
         """Initialize synthesis generator with LLM client and CoreAgent.
 
         Args:
-            llm_client: LLM for goal classification (unused, classification via regex).
-            core_agent: CoreAgent for synthesis execution with streaming.
+            llm_client: Fast model for scenario classification (Phase 1).
+            core_agent: CoreAgent for synthesis execution with streaming (Phase 2).
         """
         self.llm = llm_client
         self.core_agent = core_agent
 
-    def classify_goal(self, evidence: str) -> str:
-        """Classify goal type from evidence patterns.
+    async def _classify_scenario(self, goal: str, state: LoopState) -> ScenarioClassification:
+        """Wrap classifier with error handling (IG-300).
 
         Args:
-            evidence: Concatenated evidence from successful steps.
+            goal: User's goal description.
+            state: Loop state with intent and execution history.
 
         Returns:
-            Goal type: architecture_analysis, research_synthesis,
-                      implementation_summary, general_synthesis.
+            ScenarioClassification with scenario + sections + focus + emphasis.
+            Fallback to general_summary on classification failure.
         """
-        evidence_lower = evidence.lower()
+        try:
+            return await classify_synthesis_scenario(goal, state, self.llm)
+        except Exception:
+            logger.warning("Classifier failed, using fallback", exc_info=True)
+            from soothe.cognition.agent_loop.analysis.scenario_classifier import BUILTIN_SCENARIOS
 
-        # Architecture analysis: Multiple directories + layer mentions
-        directory_pattern = r"(src/|docs/|core/|backends/|protocols/|tools/)"
-        directories = len(re.findall(directory_pattern, evidence_lower))
-        layer_mentions = bool(re.search(r"layer|architecture|component|module", evidence_lower))
-
-        if directories >= _MIN_DIRECTORIES_FOR_ARCHITECTURE and layer_mentions:
-            return "architecture_analysis"
-
-        # Research synthesis: Multiple findings
-        findings_pattern = r"(found|identified|discovered|located)\s+\d+"
-        findings_count = len(re.findall(findings_pattern, evidence_lower))
-
-        if findings_count >= _MIN_FINDINGS_FOR_RESEARCH:
-            return "research_synthesis"
-
-        # Implementation summary: Code mentions
-        code_pattern = r"(function|class|method|implementation|def |async def)"
-        code_mentions = len(re.findall(code_pattern, evidence_lower))
-
-        if code_mentions >= _MIN_CODE_MENTIONS_FOR_IMPLEMENTATION:
-            return "implementation_summary"
-
-        return "general_synthesis"
-
-    def categorize_response_length(
-        self,
-        state: LoopState,
-        intent_type: str = "new_goal",
-        task_complexity: str = "medium",
-    ) -> ResponseLengthCategory:
-        """Determine response length from evidence metrics (IG-299).
-
-        Args:
-            state: Loop state with step results.
-            intent_type: Intent classification from state.intent.
-            task_complexity: Task complexity from state.intent.
-
-        Returns:
-            ResponseLengthCategory with min_words, max_words bounds.
-        """
-        # Calculate metrics (from response_length_policy)
-        evidence_volume, evidence_diversity = calculate_evidence_metrics(state.step_results)
-
-        # Classify goal type
-        evidence = self._extract_evidence(state)
-        goal_type = self.classify_goal(evidence)
-
-        # Determine length category
-        return determine_response_length(
-            intent_type=intent_type,
-            goal_type=goal_type,
-            task_complexity=task_complexity,
-            evidence_volume=evidence_volume,
-            evidence_diversity=evidence_diversity,
-        )
+            return ScenarioClassification(
+                scenario="general_summary",
+                sections=BUILTIN_SCENARIOS["general_summary"],
+                contextual_focus=["Provide concise summary of goal completion"],
+                evidence_emphasis="Use any available tool results or AI responses",
+            )
 
     async def generate_synthesis(
         self,
         goal: str,
         state: LoopState,
         plan_result: PlanResult,
-        length_category: ResponseLengthCategory,
     ) -> AsyncGenerator:
-        """Generate synthesis via CoreAgent streaming (IG-299).
+        """Generate synthesis via CoreAgent streaming (RFC-616, IG-300).
+
+        Two-phase flow:
+        1. Classify scenario from goal + intent + execution
+        2. Build synthesis prompt using classification
+        3. Stream via CoreAgent
 
         Args:
             goal: Goal description.
-            state: Loop state with thread context.
+            state: Loop state with thread context and execution history.
             plan_result: Plan result (reserved for future hints).
-            length_category: Response length guidance.
 
         Returns:
             Async generator yielding stream chunks.
@@ -151,11 +105,11 @@ class SynthesisGenerator:
         # Extract evidence
         evidence = self._extract_evidence(state)
 
-        # Classify goal type
-        goal_type = self.classify_goal(evidence)
+        # Phase 1: Classify scenario
+        classification = await self._classify_scenario(goal, state)
 
-        # Build synthesis prompt
-        prompt = self._build_synthesis_prompt(goal, evidence, goal_type, length_category)
+        # Phase 2: Build synthesis prompt from classification
+        prompt = self._build_synthesis_prompt(goal, evidence, classification)
 
         # Create human message
         human_msg = LoopHumanMessage(
@@ -167,9 +121,9 @@ class SynthesisGenerator:
         )
 
         logger.info(
-            "Synthesis generator: goal_type=%s length_category=%s evidence_chars=%d",
-            goal_type,
-            length_category.value,
+            "Synthesis generator: scenario=%s sections=%d evidence_chars=%d",
+            classification.scenario,
+            len(classification.sections),
             len(evidence),
         )
 
@@ -183,75 +137,57 @@ class SynthesisGenerator:
             yield ("goal_completion_stream", chunk)
 
     def _extract_evidence(self, state: LoopState) -> str:
-        """Extract evidence from successful step results."""
+        """Extract evidence from successful step results (unchanged from IG-299)."""
         evidence_parts = []
         for result in state.step_results:
             if result.success:
                 evidence_str = result.to_evidence_string(truncate=False)
                 evidence_parts.append(evidence_str)
+
+        if not evidence_parts:
+            return "No execution evidence available (goal completed without tools)"
+
         return "\n\n".join(evidence_parts)
 
     def _build_synthesis_prompt(
         self,
         goal: str,
         evidence: str,
-        goal_type: str,
-        length_category: ResponseLengthCategory,
+        classification: ScenarioClassification,
     ) -> str:
-        """Build synthesis prompt with length guidance (IG-299).
+        """Build synthesis prompt from scenario classification (RFC-616, IG-300).
 
         Args:
             goal: Goal description.
             evidence: Concatenated evidence from successful steps.
-            goal_type: Classified goal type.
-            length_category: Response length category.
+            classification: Scenario classification from Phase 1.
 
         Returns:
-            Complete synthesis prompt text.
+            Complete synthesis prompt text with scenario structure and focus.
         """
-        length_guidance = self._get_length_guidance(length_category)
+        focus_items = "\n".join(f"- {focus}" for focus in classification.contextual_focus)
 
-        return f"""Based on the complete execution history in this thread, generate a goal completion response for: {goal}
+        return f"""Generate a {classification.scenario} synthesis for the goal: {goal}
 
-RESPONSE LENGTH: {length_category.min_words}-{length_category.max_words} words ({length_category.value} category)
+SCENARIO STRUCTURE:
+Sections: {", ".join(classification.sections)}
 
-{length_guidance}
+CONTEXTUAL FOCUS:
+{focus_items}
 
-The response should:
-1. Summarize what was accomplished
-2. **Include actual content** from content-retrieval tools (read_file, web_search, fetch_url, ls, glob, etc.)
+EVIDENCE EMPHASIS:
+{classification.evidence_emphasis}
+
+EXECUTION EVIDENCE:
+{evidence}
+
+INSTRUCTIONS:
+1. Follow the scenario structure - address each section purposefully
+2. Focus on the contextual areas identified above
+3. Judge appropriate depth and detail level based on the goal and evidence
+4. Extract and present actual content from tool results (file contents, search results, etc.)
    - ToolMessage.content contains the actual file content, search results, etc.
-   - Extract and present this actual content directly, not just summaries
    - For file reading: show the actual file content (with line numbers if applicable)
    - For web/research: show actual search results or fetched content
-3. Provide actionable results or deliverables
-4. Be well-structured with clear sections
-5. Match the response length guidance above
-
-IMPORTANT: The user wants to see the actual content retrieved, not just confirmation messages. Extract content from ToolMessage.content in the conversation history and present it appropriately for the response length category.
-
-Use all tool results and AI responses available in the conversation history."""
-
-    def _get_length_guidance(self, length_category: ResponseLengthCategory) -> str:
-        """Get response length guidance text for the given category (IG-299).
-
-        Args:
-            length_category: ResponseLengthCategory enum value.
-
-        Returns:
-            Guidance text for the response length category.
-        """
-        if length_category == ResponseLengthCategory.BRIEF:
-            return """Be concise: Lead with answer, no preamble, 1-3 sentences.
-Focus on essential information only."""
-        elif length_category == ResponseLengthCategory.CONCISE:
-            return """Be direct: Brief synthesis, 2-4 key points, avoid repetition.
-Provide incremental updates building on prior context."""
-        elif length_category == ResponseLengthCategory.STANDARD:
-            return """Be comprehensive: 3-5 sections, specific numbers, clear structure.
-Include methodology and key findings with concrete evidence."""
-        elif length_category == ResponseLengthCategory.COMPREHENSIVE:
-            return """Be thorough: Full structured report, concrete examples, detailed breakdown.
-Provide complete analysis with all relevant details organized into clear sections."""
-        else:
-            return """Provide a well-structured response matching the task complexity."""
+5. Be concrete and actionable - show findings, not just confirmations
+6. Use the full execution history available in the conversation context"""

@@ -44,25 +44,8 @@ _COMPLEX_STEPS_THRESHOLD = 3  # ≥3 steps indicates non-trivial task
 _DAG_DEPENDENCY_THRESHOLD = 2  # ≥2 dependencies indicates complex orchestration
 _LOW_SUCCESS_RATE_THRESHOLD = 0.7  # <70% success rate needs explanation
 
-# Structural fallbacks below the word-count floor (IG-273).
+# Structural fallbacks threshold (IG-300).
 _STRUCTURED_PAYLOAD_MIN_LINES = 6
-
-
-def _word_count(text: str) -> int:
-    """Return whitespace-separated word count; cheap proxy aligned with IG-268 targets."""
-    return len(re.findall(r"\S+", text))
-
-
-def _min_word_floor(category: str | None) -> int:
-    """Map IG-268 category to its minimum word count, with a default for unknown inputs."""
-    try:
-        from soothe.cognition.agent_loop.policies.response_length_policy import (
-            ResponseLengthCategory,
-        )
-
-        return ResponseLengthCategory(category).min_words if category else 150
-    except ValueError:
-        return 150
 
 
 def determine_goal_completion_needs(
@@ -195,9 +178,8 @@ def determine_completion_action(
     state: LoopState,
     plan_result: PlanResult,
     mode: FinalResponseMode = "adaptive",
-    response_length_category: str | None = None,
 ) -> tuple[str, str | None]:
-    """Single entry point for completion decision and action (IG-299).
+    """Single entry point for completion decision and action (IG-300).
 
     Consolidates strategy selection from synthesis_policy and completion_strategies.
     Returns action and optional precomputed text for direct/skip branches.
@@ -206,7 +188,6 @@ def determine_completion_action(
         state: Loop state with execution history.
         plan_result: Plan result with planner's hybrid decision.
         mode: Final-response mode (adaptive, always_synthesize, always_last_execute).
-        response_length_category: IG-268 category for richness check.
 
     Returns:
         (action, precomputed_text) where action in {"skip", "direct", "synthesize", "summary"}
@@ -237,7 +218,7 @@ def determine_completion_action(
     if not assistant:
         return "synthesize", None
 
-    if _can_return_directly(assistant, plan_result, response_length_category):
+    if _can_return_directly(assistant, plan_result):
         return "direct", assistant
 
     # 5. Synthesis needed per planner + execution complexity
@@ -247,48 +228,44 @@ def determine_completion_action(
 def _can_return_directly(
     assistant_text: str,
     plan_result: PlanResult,
-    response_length_category: str | None,
 ) -> bool:
-    """Check richness (word count/structure) + overlap with planner output (IG-299).
+    """Check richness (structure) + overlap with planner output (IG-300).
 
     Args:
         assistant_text: Execute assistant output.
         plan_result: Plan result with full_output for overlap check.
-        response_length_category: Length category for word floor.
 
     Returns:
         True if output is rich enough and aligned with planner.
     """
-    # Richness check (IG-268)
-    if not _is_rich_enough(assistant_text, response_length_category):
+    # Richness check (IG-300: simplified, no length category)
+    if not _is_rich_enough(assistant_text):
         return False
 
     # Overlap check (avoid unrelated chatter)
     return _overlaps_with_plan_output(assistant_text, plan_result)
 
 
-def _is_rich_enough(
-    assistant_text: str,
-    response_length_category: str | None,
-) -> bool:
-    """Heuristic guard for rich, user-facing completion content (IG-268, IG-273).
+def _is_rich_enough(assistant_text: str) -> bool:
+    """Heuristic guard for rich, user-facing completion content (IG-300).
 
-    Thresholds are expressed in words to stay aligned with ResponseLengthCategory minimums.
-    Short-but-structured payloads (code fences, multi-line lists) are accepted as escape hatch.
+    Simplified from IG-273: checks for structured payloads or sufficient content.
+    No word count thresholds - judges from structure alone.
     """
     text = assistant_text.strip()
     if not text:
         return False
 
-    min_words = _min_word_floor(response_length_category)
-    if _word_count(text) >= min_words:
-        return True
-
-    # Shorter responses may still be complete when they carry structured payloads.
+    # Accept structured payloads (code fences, multi-line lists)
     if "```" in text:
         return True
+
     non_empty_lines = [line for line in text.splitlines() if line.strip()]
-    return len(non_empty_lines) >= _STRUCTURED_PAYLOAD_MIN_LINES
+    if len(non_empty_lines) >= _STRUCTURED_PAYLOAD_MIN_LINES:
+        return True
+
+    # Accept responses with sufficient length (heuristic: >100 chars)
+    return len(text) >= 100
 
 
 def _overlaps_with_plan_output(assistant_text: str, plan_result: PlanResult) -> bool:

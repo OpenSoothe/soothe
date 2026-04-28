@@ -98,66 +98,23 @@ def _agentic_final_stdout_text(
     thread_id: str,
     workspace: str | None,
     config: SootheConfig | None,
-    response_length_category: str | None = None,  # IG-268: Intelligent display caps
 ) -> str | None:
-    """Build final stdout for headless CLI after an agentic loop (IG-123, IG-268, IG-273).
+    """Build final stdout for headless CLI after an agentic loop (IG-123, IG-300).
 
     Prefers normalized ``full_output`` (goal completion body) when present. Long bodies
     are truncated on stdout and spooled to the thread run directory.
 
-    IG-268: Intelligent truncation based on response length category:
-    - BRIEF: 500 chars (chitchat, quiz)
-    - CONCISE: 2000 chars (thread continuation)
-    - STANDARD: 10000 chars (medium tasks)
-    - COMPREHENSIVE: 50000 chars (complex tasks)
+    IG-300: Simplified from IG-268 - single default cap (no response length category).
     """
     body = _normalize_agentic_body(full_output)
     if body:
-        # IG-268: Intelligent caps based on response length category
-        from soothe.cognition.agent_loop.policies.response_length_policy import (
-            ResponseLengthCategory,
-        )
-
         display_cap = _AGENTIC_GOAL_COMPLETION_FULL_DISPLAY_MAX  # Default: 50000
-
-        # Override caps based on response length category
-        if response_length_category:
-            try:
-                category = ResponseLengthCategory(response_length_category)
-                if category == ResponseLengthCategory.BRIEF:
-                    display_cap = 500  # Brief responses fit easily
-                elif category == ResponseLengthCategory.CONCISE:
-                    display_cap = 2000  # Concise continuations
-                elif category == ResponseLengthCategory.STANDARD:
-                    display_cap = 10000  # Standard research tasks
-                # COMPREHENSIVE: keep default 50000
-                logger.debug(
-                    "Intelligent display cap: category=%s cap=%d chars",
-                    response_length_category,
-                    display_cap,
-                )
-            except ValueError:
-                logger.warning(
-                    "Invalid response_length_category: %s, using default cap",
-                    response_length_category,
-                )
 
         if len(body) <= display_cap:
             return body
 
-        # Preview size scales with category (smaller preview for brief/concise)
+        # Preview size for truncated responses
         preview_cap = _AGENTIC_GOAL_COMPLETION_PREVIEW_MAX  # Default: 48000
-        if response_length_category:
-            try:
-                category = ResponseLengthCategory(response_length_category)
-                if category == ResponseLengthCategory.BRIEF:
-                    preview_cap = 400  # Show most of brief response
-                elif category == ResponseLengthCategory.CONCISE:
-                    preview_cap = 1800  # Show most of concise response
-                elif category == ResponseLengthCategory.STANDARD:
-                    preview_cap = 9000  # Show most of standard response
-            except ValueError:
-                pass  # Use default preview cap
 
         preview_text = preview(body, mode="chars", first=preview_cap, marker="").rstrip()
         tid = thread_id.strip()
@@ -662,7 +619,6 @@ class AgenticMixin:
                         thread_id=tid,
                         workspace=workspace,
                         config=self._config,
-                        response_length_category=final_result.response_length_category,  # IG-268: Intelligent display caps
                     )
                     if text is None:
                         ev = (final_result.evidence_summary or "").strip()

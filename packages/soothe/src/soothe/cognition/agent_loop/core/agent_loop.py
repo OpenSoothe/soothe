@@ -323,26 +323,14 @@ class AgentLoop:
                 # RFC-615 / IG-299: Goal completion — consolidated decision + execution
                 # Simplified from 8 files to 3 files (policy, synthesis, fallback)
 
-                # 1. Create synthesis generator for categorization and execution
+                # 1. Create synthesis generator
                 synthesis_gen = SynthesisGenerator(self.loop_planner._model, self.core_agent)
 
-                # 2. Categorize response length
-                intent_type = "new_goal"
-                task_complexity = "medium"
-                if state.intent and hasattr(state.intent, "intent_type"):
-                    intent_type = state.intent.intent_type
-                    task_complexity = getattr(state.intent, "task_complexity", "medium")
-
-                length_category = synthesis_gen.categorize_response_length(
-                    state, intent_type, task_complexity
-                )
-
-                # 3. Decision: determine action
+                # 2. Decision: determine action (no length categorization)
                 action, precomputed_text = determine_completion_action(
                     state,
                     plan_result,
                     self.config.agentic.final_response,
-                    length_category.value,
                 )
 
                 # 4. Execution: based on action
@@ -369,9 +357,7 @@ class AgentLoop:
                     accum = GoalCompletionAccumState()
                     chunk_count = 0
 
-                    async for chunk in synthesis_gen.generate_synthesis(
-                        goal, state, plan_result, length_category
-                    ):
+                    async for chunk in synthesis_gen.generate_synthesis(goal, state, plan_result):
                         chunk_count += 1
                         # Extract messages from stream chunk
                         for msg in iter_messages_for_act_aggregation(chunk):
@@ -401,7 +387,6 @@ class AgentLoop:
                 updated_result = plan_result.model_copy(
                     update={
                         "full_output": final_output,
-                        "response_length_category": length_category.value,
                     }
                 )
 
