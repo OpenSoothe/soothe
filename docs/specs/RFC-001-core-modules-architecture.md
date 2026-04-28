@@ -213,26 +213,7 @@ State persistence for checkpoints, artifacts, and recovery data is handled by th
 - `ThreadMetadata(tags, plan_summary, policy_profile, labels, priority, category)`
 - `ThreadFilter(status, tags, created_after, created_before)`
 
-## Module 6: RemoteAgentProtocol
-
-### Protocol
-
-```python
-class RemoteAgentProtocol(Protocol):
-    async def invoke(self, task: str, context: dict[str, Any] | None = None) -> str: ...
-    async def stream(self, task: str, context: dict[str, Any] | None = None) -> AsyncIterator[str]: ...
-    async def health_check(self) -> bool: ...
-```
-
-### Implementations
-
-- `ACPRemoteAgent` -- planned ACP endpoint adapter
-- `A2ARemoteAgent` -- planned A2A peer adapter
-- `LangGraphRemoteAgent` -- implemented adapter for langgraph `RemoteGraph`
-
-Future: remote backends will be wrapped as deepagents `CompiledSubAgent` instances for uniform `task`-tool access. Current state: `LangGraphRemoteAgent` is accessed through `RemoteAgentProtocol` directly; wrapper unification is deferred until the broader remote-agent surface is implemented.
-
-## Module 7: ConcurrencyPolicy
+## Module 6: ConcurrencyPolicy
 
 ### Data Model
 
@@ -250,7 +231,7 @@ Steps declare dependencies via `depends_on`, forming a DAG. The orchestrator sch
 
 **Note**: RFC-200 introduces `ConcurrencyController` in `core/concurrency.py` that enforces these limits via `asyncio.Semaphore` at goal, step, and global LLM call levels.
 
-## Module 8: VectorStoreProtocol
+## Module 7: VectorStoreProtocol
 
 ### Protocol
 
@@ -277,7 +258,7 @@ class VectorStoreProtocol(Protocol):
 - `WeaviateVectorStore` -- async via weaviate-client v4
 - `InMemoryVectorStore` -- in-memory for testing and small datasets
 
-## Module 9: PersistStore (Persistence Backend)
+## Module 8: PersistStore (Persistence Backend)
 
 Low-level key-value persistence used by `KeywordContext` and other persistence-backed components. Memory persistence is currently handled by the MemU store rather than a `StoreBackedMemory` implementation.
 
@@ -372,12 +353,11 @@ $SOOTHE_HOME/
 | **Module 3** | PlannerProtocol | [RFC-404](./RFC-404-planner-protocol-architecture.md) | Draft |
 | **Module 4** | PolicyProtocol | [RFC-406](./RFC-406-policy-protocol-architecture.md) | Draft |
 | **Module 5** | DurabilityProtocol | [RFC-408](./RFC-408-durability-protocol-architecture.md) | Draft |
-| **Module 6** | RemoteAgentProtocol | [RFC-410](./RFC-410-remote-agent-protocol-architecture.md) | Draft |
-| **Module 7** | ConcurrencyPolicy | Stayed in RFC-001 | — |
-| **Module 8** | VectorStoreProtocol | Stayed in RFC-001 | — |
+| **Module 6** | ConcurrencyPolicy | Stayed in RFC-001 | — |
+| **Module 7** | VectorStoreProtocol | Stayed in RFC-001 | — |
 
 **Numbering Scheme**:
-- **4xx**: Core protocol definitions (400-410)
+- **4xx**: Core protocol definitions (400-408)
 - **45x**: Daemon and communication layer (450-454)
 
 **Migration**: Protocol content moved to dedicated RFCs. RFC-001 preserved for architectural overview and remaining modules (ConcurrencyPolicy, VectorStoreProtocol, PersistStore). Use dedicated RFCs for implementation details.

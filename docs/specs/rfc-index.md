@@ -102,9 +102,6 @@ This index reflects the canonical RFC set and defines which files are active for
   - Status: Draft
   - Created: 2026-04-17
 
-- **RFC-410**: [RemoteAgentProtocol Architecture](RFC-410*.md)
-  - Status: Draft
-  - Created: 2026-04-17
 
 - **RFC-450**: [Unified Daemon Communication Protocol](RFC-450*.md)
   - Status: Implemented
