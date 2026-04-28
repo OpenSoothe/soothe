@@ -50,11 +50,13 @@ class RendererBase:
         """
         repaired = text
         # Add newline before numbered headings (## 1, ## 2, etc.)
-        repaired = re.sub(r"(?<!\n)(?=##+\s*\d)", "\n\n", repaired)
+        repaired = re.sub(r"(?<![#\n])(?=##+\s*\d)", "\n\n", repaired)
         # Add newline before letter headings (## Summary, etc.)
-        repaired = re.sub(r"(?<!\n)(?=##+\s*[A-Za-z])", "\n\n", repaired)
-        # Add space after ## before numbers
-        repaired = re.sub(r"(?<=##)(?=\d)", " ", repaired)
+        repaired = re.sub(r"(?<![#\n])(?=##+\s*[A-Za-z])", "\n\n", repaired)
+        # Add space after heading markers before numbers
+        repaired = re.sub(r"(?m)^(#{1,6})(?=\d)", r"\1 ", repaired)
+        # Add space after heading markers before letters
+        repaired = re.sub(r"(?m)^(#{1,6})(?=[A-Za-z])", r"\1 ", repaired)
         # Add space between letters and numbers
         repaired = re.sub(r"(?<=[A-Za-z])(?=\d{1,3}\b)", " ", repaired)
         # Add newline between lowercase and uppercase in headings

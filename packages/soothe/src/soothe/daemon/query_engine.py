@@ -335,15 +335,6 @@ class QueryEngine:
                 from soothe.core import FrameworkFilesystem
 
                 FrameworkFilesystem.clear_current_workspace()
-                await d._broadcast(
-                    {
-                        "type": "event",
-                        "thread_id": thread_id,
-                        "namespace": [],
-                        "mode": "custom",
-                        "data": {"type": ERROR, "error": "Query cancelled by user"},
-                    }
-                )
                 raise
             except Exception as exc:
                 logger.exception("Daemon query error")
@@ -575,15 +566,6 @@ class QueryEngine:
                 from soothe.core import FrameworkFilesystem
 
                 FrameworkFilesystem.clear_current_workspace()
-                await d._broadcast(
-                    {
-                        "type": "event",
-                        "thread_id": thread_id,
-                        "namespace": [],
-                        "mode": "custom",
-                        "data": {"type": ERROR, "error": f"Query cancelled in thread {thread_id}"},
-                    }
-                )
                 raise
             except Exception as exc:
                 logger.exception("Multi-threaded query error in thread %s", thread_id)

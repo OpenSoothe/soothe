@@ -129,6 +129,27 @@ def test_agentic_loop_completed_preserves_markdown_and_token_boundaries(
     assert "first10 lines" not in out
 
 
+def test_agentic_loop_completed_repairs_concatenated_markdown_headings(
+    capsys: CaptureFixture[str],
+) -> None:
+    r = CliRenderer()
+    r.on_progress_event(
+        "soothe.cognition.agent_loop.started",
+        {"max_iterations": 5, "thread_id": "t", "goal": "g"},
+        namespace=(),
+    )
+    r.on_assistant_text(
+        "# README Coverage Analysis Report## SummaryThis report...\n###1. Documentation Distribution",
+        is_main=True,
+        is_streaming=False,
+    )
+    out = capsys.readouterr().out
+    assert "Report## Summary" not in out
+    assert "## Summary" in out
+    assert "### 1. Documentation Distribution" in out
+    assert "#\n\n## 1." not in out
+
+
 def test_agentic_stdout_visible_after_turn_end(capsys: CaptureFixture[str]) -> None:
     r = CliRenderer()
     r.on_progress_event(

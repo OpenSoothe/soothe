@@ -1352,7 +1352,7 @@ class SootheApp(App):
                     f"Please start the daemon with: soothed start"
                 )
 
-            session = TuiDaemonSession(self._daemon_config)
+            session = TuiDaemonSession(self._daemon_config, workspace=self._cwd)
             status_event = await session.connect(resume_thread_id=self._lc_loop_id)
         except Exception as exc:
             self.post_message(self.ServerStartFailed(error=exc))
@@ -5701,10 +5701,18 @@ def run_textual_tui(
     """
     import asyncio
 
+    configured_workspace = getattr(config, "workspace_dir", None)
+    cwd = None
+    if isinstance(configured_workspace, str) and configured_workspace.strip():
+        workspace_value = configured_workspace.strip()
+        if workspace_value != ".":
+            cwd = workspace_value
+
     return asyncio.run(
         run_textual_app(
             thread_id=thread_id,
             initial_prompt=initial_prompt,
             daemon_config=config,
+            cwd=cwd,
         )
     )
