@@ -49,6 +49,88 @@ class StreamingTextAccumulator:
     boundary_preserve_enabled: bool = True
     """Preserve whitespace boundaries for proper concatenation."""
 
+    @staticmethod
+    def _normalize_heading_prefix(text: str) -> str:
+        """Normalize markdown heading prefix when chunks start with ``#`` markers.
+
+        Examples:
+        - ``###1. Title`` -> ``### 1. Title``
+        - ``##Summary`` -> ``## Summary``
+        """
+        if not text or text[0] != "#":
+            return text
+
+        hash_count = 0
+        for ch in text:
+            if ch == "#" and hash_count < 6:
+                hash_count += 1
+            else:
+                break
+
+        if hash_count == 0 or hash_count >= len(text):
+            return text
+
+        next_char = text[hash_count]
+        if next_char.isspace():
+            return text
+
+        return f"{text[:hash_count]} {text[hash_count:]}"
+
+    @classmethod
+    def _stitch_boundary(cls, previous: str, incoming: str) -> str:
+        """Stitch chunk boundaries with minimal semantic separators.
+
+        This prevents cross-chunk markdown/token glue like ``Report##`` or
+        ``first10`` while preserving explicit whitespace from the model.
+        """
+        if not incoming:
+            return incoming
+
+        normalized = cls._normalize_heading_prefix(incoming)
+        if not previous:
+            return normalized
+
+        prev_last = previous[-1]
+        next_first = normalized[0]
+        last_line = previous.rsplit("\n", 1)[-1].strip()
+
+        # Respect explicit boundaries from the model.
+        if prev_last.isspace() or next_first.isspace():
+            return normalized
+
+        # If previous chunk ended on a markdown heading line, start a new paragraph.
+        # Guard against split heading words like ``## Key Find`` + ``ings``.
+        if last_line.startswith("#"):
+            heading_marks = len(last_line) - len(last_line.lstrip("#"))
+            if 1 <= heading_marks <= 6:
+                if prev_last.isalpha() and next_first.isalpha() and next_first.islower():
+                    return normalized
+                return "\n\n" + normalized
+
+        # Preserve markdown/html boundaries.
+        if next_first in "#<":
+            return "\n" + normalized
+
+        # Keep markdown list/table structures readable across chunk boundaries.
+        if normalized.startswith(("|", "- ", "* ", "+ ")):
+            return "\n" + normalized
+
+        # Preserve readable token boundaries after markdown delimiters.
+        if previous.endswith("**") and next_first.isalnum():
+            return " " + normalized
+
+        # Heading marker split across chunks, e.g. "###" + "1. ..."
+        if prev_last == "#" and (next_first.isdigit() or next_first.isalpha()):
+            return " " + normalized
+
+        # Human-readable token boundaries.
+        if (prev_last.isalpha() and next_first.isdigit()) or (
+            prev_last.isdigit() and next_first.isalpha()
+        ):
+            return " " + normalized
+
+        return normalized
+
     def accumulate(
         self,
         event_type: str,
@@ -85,7 +167,8 @@ class StreamingTextAccumulator:
             state.is_active = False
             # Accumulate final content
             if content:
-                state.accumulated_text += content
+                stitched = self._stitch_boundary(state.accumulated_text, content)
+                state.accumulated_text += stitched
                 state.chunk_count += 1
             # Return full accumulated text
             return state.accumulated_text.strip() if state.accumulated_text else None
@@ -96,14 +179,15 @@ class StreamingTextAccumulator:
 
         # Accumulate chunk content
         if content:
-            state.accumulated_text += content
+            stitched = self._stitch_boundary(state.accumulated_text, content)
+            state.accumulated_text += stitched
             state.chunk_count += 1
 
             # Return chunk with boundary preservation
             if self.boundary_preserve_enabled:
-                return content  # Preserve raw boundaries
+                return stitched  # Preserve/repair boundaries at stream edge only
             else:
-                return content.strip()  # Clean boundaries
+                return stitched.strip()  # Clean boundaries
 
         return None
 

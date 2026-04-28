@@ -5,6 +5,7 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-04-17
+**Last Updated**: 2026-04-29
 **Dependencies**: RFC-000, RFC-001, RFC-100
 **Related**: RFC-203 (State), RFC-207 (Thread), RFC-213 (Reasoning)
 
@@ -477,12 +478,14 @@ Layer 2 does not own backoff policy. It produces high-fidelity execution evidenc
 | Event | Description |
 |-------|-------------|
 | `soothe.cognition.agent_loop.started` | AgentLoop execution began |
-| `soothe.cognition.agent_loop.plan` | PLAN phase completed (PlanResult) |
+| `soothe.cognition.agent_loop.reasoned` | Plan/assessment progress summary event |
 | `soothe.cognition.agent_loop.step.started` | EXECUTE step began |
 | `soothe.cognition.agent_loop.step.completed` | EXECUTE step completed |
 | `soothe.output.goal_completion.streaming` | Streaming final answer chunk |
 | `soothe.output.goal_completion.responded` | Final answer payload |
 | `soothe.cognition.agent_loop.completed` | Loop completed lifecycle event |
+
+**Contract note**: Message-mode tool telemetry chunks remain visible during execute; plain execute-phase assistant prose is daemon-suppressed and not part of user-facing output events.
 
 ---
 
@@ -543,6 +546,10 @@ agentic:
 ---
 
 ## Changelog
+
+### 2026-04-29
+- Aligned stream event table with current event contract (`soothe.cognition.agent_loop.reasoned`).
+- Clarified execute-phase suppression and tool-telemetry visibility semantics.
 
 ### 2026-04-17
 - Consolidated legacy Layer 2 loop/decision/result RFC fragments into this unified core loop architecture

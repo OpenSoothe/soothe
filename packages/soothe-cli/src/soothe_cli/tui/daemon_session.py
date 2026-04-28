@@ -121,6 +121,7 @@ class TuiDaemonSession:
     async def iter_turn_chunks(self) -> Any:
         """Yield `(namespace, mode, data)` chunks for the active daemon turn."""
         query_started = False
+        expected_thread_id = self._thread_id
         self._streaming = True
         async with self._read_lock:
             try:
@@ -130,6 +131,24 @@ class TuiDaemonSession:
                         break
 
                     event_type = event.get("type", "")
+                    event_thread_id = event.get("thread_id")
+
+                    # Strict thread isolation: ignore stale events from a different
+                    # subscribed thread so current-turn UI state stays consistent.
+                    if (
+                        expected_thread_id
+                        and isinstance(event_thread_id, str)
+                        and event_thread_id
+                        and event_thread_id != expected_thread_id
+                    ):
+                        logger.debug(
+                            "Skipping daemon event for non-active thread %s (active=%s, type=%s)",
+                            event_thread_id,
+                            expected_thread_id,
+                            event_type,
+                        )
+                        continue
+
                     if event_type == "error":
                         raise RuntimeError(str(event.get("message", "daemon error")))
 
@@ -137,6 +156,8 @@ class TuiDaemonSession:
                         thread_id = event.get("thread_id")
                         if isinstance(thread_id, str) and thread_id:
                             self._thread_id = thread_id
+                            if expected_thread_id is None:
+                                expected_thread_id = thread_id
                         state = event.get("state", "")
                         if state == "running":
                             query_started = True

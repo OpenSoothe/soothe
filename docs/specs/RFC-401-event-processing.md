@@ -4,7 +4,7 @@
 **Status**: Implemented
 **Authors**: Soothe Team
 **Created**: 2026-03-31
-**Last Updated**: 2026-04-17
+**Last Updated**: 2026-04-29
 **Depends on**: RFC-450 (Daemon Communication), `RFC-403-unified-event-naming.md` (Unified Event Naming), RFC-500 (CLI/TUI Architecture), RFC-502 (Unified Presentation Engine)
 **Supersedes**: RFC-0015, RFC-0019, RFC-0022
 **Kind**: Implementation Interface Design
@@ -17,6 +17,7 @@
 This RFC defines the interface contracts for Soothe's event processing system, including the typed event protocol, unified event processor architecture, and daemon-side filtering. It consolidates the progress event protocol (RFC-0015), unified event processing (RFC-0019), and daemon-side filtering (RFC-0022) into a single implementation interface specification.
 
 **IG-304 amendment**: For AgentLoop execution, daemon-side emission is the primary suppression boundary for execute-phase assistant prose. Client processors render normalized output events and tool telemetry; they are not the authoritative suppression boundary for execute-phase prose correctness.
+**IG-306 amendment**: Streaming accumulation preserves chunk boundaries and applies minimal boundary-safe stitching for markdown/token integrity (for example heading and alpha/number boundary glue).
 
 ---
 
@@ -137,7 +138,8 @@ class ProcessorState:
     name_map: dict[str, str] = field(default_factory=dict)
     current_plan: Plan | None = None
     thread_id: str = ""
-    multi_step_active: bool = False
+    streaming_accumulator: StreamingTextAccumulator = field(default_factory=StreamingTextAccumulator)
+    final_output_emitted_by_namespace: set[tuple[str, ...]] = field(default_factory=set)
 ```
 
 ### 5.5 ClientSession
@@ -324,6 +326,7 @@ Daemon emission must enforce these rules for AgentLoop runs:
    - `soothe.output.goal_completion.streaming`
    - `soothe.output.goal_completion.responded`
 4. Keep lifecycle/progress events (`soothe.cognition.agent_loop.*`) separate from final answer payloads.
+5. Preserve chunk boundary integrity through client streaming accumulation (boundary-safe stitching) without re-introducing client-side execute-phase suppression authority.
 
 ---
 
