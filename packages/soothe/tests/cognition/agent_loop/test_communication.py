@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe.cognition import Goal, GoalEngine
-from soothe.cognition.agent_loop.communication import GoalCommunicationHelper
+from soothe.cognition.agent_loop.utils.communication import GoalCommunicationHelper
 from soothe.cognition.goal_engine.proposal_queue import ProposalQueue
 
 

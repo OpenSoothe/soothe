@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from soothe.cognition.agent_loop import AgentLoop
-from soothe.cognition.agent_loop.schemas import (
+from soothe.cognition.agent_loop.state.schemas import (
     AgentDecision,
     PlanResult,
     StepAction,

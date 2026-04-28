@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from soothe.cognition.agent_loop.schemas import PlanResult
+from soothe.cognition.agent_loop.state.schemas import PlanResult
 from soothe.core.runner._types import GoalResult
 
 
@@ -88,7 +88,7 @@ async def test_agentloop_delegation_basic():
 @pytest.mark.asyncio
 async def test_planner_reflect_with_agentloop_result():
     """Test planner.reflect() handles agentloop_result parameter."""
-    from soothe.cognition.agent_loop.planner import LLMPlanner
+    from soothe.cognition.agent_loop.core.planner import LLMPlanner
     from soothe.protocols.planner import GoalContext
 
     # Mock model
@@ -136,7 +136,7 @@ async def test_planner_reflect_with_agentloop_result():
 @pytest.mark.asyncio
 async def test_planner_reflect_with_failed_agentloop_result():
     """Test planner generates recovery directives for failed AgentLoop result."""
-    from soothe.cognition.agent_loop.planner import LLMPlanner
+    from soothe.cognition.agent_loop.core.planner import LLMPlanner
     from soothe.protocols.planner import GoalContext
 
     mock_model = Mock()
@@ -182,7 +182,7 @@ async def test_planner_reflect_with_failed_agentloop_result():
 @pytest.mark.asyncio
 async def test_planner_reflect_without_agentloop_result():
     """Test planner falls back to heuristic reflection without agentloop_result."""
-    from soothe.cognition.agent_loop.planner import LLMPlanner
+    from soothe.cognition.agent_loop.core.planner import LLMPlanner
     from soothe.protocols.planner import Plan, PlanStep
 
     mock_model = Mock()
