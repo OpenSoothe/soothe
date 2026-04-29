@@ -22,6 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 - Version mismatch in packaging
 - IG-301: adaptive per-call LLM timeout for large prompts (goal-completion synthesis no longer cut off at the 60s floor when the provider needs longer)
+- IG-302: goal-completion synthesis runs under an ephemeral LangGraph ``thread_id`` so the checkpointer does not replay the full AgentLoop conversation; stream tags still use the parent thread id
 
 ## [0.3.3] - 2026-04-19
 

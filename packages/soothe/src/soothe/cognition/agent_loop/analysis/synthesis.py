@@ -8,11 +8,16 @@ Separation of concerns (IG-300):
 - policies/goal_completion_policy.py: Decision logic ("should we synthesize?")
 - analysis/scenario_classifier.py: Classification logic ("what scenario?")
 - analysis/synthesis.py: Execution logic ("how to synthesize?")
+
+Checkpoint isolation (IG-302): synthesis uses a fresh LangGraph ``thread_id`` so the
+checkpointer does not replay the full AgentLoop message history; only system + the
+synthesis human turn are loaded.
 """
 
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import TYPE_CHECKING
 
 from soothe.cognition.agent_loop.analysis.scenario_classifier import (
@@ -36,6 +41,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _DEFAULT_SYNTHESIS_EVIDENCE_MAX = 120_000
+
+_SYNTH_GC_MARKER = "__synth_gc__"
+
+
+def synthesis_checkpoint_thread_id(parent_thread_id: str) -> str:
+    """Return an ephemeral LangGraph thread id for goal-completion synthesis (IG-302).
+
+    Using a dedicated id prevents the SQLite checkpointer from loading the parent
+    thread's full conversation into the synthesis model call.
+
+    Args:
+        parent_thread_id: AgentLoop / user thread identifier.
+
+    Returns:
+        Unique checkpoint thread key (stable prefix for log grep).
+    """
+    return f"{parent_thread_id}{_SYNTH_GC_MARKER}{uuid.uuid4().hex}"
 
 
 class SynthesisGenerator:
@@ -143,9 +165,20 @@ class SynthesisGenerator:
             len(evidence),
         )
 
+        # IG-302: Fresh checkpoint thread so LangGraph does not replay full AgentLoop history.
+        checkpoint_thread_id = synthesis_checkpoint_thread_id(state.thread_id)
+        configurable: dict[str, str] = {"thread_id": checkpoint_thread_id}
+        if state.workspace:
+            configurable["workspace"] = state.workspace
+        logger.info(
+            "Synthesis isolated checkpoint thread=%s parent_thread=%s",
+            checkpoint_thread_id,
+            state.thread_id,
+        )
+
         async for chunk in self.core_agent.astream(
             {"messages": [human_msg]},
-            config={"configurable": {"thread_id": state.thread_id}},
+            config={"configurable": configurable},
             stream_mode=["messages"],
             subgraphs=False,
         ):
