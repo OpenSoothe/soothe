@@ -232,14 +232,6 @@ class QueryEngine:
 
                             d._thread_logger.log(tuple(namespace), mode, data)
 
-                            if (
-                                not namespace
-                                and mode == "custom"
-                                and isinstance(data, dict)
-                                and (output_text := self.extract_custom_output_text(data))
-                            ):
-                                full_response.append(output_text)
-
                             is_msg_pair = (
                                 isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
                             )
@@ -275,14 +267,6 @@ class QueryEngine:
                         namespace, mode, data = chunk
 
                         d._thread_logger.log(tuple(namespace), mode, data)
-
-                        if (
-                            not namespace
-                            and mode == "custom"
-                            and isinstance(data, dict)
-                            and (output_text := self.extract_custom_output_text(data))
-                        ):
-                            full_response.append(output_text)
 
                         is_msg_pair = (
                             isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
@@ -539,14 +523,6 @@ class QueryEngine:
 
                     d._thread_logger.log(tuple(namespace), mode, data)
 
-                    if (
-                        not namespace
-                        and mode == "custom"
-                        and isinstance(data, dict)
-                        and (output_text := self.extract_custom_output_text(data))
-                    ):
-                        full_response.append(output_text)
-
                     is_msg_pair = isinstance(data, (tuple, list)) and len(data) == msg_pair_length
                     if not namespace and mode == "messages" and is_msg_pair:
                         msg, _metadata = data
@@ -782,20 +758,3 @@ class QueryEngine:
                 self._daemon._pending_interrupt_responses.pop(thread_id, None)
 
         return _resolver
-
-    @staticmethod
-    def extract_custom_output_text(data: dict[str, Any]) -> str | None:
-        """Extract assistant-visible output text from custom protocol events.
-
-        Handles both final events and streaming chunks (RFC-614):
-        - Final events: strip internal tags for clean display
-        - Streaming chunks: preserve raw boundaries for client concatenation
-
-        Delegates to SDK registry (single source of truth).
-        """
-        from soothe_sdk.ux.output_events import extract_output_text
-
-        event_type = str(data.get("type", ""))
-        # Use SDK registry for all output events (both final and streaming)
-        # Registry handles boundary preservation logic per event type
-        return extract_output_text(event_type, data)

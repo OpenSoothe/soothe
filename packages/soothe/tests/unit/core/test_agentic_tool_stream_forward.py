@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, ToolMessage
 
+from soothe.cognition.agent_loop.utils.messages import LoopAIMessageChunk
 from soothe.core.runner._runner_agentic import (
     _forward_messages_chunk_for_tool_ui,
     _is_ai_tool_invocation_messages_chunk,
+    _is_loop_assistant_output_messages_chunk,
     _is_tool_stream_chunk,
     _sanitize_forwarded_ai_tool_chunk,
 )
@@ -74,6 +76,17 @@ def test_forward_combines_tool_message_and_ai_tool_invocation() -> None:
     ai_plain = ((), "messages", (AIMessage(content="hi"), {}))
     assert _forward_messages_chunk_for_tool_ui(tool_chunk) is True
     assert _forward_messages_chunk_for_tool_ui(ai_plain) is False
+
+
+def test_loop_assistant_output_messages_chunk_detects_tagged_chunk() -> None:
+    msg = LoopAIMessageChunk(
+        content="syn",
+        phase="goal_completion",
+        thread_id="t-1",
+        iteration=1,
+    )
+    chunk: tuple[tuple[str, ...], str, tuple[object, dict]] = ((), "messages", (msg, {}))
+    assert _is_loop_assistant_output_messages_chunk(chunk) is True
 
 
 def test_forward_remains_tool_only_for_plain_ai_messages() -> None:

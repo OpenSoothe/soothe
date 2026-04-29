@@ -1,5 +1,7 @@
 # IG-254: Fix Quiz Response Display in TUI/CLI + Unified Output Event Registry
 
+> **Historical (IG-317):** Quiz and chitchat assistant text now uses **`mode="messages"`** with **`phase`**. Registry snippets in this IG describe the **pre-IG-317** `soothe.output.*` approach.
+
 ## Status
 ✅ Completed
 
@@ -26,122 +28,40 @@ Quiz intent classification (IG-250) added quiz events and handling in daemon, bu
 
 1. **CLI**: `packages/soothe-cli/src/soothe_cli/shared/event_processor.py:719`
 2. **TUI**: `packages/soothe-cli/src/soothe_cli/tui/textual_adapter.py:227`
-3. **SDK**: `packages/soothe-sdk/src/soothe_sdk/events.py`
+3. **SDK** (at the time): event type constants / UX helpers (paths have since moved; see git history)
 
 This violated single-responsibility principle and created maintenance burden.
 
 ---
 
-## Part 2: Unified Output Event Registry (Architecture Improvement)
+## Part 2: Unified output registry (historical only)
 
-### Problem
-Adding new query types required modifications in multiple places, risking synchronization failures.
+At completion time, quiz/chitchat display was centralized through an SDK **registry** keyed by concrete **`soothe.output.*`** event strings, so CLI/TUI shared extractors.
 
-### Solution: Centralized Registry
-Created `packages/soothe-sdk/src/soothe_sdk/output_events.py` - single source of truth for user-visible output events.
-
-#### Registry Design
-
-```python
-# Registry: event_type → extraction function
-_OUTPUT_EVENT_REGISTRY: dict[str, Callable[[dict], str | None]] = {
-    "soothe.output.chitchat.responded": lambda d: strip_internal_tags(d.get("content", "")),
-    "soothe.output.quiz.responded": lambda d: strip_internal_tags(d.get("content", "")),
-    "soothe.cognition.agent_loop.completed": lambda d: strip_internal_tags(d.get("final_stdout_message", "")),
-    "soothe.output.autonomous.final_report.reported.reported": lambda d: strip_internal_tags(d.get("content", d.get("summary", ""))),
-}
-
-def is_output_event(event_type: str) -> bool:
-    """Check if event should be displayed as assistant text."""
-    return event_type in _OUTPUT_EVENT_REGISTRY
-
-def extract_output_text(event_type: str, data: dict) -> str | None:
-    """Extract user-visible text from output event."""
-    extractor = _OUTPUT_EVENT_REGISTRY.get(event_type)
-    return extractor(data) if extractor else None
-```
-
-#### Unified Usage
-
-**CLI (EventProcessor)**:
-```python
-# BEFORE: Hardcoded event types (required 3 changes)
-if etype in {"soothe.output.chitchat.responded", "soothe.output.quiz.responded", ...}:
-    ...
-
-# AFTER: Query registry (single source of truth)
-from soothe_sdk.output_events import is_output_event, extract_output_text
-
-if is_output_event(etype):
-    content = extract_output_text(etype, data)
-    if content:
-        self._emit_assistant_text(content, is_main=True, is_streaming=False)
-```
-
-**TUI (TextualUIAdapter)**:
-```python
-# BEFORE: Hardcoded event checks (required 3 changes)
-def _extract_custom_output_text(data: dict) -> str | None:
-    if event_type == CHITCHAT_RESPONSE:
-        ...
-    if event_type == QUIZ_RESPONSE:
-        ...
-
-# AFTER: Query registry (single source of truth)
-from soothe_sdk.output_events import extract_output_text
-
-def _extract_custom_output_text(data: dict) -> str | None:
-    event_type = str(data.get("type", ""))
-    return extract_output_text(event_type, data)
-```
+**IG-317 removed that approach for core-loop assistant text:** quiz, chitchat, goal completion, and autonomous summaries are carried on **`mode="messages"`** with **`phase`** (`soothe_sdk.ux.loop_stream`). The `output_events` module and `register_output_event` public API are gone; do not copy patterns from older revisions of this IG.
 
 ---
 
-## Implementation Changes
+## Implementation Changes (as shipped at IG-254 completion)
 
-### Files Created
-1. `packages/soothe-sdk/src/soothe_sdk/output_events.py` - Unified registry
+- CLI/TUI were updated so quiz responses rendered reliably (Part 1).
+- A registry module lived under `soothe_sdk` UX paths and was later **deleted** during IG-317.
 
-### Files Modified
-1. `packages/soothe-cli/src/soothe_cli/shared/event_processor.py` - Use registry
-2. `packages/soothe-cli/src/soothe_cli/tui/textual_adapter.py` - Use registry
-
-### SDK Exports
-Added `QUIZ_RESPONSE = "soothe.output.quiz.responded"` to `events.py`
+For the exact file list at IG-254 completion, see git history of this repository.
 
 ---
 
-## Benefits
+## Benefits (at the time)
 
-### 1. Single Source of Truth
-Adding new query type → ONE registration → both CLI and TUI work automatically
+- Single registration point for **custom-mode** assistant-like events before IG-317.
+- Shared extraction logic between CLI and TUI for those events.
 
-```python
-# Example: Adding trivia query type
-register_output_event(
-    "soothe.output.trivia.responded",
-    lambda data: strip_internal_tags(data.get("answer", "")),
-)
-# DONE! CLI and TUI automatically display trivia responses
-```
+---
 
-### 2. Extensibility
-Plugins can register custom output events:
+## Post IG-317
 
-```python
-from soothe_sdk.output_events import register_output_event
-
-register_output_event(
-    "soothe.plugin.my_plugin.response",
-    lambda data: data.get("message", ""),
-)
-```
-
-### 3. Type Safety
-Registry validates event types at registration time
-
-### 4. Error Resilience
-Extractor errors don't crash CLI/TUI - logged and suppressed gracefully
+- **Extensibility** for new loop answer shapes: extend **`LOOP_ASSISTANT_OUTPUT_PHASES`** / runner tagging in coordination with clients—not `soothe.output.*` registrations.
+- Optional ancillary **`soothe.output.*`** telemetry (for example `OutputCapture` with `emit_progress=True`) remains a separate concern from assistant answer text.
 
 ---
 
@@ -176,11 +96,6 @@ soothe
 
 ---
 
-## Future Work
+## Future Work (superseded)
 
-This unified registry pattern could be extended to:
-- Progress events (verbosity tier classification)
-- Tool events (display rendering)
-- Subagent events (namespace routing)
-
-Single registry per event category → centralized maintenance → fewer synchronization bugs.
+Follow-up work consolidated on **RFC-614 + IG-317** (`messages` + `phase`). A second registry for assistant text is intentionally **not** planned.

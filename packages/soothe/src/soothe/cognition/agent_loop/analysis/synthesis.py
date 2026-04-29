@@ -20,16 +20,22 @@ from soothe.cognition.agent_loop.analysis.scenario_classifier import (
     classify_synthesis_scenario,
 )
 from soothe.cognition.agent_loop.state.schemas import LoopState, PlanResult
-from soothe.cognition.agent_loop.utils.messages import LoopHumanMessage
+from soothe.cognition.agent_loop.utils.messages import (
+    LoopHumanMessage,
+    tag_messages_stream_chunk_for_goal_completion,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from langchain_core.language_models.chat_models import BaseChatModel
 
+    from soothe.config import SootheConfig
     from soothe.core.agent import CoreAgent
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_SYNTHESIS_EVIDENCE_MAX = 120_000
 
 
 class SynthesisGenerator:
@@ -45,15 +51,22 @@ class SynthesisGenerator:
     - Length-based guidance
     """
 
-    def __init__(self, llm_client: BaseChatModel, core_agent: CoreAgent) -> None:
+    def __init__(
+        self,
+        llm_client: BaseChatModel,
+        core_agent: CoreAgent,
+        soothe_config: SootheConfig | None = None,
+    ) -> None:
         """Initialize synthesis generator with LLM client and CoreAgent.
 
         Args:
             llm_client: Fast model for scenario classification (Phase 1).
             core_agent: CoreAgent for synthesis execution with streaming (Phase 2).
+            soothe_config: Optional daemon config for evidence budgeting (IG-317).
         """
         self.llm = llm_client
         self.core_agent = core_agent
+        self._soothe_config = soothe_config
 
     async def _classify_scenario(self, goal: str, state: LoopState) -> ScenarioClassification:
         """Wrap classifier with error handling (IG-300).
@@ -92,13 +105,16 @@ class SynthesisGenerator:
         2. Build synthesis prompt using classification
         3. Stream via CoreAgent
 
+        Yields LangGraph ``messages``-mode stream tuples tagged with ``phase=goal_completion``
+        for RFC-614 / IG-317 (AgentLoop wraps as ``stream_event``).
+
         Args:
             goal: Goal description.
             state: Loop state with thread context and execution history.
             plan_result: Plan result (reserved for future hints).
 
-        Returns:
-            Async generator yielding stream chunks.
+        Yields:
+            ``(namespace, mode, data)`` stream chunks (same shape as CoreAgent ``astream``).
         """
         _ = plan_result  # Reserved for future use
 
@@ -127,27 +143,38 @@ class SynthesisGenerator:
             len(evidence),
         )
 
-        # Stream via CoreAgent (no custom accumulation - CoreAgent handles it)
         async for chunk in self.core_agent.astream(
             {"messages": [human_msg]},
             config={"configurable": {"thread_id": state.thread_id}},
             stream_mode=["messages"],
             subgraphs=False,
         ):
-            yield ("goal_completion_stream", chunk)
+            yield tag_messages_stream_chunk_for_goal_completion(
+                chunk,
+                thread_id=state.thread_id,
+                iteration=state.iteration,
+            )
 
     def _extract_evidence(self, state: LoopState) -> str:
-        """Extract evidence from successful step results (unchanged from IG-299)."""
-        evidence_parts = []
+        """Build bounded detailed evidence for synthesis (IG-317)."""
+        evidence_parts: list[str] = []
         for result in state.step_results:
             if result.success:
-                evidence_str = result.to_evidence_string(truncate=False)
-                evidence_parts.append(evidence_str)
+                evidence_parts.append(result.get_detailed_evidence_string())
 
         if not evidence_parts:
             return "No execution evidence available (goal completed without tools)"
 
-        return "\n\n".join(evidence_parts)
+        raw = "\n\n".join(evidence_parts)
+        max_chars = _DEFAULT_SYNTHESIS_EVIDENCE_MAX
+        if self._soothe_config is not None:
+            cap = self._soothe_config.agentic.report_output.synthesis_max_chars
+            if cap > 0:
+                max_chars = cap
+        if len(raw) > max_chars:
+            marker = "\n\n[evidence truncated for synthesis prompt]\n"
+            return raw[: max_chars - len(marker)] + marker
+        return raw
 
     def _build_synthesis_prompt(
         self,

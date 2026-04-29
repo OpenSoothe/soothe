@@ -4,12 +4,14 @@
 **Date**: 2026-04-27  
 **Related**: IG-260, IG-268
 
+> **Update (IG-317):** Streaming vs batch applies to **goal-completion (and related) `messages` chunks** with `phase`, not to removed `soothe.output.final_report.streaming` custom events.
+
 ## Goal
 
 Fix missing final report output in headless CLI and add a client-side config switch to control final report rendering mode:
 
-- `streaming` (default): render from `soothe.output.final_report.streaming`
-- `batch`: render from `soothe.cognition.agent_loop.completed.final_stdout_message`
+- `streaming` (default): render incrementally from loop-tagged **`messages`** (`phase` includes goal completion / final report phases)
+- `batch`: defer visible assistant text until non-chunk / final `messages` handling (see `EventProcessor` goal-completion path)
 
 ## Scope
 

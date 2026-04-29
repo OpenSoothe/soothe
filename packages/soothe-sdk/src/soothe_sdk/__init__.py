@@ -12,7 +12,7 @@ Canonical import paths (IG-259 refactoring):
     from soothe_sdk.core.verbosity import VerbosityTier
     from soothe_sdk.core.exceptions import PluginError
     from soothe_sdk.client.wire import messages_from_wire_dicts
-    from soothe_sdk.ux.output_events import is_output_event
+    from soothe_sdk.ux.loop_stream import assistant_output_phase
     from soothe_sdk.tools.metadata import get_tool_meta
     from soothe_sdk.utils.formatting import format_cli_error
     from soothe_sdk.plugin import plugin, tool

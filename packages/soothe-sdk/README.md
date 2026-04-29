@@ -231,7 +231,7 @@ soothe_sdk/
 │   ├── emit.py              # emit_progress(), set_stream_writer()
 │   └ depends.py             # library() helper
 ├── ux/                      # UX/display helpers
-│   ├── output_events.py     # Output event registry (NEW)
+│   ├── loop_stream.py       # Loop ``messages`` + ``phase`` assistant output (RFC-614)
 │   ├── classification.py    # classify_event_to_tier
 │   ├── internal.py          # Internal content filtering
 │   ├── subagent_progress.py # Subagent progress whitelist
@@ -262,7 +262,7 @@ from soothe_sdk.core.verbosity import VerbosityTier, should_show
 from soothe_sdk.plugin import plugin, tool, subagent, register_event
 from soothe_sdk.client import WebSocketClient, VerbosityLevel
 from soothe_sdk.client.wire import messages_from_wire_dicts
-from soothe_sdk.ux.output_events import is_output_event, extract_output_text
+from soothe_sdk.ux.loop_stream import assistant_output_phase, LOOP_ASSISTANT_OUTPUT_PHASES
 from soothe_sdk.tools.metadata import get_tool_meta, get_tool_display_name
 from soothe_sdk.utils.formatting import format_cli_error, log_preview
 from soothe_sdk.utils.parsing import PATH_ARG_PATTERN

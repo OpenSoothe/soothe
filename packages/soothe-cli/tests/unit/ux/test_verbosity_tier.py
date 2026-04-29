@@ -109,13 +109,9 @@ class TestClassifyEventToTier:
         )
 
     def test_classify_output_events(self) -> None:
-        """Output events classify to QUIET (always visible)."""
-        assert classify_event_to_tier("soothe.output.chitchat.response") == VerbosityTier.QUIET
-        assert (
-            classify_event_to_tier("soothe.output.autonomous.goal_completion.reported")
-            == VerbosityTier.QUIET
-        )
-        assert classify_event_to_tier("soothe.output.chitchat.started") == VerbosityTier.INTERNAL
+        """``soothe.output.*`` domain defaults to QUIET."""
+        assert classify_event_to_tier("soothe.output.telemetry.line") == VerbosityTier.QUIET
+        assert classify_event_to_tier("soothe.output.example.streaming") == VerbosityTier.QUIET
 
     def test_classify_error_events(self) -> None:
         """Error events classify to QUIET (always visible)."""

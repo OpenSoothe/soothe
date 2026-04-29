@@ -5,6 +5,8 @@
 > **Completed**: 2026-04-25
 > **Purpose**: Consolidate subagent event display to eliminate redundancy and simplify output
 
+> **IG-317 note:** References to filtering `soothe.output.chitchat.responded` describe an older custom-event path. Chitchat bodies now arrive on **`messages` + `phase="chitchat"`**; treat the prose below as historical unless you are maintaining legacy log processors.
+
 ---
 
 ## Problem Analysis
@@ -103,7 +105,7 @@ Browser subagent query shows redundant output:
 **File**: `packages/soothe-cli/src/soothe_cli/cli/stream/pipeline.py`
 
 **Changes**:
-- Filter `soothe.output.chitchat.responded` events when:
+- Filter chitchat assistant display when (historically `soothe.output.chitchat.responded`; now **`messages` + `phase="chitchat"`**) when:
   - Subagent is active (dispatched but not completed)
   - Chitchat content matches subagent intent
 

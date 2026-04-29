@@ -751,7 +751,7 @@ Exposed as langchain tools for explicit agent control:
 | `soothe.cognition.goal.directives_applied` | `goal_id`, `directives_count`, `changes` | Directives mutated DAG |
 | `soothe.cognition.goal.deferred` | `goal_id`, `reason`, `plan_preserved` | Goal deferred after DAG changes |
 | `soothe.cognition.goal.report` | `goal_id`, `step_count`, `completed`, `failed`, `summary` | Goal report emitted |
-| `soothe.output.autonomous.final_report` | `goal_id`, `description`, `status`, `summary` | Final root goal report |
+| `mode="messages"` + `phase="autonomous_goal"` (loop-tagged AI) | AI message `content` | Final autonomous summary text (IG-317; replaces legacy `soothe.output.autonomous.*` answer payloads) |
 
 ## Configuration
 

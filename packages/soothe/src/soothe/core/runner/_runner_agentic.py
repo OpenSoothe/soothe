@@ -13,6 +13,10 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.agent_loop import AgentLoop
 from soothe.cognition.agent_loop.utils.events import LoopAgentReasonEvent
+from soothe.cognition.agent_loop.utils.messages import (
+    loop_assistant_messages_chunk,
+    loop_message_assistant_output_phase,
+)
 from soothe.config import SootheConfig
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.events import (
@@ -255,6 +259,18 @@ def _is_ai_tool_invocation_messages_chunk(chunk: object) -> bool:
     if not isinstance(data, (list, tuple)) or len(data) < _MSG_PAIR_LEN:
         return False
     return _message_has_tool_invocation_metadata(data[0])
+
+
+def _is_loop_assistant_output_messages_chunk(chunk: object) -> bool:
+    """True when chunk is a root ``messages`` tuple carrying loop-tagged assistant text."""
+    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
+        return False
+    _namespace, mode, data = chunk
+    if mode != "messages":
+        return False
+    if not isinstance(data, (list, tuple)) or len(data) < _MSG_PAIR_LEN:
+        return False
+    return loop_message_assistant_output_phase(data[0]) is not None
 
 
 def _forward_messages_chunk_for_tool_ui(
@@ -641,23 +657,9 @@ class AgenticMixin:
                 # IG-304: Daemon-side suppression isolation; tool-only forwarding.
                 if _forward_messages_chunk_for_tool_ui(event_data):
                     yield _sanitize_forwarded_ai_tool_chunk(event_data)
-
-            elif event_type == "goal_completion_stream":
-                # Use unified streaming wrapper (RFC-614)
-                from soothe.core.runner._runner_shared import _wrap_streaming_output
-
-                wrapped = _wrap_streaming_output(
-                    chunk=event_data,
-                    event_type="soothe.output.goal_completion.streaming",
-                    config=self.config,
-                    namespace=(),
-                )
-                if wrapped:
-                    # wrapped is 3-tuple (namespace, mode, data)
-                    # Extract custom data for 2-tuple format expected by runner
-                    _ns, _mode, custom_data = wrapped
-                    # Yield as custom event for runner processing
-                    yield _custom(custom_data)
+                elif _is_loop_assistant_output_messages_chunk(event_data):
+                    # IG-317: Synthesis / piggybacked assistant text as tagged ``messages`` chunks.
+                    yield event_data
 
             elif event_type == "plan":
                 status = str(event_data.get("status", ""))
@@ -728,11 +730,11 @@ class AgenticMixin:
                         final_stdout = text
 
                 if final_stdout:
-                    yield _custom(
-                        {
-                            "type": "soothe.output.goal_completion.responded",
-                            "content": final_stdout,
-                        }
+                    yield loop_assistant_messages_chunk(
+                        content=final_stdout,
+                        phase="goal_completion",
+                        thread_id=tid,
+                        iteration=None,
                     )
 
                 yield _custom(

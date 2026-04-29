@@ -200,13 +200,15 @@ Where `{name}` is the concrete tool name (e.g., `search`, `crawl`, `read_file`, 
 
 ---
 
-## Output Events
+## Output domain (`soothe.output.*`)
+
+**IG-317 / RFC-614:** User-visible **assistant answer text** for the main agent loop is **not** cataloged here as `soothe.output.*` events. It is streamed on **`mode="messages"`** as loop-tagged AI payloads with a **`phase`** field (`goal_completion`, `chitchat`, `quiz`, `autonomous_goal`). Clients should use `soothe_sdk.ux.loop_stream` helpers to recognize those phases.
+
+Optional **ancillary** progress may still use the `soothe.output.*` domain (verbosity default: **QUIET** via domain `output`), for example dynamic types emitted by `soothe.utils.output_capture.OutputCapture` when `emit_progress=True` (`soothe.output.{source}`).
 
 | Type | Fields | VerbosityTier |
 |------|--------|---------------|
-| `soothe.output.chitchat.started` | `query: str` | DETAILED |
-| `soothe.output.chitchat.response` | `content: str` | QUIET |
-| `soothe.output.autonomous.final_report` | `goal_id: str`, `description: str`, `status: str`, `summary: str` | QUIET |
+| `soothe.output.*` (dynamic / ancillary) | Event-specific | QUIET (domain default) |
 
 ---
 

@@ -481,11 +481,10 @@ Layer 2 does not own backoff policy. It produces high-fidelity execution evidenc
 | `soothe.cognition.agent_loop.reasoned` | Plan/assessment progress summary event |
 | `soothe.cognition.agent_loop.step.started` | EXECUTE step began |
 | `soothe.cognition.agent_loop.step.completed` | EXECUTE step completed |
-| `soothe.output.goal_completion.streaming` | Streaming final answer chunk |
-| `soothe.output.goal_completion.responded` | Final answer payload |
+| `mode="messages"` + loop-tagged AI + `phase="goal_completion"` (and related phases) | Streaming / final user-visible answer text (IG-317; not `soothe.output.*`) |
 | `soothe.cognition.agent_loop.completed` | Loop completed lifecycle event |
 
-**Contract note**: Message-mode tool telemetry chunks remain visible during execute; plain execute-phase assistant prose is daemon-suppressed and not part of user-facing output events.
+**Contract note**: Message-mode tool telemetry chunks remain visible during execute; plain execute-phase assistant prose is daemon-suppressed. User-visible completion prose is forwarded on the **messages** wire with **`phase`**, not as separate `soothe.output.goal_completion.*` custom event types.
 
 ---
 

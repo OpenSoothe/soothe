@@ -15,13 +15,12 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command, Interrupt
 from soothe_sdk.core.exceptions import ConfigurationError
 
+from soothe.cognition.agent_loop.utils.messages import loop_assistant_messages_chunk
 from soothe.core.events import (
-    ChitchatResponseEvent,
     PlanCreatedEvent,
     PlanReflectedEvent,
     PlanStepCompletedEvent,
     PlanStepStartedEvent,
-    QuizResponseEvent,
     ThreadCreatedEvent,
     ThreadEndedEvent,
     ThreadResumedEvent,
@@ -117,7 +116,11 @@ class PhasesMixin:
 
         piggybacked = getattr(classification, "chitchat_response", None)
         if piggybacked:
-            yield _custom(ChitchatResponseEvent(content=piggybacked).to_dict())
+            yield loop_assistant_messages_chunk(
+                content=piggybacked,
+                phase="chitchat",
+                thread_id=thread_id,
+            )
             logger.debug("Chitchat completed for query: %s", user_input[:50])
             await self._save_chitchat_to_state(user_input, piggybacked, thread_id)
             return
@@ -127,7 +130,11 @@ class PhasesMixin:
         name = self._config.assistant_name
         # Pure fallback - LLM handles language detection in classification prompt
         fallback = f"Hello! I'm {name}, your AI assistant. How can I help you today?"
-        yield _custom(ChitchatResponseEvent(content=fallback).to_dict())
+        yield loop_assistant_messages_chunk(
+            content=fallback,
+            phase="chitchat",
+            thread_id=thread_id,
+        )
         logger.debug("Chitchat completed (canned fallback) for query: %s", user_input[:50])
 
     # -- quiz fast path (IG-250) ----------------------------------------------
@@ -156,7 +163,11 @@ class PhasesMixin:
         # Use piggybacked response if available (primary path)
         piggybacked = getattr(classification, "quiz_response", None)
         if piggybacked:
-            yield _custom(QuizResponseEvent(content=piggybacked).to_dict())
+            yield loop_assistant_messages_chunk(
+                content=piggybacked,
+                phase="quiz",
+                thread_id=thread_id,
+            )
             logger.debug("[IG-250] Quiz completed (piggybacked) for query: %s", user_input[:50])
             await self._save_quiz_to_state(user_input, piggybacked, thread_id)
             return
@@ -170,7 +181,11 @@ class PhasesMixin:
         if not hasattr(self, "_fast_model") or not self._fast_model:
             # No fast model available, use placeholder
             fallback_response = f"I'll answer that question: {user_input}"
-            yield _custom(QuizResponseEvent(content=fallback_response).to_dict())
+            yield loop_assistant_messages_chunk(
+                content=fallback_response,
+                phase="quiz",
+                thread_id=thread_id,
+            )
             logger.debug("[IG-250] Quiz completed (no model fallback): %s", user_input[:50])
             return
 
@@ -185,13 +200,21 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
             response = await self._fast_model.ainvoke(quiz_prompt)
             answer = response.content if hasattr(response, "content") else str(response)
 
-            yield _custom(QuizResponseEvent(content=answer).to_dict())
+            yield loop_assistant_messages_chunk(
+                content=answer,
+                phase="quiz",
+                thread_id=thread_id,
+            )
             logger.debug("[IG-250] Quiz completed (LLM fallback): %s", user_input[:50])
             await self._save_quiz_to_state(user_input, answer, thread_id)
         except Exception:
             logger.exception("[IG-250] Quiz LLM call failed")
             fallback_response = "I couldn't answer that question. Please try again."
-            yield _custom(QuizResponseEvent(content=fallback_response).to_dict())
+            yield loop_assistant_messages_chunk(
+                content=fallback_response,
+                phase="quiz",
+                thread_id=thread_id,
+            )
 
     async def _save_quiz_to_state(self, query: str, response: str, thread_id: str) -> None:
         """Save quiz interaction to thread state (IG-250).
