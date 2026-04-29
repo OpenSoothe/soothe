@@ -273,8 +273,8 @@ memory: []
 # Security Configuration - Filesystem access control and security policies
 
 security:
-  allow_paths_outside_workspace: true
-  require_approval_for_outside_paths: false
+  allow_paths_outside_workspace: false
+  require_approval_for_outside_paths: true
 
   # Path-based access control (glob patterns) - Evaluation: denied_paths > allowed_paths > workspace
   denied_paths:

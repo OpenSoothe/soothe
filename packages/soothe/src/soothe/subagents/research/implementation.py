@@ -98,15 +98,20 @@ def _build_sources(
     from .sources.filesystem import FilesystemSource
     from .sources.web import WebSource
 
+    allow_out = config.security.allow_paths_outside_workspace
+
     if domain == "web":
         return [WebSource(config=config), AcademicSource()]
     if domain == "code":
-        return [FilesystemSource(work_dir=work_dir), CLISource(workspace_root=work_dir)]
+        return [
+            FilesystemSource(work_dir=work_dir, allow_outside_workdir=allow_out),
+            CLISource(workspace_root=work_dir),
+        ]
     if domain == "deep":
         return [
             WebSource(config=config),
             AcademicSource(),
-            FilesystemSource(work_dir=work_dir),
+            FilesystemSource(work_dir=work_dir, allow_outside_workdir=allow_out),
             CLISource(workspace_root=work_dir),
             DocumentSource(config=config),
             BrowserSource(config=config),
@@ -116,7 +121,7 @@ def _build_sources(
     return [
         WebSource(config=config),
         AcademicSource(),
-        FilesystemSource(work_dir=work_dir),
+        FilesystemSource(work_dir=work_dir, allow_outside_workdir=allow_out),
         CLISource(workspace_root=work_dir),
         DocumentSource(config=config),
     ]

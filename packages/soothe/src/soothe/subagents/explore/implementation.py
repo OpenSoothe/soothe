@@ -39,7 +39,12 @@ def create_explore_subagent(
     explore_config = ExploreSubagentConfig(**subagent_config.config)
     workspace = work_dir  # Search boundary is workspace
 
-    runnable = build_explore_engine(model, explore_config, workspace)
+    runnable = build_explore_engine(
+        model,
+        explore_config,
+        workspace,
+        allow_paths_outside_workspace=config.security.allow_paths_outside_workspace,
+    )
 
     return {
         "name": "explore",

@@ -71,8 +71,14 @@ class ClaudePlugin:
         Returns:
             Subagent dict with name, description, and runnable.
         """
-        # Extract common parameters
-        permission_mode = kwargs.get("permission_mode", "accept-edits")
+        # Extract common parameters (IG-300: stricter defaults when workspace jail is on)
+        explicit_pm = "permission_mode" in kwargs
+        if explicit_pm:
+            permission_mode = kwargs["permission_mode"]
+        elif not getattr(config.security, "allow_paths_outside_workspace", True):
+            permission_mode = "plan"
+        else:
+            permission_mode = "accept-edits"
         max_turns = kwargs.get("max_turns", 20)
         system_prompt = kwargs.get("system_prompt")
         allowed_tools = kwargs.get("allowed_tools")

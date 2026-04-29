@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware.types import AgentMiddleware, ToolCallRequest
@@ -62,9 +63,11 @@ class SoothePolicyMiddleware(AgentMiddleware):
                 tool_args.get("subagent_type") or tool_args.get("description") or "task"
             )
 
+        workspace = self._workspace_from_request(request)
         ctx = PolicyContext(
             active_permissions=self._resolve_permissions(),
             thread_id=self._thread_id_from_request(request),
+            workspace=workspace,
         )
         decision = self._policy.check(
             ActionRequest(action_type=action_type, tool_name=action_name, tool_args=tool_args),
@@ -114,6 +117,23 @@ class SoothePolicyMiddleware(AgentMiddleware):
                 if isinstance(thread_id, str):
                     return thread_id
         return None
+
+    @staticmethod
+    def _workspace_from_request(request: ToolCallRequest) -> str | None:
+        """Absolute workspace string from LangGraph configurable, if present."""
+        config = getattr(request.runtime, "config", None)
+        if not isinstance(config, dict):
+            return None
+        configurable = config.get("configurable", {})
+        if not isinstance(configurable, dict):
+            return None
+        raw = configurable.get("workspace")
+        if not isinstance(raw, str) or not raw.strip():
+            return None
+        try:
+            return str(Path(raw).expanduser().resolve())
+        except (OSError, ValueError):
+            return raw.strip()
 
     @staticmethod
     def _emit_policy_event(request: ToolCallRequest, event_dict: dict[str, Any]) -> None:

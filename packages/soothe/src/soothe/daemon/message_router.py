@@ -13,7 +13,7 @@ from typing import Any
 from soothe_sdk.client.wire import messages_from_wire_dicts
 
 from soothe.core.runner._types import _generate_thread_id
-from soothe.core.workspace import validate_client_workspace
+from soothe.core.workspace import resolve_loop_daemon_workspace, validate_client_workspace
 from soothe.logging import ThreadLogger
 from soothe.utils.text_preview import preview_first
 
@@ -1754,6 +1754,13 @@ class MessageRouter:
         # Generate new loop_id
         loop_id = str(uuid7())
 
+        try:
+            resolve_loop_daemon_workspace(loop_id)
+        except ValueError:
+            logger.warning("Skipping loop workspace init for invalid loop_id %s", loop_id)
+        except OSError as e:
+            logger.warning("Could not create loop workspace directory: %s", e)
+
         # Create loop directory
         loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
         loop_dir.mkdir(parents=True, exist_ok=True)
@@ -1869,10 +1876,20 @@ class MessageRouter:
             except Exception as e:
                 logger.warning("Failed to update loop metadata: %s", str(e))
 
-        # Register thread in daemon's thread registry
+        # Register thread in daemon's thread registry (per-loop workspace, IG-300)
         d._thread_registry.ensure(thread_id, is_draft=False)
-        workspace = Path(d._daemon_workspace)
-        d._thread_registry.set_workspace(thread_id, workspace)
+        try:
+            loop_workspace = resolve_loop_daemon_workspace(loop_id)
+        except (OSError, ValueError) as e:
+            logger.warning(
+                "Falling back to daemon workspace for loop %s thread %s: %s",
+                loop_id,
+                thread_id,
+                e,
+            )
+            loop_workspace = Path(d._daemon_workspace)
+        d._thread_registry.set_workspace(thread_id, loop_workspace)
+        d._thread_registry.set_thread_loop(thread_id, loop_id)
 
         # Set runner's current thread to loop's thread
         d._runner.set_current_thread_id(thread_id)

@@ -41,6 +41,8 @@ def build_explore_engine(
     model: BaseChatModel,
     config: ExploreSubagentConfig,
     workspace: str,
+    *,
+    allow_paths_outside_workspace: bool = False,
 ) -> Any:
     """Build and compile the explore LangGraph.
 
@@ -48,12 +50,16 @@ def build_explore_engine(
         model: LLM for search planning, assessment, and synthesis.
         config: Explore configuration (thoroughness, iteration caps).
         workspace: Search boundary (working directory).
+        allow_paths_outside_workspace: When False, sandbox tools to *workspace*.
 
     Returns:
         Compiled LangGraph runnable.
     """
     # Get read-only filesystem tools (reusing deepagents tools)
-    tools = get_explore_tools(workspace=workspace)
+    tools = get_explore_tools(
+        workspace=workspace,
+        allow_paths_outside_workspace=allow_paths_outside_workspace,
+    )
 
     # Bind tools to model for plan_search node
     model_with_tools = model.bind_tools(tools)

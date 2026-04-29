@@ -36,6 +36,7 @@ class ThreadStateRegistry:
         """Initialize an empty registry."""
         self._by_thread: dict[str, ThreadState] = {}
         self._client_active_thread: dict[str, str] = {}
+        self._thread_loop: dict[str, str] = {}
 
     def get(self, thread_id: str) -> ThreadState | None:
         """Return state for *thread_id* if registered."""
@@ -53,9 +54,21 @@ class ThreadStateRegistry:
     def remove(self, thread_id: str) -> None:
         """Drop state for a thread (e.g. after archive/delete)."""
         self._by_thread.pop(thread_id, None)
+        self._thread_loop.pop(thread_id, None)
         for cid, tid in list(self._client_active_thread.items()):
             if tid == thread_id:
                 self._client_active_thread.pop(cid, None)
+
+    def set_thread_loop(self, thread_id: str, loop_id: str | None) -> None:
+        """Associate a durability thread with an AgentLoop id (IG-300)."""
+        if loop_id and str(loop_id).strip():
+            self._thread_loop[thread_id] = str(loop_id).strip()
+        else:
+            self._thread_loop.pop(thread_id, None)
+
+    def get_thread_loop(self, thread_id: str) -> str | None:
+        """Return AgentLoop id bound to *thread_id*, if any."""
+        return self._thread_loop.get(thread_id)
 
     def set_client_thread(self, client_id: str, thread_id: str) -> None:
         """Record the thread a client last bound to (new_thread / resume)."""

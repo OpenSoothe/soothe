@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Dockerfile for Soothe daemon with full extras and Playwright support
+- IG-300: per-loop daemon workspace under ``$SOOTHE_HOME/Workspace/<loop_id>/``; unified tool metadata helpers for policy path extraction; ``PolicyContext.workspace`` for stream-scoped filesystem checks
 
 ### Changed
 - Migrated soothe-community to standalone project ([github.com/OpenSoothe/soothe-community](https://github.com/OpenSoothe/soothe-community))
@@ -16,6 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Simplified version extraction logic
 - Use Chinese Docker registry mirror for builds
 - Move config files to `config/` directory
+- IG-300: default ``security.allow_paths_outside_workspace`` to false (template + dev overlay); ``ConfigDrivenPolicy`` applies filesystem deny/allow/workspace rules to real deepagents tool names; workspace backend expands ``~`` in normalized paths; explore/research/claude subagents align with the security flag
 
 ### Fixed
 - Version mismatch in packaging

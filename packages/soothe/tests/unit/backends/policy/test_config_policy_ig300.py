@@ -1,0 +1,166 @@
+"""IG-300: ConfigDrivenPolicy filesystem boundary + metadata path extraction."""
+
+from pathlib import Path
+from types import SimpleNamespace
+
+from soothe.core.persistence.config_policy import ConfigDrivenPolicy, _extract_required_permission
+from soothe.protocols.policy import (
+    ActionRequest,
+    Permission,
+    PermissionSet,
+    PolicyContext,
+)
+
+
+def _security(
+    *,
+    allow_out: bool = False,
+    require_approval_out: bool = True,
+    allowed: list[str] | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        allow_paths_outside_workspace=allow_out,
+        require_approval_for_outside_paths=require_approval_out,
+        denied_paths=[],
+        allowed_paths=allowed or ["**"],
+        denied_file_types=[],
+        require_approval_for_file_types=[],
+    )
+
+
+def test_glob_denied_outside_workspace(tmp_path: Path) -> None:
+    ws = tmp_path / "proj"
+    ws.mkdir()
+    other = tmp_path / "other"
+    other.mkdir()
+
+    cfg = SimpleNamespace(security=_security(allow_out=False), workspace_dir=str(ws))
+    policy = ConfigDrivenPolicy(config=cfg)
+    ctx = PolicyContext(
+        active_permissions=PermissionSet(frozenset([Permission("fs", "read", "*")])),
+        thread_id="t1",
+        workspace=str(ws.resolve()),
+    )
+    action = ActionRequest(
+        action_type="tool_call",
+        tool_name="glob",
+        tool_args={"path": str(other), "pattern": "*.py"},
+    )
+    d = policy.check(action, ctx)
+    assert d.verdict == "deny"
+    assert "outside workspace" in d.reason
+
+
+def test_read_file_allowed_inside_workspace(tmp_path: Path) -> None:
+    ws = tmp_path / "proj"
+    ws.mkdir()
+    f = ws / "a.txt"
+    f.write_text("hi", encoding="utf-8")
+
+    cfg = SimpleNamespace(security=_security(allow_out=False), workspace_dir=str(ws))
+    policy = ConfigDrivenPolicy(config=cfg)
+    ctx = PolicyContext(
+        active_permissions=PermissionSet(
+            frozenset([Permission("fs", "read", "*"), Permission("fs", "write", "*")])
+        ),
+        thread_id="t1",
+        workspace=str(ws.resolve()),
+    )
+    action = ActionRequest(
+        action_type="tool_call",
+        tool_name="read_file",
+        tool_args={"file_path": str(f)},
+    )
+    d = policy.check(action, ctx)
+    assert d.verdict == "allow"
+
+
+def test_outside_path_need_approval_when_configured(tmp_path: Path) -> None:
+    ws = tmp_path / "proj"
+    ws.mkdir()
+    other = tmp_path / "other"
+    other.mkdir()
+
+    cfg = SimpleNamespace(
+        security=_security(allow_out=True, require_approval_out=True),
+        workspace_dir=str(ws),
+    )
+    policy = ConfigDrivenPolicy(config=cfg)
+    ctx = PolicyContext(
+        active_permissions=PermissionSet(frozenset([Permission("fs", "read", "*")])),
+        thread_id="t1",
+        workspace=str(ws.resolve()),
+    )
+    action = ActionRequest(
+        action_type="tool_call",
+        tool_name="read_file",
+        tool_args={"path": str(other / "x.txt")},
+    )
+    d = policy.check(action, ctx)
+    assert d.verdict == "need_approval"
+
+
+def test_outside_allowed_when_flag_true_and_no_approval_required(tmp_path: Path) -> None:
+    ws = tmp_path / "proj"
+    ws.mkdir()
+    other = tmp_path / "other"
+    other.mkdir()
+
+    cfg = SimpleNamespace(
+        security=_security(allow_out=True, require_approval_out=False),
+        workspace_dir=str(ws),
+    )
+    policy = ConfigDrivenPolicy(config=cfg)
+    ctx = PolicyContext(
+        active_permissions=PermissionSet(frozenset([Permission("fs", "read", "*")])),
+        thread_id="t1",
+        workspace=str(ws.resolve()),
+    )
+    action = ActionRequest(
+        action_type="tool_call",
+        tool_name="read_file",
+        tool_args={"path": str(other / "x.txt")},
+    )
+    d = policy.check(action, ctx)
+    assert d.verdict == "allow"
+
+
+def test_denied_by_allowed_paths_whitelist(tmp_path: Path) -> None:
+    ws = tmp_path / "proj"
+    ws.mkdir()
+    cfg = SimpleNamespace(
+        security=SimpleNamespace(
+            allow_paths_outside_workspace=True,
+            require_approval_for_outside_paths=False,
+            denied_paths=[],
+            allowed_paths=["/only/here/**"],
+            denied_file_types=[],
+            require_approval_for_file_types=[],
+        ),
+        workspace_dir=str(ws),
+    )
+    policy = ConfigDrivenPolicy(config=cfg)
+    ctx = PolicyContext(
+        active_permissions=PermissionSet(frozenset([Permission("fs", "read", "*")])),
+        thread_id="t1",
+        workspace=str(ws.resolve()),
+    )
+    action = ActionRequest(
+        action_type="tool_call",
+        tool_name="read_file",
+        tool_args={"path": str(ws / "a.txt")},
+    )
+    d = policy.check(action, ctx)
+    assert d.verdict == "deny"
+    assert "allowed pattern" in d.reason
+
+
+def test_extract_required_permission_uses_file_path() -> None:
+    action = ActionRequest(
+        action_type="tool_call",
+        tool_name="read_file",
+        tool_args={"file_path": "/tmp/x"},
+    )
+    perm = _extract_required_permission(action)
+    assert perm is not None
+    assert perm.scope == "/tmp/x"
