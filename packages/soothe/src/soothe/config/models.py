@@ -881,7 +881,9 @@ class ExecutionConfig(BaseModel):
         tool_result_cache: Tool result cache settings (RFC-211).
         llm_rpm_limit: Soft cap on LLM HTTP requests per minute (middleware sliding window).
         llm_concurrent_limit: Max concurrent in-flight LLM calls per thread.
-        llm_call_timeout_seconds: Per-LLM-call timeout for rate-limit middleware.
+        llm_call_timeout_seconds: Per-LLM-call timeout for rate-limit middleware (floor when adaptive).
+        llm_call_timeout_adaptive: Scale timeout up from the floor based on estimated prompt size.
+        llm_call_timeout_max_seconds: Upper bound for adaptive per-call timeout.
     """
 
     concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
@@ -891,6 +893,8 @@ class ExecutionConfig(BaseModel):
     llm_rpm_limit: int = Field(default=120, ge=1, le=10_000)
     llm_concurrent_limit: int = Field(default=10, ge=1, le=500)
     llm_call_timeout_seconds: int = Field(default=60, ge=5, le=3600)
+    llm_call_timeout_adaptive: bool = True
+    llm_call_timeout_max_seconds: int = Field(default=600, ge=60, le=3600)
 
 
 class AutopilotConfig(BaseModel):
