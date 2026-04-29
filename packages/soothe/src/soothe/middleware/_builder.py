@@ -142,19 +142,26 @@ def build_soothe_middleware_stack(
     rpm = config.execution.llm_rpm_limit
     concurrent = config.execution.llm_concurrent_limit
     timeout = config.execution.llm_call_timeout_seconds
+    timeout_max = config.execution.llm_call_timeout_max_seconds
+    timeout_adaptive = config.execution.llm_call_timeout_adaptive
     stack.append(
         LLMRateLimitMiddleware(
             requests_per_minute=rpm,
             max_concurrent_requests_per_thread=concurrent,  # IG-258 Phase 2
             call_timeout_seconds=timeout,
+            call_timeout_max_seconds=timeout_max,
+            call_timeout_adaptive=timeout_adaptive,
             thread_local=True,  # IG-258 Phase 2: Enable thread-local budgets
         )
     )
     logger.info(
-        "[Middleware] LLM rate limiting enabled (thread-local): rpm=%d, concurrent=%d, timeout=%ds",
+        "[Middleware] LLM rate limiting enabled (thread-local): rpm=%d, concurrent=%d, "
+        "timeout_floor=%ds timeout_cap=%ds adaptive=%s",
         rpm,
         concurrent,
         timeout,
+        timeout_max,
+        timeout_adaptive,
     )
 
     # 4. LLM tracing (debug info for request/response lifecycle)

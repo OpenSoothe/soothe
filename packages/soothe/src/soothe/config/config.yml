@@ -94,6 +94,8 @@ execution:
   llm_rpm_limit: 120
   llm_concurrent_limit: 10
   llm_call_timeout_seconds: 60
+  llm_call_timeout_max_seconds: 600
+  llm_call_timeout_adaptive: true
   concurrency:
     max_parallel_goals: 1
     max_parallel_steps: 3
