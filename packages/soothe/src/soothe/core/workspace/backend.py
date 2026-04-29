@@ -25,6 +25,10 @@ class NormalizedPathBackend(FilesystemBackend):
     When virtual_mode=False (allow_paths_outside_workspace=True), the underlying
     FilesystemBackend would interpret '/' as the actual root filesystem.
     This wrapper ensures such paths are treated as workspace-relative.
+
+    ``_resolve_path`` is overridden so ``read``, ``write``, ``edit``, and other
+    path-based operations use the same normalization as ``ls_info`` / ``glob_info``
+    (IG-300).
     """
 
     def _normalize_path(self, path: str) -> str:
@@ -32,6 +36,10 @@ class NormalizedPathBackend(FilesystemBackend):
 
         Expands leading ``~`` so home-relative paths cannot bypass workspace
         routing (IG-300).
+
+        When ``virtual_mode=True`` and the path is a host-absolute path inside
+        the workspace, map it to the virtual absolute form (``/rel``) expected
+        by ``FilesystemBackend._resolve_path`` (IG-300).
 
         Args:
             path: Input path (may be '/', absolute, or relative).
@@ -48,14 +56,20 @@ class NormalizedPathBackend(FilesystemBackend):
         if expanded.is_absolute():
             abs_str = str(expanded)
             try:
-                expanded.resolve().relative_to(workspace.resolve())
+                rel = expanded.resolve().relative_to(workspace.resolve())
             except ValueError:
                 # Path is outside workspace - treat as workspace-relative
                 relative = abs_str.lstrip("/")
                 return relative or "."
+            if self.virtual_mode:
+                return "/" + rel.as_posix()
             return abs_str
 
         return path.strip()
+
+    def _resolve_path(self, key: str) -> Path:
+        """Apply RFC-103 normalization before deepagents virtual/host resolution (IG-300)."""
+        return super()._resolve_path(self._normalize_path(key))
 
     def ls_info(self, path: str) -> list[dict[str, Any]]:
         """List directory with file info, normalizing path first."""
@@ -263,17 +277,17 @@ class WorkspaceAwareBackend:
         # Absolute path outside workspace -> make relative
         if path.startswith("/"):
             backend = self._get_backend()
-            workspace = Path(backend.cwd)
-            abs_path = Path(path)
+            workspace = Path(backend.cwd).resolve()
+            abs_path = Path(path).expanduser().resolve()
             try:
-                abs_path.relative_to(workspace)
+                rel = abs_path.relative_to(workspace)
             except ValueError:
                 # Path is outside workspace - treat as workspace-relative
                 relative = path.lstrip("/")
                 return relative or "."
-            else:
-                # Path is within workspace, use as-is
-                return path
+            if getattr(backend, "virtual_mode", False):
+                return "/" + rel.as_posix()
+            return path
 
         # Already relative
         return path
