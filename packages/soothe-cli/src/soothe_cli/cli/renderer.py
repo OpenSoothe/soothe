@@ -45,6 +45,9 @@ class CliRendererState:
     # Track tool call start times for duration display (RFC-0020)
     tool_call_start_times: dict[str, float] = field(default_factory=dict)
 
+    # Buffer tool-call line text until result arrives for single-line rendering.
+    pending_tool_call_lines: dict[str, str] = field(default_factory=dict)
+
     # After LLM text on stdout, next stderr icon block gets one leading blank line
     stderr_blank_before_next_icon_block: bool = False
 
@@ -228,10 +231,12 @@ class CliRenderer(RendererBase):
         # Track start time for duration display (RFC-0020)
         if tool_call_id:
             self._state.tool_call_start_times[tool_call_id] = time.time()
+            self._state.pending_tool_call_lines[tool_call_id] = tool_block
+            return
 
+        # No stable ID means we cannot join with result later - keep old behavior.
         sys.stderr.write(f"{tool_block}\n")
         sys.stderr.flush()
-        # Mark that stderr was just written
         self._state.stderr_just_written = True
 
     def on_tool_result(
@@ -274,9 +279,15 @@ class CliRenderer(RendererBase):
         if duration_ms > 0:
             result_line += f" ({duration_ms}ms)"
 
-        # IG-257: Add indentation when inside step context
-        # Unicode U+2514 "└─" (Box Drawings Light Up and Right) for tree branch
-        if self._is_inside_step_context():
+        combined_call_line: str | None = None
+        if tool_call_id:
+            combined_call_line = self._state.pending_tool_call_lines.pop(tool_call_id, None)
+
+        if combined_call_line:
+            result_line = f"{combined_call_line} -> {result_line}"
+        elif self._is_inside_step_context():
+            # IG-257: Add indentation when inside step context
+            # Unicode U+2514 "└─" (Box Drawings Light Up and Right) for tree branch
             result_line = f"  └─ {result_line}"
 
         sys.stderr.write(result_line + "\n")
@@ -398,6 +409,7 @@ class CliRenderer(RendererBase):
         """Finalize turn-local renderer state."""
         self._state.needs_stdout_newline = False
         self._state.full_response.clear()
+        self._state.pending_tool_call_lines.clear()
 
     def _stderr_begin_icon_block(self) -> None:
         """Prepare stderr for Soothe icon lines (progress, tools, tool results).

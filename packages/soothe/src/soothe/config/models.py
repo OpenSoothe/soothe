@@ -634,7 +634,7 @@ class AgenticLoopConfig(BaseModel):
     )
 
     output_streaming: bool = Field(
-        default=False,
+        default=True,
         description="Enable streaming mode for all AI outputs (true=stream chunks, false=batch final only)",
     )
 

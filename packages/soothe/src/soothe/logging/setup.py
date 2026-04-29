@@ -83,7 +83,7 @@ def setup_logging(config: SootheConfig | None = None, *, foreground: bool = Fals
 
     console_enabled = cfg.logging.console.enabled or foreground
     console_stream = (
-        sys.stdout
+        sys.stderr
         if foreground
         else (sys.stderr if cfg.logging.console.stream == "stderr" else sys.stdout)
     )
@@ -115,6 +115,7 @@ def _suppress_noisy_third_party() -> None:
         "bubus",
         "cdp_use",
         "websockets",
+        "requests",
     )
     for name in noisy:
         logging.getLogger(name).setLevel(logging.WARNING)

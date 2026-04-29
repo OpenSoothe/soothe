@@ -276,6 +276,118 @@ def _forward_messages_chunk_for_tool_ui(
     return _is_tool_stream_chunk(chunk) or _is_ai_tool_invocation_messages_chunk(chunk)
 
 
+def _strip_text_content_from_ai_tool_message(
+    msg: object,
+) -> tuple[object, str]:
+    """Strip text payloads from AI tool-invocation messages.
+
+    Keeps tool-call metadata (`tool_calls`, `tool_call_chunks`, `tool_call` blocks)
+    while removing user-visible text content to avoid daemon-side leakage.
+
+    Args:
+        msg: AI message object or serialized dict.
+
+    Returns:
+        Tuple of (sanitized_message, stripped_text_preview_source).
+    """
+    from langchain_core.messages import AIMessage, AIMessageChunk
+
+    payload: dict[str, Any] | None
+    if isinstance(msg, (AIMessage, AIMessageChunk)):
+        payload = msg.model_dump(mode="json")
+    elif isinstance(msg, dict):
+        payload = dict(msg)
+    else:
+        return msg, ""
+
+    raw_type = payload.get("type")
+    if not isinstance(raw_type, str):
+        return msg, ""
+    if raw_type not in ("ai", "AIMessage", "AIMessageChunk") and not raw_type.endswith(
+        "AIMessageChunk"
+    ):
+        return msg, ""
+
+    stripped_parts: list[str] = []
+
+    raw_content = payload.get("content")
+    if isinstance(raw_content, str):
+        if raw_content.strip():
+            stripped_parts.append(raw_content)
+        payload["content"] = ""
+    elif isinstance(raw_content, list):
+        kept_content: list[Any] = []
+        for item in raw_content:
+            if isinstance(item, str):
+                if item.strip():
+                    stripped_parts.append(item)
+                continue
+            if isinstance(item, dict) and _dict_block_is_tool_invocation(item):
+                kept_content.append(item)
+                continue
+            if isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str) and text.strip():
+                    stripped_parts.append(text)
+                continue
+        payload["content"] = kept_content
+
+    raw_blocks = payload.get("content_blocks")
+    if isinstance(raw_blocks, list):
+        kept_blocks: list[dict[str, Any]] = []
+        for block in raw_blocks:
+            if not isinstance(block, dict):
+                continue
+            if _dict_block_is_tool_invocation(block):
+                kept_blocks.append(block)
+                continue
+            text = block.get("text")
+            if isinstance(text, str) and text.strip():
+                stripped_parts.append(text)
+        payload["content_blocks"] = kept_blocks
+
+    stripped_preview_source = " ".join(s.strip() for s in stripped_parts if s.strip()).strip()
+    return payload, stripped_preview_source
+
+
+def _sanitize_forwarded_ai_tool_chunk(
+    chunk: object,
+) -> object:
+    """Sanitize forwarded AI tool-invocation chunk by stripping text blocks.
+
+    ToolMessage chunks are returned unchanged. AI chunks that carry tool metadata are
+    converted to sanitized dict payloads so clients receive only tool-call metadata.
+
+    Args:
+        chunk: Deepagents stream chunk `(namespace, mode, data)`.
+
+    Returns:
+        Sanitized chunk object (or original chunk when sanitization is not applicable).
+    """
+    if not _is_ai_tool_invocation_messages_chunk(chunk):
+        return chunk
+    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
+        return chunk
+
+    namespace, mode, data = chunk
+    if mode != "messages":
+        return chunk
+    if not isinstance(data, (list, tuple)) or len(data) < _MSG_PAIR_LEN:
+        return chunk
+
+    msg = data[0]
+    metadata = data[1]
+    sanitized_msg, stripped_preview_source = _strip_text_content_from_ai_tool_message(msg)
+
+    if stripped_preview_source:
+        logger.debug(
+            "Sanitized AI tool chunk: stripped text/content preview=%s",
+            preview_first(stripped_preview_source, 200),
+        )
+
+    return (namespace, mode, (sanitized_msg, metadata))
+
+
 def _stringify_llm_message_content(content: object) -> str:
     """Flatten LangChain message content to a single string."""
     if isinstance(content, str):
@@ -528,7 +640,7 @@ class AgenticMixin:
             elif event_type == "stream_event":
                 # IG-304: Daemon-side suppression isolation; tool-only forwarding.
                 if _forward_messages_chunk_for_tool_ui(event_data):
-                    yield event_data
+                    yield _sanitize_forwarded_ai_tool_chunk(event_data)
 
             elif event_type == "goal_completion_stream":
                 # Use unified streaming wrapper (RFC-614)

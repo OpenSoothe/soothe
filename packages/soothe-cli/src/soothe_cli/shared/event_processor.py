@@ -72,7 +72,7 @@ class EventProcessor:
         renderer: RendererProtocol,
         *,
         verbosity: VerbosityLevel = "normal",
-        final_output_mode: str = "batch",
+        final_output_mode: str = "streaming",
         presentation_engine: PresentationEngine | None = None,
         tui_debug: bool = False,
     ) -> None:
@@ -88,7 +88,7 @@ class EventProcessor:
         self._renderer = renderer
         self._verbosity = normalize_verbosity(verbosity)
         self._final_output_mode = (
-            final_output_mode if final_output_mode in {"streaming", "batch"} else "batch"
+            final_output_mode if final_output_mode in {"streaming", "batch"} else "streaming"
         )
         self._tui_debug = tui_debug
 
@@ -891,7 +891,7 @@ class EventProcessor:
             "enabled": True,
             "mode": self._final_output_mode
             if self._final_output_mode in {"streaming", "batch"}
-            else "batch",
+            else "streaming",
             "synthesis_streaming": True,
         }
 
