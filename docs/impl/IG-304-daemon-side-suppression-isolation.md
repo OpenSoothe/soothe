@@ -1,5 +1,7 @@
 # IG-304: Daemon-side Suppression Isolation for Agentic Output
 
+> **Update (IG-317):** Final user-facing answer text is forwarded on the **`messages`** wire with **`phase`**, not via `soothe.output.goal_completion.responded`. Daemon-side suppression goals below still apply to execute-phase prose.
+
 ## Context
 
 `case1.log` shows intermediate execute-phase assistant prose (for example, "Step 1 Complete ...")
@@ -24,7 +26,7 @@ Move suppression responsibility to daemon emission paths so clients receive only
 - Update daemon-side agentic stream forwarding to stop emitting execute-phase assistant prose
   as user-visible output payloads.
 - Keep tool call/result stream forwarding intact for CLI/TUI activity display.
-- Preserve explicit final output delivery via `soothe.output.goal_completion.responded`.
+- Preserve explicit final output delivery via loop-tagged **`messages`** chunks (`phase`, including `goal_completion`).
 - Add/adjust tests to enforce daemon-side isolation contract.
 
 ## Non-goals

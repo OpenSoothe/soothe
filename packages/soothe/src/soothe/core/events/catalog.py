@@ -37,7 +37,6 @@ from typing import Any, Literal
 
 from soothe_sdk.core.events import (
     LifecycleEvent,
-    OutputEvent,
     ProtocolEvent,
     SootheEvent,
 )
@@ -49,7 +48,6 @@ from .constants import (
     AGENT_LOOP_STARTED,
     AGENT_LOOP_STEP_COMPLETED,
     AGENT_LOOP_STEP_STARTED,
-    AUTONOMOUS_GOAL_COMPLETION,
     # Cognition - AgentLoop
     AUTOPILLOT_CHECKPOINT_SAVED,
     AUTOPILLOT_DREAMING_ENTERED,
@@ -70,14 +68,10 @@ from .constants import (
     BRANCH_PRUNED,
     BRANCH_RETRY_STARTED,
     CHECKPOINT_SAVED,
-    CHITCHAT_RESPONSE,
-    # Output
-    CHITCHAT_STARTED,
     # System - Daemon
     DAEMON_HEARTBEAT,
     GOAL_BATCH_STARTED,
     GOAL_COMPLETED,
-    GOAL_COMPLETION_RESPONDED,
     # Cognition - Goal
     GOAL_CREATED,
     GOAL_DEFERRED,
@@ -99,8 +93,6 @@ from .constants import (
     PLAN_STEP_STARTED,
     POLICY_CHECKED,
     POLICY_DENIED,
-    QUIZ_RESPONSE,
-    QUIZ_STARTED,
     # Lifecycle - Recovery
     RECOVERY_RESUMED,
     # Lifecycle - Thread
@@ -419,56 +411,6 @@ def make_subagent_tool_failed(agent: str, **extra: Any) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Output events
-# ---------------------------------------------------------------------------
-
-
-class ChitchatStartedEvent(OutputEvent):
-    type: Literal["soothe.output.chitchat.started"] = "soothe.output.chitchat.started"
-    query: str = ""
-
-
-class ChitchatResponseEvent(OutputEvent):
-    type: Literal["soothe.output.chitchat.responded"] = "soothe.output.chitchat.responded"
-    content: str = ""
-
-
-class QuizStartedEvent(OutputEvent):
-    """Quiz query started (IG-250)."""
-
-    type: Literal["soothe.output.quiz.started"] = "soothe.output.quiz.started"
-    query: str = ""
-
-
-class QuizResponseEvent(OutputEvent):
-    """Quiz response generated (IG-250)."""
-
-    type: Literal["soothe.output.quiz.responded"] = "soothe.output.quiz.responded"
-    content: str = ""
-
-
-class GoalCompletionRespondedEvent(OutputEvent):
-    """Goal completion final output body."""
-
-    type: Literal["soothe.output.goal_completion.responded"] = (
-        "soothe.output.goal_completion.responded"
-    )
-    content: str = ""
-
-
-class AutonomousGoalCompletionEvent(OutputEvent):
-    """Autonomous-mode goal completion report (RFC-300, IG-273)."""
-
-    type: Literal["soothe.output.autonomous.goal_completion.reported"] = (
-        "soothe.output.autonomous.goal_completion.reported"
-    )
-    goal_id: str = ""
-    description: str = ""
-    status: str = ""
-    summary: str = ""
-
-
-# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -782,14 +724,6 @@ _reg(
     summary_template="Directives applied: {directives_count} changes",
 )
 _reg(GOAL_DEFERRED, GoalDeferredEvent, summary_template="Goal {goal_id} deferred: {reason}")
-
-# -- Output ------------------------------------------------------------------
-_reg(CHITCHAT_STARTED, ChitchatStartedEvent, verbosity=VerbosityTier.INTERNAL)
-_reg(CHITCHAT_RESPONSE, ChitchatResponseEvent, verbosity=VerbosityTier.QUIET)
-_reg(QUIZ_STARTED, QuizStartedEvent, verbosity=VerbosityTier.INTERNAL)
-_reg(QUIZ_RESPONSE, QuizResponseEvent, verbosity=VerbosityTier.QUIET)
-_reg(GOAL_COMPLETION_RESPONDED, GoalCompletionRespondedEvent, verbosity=VerbosityTier.QUIET)
-_reg(AUTONOMOUS_GOAL_COMPLETION, AutonomousGoalCompletionEvent, verbosity=VerbosityTier.QUIET)
 
 # -- Autopilot (RFC-204) -------------------------------------------------
 

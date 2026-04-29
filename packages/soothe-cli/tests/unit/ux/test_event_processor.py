@@ -96,6 +96,20 @@ class MockRenderer:
         self.calls.append(("on_turn_end", (), {}))
 
 
+def _stream_messages_event(
+    message: dict[str, Any],
+    *,
+    namespace: list[str] | None = None,
+) -> dict[str, Any]:
+    """Build a daemon ``stream_event`` payload (``mode="messages"``)."""
+    return {
+        "type": "event",
+        "mode": "messages",
+        "namespace": namespace or [],
+        "data": [message, {}],
+    }
+
+
 class TestProcessorState:
     """Tests for ProcessorState dataclass."""
 
@@ -256,22 +270,21 @@ class TestEventProcessorOutputEventRouting:
         assert progress_calls[0][1][0] == "soothe.cognition.agent_loop.completed"
         assert assistant_calls == []
 
-    def test_chitchat_output_event_still_routes_to_assistant_text(self) -> None:
-        """Non-agentic output events should keep existing fast-path behavior."""
+    def test_chitchat_phase_messages_routes_to_assistant_text(self) -> None:
+        """Chitchat piggyback text uses ``messages`` + ``phase`` (IG-317)."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal")
 
-        chitchat_event = {
-            "type": "event",
-            "mode": "custom",
-            "namespace": [],
-            "data": {
-                "type": "soothe.output.chitchat.responded",
-                "content": "Hello from chitchat",
-            },
-        }
-
-        processor.process_event(chitchat_event)
+        processor.process_event(
+            _stream_messages_event(
+                {
+                    "type": "ai",
+                    "content": "Hello from chitchat",
+                    "phase": "chitchat",
+                    "thread_id": "tid",
+                },
+            )
+        )
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         progress_calls = [c for c in renderer.calls if c[0] == "on_progress_event"]
@@ -279,22 +292,21 @@ class TestEventProcessorOutputEventRouting:
         assert assistant_calls[0][1][0] == "Hello from chitchat"
         assert progress_calls == []
 
-    def test_batch_mode_emits_goal_completion_responded_output(self) -> None:
-        """Batch mode should render final stdout from output responded event."""
+    def test_batch_mode_emits_goal_completion_final_message(self) -> None:
+        """Batch mode should render final goal completion from ``LoopAIMessage``-shaped dict."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal", final_output_mode="batch")
 
-        completion_event = {
-            "type": "event",
-            "mode": "custom",
-            "namespace": [],
-            "data": {
-                "type": "soothe.output.goal_completion.responded",
-                "content": "Batch goal completion content",
-            },
-        }
-
-        processor.process_event(completion_event)
+        processor.process_event(
+            _stream_messages_event(
+                {
+                    "type": "ai",
+                    "content": "Batch goal completion content",
+                    "phase": "goal_completion",
+                    "thread_id": "tid",
+                },
+            )
+        )
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         progress_calls = [c for c in renderer.calls if c[0] == "on_progress_event"]
@@ -302,44 +314,40 @@ class TestEventProcessorOutputEventRouting:
         assert assistant_calls[0][1][0] == "Batch goal completion content"
         assert progress_calls == []
 
-    def test_batch_mode_suppresses_synthesis_streaming_chunks(self) -> None:
-        """Batch mode should ignore streaming final-report chunks."""
+    def test_batch_mode_suppresses_goal_completion_chunks(self) -> None:
+        """Batch mode should ignore goal-completion stream chunks."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal", final_output_mode="batch")
 
-        stream_event = {
-            "type": "event",
-            "mode": "custom",
-            "namespace": [],
-            "data": {
-                "type": "soothe.output.goal_completion.streaming",
-                "content": "stream chunk",
-                "is_chunk": True,
-            },
-        }
-
-        processor.process_event(stream_event)
+        processor.process_event(
+            _stream_messages_event(
+                {
+                    "type": "AIMessageChunk",
+                    "content": "stream chunk",
+                    "phase": "goal_completion",
+                    "thread_id": "tid",
+                },
+            )
+        )
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert assistant_calls == []
 
-    def test_streaming_mode_accepts_goal_completion_stream_event(self) -> None:
-        """Goal-completion streaming event should route to assistant text in streaming mode."""
+    def test_streaming_mode_accepts_goal_completion_chunk(self) -> None:
+        """Goal-completion chunks route to assistant text in streaming mode."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
 
-        stream_event = {
-            "type": "event",
-            "mode": "custom",
-            "namespace": [],
-            "data": {
-                "type": "soothe.output.goal_completion.streaming",
-                "content": "goal completion chunk",
-                "is_chunk": True,
-            },
-        }
-
-        processor.process_event(stream_event)
+        processor.process_event(
+            _stream_messages_event(
+                {
+                    "type": "AIMessageChunk",
+                    "content": "goal completion chunk",
+                    "phase": "goal_completion",
+                    "thread_id": "tid",
+                },
+            )
+        )
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert len(assistant_calls) == 1
         assert assistant_calls[0][1][0] == "goal completion chunk"
@@ -374,42 +382,23 @@ class TestEventProcessorOutputEventRouting:
 
         chunk_1 = "# README Files Count Report\n\n## 1. Executive Summary\n\nThis report "
         chunk_2 = "documents the comprehensive count.\n\n## 2. Methodology\n"
+        tid = {"thread_id": "tid", "phase": "goal_completion"}
 
         processor.process_event(
-            {
-                "type": "event",
-                "mode": "custom",
-                "namespace": [],
-                "data": {
-                    "type": "soothe.output.goal_completion.streaming",
-                    "content": chunk_1,
-                    "is_chunk": True,
-                },
-            }
+            _stream_messages_event(
+                {"type": "AIMessageChunk", "content": chunk_1, **tid},
+            )
         )
         processor.process_event(
-            {
-                "type": "event",
-                "mode": "custom",
-                "namespace": [],
-                "data": {
-                    "type": "soothe.output.goal_completion.streaming",
-                    "content": chunk_2,
-                    "is_chunk": True,
-                },
-            }
+            _stream_messages_event(
+                {"type": "AIMessageChunk", "content": chunk_2, **tid},
+            )
         )
-        # Final responded event should not replay duplicated full text after chunks.
+        # Final non-chunk should not replay duplicated full text after chunks.
         processor.process_event(
-            {
-                "type": "event",
-                "mode": "custom",
-                "namespace": [],
-                "data": {
-                    "type": "soothe.output.goal_completion.responded",
-                    "content": chunk_1 + chunk_2,
-                },
-            }
+            _stream_messages_event(
+                {"type": "ai", "content": chunk_1 + chunk_2, **tid},
+            )
         )
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
@@ -423,83 +412,45 @@ class TestEventProcessorOutputEventRouting:
         assert progress_calls == []
 
     def test_streaming_goal_completion_preserves_boundaries_when_is_chunk_false(self) -> None:
-        """synthesis streaming should preserve boundaries even when is_chunk is false."""
+        """Non-chunk ``ai`` payloads still stream as incremental text for goal completion."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
 
+        tid = {"thread_id": "tid", "phase": "goal_completion"}
         processor.process_event(
-            {
-                "type": "event",
-                "mode": "custom",
-                "namespace": [],
-                "data": {
-                    "type": "soothe.output.goal_completion.streaming",
-                    "content": "# Report\n\n",
-                    "is_chunk": False,
-                },
-            }
+            _stream_messages_event(
+                {"type": "ai", "content": "# Report\n\n", **tid},
+            )
         )
         processor.process_event(
-            {
-                "type": "event",
-                "mode": "custom",
-                "namespace": [],
-                "data": {
-                    "type": "soothe.output.goal_completion.streaming",
-                    "content": "## Executive Summary\n\n",
-                    "is_chunk": False,
-                },
-            }
+            _stream_messages_event(
+                {"type": "ai", "content": "## Executive Summary\n\n", **tid},
+            )
         )
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert len(assistant_calls) == 2
         assert assistant_calls[0][1][0] == "# Report\n\n"
         assert assistant_calls[1][1][0] == "## Executive Summary\n\n"
-        assert assistant_calls[0][2]["is_streaming"] is True
-        assert assistant_calls[1][2]["is_streaming"] is True
+        assert assistant_calls[0][2]["is_streaming"] is False
+        assert assistant_calls[1][2]["is_streaming"] is False
 
     def test_streaming_goal_completion_keeps_raw_cross_chunk_heading_boundaries(self) -> None:
         """Streaming should preserve raw heading chunk boundaries without repair."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
 
-        processor.process_event(
-            {
-                "type": "event",
-                "mode": "custom",
-                "namespace": [],
-                "data": {
-                    "type": "soothe.output.goal_completion.streaming",
-                    "content": "# README Coverage Analysis Report",
-                    "is_chunk": True,
-                },
-            }
-        )
-        processor.process_event(
-            {
-                "type": "event",
-                "mode": "custom",
-                "namespace": [],
-                "data": {
-                    "type": "soothe.output.goal_completion.streaming",
-                    "content": "## Summary",
-                    "is_chunk": True,
-                },
-            }
-        )
-        processor.process_event(
-            {
-                "type": "event",
-                "mode": "custom",
-                "namespace": [],
-                "data": {
-                    "type": "soothe.output.goal_completion.streaming",
-                    "content": "###1. Documentation Distribution",
-                    "is_chunk": True,
-                },
-            }
-        )
+        tid = {"thread_id": "tid", "phase": "goal_completion"}
+        for content in (
+            "# README Coverage Analysis Report",
+            "## Summary",
+            "###1. Documentation Distribution",
+        ):
+            processor.process_event(
+                _stream_messages_event(
+                    {"type": "AIMessageChunk", "content": content, **tid},
+                )
+            )
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert len(assistant_calls) == 3
@@ -515,6 +466,7 @@ class TestEventProcessorOutputEventRouting:
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
 
+        tid = {"thread_id": "tid", "phase": "goal_completion"}
         chunks = [
             "## Executive Summary",
             "Analysis of README coverage across packages.",
@@ -523,16 +475,9 @@ class TestEventProcessorOutputEventRouting:
         ]
         for chunk in chunks:
             processor.process_event(
-                {
-                    "type": "event",
-                    "mode": "custom",
-                    "namespace": [],
-                    "data": {
-                        "type": "soothe.output.goal_completion.streaming",
-                        "content": chunk,
-                        "is_chunk": True,
-                    },
-                }
+                _stream_messages_event(
+                    {"type": "AIMessageChunk", "content": chunk, **tid},
+                )
             )
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]

@@ -19,7 +19,7 @@ from soothe_sdk.core.events import (
 )
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux import classify_event_to_tier
-from soothe_sdk.ux.output_events import extract_output_text, is_output_event
+from soothe_sdk.ux.loop_stream import assistant_output_phase
 
 from soothe_cli.shared.display_policy import DisplayPolicy, VerbosityLevel, normalize_verbosity
 from soothe_cli.shared.message_processing import (
@@ -49,8 +49,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MSG_PAIR_LEN = 2
-_GOAL_COMPLETION_STREAMING_EVENT = "soothe.output.goal_completion.streaming"
-_GOAL_COMPLETION_RESPONDED_EVENT = "soothe.output.goal_completion.responded"
+# Internal accumulator key (not a public wire event type).
+_LOOP_MSG_ACCUM_GOAL_COMPLETION = "_soothe.internal.loop_messages.goal_completion"
 
 
 class EventProcessor:
@@ -121,6 +121,123 @@ class EventProcessor:
     def state(self) -> ProcessorState:
         """Read-only access to processor state."""
         return self._state
+
+    def _collect_ai_message_plain_text(self, msg: AIMessage) -> str:
+        """Concatenate user-visible text from an AIMessage / AIMessageChunk."""
+        parts: list[str] = []
+        blocks = getattr(msg, "content_blocks", None) or []
+        if blocks:
+            for block in blocks:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    t = block.get("text", "")
+                    if isinstance(t, str):
+                        parts.append(t)
+        elif isinstance(msg.content, str):
+            parts.append(msg.content)
+        elif isinstance(msg.content, list):
+            for item in msg.content:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict) and item.get("type") == "text":
+                    parts.append(str(item.get("text", "")))
+        return "".join(parts)
+
+    def _collect_ai_dict_plain_text(self, msg: dict[str, Any]) -> str:
+        """Concatenate user-visible text from a serialized AI message dict."""
+        parts: list[str] = []
+        blocks = msg.get("content_blocks") or []
+        if isinstance(blocks, list) and blocks:
+            for block in blocks:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    t = block.get("text", "")
+                    if isinstance(t, str):
+                        parts.append(t)
+            return "".join(parts)
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict) and item.get("type") == "text":
+                    parts.append(str(item.get("text", "")))
+        return "".join(parts)
+
+    def _dispatch_goal_completion_assistant_text(
+        self,
+        raw_text: str,
+        *,
+        namespace: tuple[str, ...],
+        is_chunk: bool,
+    ) -> None:
+        """Display logic for ``phase=goal_completion`` messages (IG-317 / RFC-614)."""
+        if not self._presentation.tier_visible(VerbosityTier.QUIET, self._verbosity):
+            return
+
+        streaming_config = self._get_effective_streaming_config()
+
+        if is_chunk:
+            if not streaming_config.get("enabled", True):
+                return
+            if streaming_config.get("mode") == "batch":
+                return
+            if not streaming_config.get("synthesis_streaming", True):
+                return
+            display_text = self._state.streaming_accumulator.accumulate(
+                _LOOP_MSG_ACCUM_GOAL_COMPLETION,
+                raw_text,
+                namespace=namespace,
+                is_chunk=True,
+            )
+            if display_text:
+                cleaned = self._clean_assistant_text(display_text, is_streaming=True)
+                if cleaned:
+                    self._emit_assistant_text(
+                        cleaned,
+                        is_main=True,
+                        is_streaming=True,
+                    )
+            return
+
+        if namespace in self._state.final_output_emitted_by_namespace:
+            return
+
+        if streaming_config.get("mode") == "streaming":
+            stream_state = self._state.streaming_accumulator.streams.get(
+                (_LOOP_MSG_ACCUM_GOAL_COMPLETION, namespace)
+            )
+            if stream_state and stream_state.accumulated_text.strip():
+                pending_tail = (getattr(stream_state, "pending_fragment", "") or "").strip()
+                if pending_tail:
+                    cleaned_tail = self._clean_assistant_text(
+                        pending_tail,
+                        is_streaming=True,
+                    )
+                    if cleaned_tail:
+                        self._emit_assistant_text(
+                            cleaned_tail,
+                            is_main=True,
+                            is_streaming=True,
+                        )
+                    stream_state.pending_fragment = ""
+                self._presentation.mark_final_answer_locked()
+                self._state.streaming_accumulator.finalize_stream(
+                    _LOOP_MSG_ACCUM_GOAL_COMPLETION,
+                    namespace=namespace,
+                )
+                self._state.final_output_emitted_by_namespace.add(namespace)
+                return
+
+        cleaned = self._clean_assistant_text(raw_text, is_streaming=False)
+        if cleaned:
+            self._emit_assistant_text(
+                cleaned,
+                is_main=True,
+                is_streaming=False,
+            )
+        self._presentation.mark_final_answer_locked()
+        self._state.final_output_emitted_by_namespace.add(namespace)
 
     def _emit_assistant_text(
         self,
@@ -330,6 +447,13 @@ class EventProcessor:
         # Emit pending tool calls with complete args
         self._emit_pending_tool_calls(is_main)
 
+        if assistant_output_phase(msg) == "goal_completion" and is_main:
+            txt = self._collect_ai_message_plain_text(msg)
+            self._dispatch_goal_completion_assistant_text(
+                txt, namespace=namespace, is_chunk=is_chunk
+            )
+            return
+
         # Process content blocks
         tool_call_emitted_from_blocks = False
         if hasattr(msg, "content_blocks") and msg.content_blocks:
@@ -508,6 +632,16 @@ class EventProcessor:
                 return
             if msg_id:
                 self._state.seen_message_ids.add(msg_id)
+
+        ai_wire = msg_type in ("ai", "AIMessage", "AIMessageChunk") or (
+            isinstance(msg_type, str) and msg_type.endswith("AIMessageChunk")
+        )
+        if assistant_output_phase(msg) == "goal_completion" and is_main and ai_wire:
+            txt = self._collect_ai_dict_plain_text(msg)
+            self._dispatch_goal_completion_assistant_text(
+                txt, namespace=namespace, is_chunk=is_chunk
+            )
+            return
 
         # Accumulate streaming tool args from tool_call_chunks (IG-053)
         tool_call_chunks = msg.get("tool_call_chunks", [])
@@ -704,96 +838,6 @@ class EventProcessor:
         # Tool events are now visible at NORMAL verbosity (RFC-0020 CLI Stream Display Pipeline)
         # They are processed through on_progress_event -> StreamDisplayPipeline
 
-        # Handle output events (chitchat, quiz, goal completion streaming/responded, etc.)
-        # through unified registry (IG-254).
-        if is_output_event(etype):
-            # RFC-614: Unified streaming output handling
-            streaming_config = self._get_effective_streaming_config()
-
-            # Skip if streaming disabled for this event type
-            if not self._should_stream_event_type(etype, streaming_config):
-                return
-
-            content = extract_output_text(etype, data)
-            if content and self._presentation.tier_visible(VerbosityTier.QUIET, self._verbosity):
-                # Hard cutover: final goal completion answer comes only from
-                # soothe.output.goal_completion.responded.
-                if etype == _GOAL_COMPLETION_RESPONDED_EVENT:
-                    if namespace in self._state.final_output_emitted_by_namespace:
-                        return
-
-                    if streaming_config.get("mode") == "streaming":
-                        stream_state = self._state.streaming_accumulator.streams.get(
-                            (_GOAL_COMPLETION_STREAMING_EVENT, namespace)
-                        )
-                        # If streamed chunks already rendered, finalize without replay.
-                        if stream_state and stream_state.accumulated_text.strip():
-                            pending_tail = (
-                                getattr(stream_state, "pending_fragment", "") or ""
-                            ).strip()
-                            if pending_tail:
-                                cleaned_tail = self._clean_assistant_text(
-                                    pending_tail,
-                                    is_streaming=True,
-                                )
-                                if cleaned_tail:
-                                    self._emit_assistant_text(
-                                        cleaned_tail,
-                                        is_main=True,
-                                        is_streaming=True,
-                                    )
-                                stream_state.pending_fragment = ""
-                            self._presentation.mark_final_answer_locked()
-                            self._state.streaming_accumulator.finalize_stream(
-                                _GOAL_COMPLETION_STREAMING_EVENT,
-                                namespace=namespace,
-                            )
-                            self._state.final_output_emitted_by_namespace.add(namespace)
-                            return
-
-                    cleaned = self._clean_assistant_text(content, is_streaming=False)
-                    if cleaned:
-                        self._emit_assistant_text(
-                            cleaned,
-                            is_main=True,
-                            is_streaming=False,
-                        )
-                    self._presentation.mark_final_answer_locked()
-                    self._state.final_output_emitted_by_namespace.add(namespace)
-                    return
-
-                # Treat all ``*.streaming`` events as streaming text payloads. Some
-                # providers send ``is_chunk=False`` for chunk-like boundaries.
-                is_streaming_chunk = etype.endswith(".streaming")
-
-                # Use unified accumulator with namespace from event parameter
-                display_text = self._state.streaming_accumulator.accumulate(
-                    etype,
-                    content,
-                    namespace=namespace,  # Use namespace from _handle_custom_event parameter
-                    is_chunk=is_streaming_chunk,
-                )
-
-                if display_text:
-                    # Clean and display
-                    cleaned = self._clean_assistant_text(
-                        display_text,
-                        is_streaming=is_streaming_chunk,
-                    )
-                    if cleaned:
-                        self._emit_assistant_text(
-                            cleaned,
-                            is_main=True,
-                            is_streaming=is_streaming_chunk,
-                        )
-
-                # Lock final answer for non-streaming final events
-                if not is_streaming_chunk:
-                    self._presentation.mark_final_answer_locked()
-                    # Finalize stream
-                    self._state.streaming_accumulator.finalize_stream(etype, namespace=namespace)
-            return
-
         category = classify_event_to_tier(etype, namespace)
 
         # Update plan state and call specific hooks
@@ -896,34 +940,3 @@ class EventProcessor:
         }
 
         return config
-
-    def _should_stream_event_type(self, etype: str, config: dict[str, Any]) -> bool:
-        """Check if event type should be streamed based on config (RFC-614).
-
-        Args:
-            etype: Event type string.
-            config: Effective config dict with enabled, mode, per-phase flags.
-
-        Returns:
-            True if event should be streamed/processed, False to skip.
-        """
-        if not config.get("enabled", True):
-            return False
-
-        # Non-streaming output events (e.g., chitchat/quiz/responded) are
-        # always eligible when output streaming is enabled globally.
-        if not etype.endswith(".streaming"):
-            return True
-
-        # In batch mode, suppress synthesized goal-completion stream chunks.
-        if config.get("mode") == "batch" and etype == "soothe.output.goal_completion.streaming":
-            return False
-
-        # Check specific streaming flags
-        if etype == "soothe.output.goal_completion.streaming":
-            return config.get("synthesis_streaming", True)
-        if etype == "soothe.output.tool_response.streaming":
-            return config.get("tool_response_streaming", False)
-
-        # Default: stream all remaining *.streaming events when enabled.
-        return True

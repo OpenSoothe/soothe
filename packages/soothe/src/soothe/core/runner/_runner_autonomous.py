@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.agent_loop import AgentLoop
 from soothe.cognition.agent_loop.state.schemas import PlanResult
+from soothe.cognition.agent_loop.utils.messages import loop_assistant_messages_chunk
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.events import (
-    AutonomousGoalCompletionEvent,
     GoalFailedEvent,
     PlanCreatedEvent,
     PlanReflectedEvent,
@@ -320,14 +320,13 @@ class AutonomousMixin(GoalDirectivesMixin):
         # Emit autonomous goal completion event for CLI (RFC-0010 / IG-027 / IG-273)
         root_report = getattr(goal, "report", None)
         if root_report and hasattr(root_report, "summary") and root_report.summary:
-            yield _custom(
-                AutonomousGoalCompletionEvent(
-                    goal_id=goal.id,
-                    description=goal.description,
-                    status=root_report.status,
-                    summary=root_report.summary,
-                ).to_dict()
-            )
+            summary = str(root_report.summary).strip()
+            if summary:
+                yield loop_assistant_messages_chunk(
+                    content=summary,
+                    phase="autonomous_goal",
+                    thread_id=state.thread_id,
+                )
 
         try:
             async for chunk in self._save_checkpoint(

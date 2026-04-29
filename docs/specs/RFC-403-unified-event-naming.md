@@ -134,10 +134,12 @@ soothe.lifecycle.thread.started           # Thread boundary → lifecycle
 soothe.protocol.memory.recalling          # Memory protocol → protocol
 soothe.cognition.plan.creating            # Planning decision → cognition
 soothe.capability.browser.started         # Browser invocation → capability
-soothe.output.chitchat.started            # User output → output
+soothe.output.telemetry.line            # Ancillary capture → output (example only)
 soothe.system.daemon.heartbeat            # Daemon system → system
 soothe.plugin.acme.collector.started      # Third-party → plugin.<vendor>
 ```
+
+**IG-317 note:** The `soothe.output.*` line above illustrates **domain placement** (`output`) for optional telemetry-style names. Core-loop assistant answer bodies use the LangGraph **`messages`** stream with a loop **`phase`** field (see RFC-614 / `soothe_sdk.ux.loop_stream`).
 
 ### 4.3 Namespace Hierarchy
 
@@ -419,12 +421,14 @@ Create `scripts/validate_event_names.py`:
 | `soothe.autopilot.dreaming_entered` | `soothe.system.autopilot.dreaming.started` | Domain + present progressive |
 | `soothe.autopilot.relationship_detected` | `soothe.system.autopilot.relationship.detecting` | Domain + present progressive |
 
-### 8.6 Output Events
+### 8.6 Output domain (ancillary naming only)
 
-| Old Type | New Type | Notes |
+**IG-317:** Core-loop assistant prose is **not** named under `soothe.output.*`. The table below is a **style reference** for optional `soothe.output.*` telemetry if you introduce new ancillary events—not a migration checklist for assistant answers.
+
+| Old Type (example) | New Type (example) | Notes |
 |----------|----------|-------|
-| `soothe.output.chitchat.response` | `soothe.output.chitchat.responding` | Present progressive |
-| `soothe.output.autonomous.final_report` | `soothe.output.autonomous.final_report.reporting` | Hierarchical + present progressive |
+| `soothe.output.telemetry.pending` | `soothe.output.telemetry.reporting` | Present progressive |
+| `soothe.output.batch.summary` | `soothe.output.batch.summary.reporting` | Hierarchical + present progressive |
 
 ---
 

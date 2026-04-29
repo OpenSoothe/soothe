@@ -1,36 +1,20 @@
 # IG-309: RFC-614 Daemon Isolation + Streaming Consistency Polish
 
-## Context
+**Status**: Completed (superseded by follow-up IG-317 doc work)
 
-Current implementation enforces daemon-side suppression for AgentLoop execute-phase
-assistant prose (IG-304) and relies on explicit goal-completion output events for
-user-visible answer text.
+## Outcome
 
-`RFC-614` still contains stale references to universal execution streaming and
-`soothe.output.execution.streaming` examples that no longer match runtime behavior.
+RFC-614 and related specs were refreshed so they describe the **current** contract:
 
-## Goal
+- Daemon-side suppression for execute-phase assistant prose (IG-304) remains accurate.
+- Examples that referenced **`soothe.output.execution.streaming`** and parallel **`soothe.output.goal_completion.*`** assistant paths were removed or rewritten in favor of **`mode="messages"`** + **`phase`** (IG-317).
 
-Polish `docs/specs/RFC-614-unified-streaming-messaging.md` so it is fully
-consistent with the current daemon-side isolation contract and client streaming
-accumulator behavior.
+## References
 
-## Scope
+- `docs/specs/RFC-614-unified-streaming-messaging.md`
+- `docs/analysis/daemon-event-forwarding-matrix.md`
+- `docs/impl/IG-317-rfc614-loop-message-stream-unification.md`
 
-- Update stale examples and statements in RFC-614:
-  - Replace `soothe.output.execution.streaming` examples with current
-    goal-completion output events.
-  - Clarify `execution_streaming` as backward-compatibility field with no effect
-    on agentic execute-phase prose forwarding.
-  - Align event-flow and success criteria language with daemon-side suppression.
-  - Add explicit note on boundary-safe streaming concatenation behavior.
+## Note
 
-## Non-goals
-
-- No runtime code changes.
-- No event-name migration in code.
-
-## Verification
-
-- Manual pass over RFC-614 to ensure all output-event examples match actual
-  current event contract.
+No separate open checklist remains in this IG; treat RFC-614 as the living source of truth for streaming semantics.

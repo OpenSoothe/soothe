@@ -12,21 +12,21 @@
 
 This RFC defines a unified streaming messaging framework for daemon-to-client output delivery, with explicit separation between execution telemetry and user-facing final output text. The framework standardizes output events, configuration-driven display behavior, and content concatenation with whitespace boundary preservation.
 
-### IG-304 Amendment (2026-04-28)
+### IG-304 / IG-317 Amendment (current)
 
-Daemon output emission now owns suppression boundaries for AgentLoop execution:
+Daemon output emission owns suppression boundaries for AgentLoop execution:
 
 1. Execute-phase assistant prose is suppressed at daemon emission and is not streamed as user-visible output.
-2. Message-mode forwarding remains tool-focused (`ToolMessage` + AI tool-call metadata) for live tool UI.
-3. User-facing completion text is emitted through explicit goal-completion output events (`soothe.output.goal_completion.*`).
+2. Message-mode forwarding carries **tool UI** (`ToolMessage` + AI tool-call metadata) **and** loop-tagged assistant completion chunks (`phase` in `goal_completion`, `chitchat`, `quiz`, `autonomous_goal`).
+3. User-facing completion text uses the **`messages`** stream with **`phase`** (IG-317); it is **not** modeled as parallel `soothe.output.goal_completion.*` custom events.
 4. Clients consume the normalized output contract; they should not be the primary suppression authority for execute-phase prose.
 
 **Key Design Principles**:
-1. **Unified streaming wrapper**: Reuse custom event pattern to bypass IG-119 filtering
-2. **Configuration-driven**: Global enable/disable plus streaming/batch display mode
-3. **Boundary preservation**: Maintain whitespace for markdown formatting during concatenation
-4. **Namespace isolation**: Prevent interleaving concurrent streams from parallel subagents
-5. **Backward compatibility**: Preserve existing event semantics while extending capabilities
+1. **Single assistant-text wire**: Prefer loop-tagged `messages` chunks over duplicate custom `soothe.output.*` payloads for core-loop answers.
+2. **Configuration-driven**: Global enable/disable plus streaming/batch display mode for goal-completion **message** streaming.
+3. **Boundary preservation**: Maintain whitespace for markdown formatting during concatenation.
+4. **Namespace isolation**: Prevent interleaving concurrent streams from parallel subagents.
+5. **Hard cut where required**: Remove legacy dual paths that duplicate the same assistant text.
 
 ## Problem Statement
 
@@ -41,22 +41,21 @@ The runner's IG-119 filtering logic (`_runner_agentic.py` lines 541-545) blocks 
 - Wraps as custom events to bypass filtering
 - Only works for synthesis phase (final report generation)
 
-**Missing Streaming for Other Phases**:
-- Execute-phase assistant prose (CoreAgent Act narration): Suppressed by daemon contract
-- Tool result processing output events (`soothe.output.tool_response.streaming`): Not enabled by default
-- Chitchat/quiz responses: Final-only (no intermediate chunks)
-- Custom plugin outputs: Supported via output-event registry but require explicit registration/emission
+**Resolved (IG-317)**:
+- Goal completion, chitchat, quiz, and autonomous summaries stream as **`messages`** chunks with an explicit **`phase`** field instead of bespoke `soothe.output.*` assistant events.
+- Execute-phase assistant prose (CoreAgent Act narration) remains suppressed by daemon contract.
+- Optional ancillary `soothe.output.*` events (for example library line capture) are orthogonal to the assistant answer contract.
 
-**User Experience Gap**:
-Users cannot see execute-phase assistant prose in real-time by design; only tool telemetry and explicit goal-completion output events are user-facing.
+**User Experience**:
+Users see tool telemetry during execute and receive final / phased assistant text through the **`messages`** wire; execute-phase narration stays suppressed by design.
 
 ### Goals
 
-1. **Contracted streaming**: Stream only user-facing output events and tool UI telemetry; do not stream execute-phase prose
+1. **Contracted streaming**: Stream tool UI telemetry plus loop-tagged **`messages`** assistant chunks (`phase`); do not stream execute-phase prose
 2. **Configuration control**: Global enable/disable and streaming/batch display mode
 3. **Proper concatenation**: Whitespace boundary preservation for markdown formatting
 4. **Concurrency safety**: Namespace-based isolation for parallel subagent streams
-5. **Extensibility**: Plugin-friendly registration mechanism for custom streaming events
+5. **Extensibility**: Additional UX may attach to the same `messages` + `phase` pattern or emit optional `soothe.output.*` **progress** events (not duplicate assistant bodies).
 6. **Performance**: Minimal overhead when disabled, config-driven filtering
 
 ### Non-Goals
@@ -80,25 +79,25 @@ Users cannot see execute-phase assistant prose in real-time by design; only tool
 └─────────────────────────────────────────────────────────────┘
                           ↓ Config propagation
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 2: Runner Layer (Stream Generation)                    │
-│ • _wrap_streaming_output(): Unified wrapper helper            │
-│ • Config-aware IG-119 filtering: Enable/disable forwarding    │
-│ • Execution/Synthesis/Tool streaming: Event generation        │
+│ Runner layer (stream generation)                             │
+│ • IG-119-safe forwarding of tool UI + loop-tagged assistant   │
+│   `messages` chunks (`stream_event` → client `mode="messages"`)│
+│ • Config-aware suppression for execute-phase prose           │
 └─────────────────────────────────────────────────────────────┘
-                          ↓ Custom events (bypass filter)
+                          ↓ Multiplexed stream tuples
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 1: Daemon/Client Layer (Transport & Display)           │
+│ Daemon / client layer (transport & display)                  │
 │ • EventBus broadcast: Priority-aware overflow (RFC-401)       │
-│ • SDK output_events registry: Single source of truth          │
+│ • SDK `loop_stream` helpers: Recognize assistant `phase`      │
 │ • StreamingTextAccumulator: Concatenation with boundaries     │
 │ • Namespace isolation: Concurrent stream tracking             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Layer Responsibilities**:
-- **Layer 3**: Configuration determines whether output streaming is enabled and mode (streaming/batch)
-- **Layer 2**: Runner emits explicit output events for user-facing content and forwards tool UI stream chunks
-- **Layer 1**: Daemon broadcasts normalized events; Client renders/accumulates according to output contract
+**Layer responsibilities**:
+- **Configuration**: Output streaming enable/disable and display mode (streaming vs batch) for goal-completion **message** streaming.
+- **Runner**: Forwards tool UI `messages` chunks and loop-tagged assistant `messages` chunks (`phase`); suppresses execute-phase prose.
+- **Daemon / client**: Broadcasts stream tuples; clients accumulate and render assistant text from **`messages` + `phase`** using shared SDK helpers.
 
 ### Integration with Existing RFCs
 
@@ -113,8 +112,8 @@ Users cannot see execute-phase assistant prose in real-time by design; only tool
 - Maintains verbosity filtering integration
 
 **RFC-403 (Unified Event Naming)**:
-- Follows 4-segment naming: `soothe.output.<phase>.streaming`
-- Active domains in this contract: `goal_completion.streaming`, `tool_response.streaming`
+- Optional `soothe.output.*` names remain valid for **ancillary** progress telemetry.
+- **Assistant answer bodies** for the main loop use **`messages` + `phase`**, not `soothe.output.goal_completion.*` types.
 
 ### Core Abstractions
 
@@ -150,43 +149,15 @@ class OutputStreamingConfig(BaseModel):
 3. `SootheRunner` receives config → passes to runner functions
 4. Client fetches effective config via daemon RPC + applies CLI overrides
 
-#### _wrap_streaming_output() (Unified Wrapper Helper)
+#### Runner forwarding (`stream_event` → client tuples)
 
-```python
-def _wrap_streaming_output(
-    chunk: StreamChunk,
-    event_type: str,
-    *,
-    config: SootheConfig | None = None,
-    namespace: tuple[str, ...] = (),
-) -> StreamChunk | None:
-    """Wrap streaming AI text chunks as custom output events.
+Early RFC-614 drafts described a `_wrap_streaming_output()` helper that re-published AI text as **`soothe.output.*`** custom events. **IG-317 removed that path** for core-loop assistant text: the runner now forwards loop-tagged assistant chunks on the existing **`mode="messages"`** stream (plus tool UI chunks), while still applying IG-119 / IG-304 suppression for execute-phase prose.
 
-    Architecture Pattern:
-    - Extracts AI text from LangGraph messages-mode chunks
-    - Wraps as custom events: ((), "custom", {"type": event_type, ...})
-    - Custom events bypass IG-119 filtering (mode="custom")
-    - Config-driven: returns None if streaming disabled
-
-    Reuses proven pattern from final_report_stream logic (RFC-200).
-
-    Args:
-        chunk: Raw stream chunk from LangGraph astream (namespace, mode, data).
-        event_type: Custom event type following RFC-403 naming convention.
-        config: SootheConfig to check streaming enabled flag.
-        namespace: Namespace tuple for concurrent stream isolation.
-
-    Returns:
-        Custom event chunk if streaming enabled and has text, None otherwise.
-    """
-```
-
-**Design Pattern**:
-1. Config check: Early return if `config.output_streaming.enabled == False`
-2. AI text extraction: Use `extract_text_from_message_content()` from stream normalization
-3. Boundary preservation: Preserve raw content (no preprocessing)
-4. Custom event wrapping: Use `_custom()` helper (RFC-450 pattern)
-5. Namespace tracking: Include namespace in event data for client isolation
+**Design checklist**:
+1. Config: honor `OutputStreamingConfig` for **goal-completion message** streaming vs batch display on the client.
+2. Extraction: collect plain text from AI message / chunk payloads when forwarding is allowed.
+3. Loop tags: preserve `phase` metadata so clients can classify `goal_completion`, `chitchat`, `quiz`, and `autonomous_goal`.
+4. Namespace: carry LangGraph namespace through to the client so concurrent subgraphs do not interleave text.
 
 #### StreamingTextAccumulator (State Machine)
 
@@ -264,45 +235,14 @@ class StreamingTextAccumulator:
 4. **Finalization**: Mark inactive, prevent further accumulation
 5. **Clear**: Remove state after final display
 
-#### SDK Output Events Registry (Single Source of Truth)
+#### SDK: loop-tagged `messages` stream (IG-317)
 
-**Existing Pattern** (`output_events.py`, IG-254):
-```python
-_OUTPUT_EVENT_REGISTRY: dict[str, Callable[[dict], str | None]] = {}
+Public client helpers live in `packages/soothe-sdk/src/soothe_sdk/ux/loop_stream.py`:
 
-def register_output_event(event_type: str, extractor: Callable[[dict], str | None]) -> None:
-    """Register output event type with content extraction function."""
+- `LOOP_ASSISTANT_OUTPUT_PHASES` — allowed `phase` values on assistant payloads.
+- `assistant_output_phase(msg)` — returns `phase` when a wire-serialized AI message dict/object carries loop assistant output.
 
-def extract_output_text(event_type: str, data: dict) -> str | None:
-    """Extract user-visible text from output event."""
-```
-
-**Extension for Streaming Events**:
-```python
-# Goal completion streaming
-register_output_event(
-    "soothe.output.goal_completion.streaming",
-    lambda data: data.get("content", ""),
-)
-
-# Tool response streaming (experimental)
-register_output_event(
-    "soothe.output.tool_response.streaming",
-    lambda data: data.get("content", ""),
-)
-
-# Final goal completion output
-register_output_event(
-    "soothe.output.goal_completion.responded",
-    lambda data: data.get("content", ""),
-)
-```
-
-**Registry Design Principles**:
-1. **Single source**: Both CLI and TUI query registry (no duplicate logic)
-2. **Boundary preservation**: Raw content extraction (no preprocessing in SDK)
-3. **Client filtering**: Final filtering applied in EventProcessor (flexible)
-4. **Extensibility**: Plugins can register custom streaming events
+CLI/TUI `EventProcessor` paths use these helpers to treat **`mode="messages"`** chunks as user-visible assistant text for goal completion (and related phases), instead of consulting a removed `soothe.output.*` registry.
 
 ## Implementation Specification
 
@@ -322,85 +262,32 @@ register_output_event(
 
 ### Phase 2: Runner Layer (Stream Generation)
 
-**Files Modified**:
-1. `packages/soothe/src/soothe/core/runner/_runner_shared.py` - Keep reusable output wrapper helpers
-2. `packages/soothe/src/soothe/core/runner/_runner_agentic.py` - Enforce tool-only stream forwarding for message chunks
-3. `packages/soothe/src/soothe/cognition/agent_loop/core/agent_loop.py` - Avoid execute-phase user-output event emission
+**Primary modules**:
+1. `packages/soothe/src/soothe/core/runner/_runner_agentic.py` — multiplex `stream_event` into client `mode="messages"` / `custom`, enforce IG-119 / IG-304 suppression, forward loop-tagged assistant chunks for configured phases.
+2. `packages/soothe/src/soothe/cognition/agent_loop/core/agent_loop.py` — emit `stream_event` tuples consumed by the runner.
 
-**Unified Wrapper Pattern**:
-- Reuse `_custom()` helper from `_runner_shared.py` line 16-18
-- Mirror `final_report_stream` extraction logic (`_runner_agentic.py` lines 547-570)
-- Config-aware: Check `config.output_streaming.enabled` before wrapping
+**Forwarding contract** (summary): forward **tool UI** `messages` chunks; forward **loop assistant** `messages` chunks when `assistant_output_phase(...)` is non-null; suppress plain execute-phase assistant prose.
 
-**AgentLoop stream forwarding contract**:
-```python
-def _forward_messages_chunk_for_tool_ui(
-    chunk: object,
-) -> bool:
-    """Forward tool-related chunks only."""
-```
+### Phase 3: SDK (`soothe-sdk`)
 
-### Phase 3: SDK Registry Extension
-
-**Files Modified**:
-1. `packages/soothe-sdk/src/soothe_sdk/ux/output_events.py` - Register all streaming events
-
-**Naming Convention** (RFC-403):
-- `soothe.output.goal_completion.streaming` - Goal completion streaming text
-- `soothe.output.goal_completion.responded` - Goal completion final output
-- `soothe.output.tool_response.streaming` - Tool result processing (experimental)
+**Module**: `packages/soothe-sdk/src/soothe_sdk/ux/loop_stream.py` — documents allowed `phase` values and provides `assistant_output_phase()`.
 
 ### Phase 4: Daemon Layer (Broadcast)
 
-**Files Modified**:
-1. `packages/soothe/src/soothe/daemon/query_engine.py` - Update `extract_custom_output_text()`
-2. `packages/soothe/src/soothe/daemon/client_session.py` - Config override support
-
-**Extraction Simplification**:
-Delegate to SDK registry (single source of truth):
-```python
-@staticmethod
-def extract_custom_output_text(data: dict[str, Any]) -> str | None:
-    """Extract output text via SDK registry."""
-    from soothe_sdk.ux.output_events import extract_output_text
-    event_type = str(data.get("type", ""))
-    return extract_output_text(event_type, data)
-```
+**`query_engine.py`**: forwards runner chunks to WebSocket clients; **full-response** aggregation for persisted transcripts uses **`mode="messages"`** AI text extraction (not custom `soothe.output.*` assistant events).
 
 ### Phase 5: Client Layer (Display & Concatenation)
 
-**Files Modified**:
-1. `packages/soothe-cli/src/soothe_cli/shared/stream_accumulator.py` - NEW: State machine
-2. `packages/soothe-cli/src/soothe_cli/shared/event_processor.py` - Integrate accumulator
-3. `packages/soothe-cli/src/soothe_cli/shared/processor_state.py` - Add accumulator field
-4. `packages/soothe-cli/src/soothe_cli/shared/renderer_protocol.py` - Add `on_streaming_output()`
-5. `packages/soothe-cli/src/soothe_cli/cli/renderer.py` - Implement streaming display
-6. `packages/soothe-cli/src/soothe_cli/tui/textual_adapter.py` - Implement with namespace tracking
+**Primary modules**:
+1. `packages/soothe-cli/src/soothe_cli/shared/event_processor.py` — `StreamingTextAccumulator` keyed by internal namespace for **`phase=goal_completion`** message streaming; `_handle_messages_event` uses `assistant_output_phase`.
+2. `packages/soothe-cli/src/soothe_cli/tui/textual_adapter.py` — mirrors the same `messages` + `phase` behavior for the TUI.
 
-**Accumulator Integration**:
+**Goal-completion accumulation** (conceptual):
 ```python
-# EventProcessor output event handling
-elif is_output_event(etype):
-    streaming_config = self._get_effective_streaming_config()
-
-    if not self._should_stream_event_type(etype, streaming_config):
-        return
-
-    content = extract_output_text(etype, data)
-    is_streaming_chunk = etype.endswith(".streaming") and data.get("is_chunk", True)
-    namespace = tuple(self._state.current_namespace or [])
-
-    display_text = self._state.streaming_accumulator.accumulate(
-        etype, content, namespace=namespace, is_chunk=is_streaming_chunk
-    )
-
-    if display_text:
-        cleaned = self._clean_assistant_text(display_text, is_streaming=is_streaming_chunk)
-        self._emit_assistant_text(cleaned, is_main=True, is_streaming=is_streaming_chunk)
-
-    if not is_streaming_chunk:
-        self._presentation.mark_final_answer_locked()
-        self._state.streaming_accumulator.finalize_stream(etype, namespace)
+# Pseudocode — see EventProcessor for the concrete implementation
+if assistant_output_phase(msg) == "goal_completion":
+    display_text = accumulator.accumulate(internal_key, text, namespace=ns, is_chunk=is_chunk)
+    ...
 ```
 
 **Boundary Preservation Pattern**:
@@ -472,17 +359,17 @@ soothe --streaming-mode batch "query"      # Accumulate silently
 ```
 1. LangGraph.astream() → (namespace, mode, data) chunks
    ↓
-2. Runner._wrap_streaming_output() → Custom event wrapping
-   ↓ (event_type: "soothe.output.goal_completion.streaming", content: "text", is_chunk: True)
+2. Runner multiplexes `stream_event` → client `mode="messages"` / `custom`
+   ↓ (goal completion: AI chunk + phase="goal_completion", is_chunk metadata)
 3. QueryEngine._broadcast() → EventBus.publish
    ↓ (topic: "thread:{thread_id}", event: {...})
 4. EventBus → ClientSession.event_queue (priority-aware overflow)
    ↓ (WebSocket JSON transport, RFC-450)
 5. WebSocketClient.read_event() → EventProcessor.process_event()
    ↓
-6. SDK output_events.extract_output_text() → Raw content extraction
+6. `assistant_output_phase(msg)` (SDK `loop_stream`) → decide assistant display path
    ↓
-7. StreamingTextAccumulator.accumulate() → Boundary-preserving accumulation
+7. StreamingTextAccumulator.accumulate() → Boundary-preserving accumulation (internal keys)
    ↓
 8. RendererProtocol.on_assistant_text() → Display (CLI/TUI)
 ```
@@ -492,34 +379,27 @@ soothe --streaming-mode batch "query"      # Accumulate silently
 ```
 Main Agent:
   namespace: ()
-  → streams["soothe.output.goal_completion.streaming", ()] → AccumState A
+  → streams[(internal_goal_completion_key, ())] → AccumState A
 
 Subagent Browser:
   namespace: ("browser",)
-  → streams["soothe.output.goal_completion.streaming", ("browser",)] → AccumState B
+  → streams[(internal_goal_completion_key, ("browser",))] → AccumState B
 
 Concurrent execution: A and B isolated (no chunk interleaving)
 ```
 
-**Key**: Stream key = (event_type + namespace) ensures concurrent streams don't mix chunks.
+**Key**: Accumulator state is keyed by **(logical stream id, namespace)** so concurrent subgraphs never mix chunks.
 
-## Backward Compatibility
+## Compatibility Notes (IG-317)
 
-### Existing Event Semantics
+### Event Semantics
 
-**Preserved Events**:
-- `soothe.output.chitchat.responded` - Final-only (no changes)
-- `soothe.output.quiz.responded` - Final-only (no changes)
-- `soothe.cognition.agent_loop.completed` - Completion lifecycle event (control/progress)
+- **`soothe.cognition.agent_loop.completed`**: lifecycle / progress only (no parallel requirement to ship final answer text on this event).
+- **Removed for assistant bodies**: `soothe.output.goal_completion.*`, `soothe.output.chitchat.responded`, `soothe.output.quiz.responded`, and related autonomous output-domain duplicates — **replaced by `messages` + `phase`.**
 
-**Preferred AgentLoop output events**:
-- `soothe.output.goal_completion.streaming` - Streaming final answer content
-- `soothe.output.goal_completion.responded` - Final answer payload
-
-**Migration Path**:
-- Existing code expecting `final_report_stream` continues working
-- New code should use `goal_completion.streaming` naming
-- Gradual migration, no breaking changes
+**Integrator guidance**:
+- Clients must consume **`mode="messages"`** chunks and inspect **`phase`** (via `soothe_sdk.ux.loop_stream`) for user-visible loop answers.
+- Treat historical `soothe.output.*` assistant event names as **documentation debt** outside optional ancillary telemetry.
 
 ### Default Behavior
 
@@ -536,16 +416,13 @@ Concurrent execution: A and B isolated (no chunk interleaving)
 
 ### Minimal Overhead When Disabled
 
-**Config Check Pattern**:
-```python
-def _wrap_streaming_output(..., config: SootheConfig | None = None):
-    if config and not config.output_streaming.enabled:
-        return None  # Early return, minimal overhead
-```
+**Config check pattern**:
+- When streaming is disabled, the client skips incremental assistant emission for goal-completion **message** chunks and may defer to batch / final-only display logic.
+- Daemon-side suppression for execute-phase prose remains independent of this toggle.
 
-**Impact Analysis**:
-- Disabled: Single `enabled` check, no extraction/wrapping
-- Enabled: Extraction + wrapping overhead (acceptable for streaming use case)
+**Impact analysis**:
+- Disabled: client short-circuits incremental assistant rendering for configured phases.
+- Enabled: normal incremental accumulation + rendering for loop-tagged assistant `messages` chunks.
 
 ### Priority-Aware Overflow (RFC-401, IG-258)
 
@@ -573,34 +450,13 @@ def _wrap_streaming_output(..., config: SootheConfig | None = None):
 
 ## Extensibility
 
-### Plugin Integration
+### Plugin integration
 
-**Custom Streaming Events**:
-```python
-from soothe_sdk.ux.output_events import register_output_event
+Plugins that need **user-visible assistant text in the main loop** should participate in the same contract as core Soothe: emit **loop-tagged LangGraph `messages` chunks** with a `phase` that clients recognize (extend phases only with coordinated SDK + client updates).
 
-register_output_event(
-    "soothe.plugin.my_plugin.streaming",
-    lambda data: data.get("content", ""),
-)
-```
+Plugins may still emit **ancillary** `soothe.output.*` **custom** events for progress or side channels; those are **not** interpreted as main-loop assistant answers by current CLI/TUI processors.
 
-**Runner Integration**:
-```python
-wrapped = _wrap_streaming_output(
-    chunk=item,
-    event_type="soothe.plugin.my_plugin.streaming",
-    config=self.config,
-    namespace=("plugin", "my_plugin"),
-)
-```
-
-**Registry Benefits**:
-- Single registration point (SDK)
-- Both CLI and TUI automatically support custom events
-- No duplicate logic in client processors
-
-### Future Extensions
+### Future extensions
 
 **Potential Extensions**:
 1. Subagent streaming isolation (namespace tracking already in place)
@@ -673,14 +529,12 @@ wrapped = _wrap_streaming_output(
    - Priority overflow handling preserves critical events
 
 3. **Compatibility Requirements**:
-   - Existing events continue working (backward compatibility)
-   - Existing tests pass (no breaking changes)
-   - Config defaults maintain current behavior
+   - Historical `soothe.output.*` assistant payloads may still appear in archived logs but are **not** required for core-loop UX after IG-317.
+   - Config defaults preserve streaming/batch expectations for **message-mode** goal completion.
 
 4. **Extensibility Requirements**:
-   - Plugins can register custom streaming events
-   - Single source of truth in SDK registry
-   - Client processors support new events automatically
+   - New loop phases require coordinated runner + SDK `loop_stream` + client updates.
+   - Ancillary `soothe.output.*` telemetry remains naming-extensible under RFC-403.
 
 5. **Testing Requirements**:
    - Unit tests for accumulator pass (state machine validation)
@@ -710,32 +564,15 @@ wrapped = _wrap_streaming_output(
 
 ### For Developers
 
-**Using Streaming Events**:
+**Consuming loop assistant output (client)**:
 ```python
-# Runner: Wrap streaming output
-from soothe.core.runner._runner_shared import _wrap_streaming_output
+from soothe_sdk.ux.loop_stream import assistant_output_phase
 
-wrapped = _wrap_streaming_output(
-    chunk=item,
-    event_type="soothe.output.goal_completion.streaming",
-    config=self.config,
-)
-
-# Client: Process streaming events
-from soothe_sdk.ux.output_events import extract_output_text
-
-content = extract_output_text(event_type, data)
+phase = assistant_output_phase(msg)  # e.g. "goal_completion"
 ```
 
-**Registering Custom Streaming Events**:
-```python
-from soothe_sdk.ux.output_events import register_output_event
-
-register_output_event(
-    "soothe.plugin.custom.streaming",
-    lambda data: data.get("content", ""),
-)
-```
+**Emitting loop assistant output (runner / AgentLoop)**:
+- Forward `stream_event` tuples that already include loop-tagged AI `messages` payloads with `phase` set; avoid reintroducing duplicate `soothe.output.goal_completion.*` custom events for the same text.
 
 ### For Users
 

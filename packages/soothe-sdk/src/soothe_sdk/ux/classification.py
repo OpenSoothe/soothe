@@ -34,7 +34,7 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
     Examples:
         >>> classify_event_to_tier("soothe.error.general.failed")
         <VerbosityTier.QUIET: 0>
-        >>> classify_event_to_tier("soothe.output.chitchat.responded")
+        >>> classify_event_to_tier("soothe.output.telemetry.line")
         <VerbosityTier.QUIET: 0>
         >>> classify_event_to_tier("soothe.cognition.plan.creating")
         <VerbosityTier.NORMAL: 1>
@@ -52,9 +52,6 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
             return VerbosityTier.QUIET
         if "heartbeat" in event_type:
             return VerbosityTier.DEBUG
-        if event_type == "soothe.output.chitchat.started":
-            return VerbosityTier.INTERNAL
-
         segments = event_type.split(".")
         domain = segments[1] if len(segments) >= 2 else "unknown"
         return _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.DEBUG)

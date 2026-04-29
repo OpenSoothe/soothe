@@ -324,7 +324,9 @@ class AgentLoop:
                 # Simplified from 8 files to 3 files (policy, synthesis, fallback)
 
                 # 1. Create synthesis generator
-                synthesis_gen = SynthesisGenerator(self.loop_planner._model, self.core_agent)
+                synthesis_gen = SynthesisGenerator(
+                    self.loop_planner._model, self.core_agent, self.config
+                )
 
                 # 2. Decision: determine action (no length categorization)
                 action, precomputed_text = determine_completion_action(
@@ -357,13 +359,11 @@ class AgentLoop:
                     accum = GoalCompletionAccumState()
                     chunk_count = 0
 
-                    async for chunk in synthesis_gen.generate_synthesis(goal, state, plan_result):
+                    async for inner in synthesis_gen.generate_synthesis(goal, state, plan_result):
                         chunk_count += 1
-                        # Extract messages from stream chunk
-                        for msg in iter_messages_for_act_aggregation(chunk):
+                        for msg in iter_messages_for_act_aggregation(inner):
                             update_goal_completion_from_message(accum, msg)
-                        # Yield stream chunks
-                        yield chunk
+                        yield ("stream_event", inner)
 
                     # Resolve final text after stream exhausted
                     final_output = resolve_goal_completion_text(accum)

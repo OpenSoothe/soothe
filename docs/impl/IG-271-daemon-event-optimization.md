@@ -4,6 +4,8 @@
 **Created**: 2026-04-27
 **Purpose**: Remove verbose unused daemon events while ensuring proper logging
 
+> **IG-317 note:** Assistant answer bodies no longer use the `soothe.output.chitchat.*` / `quiz.*` events listed under “Output Domain” below; those rows reflect **traffic optimization work at the time**, not the current answer wire.
+
 ---
 
 ## Problem Statement
@@ -67,11 +69,8 @@ WebSocket clients receive **71 event types** from daemon, but only **~15 are act
 - `soothe.cognition.plan.step.started` ✅
 - `soothe.cognition.plan.step.completed` ✅
 
-**Output Domain** (5)
-- `soothe.output.chitchat.responded` ✅
-- `soothe.output.quiz.responded` ✅
-- `soothe.output.final_report.streaming` ✅
-- `soothe.output.autonomous.final_report.reported.reported` ✅
+**Output domain (ancillary only after IG-317)** — keep only if your deployment still emits these for telemetry; they are **not** required for core-loop assistant answers (those use `messages` + `phase`).
+- Optional `soothe.output.*` progress events when explicitly emitted by tools/libraries.
 
 ---
 
@@ -423,5 +422,5 @@ If client breakage occurs:
 
 - Analysis report: Agent exploration results (2026-04-27)
 - Event catalog: `packages/soothe/src/soothe/core/event_catalog.py`
-- Output events: `packages/soothe-sdk/src/soothe_sdk/ux/output_events.py`
+- Loop assistant phases (SDK): `packages/soothe-sdk/src/soothe_sdk/ux/loop_stream.py`
 - TUI adapter: `packages/soothe-cli/src/soothe_cli/tui/textual_adapter.py`

@@ -92,8 +92,6 @@ AGENT_LOOP_STEP_STARTED = "soothe.cognition.agent_loop.step.started"
 AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
 AGENT_LOOP_GOAL_STARTED = "soothe.cognition.agent_loop.started"
 AGENT_LOOP_GOAL_COMPLETED = "soothe.cognition.agent_loop.completed"
-GOAL_COMPLETION_STREAMING_EVENT = "soothe.output.goal_completion.streaming"
-GOAL_COMPLETION_RESPONDED_EVENT = "soothe.output.goal_completion.responded"
 
 _hitl_adapter_cache: TypeAdapter | None = None
 """Lazy singleton for the HITL request validator."""
@@ -225,19 +223,6 @@ def _is_summarization_chunk(metadata: dict | None) -> bool:
     if metadata is None:
         return False
     return metadata.get("lc_source") == "summarization"
-
-
-def _extract_custom_output_text(data: dict[str, Any]) -> str | None:
-    """Extract assistant-visible text from daemon custom output events.
-
-    Uses unified output event registry (IG-254) for single source of truth.
-    All user-visible output events (chitchat, quiz, goal completion, etc.) are
-    registered in soothe_sdk.output_events and queried here.
-    """
-    from soothe_sdk.ux.output_events import extract_output_text
-
-    event_type = str(data.get("type", ""))
-    return extract_output_text(event_type, data)
 
 
 def _format_display_line_for_tui(line: DisplayLine) -> str:
@@ -1113,6 +1098,118 @@ async def execute_task_textual(
                     if not blocks:
                         continue
 
+                    # IG-317: goal completion uses ``messages`` + ``phase`` (dedicated stream card).
+                    if getattr(message, "phase", None) == "goal_completion":
+                        from langchain_core.messages import AIMessageChunk
+
+                        text_gc = "".join(
+                            str(b.get("text", ""))
+                            for b in blocks
+                            if isinstance(b, dict) and b.get("type") == "text"
+                        )
+                        is_gc_chunk = isinstance(message, AIMessageChunk)
+                        if text_gc == "" and is_gc_chunk:
+                            continue
+                        output_text = text_gc
+                        if final_output_mode != "streaming" and is_gc_chunk:
+                            continue
+                        pending_text = pending_text_by_namespace.get(ns_key, "")
+                        existing_msg = assistant_message_by_namespace.get(ns_key)
+                        stream_msg = goal_completion_stream_by_namespace.get(ns_key)
+                        is_synthesis_stream_chunk = is_gc_chunk
+
+                        if is_synthesis_stream_chunk:
+                            if pending_text:
+                                await _flush_assistant_text_ns(
+                                    adapter,
+                                    pending_text,
+                                    ns_key,
+                                    assistant_message_by_namespace,
+                                )
+                                pending_text_by_namespace[ns_key] = ""
+                                assistant_message_by_namespace.pop(ns_key, None)
+
+                            if stream_msg is None:
+                                if adapter._set_spinner:
+                                    await adapter._set_spinner(None)
+                                msg_id = f"asst-{uuid.uuid4().hex[:8]}"
+                                if adapter._set_active_message:
+                                    adapter._set_active_message(msg_id)
+                                stream_msg = AssistantMessage(id=msg_id)
+                                await adapter._mount_message(stream_msg)
+                                goal_completion_stream_by_namespace[ns_key] = stream_msg
+
+                            await stream_msg.append_content(output_text)
+                            continue
+
+                        if stream_msg is not None:
+                            if (
+                                isinstance(message, AIMessageChunk)
+                                and output_text
+                                and output_text not in stream_msg._content
+                            ):
+                                await stream_msg.append_content(output_text)
+                            await stream_msg.stop_stream()
+                            if adapter._sync_message_content and stream_msg.id:
+                                adapter._sync_message_content(stream_msg.id, stream_msg._content)
+                            goal_completion_stream_by_namespace.pop(ns_key, None)
+                            if adapter._set_active_message:
+                                adapter._set_active_message(None)
+                            if adapter._set_spinner:
+                                await adapter._set_spinner(None)
+                            continue
+
+                        pending_normalized = pending_text.strip()
+                        output_normalized = output_text.strip()
+
+                        should_reuse = pending_normalized and (
+                            pending_normalized == output_normalized
+                            or output_normalized in pending_normalized
+                        )
+
+                        if should_reuse and existing_msg:
+                            await _flush_assistant_text_ns(
+                                adapter,
+                                pending_text,
+                                ns_key,
+                                assistant_message_by_namespace,
+                            )
+                            pending_text_by_namespace[ns_key] = ""
+                            if adapter._set_active_message:
+                                adapter._set_active_message(None)
+                            if adapter._set_spinner:
+                                await adapter._set_spinner(None)
+                            continue
+
+                        if pending_text:
+                            await _flush_assistant_text_ns(
+                                adapter,
+                                pending_text,
+                                ns_key,
+                                assistant_message_by_namespace,
+                            )
+                            pending_text_by_namespace[ns_key] = ""
+                            assistant_message_by_namespace.pop(ns_key, None)
+
+                        if not existing_msg or output_normalized != pending_normalized:
+                            output_widget = AssistantMessage(
+                                RendererBase.repair_concatenated_output(output_text),
+                                id=f"asst-{uuid.uuid4().hex[:8]}",
+                            )
+                            await adapter._mount_message(output_widget)
+                            await output_widget.write_initial_content()
+                            if adapter._sync_message_content and output_widget.id:
+                                adapter._sync_message_content(
+                                    output_widget.id,
+                                    RendererBase.repair_concatenated_output(output_text),
+                                )
+
+                        if adapter._set_active_message:
+                            adapter._set_active_message(None)
+                        if adapter._set_spinner:
+                            await adapter._set_spinner(None)
+                        continue
+
                     for block in blocks:
                         block_type = block.get("type")
 
@@ -1367,122 +1464,6 @@ async def execute_task_textual(
                                     total_steps=int(data.get("total_steps", 0)),
                                 )
                                 adapter._goal_tree_by_namespace.pop(ns_key, None)
-
-                        if output_text := _extract_custom_output_text(data):
-                            if (
-                                event_type == GOAL_COMPLETION_STREAMING_EVENT
-                                and final_output_mode != "streaming"
-                            ):
-                                continue
-                            pending_text = pending_text_by_namespace.get(ns_key, "")
-                            existing_msg = assistant_message_by_namespace.get(ns_key)
-                            stream_msg = goal_completion_stream_by_namespace.get(ns_key)
-                            is_synthesis_stream_chunk = (
-                                event_type == GOAL_COMPLETION_STREAMING_EVENT
-                                and bool(data.get("is_chunk", False))
-                            )
-
-                            if is_synthesis_stream_chunk:
-                                if pending_text:
-                                    await _flush_assistant_text_ns(
-                                        adapter,
-                                        pending_text,
-                                        ns_key,
-                                        assistant_message_by_namespace,
-                                    )
-                                    pending_text_by_namespace[ns_key] = ""
-                                    assistant_message_by_namespace.pop(ns_key, None)
-
-                                if stream_msg is None:
-                                    if adapter._set_spinner:
-                                        await adapter._set_spinner(None)
-                                    msg_id = f"asst-{uuid.uuid4().hex[:8]}"
-                                    if adapter._set_active_message:
-                                        adapter._set_active_message(msg_id)
-                                    stream_msg = AssistantMessage(id=msg_id)
-                                    await adapter._mount_message(stream_msg)
-                                    goal_completion_stream_by_namespace[ns_key] = stream_msg
-
-                                await stream_msg.append_content(output_text)
-                                continue
-
-                            if stream_msg is not None:
-                                # Flush terminal non-chunk event into existing final-report stream card.
-                                # Some providers send one final non-chunk payload after streamed chunks.
-                                if (
-                                    event_type != GOAL_COMPLETION_RESPONDED_EVENT
-                                    and output_text
-                                    and output_text not in stream_msg._content
-                                ):
-                                    await stream_msg.append_content(output_text)
-                                await stream_msg.stop_stream()
-                                if adapter._sync_message_content and stream_msg.id:
-                                    adapter._sync_message_content(
-                                        stream_msg.id, stream_msg._content
-                                    )
-                                goal_completion_stream_by_namespace.pop(ns_key, None)
-                                if adapter._set_active_message:
-                                    adapter._set_active_message(None)
-                                if adapter._set_spinner:
-                                    await adapter._set_spinner(None)
-                                continue
-
-                            # Avoid duplicate messages when output matches streamed text (IG-251)
-                            pending_normalized = pending_text.strip()
-                            output_normalized = output_text.strip()
-
-                            # Case 1: Exact match or output is subset of pending - reuse existing message
-                            should_reuse = pending_normalized and (
-                                pending_normalized == output_normalized
-                                or output_normalized in pending_normalized
-                            )
-
-                            if should_reuse and existing_msg:
-                                # Finalize the streaming message without creating a duplicate
-                                await _flush_assistant_text_ns(
-                                    adapter,
-                                    pending_text,
-                                    ns_key,
-                                    assistant_message_by_namespace,
-                                )
-                                pending_text_by_namespace[ns_key] = ""
-                                # Message already finalized, no need to create new one
-                                if adapter._set_active_message:
-                                    adapter._set_active_message(None)
-                                if adapter._set_spinner:
-                                    await adapter._set_spinner(None)
-                                continue
-
-                            # Case 2: Output differs from pending (or no pending) - flush old and create new
-                            if pending_text:
-                                await _flush_assistant_text_ns(
-                                    adapter,
-                                    pending_text,
-                                    ns_key,
-                                    assistant_message_by_namespace,
-                                )
-                                pending_text_by_namespace[ns_key] = ""
-                                assistant_message_by_namespace.pop(ns_key, None)
-
-                            # Only create new message if no existing one or content differs
-                            if not existing_msg or output_normalized != pending_normalized:
-                                output_widget = AssistantMessage(
-                                    RendererBase.repair_concatenated_output(output_text),
-                                    id=f"asst-{uuid.uuid4().hex[:8]}",
-                                )
-                                await adapter._mount_message(output_widget)
-                                await output_widget.write_initial_content()
-                                if adapter._sync_message_content and output_widget.id:
-                                    adapter._sync_message_content(
-                                        output_widget.id,
-                                        RendererBase.repair_concatenated_output(output_text),
-                                    )
-
-                            if adapter._set_active_message:
-                                adapter._set_active_message(None)
-                            if adapter._set_spinner:
-                                await adapter._set_spinner(None)
-                            continue
 
                         if event_type == AGENT_LOOP_STEP_STARTED:
                             step_id = str(data.get("step_id", "")).strip()
