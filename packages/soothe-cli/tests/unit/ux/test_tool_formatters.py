@@ -167,6 +167,17 @@ class TestFormatterRouting:
         assert brief.icon == "✓"
         assert "Read" in brief.summary
 
+    def test_grep_routes_to_file_ops_without_error(self) -> None:
+        """grep is file_ops in SDK metadata; FileOpsFormatter must handle it."""
+        from soothe_cli.shared.tool_output_formatter import ToolOutputFormatter
+
+        formatter = ToolOutputFormatter()
+        brief = formatter.format("grep", "a.py:1:match\nb.py:2:match")
+
+        assert brief.icon == "✓"
+        assert brief.metrics.get("count") == 2
+        assert "match" in brief.summary.lower()
+
     def test_web_tools_route_to_web_formatter(self) -> None:
         """Test that web tools are routed to WebFormatter."""
         from soothe_cli.shared.tool_output_formatter import ToolOutputFormatter
