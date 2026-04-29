@@ -15,6 +15,7 @@ from langchain_core.tools import BaseTool
 from pydantic import Field
 from soothe_sdk.plugin import plugin
 
+from soothe.toolkits._internal.local_path_resolution import resolve_toolkit_local_path
 from soothe.utils.tool_error_handler import tool_error_handler
 from soothe.utils.url_validation import validate_url
 
@@ -24,12 +25,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _image_to_base64(image_path: str, max_size: int = 1024) -> str:
+def _image_to_base64(
+    image_path: str,
+    max_size: int = 1024,
+    *,
+    config: Any | None = None,
+) -> str:
     """Load an image and convert to base64, resizing if needed.
 
     Args:
         image_path: Local path or URL to the image.
         max_size: Maximum dimension in pixels.
+        config: Optional ``SootheConfig`` for local path sandboxing (IG-316).
 
     Returns:
         Base64-encoded JPEG string.
@@ -52,7 +59,8 @@ def _image_to_base64(image_path: str, max_size: int = 1024) -> str:
         resp.raise_for_status()
         img = Image.open(io.BytesIO(resp.content))
     else:
-        img = Image.open(image_path)
+        local = resolve_toolkit_local_path(image_path, config=config)
+        img = Image.open(local)
 
     img = img.convert("RGB")
     img.thumbnail((max_size, max_size))
@@ -76,7 +84,7 @@ class ImageAnalysisTool(BaseTool):
 
     @tool_error_handler("analyze_image", return_type="str")
     def _run(self, image_path: str, prompt: str = "Describe this image in detail.") -> str:
-        b64 = _image_to_base64(image_path)
+        b64 = _image_to_base64(image_path, config=self.config)
 
         # Use config if available (ensures LimitedProviderModelWrapper applied)
         if self.config:
@@ -109,7 +117,7 @@ class ImageAnalysisTool(BaseTool):
         # IG-143: Add metadata for tracing
         from soothe.middleware._utils import create_llm_call_metadata
 
-        b64 = _image_to_base64(image_path)
+        b64 = _image_to_base64(image_path, config=self.config)
 
         # Use config if available (ensures LimitedProviderModelWrapper applied)
         if self.config:
@@ -158,7 +166,7 @@ class ExtractTextFromImageTool(BaseTool):
 
     @tool_error_handler("extract_text_from_image", return_type="str")
     def _run(self, image_path: str) -> str:
-        b64 = _image_to_base64(image_path)
+        b64 = _image_to_base64(image_path, config=self.config)
 
         # Use config if available (ensures LimitedProviderModelWrapper applied)
         if self.config:
@@ -191,7 +199,7 @@ class ExtractTextFromImageTool(BaseTool):
 
     @tool_error_handler("extract_text_from_image", return_type="str")
     async def _arun(self, image_path: str) -> str:
-        b64 = _image_to_base64(image_path)
+        b64 = _image_to_base64(image_path, config=self.config)
 
         # Use config if available (ensures LimitedProviderModelWrapper applied)
         if self.config:
@@ -263,7 +271,7 @@ class ImagePlugin:
         Args:
             context: Plugin context with config and logger.
         """
-        toolkit = ImageToolkit(config=context.config)
+        toolkit = ImageToolkit(config=context.soothe_config)
         self._tools = toolkit.get_tools()
 
         context.logger.info("Loaded %d image tools", len(self._tools))

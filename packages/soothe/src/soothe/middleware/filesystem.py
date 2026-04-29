@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
+from deepagents.backends.protocol import BackendProtocol
 from deepagents.backends.utils import validate_path
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain.tools import ToolRuntime
@@ -184,6 +185,29 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
             ]
         )
 
+    def _backend_for_tools(self, runtime: ToolRuntime | None) -> BackendProtocol:
+        """Resolve backend for surgical tools (IG-316).
+
+        Callable backends require ``runtime`` so ``_get_backend`` can run.
+        """
+        if runtime is not None:
+            return self._get_backend(runtime)
+        backend = self.backend
+        if callable(backend):
+            msg = "Filesystem tool requires tool runtime for this backend configuration"
+            raise RuntimeError(msg)
+        return backend
+
+    def _try_resolve_os_path(
+        self, logical_path: str, runtime: ToolRuntime | None
+    ) -> tuple[Path | None, str | None]:
+        """Map logical tool path to OS path using the same rules as ``FilesystemBackend``."""
+        try:
+            rb = self._backend_for_tools(runtime)
+            return rb._resolve_path(logical_path), None
+        except (ValueError, RuntimeError) as e:
+            return None, str(e)
+
     def _create_delete_file_tool(self) -> BaseTool:
         """Create the delete_file tool with backup support."""
 
@@ -199,7 +223,9 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
             except ValueError as e:
                 return f"Error: {e}"
 
-            resolved_path = Path(validated_path)
+            resolved_path, res_err = self._try_resolve_os_path(validated_path, runtime)
+            if res_err or resolved_path is None:
+                return f"Error: {res_err or 'Path resolution failed'}"
 
             if not resolved_path.exists():
                 return f"Error: File not found: {file_path}"
@@ -262,7 +288,9 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
             except ValueError as e:
                 return f"Error: {e}"
 
-            resolved_path = Path(validated_path)
+            resolved_path, res_err = self._try_resolve_os_path(validated_path, runtime)
+            if res_err or resolved_path is None:
+                return f"Error: {res_err or 'Path resolution failed'}"
 
             if not resolved_path.exists():
                 return f"Error: File not found: {path}"
@@ -318,7 +346,9 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
             except ValueError as e:
                 return f"Error: {e}"
 
-            resolved_path = Path(validated_path)
+            resolved_path, res_err = self._try_resolve_os_path(validated_path, runtime)
+            if res_err or resolved_path is None:
+                return f"Error: {res_err or 'Path resolution failed'}"
 
             if not resolved_path.exists():
                 return f"Error: File not found: {file_path}"
@@ -355,10 +385,10 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
             lines[start_line - 1 : end_line] = new_lines
             modified_content = "".join(lines)
 
-            # Write back using backend edit
-            resolved_backend = self._get_backend(runtime) if runtime else self.backend
+            # Write back using backend edit (logical path for virtual_mode)
+            resolved_backend = self._backend_for_tools(runtime)
             edit_result = resolved_backend.edit(
-                str(resolved_path),
+                validated_path,
                 original_content,
                 modified_content,
                 replace_all=False,
@@ -409,7 +439,9 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
             except ValueError as e:
                 return f"Error: {e}"
 
-            resolved_path = Path(validated_path)
+            resolved_path, res_err = self._try_resolve_os_path(validated_path, runtime)
+            if res_err or resolved_path is None:
+                return f"Error: {res_err or 'Path resolution failed'}"
 
             if not resolved_path.exists():
                 return f"Error: File not found: {file_path}"
@@ -440,9 +472,9 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
 
             # Write back using backend edit
             modified_content = "".join(lines)
-            resolved_backend = self._get_backend(runtime) if runtime else self.backend
+            resolved_backend = self._backend_for_tools(runtime)
             edit_result = resolved_backend.edit(
-                str(resolved_path),
+                validated_path,
                 file_content,
                 modified_content,
                 replace_all=False,
@@ -485,7 +517,9 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
             except ValueError as e:
                 return f"Error: {e}"
 
-            resolved_path = Path(validated_path)
+            resolved_path, res_err = self._try_resolve_os_path(validated_path, runtime)
+            if res_err or resolved_path is None:
+                return f"Error: {res_err or 'Path resolution failed'}"
 
             if not resolved_path.exists():
                 return f"Error: File not found: {file_path}"
@@ -514,9 +548,9 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
 
             # Write back using backend edit
             modified_content = "".join(lines)
-            resolved_backend = self._get_backend(runtime) if runtime else self.backend
+            resolved_backend = self._backend_for_tools(runtime)
             edit_result = resolved_backend.edit(
-                str(resolved_path),
+                validated_path,
                 file_content,
                 modified_content,
                 replace_all=False,
@@ -558,7 +592,9 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
             except ValueError as e:
                 return f"Error: {e}"
 
-            resolved_path = Path(validated_path)
+            resolved_path, res_err = self._try_resolve_os_path(validated_path, runtime)
+            if res_err or resolved_path is None:
+                return f"Error: {res_err or 'Path resolution failed'}"
 
             if not resolved_path.exists():
                 return f"Error: File not found: {file_path}"

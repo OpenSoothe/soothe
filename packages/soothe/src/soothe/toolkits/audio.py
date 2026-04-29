@@ -17,6 +17,8 @@ from langchain_core.tools import BaseTool
 from pydantic import Field
 from soothe_sdk.plugin import plugin
 
+from soothe.toolkits._internal.local_path_resolution import resolve_toolkit_local_path
+
 if TYPE_CHECKING:
     pass
 
@@ -37,6 +39,7 @@ class AudioTranscriptionTool(BaseTool):
     )
 
     cache_dir: str = Field(default="")
+    config: Any = Field(default=None, exclude=True)  # SootheConfig for local path sandboxing
 
     def _get_cache_path(self, audio_path: str) -> Path | None:
         """Get cache file path for audio transcription."""
@@ -106,11 +109,15 @@ class AudioTranscriptionTool(BaseTool):
             logger.info("Using cached transcription for: %s", audio_path)
             return json.loads(cache_path.read_text())
 
-        # Download if URL
+        # Download if URL; otherwise resolve local path (IG-316)
         local_path = audio_path
-        _ = audio_path.startswith(("http://", "https://"))  # Check if URL
         try:
-            local_path = self._download_if_url(audio_path)
+            if audio_path.startswith(("http://", "https://")):
+                local_path = self._download_if_url(audio_path)
+            else:
+                local_path = str(resolve_toolkit_local_path(audio_path, config=self.config))
+        except ValueError as e:
+            return {"error": str(e)}
         except Exception as e:
             return {"error": f"Failed to download audio: {e}"}
 
@@ -159,7 +166,7 @@ class AudioQATool(BaseTool):
             Answer to the question.
         """
         # Transcribe audio
-        transcribe_tool = AudioTranscriptionTool(cache_dir=self.cache_dir)
+        transcribe_tool = AudioTranscriptionTool(cache_dir=self.cache_dir, config=self.config)
         transcription = transcribe_tool._run(audio_path)
 
         if "error" in transcription:
@@ -220,8 +227,8 @@ class AudioToolkit:
             List containing AudioTranscriptionTool and AudioQATool.
         """
         return [
-            AudioTranscriptionTool(),
-            AudioQATool(config=self._config),
+            AudioTranscriptionTool(config=self._config),
+            AudioQATool(cache_dir="", config=self._config),
         ]
 
 
@@ -247,7 +254,7 @@ class AudioPlugin:
         Args:
             context: Plugin context with config and logger.
         """
-        toolkit = AudioToolkit(config=context.config)
+        toolkit = AudioToolkit(config=context.soothe_config)
         self._tools = toolkit.get_tools()
 
         context.logger.info("Loaded %d audio tools", len(self._tools))

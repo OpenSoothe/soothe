@@ -15,6 +15,8 @@ from langchain_core.tools import BaseTool
 from pydantic import Field
 from soothe_sdk.plugin import plugin
 
+from soothe.toolkits._internal.local_path_resolution import resolve_toolkit_local_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -37,6 +39,7 @@ class VideoAnalysisTool(BaseTool):
     google_api_key: str | None = Field(default=None)
     model_name: str = Field(default="gemini-1.5-pro")
     max_file_size: int = Field(default=2 * 1024 * 1024 * 1024)  # 2GB
+    config: Any = Field(default=None, exclude=True)  # SootheConfig for local path sandboxing
 
     def _get_api_key(self) -> str | None:
         """Get Google API key from instance or environment."""
@@ -53,7 +56,10 @@ class VideoAnalysisTool(BaseTool):
         Returns:
             Tuple of (resolved_path, error_message).
         """
-        path = Path(video_path)
+        try:
+            path = resolve_toolkit_local_path(video_path, config=self.config)
+        except ValueError as e:
+            return Path(video_path), str(e)
 
         if not path.exists():
             return path, f"Video file not found: {video_path}"
@@ -190,6 +196,8 @@ class VideoInfoTool(BaseTool):
         "Returns file size, format, and other basic info."
     )
 
+    config: Any = Field(default=None, exclude=True)  # SootheConfig for local path sandboxing
+
     def _run(self, video_path: str) -> dict[str, Any]:
         """Get video file metadata.
 
@@ -199,7 +207,10 @@ class VideoInfoTool(BaseTool):
         Returns:
             Dict with file metadata or error.
         """
-        path = Path(video_path)
+        try:
+            path = resolve_toolkit_local_path(video_path, config=self.config)
+        except ValueError as e:
+            return {"error": str(e)}
 
         if not path.exists():
             return {"error": f"File not found: {video_path}"}
@@ -225,8 +236,13 @@ class VideoInfoTool(BaseTool):
 class VideoToolkit:
     """Toolkit for video analysis operations."""
 
-    def __init__(self) -> None:
-        """Initialize the toolkit."""
+    def __init__(self, *, config: Any = None) -> None:
+        """Initialize the toolkit.
+
+        Args:
+            config: Optional SootheConfig for path sandboxing.
+        """
+        self._config = config
 
     def get_tools(self) -> list[BaseTool]:
         """Get list of langchain tools.
@@ -235,8 +251,8 @@ class VideoToolkit:
             List containing VideoAnalysisTool and VideoInfoTool.
         """
         return [
-            VideoAnalysisTool(),
-            VideoInfoTool(),
+            VideoAnalysisTool(config=self._config),
+            VideoInfoTool(config=self._config),
         ]
 
 
@@ -257,7 +273,7 @@ class VideoPlugin:
         Args:
             context: Plugin context with config and logger.
         """
-        toolkit = VideoToolkit()
+        toolkit = VideoToolkit(config=context.soothe_config)
         self._tools = toolkit.get_tools()
 
         context.logger.info("Loaded %d video tools", len(self._tools))

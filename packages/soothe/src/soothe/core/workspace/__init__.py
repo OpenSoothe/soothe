@@ -51,6 +51,11 @@ from .stream_resolution import (
     ResolvedWorkspace,
     resolve_workspace_for_stream,
 )
+from .tool_path_resolution import (
+    filesystem_virtual_mode_from_soothe_config,
+    max_file_size_mb_for_filesystem_backend,
+    resolve_backend_os_path,
+)
 
 __all__ = [
     # Resolution and validation
@@ -59,6 +64,9 @@ __all__ = [
     "validate_client_workspace",
     "get_git_status",
     "strict_workspace_path",
+    "resolve_backend_os_path",
+    "filesystem_virtual_mode_from_soothe_config",
+    "max_file_size_mb_for_filesystem_backend",
     # Stream resolution
     "ResolvedWorkspace",
     "resolve_workspace_for_stream",

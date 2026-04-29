@@ -1,5 +1,6 @@
 """Tests for Video tools functionality."""
 
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -105,7 +106,8 @@ class TestVideoAnalysisToolValidation:
             path, error = tool._validate_file(str(file_path))
 
             assert error is None
-            assert path == file_path
+            # macOS: tmp under /var/folders often resolves to /private/var/... via backend
+            assert path == Path(os.path.realpath(file_path))
 
 
 class TestVideoAnalysisToolExecution:
@@ -173,7 +175,7 @@ class TestVideoInfoTool:
 
             result = tool._run(str(file_path))
 
-            assert result["path"] == str(file_path)
+            assert result["path"] == os.path.realpath(str(file_path))
             assert result["name"] == "video.mp4"
             assert result["suffix"] == ".mp4"
             assert "size_bytes" in result
