@@ -21,7 +21,18 @@ from langchain_core.tools import BaseTool
 from pydantic import Field
 from soothe_sdk.plugin import plugin
 
+from soothe.toolkits._internal.local_path_resolution import resolve_toolkit_local_path
+
 logger = logging.getLogger(__name__)
+
+
+def _local_path_or_error(file_path: str, config: Any) -> Path | str:
+    """Resolve local path for data tools; return error string on failure."""
+    try:
+        return resolve_toolkit_local_path(file_path, config=config)
+    except ValueError as e:
+        return f"Error: {e}"
+
 
 _TABULAR_EXTENSIONS = frozenset({".csv", ".tsv", ".xlsx", ".xls", ".json", ".parquet"})
 _DOCUMENT_EXTENSIONS = frozenset({".pdf", ".docx", ".txt", ".md", ".rst", ".log"})
@@ -68,13 +79,17 @@ class InspectDataTool(BaseTool):
         Returns:
             Inspection result or error message.
         """
-        domain = _detect_domain(file_path)
+        secured = _local_path_or_error(file_path, self.config)
+        if isinstance(secured, str):
+            return secured
+        path_str = str(secured)
+        domain = _detect_domain(path_str)
 
         if domain == "tabular":
             try:
                 from soothe.toolkits._internal.tabular import get_tabular_columns
 
-                result = get_tabular_columns(file_path)
+                result = get_tabular_columns(path_str)
             except Exception as exc:
                 logger.exception("Tabular inspection failed")
                 return f"Error inspecting tabular file: {exc}"
@@ -85,7 +100,7 @@ class InspectDataTool(BaseTool):
             try:
                 from soothe.toolkits._internal.document import document_qa
 
-                result = document_qa(file_path, config=self.config)
+                result = document_qa(path_str, config=self.config)
             except Exception as exc:
                 logger.exception("Document inspection failed")
                 return f"Error inspecting document: {exc}"
@@ -93,7 +108,7 @@ class InspectDataTool(BaseTool):
                 return result
 
         return (
-            f"Error: Unsupported file format '{Path(file_path).suffix}'. "
+            f"Error: Unsupported file format '{Path(path_str).suffix}'. "
             f"Supported: {', '.join(sorted(_TABULAR_EXTENSIONS | _DOCUMENT_EXTENSIONS))}"
         )
 
@@ -128,13 +143,17 @@ class SummarizeDataTool(BaseTool):
         Returns:
             Summary result or error message.
         """
-        domain = _detect_domain(file_path)
+        secured = _local_path_or_error(file_path, self.config)
+        if isinstance(secured, str):
+            return secured
+        path_str = str(secured)
+        domain = _detect_domain(path_str)
 
         if domain == "tabular":
             try:
                 from soothe.toolkits._internal.tabular import get_data_summary
 
-                return get_data_summary(file_path)
+                return get_data_summary(path_str)
             except Exception as exc:
                 logger.exception("Tabular summary failed")
                 return f"Error summarizing tabular file: {exc}"
@@ -143,13 +162,13 @@ class SummarizeDataTool(BaseTool):
             try:
                 from soothe.toolkits._internal.document import document_qa
 
-                return document_qa(file_path, config=self.config)
+                return document_qa(path_str, config=self.config)
             except Exception as exc:
                 logger.exception("Document summary failed")
                 return f"Error summarizing document: {exc}"
 
         return (
-            f"Error: Unsupported file format '{Path(file_path).suffix}'. "
+            f"Error: Unsupported file format '{Path(path_str).suffix}'. "
             f"Supported: {', '.join(sorted(_TABULAR_EXTENSIONS | _DOCUMENT_EXTENSIONS))}"
         )
 
@@ -174,6 +193,8 @@ class CheckDataQualityTool(BaseTool):
         "Tabular files only (CSV, Excel, JSON, Parquet)."
     )
 
+    config: Any = Field(default=None, exclude=True)  # SootheConfig for path sandboxing
+
     def _run(self, file_path: str) -> str:
         """Check data quality.
 
@@ -183,13 +204,17 @@ class CheckDataQualityTool(BaseTool):
         Returns:
             Quality report or error message.
         """
-        domain = _detect_domain(file_path)
+        secured = _local_path_or_error(file_path, self.config)
+        if isinstance(secured, str):
+            return secured
+        path_str = str(secured)
+        domain = _detect_domain(path_str)
 
         if domain == "tabular":
             try:
                 from soothe.toolkits._internal.tabular import validate_data_quality
 
-                result = validate_data_quality(file_path)
+                result = validate_data_quality(path_str)
             except Exception as exc:
                 logger.exception("Data quality check failed")
                 return f"Error checking data quality: {exc}"
@@ -200,7 +225,7 @@ class CheckDataQualityTool(BaseTool):
             return "Error: Quality check is not supported for document files. Use inspect_data or summarize_data instead."
 
         return (
-            f"Error: Unsupported file format '{Path(file_path).suffix}'. "
+            f"Error: Unsupported file format '{Path(path_str).suffix}'. "
             f"Supported: {', '.join(sorted(_TABULAR_EXTENSIONS))}"
         )
 
@@ -225,6 +250,8 @@ class ExtractTextTool(BaseTool):
         "Document files only (PDF, DOCX, TXT, MD)."
     )
 
+    config: Any = Field(default=None, exclude=True)  # SootheConfig for path sandboxing
+
     def _run(self, file_path: str) -> str:
         """Extract text from document.
 
@@ -234,10 +261,14 @@ class ExtractTextTool(BaseTool):
         Returns:
             Extracted text or error message.
         """
+        secured = _local_path_or_error(file_path, self.config)
+        if isinstance(secured, str):
+            return secured
+        path_str = str(secured)
         try:
             from soothe.toolkits._internal.document import extract_text
 
-            result = extract_text(file_path)
+            result = extract_text(path_str)
         except Exception as exc:
             logger.exception("Text extraction failed")
             return f"Error extracting text: {exc}"
@@ -264,6 +295,8 @@ class GetDataInfoTool(BaseTool):
         "Returns: file metadata."
     )
 
+    config: Any = Field(default=None, exclude=True)  # SootheConfig for path sandboxing
+
     def _run(self, file_path: str) -> str:
         """Get file metadata.
 
@@ -273,13 +306,17 @@ class GetDataInfoTool(BaseTool):
         Returns:
             File metadata or error message.
         """
-        domain = _detect_domain(file_path)
+        secured = _local_path_or_error(file_path, self.config)
+        if isinstance(secured, str):
+            return secured
+        path_str = str(secured)
+        domain = _detect_domain(path_str)
 
         try:
             if domain == "document":
                 from soothe.toolkits._internal.document import get_document_info
 
-                result = get_document_info(file_path)
+                result = get_document_info(path_str)
                 if isinstance(result, dict):
                     return "\n".join(f"{k}: {v}" for k, v in result.items())
                 return str(result)
@@ -287,9 +324,7 @@ class GetDataInfoTool(BaseTool):
             # For tabular and unknown files, use simple file metadata retrieval
             from datetime import UTC, datetime
 
-            from soothe.utils import expand_path
-
-            resolved_path = expand_path(file_path)
+            resolved_path = secured
             if not resolved_path.exists():
                 return f"Error: File not found: {file_path}"
 
@@ -348,13 +383,17 @@ class AskAboutFileTool(BaseTool):
         if not question:
             return "Error: 'question' parameter is required."
 
-        domain = _detect_domain(file_path)
+        secured = _local_path_or_error(file_path, self.config)
+        if isinstance(secured, str):
+            return secured
+        path_str = str(secured)
+        domain = _detect_domain(path_str)
 
         if domain == "tabular":
             try:
                 from soothe.toolkits._internal.tabular import get_tabular_columns
 
-                columns_info = get_tabular_columns(file_path)
+                columns_info = get_tabular_columns(path_str)
             except Exception as exc:
                 logger.exception("Tabular question answering failed")
                 return f"Error answering question: {exc}"
@@ -369,13 +408,13 @@ class AskAboutFileTool(BaseTool):
             try:
                 from soothe.toolkits._internal.document import document_qa
 
-                return document_qa(file_path, question=question, config=self.config)
+                return document_qa(path_str, question=question, config=self.config)
             except Exception as exc:
                 logger.exception("Document question answering failed")
                 return f"Error answering question: {exc}"
 
         return (
-            f"Error: Unsupported file format '{Path(file_path).suffix}'. "
+            f"Error: Unsupported file format '{Path(path_str).suffix}'. "
             f"Supported: {', '.join(sorted(_TABULAR_EXTENSIONS | _DOCUMENT_EXTENSIONS))}"
         )
 
@@ -404,9 +443,9 @@ class DataToolkit:
         return [
             InspectDataTool(config=self._config),
             SummarizeDataTool(config=self._config),
-            CheckDataQualityTool(),
-            ExtractTextTool(),
-            GetDataInfoTool(),
+            CheckDataQualityTool(config=self._config),
+            ExtractTextTool(config=self._config),
+            GetDataInfoTool(config=self._config),
             AskAboutFileTool(config=self._config),
         ]
 
@@ -431,7 +470,7 @@ class DataPlugin:
         Args:
             context: Plugin context with config and logger.
         """
-        toolkit = DataToolkit(config=context.config)
+        toolkit = DataToolkit(config=context.soothe_config)
         self._tools = toolkit.get_tools()
 
         context.logger.info("Loaded %d data tools", len(self._tools))

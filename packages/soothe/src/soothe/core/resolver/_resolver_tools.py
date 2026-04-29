@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import BrowserSubagentConfig, SootheConfig
+from soothe.core.workspace.tool_path_resolution import (
+    filesystem_virtual_mode_from_soothe_config,
+    max_file_size_mb_for_filesystem_backend,
+)
 from soothe.utils import expand_path
 
 if TYPE_CHECKING:
@@ -250,7 +254,7 @@ def _resolve_single_tool_group_uncached(
     if name == "image":
         from soothe.toolkits.image import ImageToolkit
 
-        toolkit = ImageToolkit()
+        toolkit = ImageToolkit(config=config)
         return toolkit.get_tools()
 
     if name == "audio":
@@ -262,7 +266,7 @@ def _resolve_single_tool_group_uncached(
     if name == "video":
         from soothe.toolkits.video import VideoToolkit
 
-        toolkit = VideoToolkit()
+        toolkit = VideoToolkit(config=config)
         return toolkit.get_tools()
 
     if name == "wizsearch":
@@ -320,11 +324,14 @@ def _resolve_single_tool_group_uncached(
             else str(Path.cwd())
         )
 
+        virtual_mode = filesystem_virtual_mode_from_soothe_config(config) if config else False
+        max_file_size_mb = max_file_size_mb_for_filesystem_backend(config) if config else 10
+
         # Create filesystem backend
         backend = FilesystemBackend(
             root_dir=resolved_cwd or None,
-            virtual_mode=False,
-            max_file_size_mb=10,
+            virtual_mode=virtual_mode,
+            max_file_size_mb=max_file_size_mb,
         )
 
         # Create middleware with surgical file ops
@@ -370,11 +377,14 @@ def _resolve_single_tool_group_uncached(
             else str(Path.cwd())
         )
 
+        virtual_mode = filesystem_virtual_mode_from_soothe_config(config) if config else False
+        max_file_size_mb = max_file_size_mb_for_filesystem_backend(config) if config else 10
+
         # Create filesystem backend
         backend = FilesystemBackend(
             root_dir=resolved_cwd or None,
-            virtual_mode=False,
-            max_file_size_mb=10,
+            virtual_mode=virtual_mode,
+            max_file_size_mb=max_file_size_mb,
         )
 
         # Create middleware with surgical file ops
