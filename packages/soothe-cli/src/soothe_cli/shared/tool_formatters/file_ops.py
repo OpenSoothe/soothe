@@ -11,7 +11,8 @@ from soothe_cli.shared.tool_output_formatter import ToolBrief
 class FileOpsFormatter(BaseFormatter):
     """Formatter for file operation tools.
 
-    Handles: read_file, write_file, delete_file, list_files, search_files, glob, ls
+    Handles: read_file, write_file, delete_file, list_files, search_files, glob,
+    grep, ls
 
     Provides semantic summaries with size, line count, and item count metrics.
     """
@@ -51,6 +52,8 @@ class FileOpsFormatter(BaseFormatter):
             return self._format_search_files(result)
         if normalized == "glob":
             return self._format_glob(result)
+        if normalized == "grep":
+            return self._format_search_files(result)
         msg = f"Unknown file operation tool: {tool_name}"
         raise ValueError(msg)
 
