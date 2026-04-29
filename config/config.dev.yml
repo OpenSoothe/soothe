@@ -74,6 +74,24 @@ observability:
   thread_logging_enabled: true
   thread_logging_retention_days: 30
 
+# =============================================================================
+# Security (IG-300) — align with template defaults for local dev
+# =============================================================================
+security:
+  allow_paths_outside_workspace: false
+  require_approval_for_outside_paths: true
+  denied_paths:
+    - "~/.ssh/**"
+    - "~/.gnupg/**"
+    - "~/.aws/**"
+    - "**/.env"
+    - "**/credentials.json"
+    - "**/secrets.json"
+  allowed_paths:
+    - "**"
+  denied_file_types: []
+  require_approval_for_file_types: [".env", ".pem", ".key", ".p12", ".pfx", ".crt"]
+
 daemon:
   max_concurrent_threads: 100
   # IG-258: Concurrent performance optimization

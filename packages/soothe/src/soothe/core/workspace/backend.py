@@ -30,32 +30,32 @@ class NormalizedPathBackend(FilesystemBackend):
     def _normalize_path(self, path: str) -> str:
         """Normalize path to be workspace-relative (RFC-103).
 
+        Expands leading ``~`` so home-relative paths cannot bypass workspace
+        routing (IG-300).
+
         Args:
             path: Input path (may be '/', absolute, or relative).
 
         Returns:
             Normalized path that's safe for the backend.
         """
-        # Empty, '.', or root '/' -> use workspace root
-        if not path or path in {".", "/"}:
+        if not path or path.strip() in {"", ".", "/"}:
             return "."
 
-        # Absolute path outside workspace -> make relative
-        if path.startswith("/"):
-            workspace = Path(self.cwd)
-            abs_path = Path(path)
+        workspace = Path(self.cwd)
+        expanded = Path(path.strip()).expanduser()
+
+        if expanded.is_absolute():
+            abs_str = str(expanded)
             try:
-                abs_path.relative_to(workspace)
+                expanded.resolve().relative_to(workspace.resolve())
             except ValueError:
                 # Path is outside workspace - treat as workspace-relative
-                relative = path.lstrip("/")
+                relative = abs_str.lstrip("/")
                 return relative or "."
-            else:
-                # Path is within workspace, use as-is
-                return path
+            return abs_str
 
-        # Already relative
-        return path
+        return path.strip()
 
     def ls_info(self, path: str) -> list[dict[str, Any]]:
         """List directory with file info, normalizing path first."""

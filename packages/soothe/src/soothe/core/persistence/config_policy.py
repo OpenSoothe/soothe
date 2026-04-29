@@ -7,6 +7,12 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from soothe_sdk.tools.metadata import (
+    extract_filesystem_path_for_policy,
+    get_tool_meta,
+    is_policy_filesystem_tool,
+)
+
 from soothe.protocols.policy import (
     ActionRequest,
     Permission,
@@ -88,13 +94,20 @@ def _extract_required_permission(action: ActionRequest) -> Permission | None:
     """Extract the permission required for an action request."""
     if action.action_type == "tool_call" and action.tool_name:
         name = action.tool_name
-        if name in ("read_file", "ls", "glob", "grep"):
-            return Permission("fs", "read", action.tool_args.get("path", "*"))
-        if name in ("write_file", "edit_file"):
-            return Permission("fs", "write", action.tool_args.get("path", "*"))
-        if name == "execute":
-            cmd = action.tool_args.get("command", "")
-            first_word = cmd.split()[0] if cmd.split() else "*"
+        if name in ("execute", "shell", "bash", "run_command"):
+            cmd = action.tool_args.get("command") or action.tool_args.get("cmd", "")
+            cmd_s = str(cmd) if cmd is not None else ""
+            first_word = cmd_s.split()[0] if cmd_s.split() else "*"
+            return Permission("shell", "execute", first_word)
+        meta = get_tool_meta(name)
+        if meta and meta.category == "file_ops":
+            scope = extract_filesystem_path_for_policy(name, action.tool_args) or "*"
+            action_kind = "write" if meta.outcome_type == "file_write" else "read"
+            return Permission("fs", action_kind, scope)
+        if meta and meta.category == "execution":
+            cmd = action.tool_args.get("command", "") or action.tool_args.get("cmd", "")
+            cmd_s = str(cmd) if cmd is not None else ""
+            first_word = cmd_s.split()[0] if cmd_s.split() else "*"
             return Permission("shell", "execute", first_word)
         return Permission("fs", "read", "*")
     if action.action_type == "subagent_spawn":
@@ -135,15 +148,17 @@ class ConfigDrivenPolicy:
 
     def check(self, action: ActionRequest, context: PolicyContext) -> PolicyDecision:
         """Check if an action is permitted under the active profile."""
-        # Check filesystem-specific security policy first
+        # Check filesystem-specific security policy first (real tool names + path keys)
         if (
             action.action_type == "tool_call"
             and action.tool_name
-            and action.tool_name.startswith("fs_")
+            and is_policy_filesystem_tool(action.tool_name)
         ):
-            fs_decision = self._check_filesystem_permission(action, context)
-            if fs_decision.verdict != "allow":
-                return fs_decision
+            target = extract_filesystem_path_for_policy(action.tool_name, action.tool_args)
+            if target:
+                fs_decision = self._check_filesystem_permission(action, context, target)
+                if fs_decision.verdict != "allow":
+                    return fs_decision
 
         required = _extract_required_permission(action)
         if required is None:
@@ -202,7 +217,8 @@ class ConfigDrivenPolicy:
     def _check_filesystem_permission(
         self,
         action: ActionRequest,
-        context: PolicyContext,  # noqa: ARG002
+        context: PolicyContext,
+        target_path: str,
     ) -> PolicyDecision:
         """Check filesystem access permissions.
 
@@ -211,13 +227,18 @@ class ConfigDrivenPolicy:
         - File type restrictions
         - Workspace boundary enforcement
         - User approval requirements
+
+        Args:
+            action: Tool action (for logging context).
+            context: Policy context; uses ``context.workspace`` when set.
+            target_path: Resolved path string extracted from tool arguments.
         """
+        del action  # Reserved for future structured audit fields
         if not self._config or not hasattr(self._config, "security"):
             return PolicyDecision(verdict="allow", reason="No security config")
 
         security = self._config.security
-        file_path = action.tool_args.get("file_path", "")
-
+        file_path = target_path.strip()
         if not file_path:
             return PolicyDecision(verdict="allow", reason="No file path specified")
 
@@ -246,11 +267,16 @@ class ConfigDrivenPolicy:
                 reason=f"Path '{file_path}' does not match any allowed pattern",
             )
 
-        # 3. Check workspace boundary
-        if hasattr(self._config, "workspace_dir") and self._config.workspace_dir:
-            workspace = expand_path(self._config.workspace_dir)
+        # 3. Check workspace boundary (stream workspace from PolicyContext first)
+        workspace_root: Path | None = None
+        if context.workspace and str(context.workspace).strip():
+            workspace_root = expand_path(str(context.workspace).strip())
+        elif hasattr(self._config, "workspace_dir") and self._config.workspace_dir:
+            workspace_root = expand_path(self._config.workspace_dir)
+
+        if workspace_root is not None:
             try:
-                resolved_path.relative_to(workspace)
+                resolved_path.relative_to(workspace_root)
             except ValueError:
                 # Outside workspace
                 if not security.allow_paths_outside_workspace:

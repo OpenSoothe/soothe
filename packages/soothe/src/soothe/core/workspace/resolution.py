@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,41 @@ from typing import Any
 from soothe_sdk.utils import INVALID_WORKSPACE_DIRS
 
 logger = logging.getLogger(__name__)
+
+_LOOP_ID_SAFE = re.compile(r"^[A-Za-z0-9._-]{1,256}$")
+
+
+def resolve_loop_daemon_workspace(loop_id: str) -> Path:
+    """Resolve per-loop daemon workspace under ``$SOOTHE_HOME/Workspace/<loop_id>/``.
+
+    Used when an AgentLoop owns execution across threads so filesystem tools
+    default to an isolated directory instead of the global daemon workspace
+    (IG-300).
+
+    Args:
+        loop_id: Agent loop identifier (UUID-style string).
+
+    Returns:
+        Absolute path to the loop workspace directory (created if missing).
+
+    Raises:
+        ValueError: If *loop_id* is empty or contains unsafe characters, or the
+            resolved directory is invalid (see ``INVALID_WORKSPACE_DIRS``).
+    """
+    from soothe.config import SOOTHE_HOME
+
+    text = str(loop_id).strip()
+    if not text:
+        msg = "loop_id must be non-empty"
+        raise ValueError(msg)
+    if not _LOOP_ID_SAFE.match(text) or ".." in text or "/" in text or "\\" in text:
+        msg = f"Invalid loop_id for workspace directory: {loop_id!r}"
+        raise ValueError(msg)
+
+    root = (Path(SOOTHE_HOME) / "Workspace" / text).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    _validate_workspace_dir(root)
+    return root
 
 
 def resolve_daemon_workspace(config_workspace_dir: str = ".") -> Path:

@@ -1,5 +1,6 @@
 """Tests for the ToolMeta registry (single source of truth for display metadata)."""
 
+from soothe_sdk.tools.metadata import extract_filesystem_path_for_policy, is_policy_filesystem_tool
 from soothe_sdk.utils.tool_meta import (
     TOOL_REGISTRY,
     get_all_path_arg_keys,
@@ -351,3 +352,23 @@ class TestGetToolMeta:
         meta = get_tool_meta("shell")
         assert meta is not None
         assert meta.name == "execute"
+
+
+class TestPolicyFilesystemMetadata:
+    """IG-300: policy-facing filesystem classification and path extraction."""
+
+    def test_is_policy_filesystem_tool(self) -> None:
+        assert is_policy_filesystem_tool("read_file")
+        assert is_policy_filesystem_tool("glob")
+        assert not is_policy_filesystem_tool("execute")
+        assert is_policy_filesystem_tool("fs_custom")
+
+    def test_extract_path_prefers_registered_keys(self) -> None:
+        p = extract_filesystem_path_for_policy(
+            "read_file", {"file_path": "/a/b", "path": "/c/d"}
+        )
+        assert p == "/a/b"
+
+    def test_extract_path_grep_optional(self) -> None:
+        assert extract_filesystem_path_for_policy("grep", {"pattern": "foo"}) is None
+        assert extract_filesystem_path_for_policy("grep", {"pattern": "x", "path": "/tmp"}) == "/tmp"

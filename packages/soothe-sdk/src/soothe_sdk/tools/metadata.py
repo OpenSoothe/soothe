@@ -12,6 +12,7 @@ and consumed everywhere.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,7 +166,8 @@ _register(
     ToolMeta(
         name="grep",
         display_name="Grep",
-        arg_keys=("pattern", "regex", "regexp"),
+        arg_keys=("pattern", "path", "regex", "regexp"),
+        path_arg_keys=("path", "file_path", "directory", "target_directory", "dir"),
         category="file_ops",
         outcome_type="file_read",
         source="deepagents",
@@ -630,6 +632,59 @@ _register(
         has_header_info=True,
     )
 )
+
+# ---------------------------------------------------------------------------
+# Policy / security helpers (IG-300)
+# ---------------------------------------------------------------------------
+
+_FALLBACK_PATH_ARG_KEYS: tuple[str, ...] = (
+    "path",
+    "file_path",
+    "target_path",
+    "directory",
+    "root",
+    "file",
+    "filepath",
+    "filename",
+)
+
+
+def is_policy_filesystem_tool(tool_name: str) -> bool:
+    """Return True if *tool_name* is a filesystem tool subject to path policy."""
+    meta = get_tool_meta(tool_name)
+    if meta is not None:
+        return meta.category == "file_ops"
+    return tool_name.startswith("fs_")
+
+
+def extract_filesystem_path_for_policy(tool_name: str, tool_args: dict[str, Any]) -> str | None:
+    """Return the first non-empty path-like argument for policy checks.
+
+    Uses ``ToolMeta.path_arg_keys`` when the tool is registered; otherwise a
+    small built-in key list (and legacy ``fs_*`` tools).
+
+    Args:
+        tool_name: Invoked tool name (may be an alias).
+        tool_args: Tool call arguments.
+
+    Returns:
+        A non-empty path string, or ``None`` when no candidate is present.
+    """
+    meta = get_tool_meta(tool_name)
+    keys = meta.path_arg_keys if meta and meta.path_arg_keys else _FALLBACK_PATH_ARG_KEYS
+    for key in keys:
+        val = tool_args.get(key)
+        if val is None:
+            continue
+        if isinstance(val, str):
+            s = val.strip()
+            if s:
+                return s
+        s = str(val).strip()
+        if s:
+            return s
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Convenience accessors (derived from registry)

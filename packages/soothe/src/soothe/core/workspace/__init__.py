@@ -38,9 +38,11 @@ from .backend import (
 from .framework_filesystem import FrameworkFilesystem
 
 # Workspace resolution and validation
+from .path_normalization import strict_workspace_path
 from .resolution import (
     get_git_status,  # Git status collection utility
     resolve_daemon_workspace,
+    resolve_loop_daemon_workspace,
     validate_client_workspace,
 )
 
@@ -53,8 +55,10 @@ from .stream_resolution import (
 __all__ = [
     # Resolution and validation
     "resolve_daemon_workspace",
+    "resolve_loop_daemon_workspace",
     "validate_client_workspace",
     "get_git_status",
+    "strict_workspace_path",
     # Stream resolution
     "ResolvedWorkspace",
     "resolve_workspace_for_stream",
