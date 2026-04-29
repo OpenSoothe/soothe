@@ -26,15 +26,17 @@ def test_extract_text_from_message_content_str_and_blocks() -> None:
 
 
 def test_join_text_fragments_preserves_common_boundaries() -> None:
-    assert join_text_fragments(["first", "10"]) == "first 10"
-    assert join_text_fragments(["Report", "## Executive"]) == "Report\n## Executive"
-    assert join_text_fragments(["1", "# Heading"]) == "1\n# Heading"
-    assert join_text_fragments(["23", "<div>"]) == "23\n<div>"
+    """Test join now performs simple concatenation without boundary repair (IG-311)."""
+    assert join_text_fragments(["first", "10"]) == "first10"
+    assert join_text_fragments(["Report", "## Executive"]) == "Report## Executive"
+    assert join_text_fragments(["1", "# Heading"]) == "1# Heading"
+    assert join_text_fragments(["23", "<div>"]) == "23<div>"
 
 
 def test_extract_text_from_message_content_repairs_fragment_boundaries() -> None:
+    """Test extract text now concatenates without boundary repair (IG-311)."""
     content = [{"type": "text", "text": "Report"}, {"type": "text", "text": "## Executive"}]
-    assert extract_text_from_message_content(content) == "Report\n## Executive"
+    assert extract_text_from_message_content(content) == "Report## Executive"
 
 
 def test_parse_tuple_stream_chunk_two_and_three() -> None:

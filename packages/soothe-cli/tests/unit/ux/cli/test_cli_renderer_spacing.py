@@ -68,6 +68,52 @@ def test_tool_result_structured_payload_is_summarized(capsys: CaptureFixture[str
     assert "structured payload" in captured.err
 
 
+def test_tool_call_and_result_render_on_same_line_with_call_id(
+    capsys: CaptureFixture[str],
+) -> None:
+    r = CliRenderer()
+    r.on_tool_call(
+        name="glob",
+        args={"path": "/tmp", "glob_pattern": "**/*.py"},
+        tool_call_id="tc-join-1",
+        is_main=True,
+    )
+    r.on_tool_result(
+        name="glob",
+        result="Found 1 file",
+        tool_call_id="tc-join-1",
+        is_error=False,
+        is_main=True,
+    )
+    captured = capsys.readouterr()
+    lines = [line for line in captured.err.splitlines() if line.strip()]
+    assert len(lines) == 1
+    assert "⚙ Glob(" in lines[0]
+    assert "-> ✓ Found 1 file" in lines[0]
+
+
+def test_tool_call_without_id_keeps_separate_result_line(capsys: CaptureFixture[str]) -> None:
+    r = CliRenderer()
+    r.on_tool_call(
+        name="glob",
+        args={"path": "/tmp", "glob_pattern": "**/*.py"},
+        tool_call_id="",
+        is_main=True,
+    )
+    r.on_tool_result(
+        name="glob",
+        result="Found 1 file",
+        tool_call_id="",
+        is_error=False,
+        is_main=True,
+    )
+    captured = capsys.readouterr()
+    lines = [line for line in captured.err.splitlines() if line.strip()]
+    assert len(lines) == 2
+    assert lines[0].startswith("⚙ Glob(")
+    assert lines[1].startswith("✓ Found 1 file")
+
+
 def test_agentic_loop_completed_keeps_passthrough_stdout(capsys: CaptureFixture[str]) -> None:
     r = CliRenderer()
     r.on_progress_event(

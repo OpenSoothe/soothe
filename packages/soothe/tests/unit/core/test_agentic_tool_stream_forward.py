@@ -8,6 +8,7 @@ from soothe.core.runner._runner_agentic import (
     _forward_messages_chunk_for_tool_ui,
     _is_ai_tool_invocation_messages_chunk,
     _is_tool_stream_chunk,
+    _sanitize_forwarded_ai_tool_chunk,
 )
 
 
@@ -80,3 +81,49 @@ def test_forward_remains_tool_only_for_plain_ai_messages() -> None:
     ai_plain = ((), "messages", (AIMessage(content="hi"), {}))
     assert _forward_messages_chunk_for_tool_ui(tool_chunk) is True
     assert _forward_messages_chunk_for_tool_ui(ai_plain) is False
+
+
+def test_sanitize_forwarded_ai_tool_chunk_strips_text_content() -> None:
+    msg = AIMessage(
+        content="Step a1b2c3d 4: ✓ tool (size: 19480 bytes)",
+        tool_calls=[
+            {
+                "name": "read_file",
+                "args": {"file_path": "README.md"},
+                "id": "call-1",
+                "type": "tool_call",
+            }
+        ],
+    )
+    chunk = ((), "messages", (msg, {}))
+
+    sanitized = _sanitize_forwarded_ai_tool_chunk(chunk)
+    assert isinstance(sanitized, tuple)
+    assert len(sanitized) == 3
+    _ns, _mode, data = sanitized
+    assert isinstance(data, tuple)
+    sanitized_msg = data[0]
+    assert isinstance(sanitized_msg, dict)
+    assert sanitized_msg.get("content") == ""
+    assert sanitized_msg.get("tool_calls")
+
+
+def test_sanitize_forwarded_ai_tool_chunk_logs_stripped_preview(caplog) -> None:
+    caplog.set_level("DEBUG", logger="soothe.core.runner._runner_agentic")
+    msg = AIMessage(
+        content_blocks=[
+            {"type": "text", "text": "Step e5f6g7h 8: ✓ unknown (size: 107 bytes)"},
+            {
+                "type": "tool_call",
+                "name": "run_command",
+                "id": "call-2",
+                "args": {"command": "ls"},
+            },
+        ]
+    )
+    chunk = ((), "messages", (msg, {}))
+
+    _sanitize_forwarded_ai_tool_chunk(chunk)
+
+    assert "stripped text/content preview" in caplog.text
+    assert "Step e5f6g7h 8: ✓ unknown" in caplog.text

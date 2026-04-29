@@ -73,7 +73,7 @@ agentic:
 
   context_window_limit: 200000  # Claude models default (IG-151)
 
-  output_streaming: false  # Default batch output for AgentLoop responses (true=stream chunks, false=batch final only)
+  output_streaming: true  # Default streaming for AgentLoop responses (true=stream chunks, false=batch final only)
 
   # Performance guard - only user-facing control (performance optimizations always enabled by design)
   reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution

@@ -36,7 +36,7 @@ providers:
 router:
   default: "coding-plan:kimi-k2.5"
   fast: "coding-plan:kimi-k2.5"
-  think: "coding-plan:glm-5"
+  think: "coding-plan:kimi-k2.5"
   image: "coding-plan:qwen3.5-plus"
   embedding: "dashscope:multimodal-embedding-v1"
 
@@ -49,7 +49,7 @@ router:
 
 agentic:
   final_response: adaptive
-  output_streaming: true  # Default batch output for AgentLoop responses (true=stream, false=batch)
+  output_streaming: true  # Default streaming for AgentLoop responses (true=stream, false=batch)
   reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution
 
 execution:
