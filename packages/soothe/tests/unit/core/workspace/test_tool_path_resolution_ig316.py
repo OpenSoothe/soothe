@@ -18,6 +18,41 @@ def test_resolve_backend_os_path_virtual_mode_maps_absolute(tmp_path: Path) -> N
     assert resolved == ws / "nested" / "file.txt"
 
 
+def test_normalized_path_backend_read_host_absolute_under_workspace(tmp_path: Path) -> None:
+    """Host-absolute paths inside the workspace resolve with ``virtual_mode=True`` (IG-300)."""
+    from soothe.core.workspace.backend import NormalizedPathBackend
+
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    target = ws / "packages" / "pkg" / "README.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("hello", encoding="utf-8")
+
+    backend = NormalizedPathBackend(
+        root_dir=str(ws),
+        virtual_mode=True,
+        max_file_size_mb=10,
+    )
+    host_path = str(target)
+    out = backend.read(host_path)
+    assert "Error: File" not in out
+    assert "hello" in out
+
+
+def test_workspace_aware_backend_ls_info_host_absolute_under_workspace(tmp_path: Path) -> None:
+    """``WorkspaceAwareBackend.ls_info`` accepts host-absolute dirs when ``virtual_mode=True`` (IG-300)."""
+    from soothe.core.workspace.backend import WorkspaceAwareBackend
+
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    (ws / "a.txt").write_text("x", encoding="utf-8")
+
+    backend = WorkspaceAwareBackend(default_root_dir=ws, virtual_mode=True, max_file_size_mb=10)
+    rows = backend.ls_info(str(ws))
+    paths = [r.get("path", "") for r in rows]
+    assert any("a.txt" in p for p in paths)
+
+
 def test_filesystem_middleware_file_info_virtual_path(tmp_path: Path) -> None:
     """Surgical ``file_info`` resolves virtual absolute paths via backend (IG-316)."""
     from deepagents.backends.filesystem import FilesystemBackend
