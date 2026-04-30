@@ -348,13 +348,19 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             if memories and "memory" in triggered:
                 static_sections.append(self._build_memory_section(memories))
 
-        # IG-192 / IG-196: SUBAGENT_ROUTING_DIRECTIVE (explicit /browser, /claude, /research)
+        # IG-192 / IG-196 / IG-323: SUBAGENT_ROUTING_DIRECTIVE (explicit /browser, /claude, /research, /explore)
         subagent_directive = state.get("_subagent_routing_directive") if state else None
         if subagent_directive:
             directive_section = (
                 f"<SUBAGENT_ROUTING_DIRECTIVE>\n"
                 f"The user explicitly requested the **{subagent_directive}** subagent. You MUST use the "
                 f"'{_TASK_TOOL_NAME}' tool with subagent_type='{subagent_directive}' for this request.\n"
+                f"\n"
+                f"CRITICAL INSTRUCTION:\n"
+                f"- The subagent_type argument MUST be exactly '{subagent_directive}' (not 'claude', 'browser', etc.)\n"
+                f"- Do NOT substitute or override this choice with a different subagent\n"
+                f"- The user selected {subagent_directive} for a specific reason and will be confused if you use a different one\n"
+                f"\n"
                 f"Do not use search_web, filesystem, shell, or other tools at the root agent — delegate "
                 f"via '{_TASK_TOOL_NAME}' only. Provide a detailed task description in the tool call.\n"
                 f"</SUBAGENT_ROUTING_DIRECTIVE>"

@@ -10,7 +10,10 @@ Note: Do not enable PEP 563 (``from __future__ import annotations``) in this mod
 Pydantic validation and the task tool would fail at runtime.
 """
 
+import logging
 from typing import Annotated, Any
+
+logger = logging.getLogger(__name__)
 
 # Used in patched ``task`` / ``atask`` signatures so LangGraph detects injection.
 try:
@@ -117,6 +120,13 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
         def _validate_and_prepare_state(
             subagent_type: str, description: str, runtime: ToolRuntime
         ) -> Any:
+            # Debug logging to see actual subagent_type passed by LLM (IG-323)
+            logger.debug(
+                "[Task Tool] subagent_type='%s' description='%s' directive='%s'",
+                subagent_type,
+                description[:100],
+                runtime.state.get("_subagent_routing_directive", "none"),
+            )
             subagent = subagent_graphs[subagent_type]
             subagent_state = {
                 k: v for k, v in runtime.state.items() if k not in excluded_state_keys
