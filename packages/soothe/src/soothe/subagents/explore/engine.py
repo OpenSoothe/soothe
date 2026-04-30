@@ -113,6 +113,9 @@ def build_explore_engine(
         Compiled LangGraph runnable.
     """
     # Get read-only filesystem tools (reusing deepagents tools)
+    # Note: workspace parameter is initial/resolver workspace; thread workspace
+    # overrides at runtime via state.workspace (IG-328). Tools will re-resolve
+    # paths at execution time.
     tools = get_explore_tools(
         workspace=workspace,
         allow_paths_outside_workspace=allow_paths_outside_workspace,
@@ -138,6 +141,15 @@ def build_explore_engine(
         iterations_used = state.get("iterations_used", 0)
         findings = state.get("findings", [])
 
+        # Use thread workspace from state (runtime injection), fallback to resolver workspace (IG-328)
+        thread_workspace = state.get("workspace") or workspace
+        if thread_workspace != workspace:
+            logger.debug(
+                "Explore: using thread workspace '%s' (resolver='%s')",
+                thread_workspace,
+                workspace,
+            )
+
         # Emit started event on first iteration
         if iterations_used == 0:
             logger.info("Explore: searching for '%s'", search_target[:80])
@@ -158,7 +170,7 @@ def build_explore_engine(
 
         prompt = PLAN_SEARCH.format(
             search_target=search_target,
-            workspace=workspace,
+            workspace=thread_workspace,
             thoroughness=thoroughness,
             max_iterations=max_iterations,
             max_read_lines=max_read_lines,

@@ -30,19 +30,25 @@ def create_explore_subagent(
         model: LLM for search planning and result assessment.
         config: Soothe configuration.
         context: Context with work_dir and thoroughness settings.
+            Note: work_dir is static from resolver (daemon workspace). Thread workspace
+            is injected at runtime via state.workspace (IG-328).
 
     Returns:
         CompiledSubAgent dict with name, description, runnable.
     """
-    work_dir = context.get("work_dir", "")
+    # Resolver-provided workspace (fallback when state lacks workspace)
+    resolver_work_dir = context.get("work_dir", "")
     subagent_config = config.subagents.get("explore", SubagentConfig())
     explore_config = ExploreSubagentConfig(**subagent_config.config)
-    workspace = work_dir  # Search boundary is workspace
+
+    # Use resolver workspace as initial default
+    # Thread workspace will override at runtime via state.workspace (IG-328)
+    initial_workspace = resolver_work_dir
 
     runnable = build_explore_engine(
         model,
         explore_config,
-        workspace,
+        initial_workspace,
         allow_paths_outside_workspace=config.security.allow_paths_outside_workspace,
     )
 
