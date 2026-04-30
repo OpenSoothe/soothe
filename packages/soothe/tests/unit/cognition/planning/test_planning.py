@@ -245,6 +245,18 @@ class TestLLMPlanner:
         assert "<PLANNING_RULES>" in prompt
         assert "Return 1 step for trivial tasks" in prompt
 
+    def test_build_plan_prompt_workspace_explore_readonly_rules(self) -> None:
+        """Workspace planner XML allows explore for readonly recon."""
+        mock_model = MagicMock()
+        planner = LLMPlanner(mock_model)
+        context = PlanContext(workspace="/repo")
+        prompt = planner._build_plan_prompt("map the codebase", context)
+
+        assert "<FORBIDDEN_ACTIONS>" in prompt
+        assert "explore for writes" in prompt
+        assert "prefer subagent explore" in prompt
+        assert "<EFFICIENCY_RULES>" in prompt
+
     def test_build_plan_prompt_with_capabilities(self) -> None:
         """Test building plan prompt with available capabilities."""
         mock_model = MagicMock()

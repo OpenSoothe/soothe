@@ -7,5 +7,6 @@
 **Granularity**:
 - 1-3 steps per decision, each with checkable expected_output
 - Step descriptions: imperative tool actions (not raw goal string)
-- Merge related filesystem reads into single step
+- Merge related filesystem reads into one step when sequential tool-only
+- Parallel mode: independent readonly steps may run together if descriptions name disjoint scopes (e.g. separate explore targets)
 </EXECUTION_POLICIES>

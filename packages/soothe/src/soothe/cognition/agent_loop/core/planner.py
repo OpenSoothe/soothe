@@ -598,8 +598,8 @@ class LLMPlanner:
                 "</TOOL_ROUTING_RULES>",
                 "",
                 "<FORBIDDEN_ACTIONS>",
-                "- using ANY subagent (browser, claude, research) for local file operations",
-                "- browser/claude for: pwd, ls, cat, file read, directory listing",
+                "- delegating browser, claude, or research for trivial local file ops (use direct file tools)",
+                "- using explore for writes, deletes, shell mutation, or anything outside readonly search",
                 "- searching system directories (/etc, /Library, /usr, /System, /Applications)",
                 "- listing root filesystem (/)",
                 "</FORBIDDEN_ACTIONS>",
@@ -650,10 +650,9 @@ class LLMPlanner:
             "</PLANNING_RULES>",
             "",
             "<EFFICIENCY_RULES>",
-            "- For exploration/analysis: use 1 step with list_files + selective read_file",
+            "- Trivial local skim: one step (list_files + selective read_file); heavy readonly recon: prefer subagent explore (scoped target per step)",
             "- For project structure: single step listing top-level directories",
-            "- Avoid redundant steps (listing then reading same files)",
-            "- Batch related operations in one step when possible",
+            "- Avoid duplicate paths; batch sequential related reads—independent readonly probes may stay separate steps",
             "</EFFICIENCY_RULES>",
         ]
         sections.append("<PLANNING_OUTPUT>\n" + "\n".join(output_spec) + "\n</PLANNING_OUTPUT>")

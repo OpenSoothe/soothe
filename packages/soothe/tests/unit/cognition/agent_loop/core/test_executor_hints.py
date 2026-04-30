@@ -133,3 +133,23 @@ class TestExecutorHints:
         # Check debug log contains hints
         assert "tools=['glob', 'grep']" in caplog.text
         assert "subagent=None" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_executor_stream_thread_id_branches_langgraph_config(self) -> None:
+        """Parallel steps pass branched thread_id into configurable for checkpoint isolation."""
+        mock_agent = MagicMock()
+        mock_agent.astream = AsyncMock(return_value=iter([]))
+
+        executor = Executor(mock_agent)
+        step = StepAction(id="a1b2c3d4", description="Explore slice", expected_output="ok")
+
+        _events, step_result, _msgs = await executor._execute_step_collecting_events(
+            step,
+            "logical-thread",
+            stream_thread_id="logical-thread__pa1b2c3d4",
+        )
+
+        call_args = mock_agent.astream.call_args
+        configurable = call_args.kwargs["config"]["configurable"]
+        assert configurable["thread_id"] == "logical-thread__pa1b2c3d4"
+        assert step_result.thread_id == "logical-thread"

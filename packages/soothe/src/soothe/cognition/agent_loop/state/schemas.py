@@ -26,9 +26,15 @@ class StepAction(BaseModel):
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
-    description: str
+    description: str = Field(
+        ...,
+        description="Imperative step; parallel explore passes must name disjoint repo slices.",
+    )
     tools: list[str] | None = None
-    subagent: str | None = None
+    subagent: str | None = Field(
+        default=None,
+        description='Optional; use "explore" for readonly workspace search via task tool.',
+    )
     expected_output: str = "Step completed successfully"
     dependencies: list[str] | None = None
 
@@ -49,7 +55,9 @@ class AgentDecision(BaseModel):
 
     type: Literal["execute_steps", "final"]
     steps: list[StepAction]
-    execution_mode: Literal["parallel", "sequential", "dependency"]
+    execution_mode: Literal["parallel", "sequential", "dependency"] = Field(
+        description="parallel only for independent steps; sequential default; dependency for DAG-ordered work.",
+    )
     reasoning: str = ""
     adaptive_granularity: Literal["atomic", "semantic"] | None = None
 
