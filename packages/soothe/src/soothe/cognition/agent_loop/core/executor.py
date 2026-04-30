@@ -394,10 +394,18 @@ class Executor:
         Yields:
             StepResult for each completed step.
         """
-        # Create tasks that collect events
+        # Branched LangGraph thread_id for parallel checkpoint isolation; StepResult keeps logical thread_id.
+        logical_tid = state.thread_id
         tasks = [
             asyncio.create_task(
-                self._execute_step_collecting_events(step, state.thread_id, state.workspace)
+                self._execute_step_collecting_events(
+                    step,
+                    logical_tid,
+                    state.workspace,
+                    stream_thread_id=(
+                        f"{logical_tid}__p{step.id}" if len(steps) > 1 else logical_tid
+                    ),
+                )
             )
             for step in steps
         ]
@@ -683,6 +691,8 @@ class Executor:
         step: StepAction,
         thread_id: str,
         workspace: str | None = None,
+        *,
+        stream_thread_id: str | None = None,
     ) -> tuple[list[StreamEvent], StepResult, list[BaseMessage]]:
         """Execute single step, collecting events for later yielding.
 
@@ -693,8 +703,9 @@ class Executor:
 
         Args:
             step: StepAction with description and optional hints
-            thread_id: Thread ID for execution
+            thread_id: Logical thread ID for StepResult, logs, and durability lookups
             workspace: Thread-specific workspace path (RFC-103)
+            stream_thread_id: Optional LangGraph ``thread_id`` for this stream (parallel isolation)
 
         Returns:
             Tuple of (collected events, StepResult with outcome metadata, AI messages for IG-199)
@@ -714,8 +725,9 @@ class Executor:
                 step.subagent,
             )
 
+            cfg_thread = stream_thread_id or thread_id
             configurable: dict[str, Any] = {
-                "thread_id": thread_id,
+                "thread_id": cfg_thread,
                 "soothe_step_tools": step.tools,
                 "soothe_step_subagent": step.subagent,
                 "soothe_step_expected_output": step.expected_output,

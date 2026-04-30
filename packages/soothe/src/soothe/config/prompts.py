@@ -13,6 +13,7 @@ Architecture analysis approach:
 - List 5-10 critical components with descriptions
 - Identify design patterns with concrete examples
 - Provide specific library names for dependencies
+- Large repos: disjoint readonly `task`/explore scopes, then synthesize
 """
 
 _RESEARCH_SYNTHESIS_GUIDE = """\
@@ -109,6 +110,8 @@ Goal management tools (single-purpose):
 _SUBAGENT_GUIDE = """\
 Subagents (via the `task` tool) -- delegate ONLY when the task requires \
 the subagent's unique capability:
+- explore: Readonly repo search (glob/grep/list/read); locate/map/trace; not edits or shell.
+- research: Web or multi-source deep investigation—not trivial directory walks.
 - browser: Interactive web browsing (login, forms, JavaScript-heavy sites). \
 NOT for simple search.
 - claude: Complex reasoning, creative writing, or superior code generation.\
