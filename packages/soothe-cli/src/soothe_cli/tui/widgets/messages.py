@@ -381,6 +381,7 @@ class SkillMessage(Vertical):
     SkillMessage .skill-hint {
         margin-left: 3;
         color: $text-muted;
+        background: transparent;
     }
 
     SkillMessage.-expanded #skill-md {
@@ -772,6 +773,7 @@ class ToolCallMessage(Vertical):
     ToolCallMessage .tool-output-hint {
         margin-left: 0;
         color: $text-muted;
+        background: transparent;
     }
 
     ToolCallMessage:hover {
@@ -1925,7 +1927,7 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
     CognitionPlanReasonMessage .cognition-plan-header {
         height: auto;
         margin: 0;
-        color: $cognition;
+        color: $text-muted;
         text-style: bold;
     }
 
@@ -1975,7 +1977,7 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
         badge = f" [{self._plan_action}]" if self._plan_action in ("keep", "new") else ""
         args = f"{self._next_action}{badge}"
         header = f"{prefix} Plan({args})"
-        yield Static(header, markup=False, classes="cognition-plan-header")
+        yield Static(Content.styled(header, "bold dim"), classes="cognition-plan-header")
 
     def on_mount(self) -> None:
         """Use ASCII border variant when configured."""
@@ -2038,7 +2040,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
     CognitionGoalTreeMessage .cognition-goal-tree-header {
         height: auto;
         margin: 0;
-        color: $cognition;
+        color: $text-muted;
         text-style: bold;
     }
 
@@ -2096,7 +2098,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         if self._max_iterations > 1:
             args += f", iter<={self._max_iterations}"
         line = f"{prefix} Goal({args})"
-        return Content.styled(line, "bold")
+        return Content.styled(line, "bold dim")
 
     def _indent_prefix(self) -> str:
         g = get_glyphs()

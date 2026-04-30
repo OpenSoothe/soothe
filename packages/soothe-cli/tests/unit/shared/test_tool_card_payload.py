@@ -65,3 +65,46 @@ def test_extract_infers_tool_name_from_functions_id_when_name_is_placeholder() -
     p = extract_tool_result_card_payload(msg)
     assert p is not None
     assert p.tool_name == "ls"
+
+
+def test_run_python_envelope_success_not_flagged_on_ambiguous_status() -> None:
+    """Infer path must not treat ``\"error\": null`` as the word *error*."""
+    chunk = {
+        "type": "tool",
+        "tool_call_id": "functions.run_python:1",
+        "name": "run_python",
+        "status": "pending",
+        "content": '{"success": true, "output": "", "result": null, "error": null}',
+    }
+    p = extract_tool_result_card_payload(chunk)
+    assert p is not None
+    assert p.is_error is False
+
+
+def test_run_python_envelope_failure_when_success_false() -> None:
+    chunk = {
+        "type": "tool",
+        "tool_call_id": "functions.run_python:2",
+        "name": "run_python",
+        "status": "pending",
+        "content": '{"success": false, "output": "", "result": null, "error": "SyntaxError: x"}',
+    }
+    p = extract_tool_result_card_payload(chunk)
+    assert p is not None
+    assert p.is_error is True
+
+
+def test_run_python_envelope_allows_extra_keys() -> None:
+    """Strict contract is minimum key set; extra keys must still parse."""
+    chunk = {
+        "type": "tool",
+        "tool_call_id": "tc-extra",
+        "name": "run_python",
+        "status": "pending",
+        "content": (
+            '{"success": true, "output": "", "result": null, "error": null, "meta": 1}'
+        ),
+    }
+    p = extract_tool_result_card_payload(chunk)
+    assert p is not None
+    assert p.is_error is False

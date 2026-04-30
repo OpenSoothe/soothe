@@ -107,8 +107,6 @@ tools:
     enabled: true
     default_engines:
       - tavily
-  research:
-    enabled: true
   image:
     enabled: true
   audio:

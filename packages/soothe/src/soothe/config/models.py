@@ -258,7 +258,6 @@ class ToolsConfig(BaseModel):
         datetime: DateTime tool config.
         data: Data inspection tools config.
         wizsearch: Wizsearch multi-engine search tools config.
-        research: Research tools config.
         image: Image analysis tools config.
         audio: Audio transcription tools config.
         video: Video analysis tools config.
@@ -269,7 +268,6 @@ class ToolsConfig(BaseModel):
     datetime: ToolConfig = Field(default_factory=ToolConfig)
     data: ToolConfig = Field(default_factory=ToolConfig)
     wizsearch: WebSearchConfig = Field(default_factory=WebSearchConfig)
-    research: ToolConfig = Field(default_factory=ToolConfig)
     image: ToolConfig = Field(default_factory=ToolConfig)
     audio: ToolConfig = Field(default_factory=ToolConfig)
     video: ToolConfig = Field(default_factory=ToolConfig)
@@ -289,8 +287,7 @@ class PersistenceConfig(BaseModel):
             Maps component names to database names.
             Default: {"checkpoints": "soothe_checkpoints", "metadata": "soothe_metadata",
                       "vectors": "soothe_vectors", "memory": "soothe_memory"}
-        soothe_postgres_dsn: Legacy single-database DSN (deprecated).
-            Use postgres_base_dsn + postgres_databases instead.
+        soothe_postgres_dsn: Single-database PostgreSQL DSN when ``postgres_base_dsn`` is unset.
         default_backend: Default backend for new protocols (can be overridden).
         metadata_sqlite_path: Path for ThreadInfo metadata storage (SQLitePersistStore).
             None defaults to $SOOTHE_DATA_DIR/metadata.db.
@@ -314,9 +311,8 @@ class PersistenceConfig(BaseModel):
     with separate table names for schema isolation.
     """
 
-    # Legacy single-database DSN (deprecated, kept for backward compatibility)
     soothe_postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/soothe"
-    """Legacy single-database DSN (deprecated). Use postgres_base_dsn instead."""
+    """Single-database PostgreSQL DSN when ``postgres_base_dsn`` is not set."""
 
     default_backend: Literal["postgresql", "sqlite"] = "sqlite"
 

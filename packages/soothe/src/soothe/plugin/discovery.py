@@ -209,7 +209,7 @@ def discover_all_plugins(config: "SootheConfig") -> dict[str, tuple[str, dict]]:
     discovered = {}
 
     # Built-in subagent plugins (new module structure)
-    for subagent_name in ["browser", "claude"]:
+    for subagent_name in ["browser", "claude", "explore", "research"]:
         module_path = f"soothe.subagents.{subagent_name}"
         discovered[subagent_name] = (module_path, {})
         logger.debug("Discovered built-in subagent plugin: %s", subagent_name)
@@ -222,7 +222,6 @@ def discover_all_plugins(config: "SootheConfig") -> dict[str, tuple[str, dict]]:
         "datetime",
         "goals",
         "wizsearch",
-        "research",
         "image",
         "audio",
         "video",

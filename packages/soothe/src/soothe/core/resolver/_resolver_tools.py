@@ -558,7 +558,7 @@ def resolve_subagents(
             extra_kwargs["cwd"] = resolved_cwd
         if name == "browser":
             extra_kwargs["config"] = BrowserSubagentConfig(**sub_cfg.config)
-        if name == "research":
+        if name in ("research", "explore"):
             extra_kwargs["config"] = config
             if "context" not in extra_kwargs:
                 extra_kwargs["context"] = {"work_dir": resolved_cwd}

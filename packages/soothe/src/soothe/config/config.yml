@@ -230,8 +230,6 @@ tools:
     crawler: wizsearch    # Or jina, requires JINA_API_KEY
     max_results_per_engine: 10
     timeout: 30
-  research:
-    enabled: true       # Deep multi-source iterative research (InquiryEngine)
 
   # Optional tools (require API keys or external services):
   image:

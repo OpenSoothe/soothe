@@ -8,6 +8,45 @@ from __future__ import annotations
 import json
 from typing import Any
 
+# Serialized shape from ``PythonSessionManager.execute`` / ``RunPythonTool``.
+_RUN_PYTHON_RESULT_KEYS: frozenset[str] = frozenset({"success", "output", "result", "error"})
+
+
+def try_parse_run_python_result_envelope(text: str) -> dict[str, Any] | None:
+    """If ``text`` is JSON for ``run_python``, return the dict; else ``None``.
+
+    Uses a strict key check so arbitrary JSON containing the word ``error`` is not
+    mistaken for this envelope (and substring heuristics are never applied to it).
+
+    Args:
+        text: Tool message body (often a single JSON object string).
+
+    Returns:
+        Parsed dict when keys match the run_python contract; otherwise ``None``.
+    """
+    if not isinstance(text, str):
+        return None
+    s = text.strip()
+    if not s.startswith("{"):
+        return None
+    try:
+        obj = json.loads(s)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(obj, dict):
+        return None
+    if not _RUN_PYTHON_RESULT_KEYS.issubset(obj.keys()):
+        return None
+    return obj
+
+
+def run_python_envelope_indicates_failure(env: dict[str, Any]) -> bool:
+    """Match server-side failure semantics: ``not success`` or truthy ``error``."""
+    if not env.get("success"):
+        return True
+    err = env.get("error")
+    return bool(err)
+
 
 def format_content_block_for_tool_display(block: dict[str, Any]) -> str:
     """Format a single multimodal / structured content block for terminal display.
@@ -74,4 +113,6 @@ def format_tool_message_content(content: Any) -> str:  # noqa: ANN401
 __all__ = [
     "format_content_block_for_tool_display",
     "format_tool_message_content",
+    "run_python_envelope_indicates_failure",
+    "try_parse_run_python_result_envelope",
 ]
