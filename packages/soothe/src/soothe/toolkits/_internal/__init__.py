@@ -10,6 +10,6 @@ External code should import from the public tool modules instead:
 - ``soothe.tools.data``
 - ``soothe.tools.websearch``
 
-For research capability, use the research subagent:
-- ``soothe.subagents.research``
+For deep multi-source research, use the built-in **research** subagent
+(``soothe.subagents.research``) via the ``task`` tool, not a tool group.
 """

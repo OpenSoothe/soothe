@@ -14,11 +14,28 @@ from dataclasses import dataclass
 from typing import Any
 
 from soothe_cli.shared.tool_call_resolution import infer_tool_name_from_call_id
-from soothe_cli.shared.tool_message_format import format_tool_message_content
+from soothe_cli.shared.tool_message_format import (
+    format_tool_message_content,
+    run_python_envelope_indicates_failure,
+    try_parse_run_python_result_envelope,
+)
 
 
-def infer_tool_output_suggests_error(output_display: str) -> bool:
-    """Return True if formatted tool output text looks like a failure (CLI parity)."""
+def infer_tool_output_suggests_error(output_display: str, _tool_name: str = "") -> bool:
+    """Return True if formatted tool output text looks like a failure (CLI parity).
+
+    When ``output_display`` is JSON matching the ``run_python`` result contract (fixed
+    key set including ``success`` / ``error``), success is determined from fields, not
+    from substrings (so ``\"error\": null`` does not imply failure).
+
+    Args:
+        output_display: Flattened tool output string.
+        _tool_name: Reserved for future per-tool heuristics alongside envelopes.
+    """
+    env = try_parse_run_python_result_envelope(output_display)
+    if env is not None:
+        return run_python_envelope_indicates_failure(env)
+
     if not output_display:
         return False
     lowered = output_display.lower()
@@ -103,7 +120,7 @@ def extract_tool_result_card_payload(message: Any) -> ToolResultCardPayload | No
     elif status_lower in {"success", "completed"}:
         is_error = False
     else:
-        is_error = infer_tool_output_suggests_error(output_display)
+        is_error = infer_tool_output_suggests_error(output_display, tool_name)
 
     return ToolResultCardPayload(
         tool_call_id=tool_call_id,

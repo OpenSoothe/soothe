@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 
 class _SootheConfigLoggingFileView:
-    """Maps flat ``observability.log_file_*`` fields to legacy ``logging.file`` shape."""
+    """Maps flat ``observability.log_file_*`` fields to the nested ``file`` view shape."""
 
     __slots__ = ("_cfg",)
 
@@ -68,7 +68,7 @@ class _SootheConfigLoggingFileView:
 
 
 class SootheConfigLoggingView:
-    """Read-through facade for legacy ``config.logging.*`` access paths."""
+    """Read-through facade for ``config.logging.*``-style access (CLI and flat YAML)."""
 
     __slots__ = ("_cfg",)
 
@@ -150,23 +150,23 @@ class SootheConfig(BaseSettings):
     subagents: dict[str, SubagentConfig] = Field(default_factory=dict)
     """Subagent name to config mapping. Set ``enabled: false`` to disable.
 
-    Builtin subagents (browser, claude) are added automatically.
+    Builtin subagents (browser, claude, explore, research) are added automatically.
     Plugin-discovered subagents are merged during config validation.
     """
 
     @model_validator(mode="before")
     @classmethod
-    def _merge_legacy_logging_yaml(cls, data: Any) -> Any:
-        """Accept deprecated top-level ``logging:`` YAML into observability/agentic."""
+    def _merge_top_level_logging_yaml(cls, data: Any) -> Any:
+        """Fold top-level ``logging:`` YAML into ``observability`` and ``agentic``."""
         if not isinstance(data, dict):
             return data
-        legacy = data.pop("logging", None)
-        if not isinstance(legacy, dict):
+        logging_block = data.pop("logging", None)
+        if not isinstance(logging_block, dict):
             return data
         obs: dict[str, Any] = dict(data.get("observability") or {})
-        if "verbosity" in legacy:
-            obs["verbosity"] = legacy["verbosity"]
-        file_cfg = legacy.get("file")
+        if "verbosity" in logging_block:
+            obs["verbosity"] = logging_block["verbosity"]
+        file_cfg = logging_block.get("file")
         if isinstance(file_cfg, dict):
             if "level" in file_cfg:
                 obs["log_file_level"] = file_cfg["level"]
@@ -176,14 +176,14 @@ class SootheConfig(BaseSettings):
                 obs["log_file_max_bytes"] = file_cfg["max_bytes"]
             if "backup_count" in file_cfg:
                 obs["log_file_backup_count"] = file_cfg["backup_count"]
-        console_cfg = legacy.get("console")
+        console_cfg = logging_block.get("console")
         if isinstance(console_cfg, dict):
             obs["console"] = {**(obs.get("console") or {}), **console_cfg}
-        gh_cfg = legacy.get("global_history")
+        gh_cfg = logging_block.get("global_history")
         if isinstance(gh_cfg, dict):
             obs["global_history"] = {**(obs.get("global_history") or {}), **gh_cfg}
         data["observability"] = obs
-        ro = legacy.get("report_output")
+        ro = logging_block.get("report_output")
         if isinstance(ro, dict):
             agentic = dict(data.get("agentic") or {})
             agentic["report_output"] = {**(agentic.get("report_output") or {}), **ro}
@@ -193,10 +193,12 @@ class SootheConfig(BaseSettings):
     @model_validator(mode="after")
     def _merge_subagents(self) -> SootheConfig:
         """Merge builtin and plugin-discovered subagents with user configs."""
-        # Start with builtin defaults
+        # Built-in subagent entries merged before user YAML and plugin registry.
         builtin_subagents = {
             "browser": SubagentConfig(),
             "claude": SubagentConfig(),
+            "explore": SubagentConfig(),
+            "research": SubagentConfig(),
         }
 
         # Import here to avoid circular dependency
@@ -304,7 +306,7 @@ class SootheConfig(BaseSettings):
 
     @property
     def logging(self) -> SootheConfigLoggingView:
-        """Legacy access path: maps to ``observability`` and ``agentic.report_output``."""
+        """Maps CLI-style logging fields to ``observability`` and ``agentic.report_output``."""
         return SootheConfigLoggingView(self)
 
     # --- Persistence helpers ---
@@ -313,7 +315,7 @@ class SootheConfig(BaseSettings):
         """Resolve PostgreSQL DSN for a specific database component (RFC-612).
 
         Constructs full DSN from base_dsn + database name, with environment
-        variable resolution and backward compatibility fallback.
+        variable resolution.
 
         Args:
             db_key: Database component key (e.g., "checkpoints", "metadata", "vectors", "memory").
@@ -339,14 +341,13 @@ class SootheConfig(BaseSettings):
             # Construct full DSN: base_dsn/database_name
             return f"{base_dsn}/{db_name}"
 
-        # Backward compatibility: use legacy single-database DSN
         return _resolve_env(self.persistence.soothe_postgres_dsn)
 
     def resolve_persistence_postgres_dsn(self) -> str:
         """Resolve the effective PostgreSQL DSN for persistence components.
 
-        Uses RFC-612 multi-database architecture if postgres_base_dsn is set,
-        otherwise falls back to legacy soothe_postgres_dsn for backward compatibility.
+        Uses RFC-612 multi-database architecture when ``postgres_base_dsn`` is set;
+        otherwise uses ``soothe_postgres_dsn``.
 
         Returns:
             The configured DSN for context/memory/durability/checkpointer.
@@ -356,7 +357,6 @@ class SootheConfig(BaseSettings):
             # Use checkpoints database as default for checkpointer
             return self.resolve_postgres_dsn_for_database("checkpoints")
 
-        # Backward compatibility: legacy single-database DSN
         return _resolve_env(self.persistence.soothe_postgres_dsn)
 
     # --- Vector store helpers ---

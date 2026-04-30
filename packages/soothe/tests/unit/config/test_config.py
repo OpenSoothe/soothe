@@ -30,7 +30,6 @@ class TestSootheConfig:
         assert cfg.tools.datetime.enabled is True
         assert cfg.tools.data.enabled is True
         assert cfg.tools.wizsearch.enabled is True
-        assert cfg.tools.research.enabled is True
         # Check that optional tools are enabled by default (but won't work without API keys)
         assert cfg.tools.image.enabled is True
         assert cfg.tools.audio.enabled is True
@@ -47,9 +46,10 @@ class TestSootheConfig:
         cfg = SootheConfig()
         assert "browser" in cfg.subagents
         assert "claude" in cfg.subagents
+        assert "explore" in cfg.subagents
+        assert "research" in cfg.subagents
         # skillify and weaver are community plugins, not built-in
         assert "scout" not in cfg.subagents
-        assert "research" not in cfg.subagents
         for name, sub_cfg in cfg.subagents.items():
             assert sub_cfg.enabled is True, f"{name} should be enabled by default"
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from soothe_cli.shared.tool_formatters.base import BaseFormatter
+from soothe_cli.shared.tool_message_format import try_parse_run_python_result_envelope
 from soothe_cli.shared.tool_output_formatter import ToolBrief
 
 
@@ -112,7 +113,7 @@ class ExecutionFormatter(BaseFormatter):
             metrics={"output_size": output_size},
         )
 
-    def _format_run_python(self, result: dict[str, Any]) -> ToolBrief:
+    def _format_run_python(self, result: Any) -> ToolBrief:
         """Format run_python result.
 
         Shows execution status with return value type.
@@ -130,6 +131,12 @@ class ExecutionFormatter(BaseFormatter):
             >>> brief.detail
             'returned: int'
         """
+        # Wire/protocol often delivers tool payloads as JSON strings.
+        if isinstance(result, str):
+            parsed = try_parse_run_python_result_envelope(result)
+            if parsed is not None:
+                result = parsed
+
         # Handle dict result
         if isinstance(result, dict):
             success = result.get("success", True)
@@ -161,9 +168,15 @@ class ExecutionFormatter(BaseFormatter):
                 metrics={"has_return": return_value is not None},
             )
 
-        # Handle string result (fallback)
+        # Handle string result (fallback — not the standard run_python JSON envelope)
         if isinstance(result, str):
-            if "error" in result.lower() or "failed" in result.lower():
+            lowered = result.lower()
+            if (
+                "traceback" in lowered
+                or "exception:" in lowered
+                or "failed:" in lowered
+                or result.startswith("Error:")
+            ):
                 return ToolBrief(
                     icon="✗",
                     summary="Execution failed",
