@@ -866,6 +866,15 @@ async def execute_task_textual(
                     ctx_model = context.get("model") if context else None
                     raw_mp = context.get("model_params") if context else None
                     mp = raw_mp if isinstance(raw_mp, dict) else None
+                    image_attachments: list[dict[str, str]] | None = None
+                    if images_to_send:
+                        image_attachments = [
+                            {
+                                "mime_type": f"image/{img.format}",
+                                "data": img.base64_data,
+                            }
+                            for img in images_to_send
+                        ]
                     await daemon_session.send_turn(
                         routed_text,
                         interactive=True,
@@ -874,6 +883,7 @@ async def execute_task_textual(
                         if isinstance(ctx_model, str) and ctx_model.strip()
                         else None,
                         model_params=mp,
+                        attachments=image_attachments,
                     )
                     chunk_source = daemon_session.iter_turn_chunks()
 

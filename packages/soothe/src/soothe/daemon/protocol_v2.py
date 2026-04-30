@@ -68,12 +68,39 @@ def validate_message(msg: dict[str, Any]) -> list[str]:
             errors.append("Input message missing required field: text")
         elif not isinstance(msg.get("text"), str):
             errors.append("Input text must be a string")
+        else:
+            text_val = msg.get("text", "")
+            att_val = msg.get("attachments", None)
+            has_text = isinstance(text_val, str) and text_val.strip() != ""
+            has_attachments = isinstance(att_val, list) and len(att_val) > 0
+            if not has_text and not has_attachments:
+                errors.append("Input must include non-empty text and/or image attachments")
 
         # Optional fields
         if "autonomous" in msg and not isinstance(msg["autonomous"], bool):
             errors.append("Input autonomous must be a boolean")
         if "max_iterations" in msg and not isinstance(msg["max_iterations"], int):
             errors.append("Input max_iterations must be an integer")
+        if "attachments" in msg:
+            att = msg.get("attachments")
+            if att is not None and not isinstance(att, list):
+                errors.append("Input attachments must be an array")
+            elif isinstance(att, list):
+                for i, item in enumerate(att):
+                    if not isinstance(item, dict):
+                        errors.append(f"Input attachments[{i}] must be an object")
+                        break
+                    if (
+                        not isinstance(item.get("mime_type"), str)
+                        or not str(item.get("mime_type")).strip()
+                    ):
+                        errors.append(
+                            f"Input attachments[{i}].mime_type must be a non-empty string"
+                        )
+                        break
+                    if not isinstance(item.get("data"), str) or not str(item.get("data")).strip():
+                        errors.append(f"Input attachments[{i}].data must be a non-empty string")
+                        break
 
     elif msg_type == "command":
         if "cmd" not in msg:

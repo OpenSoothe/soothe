@@ -14,6 +14,7 @@ from soothe_sdk.client.wire import messages_from_wire_dicts
 
 from soothe.core.runner._types import _generate_thread_id
 from soothe.core.workspace import resolve_loop_daemon_workspace, validate_client_workspace
+from soothe.daemon.image_understanding import validate_and_normalize_image_attachments
 from soothe.logging import ThreadLogger
 from soothe.utils.text_preview import preview_first
 
@@ -47,8 +48,22 @@ class MessageRouter:
         )
 
         if msg_type == "input":
-            text = msg.get("text", "").strip()
-            if text:
+            raw_text = msg.get("text", "")
+            text = raw_text.strip() if isinstance(raw_text, str) else ""
+            normalized_attachments, att_err = validate_and_normalize_image_attachments(
+                msg.get("attachments")
+            )
+            if att_err:
+                await d._send_client_message(
+                    client_id,
+                    {
+                        "type": "error",
+                        "code": "INVALID_MESSAGE",
+                        "message": att_err,
+                    },
+                )
+                return
+            if text or normalized_attachments:
                 # IG-054: Capacity check moved to query_engine.py to eliminate race
                 # between checking len(_active_threads) and actually creating the task
                 max_iterations = msg.get("max_iterations")
@@ -66,23 +81,25 @@ class MessageRouter:
                 raw_params = msg.get("model_params")
                 model_params = raw_params if isinstance(raw_params, dict) else None
                 logger.debug(
-                    "[MsgRouter] Putting input in queue: text=%s, client=%s",
+                    "[MsgRouter] Putting input in queue: text=%s, attachments=%d, client=%s",
                     preview_first(text, 30),
+                    len(normalized_attachments),
                     _client_label(client_id),
                 )
-                await d._current_input_queue.put(
-                    {
-                        "type": "input",
-                        "text": text,
-                        "autonomous": bool(msg.get("autonomous", False)),
-                        "max_iterations": parsed_max,
-                        "subagent": subagent,
-                        "client_id": client_id,
-                        "interactive": bool(msg.get("interactive", False)),
-                        "model": model,
-                        "model_params": model_params,
-                    }
-                )
+                payload: dict[str, Any] = {
+                    "type": "input",
+                    "text": text,
+                    "autonomous": bool(msg.get("autonomous", False)),
+                    "max_iterations": parsed_max,
+                    "subagent": subagent,
+                    "client_id": client_id,
+                    "interactive": bool(msg.get("interactive", False)),
+                    "model": model,
+                    "model_params": model_params,
+                }
+                if normalized_attachments:
+                    payload["attachments"] = normalized_attachments
+                await d._current_input_queue.put(payload)
                 logger.debug("[MsgRouter] Input put in queue successfully")
             return
 

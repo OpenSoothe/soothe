@@ -484,12 +484,12 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
         config = {"configurable": {"thread_id": thread_id}}
 
         try:
-            # LangGraph requires as_node when update is ambiguous (multiple message types)
-            # Use "agent" node context for chitchat updates
+            # LangGraph requires as_node when update is ambiguous (multiple message types).
+            # LangChain create_agent (deepagents) names the main LLM node "model", not "agent".
             await self._agent.graph.aupdate_state(
                 config,
                 {"messages": [HumanMessage(content=user_input), AIMessage(content=response)]},
-                as_node="agent",
+                as_node="model",
             )
             logger.debug("Chitchat exchange saved to checkpointer for thread %s", thread_id)
         except Exception:
