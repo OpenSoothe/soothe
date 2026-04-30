@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import re
 import time
 from datetime import datetime
 from typing import Any, Literal
@@ -23,6 +22,8 @@ from pydantic import Field
 from soothe_sdk.plugin import plugin
 
 from soothe.config.constants import DEFAULT_EXECUTE_TIMEOUT
+from soothe.core.security.operation_security import WorkspaceToolOperationSecurity
+from soothe.protocols.operation_security import OperationSecurityContext, OperationSecurityRequest
 from soothe.toolkits._internal.python_session_manager import get_session_manager
 from soothe.toolkits._internal.shell import (
     ANSI_ESCAPE,
@@ -65,32 +66,7 @@ class RunCommandTool(BaseTool):
     responsiveness_timeout: int = Field(
         default=2, description="Timeout for shell responsiveness checks"
     )
-
-    banned_commands: list[str] = Field(
-        default_factory=lambda: [
-            "rm -rf /",
-            "rm -rf ~",
-            "rm -rf ./*",
-            "rm -rf *",
-            "mkfs",
-            "dd if=",
-            ":(){ :|:& };:",
-            "sudo rm",
-            "sudo dd",
-            "chmod -R 777 /",
-            "chown -R",
-        ]
-    )
-
-    banned_command_patterns: list[str] = Field(
-        default_factory=lambda: [
-            r"git\s+init",
-            r"git\s+commit",
-            r"git\s+add",
-            r"rm\s+-rf\s+/",
-            r"sudo\s+rm\s+-rf",
-        ]
-    )
+    security_config: Any = Field(default=None, description="Security configuration object")
 
     _shell_initialized: bool = False
     _last_workspace: str | None = None
@@ -218,15 +194,23 @@ class RunCommandTool(BaseTool):
                 with contextlib.suppress(Exception):
                     child.close()
 
-    def _is_banned(self, command: str) -> bool:
-        """Check if command matches banned list or patterns."""
-        cmd_lower = command.strip().lower()
-        if any(banned.lower() in cmd_lower for banned in self.banned_commands):
-            return True
-
-        return any(
-            re.search(pattern, command, re.IGNORECASE) for pattern in self.banned_command_patterns
+    def _security_decision(self, command: str, tool_name: str) -> tuple[str, str]:
+        """Evaluate command with OperationSecurityProtocol."""
+        evaluator = WorkspaceToolOperationSecurity()
+        decision = evaluator.evaluate(
+            OperationSecurityRequest(
+                action_type="tool_call",
+                tool_name=tool_name,
+                tool_args={"command": command},
+                operation_kind="shell_execute",
+                command=command,
+            ),
+            OperationSecurityContext(
+                workspace=self._get_effective_workspace(),
+                security_config=self.security_config,
+            ),
         )
+        return decision.verdict, decision.reason
 
     def _test_shell_responsive(self, max_attempts: int = 2) -> bool:
         """Test if shell is responsive with quick timeout.
@@ -403,16 +387,17 @@ class RunCommandTool(BaseTool):
             TimeoutError: If command exceeds timeout
             FileNotFoundError: If command not found (handled internally)
         """
+        verdict, reason = self._security_decision(command, self.name)
+        if verdict != "allow":
+            logger.warning("Operation security denied command: %s (%s)", command, reason)
+            return f"Error: {reason}"
+
         self._ensure_shell_initialized()
 
         if "default" not in _shell_instances:
             return "Error: Shell not initialized. Install pexpect: pip install pexpect"
 
         import pexpect
-
-        if self._is_banned(command):
-            logger.warning("Banned command attempted: %s", command)
-            return "Error: Command not allowed for security reasons."
 
         # Get dynamic workspace and change to it before running command (RFC-103)
         effective_workspace = self._get_effective_workspace()
@@ -596,6 +581,45 @@ class RunBackgroundTool(BaseTool):
         "Returns: process ID for tracking. "
         "Use kill_process to stop background commands."
     )
+    workspace_root: str = Field(default="", description="Working directory for shell")
+    security_config: Any = Field(default=None, description="Security configuration object")
+
+    def _get_effective_workspace(self) -> str | None:
+        """Get effective workspace, checking runtime config/context first."""
+        try:
+            from langgraph.config import get_config
+
+            config = get_config()
+            configurable = config.get("configurable", {})
+            workspace = configurable.get("workspace")
+            if workspace:
+                return str(workspace)
+        except Exception:  # noqa: S110
+            pass
+
+        from soothe.core import FrameworkFilesystem
+
+        dynamic_workspace = FrameworkFilesystem.get_current_workspace()
+        if dynamic_workspace:
+            return str(dynamic_workspace)
+        return self.workspace_root or None
+
+    def _security_decision(self, command: str) -> tuple[str, str]:
+        evaluator = WorkspaceToolOperationSecurity()
+        decision = evaluator.evaluate(
+            OperationSecurityRequest(
+                action_type="tool_call",
+                tool_name=self.name,
+                tool_args={"command": command},
+                operation_kind="shell_execute",
+                command=command,
+            ),
+            OperationSecurityContext(
+                workspace=self._get_effective_workspace(),
+                security_config=self.security_config,
+            ),
+        )
+        return decision.verdict, decision.reason
 
     def _run(self, command: str) -> dict[str, Any]:
         """Execute command in background process.
@@ -606,6 +630,10 @@ class RunBackgroundTool(BaseTool):
         Returns:
             Dict with 'pid', 'status', and 'message'
         """
+        verdict, reason = self._security_decision(command)
+        if verdict != "allow":
+            return {"pid": None, "status": "error", "message": f"Error: {reason}"}
+
         if "default" not in _shell_instances:
             return {"pid": None, "status": "error", "message": "Error: Shell not initialized."}
 
@@ -689,7 +717,9 @@ class ExecutionToolkit:
     Provides: run_command, run_python, run_background, kill_process
     """
 
-    def __init__(self, *, workspace_root: str = "", timeout: int = 60) -> None:
+    def __init__(
+        self, *, workspace_root: str = "", timeout: int = 60, security_config: Any = None
+    ) -> None:
         """Initialize toolkit.
 
         Args:
@@ -698,6 +728,7 @@ class ExecutionToolkit:
         """
         self._workspace_root = workspace_root
         self._timeout = timeout
+        self._security_config = security_config
 
     def get_tools(self) -> list[BaseTool]:
         """Get list of langchain tools.
@@ -710,14 +741,23 @@ class ExecutionToolkit:
             List of execution BaseTool instances.
         """
         return [
-            RunCommandTool(workspace_root=self._workspace_root, timeout=self._timeout),
+            RunCommandTool(
+                workspace_root=self._workspace_root,
+                timeout=self._timeout,
+                security_config=self._security_config,
+            ),
             RunPythonTool(workdir=self._workspace_root),
-            RunBackgroundTool(),
+            RunBackgroundTool(
+                workspace_root=self._workspace_root,
+                security_config=self._security_config,
+            ),
             KillProcessTool(),
         ]
 
 
-def create_execution_tools(*, workspace_root: str = "", timeout: int = 60) -> list[BaseTool]:
+def create_execution_tools(
+    *, workspace_root: str = "", timeout: int = 60, security_config: Any = None
+) -> list[BaseTool]:
     """Factory function to create execution tools.
 
     Args:
@@ -727,7 +767,11 @@ def create_execution_tools(*, workspace_root: str = "", timeout: int = 60) -> li
     Returns:
         List of execution BaseTool instances.
     """
-    toolkit = ExecutionToolkit(workspace_root=workspace_root, timeout=timeout)
+    toolkit = ExecutionToolkit(
+        workspace_root=workspace_root,
+        timeout=timeout,
+        security_config=security_config,
+    )
     return toolkit.get_tools()
 
 
@@ -755,8 +799,13 @@ class ExecutionPlugin:
         """
         workspace_root = getattr(context.config, "workspace_root", "")
         timeout = getattr(context.config, "timeout", 60)
+        security_config = getattr(context.soothe_config, "security", None)
 
-        toolkit = ExecutionToolkit(workspace_root=workspace_root, timeout=timeout)
+        toolkit = ExecutionToolkit(
+            workspace_root=workspace_root,
+            timeout=timeout,
+            security_config=security_config,
+        )
         self._tools = toolkit.get_tools()
 
         context.logger.info(

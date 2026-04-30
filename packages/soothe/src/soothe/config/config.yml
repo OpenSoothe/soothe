@@ -280,6 +280,13 @@ security:
 
   # Path-based access control (glob patterns) - Evaluation: denied_paths > allowed_paths > workspace
   denied_paths:
+    - "/etc/**"
+    - "/bin/**"
+    - "/sbin/**"
+    - "/usr/**"
+    - "/System/**"
+    - "/Library/**"
+    - "/private/etc/**"
     - "~/.ssh/**"
     - "~/.gnupg/**"
     - "~/.aws/**"

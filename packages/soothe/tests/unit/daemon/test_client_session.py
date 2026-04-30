@@ -124,9 +124,6 @@ async def test_remove_session():
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason="Timing issue with async sender loop in unit test - covered by integration tests"
-)
 async def test_sender_loop_sends_events():
     """Test that sender loop sends events via transport."""
     bus = EventBus()
@@ -142,9 +139,9 @@ async def test_sender_loop_sends_events():
     # Give sender task time to start
     await asyncio.sleep(0.05)
 
-    # Publish event
+    # Publish event (topic format must match: thread:{thread_id})
     event = {"type": "test", "data": "hello"}
-    await bus.publish("thread:abc123", event)
+    await bus.publish("thread:thread-abc123", event)
 
     # Wait for sender loop to process
     await asyncio.sleep(0.2)
@@ -172,9 +169,9 @@ async def test_sender_loop_stops_on_error():
     result = await manager.subscribe_thread(client_id, "thread-abc123")
     assert result is True
 
-    # Publish event
+    # Publish event (topic format must match: thread:{thread_id})
     event = {"type": "test", "data": "hello"}
-    await bus.publish("thread:abc123", event)
+    await bus.publish("thread:thread-abc123", event)
 
     # Wait for sender loop to process
     await asyncio.sleep(0.1)
