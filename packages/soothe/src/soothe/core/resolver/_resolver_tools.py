@@ -558,10 +558,17 @@ def resolve_subagents(
             extra_kwargs["cwd"] = resolved_cwd
         if name == "browser":
             extra_kwargs["config"] = BrowserSubagentConfig(**sub_cfg.config)
-        if name in ("research", "explore"):
+        if name == "research":
             extra_kwargs["config"] = config
             if "context" not in extra_kwargs:
                 extra_kwargs["context"] = {"work_dir": resolved_cwd}
+        elif name == "explore":
+            # Explore YAML options live in ``config.subagents["explore"].config`` only.
+            # Do not spread them as kwargs — ``create_explore_subagent`` accepts ``model``,
+            # ``SootheConfig``, and ``context`` only.
+            extra_kwargs.clear()
+            extra_kwargs["config"] = config
+            extra_kwargs["context"] = {"work_dir": resolved_cwd}
 
         pending.append((name, factory, {"model": model_override, **extra_kwargs}))
 
