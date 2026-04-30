@@ -55,6 +55,11 @@ from soothe_cli.shared.renderer_base import RendererBase
 from soothe_cli.shared.subagent_routing import parse_subagent_from_input
 from soothe_cli.shared.tool_call_resolution import build_streaming_args_overlay
 from soothe_cli.shared.tool_card_payload import extract_tool_result_card_payload
+from soothe_cli.shared.tool_card_visibility import (
+    should_elide_completed_tool_call_message,
+    should_elide_stream_tool_card_mount,
+    should_elide_tool_card_no_info,
+)
 from soothe_cli.tui._ask_user_types import AskUserRequest
 from soothe_cli.tui._cli_context import CLIContext  # noqa: TC001
 from soothe_cli.tui._session_stats import (
@@ -563,6 +568,21 @@ def _defer_first_tool_card_mount_until_final_stream_chunk(message: Any) -> bool:
     return True
 
 
+def _assistant_message_terminal_for_empty_tool_arg_mount(message: Any) -> bool:
+    """True when streamed tool-call kwargs will not be refined by a later chunk.
+
+    Used with :func:`should_elide_stream_tool_card_mount` to avoid mounting cards
+    that only show placeholder headers (IG-300).
+    """
+    from langchain_core.messages import AIMessage, AIMessageChunk
+
+    if isinstance(message, AIMessage):
+        return True
+    if isinstance(message, AIMessageChunk):
+        return getattr(message, "chunk_position", None) == "last"
+    return False
+
+
 def _tui_effective_ai_blocks(
     message: Any,
     *,
@@ -999,6 +1019,11 @@ async def execute_task_textual(
                             )
                             if not tool_card.is_error:
                                 tool_msg.set_success(output_str)
+                                if should_elide_completed_tool_call_message(
+                                    tool_msg, output_str, is_error=False
+                                ):
+                                    adapter._tool_display_by_call_id.pop(sid, None)
+                                    await tool_msg.remove()
                             else:
                                 tool_msg.set_error(output_str or "Error")
                                 await dispatch_hook(
@@ -1011,27 +1036,40 @@ async def execute_task_textual(
                             # ``extract_tool_result_card_payload`` normalizes name + id;
                             # ``ToolCallMessage`` applies the same id→name inference as cards.
                             tname = tool_card.tool_name or "tool"
-                            logger.debug(
-                                "Tool result orphan (no pending card): tool_call_id=%s name=%s",
-                                tool_id,
-                                tname,
-                            )
-                            orphan = ToolCallMessage(
-                                tname,
-                                {},
-                                tool_call_id=str(tool_id),
-                            )
-                            await adapter._mount_message(orphan)
-                            adapter._tool_display_by_call_id[str(tool_id)] = orphan
                             output_str = tool_card.output_display
-                            if not tool_card.is_error:
-                                orphan.set_success(output_str)
-                            else:
-                                orphan.set_error(output_str or "Error")
-                                await dispatch_hook(
-                                    "tool.error",
-                                    {"tool_names": [orphan._tool_name]},
+                            if should_elide_tool_card_no_info(
+                                tool_name=tname,
+                                args={},
+                                formatted_output=output_str,
+                                is_error=tool_card.is_error,
+                            ):
+                                logger.debug(
+                                    "Tool result orphan skipped (IG-300 no-info): "
+                                    "tool_call_id=%s name=%s",
+                                    tool_id,
+                                    tname,
                                 )
+                            else:
+                                logger.debug(
+                                    "Tool result orphan (no pending card): tool_call_id=%s name=%s",
+                                    tool_id,
+                                    tname,
+                                )
+                                orphan = ToolCallMessage(
+                                    tname,
+                                    {},
+                                    tool_call_id=str(tool_id),
+                                )
+                                await adapter._mount_message(orphan)
+                                adapter._tool_display_by_call_id[str(tool_id)] = orphan
+                                if not tool_card.is_error:
+                                    orphan.set_success(output_str)
+                                else:
+                                    orphan.set_error(output_str or "Error")
+                                    await dispatch_hook(
+                                        "tool.error",
+                                        {"tool_names": [orphan._tool_name]},
+                                    )
 
                         # Reshow spinner only when all in-flight tools have
                         # completed (avoids premature "Thinking..." when
@@ -1363,6 +1401,23 @@ async def execute_task_textual(
                                         lookup_id,
                                         getattr(message, "chunk_position", None),
                                     )
+                                    continue
+                                if should_elide_stream_tool_card_mount(
+                                    tool_name=buffer_name or "",
+                                    args=parsed_args,
+                                    message_terminal_for_tool_args=_assistant_message_terminal_for_empty_tool_arg_mount(
+                                        message
+                                    ),
+                                ):
+                                    displayed_tool_ids.add(lookup_id)
+                                    logger.debug(
+                                        "Tool call card skipped (IG-300 terminal empty args): "
+                                        "name=%s tool_call_id=%r chunk_position=%r",
+                                        buffer_name,
+                                        lookup_id,
+                                        getattr(message, "chunk_position", None),
+                                    )
+                                    tool_call_buffers.pop(buffer_key, None)
                                     continue
                                 displayed_tool_ids.add(lookup_id)
                                 if show_tool_ui:
