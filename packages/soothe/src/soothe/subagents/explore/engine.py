@@ -146,6 +146,14 @@ def build_explore_engine(
         new_messages = tool_results.get("messages", [])
         findings_update: list[dict[str, Any]] = []
 
+        id_to_args: dict[str, dict[str, Any]] = {}
+        if isinstance(last_message, AIMessage) and last_message.tool_calls:
+            for tc in last_message.tool_calls:
+                cid = tc.get("id")
+                if cid:
+                    args = tc.get("args")
+                    id_to_args[str(cid)] = args if isinstance(args, dict) else {}
+
         for tool_msg in new_messages:
             if isinstance(tool_msg, ToolMessage):
                 tool_name = tool_msg.name or "unknown"
@@ -181,8 +189,15 @@ def build_explore_engine(
                             {"path": last_path, "snippet": artifact[:500], "relevance": "unknown"}
                         )
                 elif tool_name == "file_info":
-                    # Metadata - could help assess relevance
-                    pass
+                    args = id_to_args.get(str(tool_msg.tool_call_id or ""), {})
+                    path = str(args.get("path", "") or "unknown")
+                    snippet: str | None = None
+                    if isinstance(tool_msg.content, str) and tool_msg.content.strip():
+                        snippet = tool_msg.content.strip()[:500]
+                    if path != "unknown" or snippet:
+                        findings_update.append(
+                            {"path": path, "snippet": snippet, "relevance": "unknown"}
+                        )
 
                 emit_progress(
                     ExploreExecutingEvent(

@@ -1,6 +1,7 @@
 """Explore subagent read-only filesystem tools (RFC-613).
 
-Reuses existing tools from deepagents FilesystemMiddleware to avoid duplication.
+Uses ``SootheFilesystemMiddleware`` so explore shares the same built-in filesystem
+tool surface as the main agent, while exposing only a read-only subset.
 """
 
 from __future__ import annotations
@@ -9,7 +10,8 @@ import os
 from typing import Any
 
 from deepagents.backends.filesystem import FilesystemBackend
-from deepagents.middleware.filesystem import FilesystemMiddleware
+
+from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
 
 def get_explore_tools(
@@ -18,22 +20,20 @@ def get_explore_tools(
     virtual_mode: bool | None = None,
     allow_paths_outside_workspace: bool | None = None,
 ) -> list[Any]:
-    """Get filesystem tools for explore subagent.
+    """Get read-only filesystem tools for the explore subagent.
 
-    Reuses deepagents FilesystemMiddleware tools instead of duplicating:
-    - glob: Find files matching glob patterns
-    - grep: Search text in files
-    - ls: List directory contents
-    - read_file: Read file content
+    Tools (all read-only, workspace-scoped via backend):
+    - glob, grep, ls, read_file: from deepagents (via middleware base)
+    - file_info: Soothe extension (metadata only)
 
     Args:
         workspace: Optional workspace root path.
         virtual_mode: When set, forces FilesystemBackend ``virtual_mode``.
         allow_paths_outside_workspace: When ``virtual_mode`` is omitted, sets
-            ``virtual_mode`` to ``not allow_paths_outside_workspace`` (IG-300).
+            ``virtual_mode`` to ``not allow_paths_outside_workspace``.
 
     Returns:
-        List of langchain tool instances (glob, grep, ls, read_file).
+        Ordered list of langchain tool instances.
     """
     if virtual_mode is None:
         if allow_paths_outside_workspace is None:
@@ -41,18 +41,21 @@ def get_explore_tools(
         else:
             virtual_mode = not allow_paths_outside_workspace
 
-    # Create filesystem backend with workspace boundary
+    root = workspace or os.getcwd()
     backend = FilesystemBackend(
-        root_dir=workspace or os.getcwd(),
+        root_dir=root,
         virtual_mode=virtual_mode,
-        max_file_size_mb=10,  # Limit file reads
+        max_file_size_mb=10,
     )
 
-    # Create middleware (provides glob, grep, ls, read_file, write_file, edit_file)
-    middleware = FilesystemMiddleware(backend=backend)
+    middleware = SootheFilesystemMiddleware(
+        backend=backend,
+        backup_enabled=True,
+        workspace_root=root,
+    )
 
-    # Return only read-only tools (exclude write_file, edit_file)
-    read_only_tools = ["glob", "grep", "ls", "read_file"]
-    tools = [t for t in middleware.tools if t.name in read_only_tools]
+    read_only_tool_names = ("glob", "grep", "ls", "read_file", "file_info")
+    by_name = {t.name: t for t in middleware.tools}
+    tools = [by_name[name] for name in read_only_tool_names if name in by_name]
 
     return tools
