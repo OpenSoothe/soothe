@@ -256,9 +256,8 @@ def build_streaming_args_overlay(
     from langchain_core.messages import AIMessageChunk
 
     overlay: dict[str, dict[str, Any]] = {}
-    streaming_final = (not isinstance(message, AIMessageChunk)) or (
-        getattr(message, "chunk_position", None) == "last"
-    )
+    chunk_pos = getattr(message, "chunk_position", None)
+    is_final_chunk = (not isinstance(message, AIMessageChunk)) or chunk_pos == "last"
 
     for tc_id, pend in list(pending_tool_calls_lc.items()):
         parsed = try_parse_pending_tool_call_args(pend)
@@ -267,18 +266,20 @@ def build_streaming_args_overlay(
         name = str(pend.get("name") or "")
         if not name:
             continue
-        if not parsed and not streaming_final:
+        # Omit empty dicts — they are non-meaningful for merge/display (IG-300).
+        if not parsed:
             continue
         str_id = str(tc_id)
         overlay[str_id] = parsed
         if logger.isEnabledFor(logging.DEBUG):
             args_preview = str(parsed)[:200]
             logger.debug(
-                "tool_stream_overlay id=%s name=%s keys=%s streaming_final=%s preview=%s",
+                "tool_stream_overlay id=%s name=%s keys=%s chunk_position=%r is_final=%s preview=%s",
                 str_id,
                 name,
                 sorted(parsed.keys()) if isinstance(parsed, dict) else "?",
-                streaming_final,
+                chunk_pos,
+                is_final_chunk,
                 args_preview,
             )
     return overlay

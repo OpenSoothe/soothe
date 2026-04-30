@@ -40,3 +40,17 @@ def test_streaming_overlay_reflects_latest_parsed_json(
     o2 = build_streaming_args_overlay(chunk_last, pending)
     assert o2["t2"]["path"] == "/short"
     assert o2["t2"].get("offset") == 10
+
+
+def test_streaming_overlay_omits_empty_parsed_dict(chunk_last: AIMessageChunk) -> None:
+    """IG-300: parsed ``{}`` must not appear in the overlay (no mergeable kwargs)."""
+    pending: dict[str, Any] = {
+        "g1": {
+            "name": "glob",
+            "args_str": "{}",
+            "emitted": False,
+            "is_main": True,
+        },
+    }
+    o = build_streaming_args_overlay(chunk_last, pending)
+    assert "g1" not in o
