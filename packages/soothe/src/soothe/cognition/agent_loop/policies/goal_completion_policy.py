@@ -96,6 +96,7 @@ def _heuristic_requires_goal_completion(state: TYPE_CHECKING.Any) -> bool:
     """Check execution complexity indicators requiring synthesis.
 
     Simplified heuristics (IG-298):
+    - Zero execution: No steps executed at all (iteration 0 with empty results)
     - Execution complexity (parallel multi-step, subagent cap)
     - Step diversity (multiple step types, DAG dependencies)
     - Wave patterns (multiple execution waves)
@@ -109,6 +110,13 @@ def _heuristic_requires_goal_completion(state: TYPE_CHECKING.Any) -> bool:
     Returns:
         True if execution complexity suggests synthesis needed.
     """
+    # 0. Zero execution check: No steps executed at all
+    # When iteration=0 and step_results=[], we have NO evidence the goal was achieved
+    # Force synthesis to generate proper goal completion response
+    if state.iteration == 0 and len(state.step_results) == 0:
+        logger.info("Heuristic: zero_execution (iter=0, results=0) → synthesis required")
+        return True
+
     # 1. Wave execution complexity (IG-130, IG-132)
     if state.last_execute_wave_parallel_multi_step:
         logger.info("Heuristic: parallel_multi_step=True")
