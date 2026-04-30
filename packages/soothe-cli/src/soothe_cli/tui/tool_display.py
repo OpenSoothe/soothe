@@ -15,6 +15,7 @@ from soothe_sdk.utils import get_all_path_arg_keys, get_tool_display_name, get_t
 from soothe_cli.shared.message_processing import (
     _normalize_tool_name_for_arg_map,
     extract_tool_args_dict,
+    format_tool_call_args,
 )
 from soothe_cli.tui.config import MAX_ARG_LENGTH, get_glyphs
 from soothe_cli.tui.unicode_security import strip_dangerous_unicode
@@ -113,6 +114,33 @@ def _first_nonempty_str_arg(tool_args: dict[str, Any], keys: tuple[str, ...]) ->
         if s:
             return s
     return None
+
+
+def format_tool_cli_style_command(tool_name: str, tool_args: dict[str, Any] | None) -> str:
+    """Format a tool invocation like headless CLI (``CliRenderer.on_tool_call``).
+
+    Uses ``get_tool_display_name`` + ``format_tool_call_args`` so the TUI command line
+    matches stderr tool blocks.
+
+    Args:
+        tool_name: Raw tool name from the model or wire.
+        tool_args: Parsed arguments (may include ``_raw`` / ``raw_args_str``).
+
+    Returns:
+        Single line, e.g. ``(*) ReadFile(config.yml)`` (glyph prefix from theme).
+    """
+    args_in = tool_args or {}
+    inner = extract_tool_args_dict(args_in)
+    raw = ""
+    if "_raw" in args_in:
+        raw = str(args_in.get("_raw") or "")
+    elif "raw_args_str" in args_in:
+        raw = str(args_in.get("raw_args_str") or "")
+    key = tool_name or "tool"
+    display_name = get_tool_display_name(_normalize_tool_name_for_arg_map(key))
+    args_str = format_tool_call_args(key, {"args": inner, "_raw": raw})
+    prefix = get_glyphs().tool_prefix
+    return f"{prefix} {display_name}({args_str})"
 
 
 def format_tool_display(tool_name: str, tool_args: dict) -> str:

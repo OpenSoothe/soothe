@@ -7,6 +7,7 @@ Uses WebSocket transport (RFC-0013).
 import asyncio
 import json
 import logging
+import os
 import sys
 from typing import Any
 
@@ -52,10 +53,13 @@ async def run_headless_via_daemon(
 
     try:
         await connect_websocket_with_retries(client)
+        # Optional explicit client workspace (defaults to process cwd in SDK).
+        cli_ws = os.environ.get("SOOTHE_CLI_WORKSPACE", "").strip()
         status_event = await bootstrap_thread_session(
             client,
             resume_thread_id=thread_id,
             verbosity=verbosity,
+            workspace=cli_ws or None,
             thread_status_timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S,
             subscription_timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S,
         )

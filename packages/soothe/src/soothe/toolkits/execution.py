@@ -15,9 +15,15 @@ import contextlib
 import logging
 import time
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from langchain_core.tools import BaseTool
+from langchain_core.tools.base import InjectedToolArg
+
+try:
+    from langchain.tools import ToolRuntime
+except ImportError:  # pragma: no cover - optional at static analysis time
+    ToolRuntime = Any  # type: ignore[misc,assignment]
 from pydantic import Field
 from soothe_sdk.plugin import plugin
 
@@ -35,6 +41,53 @@ from soothe.utils import expand_path
 from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
+
+
+def _workspace_from_tool_runtime(tool_runtime: Any) -> str | None:
+    """Resolve workspace from injected ``ToolRuntime`` (config + graph state).
+
+    ``ToolNode`` supplies ``runtime.config`` and ``runtime.state``. For sync tools
+    executed on a worker thread, ``langgraph.config.get_config()`` may be empty while
+    ``configurable["workspace"]`` is still missing from the per-call config copy. The
+    latest human message in ``state["messages"]`` (e.g. ``LoopHumanMessage.workspace``)
+    remains the authoritative client thread workspace (RFC-103, IG-300).
+
+    Args:
+        tool_runtime: LangGraph ``ToolRuntime`` (or compatible duck-typed object).
+
+    Returns:
+        Absolute or raw workspace string, or ``None`` if not found.
+    """
+    if tool_runtime is None:
+        return None
+    cfg = getattr(tool_runtime, "config", None)
+    if isinstance(cfg, dict):
+        configurable = cfg.get("configurable")
+        if isinstance(configurable, dict):
+            workspace = configurable.get("workspace")
+            if isinstance(workspace, str) and workspace.strip():
+                return workspace.strip()
+
+    state = getattr(tool_runtime, "state", None)
+    if not isinstance(state, dict):
+        return None
+    messages = state.get("messages")
+    if not isinstance(messages, (list, tuple)):
+        return None
+    for msg in reversed(messages):
+        ws = getattr(msg, "workspace", None)
+        if isinstance(ws, str) and ws.strip():
+            return ws.strip()
+        if isinstance(msg, dict):
+            ak = msg.get("additional_kwargs")
+            if isinstance(ak, dict):
+                cand = ak.get("workspace")
+                if isinstance(cand, str) and cand.strip():
+                    return cand.strip()
+            top = msg.get("workspace")
+            if isinstance(top, str) and top.strip():
+                return top.strip()
+    return None
 
 
 class RunCommandTool(BaseTool):
@@ -80,19 +133,26 @@ class RunCommandTool(BaseTool):
         super().__init__(**data)
         self._shell_initialized = False
         self._last_workspace = None
+        self._last_tool_runtime: Any = None
         self.custom_prompt = ""
 
-    def _get_effective_workspace(self) -> str | None:
+    def _get_effective_workspace(self, tool_runtime: Any = None) -> str | None:
         """Get effective workspace, checking LangGraph config first (RFC-103).
 
         Priority:
-        1. workspace from LangGraph configurable
+        0. workspace from injected ``ToolRuntime.config`` (ToolNode / thread-pool safe)
+        1. workspace from LangGraph ``get_config()`` configurable
         2. ContextVar (for same-async-context)
-        3. self.workspace_root (static fallback)
+        3. self.workspace_root (static fallback from daemon config)
 
         Returns:
             Effective workspace path or None.
         """
+        # Priority 0: ToolRuntime (configurable + messages state; IG-300).
+        from_runtime = _workspace_from_tool_runtime(tool_runtime)
+        if from_runtime:
+            return str(from_runtime)
+
         # Priority 1: Try LangGraph configurable
         try:
             from langgraph.config import get_config
@@ -115,13 +175,13 @@ class RunCommandTool(BaseTool):
         # Priority 3: Use static fallback
         return self.workspace_root or None
 
-    def _ensure_shell_initialized(self) -> None:
+    def _ensure_shell_initialized(self, tool_runtime: Any = None) -> None:
         """Lazy initialization guard - initializes shell on first use."""
         if not self._shell_initialized:
-            self._initialize_shell()
+            self._initialize_shell(tool_runtime)
             self._shell_initialized = True
 
-    def _initialize_shell(self) -> None:
+    def _initialize_shell(self, tool_runtime: Any = None) -> None:
         """Start persistent shell with custom prompt (optimized)."""
         import time
 
@@ -169,10 +229,11 @@ class RunCommandTool(BaseTool):
                 msg = f"Shell initialization failed. Expected '__init__' in output, got: {preview_first(output, 100)}"
                 raise RuntimeError(msg)
 
-            # Set working directory if specified
-            if self.workspace_root:
-                logger.debug("Shell init: changing to workspace %s", self.workspace_root)
-                workspace = str(expand_path(self.workspace_root))
+            # Set working directory to client / thread workspace when known (IG-300).
+            init_workspace = self._get_effective_workspace(tool_runtime)
+            if init_workspace:
+                logger.debug("Shell init: changing to workspace %s", init_workspace)
+                workspace = str(expand_path(init_workspace))
                 child.sendline(f"cd '{workspace}'")
                 child.expect(custom_prompt, timeout=init_timeout)
 
@@ -194,7 +255,9 @@ class RunCommandTool(BaseTool):
                 with contextlib.suppress(Exception):
                     child.close()
 
-    def _security_decision(self, command: str, tool_name: str) -> tuple[str, str]:
+    def _security_decision(
+        self, command: str, tool_name: str, tool_runtime: Any = None
+    ) -> tuple[str, str]:
         """Evaluate command with OperationSecurityProtocol."""
         evaluator = WorkspaceToolOperationSecurity()
         decision = evaluator.evaluate(
@@ -206,7 +269,7 @@ class RunCommandTool(BaseTool):
                 command=command,
             ),
             OperationSecurityContext(
-                workspace=self._get_effective_workspace(),
+                workspace=self._get_effective_workspace(tool_runtime),
                 security_config=self.security_config,
             ),
         )
@@ -348,13 +411,14 @@ class RunCommandTool(BaseTool):
                             _shell_instances["default"].close()
                         del _shell_instances["default"]
 
-                self._initialize_shell()
+                self._initialize_shell(self._last_tool_runtime)
 
                 if not self._test_shell_responsive():
                     raise RuntimeError("Recovered shell failed responsiveness test")
 
-                if self.workspace_root:
-                    workspace = str(expand_path(self.workspace_root))
+                recover_ws = self._get_effective_workspace(self._last_tool_runtime)
+                if recover_ws:
+                    workspace = str(expand_path(recover_ws))
                     child = _shell_instances.get("default")
                     if child:
                         child.sendline(f"cd '{workspace}'")
@@ -373,12 +437,19 @@ class RunCommandTool(BaseTool):
                     msg = f"Shell recovery failed after {max_retries} attempts: {e}"
                     raise RuntimeError(msg) from e
 
-    def _run(self, command: str, timeout: int | None = None) -> str:
+    def _run(
+        self,
+        command: str,
+        timeout: int | None = None,
+        *,
+        runtime: Annotated[ToolRuntime | None, InjectedToolArg()] = None,
+    ) -> str:
         """Execute shell command synchronously.
 
         Args:
             command: Shell command to execute
             timeout: Optional timeout override (uses instance default if not provided)
+            runtime: Injected LangGraph tool runtime (thread-pool safe workspace).
 
         Returns:
             Combined stdout and stderr output
@@ -387,12 +458,13 @@ class RunCommandTool(BaseTool):
             TimeoutError: If command exceeds timeout
             FileNotFoundError: If command not found (handled internally)
         """
-        verdict, reason = self._security_decision(command, self.name)
+        self._last_tool_runtime = runtime
+        verdict, reason = self._security_decision(command, self.name, runtime)
         if verdict != "allow":
             logger.warning("Operation security denied command: %s (%s)", command, reason)
             return f"Error: {reason}"
 
-        self._ensure_shell_initialized()
+        self._ensure_shell_initialized(runtime)
 
         if "default" not in _shell_instances:
             return "Error: Shell not initialized. Install pexpect: pip install pexpect"
@@ -400,7 +472,7 @@ class RunCommandTool(BaseTool):
         import pexpect
 
         # Get dynamic workspace and change to it before running command (RFC-103)
-        effective_workspace = self._get_effective_workspace()
+        effective_workspace = self._get_effective_workspace(runtime)
         if effective_workspace and effective_workspace != self._last_workspace:
             child = _shell_instances.get("default")
             if child:
@@ -494,14 +566,21 @@ class RunCommandTool(BaseTool):
 
             return f"Error executing command: {e}"
 
-    async def _arun(self, command: str, timeout: int | None = None) -> str:  # noqa: ASYNC109
+    async def _arun(
+        self,
+        command: str,
+        timeout: int | None = None,
+        *,
+        runtime: Annotated[ToolRuntime | None, InjectedToolArg()] = None,
+    ) -> str:  # noqa: ASYNC109
         """Async execution (delegates to sync).
 
         Args:
             command: Shell command to execute
             timeout: Optional timeout override (uses instance default if not provided)
+            runtime: Injected LangGraph tool runtime (thread-pool safe workspace).
         """
-        return self._run(command, timeout)
+        return self._run(command, timeout, runtime=runtime)
 
     @classmethod
     def cleanup(cls) -> None:
@@ -584,8 +663,11 @@ class RunBackgroundTool(BaseTool):
     workspace_root: str = Field(default="", description="Working directory for shell")
     security_config: Any = Field(default=None, description="Security configuration object")
 
-    def _get_effective_workspace(self) -> str | None:
-        """Get effective workspace, checking runtime config/context first."""
+    def _get_effective_workspace(self, tool_runtime: Any = None) -> str | None:
+        """Get effective workspace, checking runtime config/context first (IG-300)."""
+        from_runtime = _workspace_from_tool_runtime(tool_runtime)
+        if from_runtime:
+            return str(from_runtime)
         try:
             from langgraph.config import get_config
 
@@ -604,7 +686,7 @@ class RunBackgroundTool(BaseTool):
             return str(dynamic_workspace)
         return self.workspace_root or None
 
-    def _security_decision(self, command: str) -> tuple[str, str]:
+    def _security_decision(self, command: str, tool_runtime: Any = None) -> tuple[str, str]:
         evaluator = WorkspaceToolOperationSecurity()
         decision = evaluator.evaluate(
             OperationSecurityRequest(
@@ -615,13 +697,18 @@ class RunBackgroundTool(BaseTool):
                 command=command,
             ),
             OperationSecurityContext(
-                workspace=self._get_effective_workspace(),
+                workspace=self._get_effective_workspace(tool_runtime),
                 security_config=self.security_config,
             ),
         )
         return decision.verdict, decision.reason
 
-    def _run(self, command: str) -> dict[str, Any]:
+    def _run(
+        self,
+        command: str,
+        *,
+        runtime: Annotated[ToolRuntime | None, InjectedToolArg()] = None,
+    ) -> dict[str, Any]:
         """Execute command in background process.
 
         Args:
@@ -630,12 +717,23 @@ class RunBackgroundTool(BaseTool):
         Returns:
             Dict with 'pid', 'status', and 'message'
         """
-        verdict, reason = self._security_decision(command)
+        verdict, reason = self._security_decision(command, runtime)
         if verdict != "allow":
             return {"pid": None, "status": "error", "message": f"Error: {reason}"}
 
         if "default" not in _shell_instances:
             return {"pid": None, "status": "error", "message": "Error: Shell not initialized."}
+
+        effective = self._get_effective_workspace(runtime)
+        if effective:
+            import pexpect
+
+            child = _shell_instances["default"]
+            try:
+                child.sendline(f"cd '{str(expand_path(effective))}'")
+                child.expect("soothe-cli>> ", timeout=5)
+            except (pexpect.TIMEOUT, pexpect.EOF, OSError, RuntimeError):
+                logger.warning("run_background: failed to cd to workspace %s", effective)
 
         try:
             child = _shell_instances["default"]
@@ -660,9 +758,14 @@ class RunBackgroundTool(BaseTool):
                 "message": f"Background process started with PID: {pid}",
             }
 
-    async def _arun(self, command: str) -> dict[str, Any]:
+    async def _arun(
+        self,
+        command: str,
+        *,
+        runtime: Annotated[ToolRuntime | None, InjectedToolArg()] = None,
+    ) -> dict[str, Any]:
         """Async execution (delegates to sync)."""
-        return self._run(command)
+        return self._run(command, runtime=runtime)
 
 
 class KillProcessTool(BaseTool):
