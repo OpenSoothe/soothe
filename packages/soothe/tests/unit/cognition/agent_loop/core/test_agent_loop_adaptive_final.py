@@ -128,7 +128,7 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.cognition.agent_loop.policies.goal_completion_policy.determine_completion_action",
+            "soothe.cognition.agent_loop.core.agent_loop.determine_completion_action",
             return_value=("skip", "from plan full_output"),
         ),
     ):
@@ -145,3 +145,74 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
 
     assert events
     assert calls == 0, "synthesis should not run when planner recommends direct return"
+    completed = [e for e in events if e[0] == "completed"]
+    assert len(completed) == 1
+    assert completed[0][1]["skip_goal_completion_wire_duplicate"] is True
+
+
+@pytest.mark.asyncio
+async def test_completed_payload_skip_goal_completion_wire_duplicate_false_for_summary() -> None:
+    """Summary path may emit runner goal_completion chunk; do not set skip flag."""
+    mock_core = Mock()
+    mock_core.astream = AsyncMock()
+
+    async def fake_plan(goal, state, context):  # noqa: ARG001
+        return PlanResult(
+            status="done",
+            evidence_summary="evidence body",
+            goal_progress=1.0,
+            confidence=0.9,
+            reasoning="",
+            next_action="done",
+            plan_action="new",
+            full_output="from plan full_output",
+            require_goal_completion=False,
+        )
+
+    mock_gr = Mock()
+    mock_ckpt = Mock()
+    mock_ckpt.goal_history = []
+
+    mock_sm = Mock()
+    mock_sm.load = AsyncMock(return_value=None)
+    mock_sm.initialize = AsyncMock(return_value=mock_ckpt)
+    mock_sm.start_new_goal = Mock(return_value=mock_gr)
+    mock_sm.save = AsyncMock()
+    mock_sm.record_iteration = AsyncMock()
+    mock_sm.finalize_goal = AsyncMock()
+
+    mock_gcm = Mock()
+    mock_gcm.get_plan_context = AsyncMock(return_value=[])
+
+    with (
+        patch(
+            "soothe.cognition.agent_loop.core.agent_loop.AgentLoopStateManager",
+            return_value=mock_sm,
+        ),
+        patch(
+            "soothe.cognition.agent_loop.core.agent_loop.GoalContextManager",
+            return_value=mock_gcm,
+        ),
+        patch(
+            "soothe.cognition.agent_loop.core.agent_loop.determine_completion_action",
+            return_value=("summary", None),
+        ),
+        patch(
+            "soothe.cognition.agent_loop.core.agent_loop.generate_user_fallback_summary",
+            return_value="fallback summary",
+        ),
+    ):
+        loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
+        loop.plan_phase.plan = fake_plan
+
+        events = [
+            evt
+            async for evt in loop.run_with_progress(
+                goal="simple goal",
+                thread_id="thread-a",
+            )
+        ]
+
+    completed = [e for e in events if e[0] == "completed"]
+    assert len(completed) == 1
+    assert completed[0][1]["skip_goal_completion_wire_duplicate"] is False

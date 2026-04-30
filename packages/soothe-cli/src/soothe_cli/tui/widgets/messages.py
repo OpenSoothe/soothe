@@ -31,6 +31,8 @@ from soothe_cli.tui.formatting import format_duration
 from soothe_cli.tui.input import EMAIL_PREFIX_PATTERN, INPUT_HIGHLIGHT_PATTERN
 from soothe_cli.tui.preview_limits import (
     APPROVAL_DIFF_MAX_LINES,
+    ASSISTANT_MESSAGE_PREVIEW_CHARS,
+    ASSISTANT_MESSAGE_PREVIEW_LINES,
     SKILL_CARD_PREVIEW_CHARS,
     SKILL_CARD_PREVIEW_LINES,
     TOOL_CARD_PREVIEW_CHARS,
@@ -576,23 +578,33 @@ class SkillMessage(Vertical):
             _show_timestamp_toast(self)
 
 
-class AssistantMessage(_TimestampClickMixin, Vertical):
-    """Widget displaying an assistant message with markdown support and enhanced styling.
+class AssistantMessage(Vertical):
+    """Assistant reply card: ``⏺`` header (same glyph as tool rows) and markdown body.
 
-    Uses MarkdownStream for smoother streaming instead of re-rendering
-    the full content on each update.
+    Long bodies show the first few source lines collapsed (like ``ToolCallMessage``);
+    click the card or use Ctrl+O (after skills) to expand or collapse. While the
+    markdown stream is active, the full body stays visible until streaming stops.
     """
 
     can_select = True
     """Enable text selection for copy functionality."""
 
+    _PREVIEW_LINES = ASSISTANT_MESSAGE_PREVIEW_LINES
+    _PREVIEW_CHARS = ASSISTANT_MESSAGE_PREVIEW_CHARS
+
     DEFAULT_CSS = """
     AssistantMessage {
         height: auto;
         padding: 0 1;
-        margin: 1 0;
+        margin: 0 0 1 0;
         background: transparent;
-        border-left: wide $secondary;
+        border-left: wide $tool;
+    }
+
+    AssistantMessage .assistant-header {
+        height: auto;
+        color: $tool;
+        text-style: bold;
     }
 
     AssistantMessage Markdown {
@@ -600,103 +612,206 @@ class AssistantMessage(_TimestampClickMixin, Vertical):
         margin: 0;
     }
 
+    AssistantMessage .assistant-preview {
+        margin-left: 0;
+        margin-top: 0;
+    }
+
+    AssistantMessage .assistant-hint {
+        margin-left: 0;
+        color: $text-muted;
+        background: transparent;
+    }
+
     AssistantMessage:hover {
-        opacity: 0.9;
+        border-left: wide $tool-hover;
+        opacity: 0.95;
     }
     """
-    """Consistent styling with transparent background and colored borders matching other cards."""
 
-    def __init__(self, content: str = "", **kwargs: Any) -> None:
+    def __init__(
+        self,
+        content: str = "",
+        *,
+        role_label: str | None = None,
+        **kwargs: Any,
+    ) -> None:
         """Initialize an assistant message.
 
         Args:
-            content: Initial markdown content
-            **kwargs: Additional arguments passed to parent
+            content: Initial markdown content.
+            role_label: Short label after the tool-style glyph (default ``Assistant``).
+            **kwargs: Additional arguments passed to parent.
         """
         super().__init__(**kwargs)
+        label = (role_label or "Assistant").strip()
+        self._role_label = label or "Assistant"
         self._content = content
         self._markdown: Markdown | None = None
         self._stream: MarkdownStream | None = None
+        self._expanded: bool = False
+        self._header_widget: Static | None = None
+        self._preview_widget: Static | None = None
+        self._hint_widget: Static | None = None
 
     def compose(self) -> ComposeResult:  # noqa: PLR6301  # Textual widget method convention
-        """Compose the assistant message layout.
-
-        Yields:
-            Markdown widget for content.
-        """
+        """Compose header, markdown body, plain preview, and expand hint."""
         from textual.widgets import Markdown
 
-        yield Markdown("", id="assistant-content")
+        yield Static("", markup=False, classes="assistant-header", id="assistant-header")
+        yield Markdown("", id="assistant-md")
+        yield Static("", markup=False, classes="assistant-preview", id="assistant-preview")
+        yield Static("", markup=False, classes="assistant-hint", id="assistant-hint")
 
     def on_mount(self) -> None:
-        """Store reference to markdown widget."""
+        """Wire child widgets and apply initial layout."""
         from textual.widgets import Markdown
 
-        self._markdown = self.query_one("#assistant-content", Markdown)
+        if is_ascii_mode():
+            self.add_class("-ascii")
+
+        self._markdown = self.query_one("#assistant-md", Markdown)
+        self._header_widget = self.query_one("#assistant-header", Static)
+        self._preview_widget = self.query_one("#assistant-preview", Static)
+        self._hint_widget = self.query_one("#assistant-hint", Static)
+
+        prefix = get_glyphs().tool_prefix
+        self._header_widget.update(f"{prefix} {self._role_label}")
+        self._preview_widget.display = False
+        self._hint_widget.display = False
+        self._refresh_body_visibility()
+
+    def _needs_truncation(self, text: str) -> bool:
+        raw = text or ""
+        if not raw.strip():
+            return False
+        lines = raw.split("\n")
+        if len(lines) > self._PREVIEW_LINES:
+            return True
+        return len(raw) > self._PREVIEW_CHARS
+
+    def _preview_plain(self, text: str) -> str:
+        lines = (text or "").split("\n")
+        return "\n".join(lines[: self._PREVIEW_LINES])
+
+    def _refresh_body_visibility(self) -> None:
+        """Show markdown, plain preview, or hint depending on stream and collapse state."""
+        md = self._markdown
+        prev = self._preview_widget
+        hint = self._hint_widget
+        if md is None or prev is None or hint is None:
+            return
+
+        streaming = self._stream is not None
+        body = self._content or ""
+        if not body.strip():
+            md.display = True
+            prev.display = False
+            hint.display = False
+            return
+
+        need = self._needs_truncation(body)
+        if streaming or not need or self._expanded:
+            md.display = True
+            prev.display = False
+            if need and not streaming and self._expanded:
+                ellipsis = get_glyphs().ellipsis
+                hint.update(
+                    Content.styled(
+                        f"{ellipsis} click or Ctrl+O to collapse",
+                        "dim italic",
+                    )
+                )
+                hint.display = True
+            else:
+                hint.display = False
+            return
+
+        md.display = False
+        prev.update(self._preview_plain(body))
+        prev.display = True
+        total_lines = len(body.split("\n"))
+        remaining = max(0, total_lines - self._PREVIEW_LINES)
+        ellipsis = get_glyphs().ellipsis
+        if remaining > 0:
+            hint_line = (
+                f"{ellipsis} {remaining} more lines — click or Ctrl+O to expand"
+                if remaining != 1
+                else f"{ellipsis} 1 more line — click or Ctrl+O to expand"
+            )
+        elif len(body) > self._PREVIEW_CHARS:
+            hint_line = f"{ellipsis} more text — click or Ctrl+O to expand"
+        else:
+            hint_line = "click or Ctrl+O to expand"
+        hint.update(Content.styled(hint_line, "dim"))
+        hint.display = True
 
     def _get_markdown(self) -> Markdown:
-        """Get the markdown widget, querying if not cached.
-
-        Returns:
-            The Markdown widget for this message.
-        """
+        """Return the markdown widget, querying if not cached."""
         if self._markdown is None:
             from textual.widgets import Markdown
 
-            self._markdown = self.query_one("#assistant-content", Markdown)
+            self._markdown = self.query_one("#assistant-md", Markdown)
         return self._markdown
 
     def _ensure_stream(self) -> MarkdownStream:
-        """Ensure the markdown stream is initialized.
-
-        Returns:
-            The MarkdownStream instance for streaming content.
-        """
+        """Ensure the markdown stream is initialized."""
         if self._stream is None:
             from textual.widgets import Markdown
 
             self._stream = Markdown.get_stream(self._get_markdown())
         return self._stream
 
+    @property
+    def has_collapsible_body(self) -> bool:
+        """True when the body is long enough to support expand/collapse."""
+        return self._needs_truncation(self._content)
+
+    def toggle_collapse(self) -> None:
+        """Toggle expanded markdown vs collapsed plain preview."""
+        if not self.has_collapsible_body:
+            return
+        self._expanded = not self._expanded
+        self._refresh_body_visibility()
+
+    def on_click(self, event: Click) -> None:
+        """Toggle collapse for long messages; otherwise show timestamp toast."""
+        event.stop()
+        if self.has_collapsible_body:
+            self.toggle_collapse()
+        else:
+            _show_timestamp_toast(self)
+
     async def append_content(self, text: str) -> None:
-        """Append content to the message (for streaming).
-
-        Uses MarkdownStream for smoother rendering instead of re-rendering
-        the full content on each chunk.
-
-        Args:
-            text: Text to append
-        """
+        """Append content to the message (for streaming)."""
         if not text:
             return
         self._content += text
         stream = self._ensure_stream()
+        self._refresh_body_visibility()
         await stream.write(text)
 
     async def write_initial_content(self) -> None:
-        """Write initial content if provided at construction time."""
+        """Write initial content from constructor and finalize the stream."""
         if self._content:
             stream = self._ensure_stream()
             await stream.write(self._content)
+            await self.stop_stream()
 
     async def stop_stream(self) -> None:
-        """Stop the streaming and finalize the content."""
+        """Stop the streaming and apply collapsed layout when appropriate."""
         if self._stream is not None:
             await self._stream.stop()
             self._stream = None
+        self._refresh_body_visibility()
 
     async def set_content(self, content: str) -> None:
-        """Set the full message content.
-
-        This stops any active stream and sets content directly.
-
-        Args:
-            content: The markdown content to display
-        """
+        """Set the full message content (stops any active stream)."""
         await self.stop_stream()
         self._content = content
         if self._markdown:
             await self._markdown.update(content)
+        self._refresh_body_visibility()
 
 
 class ToolCallMessage(Vertical):
