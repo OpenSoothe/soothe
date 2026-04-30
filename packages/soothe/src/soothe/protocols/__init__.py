@@ -10,6 +10,13 @@ from soothe.protocols.durability import (
 from soothe.protocols.loop_planner import LoopPlannerProtocol
 from soothe.protocols.loop_working_memory import LoopWorkingMemoryProtocol
 from soothe.protocols.memory import MemoryItem, MemoryProtocol
+from soothe.protocols.operation_security import (
+    OperationKind,
+    OperationSecurityContext,
+    OperationSecurityDecision,
+    OperationSecurityProtocol,
+    OperationSecurityRequest,
+)
 from soothe.protocols.persistence import AsyncPersistStore
 from soothe.protocols.planner import (
     CheckpointEnvelope,
@@ -46,6 +53,11 @@ __all__ = [
     "LoopWorkingMemoryProtocol",
     "MemoryItem",
     "MemoryProtocol",
+    "OperationKind",
+    "OperationSecurityContext",
+    "OperationSecurityDecision",
+    "OperationSecurityProtocol",
+    "OperationSecurityRequest",
     "Permission",
     "PermissionSet",
     "Plan",

@@ -892,9 +892,9 @@ class ExecutionConfig(BaseModel):
 
     llm_rpm_limit: int = Field(default=120, ge=1, le=10_000)
     llm_concurrent_limit: int = Field(default=10, ge=1, le=500)
-    llm_call_timeout_seconds: int = Field(default=60, ge=5, le=3600)
+    llm_call_timeout_seconds: int = Field(default=120, ge=5, le=3600)
     llm_call_timeout_adaptive: bool = True
-    llm_call_timeout_max_seconds: int = Field(default=600, ge=60, le=3600)
+    llm_call_timeout_max_seconds: int = Field(default=900, ge=60, le=3600)
 
 
 class AutopilotConfig(BaseModel):
