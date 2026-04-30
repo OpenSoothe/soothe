@@ -64,7 +64,10 @@ class PythonSessionManager:
                         logger.info("Created new Python session: %s", session_id)
 
                     except ImportError:
-                        logger.warning("IPython not available, sessions will not persist")
+                        logger.info(
+                            "IPython not available for session %s, using namespace-based persistence",
+                            session_id,
+                        )
                         return None
                     except Exception:
                         logger.exception("Failed to create Python session")

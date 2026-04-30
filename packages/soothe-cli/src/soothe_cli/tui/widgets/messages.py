@@ -18,6 +18,7 @@ from textual.events import Click
 from textual.reactive import var
 from textual.widgets import Static
 
+from soothe_cli.shared.presentation_engine import PresentationEngine
 from soothe_cli.shared.tool_call_resolution import infer_tool_name_from_call_id
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import (
@@ -37,7 +38,7 @@ from soothe_cli.tui.preview_limits import (
     TOOL_CARD_PREVIEW_TODO_ITEMS,
     TOOL_CARD_PREVIEW_WEB_DICT_KEYS,
 )
-from soothe_cli.tui.tool_display import format_tool_display
+from soothe_cli.tui.tool_display import format_tool_cli_style_command
 from soothe_cli.tui.widgets._links import open_style_link
 from soothe_cli.tui.widgets.diff import compose_diff_lines
 
@@ -123,19 +124,12 @@ class FormattedOutput:
     truncation occurred."""
 
 
-# Maximum number of tool arguments to display inline
-_MAX_INLINE_ARGS = 3
-
 # Truncation limits for display
 _MAX_TODO_CONTENT_LEN = 70
 _MAX_WEB_CONTENT_LEN = 100
 
-# Tools that have their key info already in the header (no need for args line)
-# Derived from ToolMeta registry (IG-232)
-from soothe_sdk.utils import get_tools_with_header_info  # noqa: E402, I001 -- module-level import after code
-
-_TOOLS_WITH_HEADER_INFO: set[str] = set(get_tools_with_header_info())
-
+_TOOL_CARD_PRESENTATION = PresentationEngine()
+"""Shared brief/summary rules with headless CLI (IG-320)."""
 
 _SUCCESS_EXIT_RE = re.compile(r"\n?\[Command succeeded with exit code 0\]\s*$")
 """Strip the SDK's `[Command succeeded with exit code 0]` trailer from tool output."""
@@ -705,11 +699,11 @@ class AssistantMessage(_TimestampClickMixin, Vertical):
 
 
 class ToolCallMessage(Vertical):
-    """Widget displaying a tool call with collapsible output.
+    """Widget displaying a tool call with CLI-style command and result lines.
 
-    Tool outputs are shown as a one-line preview by default (plus expand hint).
-    Press Ctrl+O to expand/collapse the full output.
-    Shows an animated "Running..." indicator while the tool is executing.
+    Command line matches headless ``CliRenderer.on_tool_call``; result line matches
+    ``on_tool_result`` (✓/✗, brief, optional duration). Raw tool output is collapsed
+    until the user expands (click or Ctrl+O). While pending, shows a running spinner.
     """
 
     can_select = True
@@ -730,17 +724,6 @@ class ToolCallMessage(Vertical):
         text-style: bold;
     }
 
-    ToolCallMessage .tool-task-desc {
-        color: $text-muted;
-        margin-left: 3;
-        text-style: italic;
-    }
-
-    ToolCallMessage .tool-args {
-        color: $text-muted;
-        margin-left: 3;
-    }
-
     ToolCallMessage .tool-status {
         margin-left: 3;
     }
@@ -759,6 +742,19 @@ class ToolCallMessage(Vertical):
 
     ToolCallMessage .tool-status.rejected {
         color: $warning;
+    }
+
+    ToolCallMessage .tool-result-summary {
+        margin-left: 3;
+        height: auto;
+    }
+
+    ToolCallMessage .tool-result-summary.success {
+        color: $success;
+    }
+
+    ToolCallMessage .tool-result-summary.error {
+        color: $error;
     }
 
     ToolCallMessage .tool-output {
@@ -821,6 +817,7 @@ class ToolCallMessage(Vertical):
         self._expanded: bool = False
         # Widget references (set in on_mount)
         self._status_widget: Static | None = None
+        self._result_summary_widget: Static | None = None
         self._preview_widget: Static | None = None
         self._hint_widget: Static | None = None
         self._full_widget: Static | None = None
@@ -837,35 +834,13 @@ class ToolCallMessage(Vertical):
         """Compose the tool call message layout.
 
         Yields:
-            Widgets for header, arguments, status, and output display.
+            Widgets for header, CLI-style result line, status, and collapsible output.
         """
-        tool_label = format_tool_display(self._tool_name, self._args)
+        tool_label = format_tool_cli_style_command(self._tool_name, self._args)
         yield Static(tool_label, markup=False, classes="tool-header")
-        # Task: dedicated description line (dim, truncated)
-        if self._tool_name == "task":
-            desc = self._args.get("description", "")
-            if desc:
-                max_len = TOOL_CARD_PREVIEW_CHARS
-                suffix = "..." if len(desc) > max_len else ""
-                truncated = desc[:max_len].rstrip() + suffix
-                yield Static(
-                    Content.styled(truncated, "dim"),
-                    classes="tool-task-desc",
-                )
-        # Only show args for tools where header doesn't capture the key info
-        elif self._tool_name not in _TOOLS_WITH_HEADER_INFO:
-            args = self._filtered_args()
-            if args:
-                args_str = ", ".join(f"{k}={v!r}" for k, v in list(args.items())[:_MAX_INLINE_ARGS])
-                if len(args) > _MAX_INLINE_ARGS:
-                    args_str += ", ..."
-                yield Static(
-                    Content.from_markup("[dim]($args)[/dim]", args=args_str),
-                    classes="tool-args",
-                )
-        # Status - shows running animation while pending, then final status
+        yield Static("", classes="tool-result-summary", id="tool-result-summary")
+        # Status — running spinner while executing; unused when result summary shows
         yield Static("", classes="tool-status", id="status")
-        # Output area - hidden initially, shown when output is set
         yield Static("", classes="tool-output-preview", id="output-preview")
         yield Static("", classes="tool-output", id="output-full")
         yield Static("", classes="tool-output-hint", id="output-hint")
@@ -876,11 +851,13 @@ class ToolCallMessage(Vertical):
             self.add_class("-ascii")
 
         self._status_widget = self.query_one("#status", Static)
+        self._result_summary_widget = self.query_one("#tool-result-summary", Static)
         self._preview_widget = self.query_one("#output-preview", Static)
         self._hint_widget = self.query_one("#output-hint", Static)
         self._full_widget = self.query_one("#output-full", Static)
         # Hide everything initially - status only shown when running or on error/reject
         self._status_widget.display = False
+        self._result_summary_widget.display = False
         self._preview_widget.display = False
         self._hint_widget.display = False
         self._full_widget.display = False
@@ -908,18 +885,36 @@ class ToolCallMessage(Vertical):
             case "success":
                 self._status = "success"
                 self._output = output
+                if self._status_widget:
+                    self._status_widget.remove_class("pending")
+                    self._status_widget.display = False
+                line = _TOOL_CARD_PRESENTATION.format_tool_result_status_line(
+                    self._tool_name,
+                    output,
+                    is_error=False,
+                    duration_ms=0,
+                )
+                self._apply_result_summary(line, is_error=False)
                 self._update_output_display()
             case "error":
                 self._status = "error"
                 self._output = output
                 if self._status_widget:
-                    self._status_widget.add_class("error")
-                    error_icon = get_glyphs().error
-                    self._status_widget.update(Content.styled(f"{error_icon} Error", colors.error))
-                    self._status_widget.display = True
+                    self._status_widget.remove_class("pending")
+                    self._status_widget.remove_class("error")
+                    self._status_widget.display = False
+                line = _TOOL_CARD_PRESENTATION.format_tool_result_status_line(
+                    self._tool_name,
+                    output,
+                    is_error=True,
+                    duration_ms=0,
+                )
+                self._apply_result_summary(line, is_error=True)
                 self._update_output_display()
             case "rejected":
                 self._status = "rejected"
+                if self._result_summary_widget:
+                    self._result_summary_widget.display = False
                 if self._status_widget:
                     self._status_widget.add_class("rejected")
                     error_icon = get_glyphs().error
@@ -929,6 +924,8 @@ class ToolCallMessage(Vertical):
                     self._status_widget.display = True
             case "skipped":
                 self._status = "skipped"
+                if self._result_summary_widget:
+                    self._result_summary_widget.display = False
                 if self._status_widget:
                     self._status_widget.add_class("rejected")
                     self._status_widget.update(Content.styled("- Skipped", "dim"))
@@ -937,6 +934,8 @@ class ToolCallMessage(Vertical):
                 # For running tools, show static "Running..." without animation
                 # (animations shouldn't be restored for archived tools)
                 self._status = "running"
+                if self._result_summary_widget:
+                    self._result_summary_widget.display = False
                 if self._status_widget:
                     self._status_widget.add_class("pending")
                     frame = get_glyphs().spinner_frames[0]
@@ -961,7 +960,7 @@ class ToolCallMessage(Vertical):
         except Exception:  # noqa: BLE001  # Widget tree not ready or query miss
             return
         # Textual ``Static.update`` accepts only the new content (no ``markup=`` kwarg).
-        header.update(format_tool_display(self._tool_name, self._args))
+        header.update(format_tool_cli_style_command(self._tool_name, self._args))
 
     def set_running(self) -> None:
         """Mark the tool as running (approved and executing).
@@ -973,6 +972,8 @@ class ToolCallMessage(Vertical):
 
         self._status = "running"
         self._start_time = time()
+        if self._result_summary_widget:
+            self._result_summary_widget.display = False
         if self._status_widget:
             self._status_widget.add_class("pending")
             self._status_widget.display = True
@@ -1002,6 +1003,22 @@ class ToolCallMessage(Vertical):
             self._animation_timer.stop()
             self._animation_timer = None
 
+    def _duration_ms_since_start(self) -> int:
+        if self._start_time is None:
+            return 0
+        return int((time() - self._start_time) * 1000)
+
+    def _apply_result_summary(self, line: str, *, is_error: bool) -> None:
+        """Show the CLI-style ✓/✗ result line under the command header."""
+        w = self._result_summary_widget
+        if w is None:
+            return
+        w.remove_class("success")
+        w.remove_class("error")
+        w.add_class("error" if is_error else "success")
+        w.update(Content(line))
+        w.display = True
+
     def set_success(self, result: str = "") -> None:
         """Mark the tool call as successful.
 
@@ -1010,12 +1027,19 @@ class ToolCallMessage(Vertical):
         """
         self._stop_animation()
         self._status = "success"
-        # Strip redundant success trailer — the UI already conveys success
         self._output = _strip_success_exit_line(result)
+        self._expanded = False
+        duration_ms = self._duration_ms_since_start()
+        line = _TOOL_CARD_PRESENTATION.format_tool_result_status_line(
+            self._tool_name,
+            self._output,
+            is_error=False,
+            duration_ms=duration_ms,
+        )
         if self._status_widget:
             self._status_widget.remove_class("pending")
-            # Hide status on success - output speaks for itself
             self._status_widget.display = False
+        self._apply_result_summary(line, is_error=False)
         self._update_output_display()
 
     def set_error(self, error: str) -> None:
@@ -1026,7 +1050,6 @@ class ToolCallMessage(Vertical):
         """
         self._stop_animation()
         self._status = "error"
-        # For shell commands, prepend the full command so users can see what failed
         command = (
             self._args.get("command") if self._tool_name in {"shell", "bash", "execute"} else None
         )
@@ -1034,21 +1057,27 @@ class ToolCallMessage(Vertical):
             self._output = f"$ {command}\n\n{error}"
         else:
             self._output = error
+        self._expanded = False
+        duration_ms = self._duration_ms_since_start()
+        line = _TOOL_CARD_PRESENTATION.format_tool_result_status_line(
+            self._tool_name,
+            error,
+            is_error=True,
+            duration_ms=duration_ms,
+        )
         if self._status_widget:
             self._status_widget.remove_class("pending")
-            self._status_widget.add_class("error")
-            error_icon = get_glyphs().error
-            colors = theme.get_theme_colors(self)
-            self._status_widget.update(Content.styled(f"{error_icon} Error", colors.error))
-            self._status_widget.display = True
-        # Always show full error - errors should be visible
-        self._expanded = True
+            self._status_widget.remove_class("error")
+            self._status_widget.display = False
+        self._apply_result_summary(line, is_error=True)
         self._update_output_display()
 
     def set_rejected(self) -> None:
         """Mark the tool call as rejected by user."""
         self._stop_animation()
         self._status = "rejected"
+        if self._result_summary_widget:
+            self._result_summary_widget.display = False
         if self._status_widget:
             self._status_widget.remove_class("pending")
             self._status_widget.add_class("rejected")
@@ -1062,6 +1091,8 @@ class ToolCallMessage(Vertical):
         """Mark the tool call as skipped (due to another rejection)."""
         self._stop_animation()
         self._status = "skipped"
+        if self._result_summary_widget:
+            self._result_summary_widget.display = False
         if self._status_widget:
             self._status_widget.remove_class("pending")
             self._status_widget.add_class("rejected")  # Use same styling as rejected
@@ -1517,6 +1548,11 @@ class ToolCallMessage(Vertical):
 
         return FormattedOutput(content=content, truncation=truncation)
 
+    def _cli_result_summary_active(self) -> bool:
+        """True when the Done/Failed summary row is shown (IG-320)."""
+        w = self._result_summary_widget
+        return self._status in ("success", "error") and w is not None and bool(w.display)
+
     def _update_output_display(self) -> None:
         """Update the output display based on expanded state."""
         if not self._preview_widget or not self._full_widget or not self._hint_widget:
@@ -1528,17 +1564,19 @@ class ToolCallMessage(Vertical):
         def _empty_success_content() -> Content:
             return self._prefix_output(Content.styled("(no tool output)", "dim italic"))
 
-        lines = output_stripped.split("\n")
-        total_lines = len(lines)
-        total_chars = len(output_stripped)
+        if self._cli_result_summary_active():
+            if not self._expanded:
+                self._preview_widget.display = False
+                self._full_widget.display = False
+                if output_stripped:
+                    self._hint_widget.update(
+                        Content.styled("click or Ctrl+O to show full output", "dim italic")
+                    )
+                    self._hint_widget.display = True
+                else:
+                    self._hint_widget.display = False
+                return
 
-        # Truncate if too many lines OR too many characters
-        needs_truncation = (not empty_success) and (
-            total_lines > self._PREVIEW_LINES or total_chars > self._PREVIEW_CHARS
-        )
-
-        if self._expanded:
-            # Show full output with formatting
             self._preview_widget.display = False
             if empty_success:
                 self._full_widget.update(_empty_success_content())
@@ -1547,11 +1585,30 @@ class ToolCallMessage(Vertical):
                 prefixed = self._prefix_output(result.content)
                 self._full_widget.update(prefixed)
             self._full_widget.display = True
-            # Show collapse hint underneath
+            self._hint_widget.update(Content.styled("click or Ctrl+O to collapse", "dim italic"))
+            self._hint_widget.display = True
+            return
+
+        lines = output_stripped.split("\n")
+        total_lines = len(lines)
+        total_chars = len(output_stripped)
+
+        needs_truncation = (not empty_success) and (
+            total_lines > self._PREVIEW_LINES or total_chars > self._PREVIEW_CHARS
+        )
+
+        if self._expanded:
+            self._preview_widget.display = False
+            if empty_success:
+                self._full_widget.update(_empty_success_content())
+            else:
+                result = self._format_output(self._output, is_preview=False)
+                prefixed = self._prefix_output(result.content)
+                self._full_widget.update(prefixed)
+            self._full_widget.display = True
             self._hint_widget.update(Content.styled("click or Ctrl+O to collapse", "dim italic"))
             self._hint_widget.display = True
         else:
-            # Show preview
             self._full_widget.display = False
             if empty_success:
                 self._preview_widget.update(_empty_success_content())
@@ -1563,7 +1620,6 @@ class ToolCallMessage(Vertical):
                 self._preview_widget.update(prefixed)
                 self._preview_widget.display = True
 
-                # Build hint with truncation info if available
                 if result.truncation:
                     ellipsis = get_glyphs().ellipsis
                     hint = Content.styled(
@@ -1575,7 +1631,6 @@ class ToolCallMessage(Vertical):
                 self._hint_widget.update(hint)
                 self._hint_widget.display = True
             elif output_stripped:
-                # Output fits in preview, show formatted
                 result = self._format_output(output_stripped, is_preview=False)
                 prefixed = self._prefix_output(result.content)
                 self._preview_widget.update(prefixed)
@@ -1595,21 +1650,6 @@ class ToolCallMessage(Vertical):
         if (self._output or "").strip():
             return True
         return self._status == "success"
-
-    def _filtered_args(self) -> dict[str, Any]:
-        """Filter large tool args for display.
-
-        Returns:
-            Filtered args dict with only display-relevant keys for write/edit tools.
-        """
-        if self._tool_name not in {"write_file", "edit_file"}:
-            return self._args
-
-        filtered: dict[str, Any] = {}
-        for key in ("file_path", "path", "replace_all"):
-            if key in self._args:
-                filtered[key] = self._args[key]
-        return filtered
 
 
 class DiffMessage(_TimestampClickMixin, Static):

@@ -1,13 +1,63 @@
 """Tests for CLI tools functionality."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+from langchain_core.utils.function_calling import convert_to_openai_tool
+
+from soothe.cognition.agent_loop.utils.messages import LoopHumanMessage
 from soothe.toolkits.execution import (
     KillProcessTool,
     RunBackgroundTool,
     RunCommandTool,
+    RunPythonTool,
     create_execution_tools,
 )
+
+
+class TestRunCommandToolWorkspaceResolution:
+    """RFC-103 / IG-300: client workspace must win over daemon workspace_root."""
+
+    def test_effective_workspace_prefers_injected_runtime_config(self) -> None:
+        """ToolNode passes workspace on ToolRuntime.config (thread-pool safe)."""
+        tool = RunCommandTool(workspace_root="/daemon/default")
+        runtime = MagicMock()
+        runtime.config = {"configurable": {"workspace": "/client/source"}}
+        assert tool._get_effective_workspace(runtime) == "/client/source"
+
+    def test_effective_workspace_reads_loop_human_workspace_from_state(self) -> None:
+        """When configurable omits workspace, fall back to LoopHumanMessage in state."""
+        tool = RunCommandTool(workspace_root="/daemon/default")
+        runtime = MagicMock()
+        runtime.config = {"configurable": {"thread_id": "t1"}}
+        runtime.state = {
+            "messages": [
+                LoopHumanMessage(
+                    content="Execute: x",
+                    thread_id="t1",
+                    workspace="/client/from_state",
+                    phase="execute_step",
+                )
+            ]
+        }
+        assert tool._get_effective_workspace(runtime) == "/client/from_state"
+
+
+class TestRunCommandToolOpenAiSchema:
+    """OpenAI bind_tools requires JSON-serializable tool parameters (no ToolRuntime in schema)."""
+
+    def test_run_command_openai_parameters_exclude_runtime(self) -> None:
+        tool = RunCommandTool()
+        params = convert_to_openai_tool(tool)["function"]["parameters"]
+        props = params.get("properties") or {}
+        assert "runtime" not in props
+        assert "command" in props
+
+    def test_run_background_openai_parameters_exclude_runtime(self) -> None:
+        tool = RunBackgroundTool()
+        params = convert_to_openai_tool(tool)["function"]["parameters"]
+        props = params.get("properties") or {}
+        assert "runtime" not in props
+        assert "command" in props
 
 
 class TestRunCommandToolInitialization:
@@ -41,8 +91,6 @@ class TestRunCommandToolInitialization:
 
     def test_create_execution_tools(self) -> None:
         """Test factory function creates all tools."""
-        from soothe.toolkits.execution import RunPythonTool
-
         tools = create_execution_tools()
 
         assert len(tools) == 4

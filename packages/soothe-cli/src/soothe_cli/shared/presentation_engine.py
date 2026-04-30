@@ -121,6 +121,42 @@ class PresentationEngine:
 
         return log_preview(compact, self._TOOL_RESULT_MAX_CHARS)
 
+    def format_tool_result_status_line(
+        self,
+        tool_name: str,
+        raw_content: str,
+        *,
+        is_error: bool,
+        duration_ms: int = 0,
+    ) -> str:
+        """One-line tool result for TUI/CLI parity (brief + summarize + icon + duration).
+
+        Mirrors :meth:`soothe_cli.cli.renderer.CliRenderer.on_tool_result` text assembly
+        after ``extract_tool_brief`` / ``summarize_tool_result``.
+
+        Args:
+            tool_name: Tool that produced the content.
+            raw_content: Raw or formatted tool message body (string).
+            is_error: When True, prefix with the error icon if missing.
+            duration_ms: Elapsed time in ms; omitted when zero.
+
+        Returns:
+            Plain-text status line (may already start with a status icon from brief).
+        """
+        from soothe_cli.shared.message_processing import extract_tool_brief
+
+        brief = extract_tool_brief(tool_name, raw_content)
+        summarized = self.summarize_tool_result(brief)
+        result_stripped = summarized.lstrip()
+        if result_stripped.startswith(("✓", "✗")):
+            result_line = summarized
+        else:
+            icon = "✗" if is_error else "✓"
+            result_line = f"{icon} {summarized}"
+        if duration_ms > 0:
+            result_line += f" ({duration_ms}ms)"
+        return result_line
+
     @staticmethod
     def _normalize_reason(content: str) -> str:
         lowered = content.lower().strip()

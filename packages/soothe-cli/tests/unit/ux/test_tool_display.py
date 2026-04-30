@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe_cli.tui.tool_display import format_tool_display
+from soothe_cli.tui.tool_display import format_tool_cli_style_command, format_tool_display
 from soothe_cli.tui.widgets.messages import ToolCallMessage
 
 
@@ -124,3 +124,10 @@ def test_task_type_only_uses_parentheses() -> None:
     s = format_tool_display("task", {"subagent_type": "browser"})
     assert "[" not in s
     assert "browser" in s
+
+
+def test_cli_style_command_uses_format_tool_call_args() -> None:
+    """TUI command line matches CLI (display name + arg summary)."""
+    s = format_tool_cli_style_command("read_file", {"path": "/tmp/README.md"})
+    assert "README" in s
+    assert "(" in s and ")" in s
