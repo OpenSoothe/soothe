@@ -34,6 +34,18 @@ def test_tool_result_structured_payload_summary() -> None:
     assert "structured payload" in result
 
 
+def test_format_tool_result_status_line_duration_suffix() -> None:
+    engine = PresentationEngine()
+    line = engine.format_tool_result_status_line(
+        "read_file",
+        "hello\nworld",
+        is_error=False,
+        duration_ms=12,
+    )
+    assert "12ms" in line
+    assert line.strip()
+
+
 def test_final_answer_lock_and_reset_turn() -> None:
     engine = PresentationEngine()
     assert not engine.final_answer_locked
