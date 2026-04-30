@@ -70,13 +70,36 @@ def test_hybrid_mode_llm_false_heuristic_true():
 
 
 def test_hybrid_mode_both_false():
-    """Hybrid mode should return False when both LLM and heuristic agree."""
+    """Hybrid mode should return False when both LLM and heuristic agree (with actual execution)."""
+    step_results = [
+        StepResult(
+            step_id="S1",
+            success=True,
+            outcome={"type": "file_read"},
+            duration_ms=100,
+            thread_id="t1",
+        ),
+    ]
+    state = mock_loop_state(
+        iteration=0, step_results=step_results, last_execute_wave_parallel_multi_step=False
+    )
+    # LLM=False, heuristic=False (simple execution with actual steps)
+    result = determine_goal_completion_needs(llm_decision=False, state=state, mode="hybrid")
+    assert result is False
+
+
+def test_hybrid_mode_zero_execution_requires_synthesis():
+    """Hybrid mode should return True when zero execution (iter=0, results=[]).
+
+    This is the guard against premature 'done' assessment without any execution.
+    When LLM claims done but no steps were executed, we force synthesis.
+    """
     state = mock_loop_state(
         iteration=0, step_results=[], last_execute_wave_parallel_multi_step=False
     )
-    # LLM=False, heuristic=False (simple execution)
+    # LLM=False (claims done), but heuristic=True (zero execution guard)
     result = determine_goal_completion_needs(llm_decision=False, state=state, mode="hybrid")
-    assert result is False
+    assert result is True
 
 
 def test_heuristic_parallel_multi_step():
@@ -145,7 +168,7 @@ def test_heuristic_dag_dependencies():
 
 
 def test_heuristic_no_dependencies():
-    """No DAG dependencies does not require synthesis."""
+    """No DAG dependencies does not require synthesis (with actual execution)."""
     decision = AgentDecision(
         type="execute_steps",
         steps=[
@@ -154,7 +177,11 @@ def test_heuristic_no_dependencies():
         ],
         execution_mode="parallel",
     )
-    state = mock_loop_state(current_decision=decision)
+    # Provide execution evidence
+    step_results = [
+        StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
+    ]
+    state = mock_loop_state(current_decision=decision, step_results=step_results)
     result = _heuristic_requires_goal_completion(state)
     assert result is False
 
@@ -265,7 +292,7 @@ def test_heuristic_combined_complexity():
 
 
 def test_heuristic_simple_execution():
-    """Simple execution (no complexity indicators) should not require synthesis."""
+    """Simple execution (with actual steps) should not require synthesis."""
     step_results = [
         StepResult(
             step_id="S1",
@@ -282,9 +309,26 @@ def test_heuristic_simple_execution():
         last_wave_hit_subagent_cap=False,
         current_decision=None,
     )
-    # All simple execution indicators
+    # All simple execution indicators (with 1 step executed)
     result = _heuristic_requires_goal_completion(state)
     assert result is False
+
+
+def test_heuristic_zero_execution():
+    """Zero execution (iter=0, results=[]) should require synthesis.
+
+    Guard against premature 'done' without any evidence.
+    """
+    state = mock_loop_state(
+        iteration=0,
+        step_results=[],
+        last_execute_wave_parallel_multi_step=False,
+        last_wave_hit_subagent_cap=False,
+        current_decision=None,
+    )
+    # Zero execution: no steps were executed
+    result = _heuristic_requires_goal_completion(state)
+    assert result is True
 
 
 if __name__ == "__main__":
