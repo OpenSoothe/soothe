@@ -6,7 +6,7 @@ Templates for the LLM-orchestrated iterative filesystem search agent.
 PLAN_SEARCH = """\
 Target: {search_target}
 Workspace: {workspace} | Mode: {thoroughness} (≤{max_iterations} iters) | read ≤{max_read_lines} lines/call
-Tools (readonly): glob, grep, ls, read_file, file_info
+Tools (readonly): glob, grep, ls, read_file, file_info (metadata)
 
 Tactics: honor any subtree or symbol named in the target first → widen (glob/ls) → grep → read_file to confirm.
 Archetypes: find file→glob; trace behavior→grep then read; find definition→grep defs.

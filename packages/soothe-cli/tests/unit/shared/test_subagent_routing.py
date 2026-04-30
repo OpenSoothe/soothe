@@ -16,6 +16,8 @@ from soothe_cli.shared.subagent_routing import parse_subagent_from_input
         ("/browser open x", "browser", "open x"),
         ("/claude reason", "claude", "reason"),
         ("/research papers", "research", "papers"),
+        ("/explore find files", "explore", "find files"),
+        ("Please /explore search code", "explore", "Please search code"),
         ("Please /research find sources", "research", "Please find sources"),
         ("/plan do thing", None, "/plan do thing"),
         ("no prefix", None, "no prefix"),
@@ -40,6 +42,30 @@ async def test_handle_routing_command_sets_subagent_for_browser() -> None:
     await handle_routing_command("/browser open example.com", console, client)
 
     client.send_input.assert_awaited_once_with("open example.com", subagent="browser")
+
+
+@pytest.mark.asyncio
+async def test_handle_routing_command_sets_subagent_for_browser() -> None:
+    """Routing handler must send cleaned text and WebSocket subagent field."""
+    client = MagicMock()
+    client.send_input = AsyncMock()
+    console = MagicMock()
+
+    await handle_routing_command("/browser open example.com", console, client)
+
+    client.send_input.assert_awaited_once_with("open example.com", subagent="browser")
+
+
+@pytest.mark.asyncio
+async def test_handle_routing_command_sets_subagent_for_explore() -> None:
+    """Routing handler must send cleaned text and WebSocket subagent field for explore."""
+    client = MagicMock()
+    client.send_input = AsyncMock()
+    console = MagicMock()
+
+    await handle_routing_command("/explore find Python files", console, client)
+
+    client.send_input.assert_awaited_once_with("find Python files", subagent="explore")
 
 
 @pytest.mark.asyncio
