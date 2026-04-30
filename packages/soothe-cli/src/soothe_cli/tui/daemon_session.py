@@ -96,6 +96,7 @@ class TuiDaemonSession:
         interactive: bool = True,
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
+        attachments: list[dict[str, str]] | None = None,
     ) -> None:
         """Send a new user turn to the daemon."""
         await self._client.send_input(
@@ -106,6 +107,7 @@ class TuiDaemonSession:
             interactive=interactive,
             model=model,
             model_params=model_params,
+            attachments=attachments,
         )
 
     async def cancel_remote_query(self) -> None:

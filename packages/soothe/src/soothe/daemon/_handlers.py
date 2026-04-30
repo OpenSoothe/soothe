@@ -188,6 +188,8 @@ class DaemonHandlersMixin:
                         model_kw = (
                             raw_m.strip() if isinstance(raw_m, str) and raw_m.strip() else None
                         )
+                        raw_att = msg.get("attachments")
+                        attachments = raw_att if isinstance(raw_att, list) and raw_att else None
                         await self._query_engine.run_query(
                             text,
                             autonomous=bool(msg.get("autonomous", False)),
@@ -197,6 +199,7 @@ class DaemonHandlersMixin:
                             interactive=bool(msg.get("interactive", False)),
                             model=model_kw,
                             model_params=model_params,
+                            attachments=attachments,
                         )
             except asyncio.CancelledError:
                 break
@@ -231,6 +234,7 @@ class DaemonHandlersMixin:
         interactive: bool = False,
         model: str | None = None,
         model_params: dict | None = None,
+        attachments: list[dict[str, str]] | None = None,
     ) -> None:
         """Delegate to ``QueryEngine`` (keeps unit tests and legacy callers working)."""
         await self._query_engine.run_query(
@@ -242,4 +246,5 @@ class DaemonHandlersMixin:
             interactive=interactive,
             model=model,
             model_params=model_params,
+            attachments=attachments,
         )

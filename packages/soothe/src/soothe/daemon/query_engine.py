@@ -15,8 +15,10 @@ from typing import Any
 
 from soothe.core.events import ERROR
 from soothe.core.workspace import resolve_workspace_for_stream
+from soothe.daemon.image_understanding import enrich_user_text_with_vision
 from soothe.foundation import extract_text_from_ai_message
 from soothe.logging import ThreadLogger
+from soothe.utils.error_format import emit_error_event
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,7 @@ class QueryEngine:
         interactive: bool = False,
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
+        attachments: list[dict[str, str]] | None = None,
     ) -> None:
         """Stream a query through ``SootheRunner`` and broadcast events."""
         d = self._daemon
@@ -65,6 +68,7 @@ class QueryEngine:
                 interactive=interactive,
                 model=model,
                 model_params=model_params,
+                attachments=attachments,
             )
             return
 
@@ -83,24 +87,7 @@ class QueryEngine:
                 max_size_mb=d._config.observability.thread_logging_max_size_mb,
             )
 
-        if d._thread_logger:
-            d._thread_logger.log_user_input(text)
-
-        await d._runner.touch_thread_activity_timestamp(thread_id)
-
-        # Add to global cross-thread input history
-        if d._global_history:
-            metadata = {
-                "workspace": str(
-                    d._thread_registry.get_workspace(thread_id) or d._daemon_workspace
-                ),
-                "autonomous": autonomous,
-                "subagent": subagent,
-            }
-            d._global_history.add(text, thread_id=thread_id, metadata=metadata)
-
-        # IG-054: Check capacity BEFORE creating task (not at message routing time)
-        # This eliminates race window between capacity check and task creation
+        # IG-054: Capacity check before vision preflight (IG-327) to avoid wasted image API calls.
         max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
         at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
         if at_capacity:
@@ -131,6 +118,42 @@ class QueryEngine:
             if client_id:
                 await d._session_manager.release_thread_ownership(client_id)
             return
+
+        effective_text = text
+        if attachments:
+            try:
+                effective_text = await enrich_user_text_with_vision(d._config, text, attachments)
+            except Exception as exc:
+                logger.exception("Vision preflight failed for thread %s", thread_id)
+                await d._broadcast(
+                    {
+                        "type": "event",
+                        "thread_id": thread_id,
+                        "namespace": [],
+                        "mode": "custom",
+                        "data": emit_error_event(exc),
+                    }
+                )
+                await d._broadcast({"type": "status", "state": "idle", "thread_id": thread_id})
+                if client_id:
+                    await d._session_manager.release_thread_ownership(client_id)
+                return
+
+        if d._thread_logger:
+            d._thread_logger.log_user_input(effective_text)
+
+        await d._runner.touch_thread_activity_timestamp(thread_id)
+
+        # Add to global cross-thread input history
+        if d._global_history:
+            metadata = {
+                "workspace": str(
+                    d._thread_registry.get_workspace(thread_id) or d._daemon_workspace
+                ),
+                "autonomous": autonomous,
+                "subagent": subagent,
+            }
+            d._global_history.add(effective_text, thread_id=thread_id, metadata=metadata)
 
         # No placeholder pattern - set task directly after creation
         d._query_running = True
@@ -189,7 +212,7 @@ class QueryEngine:
 
                 if timeout_enabled:
                     async with asyncio.timeout(timeout_seconds):
-                        async for chunk in d._runner.astream(text, **stream_kwargs):
+                        async for chunk in d._runner.astream(effective_text, **stream_kwargs):
                             # IG-157: Check for task cancellation from cancel_current_query()
                             if d._current_query_task and d._current_query_task.done():
                                 logger.info("Stream loop detected cancelled task, stopping")
@@ -252,7 +275,7 @@ class QueryEngine:
                         logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
                 else:
                     # No timeout - original behavior
-                    async for chunk in d._runner.astream(text, **stream_kwargs):
+                    async for chunk in d._runner.astream(effective_text, **stream_kwargs):
                         # IG-157: Check for task cancellation from cancel_current_query()
                         if d._current_query_task and d._current_query_task.done():
                             logger.info("Stream loop detected cancelled task, stopping")
@@ -324,8 +347,6 @@ class QueryEngine:
                 raise
             except Exception as exc:
                 logger.exception("Daemon query error")
-                from soothe.utils.error_format import emit_error_event
-
                 await d._broadcast(
                     {
                         "type": "event",
@@ -351,7 +372,7 @@ class QueryEngine:
                         retention_days=d._config.observability.thread_logging_retention_days,
                         max_size_mb=d._config.observability.thread_logging_max_size_mb,
                     )
-                    d._thread_logger.log_user_input(text)
+                    d._thread_logger.log_user_input(effective_text)
 
                 if full_response:
                     d._thread_logger.log_assistant_response("".join(full_response))
@@ -402,6 +423,7 @@ class QueryEngine:
         interactive: bool = False,
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
+        attachments: list[dict[str, str]] | None = None,
     ) -> None:
         """Execute query using ``ThreadExecutor``.
 
@@ -424,24 +446,6 @@ class QueryEngine:
                 max_size_mb=d._config.observability.thread_logging_max_size_mb,
             )
 
-        if d._thread_logger:
-            d._thread_logger.log_user_input(text)
-
-        await d._runner.touch_thread_activity_timestamp(thread_id)
-
-        # Add to global cross-thread input history
-        if d._global_history:
-            metadata = {
-                "workspace": str(
-                    d._thread_registry.get_workspace(thread_id) or d._daemon_workspace
-                ),
-                "autonomous": autonomous,
-                "subagent": subagent,
-            }
-            d._global_history.add(text, thread_id=thread_id, metadata=metadata)
-
-        # IG-054: Check capacity BEFORE creating task (not at message routing time)
-        # This eliminates race window between capacity check and task creation
         max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
         at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
         if at_capacity:
@@ -472,6 +476,42 @@ class QueryEngine:
             if client_id:
                 await d._session_manager.release_thread_ownership(client_id)
             return
+
+        effective_text = text
+        if attachments:
+            try:
+                effective_text = await enrich_user_text_with_vision(d._config, text, attachments)
+            except Exception as exc:
+                logger.exception("Vision preflight failed for thread %s", thread_id)
+                await d._broadcast(
+                    {
+                        "type": "event",
+                        "thread_id": thread_id,
+                        "namespace": [],
+                        "mode": "custom",
+                        "data": emit_error_event(exc),
+                    }
+                )
+                await d._broadcast({"type": "status", "state": "idle", "thread_id": thread_id})
+                if client_id:
+                    await d._session_manager.release_thread_ownership(client_id)
+                return
+
+        if d._thread_logger:
+            d._thread_logger.log_user_input(effective_text)
+
+        await d._runner.touch_thread_activity_timestamp(thread_id)
+
+        # Add to global cross-thread input history
+        if d._global_history:
+            metadata = {
+                "workspace": str(
+                    d._thread_registry.get_workspace(thread_id) or d._daemon_workspace
+                ),
+                "autonomous": autonomous,
+                "subagent": subagent,
+            }
+            d._global_history.add(effective_text, thread_id=thread_id, metadata=metadata)
 
         if client_id:
             await d._session_manager.claim_thread_ownership(client_id, thread_id)
@@ -514,7 +554,7 @@ class QueryEngine:
                 stream_tuple_length = 3
                 msg_pair_length = 2
                 async for chunk in d._thread_executor.execute_thread(
-                    thread_id, text, **stream_kwargs
+                    thread_id, effective_text, **stream_kwargs
                 ):
                     # IG-157: Check for task cancellation from cancel_current_query()
                     if d._current_query_task and d._current_query_task.done():
@@ -549,8 +589,6 @@ class QueryEngine:
                 raise
             except Exception as exc:
                 logger.exception("Multi-threaded query error in thread %s", thread_id)
-                from soothe.utils.error_format import emit_error_event
-
                 await d._broadcast(
                     {
                         "type": "event",
@@ -573,7 +611,7 @@ class QueryEngine:
                         retention_days=d._config.observability.thread_logging_retention_days,
                         max_size_mb=d._config.observability.thread_logging_max_size_mb,
                     )
-                    d._thread_logger.log_user_input(text)
+                    d._thread_logger.log_user_input(effective_text)
 
                 if full_response:
                     d._thread_logger.log_assistant_response("".join(full_response))

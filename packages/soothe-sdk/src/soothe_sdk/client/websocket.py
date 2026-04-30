@@ -161,6 +161,7 @@ class WebSocketClient:
         interactive: bool = False,
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
+        attachments: list[dict[str, str]] | None = None,
     ) -> None:
         """Send user input to the daemon.
 
@@ -171,6 +172,7 @@ class WebSocketClient:
             subagent: Optional subagent name to route the query to.
             model: Optional ``provider:model`` override for this turn (daemon host config).
             model_params: Optional extra kwargs for model construction (JSON-serializable dict).
+            attachments: Optional image attachments (``mime_type`` + base64 ``data``); IG-327.
         """
         payload: dict[str, Any] = {"type": "input", "text": text}
         if autonomous:
@@ -185,6 +187,8 @@ class WebSocketClient:
             payload["model"] = model
         if model_params:
             payload["model_params"] = model_params
+        if attachments:
+            payload["attachments"] = attachments
         await self.send(payload)
 
     async def send_command(self, cmd: str) -> None:

@@ -19,6 +19,22 @@ def test_validate_message_input_valid() -> None:
     assert errors == []
 
 
+def test_validate_message_input_image_only_empty_text() -> None:
+    """IG-327: image attachments allow empty user text when attachments are non-empty."""
+    msg = {
+        "type": "input",
+        "text": "",
+        "attachments": [{"mime_type": "image/png", "data": "abc"}],
+    }
+    assert validate_message(msg) == []
+
+
+def test_validate_message_input_neither_text_nor_attachments() -> None:
+    errors = validate_message({"type": "input", "text": ""})
+    assert errors
+    assert "non-empty" in errors[0].lower()
+
+
 def test_validate_message_input_missing_text() -> None:
     """Test input message missing required text field."""
     msg = {"type": "input"}
