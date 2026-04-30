@@ -1060,7 +1060,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 time.sleep(0.2)
 
         # SIGKILL escalation
-        logger.warning("Daemon did not stop within %.1f seconds, sending SIGKILL", timeout)
+        logger.debug("Daemon did not stop within %.1f seconds, sending SIGKILL", timeout)
         with contextlib.suppress(ProcessLookupError, PermissionError):
             os.kill(pid, signal.SIGKILL)
 
