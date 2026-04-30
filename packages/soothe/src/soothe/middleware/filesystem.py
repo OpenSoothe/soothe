@@ -186,16 +186,27 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
         )
 
     def _backend_for_tools(self, runtime: ToolRuntime | None) -> BackendProtocol:
-        """Resolve backend for surgical tools (IG-316).
+        """Resolve backend for surgical tools (IG-316, IG-328).
 
         Callable backends require ``runtime`` so ``_get_backend`` can run.
+        IG-328: Allow callable backend with None runtime (fallback to initial workspace).
         """
+        import logging
+
+        _logger = logging.getLogger(__name__)
+
         if runtime is not None:
             return self._get_backend(runtime)
         backend = self.backend
         if callable(backend):
-            msg = "Filesystem tool requires tool runtime for this backend configuration"
-            raise RuntimeError(msg)
+            # IG-328: Callable backend with None runtime (direct tool invocation)
+            # Call backend with None to get fallback workspace
+            try:
+                return backend(None)
+            except Exception as e:
+                _logger.debug("Callable backend failed with None runtime: %s", e)
+                msg = "Filesystem tool requires tool runtime for this backend configuration"
+                raise RuntimeError(msg) from e
         return backend
 
     def _try_resolve_os_path(
