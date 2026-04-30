@@ -261,8 +261,12 @@ def _is_ai_tool_invocation_messages_chunk(chunk: object) -> bool:
     return _message_has_tool_invocation_metadata(data[0])
 
 
-def _is_loop_assistant_output_messages_chunk(chunk: object) -> bool:
-    """True when chunk is a root ``messages`` tuple carrying loop-tagged assistant text."""
+def _is_ai_messages_stream_chunk(chunk: object) -> bool:
+    """True for ``messages`` chunks whose payload is assistant AI (not human/tool).
+
+    Used so daemon clients receive full streamed assistant content from subgraphs
+    and execute phases, not only tool rows (IG-330).
+    """
     if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
         return False
     _namespace, mode, data = chunk
@@ -270,7 +274,30 @@ def _is_loop_assistant_output_messages_chunk(chunk: object) -> bool:
         return False
     if not isinstance(data, (list, tuple)) or len(data) < _MSG_PAIR_LEN:
         return False
-    return loop_message_assistant_output_phase(data[0]) is not None
+    msg = data[0]
+    from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
+
+    if isinstance(msg, HumanMessage):
+        return False
+    if isinstance(msg, (AIMessage, AIMessageChunk)):
+        return True
+    if isinstance(msg, dict):
+        raw_type = msg.get("type")
+        if isinstance(raw_type, str):
+            if raw_type in ("human", "HumanMessage", "HumanMessageChunk"):
+                return False
+            if raw_type in ("tool", "ToolMessage") or raw_type.endswith("ToolMessage"):
+                return False
+            if raw_type in ("ai", "AIMessage", "AIMessageChunk") or raw_type.endswith(
+                "AIMessageChunk"
+            ):
+                return True
+        if loop_message_assistant_output_phase(msg) is not None:
+            rt = msg.get("type")
+            if isinstance(rt, str) and rt in ("human", "HumanMessage"):
+                return False
+            return True
+    return False
 
 
 def _forward_messages_chunk_for_tool_ui(
@@ -278,10 +305,9 @@ def _forward_messages_chunk_for_tool_ui(
 ) -> bool:
     """Whether to forward a ``stream_event`` messages chunk to WebSocket / TUI.
 
-    IG-304: Daemon-side suppression isolation.
-    Always forward tool-related chunks only (tool results + AI tool-call metadata).
-    Execute-phase assistant prose is suppressed server-side and should not be
-    streamed to clients as user-facing text.
+    Forwards ``ToolMessage`` chunks and all assistant ``AIMessage`` / ``AIMessageChunk``
+    wire payloads (full content, including execute-phase prose and subgraph output;
+    IG-330). Human messages are not forwarded on this path.
 
     Args:
         chunk: Deepagents stream chunk ``(namespace, mode, data)``.
@@ -289,134 +315,7 @@ def _forward_messages_chunk_for_tool_ui(
     Returns:
         True if chunk should be forwarded.
     """
-    return _is_tool_stream_chunk(chunk) or _is_ai_tool_invocation_messages_chunk(chunk)
-
-
-def _strip_text_content_from_ai_tool_message(
-    msg: object,
-) -> tuple[object, str]:
-    """Strip text payloads from AI tool-invocation messages.
-
-    Keeps tool-call metadata (`tool_calls`, `tool_call_chunks`, `tool_call` blocks)
-    while removing user-visible text content to avoid daemon-side leakage.
-
-    Args:
-        msg: AI message object or serialized dict.
-
-    Returns:
-        Tuple of (sanitized_message, stripped_text_preview_source).
-    """
-    from langchain_core.messages import AIMessage, AIMessageChunk
-
-    payload: dict[str, Any] | None
-    if isinstance(msg, (AIMessage, AIMessageChunk)):
-        payload = msg.model_dump(mode="json")
-    elif isinstance(msg, dict):
-        payload = dict(msg)
-    else:
-        return msg, ""
-
-    raw_type = payload.get("type")
-    if not isinstance(raw_type, str):
-        return msg, ""
-    if raw_type not in ("ai", "AIMessage", "AIMessageChunk") and not raw_type.endswith(
-        "AIMessageChunk"
-    ):
-        return msg, ""
-
-    stripped_parts: list[str] = []
-
-    raw_content = payload.get("content")
-    if isinstance(raw_content, str):
-        if raw_content.strip():
-            stripped_parts.append(raw_content)
-        payload["content"] = ""
-    elif isinstance(raw_content, list):
-        kept_content: list[Any] = []
-        for item in raw_content:
-            if isinstance(item, str):
-                if item.strip():
-                    stripped_parts.append(item)
-                continue
-            if isinstance(item, dict) and _dict_block_is_tool_invocation(item):
-                kept_content.append(item)
-                continue
-            if isinstance(item, dict):
-                text = item.get("text")
-                if isinstance(text, str) and text.strip():
-                    stripped_parts.append(text)
-                continue
-        payload["content"] = kept_content
-
-    raw_blocks = payload.get("content_blocks")
-    if isinstance(raw_blocks, list):
-        kept_blocks: list[dict[str, Any]] = []
-        for block in raw_blocks:
-            if not isinstance(block, dict):
-                continue
-            if _dict_block_is_tool_invocation(block):
-                kept_blocks.append(block)
-                continue
-            text = block.get("text")
-            if isinstance(text, str) and text.strip():
-                stripped_parts.append(text)
-        payload["content_blocks"] = kept_blocks
-
-    stripped_preview_source = " ".join(s.strip() for s in stripped_parts if s.strip()).strip()
-    return payload, stripped_preview_source
-
-
-def _sanitize_forwarded_ai_tool_chunk(
-    chunk: object,
-) -> object:
-    """Sanitize forwarded AI tool-invocation chunk by stripping text blocks.
-
-    ToolMessage chunks are returned unchanged. AI chunks that carry tool metadata are
-    converted to sanitized dict payloads so clients receive only tool-call metadata.
-
-    Args:
-        chunk: Deepagents stream chunk `(namespace, mode, data)`.
-
-    Returns:
-        Sanitized chunk object (or original chunk when sanitization is not applicable).
-    """
-    if not _is_ai_tool_invocation_messages_chunk(chunk):
-        return chunk
-    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
-        return chunk
-
-    namespace, mode, data = chunk
-    if mode != "messages":
-        return chunk
-    if not isinstance(data, (list, tuple)) or len(data) < _MSG_PAIR_LEN:
-        return chunk
-
-    msg = data[0]
-    metadata = data[1]
-    sanitized_msg, stripped_preview_source = _strip_text_content_from_ai_tool_message(msg)
-
-    if stripped_preview_source:
-        logger.debug(
-            "Sanitized AI tool chunk: stripped text/content preview=%s",
-            preview_first(stripped_preview_source, 200),
-        )
-
-    return (namespace, mode, (sanitized_msg, metadata))
-
-
-def _stringify_llm_message_content(content: object) -> str:
-    """Flatten LangChain message content to a single string."""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, str):
-                parts.append(block)
-            elif isinstance(block, dict) and "text" in block:
-                parts.append(str(block["text"]))
-        return "".join(parts)
-    return str(content or "")
+    return _is_tool_stream_chunk(chunk) or _is_ai_messages_stream_chunk(chunk)
 
 
 def _clip_agentic_step_description(
@@ -654,11 +553,8 @@ class AgenticMixin:
                 )
 
             elif event_type == "stream_event":
-                # IG-304: Daemon-side suppression isolation; tool-only forwarding.
+                # IG-330: Forward full ``messages`` stream for AI + tool payloads (no strip).
                 if _forward_messages_chunk_for_tool_ui(event_data):
-                    yield _sanitize_forwarded_ai_tool_chunk(event_data)
-                elif _is_loop_assistant_output_messages_chunk(event_data):
-                    # IG-317: Synthesis / piggybacked assistant text as tagged ``messages`` chunks.
                     yield event_data
 
             elif event_type == "plan":
@@ -691,9 +587,13 @@ class AgenticMixin:
                 if isinstance(event_data, dict):
                     final_result = event_data["result"]
                     n_act_steps = int(event_data.get("step_results_count", 0))
+                    skip_goal_completion_wire_duplicate = bool(
+                        event_data.get("skip_goal_completion_wire_duplicate")
+                    )
                 else:
                     final_result = event_data
                     n_act_steps = 0
+                    skip_goal_completion_wire_duplicate = False
 
                 # Do not re-yield full_output as AIMessage: Executor already streamed the same
                 # AI + tool content via messages mode; replaying it duplicates stdout (IG-119).
@@ -729,7 +629,7 @@ class AgenticMixin:
                     if text:
                         final_stdout = text
 
-                if final_stdout:
+                if final_stdout and not skip_goal_completion_wire_duplicate:
                     yield loop_assistant_messages_chunk(
                         content=final_stdout,
                         phase="goal_completion",

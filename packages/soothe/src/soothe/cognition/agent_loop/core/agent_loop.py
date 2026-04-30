@@ -356,7 +356,7 @@ class AgentLoop:
                 final_output = None
 
                 if action == "skip" or action == "direct":
-                    # Use precomputed Execute text
+                    # Use precomputed Execute text (already streamed as the last AI message).
                     final_output = precomputed_text
                     logger.info(
                         "Goal completion: action=%s chars=%d", action, len(final_output or "")
@@ -420,6 +420,9 @@ class AgentLoop:
                     {
                         "result": updated_result,
                         "step_results_count": len(state.step_results),
+                        # Runner must not emit ``phase=goal_completion`` chunks for this body:
+                        # clients already received it via Execute ``messages`` stream.
+                        "skip_goal_completion_wire_duplicate": action in ("skip", "direct"),
                     },
                 )
                 return

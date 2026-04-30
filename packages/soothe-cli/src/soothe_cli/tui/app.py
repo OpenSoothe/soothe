@@ -4698,13 +4698,19 @@ class SootheApp(App):
             self._session_state.auto_approve = self._auto_approve
 
     def action_toggle_tool_output(self) -> None:
-        """Toggle expand/collapse of the most recent tool output or skill body."""
+        """Toggle expand/collapse of the most recent skill, assistant, or tool card."""
         # Try skill messages first (most recent collapsible content)
         with suppress(NoMatches):
             skill_messages = list(self.query(SkillMessage))
             for skill_msg in reversed(skill_messages):
                 if skill_msg._stripped_body.strip():
                     skill_msg.toggle_body()
+                    return
+        with suppress(NoMatches):
+            assistant_messages = list(self.query(AssistantMessage))
+            for asst in reversed(assistant_messages):
+                if asst.has_collapsible_body:
+                    asst.toggle_collapse()
                     return
         # Fall back to tool messages with output
         with suppress(NoMatches):
