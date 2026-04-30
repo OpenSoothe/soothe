@@ -293,7 +293,10 @@ def _resolve_single_tool_group_uncached(
             if config and config.workspace_dir
             else str(Path.cwd())
         )
-        toolkit = ExecutionToolkit(workspace_root=resolved_cwd)
+        toolkit = ExecutionToolkit(
+            workspace_root=resolved_cwd,
+            security_config=(getattr(config, "security", None) if config else None),
+        )
         return toolkit.get_tools()
 
     # Support individual tool names (map to consolidated group)
@@ -305,7 +308,10 @@ def _resolve_single_tool_group_uncached(
             if config and config.workspace_dir
             else str(Path.cwd())
         )
-        toolkit = ExecutionToolkit(workspace_root=resolved_cwd)
+        toolkit = ExecutionToolkit(
+            workspace_root=resolved_cwd,
+            security_config=(getattr(config, "security", None) if config else None),
+        )
         all_tools = toolkit.get_tools()
         tool_map = {tool.name: tool for tool in all_tools}
         if name in tool_map:

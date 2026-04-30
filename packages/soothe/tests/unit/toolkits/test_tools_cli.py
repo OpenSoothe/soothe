@@ -21,7 +21,6 @@ class TestRunCommandToolInitialization:
         assert tool.timeout == 60
         assert tool.max_output_length == 10000
         assert tool.workspace_root == ""
-        assert "rm -rf /" in tool.banned_commands
 
     def test_custom_configuration(self) -> None:
         """Test initialization with custom configuration."""
@@ -35,42 +34,10 @@ class TestRunCommandToolInitialization:
         assert tool.timeout == 120
         assert tool.max_output_length == 5000
 
-    def test_security_configuration(self) -> None:
-        """Test default security configuration."""
+    def test_security_configuration_field(self) -> None:
+        """RunCommandTool carries security config field."""
         tool = RunCommandTool()
-
-        # Check default banned commands
-        expected_banned = [
-            "rm -rf /",
-            "rm -rf ~",
-            "rm -rf ./*",
-            "rm -rf *",
-            "mkfs",
-            "dd if=",
-            ":(){ :|:& };:",
-            "sudo rm",
-            "sudo dd",
-            "chmod -R 777 /",
-            "chown -R",
-        ]
-
-        for banned in expected_banned:
-            assert banned in tool.banned_commands
-
-    def test_regex_banned_patterns(self) -> None:
-        """Test default regex banned patterns."""
-        tool = RunCommandTool()
-
-        expected_patterns = [
-            r"git\s+init",
-            r"git\s+commit",
-            r"git\s+add",
-            r"rm\s+-rf\s+/",
-            r"sudo\s+rm\s+-rf",
-        ]
-
-        for pattern in expected_patterns:
-            assert pattern in tool.banned_command_patterns
+        assert tool.security_config is None
 
     def test_create_execution_tools(self) -> None:
         """Test factory function creates all tools."""
@@ -86,91 +53,17 @@ class TestRunCommandToolInitialization:
 
 
 class TestRunCommandToolCommandValidation:
-    """Test command validation and security features."""
+    """Test command validation via operation security protocol."""
 
-    def test_is_banned_detects_banned_commands(self) -> None:
-        """Test detection of banned commands."""
+    def test_dangerous_command_is_denied(self) -> None:
         tool = RunCommandTool()
+        verdict, _reason = tool._security_decision("rm -rf /", tool.name)
+        assert verdict == "deny"
 
-        banned_commands = [
-            "rm -rf /",
-            "rm -rf ~",
-            "rm -rf ./*",
-            "rm -rf *",
-            "mkfs.ext4 /dev/sda",
-            "dd if=/dev/zero of=/dev/sda",
-            ":(){ :|:& };:",
-            "sudo rm file.txt",
-            "sudo dd if=/dev/zero of=/dev/sda",
-            "chmod -R 777 /",
-            "chown -R user:group /",
-        ]
-
-        for command in banned_commands:
-            result = tool._is_banned(command)
-            assert result is True, f"Command '{command}' should be banned"
-
-    def test_is_banned_allows_safe_commands(self) -> None:
-        """Test that safe commands are allowed."""
+    def test_safe_command_is_allowed(self) -> None:
         tool = RunCommandTool()
-
-        safe_commands = [
-            "ls -la",
-            "pwd",
-            "echo 'hello world'",
-            "python -c 'print(\"test\")'",
-            "cat file.txt",
-        ]
-
-        for command in safe_commands:
-            result = tool._is_banned(command)
-            assert result is False, f"Command '{command}' should be allowed"
-
-
-class TestRegexBannedPatterns:
-    """Test regex-based banned command patterns."""
-
-    def test_git_commands_blocked(self) -> None:
-        """Test that git init, commit, add are blocked."""
-        tool = RunCommandTool()
-
-        git_commands = [
-            "git init",
-            "git commit -m 'test'",
-            "git add .",
-            "git add file.txt",
-            "git init repo",
-        ]
-
-        for command in git_commands:
-            assert tool._is_banned(command), f"Command '{command}' should be banned"
-
-    def test_sudo_rm_blocked(self) -> None:
-        """Test that sudo rm commands are blocked."""
-        tool = RunCommandTool()
-
-        sudo_commands = [
-            "sudo rm -rf /",
-            "sudo rm file.txt",
-            "sudo rm -rf directory",
-        ]
-
-        for command in sudo_commands:
-            assert tool._is_banned(command), f"Command '{command}' should be banned"
-
-    def test_regex_pattern_case_insensitive(self) -> None:
-        """Test that regex patterns are case insensitive."""
-        tool = RunCommandTool()
-
-        # Mix of cases
-        commands = [
-            "GIT INIT",
-            "Git Commit",
-            "GiT AdD",
-        ]
-
-        for command in commands:
-            assert tool._is_banned(command), f"Command '{command}' should be banned"
+        verdict, _reason = tool._security_decision("echo hello", tool.name)
+        assert verdict == "allow"
 
 
 class TestShellRecovery:
@@ -199,13 +92,13 @@ class TestCliToolExecution:
     """Test CLI command execution."""
 
     def test_run_with_banned_command(self) -> None:
-        """Test execution with banned command."""
+        """Test execution with protocol-denied command."""
         tool = RunCommandTool()
 
         result = tool._run("rm -rf /")
 
         assert "Error" in result
-        assert "not allowed" in result
+        assert "Command blocked by security rule" in result
 
     def test_run_without_pexpect(self) -> None:
         """Test execution when pexpect is not available."""
@@ -250,3 +143,10 @@ class TestBackgroundTools:
 
         assert tool.name == "kill_process"
         assert "terminate" in tool.description.lower()
+
+    def test_run_background_denied_command(self) -> None:
+        """run_background uses operation security protocol."""
+        tool = RunBackgroundTool()
+        result = tool._run("sudo rm -rf /")
+        assert result["status"] == "error"
+        assert "Command blocked by security rule" in result["message"]

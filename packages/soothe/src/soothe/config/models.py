@@ -996,6 +996,13 @@ class SecurityConfig(BaseModel):
 
     denied_paths: list[str] = Field(
         default_factory=lambda: [
+            "/etc/**",
+            "/bin/**",
+            "/sbin/**",
+            "/usr/**",
+            "/System/**",
+            "/Library/**",
+            "/private/etc/**",
             "~/.ssh/**",
             "~/.gnupg/**",
             "~/.aws/**",
@@ -1010,6 +1017,10 @@ class SecurityConfig(BaseModel):
     require_approval_for_file_types: list[str] = Field(
         default_factory=lambda: [".env", ".pem", ".key", ".p12", ".pfx", ".crt"]
     )
+    whitelist_paths_bypass: list[str] = Field(default_factory=list)
+    """Path patterns that bypass default deny checks in operation security."""
+    whitelist_commands_bypass: list[str] = Field(default_factory=list)
+    """Regex patterns that bypass default command deny checks in operation security."""
 
 
 # ---------------------------------------------------------------------------
