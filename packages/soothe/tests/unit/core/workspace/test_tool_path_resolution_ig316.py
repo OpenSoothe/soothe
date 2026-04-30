@@ -35,8 +35,9 @@ def test_normalized_path_backend_read_host_absolute_under_workspace(tmp_path: Pa
     )
     host_path = str(target)
     out = backend.read(host_path)
-    assert "Error: File" not in out
-    assert "hello" in out
+    text = out if isinstance(out, str) else getattr(out, "content", str(out))
+    assert "Error: File" not in text
+    assert "hello" in text
 
 
 def test_workspace_aware_backend_ls_info_host_absolute_under_workspace(tmp_path: Path) -> None:

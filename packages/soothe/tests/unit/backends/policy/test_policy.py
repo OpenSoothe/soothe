@@ -232,7 +232,7 @@ class TestConfigDrivenPolicy:
         action = ActionRequest(
             action_type="tool_call",
             tool_name="execute",
-            tool_args={"command": "rm -rf /"},
+            tool_args={"command": "ls -la"},
         )
 
         # Create a custom permission set with no shell execute

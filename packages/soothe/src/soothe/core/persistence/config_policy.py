@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import fnmatch
 import logging
-from pathlib import Path
 from typing import Any
 
 from soothe_sdk.tools.metadata import (
@@ -13,6 +11,12 @@ from soothe_sdk.tools.metadata import (
     is_policy_filesystem_tool,
 )
 
+from soothe.core.security.operation_security import WorkspaceToolOperationSecurity
+from soothe.protocols.operation_security import (
+    OperationKind,
+    OperationSecurityContext,
+    OperationSecurityRequest,
+)
 from soothe.protocols.policy import (
     ActionRequest,
     Permission,
@@ -21,7 +25,6 @@ from soothe.protocols.policy import (
     PolicyDecision,
     PolicyProfile,
 )
-from soothe.utils import expand_path
 
 logger = logging.getLogger(__name__)
 
@@ -145,20 +148,20 @@ class ConfigDrivenPolicy:
         self._profiles = profiles or dict(DEFAULT_PROFILES)
         self._child_restrictions = child_restrictions or {}
         self._config = config
+        self._operation_security = WorkspaceToolOperationSecurity()
 
     def check(self, action: ActionRequest, context: PolicyContext) -> PolicyDecision:
         """Check if an action is permitted under the active profile."""
-        # Check filesystem-specific security policy first (real tool names + path keys)
-        if (
-            action.action_type == "tool_call"
-            and action.tool_name
-            and is_policy_filesystem_tool(action.tool_name)
-        ):
-            target = extract_filesystem_path_for_policy(action.tool_name, action.tool_args)
-            if target:
-                fs_decision = self._check_filesystem_permission(action, context, target)
-                if fs_decision.verdict != "allow":
-                    return fs_decision
+        if action.action_type == "tool_call" and action.tool_name:
+            request = self._build_operation_security_request(action)
+            op_context = OperationSecurityContext(
+                thread_id=context.thread_id,
+                workspace=context.workspace,
+                security_config=getattr(self._config, "security", None),
+            )
+            op_decision = self._operation_security.evaluate(request, op_context)
+            if op_decision.verdict != "allow":
+                return PolicyDecision(verdict=op_decision.verdict, reason=op_decision.reason)
 
         required = _extract_required_permission(action)
         if required is None:
@@ -214,113 +217,33 @@ class ConfigDrivenPolicy:
                 return profile
         return None
 
-    def _check_filesystem_permission(
-        self,
-        action: ActionRequest,
-        context: PolicyContext,
-        target_path: str,
-    ) -> PolicyDecision:
-        """Check filesystem access permissions.
+    def _build_operation_security_request(self, action: ActionRequest) -> OperationSecurityRequest:
+        tool_name = action.tool_name or ""
+        tool_args = action.tool_args or {}
+        meta = get_tool_meta(tool_name)
+        operation_kind: OperationKind = "generic"
+        target_path: str | None = None
+        command: str | None = None
 
-        Handles:
-        - Path blacklist/whitelist patterns
-        - File type restrictions
-        - Workspace boundary enforcement
-        - User approval requirements
+        if is_policy_filesystem_tool(tool_name):
+            target_path = extract_filesystem_path_for_policy(tool_name, tool_args)
+            if meta and meta.outcome_type == "file_write":
+                operation_kind = "filesystem_write"
+            else:
+                operation_kind = "filesystem_read"
+        elif meta and meta.category == "execution":
+            command_value = tool_args.get("command") or tool_args.get("cmd")
+            if command_value is not None:
+                command = str(command_value)
+                operation_kind = "shell_execute"
+            elif tool_name == "run_python":
+                operation_kind = "python_execute"
 
-        Args:
-            action: Tool action (for logging context).
-            context: Policy context; uses ``context.workspace`` when set.
-            target_path: Resolved path string extracted from tool arguments.
-        """
-        del action  # Reserved for future structured audit fields
-        if not self._config or not hasattr(self._config, "security"):
-            return PolicyDecision(verdict="allow", reason="No security config")
-
-        security = self._config.security
-        file_path = target_path.strip()
-        if not file_path:
-            return PolicyDecision(verdict="allow", reason="No file path specified")
-
-        resolved_path = expand_path(file_path)
-
-        # 1. Check denied_paths (blacklist) - highest priority
-        for pattern in security.denied_paths:
-            expanded_pattern = self._expand_path_pattern(pattern)
-            if self._path_matches_pattern(resolved_path, expanded_pattern):
-                return PolicyDecision(
-                    verdict="deny",
-                    reason=f"Path '{file_path}' matches denied pattern '{pattern}'",
-                )
-
-        # 2. Check allowed_paths (whitelist)
-        is_allowed = False
-        for pattern in security.allowed_paths:
-            expanded_pattern = self._expand_path_pattern(pattern)
-            if self._path_matches_pattern(resolved_path, expanded_pattern):
-                is_allowed = True
-                break
-
-        if not is_allowed:
-            return PolicyDecision(
-                verdict="deny",
-                reason=f"Path '{file_path}' does not match any allowed pattern",
-            )
-
-        # 3. Check workspace boundary (stream workspace from PolicyContext first)
-        workspace_root: Path | None = None
-        if context.workspace and str(context.workspace).strip():
-            workspace_root = expand_path(str(context.workspace).strip())
-        elif hasattr(self._config, "workspace_dir") and self._config.workspace_dir:
-            workspace_root = expand_path(self._config.workspace_dir)
-
-        if workspace_root is not None:
-            try:
-                resolved_path.relative_to(workspace_root)
-            except ValueError:
-                # Outside workspace
-                if not security.allow_paths_outside_workspace:
-                    return PolicyDecision(
-                        verdict="deny",
-                        reason=f"Path '{file_path}' is outside workspace",
-                    )
-                if security.require_approval_for_outside_paths:
-                    return PolicyDecision(
-                        verdict="need_approval",
-                        reason=f"Path '{file_path}' is outside workspace and requires approval",
-                    )
-
-        # 4. Check file type restrictions
-        file_ext = resolved_path.suffix.lower()
-
-        if file_ext in security.denied_file_types:
-            return PolicyDecision(
-                verdict="deny",
-                reason=f"File type '{file_ext}' is explicitly denied",
-            )
-
-        if file_ext in security.require_approval_for_file_types:
-            return PolicyDecision(
-                verdict="need_approval",
-                reason=f"Access to '{file_ext}' files requires approval",
-            )
-
-        # 5. All checks passed
-        return PolicyDecision(verdict="allow", reason="All security checks passed")
-
-    def _expand_path_pattern(self, pattern: str) -> str:
-        """Expand ~ and environment variables in path patterns."""
-        if pattern.startswith("~"):
-            return str(Path(pattern).expanduser())
-        return pattern
-
-    def _path_matches_pattern(self, path: Path, pattern: str) -> bool:
-        """Check if a path matches a glob pattern.
-
-        Supports:
-        - ** recursive wildcard
-        - * single-level wildcard
-        - Exact path matching
-        """
-        path_str = str(path)
-        return fnmatch.fnmatch(path_str, pattern) or path_str.startswith(pattern.rstrip("*"))
+        return OperationSecurityRequest(
+            action_type=action.action_type,
+            tool_name=tool_name,
+            tool_args=tool_args,
+            operation_kind=operation_kind,
+            target_path=target_path,
+            command=command,
+        )

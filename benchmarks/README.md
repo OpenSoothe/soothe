@@ -32,6 +32,7 @@ BM-NNN-brief-title.md
 | [BM-001](BM-001-workspace-injection.md) | Workspace Injection | Verify workspace context propagation |
 | [BM-002](BM-002-subagent-selection.md) | Subagent Selection | Verify slash-command routing and passthrough behavior |
 | [BM-003](BM-003-ai-driven-daemon-endpoint.md) | AI-Driven Daemon Endpoint | Verify HTTP REST daemon endpoint correctness and latency |
+| [BM-004](BM-004-security-verification.md) | Security Verification | Verify operation-level security checks for filesystem and execution tools |
 
 ## Running Benchmarks
 
@@ -52,6 +53,9 @@ python verify_benchmark.py BM-001
 
 # Run BM-003 daemon endpoint benchmark
 uv run python benchmarks/run_bm003_daemon_endpoint.py --base-url http://127.0.0.1:8766
+
+# Run BM-004 security verification benchmark
+uv run python benchmarks/run_bm004_security_verification.py
 ```
 
 ## Adding New Benchmarks

@@ -164,3 +164,21 @@ def test_extract_required_permission_uses_file_path() -> None:
     perm = _extract_required_permission(action)
     assert perm is not None
     assert perm.scope == "/tmp/x"
+
+
+def test_run_background_denied_for_dangerous_command() -> None:
+    cfg = SimpleNamespace(security=_security(allow_out=False), workspace_dir="/tmp/ws")
+    policy = ConfigDrivenPolicy(config=cfg)
+    ctx = PolicyContext(
+        active_permissions=PermissionSet(frozenset([Permission("shell", "execute", "*")])),
+        thread_id="t1",
+        workspace="/tmp/ws",
+    )
+    action = ActionRequest(
+        action_type="tool_call",
+        tool_name="run_background",
+        tool_args={"command": "rm -rf /"},
+    )
+    d = policy.check(action, ctx)
+    assert d.verdict == "deny"
+    assert "Command blocked by security rule" in d.reason
