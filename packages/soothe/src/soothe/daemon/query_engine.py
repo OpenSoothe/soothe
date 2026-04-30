@@ -91,7 +91,9 @@ class QueryEngine:
         # Add to global cross-thread input history
         if d._global_history:
             metadata = {
-                "workspace": str(d._thread_registry.get_workspace(thread_id) or Path.cwd()),
+                "workspace": str(
+                    d._thread_registry.get_workspace(thread_id) or d._daemon_workspace
+                ),
                 "autonomous": autonomous,
                 "subagent": subagent,
             }
@@ -430,7 +432,9 @@ class QueryEngine:
         # Add to global cross-thread input history
         if d._global_history:
             metadata = {
-                "workspace": str(d._thread_registry.get_workspace(thread_id) or Path.cwd()),
+                "workspace": str(
+                    d._thread_registry.get_workspace(thread_id) or d._daemon_workspace
+                ),
                 "autonomous": autonomous,
                 "subagent": subagent,
             }

@@ -14,6 +14,10 @@ from soothe.cognition.agent_loop.context.goal_context_manager import GoalContext
 from soothe.cognition.agent_loop.core.executor import Executor
 from soothe.cognition.agent_loop.core.fallback_summary import generate_user_fallback_summary
 from soothe.cognition.agent_loop.core.plan_phase import PlanPhase
+from soothe.cognition.agent_loop.core.thread_continuation_bootstrap import (
+    build_thread_continuation_bootstrap_plan,
+    thread_continuation_plan_bootstrap_allowed,
+)
 from soothe.cognition.agent_loop.policies.goal_completion_policy import (
     determine_completion_action,
 )
@@ -166,12 +170,15 @@ class AgentLoop:
 
         # Try to recover from checkpoint (RFC-608: loop-scoped)
         checkpoint = await state_manager.load()
+        # IG-325: valid resume of a running checkpoint (structural plan-bootstrap guard)
+        recovery_valid_resume = False
         if checkpoint and checkpoint.status == "running":
             # Get current goal iteration (RFC-608: per-goal tracking)
             current_goal_index = checkpoint.current_goal_index
             if current_goal_index >= 0 and current_goal_index < len(checkpoint.goal_history):
                 goal_record = checkpoint.goal_history[current_goal_index]
                 iteration = goal_record.iteration
+                recovery_valid_resume = True
                 logger.info(
                     "Recovering from checkpoint at iteration %d (goal: %s)",
                     iteration,
@@ -188,6 +195,7 @@ class AgentLoop:
                 checkpoint = await state_manager.initialize(thread_id, max_iterations)
                 iteration = 0
                 goal_record = None
+                recovery_valid_resume = False
 
             # Derive prior conversation from step outputs (RFC-205)
             prior_outputs = state_manager.derive_plan_conversation(limit=10)
@@ -282,11 +290,20 @@ class AgentLoop:
                     exc_info=True,
                 )
 
-            plan_result = await self.plan_phase.plan(
-                goal=goal,
+            if thread_continuation_plan_bootstrap_allowed(
+                thread_continuation_mode=thread_continuation_mode,
                 state=state,
-                context=self._build_plan_context(state),
-            )
+                recovery_valid_resume=recovery_valid_resume,
+                goal_record=goal_record,
+            ):
+                logger.info("[Plan] iter=0 thread_continuation bootstrap (no planner LLM)")
+                plan_result = build_thread_continuation_bootstrap_plan(goal)
+            else:
+                plan_result = await self.plan_phase.plan(
+                    goal=goal,
+                    state=state,
+                    context=self._build_plan_context(state),
+                )
 
             yield (
                 "plan",

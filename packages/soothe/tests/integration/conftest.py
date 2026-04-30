@@ -212,6 +212,7 @@ def build_daemon_config(
         router=base_config.router,
         vector_stores=base_config.vector_stores,
         vector_store_router=base_config.vector_store_router,
+        workspace_dir=str(tmp_path / "workspace"),
         persistence={"persist_dir": str(tmp_path / "persistence")},
         protocols={
             "memory": {"enabled": False},

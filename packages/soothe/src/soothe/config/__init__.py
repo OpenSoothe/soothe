@@ -18,6 +18,7 @@ from soothe.config.env import (
     SOOTHE_HOME,
     _resolve_env,
     _resolve_provider_env,
+    default_soothe_workspace_dir,
 )
 from soothe.config.models import (
     AgenticLoopConfig,
@@ -66,6 +67,7 @@ __all__ = [
     "MAX_CONSECUTIVE_EMPTY_TOOL_CALLS",
     "MAX_EVIDENCE_STRING_LENGTH",
     "SOOTHE_HOME",
+    "default_soothe_workspace_dir",
     "_DEFAULT_SYSTEM_PROMPT",
     "_ENV_VAR_RE",
     "_MEDIUM_SYSTEM_PROMPT",

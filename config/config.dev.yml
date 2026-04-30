@@ -1,5 +1,8 @@
 # Development Configuration - Essential dev settings only
 # Inherits defaults from src/soothe/config/config.yml
+#
+# workspace_dir defaults to $SOOTHE_HOME/Workspace (IG-327). Set workspace_dir here to
+# pin a project directory for local dev.
 providers:
   - name: dashscope
     provider_type: openai
