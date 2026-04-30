@@ -58,6 +58,7 @@ class WelcomeBanner(Static):
         height: auto;
         padding: 1;
         margin-bottom: 1;
+        background: transparent;
     }
     """
 

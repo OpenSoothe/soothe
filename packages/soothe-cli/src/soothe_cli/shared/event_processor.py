@@ -589,7 +589,9 @@ class EventProcessor:
 
         payload = extract_tool_result_card_payload(msg)
         is_error = (
-            payload.is_error if payload is not None else infer_tool_output_suggests_error(content)
+            payload.is_error
+            if payload is not None
+            else infer_tool_output_suggests_error(content, tool_name)
         )
 
         # Log tool result for audit trail
@@ -784,7 +786,9 @@ class EventProcessor:
 
         payload = extract_tool_result_card_payload(msg)
         is_error = (
-            payload.is_error if payload is not None else infer_tool_output_suggests_error(content)
+            payload.is_error
+            if payload is not None
+            else infer_tool_output_suggests_error(content, tool_name)
         )
 
         # Log tool result for audit trail

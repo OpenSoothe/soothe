@@ -204,6 +204,28 @@ class TestFormatterRouting:
 
         assert brief.icon in ("✓", "✗")
 
+    def test_run_python_json_string_success_not_misclassified(self) -> None:
+        """JSON string payloads must not match the literal substring ``error`` in ``error``: null."""
+        from soothe_cli.shared.tool_formatters import ExecutionFormatter
+
+        formatter = ExecutionFormatter()
+        payload = '{"success": true, "output": "", "result": null, "error": null}'
+        brief = formatter.format("run_python", payload)
+
+        assert brief.icon == "✓"
+        assert brief.summary == "Executed"
+        assert brief.metrics.get("error") is not True
+
+    def test_run_python_json_string_real_failure(self) -> None:
+        from soothe_cli.shared.tool_formatters import ExecutionFormatter
+
+        formatter = ExecutionFormatter()
+        payload = '{"success": false, "output": "", "result": null, "error": "SyntaxError: bad"}'
+        brief = formatter.format("run_python", payload)
+
+        assert brief.icon == "✗"
+        assert "fail" in brief.summary.lower()
+
     def test_unknown_category_falls_back(self) -> None:
         """Test that unknown tool category uses FallbackFormatter."""
         from soothe_cli.shared.tool_output_formatter import ToolOutputFormatter

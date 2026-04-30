@@ -368,7 +368,7 @@ _register(
 )
 
 # ---------------------------------------------------------------------------
-# soothe research tool
+# soothe research subagent (invoked via task tool; not a tools.* group)
 # ---------------------------------------------------------------------------
 
 _register(
