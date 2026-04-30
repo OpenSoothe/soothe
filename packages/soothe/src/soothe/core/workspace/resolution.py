@@ -50,26 +50,26 @@ def resolve_loop_daemon_workspace(loop_id: str) -> Path:
     return root
 
 
-def resolve_daemon_workspace(config_workspace_dir: str = ".") -> Path:
-    """Resolve daemon's default workspace with priority order.
+def resolve_daemon_workspace(config_workspace_dir: str = "") -> Path:
+    """Resolve daemon workspace directory.
 
     Priority:
-    1. SOOTHE_WORKSPACE env var
-    2. $SOOTHE_HOME/Workspace/ (default)
-    3. workspace_dir from config.yml (legacy)
+    1. ``SOOTHE_WORKSPACE`` environment variable (absolute override).
+    2. ``workspace_dir`` from ``SootheConfig`` / YAML. Legacy empty or ``.``
+       resolves to ``$SOOTHE_HOME/Workspace`` (IG-327).
 
     Args:
-        config_workspace_dir: workspace_dir from SootheConfig.
+        config_workspace_dir: ``workspace_dir`` from configuration.
 
     Returns:
-        Resolved absolute workspace path.
+        Resolved absolute workspace path (created if missing, except when
+        ``SOOTHE_WORKSPACE`` points at an existing path only).
 
     Raises:
         ValueError: If resolved workspace is invalid system directory.
     """
-    from soothe.config import SOOTHE_HOME
+    from soothe.config.env import default_soothe_workspace_dir
 
-    # Priority 1: SOOTHE_WORKSPACE env var
     env_workspace = os.environ.get("SOOTHE_WORKSPACE")
     if env_workspace:
         workspace = Path(env_workspace).expanduser().resolve()
@@ -77,18 +77,14 @@ def resolve_daemon_workspace(config_workspace_dir: str = ".") -> Path:
         logger.info("Using SOOTHE_WORKSPACE: %s", workspace)
         return workspace
 
-    # Priority 2: $SOOTHE_HOME/Workspace/ (only when config is default ".")
-    soothe_workspace = Path(SOOTHE_HOME) / "Workspace"
-    if config_workspace_dir == ".":
-        # Create if doesn't exist
-        soothe_workspace.mkdir(parents=True, exist_ok=True)
-        logger.info("Using default workspace: %s", soothe_workspace)
-        return soothe_workspace.resolve()
-
-    # Priority 3: config.yml workspace_dir (legacy)
-    workspace = Path(config_workspace_dir).expanduser().resolve()
+    text = (config_workspace_dir or "").strip()
+    if not text or text == ".":
+        workspace = Path(default_soothe_workspace_dir()).expanduser().resolve()
+    else:
+        workspace = Path(config_workspace_dir).expanduser().resolve()
     _validate_workspace_dir(workspace)
-    logger.info("Using config workspace_dir: %s", workspace)
+    workspace.mkdir(parents=True, exist_ok=True)
+    logger.info("Using workspace_dir: %s", workspace)
     return workspace
 
 

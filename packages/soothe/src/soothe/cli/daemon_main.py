@@ -69,7 +69,7 @@ def daemon_start(
             start_new_session=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            cwd=Path.cwd(),
+            cwd=str(Path(SOOTHE_HOME).expanduser()),
         )
     except Exception as exc:
         typer.echo(f"Failed to start daemon: {exc}", err=True)

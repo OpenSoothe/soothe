@@ -270,6 +270,11 @@ plugins: []
 skills: []
 memory: []
 
+# Agent filesystem root (file tools, default working tree). Built-in default:
+# $SOOTHE_HOME/Workspace (created when the daemon starts). Override with SOOTHE_WORKSPACE
+# or set workspace_dir to an explicit path.
+# workspace_dir: "/path/to/your/project"
+
 # Security Configuration - Filesystem access control and security policies
 
 security:

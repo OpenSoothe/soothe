@@ -1,4 +1,4 @@
-"""LLM prompts for intent classification (IG-226, IG-250).
+"""LLM prompts for intent classification (IG-226, IG-250, IG-325).
 
 Structured prompts for LLM-driven intent classification with conversation context.
 Pure LLM-driven - no keyword heuristics or language detection shortcuts.
@@ -57,12 +57,18 @@ Intent classification criteria:
   → friendly_message required (action-oriented reinterpretation, 1-2 sentences, friendly tone)
           Example: "I will read the project readme files and show the first 10 lines"
   → task_complexity=medium (default) or complex (architecture/migrations)
+  → ALSO use new_goal when the user clearly starts a NEW standalone task, repudiates or
+    resets prior context, asks to ignore earlier discussion, or switches topic to
+    unrelated work—even if conversation_context is non-empty. Judge intent from the
+    query wording, not from the presence of prior turns alone.
 
 Intent precedence (apply in order):
-1. If query references prior conversation (check conversation_context) → thread_continuation
+1. If the user explicitly starts a new standalone task OR repudiates / overrides prior
+   context (ignore earlier, new topic unrelated to last turns, fresh assignment) → new_goal
 2. If query is conversational filler (greeting/thanks) → chitchat
 3. If query is factual knowledge question (no tools needed) → quiz
-4. If query requires tools/files/analysis → new_goal (DEFAULT when uncertain)
+4. If query references prior conversation or is a follow-up on recent results → thread_continuation
+5. If query requires tools/files/analysis → new_goal (DEFAULT when uncertain)
 
 Required JSON shape:
 {{
@@ -97,10 +103,11 @@ CRITICAL OUTPUT RULES:
 - "reasoning" is REQUIRED
 
 Intent precedence:
-1. Prior conversation reference → thread_continuation
+1. Explicit new standalone task or user overrides / ignores prior context → new_goal
 2. Conversational filler → chitchat
 3. Factual knowledge question (no tools) → quiz
-4. Tool-requiring task → new_goal (DEFAULT)
+4. Prior-turn follow-up or refinement → thread_continuation
+5. Tool-requiring task → new_goal (DEFAULT)
 
 Required JSON shape:
 {{
