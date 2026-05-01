@@ -2,7 +2,7 @@
 
 Consolidates single-purpose execution tools into one module:
 - run_command: Execute shell commands synchronously (langchain_community ShellTool)
-- run_python: Execute Python code with session persistence
+- run_python: Execute Python code (langchain_experimental PythonREPLTool)
 - run_background: Run commands in background
 - kill_process: Terminate background processes
 
@@ -16,11 +16,18 @@ import os
 import re
 import signal
 import subprocess
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional
 
 from langchain_community.tools import ShellTool
+from langchain_core.callbacks.manager import (
+    AsyncCallbackManagerForToolRun,
+    CallbackManagerForToolRun,
+)
+from langchain_core.runnables.config import run_in_executor
 from langchain_core.tools import BaseTool
 from langchain_core.tools.base import InjectedToolArg
+from langchain_experimental.tools.python.tool import PythonREPLTool, sanitize_input
+from langchain_experimental.utilities.python import PythonREPL
 
 try:
     from langchain.tools import ToolRuntime
@@ -32,7 +39,6 @@ from soothe_sdk.plugin import plugin
 from soothe.config.constants import DEFAULT_EXECUTE_TIMEOUT
 from soothe.core.security.operation_security import WorkspaceToolOperationSecurity
 from soothe.protocols.operation_security import OperationSecurityContext, OperationSecurityRequest
-from soothe.toolkits._internal.python_session_manager import get_session_manager
 from soothe.utils import expand_path
 
 logger = logging.getLogger(__name__)
@@ -250,55 +256,50 @@ def cleanup_execution_resources() -> None:
     """Compatibility hook for teardown tests (persistent shell removed in IG-336)."""
 
 
-class RunPythonTool(BaseTool):
-    r"""Execute Python code with session persistence.
+class RunPythonInput(BaseModel):
+    """Arguments for ``run_python`` (PythonREPLTool-based)."""
 
-    Use this tool for data analysis, calculations, and Python scripting.
-    Variables persist across calls within the same thread, enabling iterative
-    workflows like loading data and then analyzing it in subsequent calls.
+    code: str = Field(..., description="Python code to execute.")
 
-    Example:
-        Call 1: run_python(code="import pandas as pd\\ndf = pd.read_csv('data.csv')")
-        Call 2: run_python(code="df.head()")  # Works! df persists
-        Call 3: run_python(code="df.groupby('category').sum()")  # Continue analysis
+
+def _soothe_python_repl() -> PythonREPL:
+    """Isolated REPL globals (not the importing module's ``globals()``)."""
+    return PythonREPL.model_construct(_globals={}, _locals=None)
+
+
+class RunPythonREPLTool(PythonREPLTool):
+    """LangChain :class:`~langchain_experimental.tools.python.PythonREPLTool` as ``run_python``.
+
+    Uses ``PythonREPL`` with an isolated namespace; state persists for the lifetime
+    of this tool instance (IG-338).
     """
 
     name: str = "run_python"
     description: str = (
-        "Execute Python code with session persistence. "
-        "Variables persist across calls within the same thread. "
-        "Use for: data analysis, calculations, Python scripting. "
-        "Parameters: code (required) - Python code to execute. "
-        "Returns: execution result, output, or error."
+        "Execute Python code in a persistent Python REPL (langchain_experimental). "
+        "Variables and imports persist across calls for this tool instance. "
+        "Parameters: code (required). Use print(...) to display values."
     )
+    args_schema: type[BaseModel] = RunPythonInput
+    python_repl: PythonREPL = Field(default_factory=_soothe_python_repl)
 
-    workdir: str = Field(default="", description="Working directory")
-    timeout: int = Field(default=30, description="Execution timeout in seconds")
-    session_id: str | None = Field(
-        default=None, description="Session ID for persistence (default: auto-detected from thread)"
-    )
+    def _run(
+        self,
+        code: str,
+        run_manager: Optional[CallbackManagerForToolRun] = None,
+    ) -> Any:
+        if self.sanitize_input:
+            code = sanitize_input(code)
+        return self.python_repl.run(code)
 
-    def _run(self, code: str, session_id: str | None = None) -> dict[str, Any]:
-        """Execute Python code in persistent session.
-
-        Args:
-            code: Python code to execute
-            session_id: Session identifier (default: thread_id from context or self.session_id)
-
-        Returns:
-            Dict with 'success', 'output', 'result', 'error'
-        """
-        actual_session_id = session_id or self.session_id
-
-        if actual_session_id is None:
-            actual_session_id = "default"
-
-        manager = get_session_manager()
-        return manager.execute(session_id=actual_session_id, code=code)
-
-    async def _arun(self, code: str, session_id: str | None = None) -> dict[str, Any]:
-        """Async execution (delegates to sync)."""
-        return self._run(code, session_id)
+    async def _arun(
+        self,
+        code: str,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+    ) -> Any:
+        if self.sanitize_input:
+            code = sanitize_input(code)
+        return await run_in_executor(None, self.python_repl.run, code)
 
 
 class RunBackgroundTool(BaseTool):
@@ -463,7 +464,7 @@ class ExecutionToolkit:
                 timeout=self._timeout,
                 security_config=self._security_config,
             ),
-            RunPythonTool(workdir=self._workspace_root),
+            RunPythonREPLTool(),
             RunBackgroundTool(
                 workspace_root=self._workspace_root,
                 security_config=self._security_config,

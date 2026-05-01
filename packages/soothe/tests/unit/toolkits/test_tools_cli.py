@@ -4,13 +4,14 @@ from unittest.mock import MagicMock
 
 from langchain_community.tools import ShellTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
+from langchain_experimental.tools.python.tool import PythonREPLTool
 
 from soothe.cognition.agent_loop.utils.messages import LoopHumanMessage
 from soothe.toolkits.execution import (
     KillProcessTool,
     RunBackgroundTool,
     RunCommandShellTool,
-    RunPythonTool,
+    RunPythonREPLTool,
     create_execution_tools,
 )
 
@@ -94,7 +95,8 @@ class TestRunCommandShellToolInitialization:
         assert len(tools) == 4
         assert isinstance(tools[0], RunCommandShellTool)
         assert isinstance(tools[0], ShellTool)
-        assert isinstance(tools[1], RunPythonTool)
+        assert isinstance(tools[1], RunPythonREPLTool)
+        assert isinstance(tools[1], PythonREPLTool)
         assert isinstance(tools[2], RunBackgroundTool)
         assert isinstance(tools[3], KillProcessTool)
 
