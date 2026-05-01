@@ -16,8 +16,9 @@ from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.utils import get_tool_display_name
 
 from soothe_cli.cli.stream import DisplayLine, StreamDisplayPipeline
-from soothe_cli.cli.task_scope_display import format_task_scope_bracket
+from soothe_cli.cli.task_scope_display import format_task_scope_prefix
 from soothe_cli.shared.display_policy import VerbosityLevel, normalize_verbosity
+from soothe_cli.shared.explore_task_display import format_explore_task_json_blob_for_display
 from soothe_cli.shared.message_processing import format_tool_call_args
 from soothe_cli.shared.presentation_engine import PresentationEngine
 from soothe_cli.shared.renderer_base import RendererBase
@@ -53,6 +54,9 @@ class CliRendererState:
 
     # Main-agent stdout: prepend ● before the next non-empty assistant chunk (IG-331).
     assistant_leading_bullet_pending: bool = True
+
+    # Explore Task subgraph: buffer streamed JSON; emit one simplified line on final (IG-311).
+    explore_task_json_buffer: str = ""
 
 
 class CliRenderer(RendererBase):
@@ -134,7 +138,7 @@ class CliRenderer(RendererBase):
         self._schedule_assistant_leading_bullet()
 
     def _schedule_assistant_leading_bullet(self) -> None:
-        """Next main-agent stdout assistant segment should start with ●."""
+        """Next main-agent stdout assistant segment should start with ● (⚙ when Task subgraph)."""
         self._state.assistant_leading_bullet_pending = True
 
     def on_assistant_text(
@@ -160,13 +164,43 @@ class CliRenderer(RendererBase):
             if not task_scope:
                 return
 
-        payload = text if is_streaming else self.repair_concatenated_output(text)
+        effective_streaming = is_streaming
+        explore_task = bool(task_scope and task_scope[1] == "explore")
+        if explore_task:
+            chunk_text = text if is_streaming else self.repair_concatenated_output(text)
+            if is_streaming:
+                self._state.explore_task_json_buffer += chunk_text
+                return
+            combined = self._state.explore_task_json_buffer + chunk_text
+            self._state.explore_task_json_buffer = ""
+            payload = format_explore_task_json_blob_for_display(combined)
+            effective_streaming = False
+            if not payload.strip():
+                self._schedule_assistant_leading_bullet()
+                return
+        else:
+            payload = text if is_streaming else self.repair_concatenated_output(text)
+
+        if self._state.explore_task_json_buffer and not explore_task:
+            # Defensive: leftover explore buffer when subagent type switched mid-turn.
+            self._state.explore_task_json_buffer = ""
+
         if payload and self._state.assistant_leading_bullet_pending:
-            lead = "● "
-            if task_scope:
+            if task_scope and not effective_streaming:
                 tcid, st = task_scope
-                lead += f"{format_task_scope_bracket(tcid, st)} "
-            payload = lead + payload
+                payload = (
+                    "⚙ "
+                    + format_task_scope_prefix(tcid, st)
+                    + " "
+                    + payload.strip()
+                )
+            else:
+                if task_scope:
+                    tcid, st = task_scope
+                    lead = f"⚙ {format_task_scope_prefix(tcid, st)} "
+                else:
+                    lead = "● "
+                payload = lead + payload
             self._state.assistant_leading_bullet_pending = False
 
         self._state.full_response.append(payload)
@@ -181,7 +215,7 @@ class CliRenderer(RendererBase):
         self._state.needs_stdout_newline = True
         self._state.stderr_blank_before_next_icon_block = True
 
-        if not is_streaming:
+        if not effective_streaming:
             self._schedule_assistant_leading_bullet()
 
     def on_streaming_output(
@@ -237,7 +271,7 @@ class CliRenderer(RendererBase):
         core = f"{display_name}({args_str})"
         if task_scope:
             tcid, st = task_scope
-            core = f"{format_task_scope_bracket(tcid, st)} {core}"
+            core = f"{format_task_scope_prefix(tcid, st)} {core}"
         tool_block = f"⚙ {core}"
 
         # Track start time for duration display (RFC-0020)
@@ -302,7 +336,7 @@ class CliRenderer(RendererBase):
             result_line = f"{combined_call_line} -> {result_line}"
         elif task_scope:
             tcid, st = task_scope
-            result_line = f"{format_task_scope_bracket(tcid, st)} -> {result_line}"
+            result_line = f"{format_task_scope_prefix(tcid, st)} -> {result_line}"
 
         sys.stderr.write(result_line + "\n")
         sys.stderr.flush()

@@ -117,7 +117,7 @@ class TestFormatters:
     def test_format_goal_header(self) -> None:
         line = format_goal_header("Analyze codebase")
         assert line.level == 1
-        assert line.content == "🚩 Analyze codebase"
+        assert line.content == "📍 Analyze codebase"
         assert line.icon == "●"
 
     def test_format_step_header_sequential(self) -> None:
@@ -135,7 +135,7 @@ class TestFormatters:
     def test_format_tool_call_sequential(self) -> None:
         line = format_tool_call("read_file", '"config.yml"', running=False)
         assert line.level == 2
-        assert line.content == '🔧 read_file("config.yml")'
+        assert line.content == '🔧 ReadFile("config.yml")'
         assert line.status is None
 
     def test_format_tool_call_parallel(self) -> None:
@@ -146,7 +146,7 @@ class TestFormatters:
         line = format_tool_result("Read 42 lines", 150, is_error=False)
         assert line.level == 3
         assert line.content == "✨ Read 42 lines"
-        assert line.icon == "✓"
+        assert line.icon == "●"
         assert line.duration_ms == 150
 
     def test_format_tool_result_error(self) -> None:
@@ -165,13 +165,29 @@ class TestFormatters:
             "arxiv: 15 results",
             task_scope=("functions.task:0", "explore"),
         )
-        assert line.content == 'Task(explore, "arxiv: 15 results")'
+        assert line.content == "Task(explore):#0 arxiv: 15 results"
+        assert line.icon == "⚙"
 
     def test_format_subagent_done(self) -> None:
         """IG-256: Subagent done shows triple success markers."""
         line = format_subagent_done("5 papers found", 45.2)
         assert "5 papers found" in line.content
         assert line.duration_ms == 45200
+
+    def test_format_subagent_done_task_scope_flat(self) -> None:
+        line = format_subagent_done(
+            "2 findings, 4 iterations (medium)",
+            5.9,
+            task_scope=("functions.task:0", "explore"),
+            task_description="Count README files",
+        )
+        assert line.icon == "⚙"
+        assert line.indent == ""
+        assert (
+            line.content
+            == 'Task(explore, "Count README files") -> ✓ Completed (5900ms)'
+        )
+        assert line.duration_ms is None
 
     def test_format_step_done(self) -> None:
         """Success with no description emits nothing (no generic Step line)."""
@@ -268,7 +284,7 @@ class TestStreamDisplayPipeline:
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert lines[0].content == "🚩 Analyze codebase"
+        assert lines[0].content == "📍 Analyze codebase"
         assert lines[0].icon == "●"
 
     def test_step_started(self) -> None:
@@ -289,7 +305,7 @@ class TestStreamDisplayPipeline:
         assert lines[0].indent == ""  # Level 2: flat layout
 
     def test_subagent_dispatched(self) -> None:
-        """Test subagent dispatch shows as tool call."""
+        """Legacy dispatched events are not on the curated wire; pipeline skips them."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         event = {
@@ -299,9 +315,7 @@ class TestStreamDisplayPipeline:
         }
         lines = pipeline.process(event)
 
-        assert len(lines) == 1
-        assert "🔧 research_subagent" in lines[0].content
-        assert lines[0].icon == "⚙"
+        assert len(lines) == 0
 
     def test_subagent_step_hidden_at_normal(self) -> None:
         """IG-089: Subagent internal steps hidden at normal verbosity."""
@@ -319,25 +333,27 @@ class TestStreamDisplayPipeline:
         assert len(lines) == 0
 
     def test_subagent_step_shown_at_detailed(self) -> None:
-        """IG-089: Subagent internal steps visible at detailed verbosity."""
+        """Curated explore milestone uses Task(explore, "...") when task_scope is set."""
         pipeline = StreamDisplayPipeline(verbosity="detailed")
 
         event = {
-            "type": "soothe.subagent.research.step",
-            "step_type": "query",
-            "action": "arxiv search",
-            "target": "quantum computing",
-            "task_scope": ("functions.task:1", "research"),
+            "type": "soothe.subagent.explore.milestone",
+            "decision": "expand query",
+            "findings_count": 3,
+            "iterations_used": 2,
+            "task_scope": ("functions.task:1", "explore"),
         }
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert lines[0].icon == "✓"
-        assert lines[0].content.startswith('Task(research, "')
-        assert "arxiv search" in lines[0].content
+        assert lines[0].icon == "⚙"
+        assert (
+            lines[0].content
+            == "Task(explore):#1 expand query (3 findings, 2 iter)"
+        )
 
     def test_subagent_judgement_shown_at_normal(self) -> None:
-        """IG-089: Subagent judgement visible at normal verbosity."""
+        """Judgement wire types are not routed through the curated pipeline."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         event = {
@@ -347,9 +363,7 @@ class TestStreamDisplayPipeline:
         }
         lines = pipeline.process(event)
 
-        assert len(lines) == 1
-        assert "🌟 Need more sources" in lines[0].content
-        assert lines[0].icon == "→"  # Arrow for continue action
+        assert len(lines) == 0
 
     def test_subagent_step_hidden_for_internal(self) -> None:
         pipeline = StreamDisplayPipeline(verbosity="normal")
@@ -442,14 +456,33 @@ class TestStreamDisplayPipeline:
 
         event = {
             "type": "soothe.subagent.research.completed",
-            "summary": "5 papers found",
+            "result_count": 5,
             "duration_s": 45.2,
+            "task_scope": ("functions.task:9", "research"),
         }
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert "Done: 5 papers" in lines[0].content
-        assert lines[0].duration_ms == 45200
+        assert (
+            lines[0].content == 'Task(research, "5 results") -> ✓ Completed (45200ms)'
+        )
+        assert lines[0].duration_ms is None
+
+    def test_explore_completed_includes_search_target_in_done_line(self) -> None:
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+        event = {
+            "type": "soothe.subagent.explore.completed",
+            "total_findings": 2,
+            "duration_s": 12.0,
+            "search_target": "Count README files",
+            "task_scope": ("functions.task:0", "explore"),
+        }
+        lines = pipeline.process(event)
+        assert len(lines) == 1
+        assert (
+            lines[0].content
+            == 'Task(explore, "Count README files") -> ✓ Completed (12000ms)'
+        )
 
     def test_loop_agent_reason_shown_at_normal(self) -> None:
         """IG-225: Loop agent Reason event shows judgement + plan reasoning."""

@@ -119,6 +119,7 @@ def resolve_tools(
             "datetime",
             "data",
             "wizsearch",
+            "http_requests",
             "image",
             "audio",
             "video",
@@ -297,6 +298,12 @@ def _resolve_single_tool_group_uncached(
             workspace_root=resolved_cwd,
             security_config=(getattr(config, "security", None) if config else None),
         )
+        return toolkit.get_tools()
+
+    if name == "http_requests":
+        from soothe.toolkits.http_requests import HttpRequestsToolkit
+
+        toolkit = HttpRequestsToolkit(config=config)
         return toolkit.get_tools()
 
     # Support individual tool names (map to consolidated group)

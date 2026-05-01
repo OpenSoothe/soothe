@@ -6,7 +6,8 @@ from curated ``soothe.subagent.*`` wire types (IG-339).
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from soothe_sdk.client.protocol import preview_first
 from soothe_sdk.core.subagent_wire import (

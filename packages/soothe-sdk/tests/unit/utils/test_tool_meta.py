@@ -94,12 +94,28 @@ class TestOutcomeTypeCoverage:
 
     def test_web_tools_have_web_search_outcome_type(self) -> None:
         """Web tools should have outcome_type='web_search'."""
-        web_tools = ["web_search", "fetch_url", "wizsearch_search", "wizsearch_crawl"]
+        web_tools = [
+            "web_search",
+            "fetch_url",
+            "wizsearch_search",
+            "wizsearch_crawl",
+            "requests_get",
+            "requests_delete",
+        ]
         for name in web_tools:
             meta = get_tool_meta(name)
             assert meta is not None
             assert meta.outcome_type == "web_search", (
                 f"{name}: expected web_search, got {meta.outcome_type}"
+            )
+
+    def test_http_mutating_requests_tools_have_generic_outcome(self) -> None:
+        """POST/PATCH/PUT request tools use outcome_type='generic'."""
+        for name in ("requests_post", "requests_patch", "requests_put"):
+            meta = get_tool_meta(name)
+            assert meta is not None
+            assert meta.outcome_type == "generic", (
+                f"{name}: expected generic, got {meta.outcome_type}"
             )
 
     def test_subagent_tools_have_correct_outcome_type(self) -> None:

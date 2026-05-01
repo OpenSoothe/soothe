@@ -7,7 +7,7 @@ from soothe_sdk.utils import get_tool_display_name
 
 from soothe_cli.cli.stream.display_line import DisplayLine, indent_for_level
 from soothe_cli.cli.task_scope_display import (
-    format_task_scope_bracket,
+    format_task_scope_prefix,
     format_task_subagent_line,
 )
 
@@ -226,14 +226,6 @@ def format_tool_result(
     )
 
 
-def _task_scope_line_prefix(task_scope: tuple[str, str] | None) -> str:
-    """IG-334 label for subgraph-derived progress lines (brief tool_call id)."""
-    if not task_scope:
-        return ""
-    tcid, st = task_scope
-    return f"{format_task_scope_bracket(tcid, st)} "
-
-
 def format_subagent_milestone(
     brief: str,
     *,
@@ -243,10 +235,10 @@ def format_subagent_milestone(
 ) -> DisplayLine:
     """Format a subagent milestone line showing progress.
 
-    With Task scope: ``Task(explore, "…")`` instead of the legacy emoji milestone.
+    With Task scope: ``⚙ Task(explore):#0 …`` (prefix + brief).
 
     Args:
-        brief: Milestone description (e.g., explore ``search_target``).
+        brief: Milestone description (e.g., explore milestone text).
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
@@ -254,14 +246,16 @@ def format_subagent_milestone(
         DisplayLine for milestone.
     """
     if task_scope:
-        _tcid, st = task_scope
-        content = format_task_subagent_line(st, brief)
+        tcid, st = task_scope
+        content = f"{format_task_scope_prefix(tcid, st)} {brief.strip()}"
+        milestone_icon = "⚙"
     else:
         content = brief
+        milestone_icon = "●"
     return DisplayLine(
         level=2,
         content=content,
-        icon="●",  # Solid bullet for milestone (polish)
+        icon=milestone_icon,
         indent=indent_for_level(2),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
@@ -274,27 +268,44 @@ def format_subagent_done(
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
     task_scope: tuple[str, str] | None = None,
+    task_description: str | None = None,
+    task_done_success: bool = True,
 ) -> DisplayLine:
     """Format a subagent completion line with metrics.
 
-    IG-256: Restored verbose format with triple success markers and separate result display.
-    Results show via separate tool events.
+    With Task scope: ``⚙ Task(type, \"…\") -> ✓ Completed (Nms)`` using wire task description
+    when provided; falls back to summary text inside quotes.
+    Without scope: legacy ``✓ …`` row with triple markers.
 
     Args:
-        summary: Completion summary with subagent-specific metrics (e.g., "success", "$1.23").
+        summary: Metrics fallback when task_description is absent (or failure detail).
         duration_s: Duration in seconds.
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
+        task_description: Original brief (e.g. explore ``search_target``) when available.
+        task_done_success: False for delegated failures (e.g. Claude subagent error).
 
     Returns:
-        DisplayLine for subagent done with verbose triple markers.
+        DisplayLine for subagent completion.
     """
+    if task_scope:
+        tcid, st = task_scope
+        desc = (task_description or "").strip() or summary
+        quoted = format_task_subagent_line(st, desc)
+        ms = max(0, int(duration_s * 1000))
+        outcome = "✓ Completed" if task_done_success else "✗ Failed"
+        content = f"{quoted} -> {outcome} ({ms}ms)"
+        return DisplayLine(
+            level=2,
+            content=content,
+            icon="⚙",
+            indent=indent_for_level(2),
+            duration_ms=None,
+            source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+        )
+
     duration_ms = int(duration_s * 1000)
-
-    lead = _task_scope_line_prefix(task_scope)
-    # IG-256: Verbose format restored - triple success markers
-    content = f"{lead}✓ ✅ ✓ {summary}"
-
+    content = f"✓ ✅ ✓ {summary}"
     return DisplayLine(
         level=3,
         content=content,
