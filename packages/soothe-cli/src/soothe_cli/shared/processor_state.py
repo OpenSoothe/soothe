@@ -6,6 +6,7 @@ Renderers should not modify this state directly.
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -65,6 +66,10 @@ class ProcessorState:
     final_output_emitted_by_namespace: set[tuple[str, ...]] = field(default_factory=set)
     """Namespaces that already emitted final goal completion output this turn."""
 
+    # Task tool spawn queue → bind first subgraph namespace (FIFO; IG-334)
+    task_spawn_queue: deque[tuple[str, str]] = field(default_factory=deque)
+    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str]] = field(default_factory=dict)
+
     def reset_turn(self) -> None:
         """Reset per-turn state.
 
@@ -78,6 +83,8 @@ class ProcessorState:
         self.streaming_accumulator.finalize_all()
         self.streaming_accumulator.clear()
         self.final_output_emitted_by_namespace.clear()
+        self.task_spawn_queue.clear()
+        self.namespace_task_bindings.clear()
 
     def clear_session(self) -> None:
         """Clear all session state.
@@ -93,3 +100,5 @@ class ProcessorState:
         self.emitted_tool_result_ids.clear()
         self.streaming_accumulator.clear()
         self.final_output_emitted_by_namespace.clear()
+        self.task_spawn_queue.clear()
+        self.namespace_task_bindings.clear()

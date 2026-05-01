@@ -31,9 +31,18 @@ class MockRenderer:
         *,
         is_main: bool,
         is_streaming: bool,
+        task_scope: tuple[str, str] | None = None,
     ) -> None:
         self.calls.append(
-            ("on_assistant_text", (text,), {"is_main": is_main, "is_streaming": is_streaming})
+            (
+                "on_assistant_text",
+                (text,),
+                {
+                    "is_main": is_main,
+                    "is_streaming": is_streaming,
+                    "task_scope": task_scope,
+                },
+            )
         )
 
     def on_tool_call(
@@ -43,8 +52,15 @@ class MockRenderer:
         tool_call_id: str,
         *,
         is_main: bool,
+        task_scope: tuple[str, str] | None = None,
     ) -> None:
-        self.calls.append(("on_tool_call", (name, args, tool_call_id), {"is_main": is_main}))
+        self.calls.append(
+            (
+                "on_tool_call",
+                (name, args, tool_call_id),
+                {"is_main": is_main, "task_scope": task_scope},
+            )
+        )
 
     def on_tool_result(
         self,
@@ -54,12 +70,13 @@ class MockRenderer:
         *,
         is_error: bool,
         is_main: bool,
+        task_scope: tuple[str, str] | None = None,
     ) -> None:
         self.calls.append(
             (
                 "on_tool_result",
                 (name, result, tool_call_id),
-                {"is_error": is_error, "is_main": is_main},
+                {"is_error": is_error, "is_main": is_main, "task_scope": task_scope},
             )
         )
 

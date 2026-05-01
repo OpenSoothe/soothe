@@ -122,6 +122,64 @@ class EventProcessor:
         """Read-only access to processor state."""
         return self._state
 
+    def _maybe_bind_task_namespace(self, namespace: tuple[str, ...]) -> None:
+        """Bind LangGraph subgraph ``namespace`` to the next queued Task spawn (IG-334)."""
+        if not namespace:
+            return
+        if namespace in self._state.namespace_task_bindings:
+            return
+        if self._state.task_spawn_queue:
+            self._state.namespace_task_bindings[namespace] = self._state.task_spawn_queue.popleft()
+
+    def _resolve_task_scope(self, namespace: tuple[str, ...]) -> tuple[str, str] | None:
+        """Return ``(task_tool_call_id, subagent_type)`` for this stream namespace."""
+        if not namespace:
+            return None
+        for length in range(len(namespace), 0, -1):
+            prefix = namespace[:length]
+            bound = self._state.namespace_task_bindings.get(prefix)
+            if bound is not None:
+                return bound
+        return None
+
+    def _enqueue_task_spawn_if_needed(
+        self, name: str, args: dict[str, Any], tool_call_id: str, *, is_main: bool
+    ) -> None:
+        """Record main-graph ``task`` tool calls so subgraph streams can resolve labels."""
+        if not is_main or name != "task" or not tool_call_id:
+            return
+        raw = args.get("subagent_type", "")
+        subagent_type = raw.strip() if isinstance(raw, str) else ""
+        self._state.task_spawn_queue.append((tool_call_id, subagent_type or "?"))
+
+    def _emit_tool_call_for_renderer(
+        self,
+        name: str,
+        args: dict[str, Any],
+        tool_call_id: str,
+        *,
+        is_main: bool,
+        namespace: tuple[str, ...],
+    ) -> None:
+        self._enqueue_task_spawn_if_needed(name, args, tool_call_id, is_main=is_main)
+        scope = None if is_main else self._resolve_task_scope(namespace)
+        self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main, task_scope=scope)
+
+    def _emit_tool_result_for_renderer(
+        self,
+        name: str,
+        result: str,
+        tool_call_id: str,
+        *,
+        is_error: bool,
+        is_main: bool,
+        namespace: tuple[str, ...],
+    ) -> None:
+        scope = None if is_main else self._resolve_task_scope(namespace)
+        self._renderer.on_tool_result(
+            name, result, tool_call_id, is_error=is_error, is_main=is_main, task_scope=scope
+        )
+
     def _collect_ai_message_plain_text(self, msg: AIMessage) -> str:
         """Concatenate user-visible text from an AIMessage / AIMessageChunk."""
         parts: list[str] = []
@@ -245,6 +303,7 @@ class EventProcessor:
         *,
         is_main: bool,
         is_streaming: bool,
+        namespace: tuple[str, ...] = (),
     ) -> None:
         """Forward assistant text unless a custom final response already locked the stream."""
         if is_main and self._presentation.final_answer_locked:
@@ -257,10 +316,12 @@ class EventProcessor:
             is_streaming=is_streaming,
             chars=len(payload),
         )
+        task_scope = None if is_main else self._resolve_task_scope(namespace)
         self._renderer.on_assistant_text(
             payload,
             is_main=is_main,
             is_streaming=is_streaming,
+            task_scope=task_scope,
         )
 
     def process_event(self, event: dict[str, Any]) -> None:
@@ -389,6 +450,7 @@ class EventProcessor:
         if metadata and isinstance(metadata, dict) and metadata.get("lc_source") == "summarization":
             return
 
+        self._maybe_bind_task_namespace(namespace)
         is_main = not namespace
         msg_kind: str
         if isinstance(msg, AIMessage):
@@ -418,7 +480,7 @@ class EventProcessor:
         msg: AIMessage,
         *,
         is_main: bool,
-        namespace: tuple[str, ...],  # noqa: ARG002
+        namespace: tuple[str, ...],
     ) -> None:
         """Handle AIMessage objects."""
         # Update name_map from tool calls
@@ -445,7 +507,7 @@ class EventProcessor:
         )
 
         # Emit pending tool calls with complete args
-        self._emit_pending_tool_calls(is_main)
+        self._emit_pending_tool_calls(namespace)
 
         if assistant_output_phase(msg) == "goal_completion" and is_main:
             txt = self._collect_ai_message_plain_text(msg)
@@ -474,6 +536,7 @@ class EventProcessor:
                                 cleaned,
                                 is_main=is_main,
                                 is_streaming=is_chunk,
+                                namespace=namespace,
                             )
                 elif btype in ("tool_call", "tool_call_chunk"):
                     if has_tc_args:
@@ -487,11 +550,12 @@ class EventProcessor:
                         if not coerced:
                             continue
                         tool_call_id = block.get("id", "")
-                        self._renderer.on_tool_call(
+                        self._emit_tool_call_for_renderer(
                             name,
                             coerced,
                             tool_call_id,
                             is_main=is_main,
+                            namespace=namespace,
                         )
                         tool_call_emitted_from_blocks = True
                         # Log tool invocation for audit trail
@@ -502,15 +566,16 @@ class EventProcessor:
                             preview_first(str(coerced), 200) if coerced else "{}",
                             is_main,
                         )
-        elif is_main and isinstance(msg.content, str) and msg.content:
-            # Always pass to renderer for accumulation, let renderer decide display
-            cleaned = self._clean_assistant_text(msg.content, is_streaming=is_chunk)
-            if cleaned:
-                self._emit_assistant_text(
-                    cleaned,
-                    is_main=is_main,
-                    is_streaming=is_chunk,
-                )
+        elif isinstance(msg.content, str) and msg.content:
+            if not (self._state.internal_context_active and not is_main):
+                cleaned = self._clean_assistant_text(msg.content, is_streaming=is_chunk)
+                if cleaned:
+                    self._emit_assistant_text(
+                        cleaned,
+                        is_main=is_main,
+                        is_streaming=is_chunk,
+                        namespace=namespace,
+                    )
 
         # Handle tool_calls attribute
         # IMPORTANT: Only emit if we have non-empty args. Otherwise, let the accumulation
@@ -539,7 +604,13 @@ class EventProcessor:
                         continue
                     if tool_call_id:
                         self._state.emitted_tool_call_ids.add(tool_call_id)
-                    self._renderer.on_tool_call(name, tc_args, tool_call_id, is_main=is_main)
+                    self._emit_tool_call_for_renderer(
+                        name,
+                        tc_args,
+                        tool_call_id,
+                        is_main=is_main,
+                        namespace=namespace,
+                    )
                     # Log tool invocation for audit trail
                     logger.info(
                         "tool_call name=%s id=%s args=%s is_main=%s",
@@ -554,7 +625,7 @@ class EventProcessor:
         msg: ToolMessage,
         *,
         is_main: bool,
-        namespace: tuple[str, ...],  # noqa: ARG002
+        namespace: tuple[str, ...],
     ) -> None:
         """Handle ToolMessage objects."""
         if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
@@ -580,11 +651,14 @@ class EventProcessor:
         if needs_emit:
             # Pass raw args for display fallback when parsed args unavailable
             args_to_display = parsed_args or ({"_raw": raw_args_str} if raw_args_str else {})
-            self._renderer.on_tool_call(
+            pending_is_main = pending.get("is_main", is_main)
+            emit_ns = () if pending_is_main else namespace
+            self._emit_tool_call_for_renderer(
                 pending.get("name") or tool_name,
                 args_to_display,
                 tool_call_id,
-                is_main=pending.get("is_main", is_main),
+                is_main=pending_is_main,
+                namespace=emit_ns,
             )
 
         payload = extract_tool_result_card_payload(msg)
@@ -604,12 +678,13 @@ class EventProcessor:
             is_main,
         )
 
-        self._renderer.on_tool_result(
+        self._emit_tool_result_for_renderer(
             tool_name,
             brief,
             tool_call_id,
             is_error=is_error,
             is_main=is_main,
+            namespace=namespace,
         )
 
     def _handle_dict_message(
@@ -617,7 +692,7 @@ class EventProcessor:
         msg: dict[str, Any],
         *,
         is_main: bool,
-        namespace: tuple[str, ...],  # noqa: ARG002
+        namespace: tuple[str, ...],
     ) -> None:
         """Handle deserialized dict messages (after JSON transport)."""
         msg_type = msg.get("type", "")
@@ -626,7 +701,7 @@ class EventProcessor:
 
         # Handle ToolMessage dicts (serialized via model_dump)
         if msg_type in ("ToolMessage", "tool"):
-            self._handle_tool_message_dict(msg, is_main=is_main)
+            self._handle_tool_message_dict(msg, is_main=is_main, namespace=namespace)
             return
 
         if not is_chunk:
@@ -654,20 +729,22 @@ class EventProcessor:
                 is_main=is_main,
             )
 
+        self._emit_pending_tool_calls(namespace)
+
         # Process content blocks or content string
         blocks = msg.get("content_blocks") or []
         if not blocks:
             content = msg.get("content", "")
             if isinstance(content, list):
                 blocks = content
-            elif is_main and isinstance(content, str) and content:
-                # Always pass to renderer for accumulation, let renderer decide display
+            elif isinstance(content, str) and content:
                 cleaned = self._clean_assistant_text(content, is_streaming=is_chunk)
                 if cleaned:
                     self._emit_assistant_text(
                         cleaned,
                         is_main=is_main,
                         is_streaming=is_chunk,
+                        namespace=namespace,
                     )
 
         for block in blocks:
@@ -684,6 +761,7 @@ class EventProcessor:
                             cleaned,
                             is_main=is_main,
                             is_streaming=is_chunk,
+                            namespace=namespace,
                         )
             elif btype in ("tool_call_chunk", "tool_call"):
                 name = block.get("name", "")
@@ -695,7 +773,13 @@ class EventProcessor:
                         continue
                     if tool_call_id:
                         self._state.emitted_tool_call_ids.add(tool_call_id)
-                    self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
+                    self._emit_tool_call_for_renderer(
+                        name,
+                        args,
+                        tool_call_id,
+                        is_main=is_main,
+                        namespace=namespace,
+                    )
                     # Log tool invocation for audit trail
                     logger.info(
                         "tool_call name=%s id=%s args=%s is_main=%s",
@@ -729,7 +813,13 @@ class EventProcessor:
                             continue
                         if tool_call_id:
                             self._state.emitted_tool_call_ids.add(tool_call_id)
-                        self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
+                        self._emit_tool_call_for_renderer(
+                            name,
+                            args,
+                            tool_call_id,
+                            is_main=is_main,
+                            namespace=namespace,
+                        )
                         # Log tool invocation for audit trail
                         logger.info(
                             "tool_call name=%s id=%s args=%s is_main=%s",
@@ -744,12 +834,14 @@ class EventProcessor:
         msg: dict[str, Any],
         *,
         is_main: bool,
+        namespace: tuple[str, ...],
     ) -> None:
         """Handle ToolMessage dict (serialized via model_dump).
 
         Args:
             msg: ToolMessage serialized as dict.
             is_main: True if from main agent.
+            namespace: LangGraph stream namespace for subgraph correlation.
         """
         if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
             return
@@ -777,11 +869,14 @@ class EventProcessor:
         if needs_emit:
             # Pass raw args for display fallback when parsed args unavailable
             args_to_display = parsed_args or ({"_raw": raw_args_str} if raw_args_str else {})
-            self._renderer.on_tool_call(
+            pending_is_main = pending.get("is_main", is_main)
+            emit_ns = () if pending_is_main else namespace
+            self._emit_tool_call_for_renderer(
                 pending.get("name") or tool_name,
                 args_to_display,
                 tool_call_id,
-                is_main=pending.get("is_main", is_main),
+                is_main=pending_is_main,
+                namespace=emit_ns,
             )
 
         payload = extract_tool_result_card_payload(msg)
@@ -801,15 +896,16 @@ class EventProcessor:
             is_main,
         )
 
-        self._renderer.on_tool_result(
+        self._emit_tool_result_for_renderer(
             tool_name,
             brief,
             tool_call_id,
             is_error=is_error,
             is_main=is_main,
+            namespace=namespace,
         )
 
-    def _emit_pending_tool_calls(self, is_main: bool) -> None:  # noqa: FBT001
+    def _emit_pending_tool_calls(self, namespace: tuple[str, ...]) -> None:
         """Emit pending tool calls that have complete JSON args."""
         for tc_id, pending in list(self._state.pending_tool_calls.items()):
             if pending["emitted"]:
@@ -823,11 +919,14 @@ class EventProcessor:
                 VerbosityTier.NORMAL, self._verbosity
             ):
                 self._state.emitted_tool_call_ids.add(tc_id)
-                self._renderer.on_tool_call(
+                pending_is_main = pending.get("is_main", not namespace)
+                emit_ns = () if pending_is_main else namespace
+                self._emit_tool_call_for_renderer(
                     pending["name"],
                     parsed_args,
                     tc_id,
-                    is_main=pending.get("is_main", is_main),
+                    is_main=pending_is_main,
+                    namespace=emit_ns,
                 )
                 pending["emitted"] = True
 
@@ -838,6 +937,20 @@ class EventProcessor:
     ) -> None:
         """Process protocol/progress events."""
         etype = data.get("type", "")
+
+        # IG-335: Subagent message relay short-circuit. The Claude subagent
+        # (and any future relay consumer) emits translated LangChain messages
+        # via custom events because LangGraph nodes cannot write to the
+        # ``messages`` stream channel. Re-route them through ``_handle_messages``
+        # so dedup, streaming concat, and task-scope binding all apply.
+        from soothe_cli.shared.message_relay import RELAY_EVENT_TYPE, extract_relay_payload
+
+        if etype == RELAY_EVENT_TYPE:
+            payload = extract_relay_payload(data)
+            if payload is not None:
+                msg_dict, metadata = payload
+                self._handle_messages([msg_dict, metadata], namespace)
+            return
 
         # Tool events are now visible at NORMAL verbosity (RFC-0020 CLI Stream Display Pipeline)
         # They are processed through on_progress_event -> StreamDisplayPipeline
