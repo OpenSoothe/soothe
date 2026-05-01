@@ -222,6 +222,7 @@ def discover_all_plugins(config: "SootheConfig") -> dict[str, tuple[str, dict]]:
         "datetime",
         "goals",
         "wizsearch",
+        "http_requests",
         "image",
         "audio",
         "video",

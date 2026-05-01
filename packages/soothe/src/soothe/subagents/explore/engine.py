@@ -446,6 +446,7 @@ def build_explore_engine(
                 thoroughness=thoroughness,
                 iterations_used=iterations_used,
                 duration_ms=elapsed_ms,
+                search_target=search_target,
             ).to_dict(),
             logger,
         )

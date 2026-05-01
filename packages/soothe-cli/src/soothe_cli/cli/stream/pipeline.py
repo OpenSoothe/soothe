@@ -192,7 +192,19 @@ class StreamDisplayPipeline:
                 return (a, b)
         return None
 
-    def _dispatch_curated_subagent_wire(self, event_type: str, event: dict[str, Any]) -> list[DisplayLine]:
+    def _task_description_from_completed_event(
+        self, event: dict[str, Any], subagent_name: str
+    ) -> str | None:
+        """Original task brief for completion lines (quoted in ``Task(type, \"…\")``)."""
+        if subagent_name == "explore":
+            raw = event.get("search_target")
+            if isinstance(raw, str) and raw.strip():
+                return raw.strip()
+        return None
+
+    def _dispatch_curated_subagent_wire(
+        self, event_type: str, event: dict[str, Any]
+    ) -> list[DisplayLine]:
         """Show compact lines for allowlisted ``soothe.subagent.*`` payloads (IG-339)."""
         if not is_allowlisted_subagent_event_type(event_type):
             logger.debug("Ignoring non-allowlisted soothe.subagent wire event: %s", event_type)
@@ -211,6 +223,7 @@ class StreamDisplayPipeline:
                     namespace=self._current_namespace,
                     verbosity_tier=self._verbosity_tier,
                     task_scope=task_scope,
+                    task_done_success=False,
                 )
             ]
 
@@ -434,6 +447,8 @@ class StreamDisplayPipeline:
         self._context.subagent_completion_shown = True
         self._context.subagent_result_preview = result_preview
 
+        task_description = self._task_description_from_completed_event(event, subagent_name)
+
         return [
             format_subagent_done(
                 preview_first(summary, 70),  # Increased from 50 for richer metrics
@@ -441,6 +456,7 @@ class StreamDisplayPipeline:
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
                 task_scope=self._task_scope_from_event(event),
+                task_description=task_description,
             )
         ]
 

@@ -340,6 +340,65 @@ _register(
 )
 
 # ---------------------------------------------------------------------------
+# LangChain Community Requests toolkit (IG-339)
+# ---------------------------------------------------------------------------
+
+_register(
+    ToolMeta(
+        name="requests_get",
+        display_name="RequestsGet",
+        arg_keys=("url",),
+        category="web",
+        outcome_type="web_search",
+        source="soothe",
+    )
+)
+
+_register(
+    ToolMeta(
+        name="requests_delete",
+        display_name="RequestsDelete",
+        arg_keys=("url",),
+        category="web",
+        outcome_type="web_search",
+        source="soothe",
+    )
+)
+
+_register(
+    ToolMeta(
+        name="requests_post",
+        display_name="RequestsPost",
+        arg_keys=("text",),
+        category="web",
+        outcome_type="generic",
+        source="soothe",
+    )
+)
+
+_register(
+    ToolMeta(
+        name="requests_patch",
+        display_name="RequestsPatch",
+        arg_keys=("text",),
+        category="web",
+        outcome_type="generic",
+        source="soothe",
+    )
+)
+
+_register(
+    ToolMeta(
+        name="requests_put",
+        display_name="RequestsPut",
+        arg_keys=("text",),
+        category="web",
+        outcome_type="generic",
+        source="soothe",
+    )
+)
+
+# ---------------------------------------------------------------------------
 # soothe wizsearch tools
 # ---------------------------------------------------------------------------
 

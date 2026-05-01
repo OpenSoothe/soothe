@@ -45,6 +45,7 @@ class ExploreCompletedEvent(SootheEvent):
     thoroughness: str = ""
     iterations_used: int = 0
     duration_ms: int = 0
+    search_target: str = ""
 
     model_config = ConfigDict(extra="allow")
 

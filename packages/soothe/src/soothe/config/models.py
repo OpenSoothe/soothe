@@ -246,6 +246,30 @@ class WebSearchConfig(ToolConfig):
     timeout: int = 30
 
 
+class HttpRequestsToolsConfig(ToolConfig):
+    """LangChain Community ``RequestsToolkit`` (HTTP verbs).
+
+    Requires ``allow_dangerous_requests=True`` to instantiate tools (upstream LangChain gate).
+
+    Args:
+        enabled: Whether to register HTTP request tools (default on).
+        allow_dangerous_requests: Required for LangChain tool construction; default on with toolkit enabled.
+        headers: Optional default headers for ``TextRequestsWrapper`` (e.g. Bearer tokens via ``${ENV}``).
+        verify_ssl: Whether to verify TLS certificates (passed through to the requests wrapper).
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable requests_get / requests_post / ... tools (IG-339).",
+    )
+    allow_dangerous_requests: bool = Field(
+        default=True,
+        description="Must be True for LangChain to construct dangerous request tools.",
+    )
+    headers: dict[str, str] = Field(default_factory=dict)
+    verify_ssl: bool = Field(default=True, description="TLS verification for outbound HTTP.")
+
+
 class ToolsConfig(BaseModel):
     """Configuration for all tool groups.
 
@@ -261,6 +285,7 @@ class ToolsConfig(BaseModel):
         image: Image analysis tools config.
         audio: Audio transcription tools config.
         video: Video analysis tools config.
+        http_requests: LangChain Requests toolkit (HTTP GET/POST/PATCH/PUT/DELETE).
     """
 
     execution: ToolConfig = Field(default_factory=ToolConfig)
@@ -271,6 +296,7 @@ class ToolsConfig(BaseModel):
     image: ToolConfig = Field(default_factory=ToolConfig)
     audio: ToolConfig = Field(default_factory=ToolConfig)
     video: ToolConfig = Field(default_factory=ToolConfig)
+    http_requests: HttpRequestsToolsConfig = Field(default_factory=HttpRequestsToolsConfig)
 
 
 class PersistenceConfig(BaseModel):

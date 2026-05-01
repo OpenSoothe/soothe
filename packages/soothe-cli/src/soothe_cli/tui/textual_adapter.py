@@ -261,9 +261,7 @@ def _format_progress_event_lines_for_tui(
     event_type = str(event_data.get("type", ""))
 
     # Essential progress + curated subagent wire events
-    if is_essential_progress_event_type(event_type) or event_type.startswith(
-        "soothe.subagent."
-    ):
+    if is_essential_progress_event_type(event_type) or event_type.startswith("soothe.subagent."):
         event_for_pipeline = dict(event_data)
         event_for_pipeline["namespace"] = list(namespace)
         if task_scope:
@@ -1271,7 +1269,17 @@ async def execute_task_textual(
                         block_type = block.get("type")
 
                         if block_type == "text":
-                            if suppress_subgraph_assistant_text:
+                            task_scope_txt = (
+                                resolve_task_scope_for_namespace(
+                                    namespace_task_bindings, ns_key
+                                )
+                                if ns_key
+                                else None
+                            )
+                            explore_via_task = (
+                                task_scope_txt is not None and task_scope_txt[1] == "explore"
+                            )
+                            if suppress_subgraph_assistant_text and not explore_via_task:
                                 continue
                             text = block.get("text", "")
                             if text:
@@ -1279,6 +1287,10 @@ async def execute_task_textual(
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 pending_text += text
                                 pending_text_by_namespace[ns_key] = pending_text
+
+                                if explore_via_task:
+                                    # IG-311: raw JSON streams off-thread; show summary on flush only.
+                                    continue
 
                                 # Get or create assistant message for this namespace
                                 current_msg = assistant_message_by_namespace.get(ns_key)
@@ -2137,7 +2149,10 @@ async def _flush_assistant_text_ns(
     Finalizes the streaming by stopping the MarkdownStream.
     If no message exists yet, creates one with the full content.
     """
+    from soothe_cli.shared.explore_task_display import format_explore_task_json_blob_for_display
+
     repaired_text = RendererBase.repair_concatenated_output(text)
+    repaired_text = format_explore_task_json_blob_for_display(repaired_text)
     if not repaired_text.strip():
         return
 

@@ -53,9 +53,7 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
         return _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.DEBUG)
 
     # Non-soothe events (from deepagents subagents) — not curated soothe.subagent.*
-    if namespace or (
-        ".subagent." in event_type and not event_type.startswith("soothe.subagent.")
-    ):
+    if namespace or (".subagent." in event_type and not event_type.startswith("soothe.subagent.")):
         return VerbosityTier.DETAILED
 
     # Thinking and heartbeats are debug-level

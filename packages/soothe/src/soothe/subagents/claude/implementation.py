@@ -17,7 +17,11 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
-from soothe.subagents.claude.events import ClaudeCompletedEvent, ClaudeFailedEvent, ClaudeStartedEvent
+from soothe.subagents.claude.events import (
+    ClaudeCompletedEvent,
+    ClaudeFailedEvent,
+    ClaudeStartedEvent,
+)
 from soothe.subagents.claude.session_bridge import record_claude_session, resolve_resume_session_id
 from soothe.utils import expand_path
 from soothe.utils.subagent_emit import emit_subagent_wire_event
