@@ -18,6 +18,12 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
 from soothe.config import BrowserSubagentConfig
+from soothe.subagents.browser.events import (
+    BrowserCompletedEvent,
+    BrowserStartedEvent,
+    BrowserStepCompletedEvent,
+)
+from soothe.utils.subagent_emit import emit_subagent_wire_event
 from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
@@ -232,6 +238,11 @@ def _build_browser_graph(
                 messages = state.get("messages", [])
                 task = messages[-1].content if messages else ""
 
+                emit_subagent_wire_event(
+                    BrowserStartedEvent(task_preview=preview_first(str(task), 200)).to_dict(),
+                    logger,
+                )
+
                 model_name = browser_model or "qwen3.5-flash"
                 if ":" in model_name:
                     model_name = model_name.split(":", 1)[1]
@@ -327,7 +338,16 @@ def _build_browser_graph(
                         agent.history.is_done(),
                         len(agent.history.history) if agent.history.history else 0,
                     )
-                    # IG-258: Removed browser step event emission - no longer needed
+                    emit_subagent_wire_event(
+                        BrowserStepCompletedEvent(
+                            step_index=int(step_num),
+                            url=str(url or ""),
+                            title=str(page_title),
+                            action_preview=str(action_desc or "")[:120],
+                            status="done" if agent.history.is_done() else "running",
+                        ).to_dict(),
+                        logger,
+                    )
 
                 agent = BrowserAgent(
                     task=task,
@@ -384,8 +404,13 @@ def _build_browser_graph(
                     preview_first(str(result), 300),
                 )
 
-                # Emit completed event (RFC-0020)
-                # IG-258: Removed browser completed event emission - no longer needed
+                emit_subagent_wire_event(
+                    BrowserCompletedEvent(
+                        duration_ms=int((time.perf_counter() - run_t0) * 1000),
+                        success=True,
+                    ).to_dict(),
+                    logger,
+                )
 
                 # Stop the browser session
                 try:
@@ -405,8 +430,13 @@ def _build_browser_graph(
             error_msg = format_cli_error(e, context="Browser agent")
             result = error_msg
 
-            # Emit completed event with failure (RFC-0020)
-            # IG-258: Removed browser failed event emission - no longer needed
+            emit_subagent_wire_event(
+                BrowserCompletedEvent(
+                    duration_ms=int((time.perf_counter() - run_t0) * 1000),
+                    success=False,
+                ).to_dict(),
+                logger,
+            )
         finally:
             if ephemeral_profile_dir:
                 import shutil

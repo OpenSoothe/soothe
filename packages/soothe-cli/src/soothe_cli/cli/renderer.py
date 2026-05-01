@@ -16,6 +16,7 @@ from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.utils import get_tool_display_name
 
 from soothe_cli.cli.stream import DisplayLine, StreamDisplayPipeline
+from soothe_cli.cli.task_scope_display import format_task_scope_bracket
 from soothe_cli.shared.display_policy import VerbosityLevel, normalize_verbosity
 from soothe_cli.shared.message_processing import format_tool_call_args
 from soothe_cli.shared.presentation_engine import PresentationEngine
@@ -164,7 +165,7 @@ class CliRenderer(RendererBase):
             lead = "● "
             if task_scope:
                 tcid, st = task_scope
-                lead += f"[Task({st}):{tcid}] "
+                lead += f"{format_task_scope_bracket(tcid, st)} "
             payload = lead + payload
             self._state.assistant_leading_bullet_pending = False
 
@@ -236,7 +237,7 @@ class CliRenderer(RendererBase):
         core = f"{display_name}({args_str})"
         if task_scope:
             tcid, st = task_scope
-            core = f"[Task({st}):{tcid}] {core}"
+            core = f"{format_task_scope_bracket(tcid, st)} {core}"
         tool_block = f"⚙ {core}"
 
         # Track start time for duration display (RFC-0020)
@@ -301,7 +302,7 @@ class CliRenderer(RendererBase):
             result_line = f"{combined_call_line} -> {result_line}"
         elif task_scope:
             tcid, st = task_scope
-            result_line = f"[Task({st}):{tcid}] -> {result_line}"
+            result_line = f"{format_task_scope_bracket(tcid, st)} -> {result_line}"
 
         sys.stderr.write(result_line + "\n")
         sys.stderr.flush()
@@ -337,6 +338,7 @@ class CliRenderer(RendererBase):
         data: dict[str, Any],
         *,
         namespace: tuple[str, ...],
+        task_scope: tuple[str, str] | None = None,
     ) -> None:
         """Write progress event to stderr using StreamDisplayPipeline.
 
@@ -344,9 +346,12 @@ class CliRenderer(RendererBase):
             event_type: Event type string.
             data: Event payload.
             namespace: Subagent namespace.
+            task_scope: Parent Task delegation scope for subgraph progress (IG-334).
         """
         # Build event dict for pipeline
-        event = {"type": event_type, **data}
+        event: dict[str, Any] = {"type": event_type, **data, "namespace": list(namespace)}
+        if task_scope:
+            event["task_scope"] = task_scope
         lines = self._pipeline.process(event)
         self.write_lines(lines)
 

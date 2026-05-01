@@ -92,8 +92,15 @@ class MockRenderer:
         data: dict[str, Any],
         *,
         namespace: tuple[str, ...],
+        task_scope: tuple[str, str] | None = None,
     ) -> None:
-        self.calls.append(("on_progress_event", (event_type, data), {"namespace": namespace}))
+        self.calls.append(
+            (
+                "on_progress_event",
+                (event_type, data),
+                {"namespace": namespace, "task_scope": task_scope},
+            )
+        )
 
     def on_plan_created(self, plan: Any) -> None:
         self.calls.append(("on_plan_created", (plan,), {}))

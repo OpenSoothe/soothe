@@ -6,6 +6,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.3.4] - 2026-04-19
 
+### Breaking
+- **IG-339**: Removed `soothe.capability.*` custom-stream event types for built-in subagents. External integrators must subscribe to allowlisted `soothe.subagent.*` types (see `soothe_sdk.core.subagent_wire`) and use the `messages` stream for full tool/assistant transcripts where applicable.
+
 ### Added
 - Dockerfile for Soothe daemon with full extras and Playwright support
 - IG-300: per-loop daemon workspace under ``$SOOTHE_HOME/Workspace/<loop_id>/``; unified tool metadata helpers for policy path extraction; ``PolicyContext.workspace`` for stream-scoped filesystem checks

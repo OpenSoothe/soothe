@@ -201,6 +201,8 @@ All RFCs are in `docs/specs/`. Key specifications:
 | [RFC-400](docs/specs/RFC-400-event-processing.md) | Event Processing & Filtering | Event system |
 | [RFC-600](docs/specs/RFC-600-plugin-extension-system.md) | Plugin Extension System | Plugin architecture |
 
+**Built-in subagent wire (IG-339)**: Curated `soothe.subagent.*` types and payload caps — `soothe_sdk.core.subagent_wire`, RFC-403 §8.4, [event-catalog Subagent Events](docs/specs/event-catalog.md). `soothe.capability.*` is not used.
+
 **See all RFCs**: Check `docs/specs/` directory.
 
 ---

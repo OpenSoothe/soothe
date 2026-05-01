@@ -840,6 +840,12 @@ class ToolCallMessage(Vertical):
         text-style: bold;
     }
 
+    ToolCallMessage .tool-subagent-notes {
+        margin-left: 3;
+        color: $text-muted;
+        height: auto;
+    }
+
     ToolCallMessage .tool-status {
         margin-left: 3;
     }
@@ -929,6 +935,7 @@ class ToolCallMessage(Vertical):
             tn = "tool"
         self._tool_name = tn
         self._args = args or {}
+        self._subagent_notes: list[str] = []
         self._status = "pending"  # Waiting for approval or auto-approve
         self._output: str = ""
         self._expanded: bool = False
@@ -955,6 +962,7 @@ class ToolCallMessage(Vertical):
         """
         tool_label = format_tool_cli_style_command(self._tool_name, self._args)
         yield Static(tool_label, markup=False, classes="tool-header")
+        yield Static("", markup=False, classes="tool-subagent-notes", id="subagent-notes")
         yield Static("", classes="tool-result-summary", id="tool-result-summary")
         # Status — running spinner while executing; unused when result summary shows
         yield Static("", classes="tool-status", id="status")
@@ -969,6 +977,8 @@ class ToolCallMessage(Vertical):
 
         self._status_widget = self.query_one("#status", Static)
         self._result_summary_widget = self.query_one("#tool-result-summary", Static)
+        notes = self.query_one("#subagent-notes", Static)
+        notes.display = False
         self._preview_widget = self.query_one("#output-preview", Static)
         self._hint_widget = self.query_one("#output-hint", Static)
         self._full_widget = self.query_one("#output-full", Static)
@@ -1078,6 +1088,19 @@ class ToolCallMessage(Vertical):
             return
         # Textual ``Static.update`` accepts only the new content (no ``markup=`` kwarg).
         header.update(format_tool_cli_style_command(self._tool_name, self._args))
+
+    def append_subagent_activity(self, line: str) -> None:
+        """Append one metadata line for curated ``soothe.subagent.*`` progress (IG-339)."""
+        text = (line or "").strip()
+        if not text:
+            return
+        self._subagent_notes.append(text)
+        try:
+            w = self.query_one("#subagent-notes", Static)
+        except Exception:  # noqa: BLE001
+            return
+        w.update("\n".join(self._subagent_notes))
+        w.display = True
 
     def set_running(self) -> None:
         """Mark the tool as running (approved and executing).

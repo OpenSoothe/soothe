@@ -1,36 +1,29 @@
 # Event Catalog Reference
 
-**Purpose**: Complete catalog of Soothe progress event types (RFC-400, RFC-402)
-**Status**: Reference Document (Pending RFC-402 Migration)
-**Last Updated**: 2026-04-15
+**Purpose**: Complete catalog of Soothe progress event types (RFC-400, RFC-403)
+**Status**: Reference document (incrementally migrated naming)
+**Last Updated**: 2026-05-01
 
-This document provides the complete catalog of all Soothe progress event types. For event naming semantics, grammar rules, and domain taxonomy, see [RFC-402](RFC-402-unified-event-naming.md). For event processing architecture, see [RFC-400](RFC-400-event-processing.md). For verbosity classification, see [RFC-501](RFC-501-display-verbosity.md).
+This document provides the complete catalog of all Soothe progress event types. For event naming semantics, grammar rules, and domain taxonomy, see [RFC-403](RFC-403-unified-event-naming.md). For event processing architecture, see [RFC-400](RFC-400-event-processing.md). For verbosity classification, see [RFC-501](RFC-501-display-verbosity.md).
 
 ## Event Naming Pattern
 
-All events follow the 4-segment pattern defined in RFC-402:
+All events follow the 4-segment pattern defined in RFC-403:
 ```
 soothe.<domain>.<component>.<action_or_state>
 ```
 
-**Domains**: See RFC-402 for complete domain taxonomy with functional scope definitions.
+**Domains**: See RFC-403 for the domain taxonomy with functional scope definitions.
 
-**Grammar**: All actions use present progressive tense; state nouns for reports. See RFC-402 for approved verb and state noun lists.
+**Grammar**: All actions use present progressive tense; state nouns for reports. See RFC-403 for approved verb and state noun lists.
 
-**Note**: This catalog reflects the current event naming system. RFC-402 defines the unified semantics and migration map for transitioning to present progressive tense grammar and function-based domains.
+**Note**: Built-in **delegated subagent** progress on the WebSocket `custom` stream uses the **IG-339** allowlist in `soothe_sdk.core.subagent_wire`, not the long granular lists in older drafts.
 
 ---
 
-## RFC-402 Migration Status
+## RFC-403 migration notes
 
-The event naming in this catalog will be updated following RFC-402 migration phases:
-
-**Phase 1**: Core event catalog migration
-**Phase 2**: Emitter code updates
-**Phase 3**: Test migration
-**Phase 4**: Documentation updates (this catalog)
-
-Until migration completion, event types in this catalog reflect the current system. See RFC-402 Section 8 for the complete migration map.
+Granular rename tables in older RFC drafts are partially superseded: built-in subagents emit only **curated** `soothe.subagent.*` types (see § Subagent Events below and RFC-403 §8.4).
 
 ---
 
@@ -125,38 +118,28 @@ Where `{name}` is the concrete tool name (e.g., `search`, `crawl`, `read_file`, 
 
 ---
 
-## Subagent Events
+## Subagent Events (built-in wire, IG-339)
 
-### Browser Subagent
+Sparse **`soothe.subagent.*`** events are emitted on the LangGraph **`custom`** stream for CLI/TUI progress. Payloads are **metadata-only** (bounded strings, counts). Full assistant prose and native tool loops use **`messages`** where applicable.
 
-| Type | Fields | VerbosityTier |
-|------|--------|---------------|
-| `soothe.subagent.browser.step` | `step: int\|str`, `url: str`, `action: str`, `title: str`, `is_done: bool` | NORMAL |
-| `soothe.subagent.browser.cdp` | `status: str`, `cdp_url: str?` | NORMAL |
+**Authoritative allowlist**: `soothe_sdk.core.subagent_wire.ALLOWLISTED_SUBAGENT_EVENT_TYPES`.
 
-### Claude Subagent
+| Type | Fields (representative) | CLI/TUI tier |
+|------|-------------------------|--------------|
+| `soothe.subagent.browser.started` | `task_preview` | NORMAL |
+| `soothe.subagent.browser.step.completed` | `step_index`, `url`, `title`, `action_preview`, `status` | NORMAL |
+| `soothe.subagent.browser.completed` | `duration_ms`, `success` | NORMAL |
+| `soothe.subagent.claude.started` | `task_preview` | NORMAL |
+| `soothe.subagent.claude.completed` | `cost_usd`, `duration_ms`, `claude_session_id` | NORMAL |
+| `soothe.subagent.claude.failed` | `message` | NORMAL |
+| `soothe.subagent.explore.started` | `search_target`, `thoroughness` | NORMAL |
+| `soothe.subagent.explore.milestone` | `decision`, `findings_count`, `iterations_used` | NORMAL |
+| `soothe.subagent.explore.completed` | `total_findings`, `thoroughness`, `iterations_used`, `duration_ms` | NORMAL |
+| `soothe.subagent.research.started` | `topic_preview` | NORMAL |
+| `soothe.subagent.research.gather.summary` | `query_preview`, `result_count`, `sources_touched` | NORMAL |
+| `soothe.subagent.research.completed` | `duration_ms`, `answer_length` | NORMAL |
 
-| Type | Fields | VerbosityTier |
-|------|--------|---------------|
-| `soothe.subagent.claude.text` | `text: str` | DETAILED |
-| `soothe.subagent.claude.tool_use` | `tool: str` | DETAILED |
-| `soothe.subagent.claude.result` | `cost_usd: float`, `duration_ms: int` | DETAILED |
-
-### Research Subagent
-
-| Type | Fields | VerbosityTier |
-|------|--------|---------------|
-| `soothe.subagent.research.analyze` | `topic: str` | DETAILED |
-| `soothe.subagent.research.sub_questions` | `count: int`, `sub_questions: list[dict]` | DETAILED |
-| `soothe.subagent.research.queries_generated` | `queries: list[str]` | DETAILED |
-| `soothe.subagent.research.gather` | `query: str`, `domain: str` | DETAILED |
-| `soothe.subagent.research.gather_done` | `query: str`, `result_count: int`, `sources_used: list[str]` | DETAILED |
-| `soothe.subagent.research.summarize` | `total_summaries: int` | DETAILED |
-| `soothe.subagent.research.reflect` | `loop: int` | DETAILED |
-| `soothe.subagent.research.reflection_done` | `loop: int`, `is_sufficient: bool`, `follow_up_count: int` | DETAILED |
-| `soothe.subagent.research.synthesize` | `topic: str`, `total_sources: int` | DETAILED |
-| `soothe.subagent.research.completed` | `answer_length: int` | DETAILED |
-| `soothe.subagent.research.internal_llm` | `response_type: str` | INTERNAL |
+**Removed / not emitted**: `soothe.capability.*` (hard cut). Historical per-phase names such as `soothe.subagent.claude.text` or `soothe.subagent.research.gather` are **not** part of the built-in wire contract unless reintroduced under IG-339-style review.
 
 ### Skillify Subagent
 
@@ -244,12 +227,12 @@ Events are classified into VerbosityTier values (RFC-0024) that determine visibi
 | `protocol` | DETAILED | Core protocol activity events |
 | `cognition` | NORMAL | Plan and goal cognition events |
 | `tool` | DETAILED | Main agent tool execution events |
-| `subagent` | DETAILED | Subagent activity (promoted events use `NORMAL`) |
+| `subagent` | DETAILED (registry default) | Curated **`soothe.subagent.*`** overrides to **NORMAL** in `classify_event_to_tier` (IG-339); see RFC-501 §6.1 |
 | `output` | QUIET | Content destined for user display |
 | `error` | QUIET | Error events (always shown) |
 
-**Note**: Some subagent events (e.g., browser step events) are promoted to `NORMAL` verbosity for visibility at normal verbosity level.
+**Note (IG-339)**: All allowlisted **`soothe.subagent.*`** wire events classify to **`NORMAL`** for CLI/TUI (`soothe_sdk.ux.classification`). Third-party subgraphs may still emit non-curated types—those fall back to domain defaults or **DEBUG**.
 
 ---
 
-**See Also**: [RFC-400](RFC-400-event-processing.md) for event architecture, [RFC-501](RFC-501-display-verbosity.md) for VerbosityTier specification.
+**See Also**: [RFC-400](RFC-400-event-processing.md) for event architecture, [RFC-403](RFC-403-unified-event-naming.md) §8.4 for delegated subagent naming, [RFC-501](RFC-501-display-verbosity.md) for VerbosityTier specification.

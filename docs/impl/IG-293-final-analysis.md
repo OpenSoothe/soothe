@@ -1,5 +1,7 @@
 # Final Analysis: Subagent Events Can Be Deleted
 
+> **Historical document.** Superseded by **IG-339**: built-in subagents again emit **sparse** curated `soothe.subagent.*` progress for CLI/TUI; `soothe.capability.*` was removed. See `docs/impl/IG-339-subagent-curated-wire-events.md`.
+
 ## Key Discovery
 
 **TUI behavior after IG-256**:

@@ -59,8 +59,8 @@ def test_tui_progress_preserves_hierarchy_indent() -> None:
 
     sub_start = _format_progress_event_lines_for_tui(
         {
-            "type": "soothe.capability.research.started",
-            "query": "papers on X",
+            "type": "soothe.subagent.research.started",
+            "topic_preview": "papers on X",
         },
         (),
         pipeline=pipeline,
@@ -70,9 +70,9 @@ def test_tui_progress_preserves_hierarchy_indent() -> None:
 
     sub_done = _format_progress_event_lines_for_tui(
         {
-            "type": "soothe.capability.research.completed",
-            "summary": "5 papers",
-            "duration_s": 1.0,
+            "type": "soothe.subagent.research.completed",
+            "answer_length": 1200,
+            "duration_ms": 1000,
         },
         (),
         pipeline=pipeline,

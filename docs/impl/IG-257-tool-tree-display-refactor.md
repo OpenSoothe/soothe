@@ -1,5 +1,7 @@
 # IG-257: Tool Tree Display Refactor - Implementation Summary
 
+> **Note:** Subsequent work (**IG-339**) reintroduced **curated** `soothe.subagent.*` handling in `StreamDisplayPipeline` and TUI; the blanket suppression of all subagent-shaped events described below is **obsolete**. Keep this doc for tree-display history only.
+
 ## Status: Completed ✅
 
 ## Overview
