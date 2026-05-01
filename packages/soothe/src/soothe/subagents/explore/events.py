@@ -1,8 +1,4 @@
-"""Explore subagent events.
-
-Defines and registers events for the explore subagent (RFC-613).
-Events are self-registered at module load time.
-"""
+"""Explore subagent wire events (curated ``soothe.subagent.*``, IG-338)."""
 
 from __future__ import annotations
 
@@ -10,91 +6,74 @@ from typing import Literal
 
 from pydantic import ConfigDict
 from soothe_sdk.core.events import SootheEvent
+from soothe_sdk.core.subagent_wire import (
+    SUBAGENT_EXPLORE_COMPLETED,
+    SUBAGENT_EXPLORE_MILESTONE,
+    SUBAGENT_EXPLORE_STARTED,
+)
+from soothe_sdk.core.verbosity import VerbosityTier
+
+from soothe.core.events import register_event
 
 
 class ExploreStartedEvent(SootheEvent):
-    """Explore search started event."""
+    """Explore search started."""
 
-    model_config = ConfigDict(extra="allow")
-    type: Literal["soothe.capability.explore.started"] = "soothe.capability.explore.started"
+    type: Literal["soothe.subagent.explore.started"] = SUBAGENT_EXPLORE_STARTED  # type: ignore[assignment]
     search_target: str = ""
     thoroughness: str = ""
 
-
-class ExploreExecutingEvent(SootheEvent):
-    """Explore tool executing event."""
-
     model_config = ConfigDict(extra="allow")
-    type: Literal["soothe.capability.explore.executing"] = "soothe.capability.explore.executing"
-    tool_name: str = ""
-    results_count: int = 0
 
 
-class ExploreAssessingEvent(SootheEvent):
-    """Explore assessment event."""
+class ExploreMilestoneEvent(SootheEvent):
+    """Assessment milestone (decision + counts only)."""
 
-    model_config = ConfigDict(extra="allow")
-    type: Literal["soothe.capability.explore.assessing"] = "soothe.capability.explore.assessing"
-    decision: str = ""  # "continue" | "adjust" | "finish"
+    type: Literal["soothe.subagent.explore.milestone"] = SUBAGENT_EXPLORE_MILESTONE  # type: ignore[assignment]
+    decision: str = ""
     findings_count: int = 0
     iterations_used: int = 0
 
+    model_config = ConfigDict(extra="allow")
+
 
 class ExploreCompletedEvent(SootheEvent):
-    """Explore search completed event."""
+    """Explore finished synthesizing."""
 
-    model_config = ConfigDict(extra="allow")
-    type: Literal["soothe.capability.explore.completed"] = "soothe.capability.explore.completed"
+    type: Literal["soothe.subagent.explore.completed"] = SUBAGENT_EXPLORE_COMPLETED  # type: ignore[assignment]
     total_findings: int = 0
     thoroughness: str = ""
     iterations_used: int = 0
     duration_ms: int = 0
 
+    model_config = ConfigDict(extra="allow")
 
-# Register all explore events with the global registry
-from soothe_sdk.core.verbosity import VerbosityTier  # noqa: E402
 
-from soothe.core.events import register_event  # noqa: E402
-
-# Start/complete events visible at NORMAL
 register_event(
     ExploreStartedEvent,
     verbosity=VerbosityTier.NORMAL,
-    summary_template="Explore: {search_target} ({thoroughness})",
+    summary_template="Explore: {search_target}",
+)
+register_event(
+    ExploreMilestoneEvent,
+    verbosity=VerbosityTier.DETAILED,
+    summary_template="{decision} ({findings_count} findings)",
 )
 register_event(
     ExploreCompletedEvent,
     verbosity=VerbosityTier.NORMAL,
-    summary_template="Explore done: {total_findings} findings ({iterations_used} iters, {duration_ms}ms)",
+    summary_template="Explore done ({total_findings} findings)",
 )
 
-# Internal steps at DETAILED
-register_event(
-    ExploreExecutingEvent,
-    verbosity=VerbosityTier.DETAILED,
-    summary_template="Executing: {tool_name} ({results_count} results)",
-)
-register_event(
-    ExploreAssessingEvent,
-    verbosity=VerbosityTier.DETAILED,
-    summary_template="Assessed: {decision} ({findings_count} findings, iter {iterations_used})",
-)
-
-# Event type constants for convenient imports
-SUBAGENT_EXPLORE_STARTED = "soothe.capability.explore.started"
-SUBAGENT_EXPLORE_EXECUTING = "soothe.capability.explore.executing"
-SUBAGENT_EXPLORE_ASSESSING = "soothe.capability.explore.assessing"
-SUBAGENT_EXPLORE_COMPLETED = "soothe.capability.explore.completed"
+SUBAGENT_EXPLORE_STARTED = SUBAGENT_EXPLORE_STARTED
+SUBAGENT_EXPLORE_MILESTONE = SUBAGENT_EXPLORE_MILESTONE
+SUBAGENT_EXPLORE_COMPLETED = SUBAGENT_EXPLORE_COMPLETED
 
 __all__ = [
-    # Event type constants
-    "SUBAGENT_EXPLORE_ASSESSING",
     "SUBAGENT_EXPLORE_COMPLETED",
-    "SUBAGENT_EXPLORE_EXECUTING",
+    "SUBAGENT_EXPLORE_MILESTONE",
     "SUBAGENT_EXPLORE_STARTED",
-    # Event classes
-    "ExploreAssessingEvent",
     "ExploreCompletedEvent",
-    "ExploreExecutingEvent",
+    "ExploreMilestoneEvent",
     "ExploreStartedEvent",
 ]

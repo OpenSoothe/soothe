@@ -7,7 +7,16 @@ import time
 from typing import Any
 
 from soothe_sdk.client.protocol import preview_first
+from soothe_sdk.core.subagent_wire import (
+    SUBAGENT_CLAUDE_FAILED,
+    is_allowlisted_subagent_event_type,
+    parse_subagent_wire_agent,
+)
 from soothe_sdk.core.verbosity import VerbosityTier
+from soothe_sdk.ux.subagent_progress import (
+    get_subagent_name_from_event,
+    summarize_subagent_wire_activity,
+)
 
 from soothe_cli.cli.stream.context import PipelineContext
 from soothe_cli.cli.stream.display_line import DisplayLine
@@ -130,18 +139,13 @@ class StreamDisplayPipeline:
         if event_type in GOAL_COMPLETE_EVENTS:
             return VerbosityTier.QUIET
 
-        # Subagent capability events - DETAILED by default
-        # All capability events (started/completed/steps) are DETAILED
-        if event_type.startswith("soothe.capability."):
-            return VerbosityTier.DETAILED
-
         # soothe.* events: defer to SDK domain-based classification (RFC-0020)
         # Step completion, tool events use domain defaults
         if event_type.startswith("soothe."):
             return classify_event_to_tier(event_type)
 
         # Non-soothe events (from deepagents subagents)
-        if ".subagent." in event_type:
+        if ".subagent." in event_type and not event_type.startswith("soothe.subagent."):
             return VerbosityTier.NORMAL
 
         # Default to DETAILED (hidden at normal)
@@ -157,17 +161,9 @@ class StreamDisplayPipeline:
         Returns:
             List of DisplayLine objects.
         """
-        # Capability events (soothe.capability.<subagent>.<action>)
-        # IG-256: Do NOT process subagent events explicitly - let Task tool events handle display
-        # Subagents are invoked via Task tool, so tool.execution events will show them
-        # Return empty list to suppress explicit subagent event processing
-        if event_type.startswith("soothe.capability."):
-            return []
-
-        # Legacy subagent events (.subagent.* format)
-        # IG-256: Also suppress legacy subagent events - let tool events flow through
-        if ".subagent." in event_type:
-            return []
+        # Curated delegated UX — metadata-only ``soothe.subagent.*`` (IG-339)
+        if event_type.startswith("soothe.subagent."):
+            return self._dispatch_curated_subagent_wire(event_type, event)
 
         # Goal/step events
         if is_goal_start_event_type(event_type):
@@ -186,6 +182,53 @@ class StreamDisplayPipeline:
             return self._on_loop_agent_reason(event)
 
         return []
+
+    def _task_scope_from_event(self, event: dict[str, Any]) -> tuple[str, str] | None:
+        """Extract IG-334 ``(task_tool_call_id, subagent_type)`` when attached by the renderer."""
+        ts = event.get("task_scope")
+        if isinstance(ts, tuple) and len(ts) == 2:
+            a, b = ts
+            if isinstance(a, str) and isinstance(b, str):
+                return (a, b)
+        return None
+
+    def _dispatch_curated_subagent_wire(self, event_type: str, event: dict[str, Any]) -> list[DisplayLine]:
+        """Show compact lines for allowlisted ``soothe.subagent.*`` payloads (IG-339)."""
+        if not is_allowlisted_subagent_event_type(event_type):
+            logger.debug("Ignoring non-allowlisted soothe.subagent wire event: %s", event_type)
+            return []
+
+        task_scope = self._task_scope_from_event(event)
+        agent_name = parse_subagent_wire_agent(event_type) or ""
+
+        if event_type == SUBAGENT_CLAUDE_FAILED:
+            msg = preview_first(str(event.get("message", "")), 120)
+            summary = f"failed: {msg}" if msg else "failed"
+            return [
+                format_subagent_done(
+                    preview_first(summary, 120),
+                    0.0,
+                    namespace=self._current_namespace,
+                    verbosity_tier=self._verbosity_tier,
+                    task_scope=task_scope,
+                )
+            ]
+
+        # Run-level ``*.completed`` only — not granular ``*.step.completed`` activity lines.
+        if event_type.endswith(".completed") and ".step." not in event_type:
+            return self._on_subagent_completed(event, subagent_name=agent_name)
+
+        brief = summarize_subagent_wire_activity(event_type, event)
+        if not brief:
+            brief = event_type.split(".")[-1].replace("_", " ")
+        return [
+            format_subagent_milestone(
+                brief.strip(),
+                namespace=self._current_namespace,
+                verbosity_tier=self._verbosity_tier,
+                task_scope=task_scope,
+            )
+        ]
 
     def _on_goal_started(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle goal start event.
@@ -352,6 +395,7 @@ class StreamDisplayPipeline:
                 preview_first(brief, 60),
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
+                task_scope=self._task_scope_from_event(event),
             )
         ]
 
@@ -371,10 +415,8 @@ class StreamDisplayPipeline:
         """
         # Extract subagent name from event type if not provided
         event_type = event.get("type", "")
-        if not subagent_name and event_type.startswith("soothe.capability."):
-            parts = event_type.split(".")
-            if len(parts) >= 3:  # noqa: PLR2004
-                subagent_name = parts[2]
+        if not subagent_name:
+            subagent_name = get_subagent_name_from_event(event_type) or ""
 
         # Build subagent-specific progress summary
         summary = self._build_subagent_summary(event, subagent_name)
@@ -398,6 +440,7 @@ class StreamDisplayPipeline:
                 duration_s,
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
+                task_scope=self._task_scope_from_event(event),
             )
         ]
 
@@ -430,7 +473,7 @@ class StreamDisplayPipeline:
             cost = event.get("cost_usd", 0.0)
             session_id = event.get("claude_session_id")
             if cost:
-                summary = f"$${cost:.2f}"
+                summary = f"${float(cost):.2f}"
                 if session_id:
                     summary += f", session={session_id[:8]}"
                 return summary
@@ -486,6 +529,7 @@ class StreamDisplayPipeline:
                 preview_first(brief, 60),
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
+                task_scope=self._task_scope_from_event(event),
             )
         ]
 

@@ -1,5 +1,7 @@
 # Subagent Events Analysis - Performance Optimization Recommendations
 
+> **Historical document.** Client and wire behavior described here predates **IG-339** (curated `soothe.subagent.*`, removal of `soothe.capability.*`). For current contracts see `docs/impl/IG-339-subagent-curated-wire-events.md`, RFC-403 §8.4, and `soothe_sdk.core.subagent_wire`.
+
 ## Current Status (IG-256 + IG-257)
 
 ### CLI (Headless Mode)

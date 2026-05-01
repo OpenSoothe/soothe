@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-24
-**Updated**: 2026-04-24
+**Updated**: 2026-05-01
 **Authors**: Platonic Coding Workflow
 **Depends on**: RFC-000, RFC-001, RFC-100, RFC-600
 **Supersedes**: RFC-605 (explore subagent portion only)
@@ -170,7 +170,7 @@ class ExploreResult(BaseModel):
 - **Input**: All `findings`, `search_target`
 - **Process**: Format top 3-5 matches with descriptions and optional snippets
 - **Output**: Final `ExploreResult` as `AIMessage`
-- **Emits**: `soothe.capability.explore.completed` event
+- **Emits**: `soothe.subagent.explore.completed` (curated wire, IG-339)
 
 ### 5.4 Conditional Edge Logic
 
@@ -191,72 +191,17 @@ def route_after_assessment(state: ExploreState) -> str:
         return "execute_action"
 ```
 
-### 5.5 Events
+### 5.5 Events (curated wire, IG-339)
 
-| Event Type | When | Verbosity Tier |
-|-----------|------|---------------|
-| `soothe.capability.explore.started` | Search begins | NORMAL |
-| `soothe.capability.explore.executing` | Tool executing | DETAILED |
-| `soothe.capability.explore.assessing` | Assessment in progress | DETAILED |
-| `soothe.capability.explore.completed` | Search complete | NORMAL |
+Explore emits **sparse** custom-stream progress only (metadata caps in `soothe_sdk.core.subagent_wire`). Per-tool execution detail is visible via the LangGraph **`messages`** stream where the explore loop uses native tool calls—not duplicated as fine-grained `soothe.capability.*` types.
 
-```python
-from typing import Literal
-from pydantic import ConfigDict
-from soothe.core.base_events import SubagentEvent
-from soothe.core.event_catalog import register_event, VerbosityTier
+| Event Type | When | Notes |
+|-----------|------|--------|
+| `soothe.subagent.explore.started` | Graph begins | `search_target`, `thoroughness` |
+| `soothe.subagent.explore.milestone` | After assessment decision | `decision`, `findings_count`, `iterations_used` (replaces separate “executing” / “assessing” churn) |
+| `soothe.subagent.explore.completed` | Synthesize finished | `total_findings`, `thoroughness`, `iterations_used`, `duration_ms` |
 
-class ExploreStartedEvent(SubagentEvent):
-    model_config = ConfigDict(extra="allow")
-    type: Literal["soothe.capability.explore.started"] = "soothe.capability.explore.started"
-    search_target: str
-    thoroughness: str
-
-class ExploreExecutingEvent(SubagentEvent):
-    model_config = ConfigDict(extra="allow")
-    type: Literal["soothe.capability.explore.executing"] = "soothe.capability.explore.executing"
-    tool_name: str
-    tool_args: dict
-    results_count: int
-
-class ExploreAssessingEvent(SubagentEvent):
-    model_config = ConfigDict(extra="allow")
-    type: Literal["soothe.capability.explore.assessing"] = "soothe.capability.explore.assessing"
-    decision: str  # "continue" | "adjust" | "finish"
-    findings_count: int
-    iterations_used: int
-
-class ExploreCompletedEvent(SubagentEvent):
-    model_config = ConfigDict(extra="allow")
-    type: Literal["soothe.capability.explore.completed"] = "soothe.capability.explore.completed"
-    total_findings: int
-    top_matches: list[dict]
-    thoroughness: str
-    iterations_used: int
-    duration_ms: int
-
-# Event registration
-register_event(
-    ExploreStartedEvent,
-    summary_template="Explore started: {search_target} ({thoroughness})",
-    tier=VerbosityTier.NORMAL,
-)
-register_event(
-    ExploreExecutingEvent,
-    summary_template="Explore executing: {tool_name} ({results_count} results)",
-    tier=VerbosityTier.DETAILED,
-)
-register_event(
-    ExploreAssessingEvent,
-    summary_template="Explore assessed: {decision} ({findings_count} findings, iter {iterations_used})",
-    tier=VerbosityTier.DETAILED,
-)
-register_event(
-    ExploreCompletedEvent,
-    summary_template="Explore completed: {total_findings} findings ({thoroughness}, {iterations_used} iters, {duration_ms}ms)",
-    tier=VerbosityTier.NORMAL,
-)
-```
+**Implementation**: `packages/soothe/src/soothe/subagents/explore/events.py` (Pydantic models + `register_event`). Do not rely on older `soothe.capability.explore.*` strings—they are removed.
 
 ### 5.6 Prompt Templates
 

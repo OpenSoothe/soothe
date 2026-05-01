@@ -17,6 +17,7 @@ import atexit
 import datetime
 import json
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor
 from operator import add
 from typing import TYPE_CHECKING, Annotated, Any
@@ -24,6 +25,10 @@ from typing import TYPE_CHECKING, Annotated, Any
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import Send
+
+from soothe.utils.subagent_emit import emit_subagent_wire_event
+
+from .events import ResearchCompletedEvent, ResearchGatherSummaryEvent, ResearchStartedEvent
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -205,6 +210,10 @@ def build_research_engine(
 
     def analyze_topic_node(state: dict[str, Any]) -> dict[str, Any]:
         topic = _extract_topic(state)
+        emit_subagent_wire_event(
+            ResearchStartedEvent(topic_preview=str(topic)[:200]).to_dict(),
+            logger,
+        )
         prompt = _ANALYZE_TOPIC.format(
             domains=available_domains,
             current_date=_now_str(),
@@ -280,6 +289,14 @@ def build_research_engine(
 
         selected = router.select(query, domain=domain_hint)
         if not selected:
+            emit_subagent_wire_event(
+                ResearchGatherSummaryEvent(
+                    query_preview=str(query)[:120],
+                    result_count=0,
+                    sources_touched=0,
+                ).to_dict(),
+                logger,
+            )
             return {
                 "search_summaries": [f"No sources available for: {query}"],
                 "sources_gathered": [f"none:{query}"],
@@ -318,6 +335,14 @@ def build_research_engine(
                 logger.debug("Source %s failed for query: %s", src.name, query, exc_info=True)
 
         if not all_results:
+            emit_subagent_wire_event(
+                ResearchGatherSummaryEvent(
+                    query_preview=str(query)[:120],
+                    result_count=0,
+                    sources_touched=len(selected),
+                ).to_dict(),
+                logger,
+            )
             return {
                 "search_summaries": [f"No results from sources for: {query}"],
                 "sources_gathered": [f"empty:{query}"],
@@ -328,6 +353,15 @@ def build_research_engine(
         for r in all_results:
             summary_parts.append(f"[{r.source_name}] {r.content}")
             source_refs.append(f"{r.source_name}:{r.source_ref}")
+
+        emit_subagent_wire_event(
+            ResearchGatherSummaryEvent(
+                query_preview=str(query)[:120],
+                result_count=len(all_results),
+                sources_touched=len(source_refs),
+            ).to_dict(),
+            logger,
+        )
 
         return {
             "search_summaries": ["\n".join(summary_parts)],
@@ -424,10 +458,19 @@ def build_research_engine(
             topic=topic,
             summaries=summaries[:6000],
         )
+        synth_t0 = time.perf_counter()
         resp = model.invoke([{"role": "user", "content": prompt}])
         answer = str(resp.content)
+        elapsed_ms = int((time.perf_counter() - synth_t0) * 1000)
 
         logger.info("Research: synthesized %d chars from %d sources", len(answer), num_sources)
+        emit_subagent_wire_event(
+            ResearchCompletedEvent(
+                duration_ms=elapsed_ms,
+                answer_length=len(answer),
+            ).to_dict(),
+            logger,
+        )
         return {"answer": answer}
 
     graph = StateGraph(ResearchEngineState)

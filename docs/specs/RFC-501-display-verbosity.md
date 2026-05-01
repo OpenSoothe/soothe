@@ -3,7 +3,7 @@
 **Status**: Draft
 **Authors**: Soothe Team
 **Created**: 2026-03-31
-**Last Updated**: 2026-03-31
+**Last Updated**: 2026-05-01
 **Depends on**: RFC-500 (CLI/TUI Architecture), `RFC-401-event-processing.md` (Event Processing), RFC-502 (Unified Presentation Engine)
 **Supersedes**: RFC-0020, RFC-0024
 **Kind**: Implementation Interface Design
@@ -181,6 +181,8 @@ _DOMAIN_DEFAULT_TIER: dict[str, VerbosityTier] = {
 }
 ```
 
+**IG-339 override (client UX):** `soothe_sdk.ux.classify_event_to_tier` maps **all** curated **`soothe.subagent.*`** wire types to **`NORMAL`** so CLI/TUI show sparse subagent activity at default verbosity. This applies before coarse domain defaults for any event string starting with `soothe.subagent.`. The daemon registry domain row `subagent → DETAILED` still describes non-prefix defaults and non-built-in events.
+
 ### 6.2 EventMeta Integration
 
 ```python
@@ -266,6 +268,7 @@ def on_progress_event(
     data: dict,
     *,
     namespace: tuple[str, ...],
+    task_scope: tuple[str, str] | None = None,
 ) -> None:
     tier = classify_event_to_tier(event_type, namespace)
     if not should_show(tier, self._verbosity):
@@ -301,7 +304,8 @@ if should_show(VerbosityTier.DETAILED, self._verbosity):
 | Tool summaries | ✗ | ✓ | ✓ | ✓ |
 | Milestones | ✗ | ✓ | ✓ | ✓ |
 | Protocol/lifecycle | ✗ | ✗ | ✓ | ✓ |
-| Subagent internals | ✗ | ✗ | ✓ | ✓ |
+| Built-in subagent wire (`soothe.subagent.*`, IG-339) | ✗ | ✓ | ✓ | ✓ |
+| Other deepagents / non-curated subgraph noise | ✗ | ✗ | ✓ | ✓ |
 | Thinking/heartbeats | ✗ | ✗ | ✗ | ✓ |
 
 ---
@@ -342,7 +346,7 @@ if should_show(VerbosityTier.DETAILED, self._verbosity):
 | `subagent_progress` | `NORMAL` |
 | `protocol` | `DETAILED` |
 | `tool_activity` | `DETAILED` |
-| `subagent_custom` | `DETAILED` |
+| `subagent_custom` | `NORMAL` when bridged to curated `soothe.subagent.*`; otherwise `DETAILED` |
 | `thinking` | `DEBUG` |
 | `debug` | `DEBUG` |
 | `internal` | `INTERNAL` |

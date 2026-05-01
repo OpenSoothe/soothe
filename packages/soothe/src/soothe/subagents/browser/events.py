@@ -1,8 +1,4 @@
-"""Browser subagent events.
-
-This module defines events for the browser subagent.
-Events are self-registered at module load time.
-"""
+"""Browser subagent wire events (curated ``soothe.subagent.*``, IG-338)."""
 
 from __future__ import annotations
 
@@ -10,96 +6,72 @@ from typing import Literal
 
 from pydantic import ConfigDict
 from soothe_sdk.core.events import SubagentEvent
+from soothe_sdk.core.subagent_wire import (
+    SUBAGENT_BROWSER_COMPLETED,
+    SUBAGENT_BROWSER_STARTED,
+    SUBAGENT_BROWSER_STEP_COMPLETED,
+)
+from soothe_sdk.core.verbosity import VerbosityTier
+
+from soothe.core.events import register_event
 
 
-class BrowserDispatchedEvent(SubagentEvent):
-    """Browser subagent dispatched event."""
+class BrowserStartedEvent(SubagentEvent):
+    """Browser run started."""
 
-    type: Literal["soothe.capability.browser.started"] = "soothe.capability.browser.started"
-    task: str = ""
+    type: Literal["soothe.subagent.browser.started"] = SUBAGENT_BROWSER_STARTED  # type: ignore[assignment]
+    task_preview: str = ""
 
     model_config = ConfigDict(extra="allow")
 
 
 class BrowserCompletedEvent(SubagentEvent):
-    """Browser subagent completed event."""
+    """Browser run finished."""
 
-    type: Literal["soothe.capability.browser.completed"] = "soothe.capability.browser.completed"
+    type: Literal["soothe.subagent.browser.completed"] = SUBAGENT_BROWSER_COMPLETED  # type: ignore[assignment]
     duration_ms: int = 0
     success: bool = True
 
     model_config = ConfigDict(extra="allow")
 
 
-class BrowserStepEvent(SubagentEvent):
-    """Browser automation step event."""
+class BrowserStepCompletedEvent(SubagentEvent):
+    """One browser automation step completed (metadata only)."""
 
-    type: Literal["soothe.capability.browser.step.running"] = (
-        "soothe.capability.browser.step.running"
-    )
-    step: int | str = ""
+    type: Literal["soothe.subagent.browser.step.completed"] = SUBAGENT_BROWSER_STEP_COMPLETED  # type: ignore[assignment]
+    step_index: int = 0
     url: str = ""
-    action: str = ""
     title: str = ""
-    is_done: bool = False
+    action_preview: str = ""
+    status: str = ""  # e.g. running / done
 
     model_config = ConfigDict(extra="allow")
 
 
-class BrowserCdpEvent(SubagentEvent):
-    """Browser CDP connection event."""
-
-    type: Literal["soothe.capability.browser.cdp.connecting"] = (
-        "soothe.capability.browser.cdp.connecting"
-    )
-    status: str = ""
-    cdp_url: str | None = None
-
-    model_config = ConfigDict(extra="allow")
-
-
-# Register all browser events with the global registry
-from soothe_sdk.core.verbosity import VerbosityTier  # noqa: E402
-
-from soothe.core.events import register_event  # noqa: E402
-
-# Dispatch/Complete events visible at NORMAL
 register_event(
-    BrowserDispatchedEvent,
+    BrowserStartedEvent,
     verbosity=VerbosityTier.NORMAL,
-    summary_template="Browser: {task}",
+    summary_template="Browser: {task_preview}",
 )
 register_event(
     BrowserCompletedEvent,
     verbosity=VerbosityTier.NORMAL,
-    summary_template="Completed in {duration_ms}ms",
-)
-
-# IG-089: Internal browser steps at DETAILED (hidden at normal verbosity)
-register_event(
-    BrowserStepEvent,
-    verbosity=VerbosityTier.DETAILED,
-    summary_template="Step {step}",
+    summary_template="Browser done ({duration_ms}ms)",
 )
 register_event(
-    BrowserCdpEvent,
+    BrowserStepCompletedEvent,
     verbosity=VerbosityTier.DETAILED,
-    summary_template="Browser CDP: {status}",
+    summary_template="Step {step_index}: {action_preview}",
 )
 
-# Event type constants for convenient imports
-SUBAGENT_BROWSER_DISPATCHED = "soothe.capability.browser.started"
-SUBAGENT_BROWSER_COMPLETED = "soothe.capability.browser.completed"
-SUBAGENT_BROWSER_STEP = "soothe.capability.browser.step.running"
-SUBAGENT_BROWSER_CDP = "soothe.capability.browser.cdp.connecting"
+SUBAGENT_BROWSER_DISPATCHED = SUBAGENT_BROWSER_STARTED
+SUBAGENT_BROWSER_STEP = SUBAGENT_BROWSER_STEP_COMPLETED
 
 __all__ = [
-    "SUBAGENT_BROWSER_CDP",
     "SUBAGENT_BROWSER_COMPLETED",
     "SUBAGENT_BROWSER_DISPATCHED",
     "SUBAGENT_BROWSER_STEP",
-    "BrowserCdpEvent",
     "BrowserCompletedEvent",
-    "BrowserDispatchedEvent",
-    "BrowserStepEvent",
+    "BrowserStartedEvent",
+    "BrowserStepCompletedEvent",
 ]

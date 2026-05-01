@@ -77,11 +77,7 @@ def should_show_tool_call_ui(verbosity: str | VerbosityLevel) -> bool:
 # =============================================================================
 
 # Event types that should NEVER be shown (internal implementation details)
-INTERNAL_EVENT_TYPES = frozenset(
-    {
-        "soothe.capability.research.internal_llm.run",
-    }
-)
+INTERNAL_EVENT_TYPES: frozenset[str] = frozenset()
 
 # Event types to skip in progress display (handled by plan update mechanism or not rendered)
 SKIP_EVENT_TYPES = frozenset(

@@ -155,9 +155,17 @@ class TestFormatters:
 
     def test_format_subagent_milestone(self) -> None:
         line = format_subagent_milestone("arxiv: 15 results")
-        assert line.level == 3
-        assert line.content == "🕵🏻‍♂️ arxiv: 15 results"
-        assert line.icon == "✓"
+        assert line.level == 2
+        assert line.content == "arxiv: 15 results"
+        assert line.icon == "●"
+        assert line.indent == ""
+
+    def test_format_subagent_milestone_task_scope(self) -> None:
+        line = format_subagent_milestone(
+            "arxiv: 15 results",
+            task_scope=("functions.task:0", "explore"),
+        )
+        assert line.content == 'Task(explore, "arxiv: 15 results")'
 
     def test_format_subagent_done(self) -> None:
         """IG-256: Subagent done shows triple success markers."""
@@ -319,12 +327,14 @@ class TestStreamDisplayPipeline:
             "step_type": "query",
             "action": "arxiv search",
             "target": "quantum computing",
+            "task_scope": ("functions.task:1", "research"),
         }
         lines = pipeline.process(event)
 
         assert len(lines) == 1
         assert lines[0].icon == "✓"
-        assert "🕵🏻‍♂️" in lines[0].content
+        assert lines[0].content.startswith('Task(research, "')
+        assert "arxiv search" in lines[0].content
 
     def test_subagent_judgement_shown_at_normal(self) -> None:
         """IG-089: Subagent judgement visible at normal verbosity."""
@@ -630,29 +640,33 @@ class TestStreamDisplayPipeline:
         # Second call should be deduped (no lines)
         assert lines2 == []
 
-    def test_capability_browser_step_suppressed_at_normal_verbosity(self) -> None:
-        """Browser automation steps are DETAILED tier — hidden at normal."""
+    def test_capability_browser_step_renders_at_normal_verbosity(self) -> None:
+        """Browser step.completed wire events are NORMAL tier — visible at normal."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
         event = {
-            "type": "soothe.capability.browser.step.running",
-            "step": 3,
+            "type": "soothe.subagent.browser.step.completed",
+            "step_index": 3,
             "url": "https://example.com/news",
-            "action": "scroll",
+            "action_preview": "scroll",
             "title": "News",
-        }
-        assert pipeline.process(event) == []
-
-    def test_capability_browser_step_renders_at_detailed_verbosity(self) -> None:
-        """Browser step milestones render when verbosity is detailed or higher."""
-        pipeline = StreamDisplayPipeline(verbosity="detailed")
-        event = {
-            "type": "soothe.capability.browser.step.running",
-            "step": 3,
-            "url": "https://example.com/news",
-            "action": "scroll",
-            "title": "News",
+            "status": "running",
         }
         lines = pipeline.process(event)
         assert len(lines) == 1
-        assert "Step 3" in lines[0].content
         assert "scroll" in lines[0].content
+
+    def test_capability_browser_step_renders_at_detailed_verbosity(self) -> None:
+        """Browser step milestones still render at detailed verbosity."""
+        pipeline = StreamDisplayPipeline(verbosity="detailed")
+        event = {
+            "type": "soothe.subagent.browser.step.completed",
+            "step_index": 3,
+            "url": "https://example.com/news",
+            "action_preview": "scroll",
+            "title": "News",
+            "status": "running",
+        }
+        lines = pipeline.process(event)
+        assert len(lines) == 1
+        assert "scroll" in lines[0].content
+        assert "example.com" in lines[0].content

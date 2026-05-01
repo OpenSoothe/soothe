@@ -134,15 +134,17 @@ class RendererProtocol(Protocol):
         data: dict[str, Any],
         *,
         namespace: tuple[str, ...],
+        task_scope: TaskScope | None = None,
     ) -> None:
         """Protocol/subagent progress event.
 
         Catch-all for events not covered by specific callbacks.
 
         Args:
-            event_type: Full event type string (e.g., "soothe.capability.browser.step.running").
+            event_type: Full event type string (e.g., ``soothe.subagent.browser.started``).
             data: Event payload.
             namespace: Subagent namespace tuple (empty for main agent).
+            task_scope: When subgraph streams are bound to a Task tool call (IG-334).
         """
         ...
 
