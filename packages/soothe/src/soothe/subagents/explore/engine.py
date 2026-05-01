@@ -19,14 +19,9 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolCall, ToolMessa
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from soothe.utils.progress import emit_progress
+from soothe.utils.subagent_emit import emit_subagent_wire_event
 
-from .events import (
-    ExploreAssessingEvent,
-    ExploreCompletedEvent,
-    ExploreExecutingEvent,
-    ExploreStartedEvent,
-)
+from .events import ExploreCompletedEvent, ExploreMilestoneEvent, ExploreStartedEvent
 from .prompts import ASSESS_RESULTS, PLAN_SEARCH, SYNTHESIZE
 from .schemas import ExploreResult, ExploreState, ExploreSubagentConfig
 from .search_target import resolve_explore_search_target
@@ -153,9 +148,9 @@ def build_explore_engine(
         # Emit started event on first iteration
         if iterations_used == 0:
             logger.info("Explore: searching for '%s'", search_target[:80])
-            emit_progress(
+            emit_subagent_wire_event(
                 ExploreStartedEvent(
-                    search_target=search_target[:200],
+                    search_target=search_target,
                     thoroughness=thoroughness,
                 ).to_dict(),
                 logger,
@@ -341,14 +336,6 @@ def build_explore_engine(
                             {"path": path, "snippet": snippet, "relevance": "unknown"}
                         )
 
-                emit_progress(
-                    ExploreExecutingEvent(
-                        tool_name=tool_name,
-                        results_count=len(findings_update),
-                    ).to_dict(),
-                    logger,
-                )
-
         return {
             "messages": new_messages,
             "findings": findings_update,
@@ -402,8 +389,8 @@ def build_explore_engine(
             len(findings),
         )
 
-        emit_progress(
-            ExploreAssessingEvent(
+        emit_subagent_wire_event(
+            ExploreMilestoneEvent(
                 decision=decision,
                 findings_count=len(findings),
                 iterations_used=iterations_used,
@@ -453,7 +440,7 @@ def build_explore_engine(
 
         elapsed_ms = int((time.perf_counter() - start_time) * 1000)
 
-        emit_progress(
+        emit_subagent_wire_event(
             ExploreCompletedEvent(
                 total_findings=len(findings),
                 thoroughness=thoroughness,

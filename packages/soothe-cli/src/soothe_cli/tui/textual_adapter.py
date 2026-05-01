@@ -8,6 +8,7 @@ import json
 import logging
 import time
 import uuid
+from collections import deque
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -44,6 +45,13 @@ if TYPE_CHECKING:
 
 
 from soothe_sdk.client.wire import envelope_langchain_message_dict
+from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
+from soothe_sdk.ux.subagent_progress import summarize_subagent_wire_activity
+from soothe_sdk.ux.task_namespace import (
+    enqueue_task_spawn,
+    maybe_bind_namespace,
+    resolve_task_scope_for_namespace,
+)
 
 from soothe_cli.cli.stream.display_line import DisplayLine
 from soothe_cli.shared.essential_events import (
@@ -244,32 +252,22 @@ def _format_progress_event_lines_for_tui(
     namespace: tuple[str, ...],
     *,
     pipeline: Any,
+    task_scope: tuple[str, str] | None = None,
 ) -> list[str]:
     """Format progress events with the same pipeline as CLI.
 
-    ``StreamDisplayPipeline`` applies verbosity tiers: NORMAL milestones
-    (e.g. ``browser.started``) vs DETAILED internals (e.g. ``browser.step.running``).
+    ``StreamDisplayPipeline`` applies verbosity tiers (curated ``soothe.subagent.*`` at NORMAL).
     """
     event_type = str(event_data.get("type", ""))
 
-    # Essential progress events (goal/step/reason) - always show
-    if is_essential_progress_event_type(event_type):
+    # Essential progress + curated subagent wire events
+    if is_essential_progress_event_type(event_type) or event_type.startswith(
+        "soothe.subagent."
+    ):
         event_for_pipeline = dict(event_data)
         event_for_pipeline["namespace"] = list(namespace)
-        lines = pipeline.process(event_for_pipeline)
-
-        rendered: list[str] = []
-        for line in lines:
-            line_text = _format_display_line_for_tui(line)
-            if line_text:
-                rendered.append(line_text)
-        return rendered
-
-    # All soothe.capability.* events — pipeline classifies NORMAL vs DETAILED
-    # (browser step.running, claude text.running, etc. need DETAILED verbosity)
-    if event_type.startswith("soothe.capability."):
-        event_for_pipeline = dict(event_data)
-        event_for_pipeline["namespace"] = list(namespace)
+        if task_scope:
+            event_for_pipeline["task_scope"] = task_scope
         lines = pipeline.process(event_for_pipeline)
 
         rendered: list[str] = []
@@ -814,6 +812,10 @@ async def execute_task_textual(
     pending_text_by_namespace: dict[tuple, str] = {}
     assistant_message_by_namespace: dict[tuple, Any] = {}
     goal_completion_stream_by_namespace: dict[tuple, AssistantMessage] = {}
+    # IG-334 Task tool FIFO binding (parity with ``EventProcessor`` / SDK helpers)
+    task_spawn_queue: deque[tuple[str, str]] = deque()
+    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str]] = {}
+    task_spawn_recorded: set[str] = set()
 
     # Clear media from tracker after creating the message
     if image_tracker:
@@ -942,6 +944,13 @@ async def execute_task_textual(
 
                 # Handle MESSAGES stream - for content and tool calls
                 elif current_stream_mode == "messages":
+                    if ns_key:
+                        maybe_bind_namespace(
+                            namespace_task_bindings,
+                            task_spawn_queue,
+                            ns_key,
+                        )
+
                     if not isinstance(data, tuple) or len(data) != 2:  # noqa: PLR2004  # message stream data is a 2-tuple (message, metadata)
                         logger.debug(
                             "Skipping non-2-tuple message data: type=%s",
@@ -1430,6 +1439,19 @@ async def execute_task_textual(
                                     tool_call_buffers.pop(buffer_key, None)
                                     continue
                                 displayed_tool_ids.add(lookup_id)
+                                if (
+                                    is_main_agent
+                                    and buffer_name == "task"
+                                    and lookup_id not in task_spawn_recorded
+                                ):
+                                    enqueue_task_spawn(
+                                        task_spawn_queue,
+                                        tool_name="task",
+                                        args=parsed_args,
+                                        tool_call_id=str(lookup_id),
+                                        is_main=True,
+                                    )
+                                    task_spawn_recorded.add(str(lookup_id))
                                 if show_tool_ui:
                                     file_op_tracker.start_operation(
                                         buffer_name, parsed_args, buffer_id
@@ -1636,10 +1658,34 @@ async def execute_task_textual(
                             await adapter._mount_message(plan_widget)
                             continue
 
+                        if ns_key:
+                            maybe_bind_namespace(
+                                namespace_task_bindings,
+                                task_spawn_queue,
+                                ns_key,
+                            )
+                        task_scope = resolve_task_scope_for_namespace(
+                            namespace_task_bindings, ns_key
+                        )
+                        if (
+                            task_scope
+                            and event_type.startswith("soothe.subagent.")
+                            and is_allowlisted_subagent_event_type(event_type)
+                        ):
+                            tcid = task_scope[0]
+                            card = adapter._tool_display_by_call_id.get(
+                                tcid
+                            ) or adapter._current_tool_messages.get(tcid)
+                            note = summarize_subagent_wire_activity(event_type, data)
+                            if card is not None and note:
+                                card.append_subagent_activity(note)
+                                continue
+
                         progress_lines = _format_progress_event_lines_for_tui(
                             data,
                             ns_key,
                             pipeline=progress_pipeline,
+                            task_scope=task_scope,
                         )
                         if progress_lines:
                             pending_text = pending_text_by_namespace.get(ns_key, "")

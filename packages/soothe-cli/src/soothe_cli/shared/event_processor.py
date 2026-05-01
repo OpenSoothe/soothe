@@ -20,6 +20,11 @@ from soothe_sdk.core.events import (
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux import classify_event_to_tier
 from soothe_sdk.ux.loop_stream import assistant_output_phase
+from soothe_sdk.ux.task_namespace import (
+    enqueue_task_spawn,
+    maybe_bind_namespace,
+    resolve_task_scope_for_namespace,
+)
 
 from soothe_cli.shared.display_policy import DisplayPolicy, VerbosityLevel, normalize_verbosity
 from soothe_cli.shared.message_processing import (
@@ -124,33 +129,27 @@ class EventProcessor:
 
     def _maybe_bind_task_namespace(self, namespace: tuple[str, ...]) -> None:
         """Bind LangGraph subgraph ``namespace`` to the next queued Task spawn (IG-334)."""
-        if not namespace:
-            return
-        if namespace in self._state.namespace_task_bindings:
-            return
-        if self._state.task_spawn_queue:
-            self._state.namespace_task_bindings[namespace] = self._state.task_spawn_queue.popleft()
+        maybe_bind_namespace(
+            self._state.namespace_task_bindings,
+            self._state.task_spawn_queue,
+            namespace,
+        )
 
     def _resolve_task_scope(self, namespace: tuple[str, ...]) -> tuple[str, str] | None:
         """Return ``(task_tool_call_id, subagent_type)`` for this stream namespace."""
-        if not namespace:
-            return None
-        for length in range(len(namespace), 0, -1):
-            prefix = namespace[:length]
-            bound = self._state.namespace_task_bindings.get(prefix)
-            if bound is not None:
-                return bound
-        return None
+        return resolve_task_scope_for_namespace(self._state.namespace_task_bindings, namespace)
 
     def _enqueue_task_spawn_if_needed(
         self, name: str, args: dict[str, Any], tool_call_id: str, *, is_main: bool
     ) -> None:
         """Record main-graph ``task`` tool calls so subgraph streams can resolve labels."""
-        if not is_main or name != "task" or not tool_call_id:
-            return
-        raw = args.get("subagent_type", "")
-        subagent_type = raw.strip() if isinstance(raw, str) else ""
-        self._state.task_spawn_queue.append((tool_call_id, subagent_type or "?"))
+        enqueue_task_spawn(
+            self._state.task_spawn_queue,
+            tool_name=name,
+            args=args,
+            tool_call_id=tool_call_id,
+            is_main=is_main,
+        )
 
     def _emit_tool_call_for_renderer(
         self,
@@ -954,7 +953,10 @@ class EventProcessor:
             error_text = data.get("error", data.get("message", str(etype)))
             self._renderer.on_error(error_text)
         elif self._presentation.tier_visible(category, self._verbosity):
-            self._renderer.on_progress_event(etype, data, namespace=namespace)
+            task_scope = None if not namespace else self._resolve_task_scope(namespace)
+            self._renderer.on_progress_event(
+                etype, data, namespace=namespace, task_scope=task_scope
+            )
 
     def _handle_plan_created(self, data: dict[str, Any]) -> None:
         """Handle plan creation event."""

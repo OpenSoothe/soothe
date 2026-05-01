@@ -4,7 +4,7 @@
 **Status**: Draft
 **Authors**: Platonic Brainstorming Session
 **Created**: 2026-04-15
-**Last Updated**: 2026-04-17
+**Last Updated**: 2026-05-01
 **Depends on**: `RFC-401-event-processing.md` (Event Processing)
 **Kind**: Implementation Interface Design
 
@@ -105,7 +105,7 @@ This RFC does **not** define:
 | `lifecycle` | Thread/process lifecycle boundaries | `thread.started`, `checkpoint.saving`, `iteration.completed` |
 | `protocol` | Protocol operations (memory, policy, context, durability) | `memory.recalling`, `policy.checking`, `durability.storing` |
 | `cognition` | Cognitive reasoning and decision-making | `plan.creating`, `goal.creating`, `agent_loop.completed`, `reason.running` |
-| `capability` | External capability invocations (tool, subagent, mcp) | `browser.started`, `claude.completed`, `tool.running`, `mcp.dispatching` |
+| `capability` | External capability naming (draft taxonomy; not used for built-in subagent wire) | Hypothetical `soothe.capability.*` names—**obsolete for built-ins** (IG-339 uses `soothe.subagent.*`) |
 | `output` | User-facing content delivery | `chitchat.started`, `final_report.reporting`, `autonomous.displaying` |
 | `system` | System-level operations (daemon, autopilot) | `daemon.heartbeat`, `autopilot.status_changed` |
 | `error` | Error and exception events | `general.failed`, `protocol.violated` |
@@ -119,7 +119,7 @@ This RFC does **not** define:
 1. Is it a thread/process boundary event? → `lifecycle`
 2. Is it a protocol implementation operation? → `protocol`
 3. Is it a cognitive reasoning/decision event? → `cognition`
-4. Is it an external capability invocation? → `capability`
+4. Is it delegated subagent sparse UX on the wire? → `subagent` (built-in: IG-339 allowlist); optional RFC-403 **`capability`** domain remains for other “external capability” naming drafts—not used for built-in subagent progress (see §8.4)
 5. Is it user-facing output? → `output`
 6. Is it system-level infrastructure? → `system`
 7. Is it an error/exception? → `error`
@@ -133,7 +133,7 @@ This RFC does **not** define:
 soothe.lifecycle.thread.started           # Thread boundary → lifecycle
 soothe.protocol.memory.recalling          # Memory protocol → protocol
 soothe.cognition.plan.creating            # Planning decision → cognition
-soothe.capability.browser.started         # Browser invocation → capability
+soothe.subagent.browser.started          # Delegated subagent wire → subagent (IG-339)
 soothe.output.telemetry.line            # Ancillary capture → output (example only)
 soothe.system.daemon.heartbeat            # Daemon system → system
 soothe.plugin.acme.collector.started      # Third-party → plugin.<vendor>
@@ -398,19 +398,30 @@ Create `scripts/validate_event_names.py`:
 | `soothe.cognition.goal.deferred` | `soothe.cognition.goal.deferring` | Present progressive |
 | `soothe.cognition.agent_loop.reason` | `soothe.cognition.agent_loop.reasoning` | Present progressive |
 
-### 8.4 Capability Events (Subagents)
+### 8.4 Subagent delegated UX (`soothe.subagent.*`, IG-339)
 
-| Old Type | New Type | Notes |
-|----------|----------|-------|
-| `soothe.subagent.browser.dispatched` | `soothe.capability.browser.started` | Domain migration + action |
-| `soothe.subagent.browser.step` | `soothe.capability.browser.step.running` | Domain + action clarification |
-| `soothe.subagent.browser.cdp` | `soothe.capability.browser.cdp.connecting` | Domain + action clarification |
-| `soothe.subagent.claude.text` | `soothe.capability.claude.text.running` | Domain migration |
-| `soothe.subagent.claude.tool_use` | `soothe.capability.claude.tool.running` | Domain migration |
-| `soothe.subagent.claude.result` | `soothe.capability.claude.completed` | Domain migration |
-| `soothe.subagent.research.dispatched` | `soothe.capability.research.started` | Domain migration + action |
-| `soothe.subagent.research.analyze` | `soothe.capability.research.analyzing` | Domain + present progressive |
-| `soothe.subagent.research.queries_generated` | `soothe.capability.research.queries.generating` | Domain + present progressive |
+Built-in subagents emit **only** allowlisted, metadata-only progress types under `soothe.subagent.<agent>.<signal>`. The allowlist and field caps live in **`soothe_sdk.core.subagent_wire`** (`ALLOWLISTED_SUBAGENT_EVENT_TYPES`, `clip_wire_event_payload`). Full prompts, raw HTML, and unconstrained transcripts stay off the custom stream; use LangGraph **`messages`** where the subgraph exposes LangChain tool calls and assistant text.
+
+**Historical note**: An interim `soothe.capability.*` naming experiment appeared in early migration drafts. It was **never** the stable wire contract and has been **removed** from producers and clients. Do not subscribe to `soothe.capability.*` for built-in subagents.
+
+| Agent | Curated custom-stream types (examples) | Purpose |
+|-------|------------------------------------------|---------|
+| Browser | `soothe.subagent.browser.started`, `…step.completed`, `…completed` | Lifecycle + step metadata |
+| Claude | `…claude.started`, `…completed`, `…failed` | Lifecycle + outcome |
+| Explore | `…explore.started`, `…milestone`, `…completed` | Lifecycle + assessment milestone + done |
+| Research | `…research.started`, `…gather.summary`, `…completed` | Lifecycle + gather batch + done |
+
+Run-level completion uses types ending in `.completed` but **not** `*.step.completed` (step lines are activity milestones).
+
+### 8.4.1 Archived migration table (pre-IG-339, obsolete)
+
+The following table recorded an abandoned rename toward `soothe.capability.*`. **Ignore for integration work**; retained only as archaeology.
+
+| Old Type | Superseded direction (obsolete) | Notes |
+|----------|----------------------------------|-------|
+| `soothe.subagent.browser.dispatched` | *(never shipped as stable)* | Use curated `soothe.subagent.browser.*` |
+| `soothe.subagent.claude.text` | *(removed from wire)* | Assistant text → `messages` stream |
+| `soothe.subagent.research.analyze` | *(removed from wire)* | Use curated research types |
 
 ### 8.5 System Events
 
@@ -512,9 +523,9 @@ Migration is successful when:
 
 2. **Verb consistency**: Should "completed" events become `completing`? **Resolution**: Keep `completed` as it represents present progressive result state.
 
-3. **Tool events**: Should `soothe.tool.*` migrate to `soothe.capability.tool.*`? **Resolution**: Yes, tools are external capability invocations.
+3. **Tool events**: Should `soothe.tool.*` migrate under a `capability` domain? **Resolution (superseded by IG-339)**: Main-graph tools remain `soothe.tool.*` where used; delegated subagent **sparse** UX signals use **`soothe.subagent.*`** only—not `soothe.capability.*`.
 
-4. **Internal vs external**: Subagent internal events like `browser.step`? **Resolution**: Use `soothe.capability.browser.step.running` to show running action.
+4. **Internal vs external (subagents)**: **Resolution (IG-339)**: Curated **`soothe.subagent.<agent>.<signal>`** for sparse progress; step-like activity uses explicit names (e.g. `browser.step.completed`), not generic `.running` churn. Rich transcripts stay on **`messages`**.
 
 5. **Domain decision**: Where do new protocol/backend events belong? **Resolution**: Protocol implementation operations → `protocol` domain.
 

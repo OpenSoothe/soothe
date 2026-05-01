@@ -6,6 +6,10 @@ from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.utils import get_tool_display_name
 
 from soothe_cli.cli.stream.display_line import DisplayLine, indent_for_level
+from soothe_cli.cli.task_scope_display import (
+    format_task_scope_bracket,
+    format_task_subagent_line,
+)
 
 # Emoji presentation for step-done success (U+2705 + VS16); distinct from ✓ tool rows.
 _STEP_DONE_OK_MARK = "\u2705\ufe0f"
@@ -222,31 +226,43 @@ def format_tool_result(
     )
 
 
+def _task_scope_line_prefix(task_scope: tuple[str, str] | None) -> str:
+    """IG-334 label for subgraph-derived progress lines (brief tool_call id)."""
+    if not task_scope:
+        return ""
+    tcid, st = task_scope
+    return f"{format_task_scope_bracket(tcid, st)} "
+
+
 def format_subagent_milestone(
     brief: str,
     *,
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
+    task_scope: tuple[str, str] | None = None,
 ) -> DisplayLine:
     """Format a subagent milestone line showing progress.
 
-    IG-256: Restored detective emoji for subagent milestones.
+    With Task scope: ``Task(explore, "…")`` instead of the legacy emoji milestone.
 
     Args:
-        brief: Milestone description (e.g., "Step 3: click on login").
+        brief: Milestone description (e.g., explore ``search_target``).
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
     Returns:
-        DisplayLine for milestone with detective emoji.
+        DisplayLine for milestone.
     """
-    # IG-256: Use detective emoji for milestones (restored from IG-255)
-    content = f"🕵🏻‍♂️ {brief}"
+    if task_scope:
+        _tcid, st = task_scope
+        content = format_task_subagent_line(st, brief)
+    else:
+        content = brief
     return DisplayLine(
-        level=3,
+        level=2,
         content=content,
         icon="●",  # Solid bullet for milestone (polish)
-        indent=indent_for_level(3),
+        indent=indent_for_level(2),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
 
@@ -257,6 +273,7 @@ def format_subagent_done(
     *,
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
+    task_scope: tuple[str, str] | None = None,
 ) -> DisplayLine:
     """Format a subagent completion line with metrics.
 
@@ -274,8 +291,9 @@ def format_subagent_done(
     """
     duration_ms = int(duration_s * 1000)
 
+    lead = _task_scope_line_prefix(task_scope)
     # IG-256: Verbose format restored - triple success markers
-    content = f"✓ ✅ ✓ {summary}"
+    content = f"{lead}✓ ✅ ✓ {summary}"
 
     return DisplayLine(
         level=3,

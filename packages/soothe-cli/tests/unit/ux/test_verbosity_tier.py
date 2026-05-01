@@ -126,28 +126,16 @@ class TestClassifyEventToTier:
         assert classify_event_to_tier("unknown_event", namespace=()) == VerbosityTier.DEBUG
 
     def test_classify_subagent_events(self) -> None:
-        """Subagent events classify to DETAILED (IG-089: hidden at normal).
-
-        Dispatch/completed events are NORMAL, but internal steps are DETAILED.
-        """
-        # Internal steps hidden at normal
-        assert classify_event_to_tier("soothe.subagent.browser.step") == VerbosityTier.DETAILED
-        assert classify_event_to_tier("soothe.subagent.claude.tool_use") == VerbosityTier.DETAILED
-        # Dispatch and completed visible at normal
-        assert classify_event_to_tier("soothe.subagent.browser.dispatched") == VerbosityTier.NORMAL
+        """Curated ``soothe.subagent.*`` tiers (IG-339): all NORMAL (activity + lifecycle)."""
+        assert (
+            classify_event_to_tier("soothe.subagent.browser.step.completed") == VerbosityTier.NORMAL
+        )
+        assert classify_event_to_tier("soothe.subagent.browser.started") == VerbosityTier.NORMAL
         assert classify_event_to_tier("soothe.subagent.research.completed") == VerbosityTier.NORMAL
 
-    def test_classify_capability_events(self) -> None:
-        """RFC-210 capability events classify to DETAILED."""
-        assert classify_event_to_tier("soothe.capability.browser.started") == VerbosityTier.DETAILED
-        assert classify_event_to_tier("soothe.capability.claude.started") == VerbosityTier.DETAILED
-        assert (
-            classify_event_to_tier("soothe.capability.claude.completed") == VerbosityTier.DETAILED
-        )
-        assert (
-            classify_event_to_tier("soothe.capability.claude.text.running")
-            == VerbosityTier.DETAILED
-        )
+    def test_classify_legacy_capability_prefix_is_domain_default(self) -> None:
+        """Removed ``soothe.capability.*`` wire contract — treated as unknown soothe domains."""
+        assert classify_event_to_tier("soothe.capability.browser.started") == VerbosityTier.DEBUG
 
     def test_classify_loop_agent_events(self) -> None:
         """Loop agent judgment events classify to NORMAL (user-visible progress)."""

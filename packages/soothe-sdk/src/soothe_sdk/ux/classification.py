@@ -6,16 +6,15 @@ Extracted from verbosity.py per RFC-610 (IG-185).
 from soothe_sdk.core.verbosity import VerbosityTier
 
 
-def _is_legacy_subagent_milestone_event(event_type: str) -> bool:
-    """Return True for legacy ``soothe.subagent.*`` lifecycle events (NORMAL tier)."""
+def _subagent_wire_tier(event_type: str) -> VerbosityTier | None:
+    """Tier for curated ``soothe.subagent.*`` wire events (IG-339).
+
+    All curated subagent wire signals (lifecycle and activity) are visible at NORMAL;
+    verbosity only filters coarser domains — these are already sparse and metadata-only.
+    """
     if not event_type.startswith("soothe.subagent."):
-        return False
-    if ".dispatched" in event_type or ".judgement" in event_type:
-        return True
-    # Subagent run completed (avoid matching ``*.step.*`` granular completions)
-    if event_type.endswith(".completed") and ".step." not in event_type:
-        return True
-    return False
+        return None
+    return VerbosityTier.NORMAL
 
 
 def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> VerbosityTier:
@@ -40,12 +39,9 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
         <VerbosityTier.NORMAL: 1>
     """
     if event_type.startswith("soothe."):
-        # RFC-210 capability events — all DETAILED tier
-        if event_type.startswith("soothe.capability."):
-            return VerbosityTier.DETAILED
-
-        if _is_legacy_subagent_milestone_event(event_type):
-            return VerbosityTier.NORMAL
+        wire = _subagent_wire_tier(event_type)
+        if wire is not None:
+            return wire
 
         # Fine-grained overrides (RFC-0024 / UX tests — before coarse domain defaults)
         if event_type == "soothe.cognition.agent_loop.completed":
@@ -56,8 +52,10 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
         domain = segments[1] if len(segments) >= 2 else "unknown"
         return _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.DEBUG)
 
-    # Non-soothe events (from deepagents subagents)
-    if namespace or ".subagent." in event_type:
+    # Non-soothe events (from deepagents subagents) — not curated soothe.subagent.*
+    if namespace or (
+        ".subagent." in event_type and not event_type.startswith("soothe.subagent.")
+    ):
         return VerbosityTier.DETAILED
 
     # Thinking and heartbeats are debug-level

@@ -17,11 +17,10 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
-from soothe.subagents.claude.events import (
-    ClaudeResultEvent,
-)
+from soothe.subagents.claude.events import ClaudeCompletedEvent, ClaudeFailedEvent, ClaudeStartedEvent
 from soothe.subagents.claude.session_bridge import record_claude_session, resolve_resume_session_id
 from soothe.utils import expand_path
+from soothe.utils.subagent_emit import emit_subagent_wire_event
 
 if TYPE_CHECKING:
     from deepagents.middleware.subagents import CompiledSubAgent
@@ -193,10 +192,13 @@ def _build_claude_graph(
             query,
         )
 
-        from soothe.utils.progress import emit_progress as _emit
-
         messages = state.get("messages", [])
         task = messages[-1].content if messages else ""
+
+        emit_subagent_wire_event(
+            ClaudeStartedEvent(task_preview=str(task)[:200]).to_dict(),
+            logger,
+        )
 
         logger.debug(
             "Claude subagent starting: messages=%d, task_preview=%s",
@@ -286,8 +288,8 @@ def _build_claude_graph(
                         last_claude_session_id or "<none>",
                         len(collected_text),
                     )
-                    _emit(
-                        ClaudeResultEvent(
+                    emit_subagent_wire_event(
+                        ClaudeCompletedEvent(
                             cost_usd=cost_usd,
                             duration_ms=duration_ms,
                             claude_session_id=last_claude_session_id,
@@ -297,6 +299,10 @@ def _build_claude_graph(
         except Exception:
             logger.exception("Claude agent failed")
             collected_text.append("Claude agent encountered an error.")
+            emit_subagent_wire_event(
+                ClaudeFailedEvent(message="claude_agent_exception").to_dict(),
+                logger,
+            )
         else:
             logger.debug(
                 "Recording Claude session: thread_id=%s, cwd=%s, session_id=%s, durability=%s",
