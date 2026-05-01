@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from soothe_sdk.client.schemas import Plan
 
+TaskScope = tuple[str, str]
+
 
 class RendererProtocol(Protocol):
     """Abstract callback interface for CLI/TUI event rendering.
@@ -30,6 +32,7 @@ class RendererProtocol(Protocol):
         *,
         is_main: bool,
         is_streaming: bool,
+        task_scope: TaskScope | None = None,
     ) -> None:
         """Assistant text chunk or complete message.
 
@@ -37,6 +40,7 @@ class RendererProtocol(Protocol):
             text: Text content to display.
             is_main: True if from main agent, False if from subagent.
             is_streaming: True if partial chunk, False if complete.
+            task_scope: When provided for subgraph output, ``(task_tool_call_id, subagent_type)``.
         """
         ...
 
@@ -72,6 +76,7 @@ class RendererProtocol(Protocol):
         tool_call_id: str,
         *,
         is_main: bool,
+        task_scope: TaskScope | None = None,
     ) -> None:
         """Tool invocation started.
 
@@ -80,6 +85,7 @@ class RendererProtocol(Protocol):
             args: Parsed argument dictionary.
             tool_call_id: Unique identifier for correlation with result.
             is_main: True if from main agent.
+            task_scope: Parent Task delegation scope for subgraph tools (IG-334).
         """
         ...
 
@@ -91,6 +97,7 @@ class RendererProtocol(Protocol):
         *,
         is_error: bool,
         is_main: bool,
+        task_scope: TaskScope | None = None,
     ) -> None:
         """Tool returned a result.
 
@@ -100,6 +107,7 @@ class RendererProtocol(Protocol):
             tool_call_id: Correlates with on_tool_call.
             is_error: True if result indicates failure.
             is_main: True if from main agent.
+            task_scope: Parent Task delegation scope for subgraph tools (IG-334).
         """
         ...
 
