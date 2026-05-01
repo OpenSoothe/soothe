@@ -25,7 +25,7 @@ def test_on_assistant_text_accumulates_turn_buffer() -> None:
     with patch("sys.stdout"):
         renderer.on_assistant_text("Part 1 ", is_main=True, is_streaming=True)
         renderer.on_assistant_text("Part 2", is_main=True, is_streaming=False)
-    assert "".join(renderer._state.full_response).startswith("Part 1")
+    assert "".join(renderer._state.full_response).startswith("● Part 1")
 
 
 def test_on_turn_end_clears_turn_buffer() -> None:
