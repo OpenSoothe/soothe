@@ -938,20 +938,6 @@ class EventProcessor:
         """Process protocol/progress events."""
         etype = data.get("type", "")
 
-        # IG-335: Subagent message relay short-circuit. The Claude subagent
-        # (and any future relay consumer) emits translated LangChain messages
-        # via custom events because LangGraph nodes cannot write to the
-        # ``messages`` stream channel. Re-route them through ``_handle_messages``
-        # so dedup, streaming concat, and task-scope binding all apply.
-        from soothe_cli.shared.message_relay import RELAY_EVENT_TYPE, extract_relay_payload
-
-        if etype == RELAY_EVENT_TYPE:
-            payload = extract_relay_payload(data)
-            if payload is not None:
-                msg_dict, metadata = payload
-                self._handle_messages([msg_dict, metadata], namespace)
-            return
-
         # Tool events are now visible at NORMAL verbosity (RFC-0020 CLI Stream Display Pipeline)
         # They are processed through on_progress_event -> StreamDisplayPipeline
 
