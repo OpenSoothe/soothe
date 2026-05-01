@@ -5,7 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe_sdk.core.subagent_wire import clip_wire_event_payload, is_allowlisted_subagent_event_type
+from soothe_sdk.core.subagent_wire import (
+    clip_wire_event_payload,
+    is_allowlisted_subagent_event_type,
+)
 
 from soothe.utils.progress import emit_progress
 

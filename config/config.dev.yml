@@ -117,6 +117,12 @@ tools:
   video:
     enabled: false
 
+  # LangChain RequestsToolkit (disable if outbound HTTP should not be allowed)
+  http_requests:
+    enabled: true
+    allow_dangerous_requests: true
+    verify_ssl: true
+
 # =============================================================================
 # Protocol Backends
 # =============================================================================

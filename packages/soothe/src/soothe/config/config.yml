@@ -239,6 +239,16 @@ tools:
   video:
     enabled: false   # Video analysis (Google Gemini)
 
+  # LangChain Community RequestsToolkit (GET/POST/PATCH/PUT/DELETE) (IG-339)
+  http_requests:
+    enabled: true
+    allow_dangerous_requests: true
+    verify_ssl: true
+    # headers: {}
+    # Example:
+    # headers:
+    #   Authorization: "Bearer ${MY_API_TOKEN}"
+
 # =============================================================================
 # MCP Servers
 # =============================================================================

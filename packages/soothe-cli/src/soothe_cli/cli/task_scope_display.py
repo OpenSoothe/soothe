@@ -24,11 +24,11 @@ def brief_task_tool_call_id(tool_call_id: str) -> str:
     return tid
 
 
-def format_task_scope_bracket(tool_call_id: str, subagent_type: str) -> str:
-    """Bracket prefix for subgraph tools: ``[Task(explore):#0]``."""
+def format_task_scope_prefix(tool_call_id: str, subagent_type: str) -> str:
+    """Prefix for Task subgraph lines: ``Task(explore):#0`` (no brackets)."""
     short = brief_task_tool_call_id(tool_call_id)
     st = (subagent_type or "?").strip() or "?"
-    return f"[Task({st}):{short}]"
+    return f"Task({st}):{short}"
 
 
 def format_task_subagent_line(subagent_type: str, task_description: str) -> str:
@@ -41,6 +41,6 @@ def format_task_subagent_line(subagent_type: str, task_description: str) -> str:
 
 __all__ = [
     "brief_task_tool_call_id",
-    "format_task_scope_bracket",
+    "format_task_scope_prefix",
     "format_task_subagent_line",
 ]
