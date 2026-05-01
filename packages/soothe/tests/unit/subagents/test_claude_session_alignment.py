@@ -96,22 +96,10 @@ async def test_run_claude_sets_resume_and_records_session() -> None:
         class AssistantMessage:
             pass
 
-        class UserMessage:
-            pass
-
-        class SystemMessage:
-            pass
-
         class TextBlock:
             pass
 
-        class ThinkingBlock:
-            pass
-
         class ToolUseBlock:
-            pass
-
-        class ToolResultBlock:
             pass
 
         class ClaudeAgentOptions:
@@ -135,20 +123,14 @@ async def test_run_claude_sets_resume_and_records_session() -> None:
                 self.total_cost_usd = 0.0
                 self.duration_ms = 1
                 self.session_id = "sess-from-sdk"
-                self.is_error = False
-                self.errors = None
 
         async def query(*, prompt: str, options: object) -> object:
             last_options.append(options)
             yield ResultMessage()
 
         m.AssistantMessage = AssistantMessage
-        m.UserMessage = UserMessage
-        m.SystemMessage = SystemMessage
         m.TextBlock = TextBlock
-        m.ThinkingBlock = ThinkingBlock
         m.ToolUseBlock = ToolUseBlock
-        m.ToolResultBlock = ToolResultBlock
         m.ClaudeAgentOptions = ClaudeAgentOptions
         m.ResultMessage = ResultMessage
         m.query = query
