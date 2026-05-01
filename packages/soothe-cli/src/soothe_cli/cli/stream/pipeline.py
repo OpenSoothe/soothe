@@ -534,6 +534,13 @@ class StreamDisplayPipeline:
         # Get tool call count from event
         tool_call_count = event.get("tool_call_count", 0)
 
+        # Snapshot description before mutating context (IG-333).
+        step_description = ""
+        if step_id:
+            step_description = (self._context.step_descriptions.get(step_id) or "").strip()
+        if not step_description:
+            step_description = (self._context.current_step_description or "").strip()
+
         # Mark step complete (updates _active_step_ids and steps_completed)
         if step_id:
             self._context.complete_step(step_id)
@@ -544,12 +551,12 @@ class StreamDisplayPipeline:
         self._context.current_step_description = None
         self._context.step_start_time = None
 
-        # IG-182: Return list directly (formatter returns list now)
         return format_step_done(
             duration_s,
             tool_call_count=tool_call_count,
             success=success,
             error_msg=error_msg,
+            step_description=step_description,
             namespace=self._current_namespace,
             verbosity_tier=self._verbosity_tier,
         )

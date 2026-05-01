@@ -17,7 +17,7 @@ def test_assistant_text_after_stderr_has_no_extra_blank_line(capsys: CaptureFixt
     r.write_lines([line])
     r.on_assistant_text("hello", is_main=True, is_streaming=True)
     captured = capsys.readouterr()
-    assert captured.out == "hello"
+    assert captured.out == "● hello"
     assert "\n\n" not in captured.out
     assert "● Goal: x" in captured.err
 

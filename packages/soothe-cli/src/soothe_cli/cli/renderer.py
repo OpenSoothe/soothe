@@ -51,6 +51,9 @@ class CliRendererState:
     # After LLM text on stdout, next stderr icon block gets one leading blank line
     stderr_blank_before_next_icon_block: bool = False
 
+    # Main-agent stdout: prepend ● before the next non-empty assistant chunk (IG-331).
+    assistant_leading_bullet_pending: bool = True
+
 
 class CliRenderer(RendererBase):
     """CLI renderer for headless stdout/stderr output.
@@ -112,16 +115,6 @@ class CliRenderer(RendererBase):
         """Shared presentation policy used with StreamDisplayPipeline and EventProcessor."""
         return self._presentation
 
-    def _is_inside_step_context(self) -> bool:
-        """Check if we're inside an active step (for indentation).
-
-        IG-257: Used to determine if tool calls/results should be indented as tree children.
-
-        Returns:
-            True if current_step_id is set in pipeline context.
-        """
-        return self._pipeline._context.current_step_id is not None
-
     def write_lines(self, lines: list[DisplayLine]) -> None:
         """Write display lines to stderr.
 
@@ -138,6 +131,11 @@ class CliRenderer(RendererBase):
 
         sys.stderr.flush()
         self._state.stderr_just_written = True
+        self._schedule_assistant_leading_bullet()
+
+    def _schedule_assistant_leading_bullet(self) -> None:
+        """Next main-agent stdout assistant segment should start with ●."""
+        self._state.assistant_leading_bullet_pending = True
 
     def on_assistant_text(
         self,
@@ -160,6 +158,10 @@ class CliRenderer(RendererBase):
             return  # Subagent text not shown in CLI headless mode
 
         payload = text if is_streaming else self.repair_concatenated_output(text)
+        if payload and self._state.assistant_leading_bullet_pending:
+            payload = "● " + payload
+            self._state.assistant_leading_bullet_pending = False
+
         self._state.full_response.append(payload)
 
         if self._state.stderr_just_written:
@@ -171,6 +173,9 @@ class CliRenderer(RendererBase):
         sys.stdout.flush()
         self._state.needs_stdout_newline = True
         self._state.stderr_blank_before_next_icon_block = True
+
+        if not is_streaming:
+            self._schedule_assistant_leading_bullet()
 
     def on_streaming_output(
         self,
@@ -223,11 +228,6 @@ class CliRenderer(RendererBase):
         # Use display helper for consistency with TUI (RFC-0020 Principle 5)
         tool_block = make_tool_block(display_name, args_str, status="running")
 
-        # IG-257: Add indentation when inside step context
-        # Unicode U+2514 "└─" (Box Drawings Light Up and Right) for tree branch
-        if self._is_inside_step_context():
-            tool_block = f"  └─ {tool_block}"
-
         # Track start time for duration display (RFC-0020)
         if tool_call_id:
             self._state.tool_call_start_times[tool_call_id] = time.time()
@@ -238,6 +238,7 @@ class CliRenderer(RendererBase):
         sys.stderr.write(f"{tool_block}\n")
         sys.stderr.flush()
         self._state.stderr_just_written = True
+        self._schedule_assistant_leading_bullet()
 
     def on_tool_result(
         self,
@@ -285,13 +286,10 @@ class CliRenderer(RendererBase):
 
         if combined_call_line:
             result_line = f"{combined_call_line} -> {result_line}"
-        elif self._is_inside_step_context():
-            # IG-257: Add indentation when inside step context
-            # Unicode U+2514 "└─" (Box Drawings Light Up and Right) for tree branch
-            result_line = f"  └─ {result_line}"
 
         sys.stderr.write(result_line + "\n")
         sys.stderr.flush()
+        self._schedule_assistant_leading_bullet()
 
     def on_status_change(self, state: str) -> None:
         """Handle status changes.
@@ -315,6 +313,7 @@ class CliRenderer(RendererBase):
         sys.stderr.flush()
         # Mark that stderr was just written
         self._state.stderr_just_written = True
+        self._schedule_assistant_leading_bullet()
 
     def on_progress_event(
         self,
@@ -410,6 +409,7 @@ class CliRenderer(RendererBase):
         self._state.needs_stdout_newline = False
         self._state.full_response.clear()
         self._state.pending_tool_call_lines.clear()
+        self._schedule_assistant_leading_bullet()
 
     def _stderr_begin_icon_block(self) -> None:
         """Prepare stderr for Soothe icon lines (progress, tools, tool results).
