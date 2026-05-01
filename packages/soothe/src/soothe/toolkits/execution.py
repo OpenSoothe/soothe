@@ -1,7 +1,7 @@
 """Execution tools (RFC-0016 consolidation).
 
 Consolidates single-purpose execution tools into one module:
-- run_command: Execute shell commands synchronously
+- run_command: Execute shell commands synchronously (langchain_community ShellTool)
 - run_python: Execute Python code with session persistence
 - run_background: Run commands in background
 - kill_process: Terminate background processes
@@ -11,12 +11,14 @@ Follows the pattern from image.py and audio.py.
 
 from __future__ import annotations
 
-import contextlib
 import logging
-import time
-from datetime import datetime
-from typing import Annotated, Any, Literal
+import os
+import re
+import signal
+import subprocess
+from typing import Annotated, Any
 
+from langchain_community.tools import ShellTool
 from langchain_core.tools import BaseTool
 from langchain_core.tools.base import InjectedToolArg
 
@@ -24,23 +26,18 @@ try:
     from langchain.tools import ToolRuntime
 except ImportError:  # pragma: no cover - optional at static analysis time
     ToolRuntime = Any  # type: ignore[misc,assignment]
-from pydantic import Field
+from pydantic import BaseModel, Field
 from soothe_sdk.plugin import plugin
 
 from soothe.config.constants import DEFAULT_EXECUTE_TIMEOUT
 from soothe.core.security.operation_security import WorkspaceToolOperationSecurity
 from soothe.protocols.operation_security import OperationSecurityContext, OperationSecurityRequest
 from soothe.toolkits._internal.python_session_manager import get_session_manager
-from soothe.toolkits._internal.shell import (
-    ANSI_ESCAPE,
-    ShellHealthState,
-    _shell_health_states,
-    _shell_instances,
-)
 from soothe.utils import expand_path
-from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
+
+_ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
 
 def _workspace_from_tool_runtime(tool_runtime: Any) -> str | None:
@@ -90,14 +87,71 @@ def _workspace_from_tool_runtime(tool_runtime: Any) -> str | None:
     return None
 
 
-class RunCommandTool(BaseTool):
-    """Execute a shell command synchronously.
+def _resolve_workspace(workspace_root: str, tool_runtime: Any = None) -> str | None:
+    """Resolve effective workspace for shell tools (RFC-103, IG-300).
 
-    Use this tool for running CLI commands, system commands, and scripts.
-    The command will execute and return output within the timeout period.
-    For long-running commands (>60s), use run_background instead.
+    Priority:
+        1. ``ToolRuntime`` config / messages state
+        2. LangGraph ``get_config()`` configurable
+        3. ContextVar (same-async-context)
+        4. ``workspace_root`` static fallback
+
+    Args:
+        workspace_root: Daemon-configured default workspace.
+        tool_runtime: Optional injected LangGraph tool runtime.
+
+    Returns:
+        Effective workspace path or ``None``.
+    """
+    from_runtime = _workspace_from_tool_runtime(tool_runtime)
+    if from_runtime:
+        return str(from_runtime)
+
+    try:
+        from langgraph.config import get_config
+
+        config = get_config()
+        configurable = config.get("configurable", {})
+        workspace = configurable.get("workspace")
+        if workspace:
+            return str(workspace)
+    except Exception:  # noqa: S110
+        pass
+
+    from soothe.core import FrameworkFilesystem
+
+    dynamic_workspace = FrameworkFilesystem.get_current_workspace()
+    if dynamic_workspace:
+        return str(dynamic_workspace)
+
+    return workspace_root or None
+
+
+class RunCommandInput(BaseModel):
+    """Arguments for ``run_command`` (ShellTool-based)."""
+
+    command: str = Field(..., description="The shell command to execute.")
+    timeout: int | None = Field(
+        default=None,
+        description="Optional timeout in seconds (defaults to toolkit timeout).",
+    )
+
+
+class _UnusedShellProcess:
+    """``ShellTool`` requires ``process``; Soothe runs commands via ``subprocess``."""
+
+    def run(self, commands: object) -> str:  # pragma: no cover
+        raise RuntimeError("RunCommandShellTool does not use BashProcess.run")
+
+
+class RunCommandShellTool(ShellTool):
+    """LangChain :class:`~langchain_community.tools.ShellTool` as ``run_command``.
+
+    Adds operation security, workspace-aware ``cwd``, LangGraph ``ToolRuntime``
+    injection, and subprocess execution (IG-336).
     """
 
+    process: Any = Field(default_factory=lambda: _UnusedShellProcess())
     name: str = "run_command"
     description: str = (
         "Execute a shell command and return output. "
@@ -107,158 +161,20 @@ class RunCommandTool(BaseTool):
         "Returns: command output (stdout + stderr). "
         "For long-running commands (>60s), use run_background instead."
     )
+    args_schema: type[BaseModel] = RunCommandInput
 
-    workspace_root: str = Field(default="", description="Working directory for shell")
+    workspace_root: str = Field(default="", description="Working directory fallback")
     timeout: int = Field(default=DEFAULT_EXECUTE_TIMEOUT, description="Command timeout in seconds")
     max_output_length: int = Field(default=10000)
-    custom_prompt: str = Field(default="")
-
-    quick_timeout: int = Field(
-        default=5, description="Timeout for quick operations (prompt detection, validation)"
-    )
-    responsiveness_timeout: int = Field(
-        default=2, description="Timeout for shell responsiveness checks"
-    )
     security_config: Any = Field(default=None, description="Security configuration object")
 
-    _shell_initialized: bool = False
-    _last_workspace: str | None = None
-
-    def __init__(self, **data: Any) -> None:
-        """Initialize the CLI tool.
-
-        Args:
-            **data: Pydantic model fields (workspace_root, timeout, etc.).
-        """
-        super().__init__(**data)
-        self._shell_initialized = False
-        self._last_workspace = None
-        self._last_tool_runtime: Any = None
-        self.custom_prompt = ""
-
     def _get_effective_workspace(self, tool_runtime: Any = None) -> str | None:
-        """Get effective workspace, checking LangGraph config first (RFC-103).
-
-        Priority:
-        0. workspace from injected ``ToolRuntime.config`` (ToolNode / thread-pool safe)
-        1. workspace from LangGraph ``get_config()`` configurable
-        2. ContextVar (for same-async-context)
-        3. self.workspace_root (static fallback from daemon config)
-
-        Returns:
-            Effective workspace path or None.
-        """
-        # Priority 0: ToolRuntime (configurable + messages state; IG-300).
-        from_runtime = _workspace_from_tool_runtime(tool_runtime)
-        if from_runtime:
-            return str(from_runtime)
-
-        # Priority 1: Try LangGraph configurable
-        try:
-            from langgraph.config import get_config
-
-            config = get_config()
-            configurable = config.get("configurable", {})
-            workspace = configurable.get("workspace")
-            if workspace:
-                return str(workspace)
-        except Exception:  # noqa: S110
-            pass  # Not in LangGraph context - expected for non-LangGraph tool calls
-
-        # Priority 2: Try ContextVar
-        from soothe.core import FrameworkFilesystem
-
-        dynamic_workspace = FrameworkFilesystem.get_current_workspace()
-        if dynamic_workspace:
-            return str(dynamic_workspace)
-
-        # Priority 3: Use static fallback
-        return self.workspace_root or None
-
-    def _ensure_shell_initialized(self, tool_runtime: Any = None) -> None:
-        """Lazy initialization guard - initializes shell on first use."""
-        if not self._shell_initialized:
-            self._initialize_shell(tool_runtime)
-            self._shell_initialized = True
-
-    def _initialize_shell(self, tool_runtime: Any = None) -> None:
-        """Start persistent shell with custom prompt (optimized)."""
-        import time
-
-        init_start = time.perf_counter()
-        try:
-            import pexpect
-
-            custom_prompt = "soothe-cli>> "
-            init_timeout = 2  # Reduced from default 5s for faster initialization
-
-            logger.debug("Shell init: spawning bash process")
-            spawn_start = time.perf_counter()
-
-            child = pexpect.spawn(
-                "/bin/bash",
-                encoding="utf-8",
-                echo=False,
-                timeout=self.timeout,
-            )
-
-            spawn_elapsed_ms = int((time.perf_counter() - spawn_start) * 1000)
-            logger.debug("Shell init: spawned bash in %dms", spawn_elapsed_ms)
-
-            # Send all setup commands in one batch (eliminates unnecessary sleeps)
-            # stty -onlcr: disable newline-to-carriage-return mapping
-            # unset PROMPT_COMMAND: clear any existing prompt hooks
-            # PS1 setup: set custom prompt marker
-            # echo '__init__': validation marker to confirm initialization
-            logger.debug("Shell init: sending setup commands")
-            setup_start = time.perf_counter()
-
-            child.sendline(
-                "stty -onlcr; unset PROMPT_COMMAND; PS1='soothe-cli>> '; echo '__init__'"
-            )
-
-            # Single expect operation for all setup (was 5 separate expects before)
-            child.expect(custom_prompt, timeout=init_timeout)
-            output = child.before or ""
-
-            setup_elapsed_ms = int((time.perf_counter() - setup_start) * 1000)
-            logger.debug("Shell init: setup completed in %dms", setup_elapsed_ms)
-
-            # Validate initialization marker
-            if "__init__" not in output:
-                msg = f"Shell initialization failed. Expected '__init__' in output, got: {preview_first(output, 100)}"
-                raise RuntimeError(msg)
-
-            # Set working directory to client / thread workspace when known (IG-300).
-            init_workspace = self._get_effective_workspace(tool_runtime)
-            if init_workspace:
-                logger.debug("Shell init: changing to workspace %s", init_workspace)
-                workspace = str(expand_path(init_workspace))
-                child.sendline(f"cd '{workspace}'")
-                child.expect(custom_prompt, timeout=init_timeout)
-
-            _shell_instances["default"] = child
-            self.custom_prompt = custom_prompt
-
-            total_init_ms = int((time.perf_counter() - init_start) * 1000)
-            logger.info("Shell initialized successfully in %dms", total_init_ms)
-
-        except ImportError:
-            logger.warning("pexpect not installed; cli tool will not work")
-            self.custom_prompt = ""
-
-        except Exception:
-            logger.exception("Failed to initialize shell")
-            self.custom_prompt = ""
-
-            if "child" in locals():
-                with contextlib.suppress(Exception):
-                    child.close()
+        """Expose workspace resolution for tests (RFC-103)."""
+        return _resolve_workspace(self.workspace_root, tool_runtime)
 
     def _security_decision(
         self, command: str, tool_name: str, tool_runtime: Any = None
     ) -> tuple[str, str]:
-        """Evaluate command with OperationSecurityProtocol."""
         evaluator = WorkspaceToolOperationSecurity()
         decision = evaluator.evaluate(
             OperationSecurityRequest(
@@ -269,173 +185,11 @@ class RunCommandTool(BaseTool):
                 command=command,
             ),
             OperationSecurityContext(
-                workspace=self._get_effective_workspace(tool_runtime),
+                workspace=_resolve_workspace(self.workspace_root, tool_runtime),
                 security_config=self.security_config,
             ),
         )
         return decision.verdict, decision.reason
-
-    def _test_shell_responsive(self, max_attempts: int = 2) -> bool:
-        """Test if shell is responsive with quick timeout.
-
-        Args:
-            max_attempts: Number of test attempts (default: 2)
-
-        Returns:
-            True if shell responds correctly, False otherwise
-        """
-        import time
-
-        import pexpect
-
-        child = _shell_instances.get("default")
-        if not child:
-            return False
-
-        for attempt in range(max_attempts):
-            try:
-                child.sendline("echo __test__")
-                child.expect(self.custom_prompt, timeout=self.responsiveness_timeout)
-                output = child.before or ""
-
-                if "__test__" in output:
-                    logger.debug("Shell responsiveness test passed (attempt %d)", attempt + 1)
-                    return True
-
-                logger.warning(
-                    "Shell test attempt %d failed: unexpected output '%s'",
-                    attempt + 1,
-                    preview_first(output, 50),
-                )
-
-            except pexpect.TIMEOUT:
-                logger.warning(
-                    "Shell test attempt %d timed out after %ds",
-                    attempt + 1,
-                    self.responsiveness_timeout,
-                )
-            except Exception as e:
-                logger.warning("Shell test attempt %d failed: %s", attempt + 1, e)
-
-            if attempt < max_attempts - 1:
-                time.sleep(0.5)
-
-        logger.error("Shell responsiveness test failed after all attempts")
-        return False
-
-    def _should_test_responsiveness(self, shell_id: str = "default") -> bool:
-        """Determine if responsiveness test is needed based on shell health.
-
-        Args:
-            shell_id: Shell identifier (default: "default")
-
-        Returns:
-            True if test should be performed, False to skip
-        """
-        health = _shell_health_states.get(shell_id)
-
-        if health is None:
-            logger.debug("Testing responsiveness: first command")
-            return True
-
-        if health.shell_recovered:
-            logger.debug("Testing responsiveness: shell was recovered")
-            return True
-
-        if not health.first_command_executed:
-            logger.debug("Testing responsiveness: validating initialization")
-            return True
-
-        if not health.last_command_success:
-            logger.debug("Testing responsiveness: previous command failed")
-            return True
-
-        consecutive_failure_threshold = 2
-        if health.consecutive_failures >= consecutive_failure_threshold:
-            logger.debug("Testing responsiveness: consecutive failures detected")
-            return True
-
-        if health.last_trouble_sign != "none":
-            logger.debug(
-                "Testing responsiveness: trouble sign detected (%s)", health.last_trouble_sign
-            )
-            return True
-
-        logger.debug("Skipping responsiveness test: shell healthy")
-        return False
-
-    def _detect_trouble_sign(
-        self, error: Exception | None = None, _output: str = ""
-    ) -> Literal["timeout", "eof", "error", "unexpected_output", "none"]:
-        """Detect trouble signs from command execution.
-
-        Args:
-            error: Exception that occurred during execution (if any)
-            _output: Command output (if any)
-
-        Returns:
-            Type of trouble sign detected, or "none" if healthy
-        """
-        import pexpect
-
-        if error is None:
-            return "none"
-
-        if isinstance(error, pexpect.TIMEOUT):
-            return "timeout"
-        if isinstance(error, pexpect.EOF):
-            return "eof"
-        if isinstance(error, Exception):
-            return "error"
-
-        return "none"
-
-    def _recover_shell(self, max_retries: int = 2) -> None:
-        """Recover the shell if it becomes unresponsive.
-
-        Args:
-            max_retries: Number of recovery attempts (default: 2)
-
-        Raises:
-            RuntimeError: If all recovery attempts fail
-        """
-        import time
-
-        logger.warning("Attempting to recover shell...")
-
-        for attempt in range(max_retries):
-            try:
-                with contextlib.suppress(Exception):
-                    if "default" in _shell_instances:
-                        with contextlib.suppress(Exception):
-                            _shell_instances["default"].close()
-                        del _shell_instances["default"]
-
-                self._initialize_shell(self._last_tool_runtime)
-
-                if not self._test_shell_responsive():
-                    raise RuntimeError("Recovered shell failed responsiveness test")
-
-                recover_ws = self._get_effective_workspace(self._last_tool_runtime)
-                if recover_ws:
-                    workspace = str(expand_path(recover_ws))
-                    child = _shell_instances.get("default")
-                    if child:
-                        child.sendline(f"cd '{workspace}'")
-                        child.expect(self.custom_prompt, timeout=self.quick_timeout)
-
-                logger.info("Shell recovered successfully (attempt %d)", attempt + 1)
-
-            except Exception as e:
-                logger.exception("Recovery attempt %d failed", attempt + 1)
-
-                if attempt < max_retries - 1:
-                    logger.info("Retrying recovery...")
-                    time.sleep(1)
-                else:
-                    logger.exception("All recovery attempts failed")
-                    msg = f"Shell recovery failed after {max_retries} attempts: {e}"
-                    raise RuntimeError(msg) from e
 
     def _run(
         self,
@@ -443,128 +197,44 @@ class RunCommandTool(BaseTool):
         timeout: int | None = None,
         *,
         runtime: Annotated[ToolRuntime | None, InjectedToolArg()] = None,
+        run_manager: Any = None,
     ) -> str:
-        """Execute shell command synchronously.
-
-        Args:
-            command: Shell command to execute
-            timeout: Optional timeout override (uses instance default if not provided)
-            runtime: Injected LangGraph tool runtime (thread-pool safe workspace).
-
-        Returns:
-            Combined stdout and stderr output
-
-        Raises:
-            TimeoutError: If command exceeds timeout
-            FileNotFoundError: If command not found (handled internally)
-        """
-        self._last_tool_runtime = runtime
         verdict, reason = self._security_decision(command, self.name, runtime)
         if verdict != "allow":
             logger.warning("Operation security denied command: %s (%s)", command, reason)
             return f"Error: {reason}"
 
-        self._ensure_shell_initialized(runtime)
-
-        if "default" not in _shell_instances:
-            return "Error: Shell not initialized. Install pexpect: pip install pexpect"
-
-        import pexpect
-
-        # Get dynamic workspace and change to it before running command (RFC-103)
-        effective_workspace = self._get_effective_workspace(runtime)
-        if effective_workspace and effective_workspace != self._last_workspace:
-            child = _shell_instances.get("default")
-            if child:
-                child.sendline(f"cd '{effective_workspace}'")
-                child.expect(self.custom_prompt, timeout=self.quick_timeout)
-                self._last_workspace = effective_workspace
-                logger.debug("Changed to workspace: %s", effective_workspace)
-
-        # Use provided timeout or fall back to instance default
         actual_timeout = timeout if timeout is not None else self.timeout
+        cwd_raw = _resolve_workspace(self.workspace_root, runtime)
+        cwd = str(expand_path(cwd_raw)) if cwd_raw else None
 
-        health = _shell_health_states.get("default")
-        if health is None:
-            health = ShellHealthState()
-            _shell_health_states["default"] = health
-
-        start_time = time.time()
         try:
-            if self._should_test_responsiveness("default"):
-                if not self._test_shell_responsive():
-                    logger.warning("Shell not responsive, attempting recovery")
-                    try:
-                        self._recover_shell()
-                        health.shell_recovered = True
-                    except RuntimeError as e:
-                        return f"Error: Shell recovery failed. Please restart the application. Details: {e}"
-            else:
-                health.shell_recovered = False
-
-            child = _shell_instances["default"]
-            child.sendline(command)
-
-            try:
-                child.expect(self.custom_prompt, timeout=actual_timeout)
-            except pexpect.TIMEOUT:
-                trouble_sign = self._detect_trouble_sign(
-                    error=TimeoutError(f"Timeout after {actual_timeout}s")
-                )
-                health.last_command_success = False
-                health.last_command_timestamp = datetime.now()
-                health.consecutive_failures += 1
-                health.last_trouble_sign = trouble_sign
-                health.first_command_executed = True
-
-                return (
-                    f"Error: Command timed out after {actual_timeout}s. "
-                    f"For long-running operations, use run_background instead, "
-                    f"or increase the timeout configuration."
-                )
-
-            output = child.before or ""
-            output = ANSI_ESCAPE.sub("", output)
-
-            if len(output) > self.max_output_length:
-                output = output[: self.max_output_length] + "\n... (output truncated)"
-
-            health.last_command_success = True
-            health.last_command_timestamp = datetime.now()
-            health.consecutive_failures = 0
-            health.last_trouble_sign = "none"
-            health.first_command_executed = True
-
-            return output.strip()
-
-        except pexpect.EOF as e:
-            _ = int((time.time() - start_time) * 1000)  # Duration tracking
-            logger.exception("Shell process terminated unexpectedly")
-            trouble_sign = self._detect_trouble_sign(error=e)
-            health.last_command_success = False
-            health.last_command_timestamp = datetime.now()
-            health.consecutive_failures += 1
-            health.last_trouble_sign = trouble_sign
-
-            self._recover_shell()
-            health.shell_recovered = True
-
-            return "Error: Shell terminated unexpectedly. Shell has been restarted. Please retry your command."
-
-        except Exception as e:
-            _ = int((time.time() - start_time) * 1000)  # Duration tracking
-            logger.exception("CLI command failed")
-            trouble_sign = self._detect_trouble_sign(error=e)
-            health.last_command_success = False
-            health.last_command_timestamp = datetime.now()
-            health.consecutive_failures += 1
-            health.last_trouble_sign = trouble_sign
-
-            with contextlib.suppress(Exception):
-                self._recover_shell()
-                health.shell_recovered = True
-
+            completed = subprocess.run(
+                command,
+                shell=True,
+                cwd=cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=actual_timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return (
+                f"Error: Command timed out after {actual_timeout}s. "
+                "For long-running operations, use run_background instead, "
+                "or increase the timeout configuration."
+            )
+        except OSError as e:
             return f"Error executing command: {e}"
+        except Exception as e:
+            logger.exception("CLI command failed")
+            return f"Error executing command: {e}"
+
+        output = completed.stdout or ""
+        output = _ANSI_ESCAPE.sub("", output) if output else ""
+        if len(output) > self.max_output_length:
+            output = output[: self.max_output_length] + "\n... (output truncated)"
+        return output.strip()
 
     async def _arun(
         self,
@@ -573,21 +243,11 @@ class RunCommandTool(BaseTool):
         *,
         runtime: Annotated[ToolRuntime | None, InjectedToolArg()] = None,
     ) -> str:  # noqa: ASYNC109
-        """Async execution (delegates to sync).
-
-        Args:
-            command: Shell command to execute
-            timeout: Optional timeout override (uses instance default if not provided)
-            runtime: Injected LangGraph tool runtime (thread-pool safe workspace).
-        """
         return self._run(command, timeout, runtime=runtime)
 
-    @classmethod
-    def cleanup(cls) -> None:
-        """Cleanup shell instances and health states."""
-        from soothe.toolkits._internal.shell import cleanup_shell
 
-        cleanup_shell("default")
+def cleanup_execution_resources() -> None:
+    """Compatibility hook for teardown tests (persistent shell removed in IG-336)."""
 
 
 class RunPythonTool(BaseTool):
@@ -628,14 +288,11 @@ class RunPythonTool(BaseTool):
         Returns:
             Dict with 'success', 'output', 'result', 'error'
         """
-        # Use provided session_id or try to get from instance
         actual_session_id = session_id or self.session_id
 
         if actual_session_id is None:
-            # Default session ID
             actual_session_id = "default"
 
-        # Get session manager and execute
         manager = get_session_manager()
         return manager.execute(session_id=actual_session_id, code=code)
 
@@ -663,29 +320,6 @@ class RunBackgroundTool(BaseTool):
     workspace_root: str = Field(default="", description="Working directory for shell")
     security_config: Any = Field(default=None, description="Security configuration object")
 
-    def _get_effective_workspace(self, tool_runtime: Any = None) -> str | None:
-        """Get effective workspace, checking runtime config/context first (IG-300)."""
-        from_runtime = _workspace_from_tool_runtime(tool_runtime)
-        if from_runtime:
-            return str(from_runtime)
-        try:
-            from langgraph.config import get_config
-
-            config = get_config()
-            configurable = config.get("configurable", {})
-            workspace = configurable.get("workspace")
-            if workspace:
-                return str(workspace)
-        except Exception:  # noqa: S110
-            pass
-
-        from soothe.core import FrameworkFilesystem
-
-        dynamic_workspace = FrameworkFilesystem.get_current_workspace()
-        if dynamic_workspace:
-            return str(dynamic_workspace)
-        return self.workspace_root or None
-
     def _security_decision(self, command: str, tool_runtime: Any = None) -> tuple[str, str]:
         evaluator = WorkspaceToolOperationSecurity()
         decision = evaluator.evaluate(
@@ -697,7 +331,7 @@ class RunBackgroundTool(BaseTool):
                 command=command,
             ),
             OperationSecurityContext(
-                workspace=self._get_effective_workspace(tool_runtime),
+                workspace=_resolve_workspace(self.workspace_root, tool_runtime),
                 security_config=self.security_config,
             ),
         )
@@ -721,42 +355,29 @@ class RunBackgroundTool(BaseTool):
         if verdict != "allow":
             return {"pid": None, "status": "error", "message": f"Error: {reason}"}
 
-        if "default" not in _shell_instances:
-            return {"pid": None, "status": "error", "message": "Error: Shell not initialized."}
-
-        effective = self._get_effective_workspace(runtime)
-        if effective:
-            import pexpect
-
-            child = _shell_instances["default"]
-            try:
-                child.sendline(f"cd '{str(expand_path(effective))}'")
-                child.expect("soothe-cli>> ", timeout=5)
-            except (pexpect.TIMEOUT, pexpect.EOF, OSError, RuntimeError):
-                logger.warning("run_background: failed to cd to workspace %s", effective)
+        effective = _resolve_workspace(self.workspace_root, runtime)
+        cwd = str(expand_path(effective)) if effective else None
 
         try:
-            child = _shell_instances["default"]
-            child.sendline(f"nohup {command} > /dev/null 2>&1 & echo $!")
-            child.expect("soothe-cli>> ")
-
-            output = child.before or ""
-            output = ANSI_ESCAPE.sub("", output)
-            pid = output.strip()
-
-            pid_int = int(pid)
+            proc = subprocess.Popen(
+                command,
+                shell=True,
+                cwd=cwd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
         except Exception as e:
             return {
                 "pid": None,
                 "status": "error",
                 "message": f"Error starting background process: {e}",
             }
-        else:
-            return {
-                "pid": pid_int,
-                "status": "running",
-                "message": f"Background process started with PID: {pid}",
-            }
+        return {
+            "pid": proc.pid,
+            "status": "running",
+            "message": f"Background process started with PID: {proc.pid}",
+        }
 
     async def _arun(
         self,
@@ -791,22 +412,15 @@ class KillProcessTool(BaseTool):
         Returns:
             Status message
         """
-        if "default" not in _shell_instances:
-            return "Error: Shell not initialized."
-
         try:
-            child = _shell_instances["default"]
-            child.sendline(f"kill {pid} 2>/dev/null || echo 'Process not found'")
-            child.expect("soothe-cli>> ")
-
-            output = child.before or ""
-            output = ANSI_ESCAPE.sub("", output)
-
-        except Exception as e:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return f"Process {pid} not found or already terminated"
+        except PermissionError:
+            return f"Error killing process {pid}: permission denied"
+        except OSError as e:
             return f"Error killing process: {e}"
         else:
-            if "Process not found" in output:
-                return f"Process {pid} not found or already terminated"
             return f"Process {pid} terminated"
 
     async def _arun(self, pid: int) -> str:
@@ -844,7 +458,7 @@ class ExecutionToolkit:
             List of execution BaseTool instances.
         """
         return [
-            RunCommandTool(
+            RunCommandShellTool(
                 workspace_root=self._workspace_root,
                 timeout=self._timeout,
                 security_config=self._security_config,
