@@ -22,6 +22,8 @@ from soothe_cli.cli.stream.formatter import (
 )
 from soothe_cli.cli.stream.pipeline import StreamDisplayPipeline
 
+_STEP_DONE_MARK = "\u2705\ufe0f"
+
 
 class TestDisplayLine:
     """Tests for DisplayLine dataclass."""
@@ -164,37 +166,43 @@ class TestFormatters:
         assert line.duration_ms == 45200
 
     def test_format_step_done(self) -> None:
-        """IG-182: Step done shows as level-3 tree child with duration."""
+        """IG-333: Step done mirrors goal-done layout (●, flat level 1)."""
         lines = format_step_done(3.2)
         assert len(lines) == 1
-        assert lines[0].level == 3
-        assert "Done" in lines[0].content
-        assert lines[0].icon == "|__"  # Tree connector (IG-182)
+        assert lines[0].level == 1
+        assert lines[0].content == f"{_STEP_DONE_MARK} Step (done)"
+        assert lines[0].icon == "●"
+        assert lines[0].indent == ""
         assert lines[0].duration_ms == 3200
 
     def test_format_step_done_with_tool_calls(self) -> None:
-        """IG-182: Step done shows tool call count when > 0."""
+        """Step done includes tool count in parentheses like goal metadata."""
         lines = format_step_done(11.4, tool_call_count=1)
         assert len(lines) == 1
-        assert "Done" in lines[0].content
-        assert "[1 tools]" in lines[0].content
+        assert lines[0].content == f"{_STEP_DONE_MARK} Step (done, 1 tool)"
         assert lines[0].duration_ms == 11400
 
     def test_format_step_done_without_tool_calls(self) -> None:
-        """IG-182: Step done without tool calls shows just Done."""
+        """Step done omits tool fragment when count is zero."""
         lines = format_step_done(3.2, tool_call_count=0)
         assert len(lines) == 1
-        assert "Done" in lines[0].content
-        assert "[0 tools]" not in lines[0].content
+        assert lines[0].content == f"{_STEP_DONE_MARK} Step (done)"
         assert lines[0].duration_ms == 3200
 
+    def test_format_step_done_with_description(self) -> None:
+        """Step description appears after ✅️ like goal text after 🏆."""
+        lines = format_step_done(2.0, step_description="Read README header", tool_call_count=4)
+        assert lines[0].content == f"{_STEP_DONE_MARK} Read README header (done, 4 tools)"
+
     def test_format_step_done_with_error(self) -> None:
-        """IG-182: Step done with error shows Failed line."""
+        """Failure line matches success structure; detail on second flat row."""
         lines = format_step_done(2.1, success=False, error_msg="File not found")
         assert len(lines) == 2
-        assert "Failed" in lines[0].content
-        assert lines[0].icon == "|__"
-        assert "Error: File not found" in lines[1].content
+        assert lines[0].content == "✗ Step (failed)"
+        assert lines[0].icon == "●"
+        assert lines[1].content == "Error: File not found"
+        assert lines[1].icon == ""
+        assert lines[1].indent == ""
 
     def test_format_goal_done(self) -> None:
         line = format_goal_done("Analyze codebase", 3, 38.1)
@@ -522,7 +530,7 @@ class TestStreamDisplayPipeline:
         assert len([line for line in lines if "💭" in line.content]) == 0
 
     def test_step_completed_with_tool_call_count(self) -> None:
-        """IG-182: Step completion shows tree child with tool count."""
+        """IG-333: Step completion line includes description and tool metadata."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
         pipeline._context.current_step_description = "Explore project structure"
 
@@ -537,14 +545,13 @@ class TestStreamDisplayPipeline:
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert "Done" in lines[0].content
-        assert "[5 tools]" in lines[0].content
-        assert lines[0].icon == "|__"  # Tree connector (IG-182)
-        assert lines[0].indent == "  "  # Level 3: tree child indent (IG-182)
+        assert lines[0].content == f"{_STEP_DONE_MARK} Explore project structure (done, 5 tools)"
+        assert lines[0].icon == "●"
+        assert lines[0].indent == ""
         assert lines[0].duration_ms == 1500
 
     def test_step_completed_without_tool_calls(self) -> None:
-        """IG-182: Step completion without tool calls shows just Done."""
+        """Step completion without tools omits tool suffix."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
         pipeline._context.current_step_description = "Analyze config"
 
@@ -559,24 +566,23 @@ class TestStreamDisplayPipeline:
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert "Done" in lines[0].content
-        assert "[0 tools]" not in lines[0].content  # Should not show when 0
-        assert lines[0].icon == "|__"  # Tree connector (IG-182)
+        assert lines[0].content == f"{_STEP_DONE_MARK} Analyze config (done)"
+        assert lines[0].icon == "●"
 
     def test_step_completed_uses_tracked_description_by_step_id(self) -> None:
-        """IG-182: Step completion shows Done regardless of tracked description."""
+        """Pipeline resolves description by step_id for parallel step tracking."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         pipeline.process(
             {
-                "type": "soothe.cognition.plan.step_started",
+                "type": "soothe.cognition.plan.step.started",
                 "step_id": "step_a",
                 "description": "Search root directory",
             }
         )
         pipeline.process(
             {
-                "type": "soothe.cognition.plan.step_started",
+                "type": "soothe.cognition.plan.step.started",
                 "step_id": "step_b",
                 "description": "Search src directory",
             }
@@ -592,9 +598,8 @@ class TestStreamDisplayPipeline:
         )
 
         assert len(lines) == 1
-        assert "Done" in lines[0].content  # IG-182: Just shows "Done"
-        assert "[2 tools]" in lines[0].content
-        assert lines[0].icon == "|__"  # Tree connector
+        assert lines[0].content == f"{_STEP_DONE_MARK} Search root directory (done, 2 tools)"
+        assert lines[0].icon == "●"
 
     def test_loop_agent_reason_deduped_in_short_window(self) -> None:
         """IG-225: Duplicate reason events show lines on first call only."""

@@ -7,6 +7,18 @@ from soothe_sdk.utils import get_tool_display_name
 
 from soothe_cli.cli.stream.display_line import DisplayLine, indent_for_level
 
+# Emoji presentation for step-done success (U+2705 + VS16); distinct from ✓ tool rows.
+_STEP_DONE_OK_MARK = "\u2705\ufe0f"
+
+
+def _step_done_tool_suffix(tool_call_count: int) -> str:
+    """Parenthetical fragment for tool usage (e.g. `, 4 tools`)."""
+    if tool_call_count <= 0:
+        return ""
+    if tool_call_count == 1:
+        return ", 1 tool"
+    return f", {tool_call_count} tools"
+
 
 def abbreviate_text(text: str, max_length: int = 50) -> str:
     """Abbreviate text to max_length, preserving start and end.
@@ -343,68 +355,65 @@ def format_step_done(
     tool_call_count: int = 0,
     success: bool = True,
     error_msg: str | None = None,
+    step_description: str = "",
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
 ) -> list[DisplayLine]:
-    """Format step completion as level-3 child node (IG-182).
+    """Format step completion — same structural pattern as ``format_goal_done`` (IG-333).
 
-    IG-159/IG-182: Shows brief "Done"/"Failed" with tree connector as child of step header.
-    No description repeat - user already saw it in the step header above.
-
-    IG-257: Uses Unicode tree branch "└─" (U+2514) for cleaner visual tree.
+    Flat level-1 line: ``● ✅️ {description} (done{, N tools}) (duration)``.
 
     Args:
         duration_s: Duration in seconds.
         tool_call_count: Number of tool calls made during step execution.
         success: Whether step succeeded.
         error_msg: Error message if failed.
+        step_description: Human-readable step text (from pipeline context).
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
     Returns:
-        List of DisplayLine objects for step result tree (1-2 lines).
+        One display line on success; on failure one line plus optional error detail line.
     """
     duration_ms = int(duration_s * 1000)
-    tool_info = f" [{tool_call_count} tools]" if tool_call_count > 0 else ""
+    tools = _step_done_tool_suffix(tool_call_count)
+    desc = step_description.strip() or "Step"
+    source_prefix = _derive_source_prefix(namespace, verbosity_tier)
 
-    # Success case: single line
+    # Match goal-done: level 1, bullet icon, full description in content (no tree indent).
     if success:
-        content = f"✓ Done{tool_info}"
+        content = f"{_STEP_DONE_OK_MARK} {desc} (done{tools})"
         return [
             DisplayLine(
-                level=3,  # Child node of step header (level 2)
+                level=1,
                 content=content,
-                icon="└─",  # IG-257: Unicode tree branch (U+2514)
-                indent=indent_for_level(3),
+                icon="●",
+                indent=indent_for_level(1),
                 duration_ms=duration_ms,
-                source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+                source_prefix=source_prefix,
             )
         ]
 
-    # Error case: result line + optional error detail
     lines = [
         DisplayLine(
-            level=3,
-            content=f"✗ Failed{tool_info}",
-            icon="└─",  # IG-257: Unicode tree branch (U+2514)
-            indent=indent_for_level(3),
+            level=1,
+            content=f"✗ {desc} (failed{tools})",
+            icon="●",
+            indent=indent_for_level(1),
             duration_ms=duration_ms,
-            source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+            source_prefix=source_prefix,
         )
     ]
-
-    # Show error message on level-4 line if present
     if error_msg:
         lines.append(
             DisplayLine(
-                level=4,  # Error detail as child of failed result
+                level=1,
                 content=f"Error: {error_msg}",
-                icon="└─",  # IG-257: Unicode tree branch (U+2514)
-                indent=indent_for_level(4),
-                source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+                icon="",
+                indent="",
+                source_prefix=source_prefix,
             )
         )
-
     return lines
 
 
