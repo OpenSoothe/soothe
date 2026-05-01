@@ -153,3 +153,7 @@ class TestClassifyEventToTier:
         """Loop agent judgment events classify to NORMAL (user-visible progress)."""
         # Judgment events show agent reasoning about goal progress
         assert classify_event_to_tier("soothe.cognition.agent_loop.reason") == VerbosityTier.NORMAL
+
+    def test_classify_relay_message_envelope_internal(self) -> None:
+        """IG-335: Relay envelope is INTERNAL so only the inner message renders."""
+        assert classify_event_to_tier("soothe.relay.message") == VerbosityTier.INTERNAL

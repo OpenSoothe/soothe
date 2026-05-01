@@ -20,6 +20,17 @@ from langgraph.graph.message import add_messages
 from soothe.subagents.claude.events import (
     ClaudeResultEvent,
 )
+from soothe.subagents.claude.message_mapping import (
+    ClaudeToolCorrelator,
+    translate_assistant_text_final,
+    translate_error,
+    translate_system,
+    translate_text_chunk,
+    translate_thinking,
+    translate_tool_result,
+    translate_tool_use,
+)
+from soothe.subagents.claude.relay import relay_message
 from soothe.subagents.claude.session_bridge import record_claude_session, resolve_resume_session_id
 from soothe.utils import expand_path
 
@@ -188,11 +199,16 @@ def _build_claude_graph(
             AssistantMessage,
             ClaudeAgentOptions,
             ResultMessage,
+            SystemMessage,
             TextBlock,
+            ThinkingBlock,
+            ToolResultBlock,
             ToolUseBlock,
+            UserMessage,
             query,
         )
 
+        from soothe.subagents.claude.message_mapping import _new_message_id
         from soothe.utils.progress import emit_progress as _emit
 
         messages = state.get("messages", [])
@@ -243,24 +259,32 @@ def _build_claude_graph(
             disallowed_tools or [],
         )
 
-        # IG-258: Removed event emission - no longer needed
-
         collected_text: list[str] = []
         cost_usd: float = 0.0
         last_claude_session_id: str | None = None
+        correlator = ClaudeToolCorrelator()
+        relay_metadata = {"lc_agent_name": "claude", "langgraph_node": "run_claude"}
 
         try:
             async for message in query(prompt=task, options=options):
+                # IG-335: Translate each Claude SDK message into LangChain
+                # messages and relay them so CLI/TUI render under [Task(claude):..].
                 if isinstance(message, AssistantMessage):
+                    msg_id = getattr(message, "message_id", None) or _new_message_id("claude-ai")
+                    turn_text_parts: list[str] = []
                     for block in message.content:
                         if isinstance(block, TextBlock):
                             collected_text.append(block.text)
+                            turn_text_parts.append(block.text)
                             logger.debug(
                                 "Claude text block: length=%d, preview=%s",
                                 len(block.text),
                                 block.text[:50] if len(block.text) > 50 else block.text,
                             )
-                            # IG-258: Removed event emission
+                            relay_message(
+                                translate_text_chunk(msg_id, block.text),
+                                metadata=relay_metadata,
+                            )
                         elif isinstance(block, ToolUseBlock):
                             tool_input = getattr(block, "input", None)
                             logger.debug(
@@ -268,7 +292,41 @@ def _build_claude_graph(
                                 block.name,
                                 str(tool_input)[:200] if tool_input else "<none>",
                             )
-                            # IG-258: Removed event emission
+                            correlator.register(block)
+                            tool_msg_id = _new_message_id("claude-tc")
+                            relay_message(
+                                translate_tool_use(tool_msg_id, block),
+                                metadata=relay_metadata,
+                            )
+                        elif isinstance(block, ThinkingBlock):
+                            relay_message(
+                                translate_thinking(msg_id, block),
+                                metadata=relay_metadata,
+                            )
+                    if turn_text_parts:
+                        # Finalize the streamed text turn so the renderer flushes
+                        # any pending non-streaming concat path.
+                        relay_message(
+                            translate_assistant_text_final(msg_id, "".join(turn_text_parts)),
+                            metadata=relay_metadata,
+                        )
+                    err = getattr(message, "error", None)
+                    if err:
+                        _emit(translate_error(error=str(err)), logger)
+                elif isinstance(message, UserMessage):
+                    content = getattr(message, "content", None)
+                    if isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, ToolResultBlock):
+                                relay_message(
+                                    translate_tool_result(
+                                        block, name_lookup=correlator.as_lookup()
+                                    ),
+                                    metadata=relay_metadata,
+                                )
+                    # Plain-text UserMessages echo the prompt; intentionally skipped.
+                elif isinstance(message, SystemMessage):
+                    _emit(translate_system(message), logger)
                 elif isinstance(message, ResultMessage):
                     cost_usd = message.total_cost_usd or 0.0
                     last_claude_session_id = getattr(message, "session_id", None)
@@ -286,6 +344,13 @@ def _build_claude_graph(
                         last_claude_session_id or "<none>",
                         len(collected_text),
                     )
+                    if getattr(message, "is_error", False):
+                        err_list = getattr(message, "errors", None) or []
+                        err_text = "; ".join(str(e) for e in err_list) or "result_error"
+                        _emit(
+                            translate_error(error=err_text, source="result_message"),
+                            logger,
+                        )
                     _emit(
                         ClaudeResultEvent(
                             cost_usd=cost_usd,
@@ -297,6 +362,10 @@ def _build_claude_graph(
         except Exception:
             logger.exception("Claude agent failed")
             collected_text.append("Claude agent encountered an error.")
+            _emit(
+                translate_error(error="claude_agent_exception", source="exception"),
+                logger,
+            )
         else:
             logger.debug(
                 "Recording Claude session: thread_id=%s, cwd=%s, session_id=%s, durability=%s",

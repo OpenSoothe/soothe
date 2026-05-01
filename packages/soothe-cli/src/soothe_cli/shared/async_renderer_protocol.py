@@ -31,6 +31,7 @@ class AsyncRendererProtocol(Protocol):
         *,
         is_main: bool,
         is_streaming: bool,
+        task_scope: tuple[str, str] | None = None,
     ) -> None:
         """Assistant text chunk or complete message.
 
@@ -38,6 +39,7 @@ class AsyncRendererProtocol(Protocol):
             text: Text content to display.
             is_main: True if from main agent, False if from subagent.
             is_streaming: True if partial chunk, False if complete.
+            task_scope: Parent Task delegation scope for subgraph prose (IG-334).
         """
         ...
 
@@ -73,6 +75,7 @@ class AsyncRendererProtocol(Protocol):
         tool_call_id: str,
         *,
         is_main: bool,
+        task_scope: tuple[str, str] | None = None,
     ) -> None:
         """Tool invocation started.
 
@@ -81,6 +84,7 @@ class AsyncRendererProtocol(Protocol):
             args: Parsed argument dictionary.
             tool_call_id: Unique identifier for correlation with result.
             is_main: True if from main agent.
+            task_scope: Parent Task delegation scope for subgraph tools (IG-334).
         """
         ...
 
@@ -92,6 +96,7 @@ class AsyncRendererProtocol(Protocol):
         *,
         is_error: bool,
         is_main: bool,
+        task_scope: tuple[str, str] | None = None,
     ) -> None:
         """Tool returned a result.
 
@@ -101,6 +106,7 @@ class AsyncRendererProtocol(Protocol):
             tool_call_id: Correlates with on_tool_call.
             is_error: True if result indicates failure.
             is_main: True if from main agent.
+            task_scope: Parent Task delegation scope for subgraph tools (IG-334).
         """
         ...
 

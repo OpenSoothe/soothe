@@ -16,7 +16,6 @@ from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.utils import get_tool_display_name
 
 from soothe_cli.cli.stream import DisplayLine, StreamDisplayPipeline
-from soothe_cli.cli.utils import make_tool_block
 from soothe_cli.shared.display_policy import VerbosityLevel, normalize_verbosity
 from soothe_cli.shared.message_processing import format_tool_call_args
 from soothe_cli.shared.presentation_engine import PresentationEngine
@@ -143,6 +142,7 @@ class CliRenderer(RendererBase):
         *,
         is_main: bool,
         is_streaming: bool,
+        task_scope: tuple[str, str] | None = None,
     ) -> None:
         """Write assistant text to stdout.
 
@@ -153,13 +153,19 @@ class CliRenderer(RendererBase):
             text: Text content to display.
             is_main: True if from main agent.
             is_streaming: True if partial chunk.
+            task_scope: ``(task_tool_call_id, subagent_type)`` for Task subgraph prose.
         """
         if not is_main:
-            return  # Subagent text not shown in CLI headless mode
+            if not task_scope:
+                return
 
         payload = text if is_streaming else self.repair_concatenated_output(text)
         if payload and self._state.assistant_leading_bullet_pending:
-            payload = "● " + payload
+            lead = "● "
+            if task_scope:
+                tcid, st = task_scope
+                lead += f"[Task({st}):{tcid}] "
+            payload = lead + payload
             self._state.assistant_leading_bullet_pending = False
 
         self._state.full_response.append(payload)
@@ -206,6 +212,7 @@ class CliRenderer(RendererBase):
         tool_call_id: str,
         *,
         is_main: bool,  # noqa: ARG002
+        task_scope: tuple[str, str] | None = None,
     ) -> None:
         """Write tool call to stderr as a flat stream line.
 
@@ -214,6 +221,7 @@ class CliRenderer(RendererBase):
             args: Parsed arguments (may contain _raw for fallback).
             tool_call_id: Tool call identifier.
             is_main: True if from main agent.
+            task_scope: Parent Task scope for subgraph tools (IG-334).
         """
         if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
             return
@@ -225,8 +233,11 @@ class CliRenderer(RendererBase):
         # Pass args directly, including any _raw fallback
         args_str = format_tool_call_args(name, {"args": args, "_raw": args.get("_raw", "")})
 
-        # Use display helper for consistency with TUI (RFC-0020 Principle 5)
-        tool_block = make_tool_block(display_name, args_str, status="running")
+        core = f"{display_name}({args_str})"
+        if task_scope:
+            tcid, st = task_scope
+            core = f"[Task({st}):{tcid}] {core}"
+        tool_block = f"⚙ {core}"
 
         # Track start time for duration display (RFC-0020)
         if tool_call_id:
@@ -248,6 +259,7 @@ class CliRenderer(RendererBase):
         *,
         is_error: bool,
         is_main: bool,  # noqa: ARG002
+        task_scope: tuple[str, str] | None = None,
     ) -> None:
         """Write tool result to stderr as a flat stream line with duration.
 
@@ -257,6 +269,7 @@ class CliRenderer(RendererBase):
             tool_call_id: Tool call identifier.
             is_error: True if result indicates error.
             is_main: True if from main agent.
+            task_scope: Unused when joined with pending call line (IG-334).
         """
         if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
             return
@@ -286,6 +299,9 @@ class CliRenderer(RendererBase):
 
         if combined_call_line:
             result_line = f"{combined_call_line} -> {result_line}"
+        elif task_scope:
+            tcid, st = task_scope
+            result_line = f"[Task({st}):{tcid}] -> {result_line}"
 
         sys.stderr.write(result_line + "\n")
         sys.stderr.flush()

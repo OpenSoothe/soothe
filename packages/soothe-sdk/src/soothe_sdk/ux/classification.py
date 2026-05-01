@@ -40,6 +40,11 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
         <VerbosityTier.NORMAL: 1>
     """
     if event_type.startswith("soothe."):
+        # IG-335: Message relay envelope is invisible — only the inner
+        # LangChain message governs on-screen output via the messages path.
+        if event_type == "soothe.relay.message":
+            return VerbosityTier.INTERNAL
+
         # RFC-210 capability events — all DETAILED tier
         if event_type.startswith("soothe.capability."):
             return VerbosityTier.DETAILED
