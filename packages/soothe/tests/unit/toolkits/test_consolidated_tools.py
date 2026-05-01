@@ -7,9 +7,10 @@ from pathlib import Path
 
 import pytest
 from langchain_community.tools import ShellTool
+from langchain_experimental.tools.python.tool import PythonREPLTool
 
 from soothe.toolkits.data import DataToolkit, InspectDataTool
-from soothe.toolkits.execution import ExecutionToolkit, RunCommandShellTool
+from soothe.toolkits.execution import ExecutionToolkit, RunCommandShellTool, RunPythonREPLTool
 from soothe.toolkits.file_ops import (
     ApplyDiffTool,
     DeleteFileTool,
@@ -129,6 +130,17 @@ class TestExecutionTools:
         assert len(tools) == 4
         assert isinstance(tools[0], RunCommandShellTool)
         assert isinstance(tools[0], ShellTool)
+        assert isinstance(tools[1], RunPythonREPLTool)
+        assert isinstance(tools[1], PythonREPLTool)
+
+    def test_run_python_tool_name(self) -> None:
+        tool = RunPythonREPLTool()
+        assert tool.name == "run_python"
+
+    def test_run_python_emits_print_output(self) -> None:
+        tool = RunPythonREPLTool()
+        out = tool._run(code="print('hello')")
+        assert "hello" in str(out)
 
     def test_run_command_tool_name(self) -> None:
         tool = RunCommandShellTool()

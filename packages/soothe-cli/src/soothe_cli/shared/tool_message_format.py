@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-# Serialized shape from ``PythonSessionManager.execute`` / ``RunPythonTool``.
+# Serialized shape historically used by ``RunPythonTool`` (dict envelope); REPL tools may return plain text.
 _RUN_PYTHON_RESULT_KEYS: frozenset[str] = frozenset({"success", "output", "result", "error"})
 
 

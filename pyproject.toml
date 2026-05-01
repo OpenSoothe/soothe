@@ -12,6 +12,13 @@ dependencies = [
 [tool.uv.workspace]
 members = ["packages/*"]
 
+# Pin the default package index to PyPI so `uv sync` / `make all-sync` work even when the
+# environment sets UV_INDEX_URL or UV_DEFAULT_INDEX to a broken or unreachable mirror.
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
+
 [tool.uv.sources]
 soothe-sdk = { workspace = true }
 soothe-cli = { workspace = true }
