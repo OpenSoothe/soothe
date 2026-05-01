@@ -24,7 +24,7 @@ DEFAULT_AUTONOMOUS_MAX_ITERATIONS = 10
 # ============================================================================
 
 # Default timeout for shell command execution (RFC-606 TUI migration)
-# Used by RunCommandTool and TUI display logic
+# Used by execution tools (run_command) and TUI display logic
 DEFAULT_EXECUTE_TIMEOUT = 60  # seconds
 
 # ============================================================================
