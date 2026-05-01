@@ -6,9 +6,10 @@ import importlib
 from pathlib import Path
 
 import pytest
+from langchain_community.tools import ShellTool
 
 from soothe.toolkits.data import DataToolkit, InspectDataTool
-from soothe.toolkits.execution import ExecutionToolkit, RunCommandTool
+from soothe.toolkits.execution import ExecutionToolkit, RunCommandShellTool
 from soothe.toolkits.file_ops import (
     ApplyDiffTool,
     DeleteFileTool,
@@ -126,20 +127,21 @@ class TestExecutionTools:
         toolkit = ExecutionToolkit()
         tools = toolkit.get_tools()
         assert len(tools) == 4
-        assert isinstance(tools[0], RunCommandTool)
+        assert isinstance(tools[0], RunCommandShellTool)
+        assert isinstance(tools[0], ShellTool)
 
     def test_run_command_tool_name(self) -> None:
-        tool = RunCommandTool()
+        tool = RunCommandShellTool()
         assert tool.name == "run_command"
 
     def test_run_command_description_mentions_shell(self) -> None:
-        tool = RunCommandTool()
+        tool = RunCommandShellTool()
         desc = tool.description.lower()
         assert "command" in desc or "shell" in desc
 
     def test_run_command_basic(self) -> None:
         """Test basic command execution."""
-        tool = RunCommandTool()
+        tool = RunCommandShellTool()
         result = tool._run(command="echo hello")
         assert "hello" in result or result  # Should have some output
 

@@ -20,16 +20,16 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.mark.integration
-class TestRunCommandTool:
+class TestRunCommandShellTool:
     """Integration tests for shell command execution."""
 
     @pytest.fixture
     def cmd_tool(self):
-        """Create RunCommandTool instance."""
-        from soothe.toolkits.execution import RunCommandTool
+        """Create RunCommandShellTool instance."""
+        from soothe.toolkits.execution import RunCommandShellTool
 
-        return RunCommandTool(
-            workdir=tempfile.mkdtemp(),
+        return RunCommandShellTool(
+            workspace_root=tempfile.mkdtemp(),
             timeout=30,
         )
 
