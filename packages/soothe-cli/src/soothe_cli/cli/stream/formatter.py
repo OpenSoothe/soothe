@@ -361,7 +361,8 @@ def format_step_done(
 ) -> list[DisplayLine]:
     """Format step completion — same structural pattern as ``format_goal_done`` (IG-333).
 
-    Flat level-1 line: ``● ✅️ {description} (done{, N tools}) (duration)``.
+    Flat level-1 line: ``● ✅️ {description} (done{, N tools}) (duration)``. If the step
+    text is missing on success, returns no lines (no generic ``Step (done)`` placeholder).
 
     Args:
         duration_s: Duration in seconds.
@@ -373,11 +374,18 @@ def format_step_done(
         verbosity_tier: Current verbosity tier.
 
     Returns:
-        One display line on success; on failure one line plus optional error detail line.
+        One display line on success when ``step_description`` is non-empty; otherwise an
+        empty list on success (avoids a redundant generic ``Step (done)`` line when the
+        daemon emits completion without matching step context). On failure, one line
+        plus optional error detail line (uses ``Step`` as label only when description is
+        missing).
     """
     duration_ms = int(duration_s * 1000)
     tools = _step_done_tool_suffix(tool_call_count)
-    desc = step_description.strip() or "Step"
+    desc_stripped = step_description.strip()
+    if success and not desc_stripped:
+        return []
+    desc = desc_stripped or "Step"
     source_prefix = _derive_source_prefix(namespace, verbosity_tier)
 
     # Match goal-done: level 1, bullet icon, full description in content (no tree indent).

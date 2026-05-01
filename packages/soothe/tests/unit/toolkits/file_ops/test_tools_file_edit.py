@@ -14,215 +14,253 @@ Note: This toolkit does NOT provide read_file, write_file, search_files, list_fi
 
 import asyncio
 import platform
-import tempfile
 import warnings
-from pathlib import Path
 
 import pytest
 
 from soothe.toolkits._internal.file_edit import (
     _detect_stripped_absolute_path,
 )
-from soothe.toolkits.file_ops import (
-    ApplyDiffTool,
-    DeleteFileTool,
-    DeleteLinesTool,
-    EditFileLinesTool,
-    FileInfoTool,
-    InsertLinesTool,
-)
+
+# ---------------------------------------------------------------------------
+# Middleware Fixture (Reference Implementation)
+# ---------------------------------------------------------------------------
 
 
-class TestDeleteFileTool:
-    """Test DeleteFileTool functionality."""
+@pytest.fixture
+def middleware(tmp_path):
+    """Create SootheFilesystemMiddleware for testing.
 
-    def test_tool_metadata(self) -> None:
-        """Test tool metadata."""
-        tool = DeleteFileTool()
+    This is the reference pattern for testing file_ops tools.
+    """
+    from deepagents.backends.filesystem import FilesystemBackend
 
-        assert tool.name == "delete_file"
-        assert "delete" in tool.description.lower()
+    from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
-    def test_delete_existing_file(self) -> None:
-        """Test deleting an existing file."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            file_path = Path(temp_dir) / "test.txt"
-            file_path.write_text("Hello, World!")
-
-            tool = DeleteFileTool(work_dir=temp_dir, backup_enabled=False)
-
-            result = tool._run("test.txt")
-
-            assert "Deleted:" in result
-            assert not file_path.exists()
-
-    def test_delete_nonexistent_file(self) -> None:
-        """Test deleting a non-existent file."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            tool = DeleteFileTool(work_dir=temp_dir)
-
-            result = tool._run("nonexistent.txt")
-
-            assert "Error" in result
-            assert "not found" in result.lower()
-
-    def test_delete_with_backup(self) -> None:
-        """Test deleting file with backup."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            file_path = Path(temp_dir) / "test.txt"
-            file_path.write_text("Hello, World!")
-
-            tool = DeleteFileTool(work_dir=temp_dir, backup_enabled=True)
-
-            result = tool._run("test.txt")
-
-            assert "backup:" in result.lower()
-
-    def test_async_delete_honors_backup_keyword(self) -> None:
-        """Async wrapper should work correctly."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            file_path = Path(temp_dir) / "test.txt"
-            file_path.write_text("Hello, World!")
-            tool = DeleteFileTool(work_dir=temp_dir, backup_enabled=False)
-
-            result = asyncio.run(tool._arun("test.txt"))
-
-            assert "Deleted:" in result
-            assert not file_path.exists()
+    backend = FilesystemBackend(root_dir=tmp_path)
+    return SootheFilesystemMiddleware(backend=backend, backup_enabled=True)
 
 
-class TestFileInfoTool:
-    """Test FileInfoTool functionality."""
+@pytest.fixture
+def delete_tool(middleware):
+    """Get delete_file tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "delete_file")
 
-    def test_tool_metadata(self) -> None:
-        """Test tool metadata."""
-        tool = FileInfoTool()
 
-        assert tool.name == "file_info"
-        assert "info" in tool.description.lower() or "metadata" in tool.description.lower()
+@pytest.fixture
+def info_tool(middleware):
+    """Get file_info tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "file_info")
 
-    def test_get_file_info(self) -> None:
-        """Test getting file info."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            file_path = Path(temp_dir) / "test.txt"
-            file_path.write_text("Hello, World!")
 
-            tool = FileInfoTool(work_dir=temp_dir)
+@pytest.fixture
+def edit_tool(middleware):
+    """Get edit_file_lines tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "edit_file_lines")
 
-            result = tool._run("test.txt")
 
-            assert "Path:" in result
-            assert "Size:" in result
-            assert "Modified:" in result
+@pytest.fixture
+def insert_tool(middleware):
+    """Get insert_lines tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "insert_lines")
 
-    def test_get_nonexistent_file_info(self) -> None:
-        """Test getting info for non-existent file."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            tool = FileInfoTool(work_dir=temp_dir)
 
-            result = tool._run("nonexistent.txt")
+@pytest.fixture
+def delete_lines_tool(middleware):
+    """Get delete_lines tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "delete_lines")
 
-            assert "Error" in result
-            assert "not found" in result.lower()
+
+@pytest.fixture
+def apply_diff_tool(middleware):
+    """Get apply_diff tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "apply_diff")
 
 
 # ---------------------------------------------------------------------------
-# Surgical Code Editing Tools (merged from code_edit toolkit)
+# Delete File Tool Tests
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteFileTool:
+    """Test delete_file tool functionality."""
+
+    def test_tool_metadata(self, delete_tool) -> None:
+        """Test tool metadata."""
+        assert delete_tool.name == "delete_file"
+        assert "delete" in delete_tool.description.lower()
+
+    def test_delete_existing_file(self, delete_tool, tmp_path) -> None:
+        """Test deleting an existing file."""
+        file_path = tmp_path / "test.txt"
+        file_path.write_text("Hello, World!")
+
+        result = delete_tool.invoke({"file_path": str(file_path)})
+
+        assert "Deleted" in result or "deleted" in result.lower()
+        assert not file_path.exists()
+
+    def test_delete_nonexistent_file(self, delete_tool) -> None:
+        """Test deleting a non-existent file."""
+        result = delete_tool.invoke({"file_path": "/nonexistent/file.txt"})
+
+        assert "Error" in result
+        assert "not found" in result.lower()
+
+    def test_delete_with_backup(self, delete_tool, tmp_path) -> None:
+        """Test deleting file with backup."""
+        file_path = tmp_path / "test.txt"
+        file_path.write_text("Hello, World!")
+
+        result = delete_tool.invoke({"file_path": str(file_path)})
+
+        assert "backup" in result.lower()
+
+    def test_async_delete_works(self, delete_tool, tmp_path) -> None:
+        """Async invoke should work correctly."""
+        file_path = tmp_path / "test.txt"
+        file_path.write_text("Hello, World!")
+
+        result = asyncio.run(delete_tool.ainvoke({"file_path": str(file_path)}))
+
+        assert "Deleted" in result or "deleted" in result.lower()
+        assert not file_path.exists()
+
+
+# ---------------------------------------------------------------------------
+# File Info Tool Tests
+# ---------------------------------------------------------------------------
+
+
+class TestFileInfoTool:
+    """Test file_info tool functionality."""
+
+    def test_tool_metadata(self, info_tool) -> None:
+        """Test tool metadata."""
+        assert info_tool.name == "file_info"
+        assert (
+            "info" in info_tool.description.lower() or "metadata" in info_tool.description.lower()
+        )
+
+    def test_get_file_info(self, info_tool, tmp_path) -> None:
+        """Test getting file info."""
+        file_path = tmp_path / "test.txt"
+        file_path.write_text("Hello, World!")
+
+        result = info_tool.invoke({"path": str(file_path)})
+
+        assert "Path:" in result
+        assert "Size:" in result
+        assert "Modified:" in result
+
+    def test_get_nonexistent_file_info(self, info_tool) -> None:
+        """Test getting info for non-existent file."""
+        result = info_tool.invoke({"path": "/nonexistent/file.txt"})
+
+        assert "Error" in result
+        assert "not found" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# Surgical Code Editing Tools
 # ---------------------------------------------------------------------------
 
 
 class TestEditFileLinesTool:
     """Tests for edit_file_lines tool."""
 
-    def test_replace_single_line(self) -> None:
+    def test_replace_single_line(self, edit_tool, tmp_path) -> None:
         """Test replacing a single line."""
-        tool = EditFileLinesTool()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\nline3\n")
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".py") as f:
-            f.write("line1\nline2\nline3\n")
-            f.flush()
+        result = edit_tool.invoke(
+            {
+                "file_path": str(test_file),
+                "start_line": 2,
+                "end_line": 2,
+                "new_content": "modified_line2",
+            }
+        )
 
-            result = tool._run(path=f.name, start_line=2, end_line=2, new_content="modified_line2")
+        assert "Updated" in result or "updated" in result.lower()
+        assert "1 removed, 1 added" in result
 
-            assert "Updated" in result
-            assert "1 removed, 1 added" in result
+        content = test_file.read_text()
+        assert "modified_line2" in content
+        assert "line1" in content
+        assert "line3" in content
 
-            with open(f.name) as rf:
-                content = rf.read()
-                assert "modified_line2" in content
-                assert "line1" in content
-                assert "line3" in content
-
-            Path(f.name).unlink()
-
-    def test_replace_multiple_lines(self) -> None:
+    def test_replace_multiple_lines(self, edit_tool, tmp_path) -> None:
         """Test replacing multiple lines."""
-        tool = EditFileLinesTool()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\nline3\nline4\nline5\n")
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".py") as f:
-            f.write("line1\nline2\nline3\nline4\nline5\n")
-            f.flush()
+        result = edit_tool.invoke(
+            {
+                "file_path": str(test_file),
+                "start_line": 2,
+                "end_line": 4,
+                "new_content": "new2\nnew3\nnew4",
+            }
+        )
 
-            result = tool._run(
-                path=f.name, start_line=2, end_line=4, new_content="new2\nnew3\nnew4"
-            )
+        assert "Updated" in result or "updated" in result.lower()
+        assert "3 removed, 3 added" in result
 
-            assert "Updated" in result
-            assert "3 removed, 3 added" in result
+        content = test_file.read_text()
+        assert "line1" in content
+        assert "new2" in content
+        assert "new3" in content
+        assert "new4" in content
+        assert "line5" in content
 
-            with open(f.name) as rf:
-                content = rf.read()
-                assert "line1" in content
-                assert "new2" in content
-                assert "new3" in content
-                assert "new4" in content
-                assert "line5" in content
-
-            Path(f.name).unlink()
-
-    def test_replace_with_different_line_count(self) -> None:
+    def test_replace_with_different_line_count(self, edit_tool, tmp_path) -> None:
         """Test replacing with different number of lines."""
-        tool = EditFileLinesTool()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\nline3\n")
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".py") as f:
-            f.write("line1\nline2\nline3\n")
-            f.flush()
+        result = edit_tool.invoke(
+            {
+                "file_path": str(test_file),
+                "start_line": 2,
+                "end_line": 3,
+                "new_content": "new1\nnew2\nnew3\nnew4",
+            }
+        )
 
-            result = tool._run(
-                path=f.name, start_line=2, end_line=3, new_content="new1\nnew2\nnew3\nnew4"
-            )
+        assert "2 removed, 4 added" in result
 
-            assert "2 removed, 4 added" in result
+        lines = test_file.read_text().splitlines()
+        assert len(lines) == 5
 
-            with open(f.name) as rf:
-                lines = rf.readlines()
-                assert len(lines) == 5
-
-            Path(f.name).unlink()
-
-    def test_invalid_line_range(self) -> None:
+    def test_invalid_line_range(self, edit_tool, tmp_path) -> None:
         """Test error handling for invalid line range."""
-        tool = EditFileLinesTool()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\n")
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".py") as f:
-            f.write("line1\nline2\n")
-            f.flush()
+        result = edit_tool.invoke(
+            {"file_path": str(test_file), "start_line": 5, "end_line": 6, "new_content": "x"}
+        )
+        assert "Error" in result
+        assert "Invalid start_line" in result
 
-            result = tool._run(path=f.name, start_line=5, end_line=6, new_content="x")
-            assert "Error" in result
-            assert "Invalid start_line" in result
+        result = edit_tool.invoke(
+            {"file_path": str(test_file), "start_line": 1, "end_line": 5, "new_content": "x"}
+        )
+        assert "Error" in result
+        assert "Invalid end_line" in result
 
-            result = tool._run(path=f.name, start_line=1, end_line=5, new_content="x")
-            assert "Error" in result
-            assert "Invalid end_line" in result
-
-            Path(f.name).unlink()
-
-    def test_file_not_found(self) -> None:
+    def test_file_not_found(self, edit_tool) -> None:
         """Test error handling for missing file."""
-        tool = EditFileLinesTool()
-
-        result = tool._run(path="/nonexistent/file.py", start_line=1, end_line=1, new_content="x")
+        result = edit_tool.invoke(
+            {
+                "file_path": "/nonexistent/file.py",
+                "start_line": 1,
+                "end_line": 1,
+                "new_content": "x",
+            }
+        )
         assert "Error" in result
         assert "File not found" in result
 
@@ -230,129 +268,96 @@ class TestEditFileLinesTool:
 class TestInsertLinesTool:
     """Tests for insert_lines tool."""
 
-    def test_insert_at_beginning(self) -> None:
+    def test_insert_at_beginning(self, insert_tool, tmp_path) -> None:
         """Test inserting at beginning of file."""
-        tool = InsertLinesTool()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\n")
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".py") as f:
-            f.write("line1\nline2\n")
-            f.flush()
+        insert_tool.invoke({"file_path": str(test_file), "line": 1, "content": "new_first"})
 
-            tool._run(path=f.name, line=1, content="new_first")
+        lines = test_file.read_text().splitlines()
+        assert lines[0] == "new_first"
+        assert lines[1] == "line1"
 
-            with open(f.name) as rf:
-                lines = rf.readlines()
-                assert lines[0] == "new_first\n"
-                assert lines[1] == "line1\n"
-
-            Path(f.name).unlink()
-
-    def test_insert_in_middle(self) -> None:
+    def test_insert_in_middle(self, insert_tool, tmp_path) -> None:
         """Test inserting in middle of file."""
-        tool = InsertLinesTool()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\nline3\n")
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".py") as f:
-            f.write("line1\nline2\nline3\n")
-            f.flush()
+        insert_tool.invoke({"file_path": str(test_file), "line": 2, "content": "inserted"})
 
-            tool._run(path=f.name, line=2, content="inserted")
+        content = test_file.read_text()
+        assert content == "line1\ninserted\nline2\nline3\n"
 
-            with open(f.name) as rf:
-                content = rf.read()
-                assert content == "line1\ninserted\nline2\nline3\n"
-
-            Path(f.name).unlink()
-
-    def test_insert_at_end(self) -> None:
+    def test_insert_at_end(self, insert_tool, tmp_path) -> None:
         """Test appending at end of file."""
-        tool = InsertLinesTool()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\n")
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".py") as f:
-            f.write("line1\nline2\n")
-            f.flush()
+        insert_tool.invoke({"file_path": str(test_file), "line": 3, "content": "new_last"})
 
-            tool._run(path=f.name, line=3, content="new_last")
-
-            with open(f.name) as rf:
-                content = rf.read()
-                assert content == "line1\nline2\nnew_last\n"
-
-            Path(f.name).unlink()
+        content = test_file.read_text()
+        assert content == "line1\nline2\nnew_last\n"
 
 
 class TestDeleteLinesTool:
     """Tests for delete_lines tool."""
 
-    def test_delete_single_line(self) -> None:
+    def test_delete_single_line(self, delete_lines_tool, tmp_path) -> None:
         """Test deleting a single line."""
-        tool = DeleteLinesTool()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\nline3\n")
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".py") as f:
-            f.write("line1\nline2\nline3\n")
-            f.flush()
+        delete_lines_tool.invoke({"file_path": str(test_file), "start_line": 2, "end_line": 2})
 
-            tool._run(path=f.name, start_line=2, end_line=2)
+        content = test_file.read_text()
+        assert content == "line1\nline3\n"
 
-            with open(f.name) as rf:
-                content = rf.read()
-                assert content == "line1\nline3\n"
-
-            Path(f.name).unlink()
-
-    def test_delete_multiple_lines(self) -> None:
+    def test_delete_multiple_lines(self, delete_lines_tool, tmp_path) -> None:
         """Test deleting multiple lines."""
-        tool = DeleteLinesTool()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\nline3\nline4\nline5\n")
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".py") as f:
-            f.write("line1\nline2\nline3\nline4\nline5\n")
-            f.flush()
+        delete_lines_tool.invoke({"file_path": str(test_file), "start_line": 2, "end_line": 4})
 
-            tool._run(path=f.name, start_line=2, end_line=4)
-
-            with open(f.name) as rf:
-                content = rf.read()
-                assert content == "line1\nline5\n"
-
-            Path(f.name).unlink()
+        content = test_file.read_text()
+        assert content == "line1\nline5\n"
 
 
 class TestApplyDiffTool:
     """Tests for apply_diff tool."""
 
-    def test_apply_simple_diff(self) -> None:
+    def test_apply_simple_diff(self, apply_diff_tool, tmp_path) -> None:
         """Test applying a simple diff."""
-        tool = ApplyDiffTool()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("def hello():\n    print('world')\n")
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".py") as f:
-            f.write("def hello():\n    print('world')\n")
-            f.flush()
-
-            diff = f"""--- {f.name}
-+++ {f.name}
+        diff = f"""--- {test_file.name}
++++ {test_file.name}
 @@ -1,2 +1,2 @@
  def hello():
 -    print('world')
 +    print('hello')
 """
 
-            tool._run(path=f.name, diff=diff)
+        apply_diff_tool.invoke({"file_path": str(test_file), "diff": diff})
 
-            with open(f.name) as rf:
-                content = rf.read()
-                assert "print('hello')" in content
-                assert "print('world')" not in content
+        content = test_file.read_text()
+        assert "print('hello')" in content
+        assert "print('world')" not in content
 
-            Path(f.name).unlink()
-
-    def test_apply_diff_file_not_found(self) -> None:
+    def test_apply_diff_file_not_found(self, apply_diff_tool) -> None:
         """Test applying diff to non-existent file."""
-        tool = ApplyDiffTool()
-
-        diff = "--- /nonexistent/file.py\n+++ /nonexistent/file.py\n@@ -1 +1 @@\n-old\n+new\n"
-        result = tool._run(path="/nonexistent/file.py", diff=diff)
+        diff = "--- nonexistent.py\n+++ nonexistent.py\n@@ -1 +1 @@\n-old\n+new\n"
+        result = apply_diff_tool.invoke({"file_path": "/nonexistent/file.py", "diff": diff})
 
         assert "Error" in result
         assert "File not found" in result
+
+
+# ---------------------------------------------------------------------------
+# Helper Function Tests (Not Tool Tests)
+# ---------------------------------------------------------------------------
 
 
 class TestStrippedAbsolutePathDetection:

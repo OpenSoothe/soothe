@@ -16,7 +16,7 @@ import os
 import re
 import signal
 import subprocess
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 
 from langchain_community.tools import ShellTool
 from langchain_core.callbacks.manager import (
@@ -286,7 +286,7 @@ class RunPythonREPLTool(PythonREPLTool):
     def _run(
         self,
         code: str,
-        run_manager: Optional[CallbackManagerForToolRun] = None,
+        run_manager: CallbackManagerForToolRun | None = None,
     ) -> Any:
         if self.sanitize_input:
             code = sanitize_input(code)
@@ -295,7 +295,7 @@ class RunPythonREPLTool(PythonREPLTool):
     async def _arun(
         self,
         code: str,
-        run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+        run_manager: AsyncCallbackManagerForToolRun | None = None,
     ) -> Any:
         if self.sanitize_input:
             code = sanitize_input(code)
