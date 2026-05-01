@@ -894,28 +894,6 @@ async def execute_task_textual(
 
                 namespace, current_stream_mode, data = chunk
 
-                # IG-335: Subagent message relay short-circuit. The Claude
-                # subagent translates SDK messages into LangChain messages and
-                # emits them as ``soothe.relay.message`` custom events because
-                # LangGraph nodes cannot write to the ``messages`` stream.
-                # Rewrite the chunk so the existing messages branch renders
-                # them through the standard widget pipeline.
-                if current_stream_mode == "custom" and isinstance(data, dict):
-                    from soothe_cli.shared.message_relay import (
-                        extract_relay_payload as _extract_relay_payload,
-                    )
-                    from soothe_cli.shared.message_relay import (
-                        is_relay_event as _is_relay_event,
-                    )
-
-                    if _is_relay_event(data):
-                        relay = _extract_relay_payload(data)
-                        if relay is None:
-                            continue
-                        msg_dict, metadata_dict = relay
-                        current_stream_mode = "messages"
-                        data = (msg_dict, metadata_dict)
-
                 # Convert namespace to hashable tuple for dict keys
                 ns_key = tuple(namespace) if namespace else ()
 
