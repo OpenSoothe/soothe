@@ -11,14 +11,6 @@ from langchain_experimental.tools.python.tool import PythonREPLTool
 
 from soothe.toolkits.data import DataToolkit, InspectDataTool
 from soothe.toolkits.execution import ExecutionToolkit, RunCommandShellTool, RunPythonREPLTool
-from soothe.toolkits.file_ops import (
-    ApplyDiffTool,
-    DeleteFileTool,
-    DeleteLinesTool,
-    EditFileLinesTool,
-    FileInfoTool,
-    InsertLinesTool,
-)
 from soothe.toolkits.wizsearch import WizsearchCrawlTool, WizsearchSearchTool
 
 
@@ -66,42 +58,85 @@ class TestFileOpsToolkit:
 
     def test_delete_file_tool(self, tmp_path: Path) -> None:
         """Test delete_file tool."""
+        from deepagents.backends.filesystem import FilesystemBackend
+
+        from soothe.middleware.filesystem import SootheFilesystemMiddleware
+
         test_file = tmp_path / "to_delete.txt"
         test_file.write_text("delete me")
-        tool = DeleteFileTool(work_dir=str(tmp_path))
-        tool._run(path="to_delete.txt")
+
+        backend = FilesystemBackend(root_dir=tmp_path)
+        middleware = SootheFilesystemMiddleware(backend=backend)
+        tool = next(t for t in middleware.tools if t.name == "delete_file")
+        result = tool.invoke({"file_path": str(test_file)})
+
+        assert "Deleted" in result or "deleted" in result.lower()
         assert not test_file.exists()
 
     def test_file_info_tool(self, tmp_path: Path) -> None:
         """Test file_info tool."""
+        from deepagents.backends.filesystem import FilesystemBackend
+
+        from soothe.middleware.filesystem import SootheFilesystemMiddleware
+
         test_file = tmp_path / "info.txt"
         test_file.write_text("some content")
-        tool = FileInfoTool(work_dir=str(tmp_path))
-        result = tool._run(path="info.txt")
+
+        backend = FilesystemBackend(root_dir=tmp_path)
+        middleware = SootheFilesystemMiddleware(backend=backend)
+        tool = next(t for t in middleware.tools if t.name == "file_info")
+        result = tool.invoke({"path": str(test_file)})
+
         assert "Size" in result or "Path" in result or "size" in result.lower()
 
     def test_edit_file_lines_tool(self, tmp_path: Path) -> None:
         """Test edit_file_lines tool."""
+        from deepagents.backends.filesystem import FilesystemBackend
+
+        from soothe.middleware.filesystem import SootheFilesystemMiddleware
+
         test_file = tmp_path / "edit.txt"
         test_file.write_text("line1\nline2\nline3\n")
-        tool = EditFileLinesTool(work_dir=str(tmp_path))
-        tool._run(path="edit.txt", start_line=2, end_line=2, new_content="modified")
+
+        backend = FilesystemBackend(root_dir=tmp_path)
+        middleware = SootheFilesystemMiddleware(backend=backend)
+        tool = next(t for t in middleware.tools if t.name == "edit_file_lines")
+        tool.invoke(
+            {"file_path": str(test_file), "start_line": 2, "end_line": 2, "new_content": "modified"}
+        )
+
         assert "modified" in test_file.read_text()
 
     def test_insert_lines_tool(self, tmp_path: Path) -> None:
         """Test insert_lines tool."""
+        from deepagents.backends.filesystem import FilesystemBackend
+
+        from soothe.middleware.filesystem import SootheFilesystemMiddleware
+
         test_file = tmp_path / "insert.txt"
         test_file.write_text("before\nafter\n")
-        tool = InsertLinesTool(work_dir=str(tmp_path))
-        tool._run(path="insert.txt", line=2, content="inserted")
+
+        backend = FilesystemBackend(root_dir=tmp_path)
+        middleware = SootheFilesystemMiddleware(backend=backend)
+        tool = next(t for t in middleware.tools if t.name == "insert_lines")
+        tool.invoke({"file_path": str(test_file), "line": 2, "content": "inserted"})
+
         assert "inserted" in test_file.read_text()
 
     def test_delete_lines_tool(self, tmp_path: Path) -> None:
         """Test delete_lines tool."""
+        from deepagents.backends.filesystem import FilesystemBackend
+
+        from soothe.middleware.filesystem import SootheFilesystemMiddleware
+
         test_file = tmp_path / "delete_lines.txt"
         test_file.write_text("keep1\ndelete\nkeep2\n")
-        tool = DeleteLinesTool(work_dir=str(tmp_path))
-        tool._run(path="delete_lines.txt", start_line=2, end_line=2)
+
+        backend = FilesystemBackend(root_dir=tmp_path)
+        middleware = SootheFilesystemMiddleware(backend=backend)
+        tool = next(t for t in middleware.tools if t.name == "delete_lines")
+        tool.invoke({"file_path": str(test_file), "start_line": 2, "end_line": 2})
+
         content = test_file.read_text()
         assert "keep1" in content
         assert "keep2" in content
@@ -109,9 +144,16 @@ class TestFileOpsToolkit:
 
     def test_apply_diff_tool(self, tmp_path: Path) -> None:
         """Test apply_diff tool."""
+        from deepagents.backends.filesystem import FilesystemBackend
+
+        from soothe.middleware.filesystem import SootheFilesystemMiddleware
+
         test_file = tmp_path / "diff.txt"
         test_file.write_text("old content\n")
-        tool = ApplyDiffTool(work_dir=str(tmp_path))  # noqa: F841
+
+        backend = FilesystemBackend(root_dir=tmp_path)
+        middleware = SootheFilesystemMiddleware(backend=backend)
+        tool = next(t for t in middleware.tools if t.name == "apply_diff")  # noqa: F841
         # Note: apply_diff implementation would need proper diff format
         # This is a placeholder test
 

@@ -12,13 +12,69 @@ Note: Basic file operations (read_file, write_file, search_files, list_files) ar
 provided by deepagents' FilesystemMiddleware, not this module.
 """
 
-import tempfile
-from pathlib import Path
-
 import pytest
 
 # Mark all tests in this module as integration tests
 pytestmark = pytest.mark.integration
+
+
+# ---------------------------------------------------------------------------
+# Middleware Fixture (Reference Implementation)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def middleware(tmp_path):
+    """Create SootheFilesystemMiddleware for testing.
+
+    This is the reference pattern for testing file_ops tools.
+    """
+    from deepagents.backends.filesystem import FilesystemBackend
+
+    from soothe.middleware.filesystem import SootheFilesystemMiddleware
+
+    backend = FilesystemBackend(root_dir=tmp_path)
+    return SootheFilesystemMiddleware(
+        backend=backend,
+        backup_enabled=True,
+        backup_dir=str(tmp_path / ".backups"),
+    )
+
+
+@pytest.fixture
+def delete_tool(middleware):
+    """Get delete_file tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "delete_file")
+
+
+@pytest.fixture
+def info_tool(middleware):
+    """Get file_info tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "file_info")
+
+
+@pytest.fixture
+def edit_tool(middleware):
+    """Get edit_file_lines tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "edit_file_lines")
+
+
+@pytest.fixture
+def insert_tool(middleware):
+    """Get insert_lines tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "insert_lines")
+
+
+@pytest.fixture
+def delete_lines_tool(middleware):
+    """Get delete_lines tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "delete_lines")
+
+
+@pytest.fixture
+def apply_diff_tool(middleware):
+    """Get apply_diff tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "apply_diff")
 
 
 # ---------------------------------------------------------------------------
@@ -28,45 +84,34 @@ pytestmark = pytest.mark.integration
 
 @pytest.mark.integration
 class TestDeleteFileTool:
-    """Integration tests for DeleteFileTool."""
+    """Integration tests for delete_file tool."""
 
-    @pytest.fixture
-    def delete_tool(self):
-        """Create DeleteFileTool instance."""
-        from soothe.toolkits.file_ops import DeleteFileTool
-
-        return DeleteFileTool()
-
-    def test_delete_existing_file(self, delete_tool) -> None:
+    def test_delete_existing_file(self, delete_tool, tmp_path) -> None:
         """Test deleting an existing file."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / "delete_me.txt"
-            test_file.write_text("content")
+        test_file = tmp_path / "delete_me.txt"
+        test_file.write_text("content")
 
-            result = delete_tool._run(str(test_file))
+        result = delete_tool.invoke({"file_path": str(test_file)})
 
-            assert not test_file.exists()
-            assert "Deleted" in result
+        assert not test_file.exists()
+        assert "Deleted" in result or "deleted" in result.lower()
 
     def test_delete_nonexistent_file(self, delete_tool) -> None:
         """Test deleting non-existent file."""
-        result = delete_tool._run("/nonexistent/file.txt")
+        result = delete_tool.invoke({"file_path": "/nonexistent/file.txt"})
 
         # Should return error message
         assert "Error" in result or "not found" in result.lower()
 
-    def test_delete_with_backup(self, delete_tool) -> None:
+    def test_delete_with_backup(self, delete_tool, tmp_path) -> None:
         """Test deletion creates backup."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / "backup_test.txt"
-            test_file.write_text("important content")
+        test_file = tmp_path / "backup_test.txt"
+        test_file.write_text("important content")
 
-            delete_tool.backup_enabled = True
-            delete_tool.backup_dir = tmpdir
-            result = delete_tool._run(str(test_file))
+        result = delete_tool.invoke({"file_path": str(test_file)})
 
-            assert not test_file.exists()
-            assert "backup" in result.lower()
+        assert not test_file.exists()
+        assert "backup" in result.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -76,31 +121,23 @@ class TestDeleteFileTool:
 
 @pytest.mark.integration
 class TestFileInfoTool:
-    """Integration tests for FileInfoTool."""
+    """Integration tests for file_info tool."""
 
-    @pytest.fixture
-    def info_tool(self):
-        """Create FileInfoTool instance."""
-        from soothe.toolkits.file_ops import FileInfoTool
-
-        return FileInfoTool()
-
-    def test_get_file_metadata(self, info_tool) -> None:
+    def test_get_file_metadata(self, info_tool, tmp_path) -> None:
         """Test getting file metadata."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / "test.txt"
-            test_file.write_text("content")
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("content")
 
-            result = info_tool._run(str(test_file))
+        result = info_tool.invoke({"file_path": str(test_file)})
 
-            # Should return file metadata
-            assert "Path:" in result
-            assert "Size:" in result
-            assert "Modified:" in result
+        # Should return file metadata
+        assert "Path:" in result
+        assert "Size:" in result
+        assert "Modified:" in result
 
     def test_get_nonexistent_file_info(self, info_tool) -> None:
         """Test getting info for non-existent file."""
-        result = info_tool._run("/nonexistent/file.txt")
+        result = info_tool.invoke({"file_path": "/nonexistent/file.txt"})
 
         # Should handle gracefully
         assert "Error" in result or "not found" in result.lower()
@@ -113,52 +150,52 @@ class TestFileInfoTool:
 
 @pytest.mark.integration
 class TestEditFileLinesTool:
-    """Integration tests for EditFileLinesTool."""
+    """Integration tests for edit_file_lines tool."""
 
-    @pytest.fixture
-    def edit_tool(self):
-        """Create EditFileLinesTool instance."""
-        from soothe.toolkits.file_ops import EditFileLinesTool
-
-        return EditFileLinesTool()
-
-    def test_replace_lines(self, edit_tool) -> None:
+    def test_replace_lines(self, edit_tool, tmp_path) -> None:
         """Test replacing specific line range."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / "test.py"
-            lines = [f"Line {i}" for i in range(1, 11)]
-            test_file.write_text("\n".join(lines))
+        test_file = tmp_path / "test.py"
+        lines = [f"Line {i}" for i in range(1, 11)]
+        test_file.write_text("\n".join(lines))
 
-            result = edit_tool._run(
-                str(test_file),
-                start_line=3,
-                end_line=5,
-                new_content="New Line 3\nNew Line 4\nNew Line 5",
-            )
+        result = edit_tool.invoke(
+            {
+                "file_path": str(test_file),
+                "start_line": 3,
+                "end_line": 5,
+                "new_content": "New Line 3\nNew Line 4\nNew Line 5",
+            }
+        )
 
-            content = test_file.read_text()
-            assert "New Line 3" in content
-            assert "Line 6" in content  # Line after replaced range should still exist
-            assert "Line 2" in content  # Line before replaced range should still exist
-            assert "Updated" in result
+        content = test_file.read_text()
+        assert "New Line 3" in content
+        assert "Line 6" in content  # Line after replaced range should still exist
+        assert "Line 2" in content  # Line before replaced range should still exist
+        assert "Updated" in result or "updated" in result.lower()
 
     def test_edit_nonexistent_file(self, edit_tool) -> None:
         """Test editing non-existent file."""
-        result = edit_tool._run(
-            "/nonexistent/file.txt", start_line=1, end_line=2, new_content="test"
+        result = edit_tool.invoke(
+            {
+                "file_path": "/nonexistent/file.txt",
+                "start_line": 1,
+                "end_line": 2,
+                "new_content": "test",
+            }
         )
 
         assert "Error" in result or "not found" in result.lower()
 
-    def test_invalid_line_range(self, edit_tool) -> None:
+    def test_invalid_line_range(self, edit_tool, tmp_path) -> None:
         """Test invalid line range."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / "test.txt"
-            test_file.write_text("Line 1\nLine 2")
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Line 1\nLine 2")
 
-            result = edit_tool._run(str(test_file), start_line=10, end_line=15, new_content="test")
+        result = edit_tool.invoke(
+            {"file_path": str(test_file), "start_line": 10, "end_line": 15, "new_content": "test"}
+        )
 
-            assert "Error" in result or "Invalid" in result
+        assert "Error" in result or "Invalid" in result
 
 
 # ---------------------------------------------------------------------------
@@ -168,39 +205,34 @@ class TestEditFileLinesTool:
 
 @pytest.mark.integration
 class TestInsertLinesTool:
-    """Integration tests for InsertLinesTool."""
+    """Integration tests for insert_lines tool."""
 
-    @pytest.fixture
-    def insert_tool(self):
-        """Create InsertLinesTool instance."""
-        from soothe.toolkits.file_ops import InsertLinesTool
-
-        return InsertLinesTool()
-
-    def test_insert_at_line(self, insert_tool) -> None:
+    def test_insert_at_line(self, insert_tool, tmp_path) -> None:
         """Test inserting content at specific line."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / "test.py"
-            test_file.write_text("Line 1\nLine 2\nLine 3")
+        test_file = tmp_path / "test.py"
+        test_file.write_text("Line 1\nLine 2\nLine 3")
 
-            result = insert_tool._run(str(test_file), line=2, content="Inserted Line")
+        result = insert_tool.invoke(
+            {"file_path": str(test_file), "line_number": 2, "content": "Inserted Line"}
+        )
 
-            content = test_file.read_text()
-            lines = content.splitlines()
-            assert "Inserted Line" in lines[1]  # Should be at line 2
-            assert "Line 1" in lines[0]
-            assert "Inserted" in result
+        content = test_file.read_text()
+        lines = content.splitlines()
+        assert "Inserted Line" in lines[1]  # Should be at line 2
+        assert "Line 1" in lines[0]
+        assert "Inserted" in result or "inserted" in result.lower()
 
-    def test_insert_at_end(self, insert_tool) -> None:
+    def test_insert_at_end(self, insert_tool, tmp_path) -> None:
         """Test inserting at end of file."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / "test.txt"
-            test_file.write_text("Line 1\nLine 2")
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Line 1\nLine 2")
 
-            _ = insert_tool._run(str(test_file), line=3, content="Final Line")
+        _ = insert_tool.invoke(
+            {"file_path": str(test_file), "line_number": 3, "content": "Final Line"}
+        )
 
-            content = test_file.read_text()
-            assert "Final Line" in content
+        content = test_file.read_text()
+        assert "Final Line" in content
 
 
 # ---------------------------------------------------------------------------
@@ -210,39 +242,34 @@ class TestInsertLinesTool:
 
 @pytest.mark.integration
 class TestDeleteLinesTool:
-    """Integration tests for DeleteLinesTool."""
+    """Integration tests for delete_lines tool."""
 
-    @pytest.fixture
-    def delete_lines_tool(self):
-        """Create DeleteLinesTool instance."""
-        from soothe.toolkits.file_ops import DeleteLinesTool
-
-        return DeleteLinesTool()
-
-    def test_delete_line_range(self, delete_lines_tool) -> None:
+    def test_delete_line_range(self, delete_lines_tool, tmp_path) -> None:
         """Test deleting specific line range."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / "test.py"
-            lines = [f"Line {i}" for i in range(1, 11)]
-            test_file.write_text("\n".join(lines))
+        test_file = tmp_path / "test.py"
+        lines = [f"Line {i}" for i in range(1, 11)]
+        test_file.write_text("\n".join(lines))
 
-            result = delete_lines_tool._run(str(test_file), start_line=3, end_line=5)
+        result = delete_lines_tool.invoke(
+            {"file_path": str(test_file), "start_line": 3, "end_line": 5}
+        )
 
-            content = test_file.read_text()
-            assert "Line 3" not in content
-            assert "Line 5" not in content
-            assert "Line 6" in content  # Line after deleted range
-            assert "Deleted" in result
+        content = test_file.read_text()
+        assert "Line 3" not in content
+        assert "Line 5" not in content
+        assert "Line 6" in content  # Line after deleted range
+        assert "Deleted" in result or "deleted" in result.lower()
 
-    def test_delete_invalid_range(self, delete_lines_tool) -> None:
+    def test_delete_invalid_range(self, delete_lines_tool, tmp_path) -> None:
         """Test deleting invalid line range."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / "test.txt"
-            test_file.write_text("Line 1\nLine 2")
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Line 1\nLine 2")
 
-            result = delete_lines_tool._run(str(test_file), start_line=10, end_line=15)
+        result = delete_lines_tool.invoke(
+            {"file_path": str(test_file), "start_line": 10, "end_line": 15}
+        )
 
-            assert "Error" in result or "Invalid" in result
+        assert "Error" in result or "Invalid" in result
 
 
 # ---------------------------------------------------------------------------
@@ -252,38 +279,31 @@ class TestDeleteLinesTool:
 
 @pytest.mark.integration
 class TestApplyDiffTool:
-    """Integration tests for ApplyDiffTool."""
+    """Integration tests for apply_diff tool."""
 
-    @pytest.fixture
-    def apply_diff_tool(self):
-        """Create ApplyDiffTool instance."""
-        from soothe.toolkits.file_ops import ApplyDiffTool
-
-        return ApplyDiffTool()
-
-    def test_apply_simple_diff(self, apply_diff_tool) -> None:
+    def test_apply_simple_diff(self, apply_diff_tool, tmp_path) -> None:
         """Test applying a simple unified diff."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / "test.txt"
-            test_file.write_text("Original content\n")
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Original content\n")
 
-            diff = "--- test.txt\n+++ test.txt\n@@ -1 +1 @@\n-Original content\n+Modified content\n"
+        diff = "--- test.txt\n+++ test.txt\n@@ -1 +1 @@\n-Original content\n+Modified content\n"
 
-            result = apply_diff_tool._run(str(test_file), diff=diff)
+        result = apply_diff_tool.invoke({"file_path": str(test_file), "diff": diff})
 
-            content = test_file.read_text()
-            assert "Modified content" in content
-            assert "Applied" in result
+        content = test_file.read_text()
+        assert "Modified content" in content
+        assert "Applied" in result or "applied" in result.lower()
 
-    def test_apply_invalid_diff(self, apply_diff_tool) -> None:
+    def test_apply_invalid_diff(self, apply_diff_tool, tmp_path) -> None:
         """Test applying invalid diff."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / "test.txt"
-            test_file.write_text("content")
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("content")
 
-            result = apply_diff_tool._run(str(test_file), diff="invalid diff format")
+        result = apply_diff_tool.invoke(
+            {"file_path": str(test_file), "diff": "invalid diff format"}
+        )
 
-            assert "Error" in result or "Failed" in result
+        assert "Error" in result or "Failed" in result
 
 
 # ---------------------------------------------------------------------------

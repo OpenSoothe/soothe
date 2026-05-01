@@ -166,28 +166,19 @@ class TestFormatters:
         assert line.duration_ms == 45200
 
     def test_format_step_done(self) -> None:
-        """IG-333: Step done mirrors goal-done layout (●, flat level 1)."""
+        """Success with no description emits nothing (no generic Step line)."""
         lines = format_step_done(3.2)
-        assert len(lines) == 1
-        assert lines[0].level == 1
-        assert lines[0].content == f"{_STEP_DONE_MARK} Step (done)"
-        assert lines[0].icon == "●"
-        assert lines[0].indent == ""
-        assert lines[0].duration_ms == 3200
+        assert lines == []
 
     def test_format_step_done_with_tool_calls(self) -> None:
-        """Step done includes tool count in parentheses like goal metadata."""
+        """Same suppression when tool count is set but description is missing."""
         lines = format_step_done(11.4, tool_call_count=1)
-        assert len(lines) == 1
-        assert lines[0].content == f"{_STEP_DONE_MARK} Step (done, 1 tool)"
-        assert lines[0].duration_ms == 11400
+        assert lines == []
 
     def test_format_step_done_without_tool_calls(self) -> None:
-        """Step done omits tool fragment when count is zero."""
+        """Empty description still suppresses generic Step (done)."""
         lines = format_step_done(3.2, tool_call_count=0)
-        assert len(lines) == 1
-        assert lines[0].content == f"{_STEP_DONE_MARK} Step (done)"
-        assert lines[0].duration_ms == 3200
+        assert lines == []
 
     def test_format_step_done_with_description(self) -> None:
         """Step description appears after ✅️ like goal text after 🏆."""
@@ -568,6 +559,23 @@ class TestStreamDisplayPipeline:
         assert len(lines) == 1
         assert lines[0].content == f"{_STEP_DONE_MARK} Analyze config (done)"
         assert lines[0].icon == "●"
+
+    def test_step_completed_suppresses_when_no_description(self) -> None:
+        """No redundant ● Step (done) when completion arrives without step context."""
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline.process({"type": "soothe.cognition.agent_loop.started", "goal": "test"})
+
+        lines = pipeline.process(
+            {
+                "type": "soothe.cognition.agent_loop.step.completed",
+                "step_id": "orphan",
+                "success": True,
+                "duration_ms": 38000,
+                "tool_call_count": 1,
+            }
+        )
+
+        assert lines == []
 
     def test_step_completed_uses_tracked_description_by_step_id(self) -> None:
         """Pipeline resolves description by step_id for parallel step tracking."""

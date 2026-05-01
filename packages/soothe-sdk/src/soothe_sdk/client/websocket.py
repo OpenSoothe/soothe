@@ -66,7 +66,7 @@ class WebSocketClient:
             try:
                 # Wait up to 2s for close handshake to prevent indefinite hangs
                 await asyncio.wait_for(self._ws.close(), timeout=2.0)
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 # Force close on timeout - daemon will handle graceful cleanup
                 logger.debug("WebSocket close timed out after 2s, forcing closure")
             except Exception:

@@ -9,6 +9,7 @@ This module is part of Phase 1 of IG-174: CLI import violations fix.
 import json
 import logging
 import os
+from datetime import UTC
 from pathlib import Path
 from typing import Any, Literal
 
@@ -163,9 +164,9 @@ class GlobalInputHistory:
         Returns:
             ISO format timestamp string.
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
 
 def setup_logging(
