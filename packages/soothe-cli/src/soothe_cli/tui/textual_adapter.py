@@ -1270,9 +1270,7 @@ async def execute_task_textual(
 
                         if block_type == "text":
                             task_scope_txt = (
-                                resolve_task_scope_for_namespace(
-                                    namespace_task_bindings, ns_key
-                                )
+                                resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
                                 if ns_key
                                 else None
                             )
