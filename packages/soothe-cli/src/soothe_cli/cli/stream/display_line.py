@@ -18,7 +18,6 @@ class DisplayLine:
         indent: Indentation string (headless stream uses no tree indent).
         status: Optional status suffix ("running" for parallel tools).
         duration_ms: Optional duration in milliseconds.
-        source_prefix: Optional source identifier for debug mode (e.g., "[main]", "[subagent:research]").
     """
 
     level: int
@@ -27,7 +26,6 @@ class DisplayLine:
     indent: str
     status: str | None = None
     duration_ms: int | None = None
-    source_prefix: str | None = None
 
     def format(self) -> str:
         """Format the display line as a string.
@@ -35,14 +33,8 @@ class DisplayLine:
         Returns:
             Formatted line ready for output.
         """
-        parts = []
+        parts: list[str] = []
 
-        # Add source prefix first if present (debug mode)
-        if self.source_prefix:
-            parts.append(self.source_prefix)
-            parts.append(" ")
-
-        # Handle empty icon (connector already in indent)
         if self.icon:
             parts.extend([self.indent, self.icon, " ", self.content])
         else:

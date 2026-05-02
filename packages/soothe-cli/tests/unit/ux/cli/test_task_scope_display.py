@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe_cli.cli.task_scope_display import (
+from soothe_cli.cli.stream.task_scope import (
     brief_task_tool_call_id,
     format_task_scope_prefix,
     format_task_subagent_line,
