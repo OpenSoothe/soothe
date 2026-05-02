@@ -44,6 +44,59 @@ class ExploreResult(BaseModel):
     summary: str  # Brief answer to the search target
 
 
+def _md_single_line(text: str, max_len: int) -> str:
+    """Collapse whitespace for safe single-line markdown fields."""
+    one = " ".join(text.split()).strip()
+    if len(one) > max_len:
+        return one[: max_len - 1] + "…"
+    return one
+
+
+def format_explore_result_markdown(result: ExploreResult) -> str:
+    """Render structured explore output as user-facing markdown (IG-356).
+
+    Used as the subgraph final AIMessage so headless and planner paths receive
+    prose comparable to other delegate finals, not JSON-only payloads.
+
+    Args:
+        result: Structured synthesis output from the explore graph.
+
+    Returns:
+        Markdown string for the delegate final message body.
+    """
+    lines: list[str] = [
+        "# Explore results",
+        "",
+        f"**Search target:** {_md_single_line(result.target, 400)}",
+        f"**Thoroughness:** {result.thoroughness}",
+        "",
+        "## Summary",
+        "",
+        (result.summary.strip() or "_No summary._"),
+        "",
+        "## Matches",
+        "",
+    ]
+    if not result.matches:
+        lines.append("_No ranked matches returned._")
+    else:
+        for i, m in enumerate(result.matches, 1):
+            lines.append(f"### {i}. `{m.path}`")
+            lines.append("")
+            lines.append(f"- **Relevance:** {m.relevance}")
+            lines.append(f"- **Description:** {_md_single_line(m.description, 400)}")
+            if m.snippet and m.snippet.strip():
+                lines.append("")
+                lines.append("```text")
+                snippet = m.snippet.strip()
+                if len(snippet) > 4000:
+                    snippet = snippet[:3999] + "…"
+                lines.append(snippet)
+                lines.append("```")
+            lines.append("")
+    return "\n".join(lines).strip() + "\n"
+
+
 class ExploreSubagentConfig(BaseModel):
     """Explore-specific configuration, stored inside SubagentConfig.config.
 

@@ -11,6 +11,9 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 
+from soothe.cognition.agent_loop.analysis.metadata_generator import (
+    DELEGATE_EVIDENCE_PREVIEW_CAP,
+)
 from soothe.cognition.agent_loop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -158,11 +161,17 @@ class Executor:
         """
         state.last_execute_wave_parallel_multi_step = parallel_multi_step
         state.last_wave_answer_from_delegate_final = False
+        delegate = (delegate_final_text or "").strip()
         if parallel_multi_step:
-            state.last_execute_assistant_text = None
+            if delegate:
+                state.last_wave_answer_from_delegate_final = True
+                if len(delegate) > _DELEGATE_FINAL_WAVE_CAP:
+                    delegate = delegate[:_DELEGATE_FINAL_WAVE_CAP]
+                state.last_execute_assistant_text = delegate
+            else:
+                state.last_execute_assistant_text = None
             return
         root_text = self._assemble_assistant_text_from_stream_messages(messages).strip()
-        delegate = (delegate_final_text or "").strip()
         if delegate:
             state.last_wave_answer_from_delegate_final = True
             if len(delegate) > _DELEGATE_FINAL_WAVE_CAP:
@@ -373,15 +382,23 @@ class Executor:
             if success:
                 # IG-148: Add CoreAgent input/output evidence for sequential execution
                 outcome_data = {
-                    "type": "generic",
+                    "type": "subagent" if subagent_task_completions > 0 else "generic",
                     "size_bytes": len(output.encode("utf-8")) if output else 0,
                 }
+                if subagent_task_completions > 0:
+                    outcome_data["tool_name"] = "task"
                 # Add step input (combined_description for sequential waves)
                 if combined_description:
                     outcome_data["step_input"] = combined_description
                 # Add output summary (truncated)
                 if output:
                     outcome_data["output_summary"] = create_output_summary(output)
+                    stripped = output.strip()
+                    if stripped:
+                        cap = DELEGATE_EVIDENCE_PREVIEW_CAP
+                        outcome_data["delegate_evidence_preview"] = stripped[:cap] + (
+                            "…" if len(stripped) > cap else ""
+                        )
 
                 results.append(
                     StepResult(
@@ -464,6 +481,7 @@ class Executor:
         all_step_results: list[StepResult] = []
         single_wave_messages: list[BaseMessage] = []
         wave_delegate_final = ""
+        wave_delegate_parts: list[str] = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(
@@ -490,6 +508,9 @@ class Executor:
                 if len(steps) == 1:
                     single_wave_messages = step_messages
                     wave_delegate_final = delegate_final
+                df = (delegate_final or "").strip()
+                if df:
+                    wave_delegate_parts.append(df)
                 all_step_results.append(step_result)
                 # Yield collected events first
                 for event in events:
@@ -498,8 +519,14 @@ class Executor:
                 yield step_result
 
         parallel_multi = len(steps) > 1
+        merged_parallel_delegate = "\n\n---\n\n".join(wave_delegate_parts)
         if parallel_multi:
-            self._record_execute_wave_for_finalize(state, [], parallel_multi_step=True)
+            self._record_execute_wave_for_finalize(
+                state,
+                [],
+                parallel_multi_step=True,
+                delegate_final_text=merged_parallel_delegate or None,
+            )
         else:
             self._record_execute_wave_for_finalize(
                 state,
@@ -961,6 +988,7 @@ class Executor:
         from soothe.cognition.agent_loop.utils.stream_normalize import (
             extract_text_from_message_content,
             iter_messages_for_act_aggregation,
+            iter_messages_for_delegate_task_scan,
             join_text_fragments,
         )
 
@@ -968,6 +996,7 @@ class Executor:
         tool_call_count = 0
         messages: list[BaseMessage] = []  # IG-151: Collect messages for token extraction
         delegate_task_final_parts: list[str] = []
+        delegate_task_ids_seen: set[str] = set()
 
         # RFC-211: Initialize cache and collect outcomes
         cache = ToolResultCache(
@@ -1041,10 +1070,14 @@ class Executor:
                     outcomes.append(outcome)
 
                     if tool_name == "task" and text_out.strip():
-                        clipped = text_out.strip()
-                        if len(clipped) > _DELEGATE_FINAL_PER_TASK_CAP:
-                            clipped = clipped[:_DELEGATE_FINAL_PER_TASK_CAP]
-                        delegate_task_final_parts.append(clipped)
+                        tc_id = tool_call_id or ""
+                        if not (tc_id and tc_id in delegate_task_ids_seen):
+                            if tc_id:
+                                delegate_task_ids_seen.add(tc_id)
+                            clipped = text_out.strip()
+                            if len(clipped) > _DELEGATE_FINAL_PER_TASK_CAP:
+                                clipped = clipped[:_DELEGATE_FINAL_PER_TASK_CAP]
+                            delegate_task_final_parts.append(clipped)
 
                     logger.debug(
                         "[Act Phase TOOL] #%d %s(%s) → %s, %dB%s",
@@ -1066,6 +1099,20 @@ class Executor:
                     if t:
                         chunks.append(t)
                         logger.debug("[AI Message] %s", log_preview(t, chars=150))
+
+            for task_msg in iter_messages_for_delegate_task_scan(chunk):
+                text_out = extract_text_from_message_content(task_msg.content)
+                if not text_out.strip():
+                    continue
+                tc_id = getattr(task_msg, "tool_call_id", "") or ""
+                if tc_id and tc_id in delegate_task_ids_seen:
+                    continue
+                if tc_id:
+                    delegate_task_ids_seen.add(tc_id)
+                clipped = text_out.strip()
+                if len(clipped) > _DELEGATE_FINAL_PER_TASK_CAP:
+                    clipped = clipped[:_DELEGATE_FINAL_PER_TASK_CAP]
+                delegate_task_final_parts.append(clipped)
 
             if stop_act_stream:
                 break
