@@ -42,6 +42,7 @@ class ResearchCompletedEvent(SootheEvent):
     type: Literal["soothe.subagent.research.completed"] = SUBAGENT_RESEARCH_COMPLETED  # type: ignore[assignment]
     duration_ms: int = 0
     answer_length: int = 0
+    summary: str = ""
 
     model_config = ConfigDict(extra="allow")
 
@@ -53,7 +54,7 @@ register_event(
 )
 register_event(
     ResearchGatherSummaryEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Gather: {result_count} hits ({sources_touched} sources)",
 )
 register_event(

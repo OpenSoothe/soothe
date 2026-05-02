@@ -259,7 +259,7 @@ class Executor:
         Yields:
             StreamEvent during execution, then StepResult for each step.
         """
-        ready_steps = decision.get_ready_steps(state.completed_step_ids)
+        ready_steps = decision.get_ready_steps(state.dependency_completion_ids())
 
         if not ready_steps:
             logger.warning("No ready steps to execute (all completed or blocked)")
@@ -668,7 +668,7 @@ class Executor:
         Yields:
             StreamEvent during execution, then StepResult.
         """
-        local_done = set(state.completed_step_ids)
+        local_done = set(state.dependency_completion_ids())
         failed_sticky: set[str] = set()
 
         while True:

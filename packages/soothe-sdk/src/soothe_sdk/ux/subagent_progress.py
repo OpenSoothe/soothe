@@ -17,6 +17,7 @@ from soothe_sdk.core.subagent_wire import (
     SUBAGENT_CLAUDE_COMPLETED,
     SUBAGENT_CLAUDE_FAILED,
     SUBAGENT_CLAUDE_STARTED,
+    SUBAGENT_CLAUDE_STEP_COMPLETED,
     SUBAGENT_EXPLORE_COMPLETED,
     SUBAGENT_EXPLORE_MILESTONE,
     SUBAGENT_EXPLORE_STARTED,
@@ -78,6 +79,12 @@ def summarize_subagent_wire_activity(event_type: str, data: Mapping[str, Any]) -
 
     if event_type == SUBAGENT_CLAUDE_STARTED:
         return preview_first(str(data.get("task_preview", "")), 120)
+    if event_type == SUBAGENT_CLAUDE_STEP_COMPLETED:
+        tn = str(data.get("tool_name", "") or "").strip()
+        ip = preview_first(str(data.get("input_preview", "")), 80)
+        if tn and ip:
+            return f"{tn}({ip})"
+        return tn or ip or "step"
     if event_type == SUBAGENT_CLAUDE_COMPLETED:
         cost = data.get("cost_usd", 0.0)
         ms = int(data.get("duration_ms", 0) or 0)

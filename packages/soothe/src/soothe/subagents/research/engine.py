@@ -28,6 +28,7 @@ from langgraph.types import Send
 
 from soothe.utils.subagent_emit import emit_subagent_wire_event
 
+from .display_summary import research_answer_summary_for_display
 from .events import ResearchCompletedEvent, ResearchGatherSummaryEvent, ResearchStartedEvent
 
 if TYPE_CHECKING:
@@ -464,10 +465,12 @@ def build_research_engine(
         elapsed_ms = int((time.perf_counter() - synth_t0) * 1000)
 
         logger.info("Research: synthesized %d chars from %d sources", len(answer), num_sources)
+        completion_summary = research_answer_summary_for_display(answer)
         emit_subagent_wire_event(
             ResearchCompletedEvent(
                 duration_ms=elapsed_ms,
                 answer_length=len(answer),
+                summary=completion_summary,
             ).to_dict(),
             logger,
         )

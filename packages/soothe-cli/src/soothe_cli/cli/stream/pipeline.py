@@ -434,6 +434,15 @@ class StreamDisplayPipeline:
 
         task_description = self._task_description_from_completed_event(event, subagent_name)
 
+        answer_tail: str | None = None
+        raw_summary = event.get("summary")
+        if (
+            isinstance(raw_summary, str)
+            and raw_summary.strip()
+            and subagent_name in ("claude", "browser", "research")
+        ):
+            answer_tail = preview_first(raw_summary.strip(), 120)
+
         return [
             format_subagent_done(
                 preview_first(summary, 70),  # Increased from 50 for richer metrics
@@ -441,6 +450,7 @@ class StreamDisplayPipeline:
                 namespace=self._current_namespace,
                 task_scope=self._task_scope_from_event(event),
                 task_description=task_description,
+                answer_summary=answer_tail,
             )
         ]
 
@@ -713,6 +723,11 @@ class StreamDisplayPipeline:
         """
         # Get result content from event
         result = event.get("result", "")
+        wire_summary = event.get("summary")
+        if isinstance(wire_summary, str) and wire_summary.strip():
+            if subagent_name in ("claude", "browser", "research"):
+                return preview_first(wire_summary.strip(), 120)
+
         if not result:
             return ""
 

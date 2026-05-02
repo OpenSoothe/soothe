@@ -31,6 +31,7 @@ class BrowserCompletedEvent(SubagentEvent):
     type: Literal["soothe.subagent.browser.completed"] = SUBAGENT_BROWSER_COMPLETED  # type: ignore[assignment]
     duration_ms: int = 0
     success: bool = True
+    summary: str = ""
 
     model_config = ConfigDict(extra="allow")
 
@@ -60,7 +61,7 @@ register_event(
 )
 register_event(
     BrowserStepCompletedEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Step {step_index}: {action_preview}",
 )
 

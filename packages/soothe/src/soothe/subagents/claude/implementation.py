@@ -17,10 +17,12 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
+from soothe.subagents.claude.display_summary import claude_text_summary_for_display
 from soothe.subagents.claude.events import (
     ClaudeCompletedEvent,
     ClaudeFailedEvent,
     ClaudeStartedEvent,
+    ClaudeStepCompletedEvent,
 )
 from soothe.subagents.claude.session_bridge import record_claude_session, resolve_resume_session_id
 from soothe.utils import expand_path
@@ -274,7 +276,13 @@ def _build_claude_graph(
                                 block.name,
                                 str(tool_input)[:200] if tool_input else "<none>",
                             )
-                            # IG-258: Removed event emission
+                            emit_subagent_wire_event(
+                                ClaudeStepCompletedEvent(
+                                    tool_name=str(getattr(block, "name", "") or ""),
+                                    input_preview=_preview_claude_tool_input(tool_input),
+                                ).to_dict(),
+                                logger,
+                            )
                 elif isinstance(message, ResultMessage):
                     cost_usd = message.total_cost_usd or 0.0
                     last_claude_session_id = getattr(message, "session_id", None)
@@ -292,11 +300,13 @@ def _build_claude_graph(
                         last_claude_session_id or "<none>",
                         len(collected_text),
                     )
+                    completion_summary = claude_text_summary_for_display("\n".join(collected_text))
                     emit_subagent_wire_event(
                         ClaudeCompletedEvent(
                             cost_usd=cost_usd,
                             duration_ms=duration_ms,
                             claude_session_id=last_claude_session_id,
+                            summary=completion_summary,
                         ).to_dict(),
                         logger,
                     )
