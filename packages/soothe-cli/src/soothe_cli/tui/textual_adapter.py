@@ -655,6 +655,7 @@ async def execute_task_textual(
     *,
     daemon_session: Any = None,  # noqa: ANN401  # Daemon-backed TUI session
     sandbox_type: str | None = None,
+    workspace: str | None = None,
     message_kwargs: dict[str, Any] | None = None,
     turn_stats: SessionStats | None = None,
     skip_daemon_send_turn: bool = False,
@@ -679,6 +680,10 @@ async def execute_task_textual(
             to the graph via `context=`.
         sandbox_type: Sandbox provider name for trace metadata, or `None`
             if no sandbox is active.
+        workspace: Resolved project directory for in-process runs (matches app
+            status-bar cwd / daemon bootstrap). Passed into LangGraph
+            `configurable.workspace`; when omitted, ``build_stream_config`` uses
+            ``Path.cwd()`` (IG-341).
         message_kwargs: Extra fields merged into the stream input message
             dict (e.g., `additional_kwargs` for persisting skill metadata
             in the checkpoint).
@@ -766,7 +771,12 @@ async def execute_task_textual(
         message_content = final_input
 
     loop_id = session_state.loop_id
-    config = build_stream_config(loop_id, assistant_id, sandbox_type=sandbox_type)
+    config = build_stream_config(
+        loop_id,
+        assistant_id,
+        sandbox_type=sandbox_type,
+        workspace=workspace,
+    )
 
     await dispatch_hook("session.start", {"loop_id": loop_id})
 
@@ -823,6 +833,9 @@ async def execute_task_textual(
     if message_kwargs:
         user_msg.update(message_kwargs)
     stream_input: dict | Command = {"messages": [user_msg]}
+    cfg_workspace = (config.get("configurable") or {}).get("workspace")
+    if cfg_workspace:
+        stream_input["workspace"] = cfg_workspace
 
     # Track summarization lifecycle so spinner status and notification stay in sync.
     summarization_in_progress = False

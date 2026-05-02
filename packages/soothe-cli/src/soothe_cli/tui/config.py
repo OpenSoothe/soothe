@@ -609,6 +609,7 @@ def build_stream_config(
     assistant_id: str | None,
     *,
     sandbox_type: str | None = None,
+    workspace: str | None = None,
 ) -> RunnableConfig:
     """Build the LangGraph stream config dict.
 
@@ -634,6 +635,10 @@ def build_stream_config(
         assistant_id: The agent/assistant identifier, if any.
         sandbox_type: Sandbox provider name for trace metadata, or `None` if no
             sandbox is active.
+        workspace: Thread workspace directory for in-process TUI runs. When
+            omitted, uses `Path.cwd()` (resolved). Mirrored to
+            `configurable["workspace"]` for middleware and task-tool propagation
+            (IG-341, RFC-103).
 
     Returns:
         Config dict with `configurable` and `metadata` keys.
@@ -677,8 +682,28 @@ def build_stream_config(
         metadata["git_branch"] = branch
     if sandbox_type and sandbox_type != "none":
         metadata["sandbox_type"] = sandbox_type
+
+    configurable: dict[str, Any] = {"thread_id": thread_id}
+    resolved_workspace: str | None = None
+    if workspace and str(workspace).strip():
+        try:
+            resolved_workspace = str(Path(workspace).expanduser().resolve())
+        except OSError:
+            logger.warning(
+                "Could not resolve workspace path %r; omitting configurable.workspace",
+                workspace,
+                exc_info=True,
+            )
+    else:
+        try:
+            resolved_workspace = str(Path.cwd().resolve())
+        except OSError:
+            logger.warning("Could not resolve cwd for configurable.workspace", exc_info=True)
+    if resolved_workspace:
+        configurable["workspace"] = resolved_workspace
+
     return {
-        "configurable": {"thread_id": thread_id},
+        "configurable": configurable,
         "metadata": metadata,
     }
 
