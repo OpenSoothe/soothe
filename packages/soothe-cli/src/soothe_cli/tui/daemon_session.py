@@ -60,7 +60,7 @@ class TuiDaemonSession:
         status_event = await bootstrap_thread_session(
             self._client,
             resume_thread_id=resume_thread_id,
-            verbosity=self._cfg.logging.verbosity,
+            verbosity="normal",
             workspace=self._workspace,
         )
         if status_event.get("type") == "error":

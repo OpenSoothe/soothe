@@ -55,13 +55,12 @@ def test_final_answer_lock_and_reset_turn() -> None:
     assert not engine.final_answer_locked
 
 
-def test_tier_visible_matches_should_show() -> None:
+def test_tier_visible_matches_fixed_normal_ceiling() -> None:
     engine = PresentationEngine()
-    for verbosity in ("quiet", "normal", "detailed", "debug"):
-        for tier in (
-            VerbosityTier.QUIET,
-            VerbosityTier.NORMAL,
-            VerbosityTier.DETAILED,
-            VerbosityTier.DEBUG,
-        ):
-            assert engine.tier_visible(tier, verbosity) == should_show(tier, verbosity)
+    for tier in (
+        VerbosityTier.QUIET,
+        VerbosityTier.NORMAL,
+        VerbosityTier.DETAILED,
+        VerbosityTier.DEBUG,
+    ):
+        assert engine.tier_visible(tier) == should_show(tier, "normal")

@@ -326,7 +326,6 @@ def _try_register_explore_inner_tool_pending(
     namespace_task_bindings: dict[tuple[str, ...], tuple[str, str]],
     show_tool_ui: bool,
     presentation: PresentationEngine,
-    verbosity_level: Any,
     pending_lines: dict[str, str],
     start_times: dict[str, float],
 ) -> None:
@@ -338,7 +337,7 @@ def _try_register_explore_inner_tool_pending(
     ts_r = resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
     if not ts_r or ts_r[1] != "explore":
         return
-    if not show_tool_ui or not presentation.tier_visible(VerbosityTier.NORMAL, verbosity_level):
+    if not show_tool_ui or not presentation.tier_visible(VerbosityTier.NORMAL):
         return
     pending_lines[str(lookup_id)] = _format_task_scoped_tool_invocation_line(
         ts_r,
@@ -768,11 +767,6 @@ async def execute_task_textual(
             prompt, e.g. after ``invoke_skill``). Also used for consuming
             events from already-running threads.
 
-    Note:
-        Progress verbosity (``quiet`` … ``debug``) for tool UI and the stream
-        pipeline is read from ``cli_config.yml`` via
-        :func:`soothe_cli.shared.load_config`.
-
     Returns:
         Stats accumulated over this turn (request count, token counts,
             wall-clock time).
@@ -791,24 +785,18 @@ async def execute_task_textual(
 
     from soothe_cli.cli.stream import StreamDisplayPipeline
     from soothe_cli.shared.config_loader import load_config
-    from soothe_cli.shared.display_policy import normalize_verbosity, should_show_tool_call_ui
 
     hitl_request_adapter = _get_hitl_request_adapter(HITLRequest)
     ask_user_adapter = _get_ask_user_adapter()
     cli_cfg = load_config()
-    pv = normalize_verbosity(cli_cfg.verbosity)
     final_output_mode = (
         cli_cfg.final_output_mode
         if cli_cfg.final_output_mode in {"streaming", "batch"}
         else "streaming"
     )
-    show_tool_ui = should_show_tool_call_ui(pv)
-    logger.debug(
-        "TUI turn: verbosity=%r show_tool_ui=%s (tool-call rows follow this flag)",
-        pv,
-        show_tool_ui,
-    )
-    progress_pipeline = StreamDisplayPipeline(verbosity=pv)
+    show_tool_ui = True
+    logger.debug("TUI turn: fixed normal UX show_tool_ui=%s", show_tool_ui)
+    progress_pipeline = StreamDisplayPipeline()
     presentation = PresentationEngine()
     explore_scoped_tool_pending_lines: dict[str, str] = {}
     explore_scoped_tool_start_times: dict[str, float] = {}
@@ -1142,7 +1130,7 @@ async def execute_task_textual(
                                 and ts_ap[1] == "explore"
                                 and ts_ap[0]
                                 and show_tool_ui
-                                and presentation.tier_visible(VerbosityTier.NORMAL, pv)
+                                and presentation.tier_visible(VerbosityTier.NORMAL)
                             ):
                                 pending_ln = explore_scoped_tool_pending_lines.pop(sid, None)
                                 start_tm = explore_scoped_tool_start_times.pop(sid, None)
@@ -1209,7 +1197,7 @@ async def execute_task_textual(
                                     and ts_or[1] == "explore"
                                     and ts_or[0]
                                     and show_tool_ui
-                                    and presentation.tier_visible(VerbosityTier.NORMAL, pv)
+                                    and presentation.tier_visible(VerbosityTier.NORMAL)
                                 ):
                                     o_sid = str(tool_id)
                                     op = explore_scoped_tool_pending_lines.pop(o_sid, None)
@@ -1593,7 +1581,6 @@ async def execute_task_textual(
                                         namespace_task_bindings=namespace_task_bindings,
                                         show_tool_ui=show_tool_ui,
                                         presentation=presentation,
-                                        verbosity_level=pv,
                                         pending_lines=explore_scoped_tool_pending_lines,
                                         start_times=explore_scoped_tool_start_times,
                                     )
@@ -1616,7 +1603,6 @@ async def execute_task_textual(
                                     namespace_task_bindings=namespace_task_bindings,
                                     show_tool_ui=show_tool_ui,
                                     presentation=presentation,
-                                    verbosity_level=pv,
                                     pending_lines=explore_scoped_tool_pending_lines,
                                     start_times=explore_scoped_tool_start_times,
                                 )

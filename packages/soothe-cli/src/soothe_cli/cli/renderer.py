@@ -12,12 +12,10 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.utils import get_tool_display_name
 
 from soothe_cli.cli.stream import DisplayLine, StreamDisplayPipeline
 from soothe_cli.cli.task_scope_display import format_task_scope_prefix
-from soothe_cli.shared.display_policy import VerbosityLevel, normalize_verbosity
 from soothe_cli.shared.explore_task_display import format_explore_task_json_blob_for_display
 from soothe_cli.shared.message_processing import format_tool_call_args
 from soothe_cli.shared.presentation_engine import PresentationEngine
@@ -76,28 +74,24 @@ class CliRenderer(RendererBase):
     extra blank lines inside the LLM stream or between consecutive stderr lines.
 
     Usage:
-        renderer = CliRenderer(verbosity="normal")
-        processor = EventProcessor(renderer, verbosity="normal")
+        renderer = CliRenderer()
+        processor = EventProcessor(renderer)
     """
 
     def __init__(
         self,
         *,
-        verbosity: VerbosityLevel = "normal",
         presentation_engine: PresentationEngine | None = None,
     ) -> None:
         """Initialize CLI renderer.
 
         Args:
-            verbosity: Progress visibility level.
             presentation_engine: Shared presentation engine (optional).
         """
         super().__init__()
-        self._verbosity = normalize_verbosity(verbosity)
         self._state = CliRendererState()
         self._presentation = presentation_engine or PresentationEngine()
         self._pipeline = StreamDisplayPipeline(
-            verbosity=verbosity,
             presentation_engine=self._presentation,
         )
 
@@ -105,7 +99,6 @@ class CliRenderer(RendererBase):
         """Attach a shared presentation engine (used by EventProcessor wiring)."""
         self._presentation = engine
         self._pipeline = StreamDisplayPipeline(
-            verbosity=self._verbosity,
             presentation_engine=engine,
         )
 
@@ -253,9 +246,6 @@ class CliRenderer(RendererBase):
             is_main: True if from main agent.
             task_scope: Parent Task scope for subgraph tools (IG-334).
         """
-        if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
-            return
-
         self._stderr_begin_icon_block()
 
         display_name = get_tool_display_name(name)
@@ -301,9 +291,6 @@ class CliRenderer(RendererBase):
             is_main: True if from main agent.
             task_scope: Unused when joined with pending call line (IG-334).
         """
-        if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
-            return
-
         self._stderr_begin_icon_block()
 
         # Calculate duration (RFC-0020)

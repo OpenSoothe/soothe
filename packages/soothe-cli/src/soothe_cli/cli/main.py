@@ -70,10 +70,6 @@ def main(
         bool,
         typer.Option("--no-tui", help="Disable TUI; run single prompt and exit."),
     ] = False,
-    output_format: Annotated[
-        str,
-        typer.Option("--format", "-f", help="Output format for headless mode: text or jsonl."),
-    ] = "text",
     streaming: Annotated[
         bool | None,
         typer.Option("--streaming/--no-streaming", help="Enable/disable output streaming."),
@@ -124,7 +120,6 @@ def main(
             no_tui=no_tui,
             autonomous=False,
             max_iterations=None,
-            output_format=output_format,
             streaming_enabled=streaming,
             streaming_mode=streaming_mode,
         )

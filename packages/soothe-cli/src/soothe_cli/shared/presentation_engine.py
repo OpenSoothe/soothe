@@ -13,8 +13,6 @@ from dataclasses import dataclass
 from soothe_sdk.core.verbosity import VerbosityTier, should_show
 from soothe_sdk.utils import log_preview
 
-from soothe_cli.shared.display_policy import VerbosityLevel
-
 
 @dataclass
 class PresentationState:
@@ -69,9 +67,9 @@ class PresentationEngine:
         """Clear presentation state for a new session (e.g. thread change)."""
         self.reset_turn()
 
-    def tier_visible(self, tier: VerbosityTier, verbosity: VerbosityLevel) -> bool:
-        """Return whether content at the given verbosity tier should display."""
-        return should_show(tier, verbosity)
+    def tier_visible(self, tier: VerbosityTier) -> bool:
+        """Return whether content at the given event tier should display (fixed normal UX)."""
+        return should_show(tier, "normal")
 
     def should_emit_reason(
         self,

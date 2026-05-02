@@ -6,7 +6,7 @@ from soothe_cli.shared.essential_events import LOOP_REASON_EVENT_TYPE
 
 def test_loop_agent_reason_emits_labeled_sections() -> None:
     """When plan_reasoning is set, emit judgement + plan reasoning lines."""
-    pipeline = StreamDisplayPipeline(verbosity="normal")
+    pipeline = StreamDisplayPipeline()
 
     event = {
         "type": LOOP_REASON_EVENT_TYPE,

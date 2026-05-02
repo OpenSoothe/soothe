@@ -31,7 +31,6 @@ from soothe_cli.cli.stream.formatter import (
     format_subagent_milestone,
     format_tool_call,
 )
-from soothe_cli.shared.display_policy import VerbosityLevel, normalize_verbosity
 from soothe_cli.shared.essential_events import (
     LOOP_REASON_EVENT_TYPE,
     is_goal_start_event_type,
@@ -50,14 +49,6 @@ GOAL_COMPLETE_EVENTS = {
     "soothe.cognition.agent_loop.completed",
 }
 
-# Verbosity tier mapping
-_VERBOSITY_TO_TIER = {
-    "quiet": VerbosityTier.QUIET,
-    "normal": VerbosityTier.NORMAL,
-    "detailed": VerbosityTier.DETAILED,
-    "debug": VerbosityTier.DEBUG,
-}
-
 
 class StreamDisplayPipeline:
     """Pipeline for processing events into CLI display lines.
@@ -66,7 +57,7 @@ class StreamDisplayPipeline:
     Emits structured DisplayLine objects for rendering.
 
     Usage:
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
         for event in events:
             lines = pipeline.process(event)
             renderer.write_lines(lines)
@@ -74,18 +65,14 @@ class StreamDisplayPipeline:
 
     def __init__(
         self,
-        verbosity: VerbosityLevel = "normal",
         *,
         presentation_engine: PresentationEngine | None = None,
     ) -> None:
         """Initialize the pipeline.
 
         Args:
-            verbosity: Verbosity level for filtering.
             presentation_engine: Shared engine (defaults to a new instance).
         """
-        self._verbosity = normalize_verbosity(verbosity)
-        self._verbosity_tier = _VERBOSITY_TO_TIER.get(self._verbosity, VerbosityTier.NORMAL)
         self._context = PipelineContext()
         self._presentation = presentation_engine or PresentationEngine()
         self._current_namespace: tuple[str, ...] = ()  # Track current namespace
@@ -110,7 +97,7 @@ class StreamDisplayPipeline:
 
         # Classify and filter
         tier = self._classify_event(event_type)
-        if tier > self._verbosity_tier:
+        if tier > VerbosityTier.NORMAL:
             return []
 
         # Dispatch to handlers
@@ -221,7 +208,6 @@ class StreamDisplayPipeline:
                     preview_first(summary, 120),
                     0.0,
                     namespace=self._current_namespace,
-                    verbosity_tier=self._verbosity_tier,
                     task_scope=task_scope,
                     task_done_success=False,
                 )
@@ -243,7 +229,6 @@ class StreamDisplayPipeline:
             format_subagent_milestone(
                 brief.strip(),
                 namespace=self._current_namespace,
-                verbosity_tier=self._verbosity_tier,
                 task_scope=task_scope,
             )
         ]
@@ -277,7 +262,6 @@ class StreamDisplayPipeline:
             format_goal_header(
                 goal,
                 namespace=self._current_namespace,
-                verbosity_tier=self._verbosity_tier,
             )
         ]
 
@@ -312,7 +296,6 @@ class StreamDisplayPipeline:
             format_step_header(
                 description,
                 namespace=self._current_namespace,
-                verbosity_tier=self._verbosity_tier,
             )
         ]
 
@@ -355,7 +338,6 @@ class StreamDisplayPipeline:
                 args_summary,
                 running=True,
                 namespace=self._current_namespace,
-                verbosity_tier=self._verbosity_tier,
             )
         ]
 
@@ -381,7 +363,6 @@ class StreamDisplayPipeline:
                 judgement,
                 action,
                 namespace=self._current_namespace,
-                verbosity_tier=self._verbosity_tier,
             )
         ]
 
@@ -412,7 +393,6 @@ class StreamDisplayPipeline:
             format_subagent_milestone(
                 preview_first(brief, 60),
                 namespace=self._current_namespace,
-                verbosity_tier=self._verbosity_tier,
                 task_scope=self._task_scope_from_event(event),
             )
         ]
@@ -459,7 +439,6 @@ class StreamDisplayPipeline:
                 preview_first(summary, 70),  # Increased from 50 for richer metrics
                 duration_s,
                 namespace=self._current_namespace,
-                verbosity_tier=self._verbosity_tier,
                 task_scope=self._task_scope_from_event(event),
                 task_description=task_description,
             )
@@ -549,7 +528,6 @@ class StreamDisplayPipeline:
             format_subagent_milestone(
                 preview_first(brief, 60),
                 namespace=self._current_namespace,
-                verbosity_tier=self._verbosity_tier,
                 task_scope=self._task_scope_from_event(event),
             )
         ]
@@ -623,7 +601,6 @@ class StreamDisplayPipeline:
             error_msg=error_msg,
             step_description=step_description,
             namespace=self._current_namespace,
-            verbosity_tier=self._verbosity_tier,
         )
 
     def _on_goal_completed(self, event: dict[str, Any]) -> list[DisplayLine]:
@@ -651,7 +628,6 @@ class StreamDisplayPipeline:
                 steps,
                 total_s,
                 namespace=self._current_namespace,
-                verbosity_tier=self._verbosity_tier,
             )
         ]
 
@@ -687,7 +663,6 @@ class StreamDisplayPipeline:
                 action_text,
                 action,
                 namespace=self._current_namespace,
-                verbosity_tier=self._verbosity_tier,
             )
         ]
 
@@ -700,7 +675,6 @@ class StreamDisplayPipeline:
                     "",  # Empty label - no prefix
                     plan_reasoning,
                     namespace=self._current_namespace,
-                    verbosity_tier=self._verbosity_tier,
                 )
             )
 

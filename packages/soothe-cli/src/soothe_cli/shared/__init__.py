@@ -17,7 +17,6 @@ from soothe_cli.shared.display_policy import (
     INTERNAL_JSON_KEYS,
     SKIP_EVENT_TYPES,
     DisplayPolicy,
-    VerbosityLevel,
     create_display_policy,
 )
 from soothe_cli.shared.essential_events import (
@@ -73,7 +72,6 @@ __all__ = [
     # Rendering
     "RendererProtocol",
     # Message processing
-    "VerbosityLevel",
     "accumulate_tool_call_chunks",
     "coerce_tool_call_args_to_dict",
     "extract_tool_args_dict",

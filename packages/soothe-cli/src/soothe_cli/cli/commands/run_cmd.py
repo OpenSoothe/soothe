@@ -22,7 +22,6 @@ def run_impl(
     no_tui: bool,  # noqa: FBT001
     autonomous: bool,  # noqa: FBT001
     max_iterations: int | None,
-    output_format: str,
     streaming_enabled: bool | None = None,
     streaming_mode: str | None = None,
 ) -> None:
@@ -36,7 +35,6 @@ def run_impl(
         no_tui: Force headless mode
         autonomous: Enable autonomous iteration mode
         max_iterations: Max iterations for autonomous mode
-        output_format: Output format (text or jsonl)
         streaming_enabled: Override daemon streaming enabled setting (RFC-614)
         streaming_mode: Override daemon streaming mode ('streaming' or 'batch')
     """
@@ -44,7 +42,7 @@ def run_impl(
 
     try:
         cfg = load_config(config)
-        log_level = resolve_cli_log_level(cfg.verbosity, logging_level=cfg.logging_level)
+        log_level = resolve_cli_log_level(logging_level=cfg.logging_level)
         log_file = Path(SOOTHE_HOME) / "logs" / "soothe-cli.log"
         setup_logging(log_level, log_file=log_file)
 
@@ -71,7 +69,6 @@ def run_impl(
                 cfg,
                 prompt or "",
                 thread_id=thread_id,
-                output_format=output_format,
                 autonomous=autonomous,
                 max_iterations=max_iterations,
             )

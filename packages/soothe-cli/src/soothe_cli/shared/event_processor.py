@@ -19,14 +19,14 @@ from soothe_sdk.core.events import (
 )
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux import classify_event_to_tier
-from soothe_sdk.ux.loop_stream import assistant_output_phase
+from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
 from soothe_sdk.ux.task_namespace import (
     enqueue_task_spawn,
     maybe_bind_namespace,
     resolve_task_scope_for_namespace,
 )
 
-from soothe_cli.shared.display_policy import DisplayPolicy, VerbosityLevel, normalize_verbosity
+from soothe_cli.shared.display_policy import DisplayPolicy
 from soothe_cli.shared.message_processing import (
     accumulate_tool_call_chunks,
     extract_tool_args_dict,
@@ -54,8 +54,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MSG_PAIR_LEN = 2
-# Internal accumulator key (not a public wire event type).
-_LOOP_MSG_ACCUM_GOAL_COMPLETION = "_soothe.internal.loop_messages.goal_completion"
+
+
+def _loop_msg_accum_event_key(phase: str) -> str:
+    """Accumulator event-type key for loop-tagged assistant streams (RFC-614)."""
+    return f"_soothe.internal.loop_messages.{phase}"
 
 
 class EventProcessor:
@@ -64,9 +67,12 @@ class EventProcessor:
     Handles all event routing, state management, and filtering.
     Delegates display to RendererProtocol implementation.
 
+    Display policy is fixed to the former **normal** client mode (IG-343).
+    When ``headless_output`` is True, only RFC-614 loop-tagged main-graph
+    assistant text is emitted; tools and progress are not rendered.
+
     Usage:
-        renderer = CliRenderer(verbosity="normal")
-        processor = EventProcessor(renderer, verbosity="normal")
+        processor = EventProcessor(renderer)
 
         # In event loop:
         processor.process_event(event)
@@ -76,22 +82,22 @@ class EventProcessor:
         self,
         renderer: RendererProtocol,
         *,
-        verbosity: VerbosityLevel = "normal",
         final_output_mode: str = "streaming",
         presentation_engine: PresentationEngine | None = None,
         tui_debug: bool = False,
+        headless_output: bool = False,
     ) -> None:
-        """Initialize processor with renderer and verbosity level.
+        """Initialize processor with renderer.
 
         Args:
             renderer: Callback interface for display.
-            verbosity: Progress visibility level.
             presentation_engine: Shared engine; if omitted, uses renderer's
                 ``presentation_engine`` when present, else a new instance.
             tui_debug: When True, emit INFO logs on logger ``soothe.ux.tui.trace`` (IG-129).
+            headless_output: Headless CLI: loop-tagged main answers only, no tool/progress UI.
         """
         self._renderer = renderer
-        self._verbosity = normalize_verbosity(verbosity)
+        self._headless_output = headless_output
         self._final_output_mode = (
             final_output_mode if final_output_mode in {"streaming", "batch"} else "streaming"
         )
@@ -109,7 +115,7 @@ class EventProcessor:
         else:
             self._presentation = PresentationEngine()
 
-        self._policy = DisplayPolicy(verbosity=self._verbosity)
+        self._policy = DisplayPolicy()
         self._state = ProcessorState()
 
     @property
@@ -221,17 +227,37 @@ class EventProcessor:
                     parts.append(str(item.get("text", "")))
         return "".join(parts)
 
-    def _dispatch_goal_completion_assistant_text(
+    def _suppress_main_assistant_body_for_headless_obj(
+        self, msg: AIMessage, *, is_main: bool
+    ) -> bool:
+        if not self._headless_output or not is_main:
+            return False
+        ph = assistant_output_phase(msg)
+        return ph is None or ph not in LOOP_ASSISTANT_OUTPUT_PHASES
+
+    def _suppress_main_assistant_body_for_headless_dict(
+        self, msg: dict[str, Any], *, is_main: bool, ai_wire: bool
+    ) -> bool:
+        if not self._headless_output or not is_main or not ai_wire:
+            return False
+        ph = assistant_output_phase(msg)
+        return ph is None or ph not in LOOP_ASSISTANT_OUTPUT_PHASES
+
+    def _dispatch_loop_tagged_assistant_text(
         self,
         raw_text: str,
         *,
         namespace: tuple[str, ...],
         is_chunk: bool,
+        phase: str,
     ) -> None:
-        """Display logic for ``phase=goal_completion`` messages (IG-317 / RFC-614)."""
-        if not self._presentation.tier_visible(VerbosityTier.QUIET, self._verbosity):
+        """Display logic for RFC-614 loop-tagged assistant messages (IG-317 / IG-343)."""
+        if phase not in LOOP_ASSISTANT_OUTPUT_PHASES:
+            return
+        if not self._presentation.tier_visible(VerbosityTier.QUIET):
             return
 
+        accum_key = _loop_msg_accum_event_key(phase)
         streaming_config = self._get_effective_streaming_config()
 
         if is_chunk:
@@ -242,7 +268,7 @@ class EventProcessor:
             if not streaming_config.get("synthesis_streaming", True):
                 return
             display_text = self._state.streaming_accumulator.accumulate(
-                _LOOP_MSG_ACCUM_GOAL_COMPLETION,
+                accum_key,
                 raw_text,
                 namespace=namespace,
                 is_chunk=True,
@@ -257,13 +283,11 @@ class EventProcessor:
                     )
             return
 
-        if namespace in self._state.final_output_emitted_by_namespace:
+        if (phase, namespace) in self._state.final_loop_output_emitted:
             return
 
         if streaming_config.get("mode") == "streaming":
-            stream_state = self._state.streaming_accumulator.streams.get(
-                (_LOOP_MSG_ACCUM_GOAL_COMPLETION, namespace)
-            )
+            stream_state = self._state.streaming_accumulator.streams.get((accum_key, namespace))
             if stream_state and stream_state.accumulated_text.strip():
                 pending_tail = (getattr(stream_state, "pending_fragment", "") or "").strip()
                 if pending_tail:
@@ -280,10 +304,10 @@ class EventProcessor:
                     stream_state.pending_fragment = ""
                 self._presentation.mark_final_answer_locked()
                 self._state.streaming_accumulator.finalize_stream(
-                    _LOOP_MSG_ACCUM_GOAL_COMPLETION,
+                    accum_key,
                     namespace=namespace,
                 )
-                self._state.final_output_emitted_by_namespace.add(namespace)
+                self._state.final_loop_output_emitted.add((phase, namespace))
                 return
 
         cleaned = self._clean_assistant_text(raw_text, is_streaming=False)
@@ -294,7 +318,7 @@ class EventProcessor:
                 is_streaming=False,
             )
         self._presentation.mark_final_answer_locked()
-        self._state.final_output_emitted_by_namespace.add(namespace)
+        self._state.final_loop_output_emitted.add((phase, namespace))
 
     def _emit_assistant_text(
         self,
@@ -307,17 +331,16 @@ class EventProcessor:
         """Forward assistant text unless a custom final response already locked the stream."""
         if is_main and self._presentation.final_answer_locked:
             return
-        payload = self._maybe_extract_quiet_answer(text)
         log_tui_trace(
             tui_debug=self._tui_debug,
             event="processor.emit_assistant_text",
             is_main=is_main,
             is_streaming=is_streaming,
-            chars=len(payload),
+            chars=len(text),
         )
         task_scope = None if is_main else self._resolve_task_scope(namespace)
         self._renderer.on_assistant_text(
-            payload,
+            text,
             is_main=is_main,
             is_streaming=is_streaming,
             task_scope=task_scope,
@@ -482,6 +505,13 @@ class EventProcessor:
         namespace: tuple[str, ...],
     ) -> None:
         """Handle AIMessage objects."""
+        # Headless (IG-343): drop subgraph chatter unless RFC-614 loop-tagged output,
+        # which is emitted via _dispatch_loop_tagged_assistant_text as main-visible text.
+        if self._headless_output and not is_main:
+            lo = assistant_output_phase(msg)
+            if lo not in LOOP_ASSISTANT_OUTPUT_PHASES:
+                return
+
         # Update name_map from tool calls
         update_name_map_from_tool_calls(msg, self._state.name_map)
 
@@ -508,10 +538,15 @@ class EventProcessor:
         # Emit pending tool calls with complete args
         self._emit_pending_tool_calls(namespace)
 
-        if assistant_output_phase(msg) == "goal_completion" and is_main:
+        loop_phase = assistant_output_phase(msg)
+        if (
+            loop_phase
+            and loop_phase in LOOP_ASSISTANT_OUTPUT_PHASES
+            and (is_main or self._headless_output)
+        ):
             txt = self._collect_ai_message_plain_text(msg)
-            self._dispatch_goal_completion_assistant_text(
-                txt, namespace=namespace, is_chunk=is_chunk
+            self._dispatch_loop_tagged_assistant_text(
+                txt, namespace=namespace, is_chunk=is_chunk, phase=loop_phase
             )
             return
 
@@ -527,6 +562,8 @@ class EventProcessor:
                     # Suppress during internal context (research internal LLM responses)
                     if self._state.internal_context_active and not is_main:
                         continue
+                    if self._suppress_main_assistant_body_for_headless_obj(msg, is_main=is_main):
+                        continue
                     # Always pass to renderer for accumulation, let renderer decide display
                     if text:
                         cleaned = self._clean_assistant_text(text, is_streaming=is_chunk)
@@ -541,9 +578,7 @@ class EventProcessor:
                     if has_tc_args:
                         continue
                     name = block.get("name", "")
-                    if name and self._presentation.tier_visible(
-                        VerbosityTier.NORMAL, self._verbosity
-                    ):
+                    if name and self._presentation.tier_visible(VerbosityTier.NORMAL):
                         coerced = extract_tool_args_dict(block)
                         # Skip if no args - will be emitted when tool result arrives
                         if not coerced:
@@ -566,7 +601,9 @@ class EventProcessor:
                             is_main,
                         )
         elif isinstance(msg.content, str) and msg.content:
-            if not (self._state.internal_context_active and not is_main):
+            if self._suppress_main_assistant_body_for_headless_obj(msg, is_main=is_main):
+                pass
+            elif not (self._state.internal_context_active and not is_main):
                 cleaned = self._clean_assistant_text(msg.content, is_streaming=is_chunk)
                 if cleaned:
                     self._emit_assistant_text(
@@ -582,9 +619,7 @@ class EventProcessor:
         if tcs:
             for tc in tcs:
                 name = tc.get("name", "")
-                if not name or not self._presentation.tier_visible(
-                    VerbosityTier.NORMAL, self._verbosity
-                ):
+                if not name or not self._presentation.tier_visible(VerbosityTier.NORMAL):
                     continue
                 tc_args = extract_tool_args_dict(tc)
 
@@ -627,7 +662,9 @@ class EventProcessor:
         namespace: tuple[str, ...],
     ) -> None:
         """Handle ToolMessage objects."""
-        if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
+        if self._headless_output:
+            return
+        if not self._presentation.tier_visible(VerbosityTier.NORMAL):
             return
 
         tool_name = getattr(msg, "name", "tool")
@@ -694,6 +731,11 @@ class EventProcessor:
         namespace: tuple[str, ...],
     ) -> None:
         """Handle deserialized dict messages (after JSON transport)."""
+        if self._headless_output and not is_main:
+            lo = assistant_output_phase(msg)
+            if lo not in LOOP_ASSISTANT_OUTPUT_PHASES:
+                return
+
         msg_type = msg.get("type", "")
         msg_id = msg.get("id", "")
         is_chunk = msg_type == "AIMessageChunk"
@@ -712,10 +754,16 @@ class EventProcessor:
         ai_wire = msg_type in ("ai", "AIMessage", "AIMessageChunk") or (
             isinstance(msg_type, str) and msg_type.endswith("AIMessageChunk")
         )
-        if assistant_output_phase(msg) == "goal_completion" and is_main and ai_wire:
+        loop_phase = assistant_output_phase(msg)
+        if (
+            loop_phase
+            and loop_phase in LOOP_ASSISTANT_OUTPUT_PHASES
+            and ai_wire
+            and (is_main or self._headless_output)
+        ):
             txt = self._collect_ai_dict_plain_text(msg)
-            self._dispatch_goal_completion_assistant_text(
-                txt, namespace=namespace, is_chunk=is_chunk
+            self._dispatch_loop_tagged_assistant_text(
+                txt, namespace=namespace, is_chunk=is_chunk, phase=loop_phase
             )
             return
 
@@ -737,14 +785,19 @@ class EventProcessor:
             if isinstance(content, list):
                 blocks = content
             elif isinstance(content, str) and content:
-                cleaned = self._clean_assistant_text(content, is_streaming=is_chunk)
-                if cleaned:
-                    self._emit_assistant_text(
-                        cleaned,
-                        is_main=is_main,
-                        is_streaming=is_chunk,
-                        namespace=namespace,
-                    )
+                if self._suppress_main_assistant_body_for_headless_dict(
+                    msg, is_main=is_main, ai_wire=ai_wire
+                ):
+                    pass
+                else:
+                    cleaned = self._clean_assistant_text(content, is_streaming=is_chunk)
+                    if cleaned:
+                        self._emit_assistant_text(
+                            cleaned,
+                            is_main=is_main,
+                            is_streaming=is_chunk,
+                            namespace=namespace,
+                        )
 
         for block in blocks:
             if not isinstance(block, dict):
@@ -754,6 +807,10 @@ class EventProcessor:
                 text = block.get("text", "")
                 # Always pass to renderer for accumulation, let renderer decide display
                 if text:
+                    if self._suppress_main_assistant_body_for_headless_dict(
+                        msg, is_main=is_main, ai_wire=ai_wire
+                    ):
+                        continue
                     cleaned = self._clean_assistant_text(text, is_streaming=is_chunk)
                     if cleaned:
                         self._emit_assistant_text(
@@ -764,7 +821,7 @@ class EventProcessor:
                         )
             elif btype in ("tool_call_chunk", "tool_call"):
                 name = block.get("name", "")
-                if name and self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
+                if name and self._presentation.tier_visible(VerbosityTier.NORMAL):
                     args = extract_tool_args_dict(block)
                     tool_call_id = block.get("id", "")
                     # Deduplicate tool calls
@@ -796,9 +853,7 @@ class EventProcessor:
             for tc in tool_calls:
                 if isinstance(tc, dict):
                     name = tc.get("name", "")
-                    if name and self._presentation.tier_visible(
-                        VerbosityTier.NORMAL, self._verbosity
-                    ):
+                    if name and self._presentation.tier_visible(VerbosityTier.NORMAL):
                         args = extract_tool_args_dict(tc)
                         tool_call_id = tc.get("id", "")
 
@@ -842,7 +897,7 @@ class EventProcessor:
             is_main: True if from main agent.
             namespace: LangGraph stream namespace for subgraph correlation.
         """
-        if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
+        if not self._presentation.tier_visible(VerbosityTier.NORMAL):
             return
 
         tool_name = msg.get("name", "tool")
@@ -906,6 +961,8 @@ class EventProcessor:
 
     def _emit_pending_tool_calls(self, namespace: tuple[str, ...]) -> None:
         """Emit pending tool calls that have complete JSON args."""
+        if self._headless_output:
+            return
         for tc_id, pending in list(self._state.pending_tool_calls.items()):
             if pending["emitted"]:
                 continue
@@ -914,9 +971,7 @@ class EventProcessor:
                 pending["emitted"] = True
                 continue
             parsed_args = try_parse_pending_tool_call_args(pending)
-            if parsed_args is not None and self._presentation.tier_visible(
-                VerbosityTier.NORMAL, self._verbosity
-            ):
+            if parsed_args is not None and self._presentation.tier_visible(VerbosityTier.NORMAL):
                 self._state.emitted_tool_call_ids.add(tc_id)
                 pending_is_main = pending.get("is_main", not namespace)
                 emit_ns = () if pending_is_main else namespace
@@ -937,6 +992,13 @@ class EventProcessor:
         """Process protocol/progress events."""
         etype = data.get("type", "")
 
+        if self._headless_output:
+            category = classify_event_to_tier(etype, namespace)
+            if category == VerbosityTier.QUIET and "error" in etype:
+                error_text = data.get("error", data.get("message", str(etype)))
+                self._renderer.on_error(error_text)
+            return
+
         # Tool events are now visible at NORMAL verbosity (RFC-0020 CLI Stream Display Pipeline)
         # They are processed through on_progress_event -> StreamDisplayPipeline
 
@@ -952,7 +1014,7 @@ class EventProcessor:
         elif category == VerbosityTier.QUIET and "error" in etype:
             error_text = data.get("error", data.get("message", str(etype)))
             self._renderer.on_error(error_text)
-        elif self._presentation.tier_visible(category, self._verbosity):
+        elif self._presentation.tier_visible(category):
             task_scope = None if not namespace else self._resolve_task_scope(namespace)
             self._renderer.on_progress_event(
                 etype, data, namespace=namespace, task_scope=task_scope
@@ -1018,12 +1080,6 @@ class EventProcessor:
             strip_internal_tags(text),
             preserve_boundary_whitespace=is_streaming,
         )
-
-    def _maybe_extract_quiet_answer(self, text: str) -> str:
-        """Apply quiet-mode answer extraction with fallback."""
-        if self._verbosity == "quiet":
-            return self._policy.extract_quiet_answer(text)
-        return text
 
     def _get_effective_streaming_config(self) -> Any:
         """Get effective streaming config with defaults (RFC-614).

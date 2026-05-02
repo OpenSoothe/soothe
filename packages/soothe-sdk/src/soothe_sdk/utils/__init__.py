@@ -20,7 +20,6 @@ from soothe_sdk.utils.formatting import (
     log_preview,
 )
 from soothe_sdk.utils.logging import (
-    VERBOSITY_TO_LOG_LEVEL,
     GlobalInputHistory,
     resolve_cli_log_level,
     setup_logging,
@@ -40,7 +39,6 @@ from soothe_sdk.utils.workspace import INVALID_WORKSPACE_DIRS
 __all__ = [
     "setup_logging",
     "GlobalInputHistory",
-    "VERBOSITY_TO_LOG_LEVEL",
     "resolve_cli_log_level",
     "format_cli_error",
     "log_preview",
