@@ -68,8 +68,8 @@ class EventProcessor:
     Delegates display to RendererProtocol implementation.
 
     Display policy is fixed to the former **normal** client mode (IG-343).
-    When ``headless_output`` is True, only RFC-614 loop-tagged main-graph
-    assistant text is emitted; tools and progress are not rendered.
+    When ``headless_output`` is True, RFC-614 loop-tagged main-graph assistant
+    text is emitted; tools and progress are not rendered.
 
     Usage:
         processor = EventProcessor(renderer)

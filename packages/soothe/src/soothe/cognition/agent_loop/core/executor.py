@@ -40,6 +40,9 @@ class _ActStreamBudget:
 
 
 _TUPLE_LEN = 3
+# IG-355: ``task`` tool return text caps (delegate finals; not subgraph AIMessage streams)
+_DELEGATE_FINAL_PER_TASK_CAP = 80_000
+_DELEGATE_FINAL_WAVE_CAP = 120_000
 
 # Type for stream events yielded during execution
 StreamEvent = tuple[tuple[str, ...], str, Any]  # (namespace, mode, data)
@@ -146,14 +149,29 @@ class Executor:
         messages: list[BaseMessage],
         *,
         parallel_multi_step: bool,
+        delegate_final_text: str | None = None,
     ) -> None:
-        """Update state with last Execute assistant text for adaptive final response (IG-199)."""
+        """Update state with last Execute assistant text for adaptive final response (IG-199).
+
+        When the root graph provides no AIMessage text (``iter_messages_for_act_aggregation`` is
+        root-only), ``task`` tool return bodies supply delegate finals for goal completion (IG-355).
+        """
         state.last_execute_wave_parallel_multi_step = parallel_multi_step
+        state.last_wave_answer_from_delegate_final = False
         if parallel_multi_step:
             state.last_execute_assistant_text = None
             return
-        text = self._assemble_assistant_text_from_stream_messages(messages)
-        state.last_execute_assistant_text = text if text else None
+        root_text = self._assemble_assistant_text_from_stream_messages(messages).strip()
+        delegate = (delegate_final_text or "").strip()
+        if delegate:
+            state.last_wave_answer_from_delegate_final = True
+            if len(delegate) > _DELEGATE_FINAL_WAVE_CAP:
+                delegate = delegate[:_DELEGATE_FINAL_WAVE_CAP]
+            state.last_execute_assistant_text = delegate
+        elif root_text:
+            state.last_execute_assistant_text = root_text
+        else:
+            state.last_execute_assistant_text = None
 
     def _assemble_assistant_text_from_stream_messages(self, messages: list[BaseMessage]) -> str:
         """Extract assistant-visible text from CoreAgent stream message list.
@@ -445,6 +463,7 @@ class Executor:
         # Process results
         all_step_results: list[StepResult] = []
         single_wave_messages: list[BaseMessage] = []
+        wave_delegate_final = ""
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(
@@ -467,9 +486,10 @@ class Executor:
                 all_step_results.append(step_result)
                 yield step_result
             else:
-                events, step_result, step_messages = result
+                events, step_result, step_messages, delegate_final = result
                 if len(steps) == 1:
                     single_wave_messages = step_messages
+                    wave_delegate_final = delegate_final
                 all_step_results.append(step_result)
                 # Yield collected events first
                 for event in events:
@@ -482,7 +502,10 @@ class Executor:
             self._record_execute_wave_for_finalize(state, [], parallel_multi_step=True)
         else:
             self._record_execute_wave_for_finalize(
-                state, single_wave_messages, parallel_multi_step=False
+                state,
+                single_wave_messages,
+                parallel_multi_step=False,
+                delegate_final_text=wave_delegate_final or None,
             )
 
         # Aggregate metrics from parallel execution
@@ -590,7 +613,8 @@ class Executor:
 
             tool_call_count = 0
             messages: list[BaseMessage] = []  # IG-151: Collect messages for token extraction
-            async for final_output, event, tc_count, msg_list in self._stream_and_collect(
+            delegate_final = ""
+            async for final_output, event, tc_count, msg_list, df in self._stream_and_collect(
                 stream, budget=budget
             ):
                 if event is not None:
@@ -600,6 +624,7 @@ class Executor:
                     output = final_output
                     tool_call_count = tc_count
                     messages = msg_list  # IG-151: Save messages for metrics
+                    delegate_final = df
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
@@ -642,7 +667,12 @@ class Executor:
 
             # Aggregate metrics into LoopState
             self._aggregate_wave_metrics(step_results, output, messages, state)
-            self._record_execute_wave_for_finalize(state, messages, parallel_multi_step=False)
+            self._record_execute_wave_for_finalize(
+                state,
+                messages,
+                parallel_multi_step=False,
+                delegate_final_text=delegate_final or None,
+            )
 
             # Yield step results
             for sr in step_results:
@@ -720,13 +750,14 @@ class Executor:
         stream_thread_id: str | None = None,
         unified_classification: Any | None = None,
         git_status: dict[str, Any] | None = None,
-    ) -> tuple[list[StreamEvent], StepResult, list[BaseMessage]]:
+    ) -> tuple[list[StreamEvent], StepResult, list[BaseMessage], str]:
         """Execute single step, collecting events for later yielding.
 
         Used for parallel execution where we can't yield in real-time.
         Events are collected and returned with the final result.
 
         RFC-211: Collects outcome metadata instead of full output string.
+        IG-355: Fourth tuple element is joined ``task`` tool delegate-final text for finalize.
 
         Args:
             step: StepAction with description and optional hints
@@ -737,7 +768,7 @@ class Executor:
             git_status: Optional git snapshot for prompt XML (RFC-104).
 
         Returns:
-            Tuple of (collected events, StepResult with outcome metadata, AI messages for IG-199)
+            Tuple of ``(events, StepResult, AI messages for IG-199, delegate_final_text)``.
         """
         start = time.perf_counter()
         events: list[StreamEvent] = []
@@ -804,7 +835,8 @@ class Executor:
             # Stream events and collect outcome metadata (RFC-211)
             tool_call_count = 0
             messages: list[BaseMessage] = []
-            async for final_output, event, tc_count, msg_list in self._stream_and_collect(
+            delegate_final = ""
+            async for final_output, event, tc_count, msg_list, df in self._stream_and_collect(
                 stream, budget=budget
             ):
                 if event is not None:
@@ -813,6 +845,7 @@ class Executor:
                     output = final_output
                     tool_call_count = tc_count
                     messages = msg_list
+                    delegate_final = df
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
@@ -857,6 +890,7 @@ class Executor:
                     hit_subagent_cap=budget.hit_subagent_cap,
                 ),
                 messages,
+                delegate_final,
             )
 
         except Exception as e:
@@ -885,6 +919,7 @@ class Executor:
                     hit_subagent_cap=False,
                 ),
                 [],
+                "",
             )
 
     async def _stream_and_collect(
@@ -892,7 +927,10 @@ class Executor:
         stream: AsyncGenerator,
         *,
         budget: _ActStreamBudget | None = None,
-    ) -> AsyncGenerator[tuple[str | None, StreamEvent | None, int, list[BaseMessage]], None]:
+    ) -> AsyncGenerator[
+        tuple[str | None, StreamEvent | None, int, list[BaseMessage], str],
+        None,
+    ]:
         """Stream events immediately while accumulating output and counting tool calls.
 
         This is the canonical streaming method that yields events as they arrive
@@ -901,15 +939,18 @@ class Executor:
 
         RFC-211: Also extracts tool_call_id and generates outcome metadata.
         IG-151: Collects AIMessage objects for token usage extraction.
+        IG-355: Collects ``task`` tool return text (delegate finals) for goal completion when
+        subgraph AIMessages are not folded into root-graph act aggregation.
 
         Args:
             stream: Async iterator from agent.astream()
             budget: Optional Act wave budget (subagent ``task`` cap, IG-130).
 
         Yields:
-            Tuple of (output, event, tool_call_count, messages):
-            - When event is not None: yield (None, event, 0, []) for immediate display
-            - At end: yield (combined_output, None, tool_call_count, messages) for final result
+            Tuple of ``(output, event, tool_call_count, messages, delegate_final_text)``:
+            - When event is not None: immediate display chunk (delegate_final_text empty).
+            - At end: combined_output, tool_call_count, root AIMessages list, and joined
+              ``task`` tool bodies (ordered, capped)—empty string when no ``task`` tools ran.
         """
         from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
@@ -926,6 +967,7 @@ class Executor:
         chunks: list[str] = []
         tool_call_count = 0
         messages: list[BaseMessage] = []  # IG-151: Collect messages for token extraction
+        delegate_task_final_parts: list[str] = []
 
         # RFC-211: Initialize cache and collect outcomes
         cache = ToolResultCache(
@@ -959,7 +1001,7 @@ class Executor:
             # Handle tuple format (namespace, mode, data) - deepagents canonical
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                 # Yield event immediately for real-time display
-                yield None, chunk, 0, []
+                yield None, chunk, 0, [], ""
 
             stop_act_stream = False
             for msg in iter_messages_for_act_aggregation(chunk):
@@ -998,6 +1040,12 @@ class Executor:
 
                     outcomes.append(outcome)
 
+                    if tool_name == "task" and text_out.strip():
+                        clipped = text_out.strip()
+                        if len(clipped) > _DELEGATE_FINAL_PER_TASK_CAP:
+                            clipped = clipped[:_DELEGATE_FINAL_PER_TASK_CAP]
+                        delegate_task_final_parts.append(clipped)
+
                     logger.debug(
                         "[Act Phase TOOL] #%d %s(%s) → %s, %dB%s",
                         tool_call_count,
@@ -1032,8 +1080,14 @@ class Executor:
             elif hasattr(chunk, "content") and not isinstance(chunk, (tuple, dict)):
                 chunks.append(str(chunk.content))
 
+        delegate_final_text = ""
+        if delegate_task_final_parts:
+            delegate_final_text = "\n\n".join(delegate_task_final_parts)
+            if len(delegate_final_text) > _DELEGATE_FINAL_WAVE_CAP:
+                delegate_final_text = delegate_final_text[:_DELEGATE_FINAL_WAVE_CAP]
+
         # Final yield with combined output and tool call count
-        yield join_text_fragments(chunks), None, tool_call_count, messages
+        yield join_text_fragments(chunks), None, tool_call_count, messages, delegate_final_text
 
     def _build_sequential_input(self, steps: list) -> str:
         """Build combined input for sequential execution.

@@ -59,10 +59,11 @@ LangGraph `(namespace, mode, data)` 3-tuple:
 
 **Naming**: `soothe.<component>.<action>`. Subagent: `soothe.<subagent>.<action>`, Protocol: `soothe.<protocol>.<action>`.
 
-**AgentLoop output contract note** (IG-304, IG-317, RFC-614):
+**AgentLoop output contract note** (IG-304, IG-317, RFC-614, IG-355):
 - Execute-phase assistant prose is daemon-suppressed for user-facing output.
 - Live execute observability is carried by tool telemetry (`ToolMessage` + AI tool-call metadata).
 - Final user-facing answer text (goal completion, chitchat, quiz, autonomous summaries) is emitted on the **`messages`** stream as loop-tagged AI message chunks with a **`phase`** field (for example `goal_completion`), not as `soothe.output.goal_completion.*` custom events.
+- **Headless** (`--no-tui`): stdout shows loop-tagged assistant text only (`HeadlessCliRenderer`); answers produced only via **`task`** delegation are surfaced through goal-completion replay when needed (IG-355). Slash routes such as `/claude` set `preferred_subagent` as a planner hint (IG-349); they do not bypass the streaming contract.
 
 ### Protocol Custom Events
 

@@ -618,26 +618,32 @@ class AgenticMixin:
                     )
                 completion_summary = completion_summary[:240]
                 final_stdout: str | None = None
-                # Only attach final_stdout when max_iterations > 1 (multi-step mode).
-                # In single-step mode (max_iterations == 1), stdout is NOT suppressed,
-                # so adding final_stdout would duplicate normal stdout (IG-119 follow-up).
-                if max_iterations > 1 and final_result.status == "done":
-                    text = _agentic_final_stdout_text(
-                        next_action=final_result.next_action,
-                        full_output=final_result.full_output,
-                        thread_id=tid,
-                        workspace=workspace,
-                        config=self._config,
-                    )
-                    if text is None:
-                        ev = (final_result.evidence_summary or "").strip()
-                        if ev:
+                if final_result.status == "done":
+                    if not skip_goal_completion_wire_duplicate:
+                        # IG-355: emit one phased replay when the answer was not already on the root
+                        # ``messages`` stream (e.g. delegate finals)—including single-iteration runs.
+                        raw = (final_result.full_output or "").strip()
+                        if raw:
                             cap = _AGENTIC_FINAL_STDOUT_CAP
-                            text = ev[:cap] if len(ev) > cap else ev
-                    if text:
-                        final_stdout = text
+                            final_stdout = raw[:cap] if len(raw) > cap else raw
+                    elif max_iterations > 1:
+                        # IG-119 follow-up: multi-step mode headless suppression attach-outcome path.
+                        text = _agentic_final_stdout_text(
+                            next_action=final_result.next_action,
+                            full_output=final_result.full_output,
+                            thread_id=tid,
+                            workspace=workspace,
+                            config=self._config,
+                        )
+                        if text is None:
+                            ev = (final_result.evidence_summary or "").strip()
+                            if ev:
+                                cap = _AGENTIC_FINAL_STDOUT_CAP
+                                text = ev[:cap] if len(ev) > cap else ev
+                        if text:
+                            final_stdout = text
 
-                if final_stdout and not skip_goal_completion_wire_duplicate:
+                if final_stdout:
                     yield loop_assistant_messages_chunk(
                         content=final_stdout,
                         phase="goal_completion",

@@ -143,7 +143,7 @@ class TestExecutorHints:
         executor = Executor(mock_agent)
         step = StepAction(id="a1b2c3d4", description="Explore slice", expected_output="ok")
 
-        _events, step_result, _msgs = await executor._execute_step_collecting_events(
+        _events, step_result, _msgs, _df = await executor._execute_step_collecting_events(
             step,
             "logical-thread",
             stream_thread_id="logical-thread__pa1b2c3d4",

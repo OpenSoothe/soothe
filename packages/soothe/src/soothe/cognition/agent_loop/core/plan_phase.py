@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class PlanPhase:
-    """Single LLM call: assess progress and produce the next plan fragment."""
+    """Runs the Plan step via ``LoopPlannerProtocol`` (RFC-604: one or two LLM calls)."""
 
     def __init__(self, loop_planner: LoopPlannerProtocol) -> None:
         """Initialize with a `LoopPlannerProtocol` implementation."""

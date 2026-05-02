@@ -185,7 +185,7 @@ Sparse **`soothe.subagent.*`** events are emitted on the LangGraph **`custom`** 
 
 ## Output domain (`soothe.output.*`)
 
-**IG-317 / RFC-614:** User-visible **assistant answer text** for the main agent loop is **not** cataloged here as `soothe.output.*` events. It is streamed on **`mode="messages"`** as loop-tagged AI payloads with a **`phase`** field (`goal_completion`, `chitchat`, `quiz`, `autonomous_goal`). Clients should use `soothe_sdk.ux.loop_stream` helpers to recognize those phases.
+**IG-317 / RFC-614 / IG-355:** User-visible **assistant answer text** for the main agent loop is **not** cataloged here as `soothe.output.*` events. It is streamed on **`mode="messages"`** as loop-tagged AI payloads with a **`phase`** field (`goal_completion`, `chitchat`, `quiz`, `autonomous_goal`). Clients should use `soothe_sdk.ux.loop_stream` helpers to recognize those phases. **Headless CLI** treats unphased namespaced subgraph assistant prose as non-output (IG-343); answers that exist only inside a delegate run are promoted from **`task`** tool returns and may be replayed once as **`phase=goal_completion`** for wire parity (IG-355).
 
 Optional **ancillary** progress may still use the `soothe.output.*` domain (verbosity default: **QUIET** via domain `output`), for example dynamic types emitted by `soothe.utils.output_capture.OutputCapture` when `emit_progress=True` (`soothe.output.{source}`).
 

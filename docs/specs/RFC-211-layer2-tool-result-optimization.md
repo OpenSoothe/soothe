@@ -44,6 +44,9 @@ Layer 2's current message handling has four critical inefficiencies:
 
 ### Minimal Data Contract
 
+**Delegate finals (IG-355, complementary note)**  
+Adaptive completion and headless wire parity may source user-visible text from **`task`** tool return payloads aggregated at Act-wave finalize time. That path is separate from Layer 2 checkpoint truncation here; `StepResult.outcome` remains concise metadata for planning while Executor promotes bounded delegate-return strings into loop completion state.
+
 **StepResult schema update**:
 
 ```python

@@ -77,6 +77,10 @@ def iter_messages_for_act_aggregation(chunk: Any) -> Iterator[BaseMessage]:
     - Tuple path: only ``mode == \"messages\"`` with **empty** namespace (root graph).
     - Dict path: ``chunk[\"model\"][\"messages\"]`` when present.
 
+    Subgraph AIMessages are excluded on purpose: orchestration context stays compact.
+    Delegate **final** user-visible text for completion is taken from ``task`` ``ToolMessage``
+    payloads collected separately (IG-355), not by merging namespaced assistant streams here.
+
     Args:
         chunk: Raw chunk from ``CoreAgent.astream`` / ``CompiledStateGraph.astream``.
 

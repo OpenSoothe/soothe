@@ -308,6 +308,8 @@ if should_show(VerbosityTier.DETAILED, self._verbosity):
 | Other deepagents / non-curated subgraph noise | ✗ | ✗ | ✓ | ✓ |
 | Thinking/heartbeats | ✗ | ✗ | ✗ | ✓ |
 
+**Headless note (IG-355 / RFC-614):** the non-TUI client prints **loop-tagged** assistant lines on stdout; unphased namespaced subgraph assistant prose is not shown. User-visible answers that only exist in a delegate run are promoted from **`task`** tool returns and may appear as a **`phase=goal_completion`** replay—this is orthogonal to VerbosityTier rows above (which govern rich TUI/daemon event routing).
+
 ---
 
 ## 10. Formatting Rules
