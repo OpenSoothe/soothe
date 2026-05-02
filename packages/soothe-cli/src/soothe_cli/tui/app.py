@@ -3200,6 +3200,7 @@ class SootheApp(App):
                 adapter=self._ui_adapter,
                 image_tracker=self._image_tracker,
                 sandbox_type=self._sandbox_type,
+                workspace=self._cwd,
                 message_kwargs=message_kwargs,
                 context=CLIContext(
                     model=self._model_override,
