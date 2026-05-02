@@ -13,8 +13,9 @@ from typing import Any
 
 from soothe_sdk.utils import get_outcome_type
 
-# Bounded preview for planner reflection / StepResult evidence (IG-356).
-DELEGATE_EVIDENCE_PREVIEW_CAP = 2500
+# Bounded excerpt for planner reflection (per-tool metadata); wave-level joins use the same cap
+# via import in the executor (IG-356, IG-357).
+PLANNER_OUTCOME_PREVIEW_CAP = 2500
 
 
 def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) -> dict[str, Any]:
@@ -190,7 +191,7 @@ def _extract_subagent_metadata(result: Any) -> dict[str, Any]:
 
     Returns:
         Metadata dict with completed status, artifacts_created, entities,
-        and optional ``delegate_evidence_preview`` for planner evidence (IG-356).
+        and optional ``task_return_preview`` (bounded excerpt of this ``task`` return; IG-357).
     """
     content = result if isinstance(result, str) else str(result)
 
@@ -205,7 +206,7 @@ def _extract_subagent_metadata(result: Any) -> dict[str, Any]:
     stripped = content.strip()
     preview = ""
     if stripped:
-        cap = DELEGATE_EVIDENCE_PREVIEW_CAP
+        cap = PLANNER_OUTCOME_PREVIEW_CAP
         preview = stripped[:cap] + ("…" if len(stripped) > cap else "")
 
     meta: dict[str, Any] = {
@@ -216,7 +217,7 @@ def _extract_subagent_metadata(result: Any) -> dict[str, Any]:
         "entities": entities[:10],
     }
     if preview:
-        meta["delegate_evidence_preview"] = preview
+        meta["task_return_preview"] = preview
     return meta
 
 

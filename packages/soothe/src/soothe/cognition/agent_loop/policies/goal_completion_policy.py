@@ -12,8 +12,9 @@ Decision modes (hybrid):
 - heuristic_only: Ignore LLM, use execution metrics only
 - hybrid: LLM primary, heuristic fallback (default)
 
-``state.last_execute_assistant_text`` may be sourced from root-graph AIMessages **or** ordered
-``task`` tool return bodies when subgraph streams stay off the root aggregation path (IG-355).
+``state.last_execute_assistant_text`` is resolved per wave by
+:mod:`soothe.cognition.agent_loop.core.act_wave_finalize` from root assistant stream text and/or
+ordered ``task`` tool return bodies (IG-355, IG-357).
 
 Heuristic categories (execution-focused, IG-298):
 - Wave execution: Parallel multi-step, subagent cap

@@ -116,12 +116,12 @@ async def test_parallel_tools_mixed_sync_async():
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_parallel_tools_default_is_1():
-    """Verify default configuration uses max_parallel_steps=1."""
+async def test_parallel_tools_default_parallelism():
+    """Verify default configuration uses max_parallel_steps=16."""
     config = SootheConfig()
 
     # Check default value for max_parallel_steps
-    assert config.execution.concurrency.max_parallel_steps == 1
+    assert config.execution.concurrency.max_parallel_steps == 16
 
     create_soothe_agent(
         model=config.create_chat_model("agent"),
