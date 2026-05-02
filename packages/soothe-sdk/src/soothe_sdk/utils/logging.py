@@ -33,6 +33,29 @@ def short_level_letter(levelno: int) -> str:
     return _LEVEL_SHORT_BY_NO.get(levelno, "?")
 
 
+def abbreviate_logger_name(name: str) -> str:
+    """Shorten a dotted logger path by abbreviating all but the last two segments.
+
+    Each earlier segment becomes its first character (e.g. ``soothe`` → ``s``).
+    The last two segments stay unchanged so package/module context stays readable.
+
+    Args:
+        name: Logger name, typically ``__name__`` with dots.
+
+    Returns:
+        Compact form, or ``name`` unchanged when fewer than three segments.
+    """
+    if not name:
+        return name
+    parts = name.split(".")
+    if len(parts) <= 2:
+        return name
+    head: list[str] = []
+    for p in parts[:-2]:
+        head.append(p[0] if p else "?")
+    return ".".join(head + parts[-2:])
+
+
 class ShortLevelFormatter(logging.Formatter):
     """Formatter that supplies ``level_short`` and compact ``%(asctime)s`` timestamps.
 
@@ -59,7 +82,12 @@ class ShortLevelFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         record.level_short = short_level_letter(record.levelno)
-        return super().format(record)
+        saved_name = record.name
+        record.name = abbreviate_logger_name(saved_name)
+        try:
+            return super().format(record)
+        finally:
+            record.name = saved_name
 
 
 def resolve_cli_log_level(
@@ -242,6 +270,7 @@ def setup_logging(
 __all__ = [
     "GlobalInputHistory",
     "ShortLevelFormatter",
+    "abbreviate_logger_name",
     "resolve_cli_log_level",
     "setup_logging",
     "short_level_letter",
