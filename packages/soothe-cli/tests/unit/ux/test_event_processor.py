@@ -762,7 +762,32 @@ class TestEventProcessorHeadlessSubgraph:
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert assistant_calls == []
 
-    def test_headless_emits_unphased_main_graph_answer(self) -> None:
+    def test_headless_suppresses_unphased_main_graph_execute_wave(self) -> None:
+        """Execute-wave main graph text has no loop phase; stdout stays for synthesis only (IG-345)."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, headless_output=True)
+
+        processor.process_event(
+            {
+                "type": "event",
+                "mode": "messages",
+                "namespace": [],
+                "data": [
+                    {
+                        "type": "ai",
+                        "id": "main-chatter",
+                        "content": "Let me search for README files using glob.",
+                    },
+                    {},
+                ],
+            }
+        )
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert assistant_calls == []
+
+    def test_headless_emits_phased_chitchat_main_graph(self) -> None:
+        """Direct replies tag ``phase=chitchat`` (runner); headless still shows them."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, headless_output=True)
 
@@ -775,7 +800,8 @@ class TestEventProcessorHeadlessSubgraph:
                     {
                         "type": "ai",
                         "id": "main-answer",
-                        "content": "There are 12 README files.",
+                        "content": "Hello — how can I help?",
+                        "phase": "chitchat",
                     },
                     {},
                 ],
@@ -784,4 +810,4 @@ class TestEventProcessorHeadlessSubgraph:
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert len(assistant_calls) == 1
-        assert "12 README" in assistant_calls[0][1][0]
+        assert "Hello" in assistant_calls[0][1][0]

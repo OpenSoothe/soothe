@@ -73,4 +73,33 @@ and expected. Reduce log level or clarify the message.
 
 - `packages/soothe-cli/src/soothe_cli/tui/app.py` (TUI launch workspace)
 - `packages/soothe-cli/src/soothe_cli/cli/execution/daemon.py` (headless workspace)
-- `packages/soothe/src/soothe/subagents/explore/engine.py` (log clarity)
+- `packages/soothe/src/soothe/subagents/explore/engine.py` (log clarity + ToolNode workspace)
+
+## Additional Fix: Explore ToolNode workspace injection
+
+### Root Cause
+The explore engine's `execute_action_node` calls `tool_node.invoke({"messages": ...})`
+passing only `messages`. LangGraph's `ToolNode._extract_state()` returns this dict as
+the `ToolRuntime.state`. Since `workspace` is not in the dict, the callable backend
+(`_create_thread_workspace_backend`) receives `None` for `runtime.state.get("workspace")`
+and falls back to `initial_workspace` — the stale resolver default (`~/.soothe/Workspace`).
+
+With `virtual_mode=True`, the `FilesystemBackend.cwd` becomes `~/.soothe/Workspace`, so
+all glob/grep/ls operations are scoped to that empty directory instead of the actual
+project workspace.
+
+### Fix
+Pass `workspace` from `ExploreState` into the `tool_node.invoke()` dict so `ToolRuntime.state`
+includes it. The callable backend then correctly resolves the thread workspace.
+
+```python
+# Before
+tool_results = tool_node.invoke({"messages": tool_messages_input})
+
+# After
+tool_invoke_input = {"messages": tool_messages_input}
+thread_workspace = state.get("workspace")
+if thread_workspace:
+    tool_invoke_input["workspace"] = thread_workspace
+tool_results = tool_node.invoke(tool_invoke_input)
+```
