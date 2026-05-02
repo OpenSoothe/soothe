@@ -817,8 +817,7 @@ class AssistantMessage(Vertical):
 class ToolCallMessage(Vertical):
     """Widget displaying a tool call with CLI-style command and result lines.
 
-    Command line matches headless ``CliRenderer.on_tool_call``; result line matches
-    ``on_tool_result`` (✓/✗, brief, optional duration). Raw tool output is collapsed
+    Command and result lines use the shared flat tool formatters (IG-320). Raw tool output is collapsed
     until the user expands (click or Ctrl+O). While pending, shows a running spinner.
     """
 

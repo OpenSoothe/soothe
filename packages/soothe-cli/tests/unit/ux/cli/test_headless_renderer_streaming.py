@@ -1,4 +1,4 @@
-"""Headless CLI stdout: streaming chunks must concatenate without spurious newlines."""
+"""Tests for ``HeadlessCliRenderer`` (non-TUI / ``--no-tui`` stdout-only mode)."""
 
 from __future__ import annotations
 
@@ -27,3 +27,29 @@ def test_non_streaming_concatenates_without_extra_newlines(
     r.on_assistant_text("Next", is_main=True, is_streaming=False)
     out, _ = capsys.readouterr()
     assert out == "LineNext"
+
+
+def test_suppresses_subgraph_assistant_text(capsys: pytest.CaptureFixture[str]) -> None:
+    r = HeadlessCliRenderer()
+    r.on_assistant_text("subgraph", is_main=False, is_streaming=False)
+    out, _ = capsys.readouterr()
+    assert out == ""
+
+
+def test_suppresses_task_scoped_prose(capsys: pytest.CaptureFixture[str]) -> None:
+    r = HeadlessCliRenderer()
+    r.on_assistant_text(
+        "hidden",
+        is_main=True,
+        is_streaming=False,
+        task_scope=("functions.task:0", "claude"),
+    )
+    out, _ = capsys.readouterr()
+    assert out == ""
+
+
+def test_emits_main_graph_text(capsys: pytest.CaptureFixture[str]) -> None:
+    r = HeadlessCliRenderer()
+    r.on_assistant_text("Answer", is_main=True, is_streaming=False)
+    out, _ = capsys.readouterr()
+    assert out == "Answer"

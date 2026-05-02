@@ -1,7 +1,8 @@
 """Tests for CLI Stream Display Pipeline (RFC-0020).
 
-NOTE: Tool call display is handled by CliRenderer.on_tool_call/on_tool_result
-via EventProcessor, NOT through the pipeline. The pipeline handles goal/step/subagent events.
+NOTE: Tool call lines are not produced by this pipeline. The TUI uses
+``StreamDisplayPipeline`` for goal/step/subagent progress; tool invocations are rendered
+in message widgets. Headless mode does not print tool/progress lines.
 Tool formatters remain for subagent dispatch display.
 """
 
@@ -283,8 +284,8 @@ class TestPipelineContext:
 class TestStreamDisplayPipeline:
     """Tests for StreamDisplayPipeline.
 
-    Note: Tool events are handled by CliRenderer.on_tool_call/on_tool_result
-    via EventProcessor. The pipeline focuses on goal/step/subagent events.
+    Note: LangChain ``tool_calls`` are rendered in the TUI message layer, not here.
+    This pipeline focuses on goal/step/subagent progress events.
     """
 
     def test_claude_step_wire_emits_task_scoped_milestone(self) -> None:
@@ -440,7 +441,7 @@ class TestStreamDisplayPipeline:
     def test_tool_events_handled_by_pipeline(self) -> None:
         """Tool events are INTERNAL (RFC-0020) - not displayed via pipeline.
 
-        Tool display is via LangChain tool_calls → CliRenderer.on_tool_call.
+        Tool display is via LangChain ``tool_calls`` in the TUI (headless omits tools).
         Tool events (soothe.tool.*) are for logging/metrics only, not display.
         They should be filtered out at NORMAL verbosity.
         """
