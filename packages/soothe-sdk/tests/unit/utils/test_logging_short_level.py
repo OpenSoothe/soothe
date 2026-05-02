@@ -8,7 +8,11 @@ import time
 
 import pytest
 
-from soothe_sdk.utils.logging import ShortLevelFormatter, short_level_letter
+from soothe_sdk.utils.logging import (
+    ShortLevelFormatter,
+    abbreviate_logger_name,
+    short_level_letter,
+)
 
 
 @pytest.mark.parametrize(
@@ -27,6 +31,39 @@ def test_short_level_letter_standard_levels(levelno: int, expected: str) -> None
 
 def test_short_level_letter_unknown_level() -> None:
     assert short_level_letter(999) == "?"
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("", ""),
+        ("httpx", "httpx"),
+        ("soothe.core", "soothe.core"),
+        (
+            "soothe.cognition.agent_loop.state.state_manager",
+            "s.c.a.state.state_manager",
+        ),
+        ("a.b.c.d", "a.b.c.d"),
+    ],
+)
+def test_abbreviate_logger_name(name: str, expected: str) -> None:
+    assert abbreviate_logger_name(name) == expected
+
+
+def test_short_level_formatter_abbreviates_name_in_output() -> None:
+    fmt = ShortLevelFormatter("%(name)s %(message)s")
+    record = logging.LogRecord(
+        name="soothe.cognition.agent_loop.state.state_manager",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg="x",
+        args=(),
+        exc_info=None,
+    )
+    line = fmt.format(record)
+    assert line == "s.c.a.state.state_manager x"
+    assert record.name == "soothe.cognition.agent_loop.state.state_manager"
 
 
 def test_short_level_formatter_inserts_level_short() -> None:
