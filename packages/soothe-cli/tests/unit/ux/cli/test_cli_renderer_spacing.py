@@ -206,7 +206,9 @@ def test_agentic_stdout_visible_after_turn_end(capsys: CaptureFixture[str]) -> N
     r.on_turn_end()
     r.on_assistant_text("RAW_LIST_SHOULD_LEAK", is_main=True, is_streaming=False)
     assert "RAW_LIST_SHOULD_LEAK" in capsys.readouterr().out
-    r.on_assistant_text("Found 12 README.md files (project only).", is_main=True, is_streaming=False)
+    r.on_assistant_text(
+        "Found 12 README.md files (project only).", is_main=True, is_streaming=False
+    )
     r.on_progress_event(
         "soothe.cognition.agent_loop.completed",
         {
@@ -231,7 +233,9 @@ def test_max_iter_one_no_client_suppression_after_turn_end(capsys: CaptureFixtur
     r.on_turn_end()
     r.on_assistant_text("RAW_LIST_SHOULD_LEAK", is_main=True, is_streaming=False)
     assert "RAW_LIST_SHOULD_LEAK" in capsys.readouterr().out
-    r.on_assistant_text("Found 12 README.md files (project only).", is_main=True, is_streaming=False)
+    r.on_assistant_text(
+        "Found 12 README.md files (project only).", is_main=True, is_streaming=False
+    )
     r.on_progress_event(
         "soothe.cognition.agent_loop.completed",
         {

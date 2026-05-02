@@ -188,12 +188,7 @@ class CliRenderer(RendererBase):
         if payload and self._state.assistant_leading_bullet_pending:
             if task_scope and not effective_streaming:
                 tcid, st = task_scope
-                payload = (
-                    "⚙ "
-                    + format_task_scope_prefix(tcid, st)
-                    + " "
-                    + payload.strip()
-                )
+                payload = "⚙ " + format_task_scope_prefix(tcid, st) + " " + payload.strip()
             else:
                 if task_scope:
                     tcid, st = task_scope

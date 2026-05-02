@@ -7,8 +7,7 @@ from soothe_cli.shared.explore_task_display import format_explore_task_json_blob
 
 def test_formats_explore_result_summary() -> None:
     raw = (
-        '{"target": "t", "thoroughness": "low", "matches": [], '
-        '"summary": "Found 3 README files."}'
+        '{"target": "t", "thoroughness": "low", "matches": [], "summary": "Found 3 README files."}'
     )
     assert format_explore_task_json_blob_for_display(raw) == "Found 3 README files."
 

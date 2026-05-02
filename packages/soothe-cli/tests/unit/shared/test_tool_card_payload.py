@@ -101,9 +101,7 @@ def test_run_python_envelope_allows_extra_keys() -> None:
         "tool_call_id": "tc-extra",
         "name": "run_python",
         "status": "pending",
-        "content": (
-            '{"success": true, "output": "", "result": null, "error": null, "meta": 1}'
-        ),
+        "content": ('{"success": true, "output": "", "result": null, "error": null, "meta": 1}'),
     }
     p = extract_tool_result_card_payload(chunk)
     assert p is not None

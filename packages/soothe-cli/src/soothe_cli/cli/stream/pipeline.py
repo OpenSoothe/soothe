@@ -229,6 +229,11 @@ class StreamDisplayPipeline:
 
         # Run-level ``*.completed`` only — not granular ``*.step.completed`` activity lines.
         if event_type.endswith(".completed") and ".step." not in event_type:
+            # IG-340: When running inside a Task tool scope, suppress the wire
+            # completion line; the task ToolMessage result path already emits an
+            # authoritative completion line with full wall-clock duration.
+            if task_scope:
+                return []
             return self._on_subagent_completed(event, subagent_name=agent_name)
 
         brief = summarize_subagent_wire_activity(event_type, event)

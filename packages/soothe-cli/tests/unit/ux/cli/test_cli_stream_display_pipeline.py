@@ -183,10 +183,7 @@ class TestFormatters:
         )
         assert line.icon == "⚙"
         assert line.indent == ""
-        assert (
-            line.content
-            == 'Task(explore, "Count README files") -> ✓ Completed (5900ms)'
-        )
+        assert line.content == 'Task(explore, "Count README files") -> ✓ Completed (5900ms)'
         assert line.duration_ms is None
 
     def test_format_step_done(self) -> None:
@@ -347,10 +344,7 @@ class TestStreamDisplayPipeline:
 
         assert len(lines) == 1
         assert lines[0].icon == "⚙"
-        assert (
-            lines[0].content
-            == "Task(explore):#1 expand query (3 findings, 2 iter)"
-        )
+        assert lines[0].content == "Task(explore):#1 expand query (3 findings, 2 iter)"
 
     def test_subagent_judgement_shown_at_normal(self) -> None:
         """Judgement wire types are not routed through the curated pipeline."""
@@ -463,12 +457,15 @@ class TestStreamDisplayPipeline:
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert (
-            lines[0].content == 'Task(research, "5 results") -> ✓ Completed (45200ms)'
-        )
+        assert lines[0].content == 'Task(research, "5 results") -> ✓ Completed (45200ms)'
         assert lines[0].duration_ms is None
 
     def test_explore_completed_includes_search_target_in_done_line(self) -> None:
+        """IG-340: Wire completed event suppressed when task_scope is present.
+
+        The task ToolMessage result path produces the authoritative completion
+        line, so the curated wire event is redundant when inside a Task scope.
+        """
         pipeline = StreamDisplayPipeline(verbosity="normal")
         event = {
             "type": "soothe.subagent.explore.completed",
@@ -478,11 +475,20 @@ class TestStreamDisplayPipeline:
             "task_scope": ("functions.task:0", "explore"),
         }
         lines = pipeline.process(event)
+        assert len(lines) == 0  # Suppressed to avoid duplicate with task ToolMessage result
+
+    def test_explore_completed_without_task_scope_still_shown(self) -> None:
+        """IG-340: Without task_scope, wire completed event renders normally."""
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+        event = {
+            "type": "soothe.subagent.explore.completed",
+            "total_findings": 2,
+            "duration_ms": 12000,
+            "search_target": "Count README files",
+        }
+        lines = pipeline.process(event)
         assert len(lines) == 1
-        assert (
-            lines[0].content
-            == 'Task(explore, "Count README files") -> ✓ Completed (12000ms)'
-        )
+        assert "Completed" in lines[0].content
 
     def test_loop_agent_reason_shown_at_normal(self) -> None:
         """IG-225: Loop agent Reason event shows judgement + plan reasoning."""
