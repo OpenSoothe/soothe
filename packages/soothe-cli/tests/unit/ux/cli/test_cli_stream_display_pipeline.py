@@ -273,7 +273,7 @@ class TestStreamDisplayPipeline:
     """
 
     def test_goal_started(self) -> None:
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
         event = {
             "type": "soothe.cognition.agent_loop.started",
             "goal": "Analyze codebase",
@@ -286,7 +286,7 @@ class TestStreamDisplayPipeline:
 
     def test_step_started(self) -> None:
         """IG-182: Step started shows hollow circle icon."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
         pipeline.process({"type": "soothe.cognition.agent_loop.started", "goal": "test"})
 
         event = {
@@ -303,7 +303,7 @@ class TestStreamDisplayPipeline:
 
     def test_subagent_dispatched(self) -> None:
         """Legacy dispatched events are not on the curated wire; pipeline skips them."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
 
         event = {
             "type": "soothe.subagent.research.dispatched",
@@ -316,7 +316,7 @@ class TestStreamDisplayPipeline:
 
     def test_subagent_step_hidden_at_normal(self) -> None:
         """IG-089: Subagent internal steps hidden at normal verbosity."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
 
         event = {
             "type": "soothe.subagent.research.step",
@@ -329,9 +329,9 @@ class TestStreamDisplayPipeline:
         # Internal steps hidden at normal verbosity
         assert len(lines) == 0
 
-    def test_subagent_step_shown_at_detailed(self) -> None:
+    def test_subagent_explore_milestone_with_task_scope(self) -> None:
         """Curated explore milestone uses Task(explore, "...") when task_scope is set."""
-        pipeline = StreamDisplayPipeline(verbosity="detailed")
+        pipeline = StreamDisplayPipeline()
 
         event = {
             "type": "soothe.subagent.explore.milestone",
@@ -348,7 +348,7 @@ class TestStreamDisplayPipeline:
 
     def test_subagent_judgement_shown_at_normal(self) -> None:
         """Judgement wire types are not routed through the curated pipeline."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
 
         event = {
             "type": "soothe.subagent.research.judgement",
@@ -360,7 +360,7 @@ class TestStreamDisplayPipeline:
         assert len(lines) == 0
 
     def test_subagent_step_hidden_for_internal(self) -> None:
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
 
         event = {
             "type": "soothe.subagent.research.step",
@@ -371,28 +371,27 @@ class TestStreamDisplayPipeline:
 
         assert len(lines) == 0
 
-    def test_quiet_mode_filters_most_events(self) -> None:
-        pipeline = StreamDisplayPipeline(verbosity="quiet")
+    def test_goal_start_and_completion_both_emit_lines(self) -> None:
+        """Fixed UX ceiling shows goal header and completion (no quiet/normal split)."""
+        lines_done = StreamDisplayPipeline().process(
+            {
+                "type": "soothe.cognition.agent_loop.completed",
+                "goal": "test",
+                "total_steps": 3,
+            }
+        )
+        assert len(lines_done) == 1
 
-        # Goal completion should show at quiet
-        event = {
-            "type": "soothe.cognition.agent_loop.completed",
-            "goal": "test",
-            "total_steps": 3,
-        }
-        lines = pipeline.process(event)
-        assert len(lines) == 1
-
-        # Goal start should not show at quiet
-        event = {
-            "type": "soothe.cognition.agent_loop.started",
-            "goal": "test",
-        }
-        lines = pipeline.process(event)
-        assert len(lines) == 0
+        lines_start = StreamDisplayPipeline().process(
+            {
+                "type": "soothe.cognition.agent_loop.started",
+                "goal": "test",
+            }
+        )
+        assert len(lines_start) == 1
 
     def test_goal_completion(self) -> None:
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
         pipeline._context.current_goal = "Analyze codebase"
         pipeline._context.goal_start_time = 0.0
         pipeline._context.steps_completed = 3
@@ -415,7 +414,7 @@ class TestStreamDisplayPipeline:
         Tool events (soothe.tool.*) are for logging/metrics only, not display.
         They should be filtered out at NORMAL verbosity.
         """
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
 
         # Tool events should NOT be visible at NORMAL verbosity (INTERNAL)
         # Using actual registered events from file_ops/events.py
@@ -446,7 +445,7 @@ class TestStreamDisplayPipeline:
         assert len(lines) == 0  # Filtered out (INTERNAL tier)
 
     def test_subagent_completed(self) -> None:
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
 
         event = {
             "type": "soothe.subagent.research.completed",
@@ -466,7 +465,7 @@ class TestStreamDisplayPipeline:
         The task ToolMessage result path produces the authoritative completion
         line, so the curated wire event is redundant when inside a Task scope.
         """
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
         event = {
             "type": "soothe.subagent.explore.completed",
             "total_findings": 2,
@@ -479,7 +478,7 @@ class TestStreamDisplayPipeline:
 
     def test_explore_completed_without_task_scope_still_shown(self) -> None:
         """IG-340: Without task_scope, wire completed event renders normally."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
         event = {
             "type": "soothe.subagent.explore.completed",
             "total_findings": 2,
@@ -492,7 +491,7 @@ class TestStreamDisplayPipeline:
 
     def test_loop_agent_reason_shown_at_normal(self) -> None:
         """IG-225: Loop agent Reason event shows judgement + plan reasoning."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
 
         event = {
             "type": "soothe.cognition.agent_loop.reasoned",
@@ -520,7 +519,7 @@ class TestStreamDisplayPipeline:
 
     def test_loop_agent_reason_done_shows_checkmark(self) -> None:
         """IG-225: Reason event with status=done shows checkmark and plan reasoning."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
 
         event = {
             "type": "soothe.cognition.agent_loop.reasoned",
@@ -548,7 +547,7 @@ class TestStreamDisplayPipeline:
 
     def test_default_goal_achieved_skips_redundant_reasoning(self) -> None:
         """IG-265: Skip redundant reasoning line for default "Goal achieved successfully"."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
 
         event = {
             "type": "soothe.cognition.agent_loop.reasoned",
@@ -571,7 +570,7 @@ class TestStreamDisplayPipeline:
 
     def test_step_completed_with_tool_call_count(self) -> None:
         """IG-333: Step completion line includes description and tool metadata."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
         pipeline._context.current_step_description = "Explore project structure"
 
         event = {
@@ -592,7 +591,7 @@ class TestStreamDisplayPipeline:
 
     def test_step_completed_without_tool_calls(self) -> None:
         """Step completion without tools omits tool suffix."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
         pipeline._context.current_step_description = "Analyze config"
 
         event = {
@@ -611,7 +610,7 @@ class TestStreamDisplayPipeline:
 
     def test_step_completed_suppresses_when_no_description(self) -> None:
         """No redundant ● Step (done) when completion arrives without step context."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
         pipeline.process({"type": "soothe.cognition.agent_loop.started", "goal": "test"})
 
         lines = pipeline.process(
@@ -628,7 +627,7 @@ class TestStreamDisplayPipeline:
 
     def test_step_completed_uses_tracked_description_by_step_id(self) -> None:
         """Pipeline resolves description by step_id for parallel step tracking."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
 
         pipeline.process(
             {
@@ -660,7 +659,7 @@ class TestStreamDisplayPipeline:
 
     def test_loop_agent_reason_deduped_in_short_window(self) -> None:
         """IG-225: Duplicate reason events show lines on first call only."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
         event = {
             "type": "soothe.cognition.agent_loop.reasoned",
             "status": "continue",
@@ -681,7 +680,7 @@ class TestStreamDisplayPipeline:
 
     def test_capability_browser_step_renders_at_normal_verbosity(self) -> None:
         """Browser step.completed wire events are NORMAL tier — visible at normal."""
-        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline = StreamDisplayPipeline()
         event = {
             "type": "soothe.subagent.browser.step.completed",
             "step_index": 3,
@@ -693,19 +692,3 @@ class TestStreamDisplayPipeline:
         lines = pipeline.process(event)
         assert len(lines) == 1
         assert "scroll" in lines[0].content
-
-    def test_capability_browser_step_renders_at_detailed_verbosity(self) -> None:
-        """Browser step milestones still render at detailed verbosity."""
-        pipeline = StreamDisplayPipeline(verbosity="detailed")
-        event = {
-            "type": "soothe.subagent.browser.step.completed",
-            "step_index": 3,
-            "url": "https://example.com/news",
-            "action_preview": "scroll",
-            "title": "News",
-            "status": "running",
-        }
-        lines = pipeline.process(event)
-        assert len(lines) == 1
-        assert "scroll" in lines[0].content
-        assert "example.com" in lines[0].content

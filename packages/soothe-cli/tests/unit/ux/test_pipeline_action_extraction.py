@@ -5,7 +5,7 @@ from soothe_cli.cli.stream import StreamDisplayPipeline
 
 def test_on_loop_agent_reason_extracts_next_action():
     """IG-225: Verify next_action extraction with split reasoning."""
-    pipeline = StreamDisplayPipeline(verbosity="normal")
+    pipeline = StreamDisplayPipeline()
 
     event = {
         "type": "soothe.cognition.agent_loop.reasoned",
@@ -27,7 +27,7 @@ def test_on_loop_agent_reason_extracts_next_action():
 
 def test_on_loop_agent_reason_derives_from_status():
     """IG-225: Verify status → action fallback when next_action missing."""
-    pipeline = StreamDisplayPipeline(verbosity="normal")
+    pipeline = StreamDisplayPipeline()
 
     # Test valid status values
     test_cases = [
@@ -62,7 +62,7 @@ def test_on_loop_agent_reason_derives_from_status():
 
 def test_on_loop_agent_reason_deduplicates_repeated():
     """IG-225: Verify 5s dedup window for repeated actions."""
-    pipeline = StreamDisplayPipeline(verbosity="normal")
+    pipeline = StreamDisplayPipeline()
 
     event = {
         "type": "soothe.cognition.agent_loop.reasoned",
@@ -84,7 +84,7 @@ def test_on_loop_agent_reason_deduplicates_repeated():
 
 def test_on_loop_agent_reason_formats_confidence():
     """IG-225: Verify confidence percentage formatting."""
-    pipeline = StreamDisplayPipeline(verbosity="normal")
+    pipeline = StreamDisplayPipeline()
 
     event = {
         "type": "soothe.cognition.agent_loop.reasoned",
@@ -104,7 +104,7 @@ def test_on_loop_agent_reason_formats_confidence():
 
 def test_on_loop_agent_reason_defaults_confidence_when_missing():
     """IG-225: Verify default 80% confidence when missing or zero."""
-    pipeline = StreamDisplayPipeline(verbosity="normal")
+    pipeline = StreamDisplayPipeline()
 
     # Test with confidence=0
     event1 = {
@@ -138,7 +138,7 @@ def test_on_loop_agent_reason_defaults_confidence_when_missing():
 
 def test_on_loop_agent_reason_returns_empty_when_missing_all():
     """IG-225: Verify graceful skip when all metadata absent."""
-    pipeline = StreamDisplayPipeline(verbosity="normal")
+    pipeline = StreamDisplayPipeline()
 
     event = {
         "type": "soothe.cognition.agent_loop.reasoned",
@@ -151,7 +151,7 @@ def test_on_loop_agent_reason_returns_empty_when_missing_all():
 
 def test_on_loop_agent_reason_uses_complete_action_for_done():
     """IG-225: Verify 'complete' action icon for done status."""
-    pipeline = StreamDisplayPipeline(verbosity="normal")
+    pipeline = StreamDisplayPipeline()
 
     event = {
         "type": "soothe.cognition.agent_loop.reasoned",
@@ -171,7 +171,7 @@ def test_on_loop_agent_reason_uses_complete_action_for_done():
 
 def test_on_loop_agent_reason_uses_continue_icon_for_working():
     """IG-225: Verify 'continue' action icon for working status."""
-    pipeline = StreamDisplayPipeline(verbosity="normal")
+    pipeline = StreamDisplayPipeline()
 
     event = {
         "type": "soothe.cognition.agent_loop.reasoned",

@@ -44,13 +44,14 @@ This package is the **client** component that communicates with the Soothe daemo
 CLI uses `cli_config.yml`:
 
 ```yaml
-websocket:
-  host: "localhost"
-  port: 8765
+daemon:
+  transports:
+    websocket:
+      host: "127.0.0.1"
+      port: 8765
 
-ui:
-  verbosity: "normal"
-  format: "text"
+# Optional: logging_level for ~/.soothe/logs/soothe-cli.log (DEBUG, INFO, …)
+# logging_level: INFO
 
 tui:
   theme: "default"

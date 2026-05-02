@@ -11,28 +11,14 @@ import logging
 import os
 from datetime import UTC
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 # Valid values for SOOTHE_LOG_LEVEL (same names as logging module levels).
 _SOOTHE_LOG_LEVEL_ENV = "SOOTHE_LOG_LEVEL"
 _VALID_STD_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 
-# Verbosity to log level mapping
-VERBOSITY_TO_LOG_LEVEL: dict[Literal["quiet", "minimal", "normal", "detailed", "debug"], str] = {
-    "quiet": "WARNING",
-    "minimal": "INFO",
-    "normal": "INFO",
-    "detailed": "DEBUG",
-    "debug": "DEBUG",
-}
-"""Map verbosity levels to Python logging levels.
-
-Used by CLI commands to convert user-facing verbosity to log level.
-"""
-
 
 def resolve_cli_log_level(
-    verbosity: str,
     *,
     logging_level: str | None = None,
 ) -> str:
@@ -42,10 +28,9 @@ def resolve_cli_log_level(
 
     #. Environment variable ``SOOTHE_LOG_LEVEL`` (standard level name).
     #. ``logging_level`` from ``cli_config.yml`` when set to a valid level.
-    #. ``verbosity`` mapped via :data:`VERBOSITY_TO_LOG_LEVEL`.
+    #. Default ``INFO``.
 
     Args:
-        verbosity: CLI config verbosity key (e.g. ``normal``, ``debug``).
         logging_level: Optional explicit level from config (``DEBUG``, ``INFO``, …).
             Ignored when ``None`` or not a valid standard level (falls through with a
             warning).
@@ -62,13 +47,12 @@ def resolve_cli_log_level(
         if cfg_raw in _VALID_STD_LOG_LEVELS:
             return cfg_raw
         logging.getLogger(__name__).warning(
-            "Invalid logging_level %r in cli_config.yml; expected one of %s. "
-            "Falling back to verbosity mapping.",
+            "Invalid logging_level %r in cli_config.yml; expected one of %s. Falling back to INFO.",
             logging_level,
             ", ".join(sorted(_VALID_STD_LOG_LEVELS)),
         )
 
-    return VERBOSITY_TO_LOG_LEVEL.get(verbosity, "INFO")
+    return "INFO"
 
 
 class GlobalInputHistory:
@@ -213,7 +197,6 @@ def setup_logging(
 
 __all__ = [
     "GlobalInputHistory",
-    "VERBOSITY_TO_LOG_LEVEL",
     "resolve_cli_log_level",
     "setup_logging",
 ]

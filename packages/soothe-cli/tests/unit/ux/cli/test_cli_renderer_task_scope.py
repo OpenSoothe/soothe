@@ -86,6 +86,6 @@ def test_tool_join_line_includes_task_scope_once(capsys: CaptureFixture[str]) ->
         is_main=False,
         task_scope=("functions.task:2", "explore"),
     )
-    line = next(l for l in capsys.readouterr().err.splitlines() if "->" in l)
+    line = next(ln for ln in capsys.readouterr().err.splitlines() if "->" in ln)
     assert "⚙ Task(explore):#2" in line
     assert "ListFiles" in line or "list_files" in line.lower()

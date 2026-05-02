@@ -3988,12 +3988,9 @@ class SootheApp(App):
         from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
         from soothe_cli.cli.stream.pipeline import StreamDisplayPipeline
-        from soothe_cli.shared.config_loader import load_config
-        from soothe_cli.shared.display_policy import normalize_verbosity
         from soothe_cli.shared.message_processing import extract_tool_args_dict
 
-        pv = normalize_verbosity(load_config().verbosity)
-        progress_pipeline = StreamDisplayPipeline(verbosity=pv)
+        progress_pipeline = StreamDisplayPipeline()
         tool_cards: dict[str, ToolCallMessage] = {}
         assistant_cards_by_ns: dict[tuple[Any, ...], AssistantMessage] = {}
         last_user_text_by_ns: dict[tuple[Any, ...], str] = {}

@@ -13,7 +13,7 @@ def test_tui_progress_preserves_hierarchy_indent() -> None:
     IG-225: Assessment/Plan reasoning use level=2 (flat, no indent) for prominence.
     IG-333: Step completion uses level=1 like ``format_goal_done`` (no leading spaces).
     """
-    pipeline = StreamDisplayPipeline(verbosity="normal")
+    pipeline = StreamDisplayPipeline()
 
     header = _format_progress_event_lines_for_tui(
         {
@@ -38,7 +38,7 @@ def test_tui_progress_preserves_hierarchy_indent() -> None:
         pipeline=pipeline,
     )
     assert done
-    assert done[0].startswith(f"● \u2705\ufe0f ")
+    assert done[0].startswith("● \u2705\ufe0f ")
 
     # IG-225: Assessment/Plan reasoning now use level=2 (no indent) for prominence
     reason = _format_progress_event_lines_for_tui(

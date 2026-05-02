@@ -21,9 +21,6 @@ def run(
     max_iterations: int | None = typer.Option(
         None, "--max-iterations", help="Maximum autonomous iterations."
     ),
-    output_format: str = typer.Option(
-        "text", "--format", "-f", help="Output format: text or jsonl."
-    ),
 ) -> None:
     """Run autonomous agent loop for complex tasks.
 
@@ -39,7 +36,6 @@ def run(
         no_tui=True,
         autonomous=True,
         max_iterations=max_iterations,
-        output_format=output_format,
     )
 
 

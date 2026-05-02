@@ -23,7 +23,6 @@ def run_headless(
     prompt: str,
     *,
     thread_id: str | None = None,
-    output_format: str = "text",
     autonomous: bool = False,
     max_iterations: int | None = None,
 ) -> None:
@@ -83,7 +82,6 @@ def run_headless(
             cfg,
             prompt,
             thread_id=thread_id,
-            output_format=output_format,
             autonomous=autonomous,
             max_iterations=max_iterations,
         )

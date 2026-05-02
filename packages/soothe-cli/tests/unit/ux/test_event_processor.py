@@ -272,7 +272,7 @@ class TestEventProcessorOutputEventRouting:
     def test_agent_loop_completed_routes_to_progress_event(self) -> None:
         """Agent-loop completion must flow through progress-event routing."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal")
+        processor = EventProcessor(renderer)
 
         completion_event = {
             "type": "event",
@@ -297,7 +297,7 @@ class TestEventProcessorOutputEventRouting:
     def test_chitchat_phase_messages_routes_to_assistant_text(self) -> None:
         """Chitchat piggyback text uses ``messages`` + ``phase`` (IG-317)."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal")
+        processor = EventProcessor(renderer)
 
         processor.process_event(
             _stream_messages_event(
@@ -319,7 +319,7 @@ class TestEventProcessorOutputEventRouting:
     def test_batch_mode_emits_goal_completion_final_message(self) -> None:
         """Batch mode should render final goal completion from ``LoopAIMessage``-shaped dict."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal", final_output_mode="batch")
+        processor = EventProcessor(renderer, final_output_mode="batch")
 
         processor.process_event(
             _stream_messages_event(
@@ -341,7 +341,7 @@ class TestEventProcessorOutputEventRouting:
     def test_batch_mode_suppresses_goal_completion_chunks(self) -> None:
         """Batch mode should ignore goal-completion stream chunks."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal", final_output_mode="batch")
+        processor = EventProcessor(renderer, final_output_mode="batch")
 
         processor.process_event(
             _stream_messages_event(
@@ -360,7 +360,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_mode_accepts_goal_completion_chunk(self) -> None:
         """Goal-completion chunks route to assistant text in streaming mode."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
+        processor = EventProcessor(renderer, final_output_mode="streaming")
 
         processor.process_event(
             _stream_messages_event(
@@ -379,7 +379,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_mode_completed_event_stays_progress_only(self) -> None:
         """Completed event remains progress-only in streaming mode."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
+        processor = EventProcessor(renderer, final_output_mode="streaming")
 
         completion_event = {
             "type": "event",
@@ -402,7 +402,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_goal_completion_preserves_markdown_chunk_boundaries(self) -> None:
         """Streaming markdown chunks should preserve whitespace/newlines exactly."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
+        processor = EventProcessor(renderer, final_output_mode="streaming")
 
         chunk_1 = "# README Files Count Report\n\n## 1. Executive Summary\n\nThis report "
         chunk_2 = "documents the comprehensive count.\n\n## 2. Methodology\n"
@@ -438,7 +438,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_goal_completion_preserves_boundaries_when_is_chunk_false(self) -> None:
         """Non-chunk ``ai`` payloads still stream as incremental text for goal completion."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
+        processor = EventProcessor(renderer, final_output_mode="streaming")
 
         tid = {"thread_id": "tid", "phase": "goal_completion"}
         processor.process_event(
@@ -462,7 +462,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_goal_completion_keeps_raw_cross_chunk_heading_boundaries(self) -> None:
         """Streaming should preserve raw heading chunk boundaries without repair."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
+        processor = EventProcessor(renderer, final_output_mode="streaming")
 
         tid = {"thread_id": "tid", "phase": "goal_completion"}
         for content in (
@@ -488,7 +488,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_goal_completion_keeps_raw_heading_and_bold_boundaries(self) -> None:
         """Streaming should preserve raw chunk boundaries for heading/body and bold/body."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal", final_output_mode="streaming")
+        processor = EventProcessor(renderer, final_output_mode="streaming")
 
         tid = {"thread_id": "tid", "phase": "goal_completion"}
         chunks = [
@@ -541,39 +541,13 @@ class TestEventProcessorMessageDeduplication:
         assert len(renderer.calls) == initial_calls  # No new calls
 
 
-class TestEventProcessorVerbosityFiltering:
-    """Tests for verbosity-based filtering."""
+class TestEventProcessorToolAndAssistantFiltering:
+    """Tool routing and DisplayPolicy text shaping (fixed client UX; IG-343)."""
 
-    def test_quiet_verbosity_filters_tool_activity(self):
-        """Test quiet verbosity filters tool activity events."""
+    def test_tool_result_surfaces_to_renderer(self) -> None:
+        """Tool results route to on_tool_result when not headless."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="quiet")
-
-        # This should be filtered by quiet verbosity
-        tool_event = {
-            "type": "event",
-            "mode": "messages",
-            "namespace": [],
-            "data": [
-                {
-                    "type": "ToolMessage",
-                    "name": "read_file",
-                    "content": "file contents",
-                    "tool_call_id": "tc1",
-                },
-                {},
-            ],
-        }
-
-        processor.process_event(tool_event)
-
-        tool_result_calls = [c for c in renderer.calls if c[0] == "on_tool_result"]
-        assert len(tool_result_calls) == 0
-
-    def test_normal_verbosity_shows_tool_result(self) -> None:
-        """Default (normal) verbosity must surface tool stderr lines (not only detailed)."""
-        renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal")
+        processor = EventProcessor(renderer)
 
         tool_event = {
             "type": "event",
@@ -599,7 +573,7 @@ class TestEventProcessorVerbosityFiltering:
     def test_tool_message_dict_status_error_sets_is_error(self) -> None:
         """Explicit ToolMessage status=error must set is_error even when content is benign."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal")
+        processor = EventProcessor(renderer)
 
         tool_event = {
             "type": "event",
@@ -623,9 +597,9 @@ class TestEventProcessorVerbosityFiltering:
         assert len(tool_result_calls) == 1
         assert tool_result_calls[0][2]["is_error"] is True
 
-    def test_quiet_cleans_and_extracts_answer(self) -> None:
+    def test_assistant_text_removes_trailing_decorative_filler(self) -> None:
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="quiet")
+        processor = EventProcessor(renderer)
 
         msg_event = {
             "type": "event",
@@ -634,7 +608,7 @@ class TestEventProcessorVerbosityFiltering:
             "data": [
                 {
                     "type": "AIMessage",
-                    "id": "msg-quiet",
+                    "id": "msg-filler",
                     "content": "The capital of France is Paris. Let me know if you'd like more.",
                 },
                 {},
@@ -645,12 +619,11 @@ class TestEventProcessorVerbosityFiltering:
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert assistant_calls
-        # Decorative filler is removed, first sentence extracted
         assert assistant_calls[0][1][0] == "The capital of France is Paris."
 
     def test_normal_removes_decorative_filler_preserves_identity(self) -> None:
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal")
+        processor = EventProcessor(renderer)
 
         msg_event = {
             "type": "event",
@@ -679,57 +652,9 @@ class TestEventProcessorVerbosityFiltering:
         assert "The capital of France is Paris" in assistant_calls[0][1][0]
         assert "I'm Soothe" in assistant_calls[0][1][0]
 
-    def test_quiet_extracts_bare_numeric_answer(self) -> None:
-        renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="quiet")
-
-        msg_event = {
-            "type": "event",
-            "mode": "messages",
-            "namespace": [],
-            "data": [
-                {
-                    "type": "AIMessage",
-                    "id": "msg-quiet-numeric",
-                    "content": "That's 42!",
-                },
-                {},
-            ],
-        }
-
-        processor.process_event(msg_event)
-
-        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
-        assert assistant_calls
-        assert assistant_calls[0][1][0] == "42"
-
-    def test_quiet_extracts_numeric_result_from_equation(self) -> None:
-        renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="quiet")
-
-        msg_event = {
-            "type": "event",
-            "mode": "messages",
-            "namespace": [],
-            "data": [
-                {
-                    "type": "AIMessage",
-                    "id": "msg-quiet-equation",
-                    "content": "25 + 17 = 42",
-                },
-                {},
-            ],
-        }
-
-        processor.process_event(msg_event)
-
-        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
-        assert assistant_calls
-        assert assistant_calls[0][1][0] == "42"
-
     def test_normal_strips_light_embellishment_from_answer(self) -> None:
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal")
+        processor = EventProcessor(renderer)
 
         msg_event = {
             "type": "event",
@@ -753,7 +678,7 @@ class TestEventProcessorVerbosityFiltering:
 
     def test_normal_filters_protocol_but_shows_plan_update(self) -> None:
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="normal")
+        processor = EventProcessor(renderer)
 
         processor.process_event(
             {
@@ -783,3 +708,56 @@ class TestEventProcessorVerbosityFiltering:
         assert progress_calls == []
         plan_calls = [c for c in renderer.calls if c[0] == "on_plan_created"]
         assert len(plan_calls) == 1
+
+
+class TestEventProcessorHeadlessSubgraph:
+    """Headless CLI must still surface RFC-614 loop-tagged answers from Task/subagent graphs."""
+
+    def test_headless_emits_goal_completion_from_namespaced_stream(self) -> None:
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, headless_output=True)
+
+        processor.process_event(
+            {
+                "type": "event",
+                "mode": "messages",
+                "namespace": ["functions.task:0"],
+                "data": [
+                    {
+                        "type": "ai",
+                        "id": "sub-final",
+                        "content": "Found 3 README files.",
+                        "phase": "goal_completion",
+                    },
+                    {},
+                ],
+            }
+        )
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert len(assistant_calls) == 1
+        assert assistant_calls[0][1][0] == "Found 3 README files."
+        assert assistant_calls[0][2]["is_main"] is True
+
+    def test_headless_drops_unphased_subgraph_text(self) -> None:
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, headless_output=True)
+
+        processor.process_event(
+            {
+                "type": "event",
+                "mode": "messages",
+                "namespace": ["functions.task:0"],
+                "data": [
+                    {
+                        "type": "ai",
+                        "id": "sub-chatter",
+                        "content": "Internal reasoning...",
+                    },
+                    {},
+                ],
+            }
+        )
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert assistant_calls == []
