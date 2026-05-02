@@ -157,7 +157,7 @@ class WebSocketClient:
         *,
         autonomous: bool = False,
         max_iterations: int | None = None,
-        subagent: str | None = None,
+        preferred_subagent: str | None = None,
         interactive: bool = False,
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
@@ -169,7 +169,7 @@ class WebSocketClient:
             text: The user input text.
             autonomous: Whether to run in autonomous mode.
             max_iterations: Maximum iterations for autonomous mode.
-            subagent: Optional subagent name to route the query to.
+            preferred_subagent: Optional subagent hint merged into AgentLoop (IG-349).
             model: Optional ``provider:model`` override for this turn (daemon host config).
             model_params: Optional extra kwargs for model construction (JSON-serializable dict).
             attachments: Optional image attachments (``mime_type`` + base64 ``data``); IG-327.
@@ -179,8 +179,8 @@ class WebSocketClient:
             payload["autonomous"] = True
             if max_iterations is not None:
                 payload["max_iterations"] = max_iterations
-        if subagent is not None:
-            payload["subagent"] = subagent
+        if preferred_subagent is not None:
+            payload["preferred_subagent"] = preferred_subagent
         if interactive:
             payload["interactive"] = True
         if model:

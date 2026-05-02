@@ -464,6 +464,7 @@ class LoopState(BaseModel):
     last_execute_wave_parallel_multi_step: bool = False
     thread_continuation: bool = False  # IG-226: Thread continuation mode flag
     intent: Any | None = None  # IG-268: Intent classification for response length intelligence
+    unified_classification: Any | None = None  # IG-349: RoutingClassification for Plan + Execute
 
     def add_step_result(self, result: StepResult) -> None:
         """Add step result and update completed set.

@@ -652,7 +652,6 @@ def _tui_effective_ai_blocks(
     message: Any,
     *,
     ns_key: tuple[Any, ...],
-    direct_subagent_turn: bool,
     streaming_overlay: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Build content blocks for TUI streaming (text + tool calls).
@@ -668,7 +667,8 @@ def _tui_effective_ai_blocks(
     if not isinstance(message, (AIMessage, AIMessageChunk)):
         return []
 
-    allow_plain_string = (not ns_key) or direct_subagent_turn
+    # Root namespace: allow string fallback. Subgraphs: suppress plain string (avoid dup with main).
+    allow_plain_string = not ns_key
     raw_blocks = getattr(message, "content_blocks", None)
     blocks: list[dict[str, Any]] = []
     if raw_blocks:
@@ -900,10 +900,6 @@ async def execute_task_textual(
 
     # Track summarization lifecycle so spinner status and notification stay in sync.
     summarization_in_progress = False
-    # True when this daemon turn used explicit /browser, /claude, or /research routing
-    # (``send_turn(..., subagent=...)``). Replies stream on subgraph namespaces, not ().
-    direct_subagent_turn = False
-
     try:
         while True:
             interrupt_occurred = False
@@ -936,7 +932,6 @@ async def execute_task_textual(
                     subagent_name, routed_text = parse_subagent_from_input(
                         daemon_text if isinstance(daemon_text, str) else final_input
                     )
-                    direct_subagent_turn = subagent_name is not None
                     ctx_model = context.get("model") if context else None
                     raw_mp = context.get("model_params") if context else None
                     mp = raw_mp if isinstance(raw_mp, dict) else None
@@ -952,7 +947,7 @@ async def execute_task_textual(
                     await daemon_session.send_turn(
                         routed_text,
                         interactive=True,
-                        subagent=subagent_name,
+                        preferred_subagent=subagent_name,
                         model=ctx_model
                         if isinstance(ctx_model, str) and ctx_model.strip()
                         else None,
@@ -972,16 +967,11 @@ async def execute_task_textual(
                 ns_key = tuple(namespace) if namespace else ()
 
                 # Root graph uses namespace ``()``; delegated subgraphs use non-empty
-                # namespaces. Assistant *text* from subgraphs is suppressed unless the
-                # user routed with /browser|/claude|/research (avoids duplicate prose).
-                # Tool-call UI is gated by ``show_tool_ui`` (logging verbosity), not namespace.
+                # namespaces. Assistant *text* from subgraphs is suppressed (avoid duplicate
+                # prose with main). Tool-call UI is gated by ``show_tool_ui``, not namespace.
                 is_main_agent = ns_key == ()
-                suppress_subgraph_assistant_text = (not is_main_agent) and (
-                    not direct_subagent_turn
-                )
-                # IG-344: After a direct /subagent route, hide main-graph assistant prose
-                # (wire + Task card already surface the delegated work).
-                suppress_main_agent_assistant_text = direct_subagent_turn and is_main_agent
+                suppress_subgraph_assistant_text = not is_main_agent
+                suppress_main_agent_assistant_text = False
 
                 # Handle UPDATES stream - for interrupts and todos
                 if current_stream_mode == "updates":
@@ -1279,7 +1269,6 @@ async def execute_task_textual(
                     blocks = _tui_effective_ai_blocks(
                         message,
                         ns_key=ns_key,
-                        direct_subagent_turn=direct_subagent_turn,
                         streaming_overlay=streaming_overlay or None,
                     )
                     if not blocks:
@@ -1653,11 +1642,10 @@ async def execute_task_textual(
                                     )
                                     logger.debug(
                                         "Tool call card mounted: name=%s tool_call_id=%s "
-                                        "namespace=%s direct_subagent_turn=%s",
+                                        "namespace=%s",
                                         buffer_name,
                                         lookup_id,
                                         ns_key,
-                                        direct_subagent_turn,
                                     )
                                     await adapter._mount_message(tool_msg)
                                     adapter._current_tool_messages[lookup_id] = tool_msg

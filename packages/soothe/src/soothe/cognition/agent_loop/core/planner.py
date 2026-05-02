@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage
 
-from soothe.cognition.agent_loop.state.schemas import LoopState
+from soothe.cognition.agent_loop.state.schemas import AgentDecision, LoopState, StepAction
 from soothe.cognition.agent_loop.utils.json_parsing import (
     _extract_balanced_json_object,
     _load_llm_json_dict,
@@ -689,6 +689,15 @@ class LLMPlanner:
         return plan
 
     @staticmethod
+    def _preferred_subagent_step_description(description: str, subagent_name: str) -> str:
+        """User-facing step text when wiring an explicit subagent (IG-349, shared with Plan path)."""
+        desc = (description or "").strip()
+        if not desc:
+            return f"Using the {subagent_name} subagent."
+        lowered = f"{desc[0].lower()}{desc[1:]}"
+        return f"Using the {subagent_name} subagent, {lowered}"
+
+    @staticmethod
     def _apply_preferred_subagent(plan: Plan, subagent_name: str) -> Plan:
         """Override plan execution hints to route through an explicitly requested subagent.
 
@@ -707,10 +716,44 @@ class LLMPlanner:
         for step in action_steps:
             if step.execution_hint in ("tool", "auto"):
                 step.execution_hint = "subagent"
-                lowered = f"{step.description[0].lower()}{step.description[1:]}"
-                step.description = f"Using the {subagent_name} subagent, {lowered}"
+                step.description = LLMPlanner._preferred_subagent_step_description(
+                    step.description, subagent_name
+                )
         logger.info("Applied preferred_subagent=%s to %d step(s)", subagent_name, len(action_steps))
         return plan
+
+    @staticmethod
+    def _apply_preferred_subagent_to_decision(
+        decision: AgentDecision,
+        subagent_name: str,
+    ) -> AgentDecision:
+        """Apply wire ``preferred_subagent`` to ``AgentDecision`` steps (IG-349, mirrors Plan path)."""
+        if not decision.steps:
+            return decision
+        n = len(decision.steps)
+        start = 1 if n > 1 else 0
+        new_steps: list[StepAction] = []
+        for i, step in enumerate(decision.steps):
+            if i < start:
+                new_steps.append(step)
+                continue
+            new_steps.append(
+                step.model_copy(
+                    update={
+                        "subagent": subagent_name,
+                        "description": LLMPlanner._preferred_subagent_step_description(
+                            step.description, subagent_name
+                        ),
+                    }
+                )
+            )
+        out = decision.model_copy(update={"steps": new_steps})
+        logger.info(
+            "Applied preferred_subagent=%s to AgentDecision (%d action step(s))",
+            subagent_name,
+            n - start,
+        )
+        return out
 
     def _normalize_hints_in_dict(self, data: dict) -> dict:
         """Normalize execution_hint in dict before Plan creation."""
@@ -1048,6 +1091,22 @@ class LLMPlanner:
                         plan_reasoning="",
                         next_action="Retrying with simpler approach",
                     )
+
+        # IG-349: Wire preferred_subagent into AgentDecision (parity with create_plan / Plan).
+        if result is not None and result.decision is not None:
+            preferred = (
+                getattr(context.unified_classification, "preferred_subagent", None)
+                if context.unified_classification
+                else None
+            )
+            if preferred:
+                result = result.model_copy(
+                    update={
+                        "decision": self._apply_preferred_subagent_to_decision(
+                            result.decision, preferred
+                        )
+                    }
+                )
 
         # RFC-603: Apply evidence-based confidence and progress
         result.confidence = _calculate_evidence_based_confidence(state, result)

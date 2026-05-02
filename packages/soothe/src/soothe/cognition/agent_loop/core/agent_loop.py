@@ -126,6 +126,7 @@ class AgentLoop:
         loop_id: str | None = None,  # IG-246: explicit loop_id parameter
         plan_conversation_excerpts: list[str] | None = None,
         intent: Any | None = None,  # Intent classification
+        unified_classification: Any | None = None,  # IG-349: RoutingClassification
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -241,6 +242,7 @@ class AgentLoop:
             max_iterations=max_iterations,
             plan_conversation_excerpts=plan_excerpts,
             intent=intent,
+            unified_classification=unified_classification,
         )
 
         # IG-226: Set thread continuation flag for working memory context
@@ -691,6 +693,7 @@ class AgentLoop:
             available_capabilities=available_tools + available_subagents,
             recent_messages=list(state.plan_conversation_excerpts),
             completed_steps=completed_steps,
+            unified_classification=getattr(state, "unified_classification", None),
             workspace=state.workspace,
             git_status=state.git_status,
             working_memory_excerpt=wm_excerpt,

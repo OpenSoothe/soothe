@@ -562,7 +562,7 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
             text: str,
             autonomous: bool = False,  # noqa: FBT001, FBT002
             max_iterations: int | None = None,
-            subagent: str | None = None,
+            preferred_subagent: str | None = None,
         ) -> None:
             return None
 
