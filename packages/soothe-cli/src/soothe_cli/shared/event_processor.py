@@ -230,20 +230,28 @@ class EventProcessor:
     def _suppress_main_assistant_body_for_headless_obj(
         self, msg: AIMessage, *, is_main: bool
     ) -> bool:
-        """Headless stdout: never drop main-graph assistant text (unphased streams included).
+        """Headless stdout: only RFC-614 loop-tagged finals (IG-343 / IG-345).
+
+        Suppresses unphased execute-wave narration on the main graph; ``goal_completion``,
+        ``chitchat``, etc. are routed via ``assistant_output_phase`` before this path.
 
         Subgraph streams without RFC-614 phases are skipped in ``_handle_ai_message`` before
         this runs; loop-tagged subgraph finals use ``_dispatch_loop_tagged_assistant_text``.
         """
-        del msg, is_main
-        return False
+        if not (self._headless_output and is_main):
+            return False
+        lo = assistant_output_phase(msg)
+        return lo not in LOOP_ASSISTANT_OUTPUT_PHASES
 
     def _suppress_main_assistant_body_for_headless_dict(
         self, msg: dict[str, Any], *, is_main: bool, ai_wire: bool
     ) -> bool:
         """See :meth:`_suppress_main_assistant_body_for_headless_obj`."""
-        del msg, is_main, ai_wire
-        return False
+        del ai_wire
+        if not (self._headless_output and is_main):
+            return False
+        lo = assistant_output_phase(msg)
+        return lo not in LOOP_ASSISTANT_OUTPUT_PHASES
 
     def _dispatch_loop_tagged_assistant_text(
         self,
@@ -312,15 +320,17 @@ class EventProcessor:
                 self._state.final_loop_output_emitted.add((phase, namespace))
                 return
 
-        cleaned = self._clean_assistant_text(raw_text, is_streaming=False)
+        stream_like = streaming_config.get("mode") == "streaming"
+        cleaned = self._clean_assistant_text(raw_text, is_streaming=stream_like)
         if cleaned:
             self._emit_assistant_text(
                 cleaned,
                 is_main=True,
-                is_streaming=False,
+                is_streaming=not stream_like,
             )
-        self._presentation.mark_final_answer_locked()
-        self._state.final_loop_output_emitted.add((phase, namespace))
+        # Do not lock after each non-chunk segment: ``mark_final_answer_locked`` would
+        # block the next incremental emit via ``_emit_assistant_text``. Chunk finalize
+        # path above still locks after a streamed segment completes.
 
     def _emit_assistant_text(
         self,
