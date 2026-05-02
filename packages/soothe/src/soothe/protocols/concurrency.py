@@ -35,7 +35,7 @@ class ConcurrencyPolicy(BaseModel):
     """
 
     max_parallel_goals: int = 1
-    max_parallel_steps: int = 1
-    max_parallel_subagents: int = 1
+    max_parallel_steps: int = 16
+    max_parallel_subagents: int = 16
     global_max_llm_calls: int = 5
     step_parallelism: Literal["sequential", "dependency", "max"] = "dependency"

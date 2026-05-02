@@ -116,6 +116,18 @@ def _calculate_evidence_based_confidence(
     return min(max(confidence, 0.0), 1.0)  # Clamp to [0, 1]
 
 
+def _plan_phase_chat_model(model: Any) -> Any:
+    """Return model for RFC-604 assess/plan structured calls (IG-358).
+
+    Binds ``temperature=0`` when the chat model supports it so structured JSON is
+    faster and more deterministic on most providers.
+    """
+    try:
+        return model.bind(temperature=0)  # type: ignore[union-attr]
+    except Exception:
+        return model
+
+
 def _detect_completion_fallback(
     state: LoopState,
     plan_result: Any,
@@ -817,7 +829,9 @@ class LLMPlanner:
         """
         from soothe.cognition.agent_loop.state.schemas import StatusAssessment
 
-        structured_model = self._model.with_structured_output(StatusAssessment)
+        structured_model = _plan_phase_chat_model(self._model).with_structured_output(
+            StatusAssessment
+        )
 
         try:
             assessment = await structured_model.ainvoke(messages)
@@ -875,7 +889,9 @@ class LLMPlanner:
         )
         plan_messages = messages + [context_msg]
 
-        structured_model = self._model.with_structured_output(PlanGeneration)
+        structured_model = _plan_phase_chat_model(self._model).with_structured_output(
+            PlanGeneration
+        )
 
         try:
             plan_result = await structured_model.ainvoke(plan_messages)

@@ -25,7 +25,7 @@ from soothe.cognition.agent_loop.state.schemas import (
     AgentDecision,
     LoopState,
     PlanResult,
-    normalize_sequential_step_ids,
+    assign_plan_step_ids,
 )
 from soothe.cognition.agent_loop.state.state_manager import AgentLoopStateManager
 from soothe.cognition.agent_loop.state.working_memory import LoopWorkingMemory
@@ -448,7 +448,16 @@ class AgentLoop:
                 )
                 return
 
-            decision = normalize_sequential_step_ids(decision)
+            # IG-358: New plans need unique step ids vs completed waves (3-char random).
+            # plan_action keep + existing current_decision: ids already assigned — do not re-roll.
+            if plan_result.plan_action == "new":
+                reserved = set(state.dependency_completion_ids())
+                decision = assign_plan_step_ids(decision, reserved_ids=reserved)
+            elif plan_result.plan_action == "keep" and state.current_decision is None:
+                decision = assign_plan_step_ids(
+                    decision,
+                    reserved_ids=set(state.dependency_completion_ids()),
+                )
 
             if plan_result.plan_action == "new":
                 state.completed_step_ids.clear()

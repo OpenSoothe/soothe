@@ -56,7 +56,7 @@ autonomous:
 
 agentic:
   max_iterations: 10  # Default: 10, max: 50
-  max_subagent_tasks_per_wave: 2  # Cap task completions per Execute wave (0 = unlimited, 1 = stop double-delegation)
+  max_subagent_tasks_per_wave: 16  # Cap task completions per Execute wave (0 = unlimited)
   agent_loop_output_contract_enabled: true  # CoreAgent omits tool output during Execute phase
   final_response: adaptive  # adaptive | always_synthesize | always_last_execute (IG-199)
   prior_conversation_limit: 10  # Prior messages for Plan prompts (isolated threads)
@@ -98,8 +98,8 @@ execution:
   llm_call_timeout_adaptive: true
   concurrency:
     max_parallel_goals: 1
-    max_parallel_steps: 3
-    max_parallel_subagents: 3
+    max_parallel_steps: 16
+    max_parallel_subagents: 16
     global_max_llm_calls: 9
     step_parallelism: dependency  # sequential | dependency | max
   recovery:

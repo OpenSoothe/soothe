@@ -12,7 +12,12 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 
 from soothe.cognition.agent_loop.analysis.metadata_generator import (
-    DELEGATE_EVIDENCE_PREVIEW_CAP,
+    PLANNER_OUTCOME_PREVIEW_CAP,
+)
+from soothe.cognition.agent_loop.core.act_wave_finalize import (
+    DELEGATE_FINAL_WAVE_CAP,
+    compute_act_wave_finalize,
+    provenance_is_task_delegate,
 )
 from soothe.cognition.agent_loop.state.schemas import (
     AgentDecision,
@@ -43,9 +48,8 @@ class _ActStreamBudget:
 
 
 _TUPLE_LEN = 3
-# IG-355: ``task`` tool return text caps (delegate finals; not subgraph AIMessage streams)
+# ``task`` tool return text cap per invocation before joining (delegate finals).
 _DELEGATE_FINAL_PER_TASK_CAP = 80_000
-_DELEGATE_FINAL_WAVE_CAP = 120_000
 
 # Type for stream events yielded during execution
 StreamEvent = tuple[tuple[str, ...], str, Any]  # (namespace, mode, data)
@@ -66,7 +70,7 @@ class Executor:
         self,
         core_agent: CoreAgent,
         *,
-        max_parallel_steps: int = 1,
+        max_parallel_steps: int = 16,
         config: SootheConfig | None = None,
         goal_context_manager: GoalContextManager | None = None,
     ) -> None:
@@ -154,33 +158,23 @@ class Executor:
         parallel_multi_step: bool,
         delegate_final_text: str | None = None,
     ) -> None:
-        """Update state with last Execute assistant text for adaptive final response (IG-199).
+        """Apply resolved Act-wave visible text to state (IG-199, IG-355, IG-357).
 
-        When the root graph provides no AIMessage text (``iter_messages_for_act_aggregation`` is
-        root-only), ``task`` tool return bodies supply delegate finals for goal completion (IG-355).
+        Resolution is centralized in :func:`~soothe.cognition.agent_loop.core.act_wave_finalize.compute_act_wave_finalize`.
         """
+        root_text = (
+            ""
+            if parallel_multi_step
+            else self._assemble_assistant_text_from_stream_messages(messages).strip()
+        )
+        snap = compute_act_wave_finalize(
+            parallel_multi_step=parallel_multi_step,
+            root_assistant_text=root_text,
+            delegate_final_text=delegate_final_text,
+        )
         state.last_execute_wave_parallel_multi_step = parallel_multi_step
-        state.last_wave_answer_from_delegate_final = False
-        delegate = (delegate_final_text or "").strip()
-        if parallel_multi_step:
-            if delegate:
-                state.last_wave_answer_from_delegate_final = True
-                if len(delegate) > _DELEGATE_FINAL_WAVE_CAP:
-                    delegate = delegate[:_DELEGATE_FINAL_WAVE_CAP]
-                state.last_execute_assistant_text = delegate
-            else:
-                state.last_execute_assistant_text = None
-            return
-        root_text = self._assemble_assistant_text_from_stream_messages(messages).strip()
-        if delegate:
-            state.last_wave_answer_from_delegate_final = True
-            if len(delegate) > _DELEGATE_FINAL_WAVE_CAP:
-                delegate = delegate[:_DELEGATE_FINAL_WAVE_CAP]
-            state.last_execute_assistant_text = delegate
-        elif root_text:
-            state.last_execute_assistant_text = root_text
-        else:
-            state.last_execute_assistant_text = None
+        state.last_wave_answer_from_delegate_final = provenance_is_task_delegate(snap)
+        state.last_execute_assistant_text = snap.visible_text
 
     def _assemble_assistant_text_from_stream_messages(self, messages: list[BaseMessage]) -> str:
         """Extract assistant-visible text from CoreAgent stream message list.
@@ -395,8 +389,8 @@ class Executor:
                     outcome_data["output_summary"] = create_output_summary(output)
                     stripped = output.strip()
                     if stripped:
-                        cap = DELEGATE_EVIDENCE_PREVIEW_CAP
-                        outcome_data["delegate_evidence_preview"] = stripped[:cap] + (
+                        cap = PLANNER_OUTCOME_PREVIEW_CAP
+                        outcome_data["wave_join_preview"] = stripped[:cap] + (
                             "…" if len(stripped) > cap else ""
                         )
 
@@ -1080,7 +1074,7 @@ class Executor:
                             delegate_task_final_parts.append(clipped)
 
                     logger.debug(
-                        "[Act Phase TOOL] #%d %s(%s) → %s, %dB%s",
+                        "[Act TOOL #%d] %s(%s) → %s, %dB%s",
                         tool_call_count,
                         tool_name,
                         tool_call_id,
@@ -1130,8 +1124,8 @@ class Executor:
         delegate_final_text = ""
         if delegate_task_final_parts:
             delegate_final_text = "\n\n".join(delegate_task_final_parts)
-            if len(delegate_final_text) > _DELEGATE_FINAL_WAVE_CAP:
-                delegate_final_text = delegate_final_text[:_DELEGATE_FINAL_WAVE_CAP]
+            if len(delegate_final_text) > DELEGATE_FINAL_WAVE_CAP:
+                delegate_final_text = delegate_final_text[:DELEGATE_FINAL_WAVE_CAP]
 
         # Final yield with combined output and tool call count
         yield join_text_fragments(chunks), None, tool_call_count, messages, delegate_final_text
