@@ -11,8 +11,8 @@ import json
 import re
 from typing import Any
 
-from soothe_cli.shared.message_processing import _normalize_tool_name_for_arg_map
-from soothe_cli.shared.tool_call_resolution import tool_args_meaningful
+from soothe_cli.shared.tools.message_processing import _normalize_tool_name_for_arg_map
+from soothe_cli.shared.tools.tool_call_resolution import tool_args_meaningful
 
 # Tools whose header is still useful when kwargs are omitted (workspace default).
 _TOOLS_ALLOW_STREAM_MOUNT_WITHOUT_MEANINGFUL_ARGS: frozenset[str] = frozenset(

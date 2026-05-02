@@ -31,7 +31,7 @@ def show_commands(console: Console) -> None:
     table.add_column("Description")
 
     # Import COMMANDS here to avoid circular reference at module load
-    from soothe_cli.shared.slash_commands import COMMANDS
+    from soothe_cli.shared.commands.slash_commands import COMMANDS
 
     for cmd, entry in COMMANDS.items():
         table.add_row(cmd, entry.get("description", ""))

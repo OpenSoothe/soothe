@@ -16,6 +16,7 @@ class PlanStep(BaseModel):
         id: Unique step identifier.
         description: What this step should accomplish.
         execution_hint: Preferred execution method.
+        subagent: Delegate name when routing through a subagent (parity with ``StepAction.subagent``, IG-352).
         status: Current step status.
         result: Output from execution (set after completion).
         depends_on: IDs of steps that must complete before this one.
@@ -25,6 +26,7 @@ class PlanStep(BaseModel):
     id: str
     description: str
     execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto"
+    subagent: str | None = None
     status: Literal["pending", "in_progress", "completed", "failed"] = "pending"
     result: str | None = None
     depends_on: list[str] = Field(default_factory=list)

@@ -52,14 +52,6 @@ def add_help_alias(nested_app: typer.Typer) -> None:
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
-    config: Annotated[
-        str | None,
-        typer.Option(
-            "--config",
-            "-c",
-            help="Ignored for client settings; edit ~/.soothe/config/cli_config.yml instead.",
-        ),
-    ] = None,
     prompt: Annotated[
         str | None,
         typer.Option(
@@ -96,7 +88,6 @@ def main(
     Examples:
         soothe                           # Interactive TUI mode
         soothe -p "Research AI advances" # Headless single-prompt mode
-        soothe --config custom.yml       # Ignored for client settings; use ~/.soothe/config/cli_config.yml
         soothe loop list                 # List AgentLoop instances
     """
     # Handle -h/--help flag
@@ -115,7 +106,6 @@ def main(
 
         run_impl(
             prompt=prompt,
-            config=config,
             thread_id=None,
             no_tui=no_tui,
             autonomous=False,
@@ -132,8 +122,8 @@ def main(
 # management lives under `soothe loop <subcommand>`.
 
 from soothe_cli.cli.commands.autopilot_cmd import app as _autopilot_app  # noqa: E402
+from soothe_cli.cli.commands.loop_cmd import loop_app as _loop_app  # noqa: E402
 from soothe_cli.cli.commands.thread_cmd import thread_app as _thread_app  # noqa: E402
-from soothe_cli.loop_commands import loop_app as _loop_app  # noqa: E402
 
 for _sub_app, _name in (
     (_thread_app, "thread"),

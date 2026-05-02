@@ -154,7 +154,7 @@ class ToolOutputFormatter:
         # Route to appropriate formatter
         try:
             # Import formatters (lazy import to avoid circular dependencies)
-            from soothe_cli.shared.tool_formatters import (
+            from soothe_cli.shared.tools.tool_formatters import (
                 ExecutionFormatter,
                 FallbackFormatter,
                 FileOpsFormatter,
@@ -201,7 +201,7 @@ class ToolOutputFormatter:
                 e,
                 exc_info=True,
             )
-            from soothe_cli.shared.tool_formatters import FallbackFormatter
+            from soothe_cli.shared.tools.tool_formatters import FallbackFormatter
 
             formatter = FallbackFormatter()
             return formatter.format(tool_name, result)

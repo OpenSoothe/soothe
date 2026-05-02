@@ -7,19 +7,43 @@ This package provides:
 - Abstract renderer protocol for CLI/TUI
 - Shared message processing and utilities
 - Slash command handlers and plan rendering (IG-176)
+
+Reorganized into functional subdirectories (IG-351):
+- core/: RFC-0019 unified event processing architecture
+- tools/: Tool call/result handling utilities
+- commands/: Slash command routing and handling
+- events/: Event handling and filtering utilities
+- rendering/: Rendering base classes for CLI and TUI
 """
 
 from soothe_sdk.utils import setup_logging
 
+# Import from commands subdirectory
+from soothe_cli.shared.commands.slash_commands import (
+    KEYBOARD_SHORTCUTS,
+    SLASH_COMMANDS,
+    parse_autonomous_command,
+    show_commands,
+    show_config,
+    show_history,
+    show_keymaps,
+    show_memory,
+    show_policy,
+)
 from soothe_cli.shared.config_loader import load_config
-from soothe_cli.shared.display_policy import (
+
+# Import from core subdirectory (RFC-0019 architecture)
+from soothe_cli.shared.core import EventProcessor, ProcessorState, RendererProtocol
+
+# Import from events subdirectory
+from soothe_cli.shared.events import DisplayPolicy
+from soothe_cli.shared.events.display_policy import (
     INTERNAL_EVENT_TYPES,
     INTERNAL_JSON_KEYS,
     SKIP_EVENT_TYPES,
-    DisplayPolicy,
     create_display_policy,
 )
-from soothe_cli.shared.essential_events import (
+from soothe_cli.shared.events.essential_events import (
     ESSENTIAL_PROGRESS_EVENT_TYPES,
     GOAL_START_EVENT_TYPES,
     LOOP_REASON_EVENT_TYPE,
@@ -30,8 +54,9 @@ from soothe_cli.shared.essential_events import (
     is_step_complete_event_type,
     is_step_start_event_type,
 )
-from soothe_cli.shared.event_processor import EventProcessor
-from soothe_cli.shared.message_processing import (
+
+# Import from tools subdirectory
+from soothe_cli.shared.tools.message_processing import (
     accumulate_tool_call_chunks,
     coerce_tool_call_args_to_dict,
     extract_tool_args_dict,
@@ -43,20 +68,7 @@ from soothe_cli.shared.message_processing import (
     tool_calls_have_any_arg_dict,
     try_parse_pending_tool_call_args,
 )
-from soothe_cli.shared.processor_state import ProcessorState
-from soothe_cli.shared.renderer_protocol import RendererProtocol
-from soothe_cli.shared.rendering import update_name_map_from_tool_calls
-from soothe_cli.shared.slash_commands import (
-    KEYBOARD_SHORTCUTS,
-    SLASH_COMMANDS,
-    parse_autonomous_command,
-    show_commands,
-    show_config,
-    show_history,
-    show_keymaps,
-    show_memory,
-    show_policy,
-)
+from soothe_cli.shared.tools.rendering import update_name_map_from_tool_calls
 
 __all__ = [
     "INTERNAL_EVENT_TYPES",

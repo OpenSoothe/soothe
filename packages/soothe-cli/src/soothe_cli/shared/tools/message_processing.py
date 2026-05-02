@@ -167,7 +167,7 @@ def extract_tool_brief(tool_name: str, content: str | dict | Any, max_length: in
         "✓ Done (6 chars output)"
     """
     # Use semantic formatter for tool-specific summarization
-    from soothe_cli.shared.tool_output_formatter import ToolOutputFormatter
+    from soothe_cli.shared.tools.tool_output_formatter import ToolOutputFormatter
 
     try:
         formatter = ToolOutputFormatter()

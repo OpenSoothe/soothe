@@ -13,8 +13,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from soothe_cli.shared.tool_call_resolution import infer_tool_name_from_call_id
-from soothe_cli.shared.tool_message_format import (
+from soothe_cli.shared.tools.tool_call_resolution import infer_tool_name_from_call_id
+from soothe_cli.shared.tools.tool_message_format import (
     format_tool_message_content,
     run_python_envelope_indicates_failure,
     try_parse_run_python_result_envelope,
