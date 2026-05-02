@@ -701,9 +701,12 @@ class LLMPlanner:
     def _apply_preferred_subagent(plan: Plan, subagent_name: str) -> Plan:
         """Override plan execution hints to route through an explicitly requested subagent.
 
-        Skips the first step (typically "understand requirements") and the last
-        step if it looks like a summary/validation step, so only the core action
-        steps are delegated.
+        Action steps (same skip rule as ``_apply_preferred_subagent_to_decision``: skip the
+        first step when the plan has more than one step) get ``PlanStep.subagent`` set so the
+        delegate is explicit. Tool/auto hints become ``execution_hint=subagent`` with rewritten
+        descriptions. DeepAgents surfaces delegation as the ``task`` tool; Act streaming turns
+        those completions into RFC-211 outcomes that ``PlanPhase`` feeds back like other tools
+        (IG-352).
 
         Args:
             plan: Plan to modify (mutated in place and returned).
@@ -714,6 +717,7 @@ class LLMPlanner:
         """
         action_steps = plan.steps[1:] if len(plan.steps) > 1 else plan.steps
         for step in action_steps:
+            step.subagent = subagent_name
             if step.execution_hint in ("tool", "auto"):
                 step.execution_hint = "subagent"
                 step.description = LLMPlanner._preferred_subagent_step_description(

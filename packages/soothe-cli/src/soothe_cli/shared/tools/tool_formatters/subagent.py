@@ -1,41 +1,37 @@
-"""Fallback formatter for unknown tools."""
+"""Subagent tool formatter for brief result display.
+
+Task and Research tools should show brief status, not full result content.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from soothe_sdk.client.protocol import preview_first
-
-from soothe_cli.shared.tool_formatters.base import BaseFormatter
-from soothe_cli.shared.tool_output_formatter import ToolBrief
-
-# RFC-0020 display constraints
-MAX_SUMMARY_LENGTH = 50
-MAX_DETAIL_LENGTH = 80
+from soothe_cli.shared.tools.tool_formatters.base import BaseFormatter
+from soothe_cli.shared.tools.tool_output_formatter import ToolBrief
 
 
-class FallbackFormatter(BaseFormatter):
-    """Fallback formatter for unknown tools.
+class SubagentFormatter(BaseFormatter):
+    """Formatter for subagent tools (task, research).
 
-    Provides simple truncation for tools that don't have specific formatters,
-    preserving consistent tool output formatting.
+    Shows brief completion status without full result content.
     """
 
-    def format(self, tool_name: str, result: Any) -> ToolBrief:  # noqa: ARG002
-        """Format unknown tool result with simple truncation.
+    def format(self, tool_name: str, result: Any) -> ToolBrief:
+        """Format subagent result with brief status.
 
         Args:
-            tool_name: Name of the tool (unused, for logging).
-            result: Tool result (can be str, dict, or other).
+            tool_name: Name of the subagent tool (task, research).
+            result: Tool result (typically long text output).
 
         Returns:
-            ToolBrief with truncated content.
+            ToolBrief with brief status and optional short preview.
 
         Example:
-            >>> formatter = FallbackFormatter()
-            >>> brief = formatter.format("unknown_tool", "Some long output...")
-            >>> brief.icon
-            '✓'
+            >>> formatter = SubagentFormatter()
+            >>> brief = formatter.format("task", "Long result text...")
+            >>> brief.to_display()
+            '✓ Completed'
         """
         # Handle string results
         if isinstance(result, str):
@@ -44,31 +40,30 @@ class FallbackFormatter(BaseFormatter):
             is_error = any(indicator in result.lower() for indicator in error_indicators)
 
             if is_error:
-                # Extract error message (first line or first 80 chars)
+                # Extract first line of error
                 first_line = result.split("\n")[0].strip()
-                error_msg = preview_first(first_line, 80)
+                error_preview = first_line[:80] if len(first_line) > 80 else first_line
                 return ToolBrief(
                     icon="✗",
                     summary="Failed",
-                    detail=error_msg,
+                    detail=error_preview,
                     metrics={"error": True},
                 )
 
-            # Success - truncate to 50 chars for summary
-            summary = preview_first(result.replace("\n", " ").strip(), MAX_SUMMARY_LENGTH)
-
-            # Detail is first 80 chars if longer than summary
-            detail = None
-            if len(result) > MAX_SUMMARY_LENGTH:
-                detail = preview_first(result.replace("\n", " ").strip(), MAX_DETAIL_LENGTH)
-
-            return ToolBrief(icon="✓", summary=summary, detail=detail)
+            # Success - show brief status only, no content preview
+            # Subagent results are typically very long and should not be shown inline
+            return ToolBrief(
+                icon="✓",
+                summary="Completed",
+                detail=None,  # No content preview
+                metrics={"result_length": len(result)},
+            )
 
         # Handle dict results
         if isinstance(result, dict):
             # Check for error field
             if "error" in result:
-                error_msg = preview_first(str(result["error"]), 80)
+                error_msg = str(result["error"])[:80]
                 return ToolBrief(
                     icon="✗",
                     summary="Failed",
@@ -76,7 +71,7 @@ class FallbackFormatter(BaseFormatter):
                     metrics={"error": True},
                 )
 
-            # Success - show dict summary
+            # Success - show brief status
             field_count = len(result)
             return ToolBrief(
                 icon="✓",
@@ -91,7 +86,7 @@ class FallbackFormatter(BaseFormatter):
 
             if isinstance(result, ToolOutput):
                 if not result.success:
-                    error_msg = preview_first(result.error, 80) if result.error else "Unknown error"
+                    error_msg = result.error[:80] if result.error else "Unknown error"
                     return ToolBrief(
                         icon="✗",
                         summary="Failed",
@@ -108,12 +103,11 @@ class FallbackFormatter(BaseFormatter):
                         metrics={"silent_failure": True},
                     )
 
-                # Has data
-                data_type = type(result.data).__name__ if result.data else "None"
+                # Has data - show brief status
                 return ToolBrief(
                     icon="✓",
                     summary="Completed",
-                    detail=f"data: {data_type}",
+                    detail=None,  # No content preview
                     metrics={"has_data": result.data is not None},
                 )
         except ImportError:

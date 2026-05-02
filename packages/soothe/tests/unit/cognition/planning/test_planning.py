@@ -396,3 +396,28 @@ class TestLLMPlanner:
 
         assert plan.goal == "test goal"
         assert len(plan.steps) == 1
+
+    def test_apply_preferred_subagent_sets_plan_step_subagent(self) -> None:
+        """Plan path names the delegate on action steps (IG-352, parity with AgentDecision)."""
+        plan = Plan(
+            goal="g",
+            steps=[
+                PlanStep(id="1", description="Understand goal", execution_hint="auto"),
+                PlanStep(id="2", description="Do work", execution_hint="tool"),
+            ],
+        )
+        out = LLMPlanner._apply_preferred_subagent(plan, "claude")
+        assert out.steps[0].subagent is None
+        assert out.steps[1].subagent == "claude"
+        assert out.steps[1].execution_hint == "subagent"
+
+    def test_apply_preferred_subagent_single_step_names_subagent(self) -> None:
+        """With one step, that step is an action step and receives the delegate name."""
+        plan = Plan(
+            goal="g",
+            steps=[PlanStep(id="1", description="Only step", execution_hint="tool")],
+        )
+        out = LLMPlanner._apply_preferred_subagent(plan, "browser")
+        assert len(out.steps) == 1
+        assert out.steps[0].subagent == "browser"
+        assert out.steps[0].execution_hint == "subagent"

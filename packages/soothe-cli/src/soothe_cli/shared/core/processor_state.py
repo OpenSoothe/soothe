@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from soothe_sdk.client.schemas import Plan
 
-    from soothe_cli.shared.stream_accumulator import StreamingTextAccumulator
+    from soothe_cli.shared.events.stream_accumulator import StreamingTextAccumulator
 
 
 @dataclass

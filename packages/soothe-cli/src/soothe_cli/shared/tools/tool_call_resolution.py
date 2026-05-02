@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from soothe_cli.shared.message_processing import (
+from soothe_cli.shared.tools.message_processing import (
     extract_tool_args_dict,
     normalize_tool_calls_list,
     try_parse_pending_tool_call_args,

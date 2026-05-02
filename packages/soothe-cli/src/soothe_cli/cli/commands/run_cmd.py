@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 def run_impl(
     prompt: str | None,
-    config: str | None,
     thread_id: str | None,
     no_tui: bool,  # noqa: FBT001
     autonomous: bool,  # noqa: FBT001
@@ -29,8 +28,6 @@ def run_impl(
 
     Args:
         prompt: Optional prompt for headless mode
-        config: Deprecated; passed through for ``--config`` compatibility (ignored for
-            client settings; see ``load_config``).
         thread_id: Thread ID to resume
         no_tui: Force headless mode
         autonomous: Enable autonomous iteration mode
@@ -41,7 +38,7 @@ def run_impl(
     startup_start = time.perf_counter()
 
     try:
-        cfg = load_config(config)
+        cfg = load_config()
         log_level = resolve_cli_log_level(logging_level=cfg.logging_level)
         log_file = Path(SOOTHE_HOME) / "logs" / "soothe-cli.log"
         setup_logging(log_level, log_file=log_file)

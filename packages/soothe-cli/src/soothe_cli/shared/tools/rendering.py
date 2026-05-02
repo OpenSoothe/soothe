@@ -14,7 +14,7 @@ __all__ = [
 
 def _display_subagent_name(name: str) -> str:
     """Return friendly display name for a subagent id."""
-    from soothe_cli.shared.subagent_routing import SUBAGENT_DISPLAY_NAMES
+    from soothe_cli.shared.commands.subagent_routing import SUBAGENT_DISPLAY_NAMES
 
     return SUBAGENT_DISPLAY_NAMES.get(name.lower(), name.replace("_", " ").title())
 

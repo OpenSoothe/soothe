@@ -26,8 +26,11 @@ from soothe_sdk.ux.task_namespace import (
     resolve_task_scope_for_namespace,
 )
 
-from soothe_cli.shared.display_policy import DisplayPolicy
-from soothe_cli.shared.message_processing import (
+from soothe_cli.shared.core.presentation_engine import PresentationEngine
+from soothe_cli.shared.core.processor_state import ProcessorState
+from soothe_cli.shared.events.display_policy import DisplayPolicy
+from soothe_cli.shared.events.tui_trace_log import log_tui_trace
+from soothe_cli.shared.tools.message_processing import (
     accumulate_tool_call_chunks,
     extract_tool_args_dict,
     extract_tool_brief,
@@ -37,19 +40,16 @@ from soothe_cli.shared.message_processing import (
     tool_calls_have_any_arg_dict,
     try_parse_pending_tool_call_args,
 )
-from soothe_cli.shared.presentation_engine import PresentationEngine
-from soothe_cli.shared.processor_state import ProcessorState
-from soothe_cli.shared.rendering import update_name_map_from_tool_calls
-from soothe_cli.shared.tool_card_payload import (
+from soothe_cli.shared.tools.rendering import update_name_map_from_tool_calls
+from soothe_cli.shared.tools.tool_card_payload import (
     extract_tool_result_card_payload,
     infer_tool_output_suggests_error,
 )
-from soothe_cli.shared.tui_trace_log import log_tui_trace
 
 if TYPE_CHECKING:
     from soothe_sdk.client.schemas import Plan
 
-    from soothe_cli.shared.renderer_protocol import RendererProtocol
+    from soothe_cli.shared.core.renderer_protocol import RendererProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -393,7 +393,7 @@ class EventProcessor:
             return
 
         # Find rendering handler from registry
-        from soothe_cli.shared.command_router import find_command_by_daemon_command
+        from soothe_cli.shared.commands.command_router import find_command_by_daemon_command
 
         entry = find_command_by_daemon_command(command)
         if entry and entry.get("handler") and data:
