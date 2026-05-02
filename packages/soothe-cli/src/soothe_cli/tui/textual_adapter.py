@@ -290,7 +290,7 @@ def _format_task_scoped_tool_invocation_line(
     tool_name: str,
     tool_args: dict[str, Any],
 ) -> str:
-    """One stderr-style line matching ``CliRenderer.on_tool_call`` for Task subgraph tools."""
+    """One stderr-style line for Task subgraph tools (⚙ prefix, display name, args)."""
     from soothe_cli.cli.task_scope_display import format_task_scope_prefix
 
     display_name = get_tool_display_name(tool_name)

@@ -129,7 +129,7 @@ class PresentationEngine:
     ) -> str:
         """One-line tool result for TUI/CLI parity (brief + summarize + icon + duration).
 
-        Mirrors :meth:`soothe_cli.cli.renderer.CliRenderer.on_tool_result` text assembly
+        Assembles the same one-line text as TUI tool cards and trace views
         after ``extract_tool_brief`` / ``summarize_tool_result``.
 
         Args:

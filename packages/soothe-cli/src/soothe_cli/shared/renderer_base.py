@@ -17,7 +17,7 @@ class RendererBase:
     - Shared formatting helpers
     - Common display utilities
 
-    Both CliRenderer and TuiRenderer inherit from this base class.
+    ``HeadlessCliRenderer`` and TUI message layers inherit from this base class.
     """
 
     @staticmethod
