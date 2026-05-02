@@ -233,54 +233,6 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
             response[:30],
         )
 
-    # -- direct subagent routing --------------------------------------------
-
-    async def _run_direct_subagent(
-        self,
-        user_input: str,
-        subagent_name: str,
-        state: Any,
-    ) -> AsyncGenerator[StreamChunk]:
-        """Direct routing to a specific subagent bypassing classification.
-
-        Args:
-            user_input: The user's query text.
-            subagent_name: Name of the subagent to route to.
-            state: Runner state (for thread_id tracking).
-        """
-        from soothe.cognition.intention import RoutingClassification  # IG-226: New intention module
-
-        logger.debug("Direct subagent routing: %s - %s", subagent_name, user_input[:50])
-
-        # Create minimal classification that routes to the specified subagent
-        routing = RoutingClassification(
-            task_complexity="medium",
-            preferred_subagent=subagent_name,
-            routing_hint="subagent",
-        )
-        state.unified_classification = routing  # Direct assignment (no conversion needed)
-
-        # Inject prior thread messages into subagent context (IG-140)
-        prior_messages = getattr(state, "prior_messages", "")
-        enhanced_input = user_input
-        if prior_messages:
-            # Prepend prior messages to user input as context
-            enhanced_input = f"{prior_messages}\n\nCurrent request: {user_input}"
-            logger.debug("Enhanced subagent input with prior thread messages")
-
-        # Run pre-stream work then stream directly with enhanced input
-        collected_chunks = [
-            chunk
-            async for chunk in self._pre_stream_independent(
-                enhanced_input, state, complexity="medium"
-            )
-        ]
-        for chunk in collected_chunks:
-            yield chunk
-
-        async for chunk in self._stream_phase(enhanced_input, state):
-            yield chunk
-
     # -- LangGraph stream with HITL loop ------------------------------------
 
     async def _ensure_checkpointer_initialized(self) -> None:
