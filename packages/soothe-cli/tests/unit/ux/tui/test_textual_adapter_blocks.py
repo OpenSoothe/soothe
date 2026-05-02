@@ -80,23 +80,16 @@ def test_defer_first_tool_mount_only_on_explicit_nonfinal_chunk() -> None:
 def test_string_content_fallback_when_no_content_blocks_root() -> None:
     """Daemon-style AIMessage with only ``content`` must yield a text block."""
     msg = AIMessage(content="Hello from daemon wire format")
-    blocks = _tui_effective_ai_blocks(msg, ns_key=(), direct_subagent_turn=False)
+    blocks = _tui_effective_ai_blocks(msg, ns_key=())
     assert blocks == [{"type": "text", "text": "Hello from daemon wire format"}]
 
 
-def test_string_content_when_subagent_routed() -> None:
-    """Subgraph streams may omit blocks; allow when ``direct_subagent_turn``."""
-    msg = AIMessage(content="Subagent reply")
-    blocks = _tui_effective_ai_blocks(msg, ns_key=("graphs", "n1"), direct_subagent_turn=True)
-    assert blocks == [{"type": "text", "text": "Subagent reply"}]
-
-
-def test_plain_string_suppressed_for_nested_without_direct_route() -> None:
+def test_plain_string_suppressed_for_nested_unified_loop() -> None:
     """Task sidecar subgraph: do not invent text blocks (main agent summarizes)."""
     msg = create_autospec(AIMessage, instance=True)
     msg.content = "hidden"
     msg.content_blocks = []
-    blocks = _tui_effective_ai_blocks(msg, ns_key=("graphs", "n1"), direct_subagent_turn=False)
+    blocks = _tui_effective_ai_blocks(msg, ns_key=("graphs", "n1"))
     assert blocks == []
 
 
@@ -105,13 +98,13 @@ def test_prefers_content_blocks_when_present() -> None:
         content="ignored when blocks present",
         content_blocks=[{"type": "text", "text": "from blocks"}],
     )
-    blocks = _tui_effective_ai_blocks(msg, ns_key=(), direct_subagent_turn=False)
+    blocks = _tui_effective_ai_blocks(msg, ns_key=())
     assert blocks == [{"type": "text", "text": "from blocks"}]
 
 
 def test_chunk_string_fallback() -> None:
     msg = AIMessageChunk(content="partial")
-    blocks = _tui_effective_ai_blocks(msg, ns_key=(), direct_subagent_turn=False)
+    blocks = _tui_effective_ai_blocks(msg, ns_key=())
     assert blocks == [{"type": "text", "text": "partial"}]
 
 
@@ -129,7 +122,7 @@ def test_dict_payload_with_aimessage_type_string_yields_tool_blocks() -> None:
             }
         ],
     }
-    blocks = _tui_effective_ai_blocks(msg, ns_key=(), direct_subagent_turn=False)
+    blocks = _tui_effective_ai_blocks(msg, ns_key=())
     assert any(b.get("type") == "tool_call" for b in blocks)
 
 
@@ -146,7 +139,7 @@ def test_tool_calls_attr_without_content_blocks() -> None:
             }
         ],
     )
-    blocks = _tui_effective_ai_blocks(msg, ns_key=(), direct_subagent_turn=False)
+    blocks = _tui_effective_ai_blocks(msg, ns_key=())
     assert blocks == [
         {
             "type": "tool_call",
@@ -172,7 +165,7 @@ def test_nonstandard_tool_use_expands_to_tool_call() -> None:
             }
         ]
     )
-    blocks = _tui_effective_ai_blocks(msg, ns_key=(), direct_subagent_turn=False)
+    blocks = _tui_effective_ai_blocks(msg, ns_key=())
     assert blocks == [
         {
             "type": "tool_call",
@@ -196,7 +189,7 @@ def test_tool_calls_visible_on_nested_namespace_without_direct_route() -> None:
             }
         ],
     )
-    blocks = _tui_effective_ai_blocks(msg, ns_key=("graphs", "n1"), direct_subagent_turn=False)
+    blocks = _tui_effective_ai_blocks(msg, ns_key=("graphs", "n1"))
     assert blocks == [
         {
             "type": "tool_call",

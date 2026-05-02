@@ -41,7 +41,7 @@ async def test_handle_routing_command_sets_subagent_for_browser() -> None:
 
     await handle_routing_command("/browser open example.com", console, client)
 
-    client.send_input.assert_awaited_once_with("open example.com", subagent="browser")
+    client.send_input.assert_awaited_once_with("open example.com", preferred_subagent="browser")
 
 
 @pytest.mark.asyncio
@@ -53,7 +53,7 @@ async def test_handle_routing_command_sets_subagent_for_explore() -> None:
 
     await handle_routing_command("/explore find Python files", console, client)
 
-    client.send_input.assert_awaited_once_with("find Python files", subagent="explore")
+    client.send_input.assert_awaited_once_with("find Python files", preferred_subagent="explore")
 
 
 @pytest.mark.asyncio
@@ -65,4 +65,4 @@ async def test_handle_routing_command_plan_untagged() -> None:
 
     await handle_routing_command("/plan refactor the module", console, client)
 
-    client.send_input.assert_awaited_once_with("/plan refactor the module", subagent=None)
+    client.send_input.assert_awaited_once_with("/plan refactor the module", preferred_subagent=None)

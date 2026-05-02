@@ -72,8 +72,12 @@ class MessageRouter:
                     if isinstance(max_iterations, int) and max_iterations > 0
                     else None
                 )
-                subagent = msg.get("subagent")
-                subagent = subagent.strip() or None if isinstance(subagent, str) else None
+                preferred_subagent = msg.get("preferred_subagent")
+                preferred_subagent = (
+                    preferred_subagent.strip() or None
+                    if isinstance(preferred_subagent, str)
+                    else None
+                )
                 raw_model = msg.get("model")
                 model = (
                     raw_model.strip() if isinstance(raw_model, str) and raw_model.strip() else None
@@ -91,7 +95,7 @@ class MessageRouter:
                     "text": text,
                     "autonomous": bool(msg.get("autonomous", False)),
                     "max_iterations": parsed_max,
-                    "subagent": subagent,
+                    "preferred_subagent": preferred_subagent,
                     "client_id": client_id,
                     "interactive": bool(msg.get("interactive", False)),
                     "model": model,
@@ -949,7 +953,7 @@ class MessageRouter:
                 "text": envelope.prompt,
                 "autonomous": False,
                 "max_iterations": None,
-                "subagent": None,
+                "preferred_subagent": None,
                 "client_id": client_id,
                 "interactive": True,
             },
@@ -1925,7 +1929,7 @@ class MessageRouter:
                 "text": content,
                 "autonomous": bool(msg.get("autonomous", False)),
                 "max_iterations": msg.get("max_iterations"),
-                "subagent": msg.get("subagent"),
+                "preferred_subagent": msg.get("preferred_subagent"),
                 "client_id": client_id,
                 "interactive": bool(msg.get("interactive", False)),
                 "model": msg.get("model"),

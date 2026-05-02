@@ -100,6 +100,24 @@ class Executor:
             return 0
         return max(0, int(self._config.agentic.max_subagent_tasks_per_wave))
 
+    @staticmethod
+    def _execute_graph_input(
+        messages: list[Any],
+        *,
+        unified_classification: Any | None = None,
+        workspace: str | None = None,
+        git_status: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Build LangGraph input for execute waves (IG-349: mirrors runner ``_stream_phase`` keys)."""
+        out: dict[str, Any] = {"messages": messages}
+        if unified_classification is not None:
+            out["unified_classification"] = unified_classification
+        if workspace:
+            out["workspace"] = workspace
+        if git_status is not None:
+            out["git_status"] = git_status
+        return out
+
     def _extract_token_usage(self, messages: list[BaseMessage]) -> dict[str, int]:
         """Extract token usage from last AIMessage response metadata.
 
@@ -405,6 +423,8 @@ class Executor:
                     stream_thread_id=(
                         f"{logical_tid}__p{step.id}" if len(steps) > 1 else logical_tid
                     ),
+                    unified_classification=getattr(state, "unified_classification", None),
+                    git_status=state.git_status,
                 )
             )
             for step in steps
@@ -557,7 +577,12 @@ class Executor:
                 wave_id=wave_id,
             )
             stream = self.core_agent.astream(
-                {"messages": [human_msg]},
+                self._execute_graph_input(
+                    [human_msg],
+                    unified_classification=getattr(state, "unified_classification", None),
+                    workspace=state.workspace,
+                    git_status=state.git_status,
+                ),
                 config={"configurable": configurable},
                 stream_mode=["messages", "updates", "custom"],
                 subgraphs=True,
@@ -693,6 +718,8 @@ class Executor:
         workspace: str | None = None,
         *,
         stream_thread_id: str | None = None,
+        unified_classification: Any | None = None,
+        git_status: dict[str, Any] | None = None,
     ) -> tuple[list[StreamEvent], StepResult, list[BaseMessage]]:
         """Execute single step, collecting events for later yielding.
 
@@ -706,6 +733,8 @@ class Executor:
             thread_id: Logical thread ID for StepResult, logs, and durability lookups
             workspace: Thread-specific workspace path (RFC-103)
             stream_thread_id: Optional LangGraph ``thread_id`` for this stream (parallel isolation)
+            unified_classification: Loop routing payload for middleware (IG-349).
+            git_status: Optional git snapshot for prompt XML (RFC-104).
 
         Returns:
             Tuple of (collected events, StepResult with outcome metadata, AI messages for IG-199)
@@ -761,7 +790,12 @@ class Executor:
                 phase="execute_step",
             )
             stream = self.core_agent.astream(
-                {"messages": [human_msg]},
+                self._execute_graph_input(
+                    [human_msg],
+                    unified_classification=unified_classification,
+                    workspace=workspace,
+                    git_status=git_status,
+                ),
                 config=config,
                 stream_mode=["messages", "updates", "custom"],
                 subgraphs=True,

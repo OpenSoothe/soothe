@@ -228,8 +228,8 @@ async def handle_rpc_command(
 async def handle_routing_command(cmd_input: str, console: Console, client: WebSocketClient) -> None:
     """Handle daemon routing command by sending input with optional subagent (RFC-404).
 
-    For ``/browser``, ``/claude``, and ``/research``, sets the WebSocket ``subagent``
-    field (same contract as headless ``-p``) so the daemon uses direct subagent routing.
+    For ``/browser``, ``/claude``, ``/research``, and ``/explore``, sets the WebSocket
+    ``preferred_subagent`` field so the daemon merges a subagent hint into AgentLoop (IG-349).
     Other routing commands (e.g. ``/plan``) are sent as plain text unchanged.
 
     Args:
@@ -238,7 +238,7 @@ async def handle_routing_command(cmd_input: str, console: Console, client: WebSo
         client: WebSocket client
     """
     subagent_name, text = parse_subagent_from_input(cmd_input.strip())
-    await client.send_input(text, subagent=subagent_name)
+    await client.send_input(text, preferred_subagent=subagent_name)
 
 
 __all__ = [

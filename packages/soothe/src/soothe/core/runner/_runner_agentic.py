@@ -351,6 +351,7 @@ class AgenticMixin:
         thread_id: str | None = None,
         workspace: str | None = None,
         max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
+        preferred_subagent: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Run Layer 2: Agentic Goal Execution Loop (RFC-0008).
 
@@ -505,6 +506,12 @@ class AgenticMixin:
             except Exception:
                 logger.debug("Git status collection failed for agentic loop", exc_info=True)
 
+        from soothe.core.runner.routing_merge import build_loop_unified_classification
+
+        loop_unified_classification = build_loop_unified_classification(
+            intent_classification, preferred_subagent
+        )
+
         async for event_type, event_data in loop_agent.run_with_progress(
             goal=user_input,
             thread_id=tid,
@@ -513,6 +520,7 @@ class AgenticMixin:
             max_iterations=max_iterations,
             plan_conversation_excerpts=plan_excerpts,
             intent=intent_classification,  # IG-226: Pass intent classification to AgentLoop
+            unified_classification=loop_unified_classification,
         ):
             if event_type == "iteration_started":
                 # Internal event - not shown to user

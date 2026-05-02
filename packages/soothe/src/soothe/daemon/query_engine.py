@@ -48,7 +48,7 @@ class QueryEngine:
         *,
         autonomous: bool = False,
         max_iterations: int | None = None,
-        subagent: str | None = None,
+        preferred_subagent: str | None = None,
         client_id: str | None = None,
         interactive: bool = False,
         model: str | None = None,
@@ -63,7 +63,7 @@ class QueryEngine:
                 text,
                 autonomous=autonomous,
                 max_iterations=max_iterations,
-                subagent=subagent,
+                preferred_subagent=preferred_subagent,
                 client_id=client_id,
                 interactive=interactive,
                 model=model,
@@ -151,7 +151,7 @@ class QueryEngine:
                     d._thread_registry.get_workspace(thread_id) or d._daemon_workspace
                 ),
                 "autonomous": autonomous,
-                "subagent": subagent,
+                "preferred_subagent": preferred_subagent,
             }
             d._global_history.add(effective_text, thread_id=thread_id, metadata=metadata)
 
@@ -198,8 +198,8 @@ class QueryEngine:
                     stream_kwargs["autonomous"] = True
                     if max_iterations is not None:
                         stream_kwargs["max_iterations"] = max_iterations
-                if subagent is not None:
-                    stream_kwargs["subagent"] = subagent
+                if preferred_subagent is not None:
+                    stream_kwargs["preferred_subagent"] = preferred_subagent
 
                 # Wrap streaming with timeout if configured
                 interrupt_resolver = (
@@ -418,7 +418,7 @@ class QueryEngine:
         *,
         autonomous: bool = False,
         max_iterations: int | None = None,
-        subagent: str | None = None,
+        preferred_subagent: str | None = None,
         client_id: str | None = None,
         interactive: bool = False,
         model: str | None = None,
@@ -509,7 +509,7 @@ class QueryEngine:
                     d._thread_registry.get_workspace(thread_id) or d._daemon_workspace
                 ),
                 "autonomous": autonomous,
-                "subagent": subagent,
+                "preferred_subagent": preferred_subagent,
             }
             d._global_history.add(effective_text, thread_id=thread_id, metadata=metadata)
 
@@ -544,8 +544,8 @@ class QueryEngine:
                     stream_kwargs["autonomous"] = True
                     if max_iterations is not None:
                         stream_kwargs["max_iterations"] = max_iterations
-                if subagent is not None:
-                    stream_kwargs["subagent"] = subagent
+                if preferred_subagent is not None:
+                    stream_kwargs["preferred_subagent"] = preferred_subagent
                 if interactive:
                     logger.debug(
                         "Interactive HITL continuation is not supported in multithreaded mode; running auto-approve"

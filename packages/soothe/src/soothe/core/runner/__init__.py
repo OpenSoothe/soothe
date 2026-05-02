@@ -447,7 +447,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         workspace: str | None = None,
         autonomous: bool = False,
         max_iterations: int | None = None,
-        subagent: str | None = None,
+        preferred_subagent: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
@@ -459,9 +459,6 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         - ``autonomous=True`` (RFC-0007): Goal-driven iteration with explicit goal management
         - Default (RFC-201): Agentic loop with Reason → Act iteration
 
-        **Quick path optimization**:
-        - If `subagent` is provided, bypass classifier and route directly to subagent
-
         Args:
             user_input: The user's query text.
             thread_id: Thread ID for persistence. Generated if not provided.
@@ -470,7 +467,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
                 resolved path is always a non-empty absolute directory string for this call.
             autonomous: Enable autonomous iteration loop (explicit goals).
             max_iterations: Override max iterations from config.
-            subagent: Optional subagent name to route the query to directly.
+            preferred_subagent: Optional subagent hint merged into AgentLoop (IG-349).
         """
         # Update thread_id for logging if one is provided
         from soothe.logging import set_thread_id
@@ -495,33 +492,6 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         )
 
         try:
-            # Quick path: direct subagent routing (bypasses classifier)
-            if subagent:
-                from ._types import RunnerState
-
-                state = RunnerState()
-                state.thread_id = str(thread_id or self._current_thread_id or "")
-                state.workspace = effective_workspace
-
-                # Load thread context for subagent (IG-140)
-                await self._ensure_checkpointer_initialized()
-                tid = str(thread_id or self._current_thread_id or "")
-                recent_for_thread = await self._load_recent_messages(tid, limit=16)
-                prior_limit = self._config.agentic.prior_conversation_limit if self._config else 10
-                plan_excerpts = self._format_thread_messages_for_plan(
-                    recent_for_thread, limit=prior_limit
-                )
-
-                # Pass context to subagent via state
-                state.prior_messages = plan_excerpts
-
-                logger.info(
-                    "Quick path: routing directly to subagent '%s' with thread context", subagent
-                )
-                async for chunk in self._run_direct_subagent(user_input, subagent, state):
-                    yield chunk
-                return
-
             # Autonomous mode
             if autonomous and self._goal_engine:
                 async for chunk in self._run_autonomous(
@@ -539,6 +509,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
                 thread_id=thread_id,
                 workspace=effective_workspace,
                 max_iterations=max_iterations or self._config.agentic.max_iterations,
+                preferred_subagent=preferred_subagent,
             ):
                 yield chunk
         finally:

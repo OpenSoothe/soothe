@@ -76,7 +76,7 @@ async def run_headless_via_daemon(
                 cleaned_prompt if subagent_name else prompt,
                 autonomous=autonomous,
                 max_iterations=max_iterations,
-                subagent=subagent_name,
+                preferred_subagent=subagent_name,
             ),
             timeout=_SESSION_BOOTSTRAP_TIMEOUT_S,
         )
