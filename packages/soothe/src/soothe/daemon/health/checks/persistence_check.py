@@ -151,7 +151,9 @@ def _check_filesystem_permissions() -> CheckResult:
             name="filesystem_permissions",
             status=CheckStatus.ERROR,
             message=f"SOOTHE_HOME not found: {home}",
-            details={"remediation": "Run 'soothe config init'"},
+            details={
+                "remediation": "Create ~/.soothe with config/config.yml (see docs/user_guide.md)",
+            },
         )
 
     # Check write permissions

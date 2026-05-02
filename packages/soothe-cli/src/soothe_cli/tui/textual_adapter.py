@@ -9,6 +9,7 @@ import logging
 import time
 import uuid
 from collections import deque
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -46,7 +47,8 @@ if TYPE_CHECKING:
 
 from soothe_sdk.client.wire import envelope_langchain_message_dict
 from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
-from soothe_sdk.ux.subagent_progress import summarize_subagent_wire_activity
+from soothe_sdk.core.verbosity import VerbosityTier
+from soothe_sdk.utils import get_tool_display_name
 from soothe_sdk.ux.task_namespace import (
     enqueue_task_spawn,
     maybe_bind_namespace,
@@ -58,7 +60,12 @@ from soothe_cli.shared.essential_events import (
     LOOP_REASON_EVENT_TYPE,
     is_essential_progress_event_type,
 )
-from soothe_cli.shared.message_processing import accumulate_tool_call_chunks, extract_tool_args_dict
+from soothe_cli.shared.message_processing import (
+    accumulate_tool_call_chunks,
+    extract_tool_args_dict,
+    format_tool_call_args,
+)
+from soothe_cli.shared.presentation_engine import PresentationEngine
 from soothe_cli.shared.renderer_base import RendererBase
 from soothe_cli.shared.subagent_routing import parse_subagent_from_input
 from soothe_cli.shared.tool_call_resolution import build_streaming_args_overlay
@@ -276,6 +283,69 @@ def _format_progress_event_lines_for_tui(
         return rendered
 
     return []
+
+
+def _format_task_scoped_tool_invocation_line(
+    task_scope: tuple[str, str],
+    tool_name: str,
+    tool_args: dict[str, Any],
+) -> str:
+    """One stderr-style line matching ``CliRenderer.on_tool_call`` for Task subgraph tools."""
+    from soothe_cli.cli.task_scope_display import format_task_scope_prefix
+
+    display_name = get_tool_display_name(tool_name)
+    raw_fb = tool_args.get("_raw", "")
+    raw_fallback = raw_fb if isinstance(raw_fb, str) else ""
+    args_str = format_tool_call_args(tool_name, {"args": tool_args, "_raw": raw_fallback})
+    core = f"{display_name}({args_str})"
+    tcid, st = task_scope
+    core = f"{format_task_scope_prefix(tcid, st)} {core}"
+    return f"⚙ {core}"
+
+
+def _raw_tool_content_for_presentation(message: Any) -> str:
+    """Serialize tool message body for ``PresentationEngine.format_tool_result_status_line``."""
+    from langchain_core.messages import ToolMessage
+
+    from soothe_cli.shared.tool_message_format import format_tool_message_content
+
+    if isinstance(message, ToolMessage):
+        return format_tool_message_content(getattr(message, "content", ""))
+    if isinstance(message, Mapping):
+        return format_tool_message_content(dict(message).get("content"))
+    return ""
+
+
+def _try_register_explore_inner_tool_pending(
+    *,
+    lookup_id: str | None,
+    buffer_name: str | None,
+    parsed_args: dict[str, Any],
+    is_main_agent: bool,
+    ns_key: tuple[str, ...],
+    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str]],
+    show_tool_ui: bool,
+    presentation: PresentationEngine,
+    verbosity_level: Any,
+    pending_lines: dict[str, str],
+    start_times: dict[str, float],
+) -> None:
+    """Record pending CLI-style invocation line for explore Task-scoped inner tools (IG-342)."""
+    if not lookup_id or not buffer_name or is_main_agent:
+        return
+    if buffer_name == "task":
+        return
+    ts_r = resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
+    if not ts_r or ts_r[1] != "explore":
+        return
+    if not show_tool_ui or not presentation.tier_visible(VerbosityTier.NORMAL, verbosity_level):
+        return
+    pending_lines[str(lookup_id)] = _format_task_scoped_tool_invocation_line(
+        ts_r,
+        buffer_name,
+        parsed_args,
+    )
+    start_times[str(lookup_id)] = time.time()
 
 
 class TextualUIAdapter:
@@ -739,6 +809,9 @@ async def execute_task_textual(
         show_tool_ui,
     )
     progress_pipeline = StreamDisplayPipeline(verbosity=pv)
+    presentation = PresentationEngine()
+    explore_scoped_tool_pending_lines: dict[str, str] = {}
+    explore_scoped_tool_start_times: dict[str, float] = {}
 
     # Parse file mentions and inject content if any — defer blocking I/O
     prompt_text, mentioned_files = await asyncio.to_thread(parse_file_mentions, user_input)
@@ -1008,6 +1081,7 @@ async def execute_task_textual(
                                 pending_text,
                                 ns_key,
                                 assistant_message_by_namespace,
+                                namespace_task_bindings=namespace_task_bindings,
                             )
                             pending_text_by_namespace[ns_key] = ""
                         continue
@@ -1060,6 +1134,33 @@ async def execute_task_textual(
                                     "tool.error",
                                     {"tool_names": [tool_msg._tool_name]},
                                 )
+                            ts_ap = resolve_task_scope_for_namespace(
+                                namespace_task_bindings, ns_key
+                            )
+                            if (
+                                ts_ap
+                                and ts_ap[1] == "explore"
+                                and ts_ap[0]
+                                and show_tool_ui
+                                and presentation.tier_visible(VerbosityTier.NORMAL, pv)
+                            ):
+                                pending_ln = explore_scoped_tool_pending_lines.pop(sid, None)
+                                start_tm = explore_scoped_tool_start_times.pop(sid, None)
+                                parent_explore = adapter._tool_display_by_call_id.get(ts_ap[0])
+                                if pending_ln and parent_explore is not None:
+                                    duration_ms = (
+                                        int((time.time() - start_tm) * 1000) if start_tm else 0
+                                    )
+                                    raw_body = _raw_tool_content_for_presentation(message)
+                                    status_ln = presentation.format_tool_result_status_line(
+                                        tool_msg._tool_name,
+                                        raw_body,
+                                        is_error=tool_card.is_error,
+                                        duration_ms=duration_ms,
+                                    )
+                                    parent_explore.append_subagent_activity(
+                                        f"{pending_ln} -> {status_ln}"
+                                    )
                         elif tool_id and show_tool_ui:
                             # Orphan result: no prior AIMessage tool card (daemon wire
                             # shape, streaming chunks, or missing tool_call blocks).
@@ -1100,6 +1201,32 @@ async def execute_task_textual(
                                         "tool.error",
                                         {"tool_names": [orphan._tool_name]},
                                     )
+                                ts_or = resolve_task_scope_for_namespace(
+                                    namespace_task_bindings, ns_key
+                                )
+                                if (
+                                    ts_or
+                                    and ts_or[1] == "explore"
+                                    and ts_or[0]
+                                    and show_tool_ui
+                                    and presentation.tier_visible(VerbosityTier.NORMAL, pv)
+                                ):
+                                    o_sid = str(tool_id)
+                                    op = explore_scoped_tool_pending_lines.pop(o_sid, None)
+                                    o_start = explore_scoped_tool_start_times.pop(o_sid, None)
+                                    parent_or = adapter._tool_display_by_call_id.get(ts_or[0])
+                                    if op and parent_or is not None:
+                                        o_dur = (
+                                            int((time.time() - o_start) * 1000) if o_start else 0
+                                        )
+                                        o_raw = _raw_tool_content_for_presentation(message)
+                                        o_st = presentation.format_tool_result_status_line(
+                                            tname,
+                                            o_raw,
+                                            is_error=tool_card.is_error,
+                                            duration_ms=o_dur,
+                                        )
+                                        parent_or.append_subagent_activity(f"{op} -> {o_st}")
 
                         # Reshow spinner only when all in-flight tools have
                         # completed (avoids premature "Thinking..." when
@@ -1116,6 +1243,7 @@ async def execute_task_textual(
                                     pending_text,
                                     ns_key,
                                     assistant_message_by_namespace,
+                                    namespace_task_bindings=namespace_task_bindings,
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                             if record.diff:
@@ -1193,6 +1321,7 @@ async def execute_task_textual(
                                     pending_text,
                                     ns_key,
                                     assistant_message_by_namespace,
+                                    namespace_task_bindings=namespace_task_bindings,
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
@@ -1241,6 +1370,7 @@ async def execute_task_textual(
                                 pending_text,
                                 ns_key,
                                 assistant_message_by_namespace,
+                                namespace_task_bindings=namespace_task_bindings,
                             )
                             pending_text_by_namespace[ns_key] = ""
                             if adapter._set_active_message:
@@ -1255,6 +1385,7 @@ async def execute_task_textual(
                                 pending_text,
                                 ns_key,
                                 assistant_message_by_namespace,
+                                namespace_task_bindings=namespace_task_bindings,
                             )
                             pending_text_by_namespace[ns_key] = ""
                             assistant_message_by_namespace.pop(ns_key, None)
@@ -1401,6 +1532,7 @@ async def execute_task_textual(
                                     pending_text,
                                     ns_key,
                                     assistant_message_by_namespace,
+                                    namespace_task_bindings=namespace_task_bindings,
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
@@ -1452,6 +1584,19 @@ async def execute_task_textual(
                                     ),
                                 ):
                                     displayed_tool_ids.add(lookup_id)
+                                    _try_register_explore_inner_tool_pending(
+                                        lookup_id=str(lookup_id),
+                                        buffer_name=buffer_name,
+                                        parsed_args=parsed_args,
+                                        is_main_agent=is_main_agent,
+                                        ns_key=ns_key,
+                                        namespace_task_bindings=namespace_task_bindings,
+                                        show_tool_ui=show_tool_ui,
+                                        presentation=presentation,
+                                        verbosity_level=pv,
+                                        pending_lines=explore_scoped_tool_pending_lines,
+                                        start_times=explore_scoped_tool_start_times,
+                                    )
                                     logger.debug(
                                         "Tool call card skipped (IG-300 terminal empty args): "
                                         "name=%s tool_call_id=%r chunk_position=%r",
@@ -1462,6 +1607,19 @@ async def execute_task_textual(
                                     tool_call_buffers.pop(buffer_key, None)
                                     continue
                                 displayed_tool_ids.add(lookup_id)
+                                _try_register_explore_inner_tool_pending(
+                                    lookup_id=str(lookup_id),
+                                    buffer_name=buffer_name,
+                                    parsed_args=parsed_args,
+                                    is_main_agent=is_main_agent,
+                                    ns_key=ns_key,
+                                    namespace_task_bindings=namespace_task_bindings,
+                                    show_tool_ui=show_tool_ui,
+                                    presentation=presentation,
+                                    verbosity_level=pv,
+                                    pending_lines=explore_scoped_tool_pending_lines,
+                                    start_times=explore_scoped_tool_start_times,
+                                )
                                 if (
                                     is_main_agent
                                     and buffer_name == "task"
@@ -1526,6 +1684,7 @@ async def execute_task_textual(
                                 pending_text,
                                 ns_key,
                                 assistant_message_by_namespace,
+                                namespace_task_bindings=namespace_task_bindings,
                             )
                             pending_text_by_namespace[ns_key] = ""
                             assistant_message_by_namespace.pop(ns_key, None)
@@ -1552,6 +1711,7 @@ async def execute_task_textual(
                                     pending_text,
                                     ns_key,
                                     assistant_message_by_namespace,
+                                    namespace_task_bindings=namespace_task_bindings,
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
@@ -1586,6 +1746,7 @@ async def execute_task_textual(
                                         pending_text,
                                         ns_key,
                                         assistant_message_by_namespace,
+                                        namespace_task_bindings=namespace_task_bindings,
                                     )
                                     pending_text_by_namespace[ns_key] = ""
                                     assistant_message_by_namespace.pop(ns_key, None)
@@ -1613,6 +1774,7 @@ async def execute_task_textual(
                                         pending_text,
                                         ns_key,
                                         assistant_message_by_namespace,
+                                        namespace_task_bindings=namespace_task_bindings,
                                     )
                                     pending_text_by_namespace[ns_key] = ""
                                     assistant_message_by_namespace.pop(ns_key, None)
@@ -1664,6 +1826,7 @@ async def execute_task_textual(
                                     pending_text,
                                     ns_key,
                                     assistant_message_by_namespace,
+                                    namespace_task_bindings=namespace_task_bindings,
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
@@ -1699,9 +1862,18 @@ async def execute_task_textual(
                             card = adapter._tool_display_by_call_id.get(
                                 tcid
                             ) or adapter._current_tool_messages.get(tcid)
-                            note = summarize_subagent_wire_activity(event_type, data)
-                            if card is not None and note:
-                                card.append_subagent_activity(note)
+                            ev_wire = dict(data)
+                            ev_wire.setdefault("type", event_type)
+                            ev_wire["namespace"] = list(ns_key)
+                            ev_wire["task_scope"] = task_scope
+                            wire_lines = [
+                                _format_display_line_for_tui(line)
+                                for line in progress_pipeline.process(ev_wire)
+                            ]
+                            wire_lines = [ln for ln in wire_lines if ln]
+                            if card is not None:
+                                for line_text in wire_lines:
+                                    card.append_subagent_activity(line_text)
                                 continue
 
                         progress_lines = _format_progress_event_lines_for_tui(
@@ -1718,6 +1890,7 @@ async def execute_task_textual(
                                     pending_text,
                                     ns_key,
                                     assistant_message_by_namespace,
+                                    namespace_task_bindings=namespace_task_bindings,
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
@@ -1743,7 +1916,11 @@ async def execute_task_textual(
             for ns_key, pending_text in list(pending_text_by_namespace.items()):
                 if pending_text:
                     await _flush_assistant_text_ns(
-                        adapter, pending_text, ns_key, assistant_message_by_namespace
+                        adapter,
+                        pending_text,
+                        ns_key,
+                        assistant_message_by_namespace,
+                        namespace_task_bindings=namespace_task_bindings,
                     )
             for ns_key, stream_msg in list(goal_completion_stream_by_namespace.items()):
                 await stream_msg.stop_stream()
@@ -2154,18 +2331,31 @@ async def _flush_assistant_text_ns(
     text: str,
     ns_key: tuple,
     assistant_message_by_namespace: dict[tuple, Any],
+    *,
+    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str]] | None = None,
 ) -> None:
     """Flush accumulated assistant text for a specific namespace.
 
     Finalizes the streaming by stopping the MarkdownStream.
     If no message exists yet, creates one with the full content.
     """
+    from soothe_cli.cli.task_scope_display import format_task_scope_prefix
     from soothe_cli.shared.explore_task_display import format_explore_task_json_blob_for_display
 
     repaired_text = RendererBase.repair_concatenated_output(text)
     repaired_text = format_explore_task_json_blob_for_display(repaired_text)
     if not repaired_text.strip():
         return
+
+    ts_card = None
+    if namespace_task_bindings is not None and ns_key:
+        ts_card = resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
+    if ts_card and ts_card[1] == "explore" and ts_card[0]:
+        parent_tool = adapter._tool_display_by_call_id.get(ts_card[0])
+        if parent_tool is not None:
+            line = f"⚙ {format_task_scope_prefix(ts_card[0], ts_card[1])} {repaired_text.strip()}"
+            parent_tool.append_subagent_activity(line)
+            return
 
     current_msg = assistant_message_by_namespace.get(ns_key)
     if current_msg is None:

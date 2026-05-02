@@ -16,7 +16,7 @@ def _check_config_file(config: SootheConfig | None) -> CheckResult:
             message="No configuration loaded (optional for basic usage)",
             details={
                 "impact": "Cannot run config-driven checks",
-                "remediation": "Run 'soothe config init'",
+                "remediation": "Create ~/.soothe and add config/config.yml (see docs/user_guide.md)",
             },
         )
 
@@ -119,7 +119,7 @@ def _check_soothe_home() -> CheckResult:
             message=f"SOOTHE_HOME directory not found: {home}",
             details={
                 "path": str(home),
-                "remediation": "Run 'soothe config init' to create directory",
+                "remediation": "Create ~/.soothe directory with expected layout (see docs/user_guide.md)",
             },
         )
 
@@ -158,7 +158,7 @@ def _check_soothe_home() -> CheckResult:
             details={
                 "path": str(home),
                 "missing": missing,
-                "remediation": "Run 'soothe config init'",
+                "remediation": "Create ~/.soothe and add config/config.yml (see docs/user_guide.md)",
             },
         )
 
