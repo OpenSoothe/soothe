@@ -22,9 +22,6 @@ soothe -p "Research AI advances"
 # Loop management
 soothe loop list
 soothe loop continue loop_abc123
-
-# Configuration
-soothe config show
 ```
 
 ## Architecture
