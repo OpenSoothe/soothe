@@ -140,7 +140,7 @@ def build_explore_engine(
         thread_workspace = state.get("workspace") or workspace
         if thread_workspace != workspace:
             logger.debug(
-                "Explore: using thread workspace '%s' (resolver='%s')",
+                "Explore: thread workspace '%s' overrides build-time default '%s' (IG-344)",
                 thread_workspace,
                 workspace,
             )

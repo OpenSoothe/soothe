@@ -19,7 +19,6 @@ class HeadlessCliRenderer(RendererBase):
     def __init__(self) -> None:
         super().__init__()
         self.console = Console()
-        self._needs_stdout_newline = False
 
     def on_assistant_text(
         self,
@@ -34,12 +33,8 @@ class HeadlessCliRenderer(RendererBase):
         payload = text if is_streaming else self.repair_concatenated_output(text)
         if not payload:
             return
-        if self._needs_stdout_newline:
-            sys.stdout.write("\n")
-            self._needs_stdout_newline = False
         sys.stdout.write(payload)
         sys.stdout.flush()
-        self._needs_stdout_newline = not payload.endswith("\n")
 
     def on_streaming_output(
         self,
@@ -107,7 +102,4 @@ class HeadlessCliRenderer(RendererBase):
         del step_id, success, duration_ms
 
     def on_turn_end(self) -> None:
-        if self._needs_stdout_newline:
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-            self._needs_stdout_newline = False
+        """End of turn; headless does not append synthetic newlines to stdout."""
