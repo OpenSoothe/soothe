@@ -216,9 +216,16 @@ def build_explore_engine(
         # Prefix through pending AI so ToolNode does not pick an older, already-answered AIMessage.
         tool_messages_input = messages[: pending_idx + 1]
 
-        # Execute tools via ToolNode
+        # Execute tools via ToolNode.
+        # Pass workspace in the invoke dict so ToolNode._extract_state() includes it
+        # in ToolRuntime.state, allowing the callable backend to resolve the thread
+        # workspace instead of the stale resolver default (IG-344).
         logger.info("Explore: executing tools")
-        tool_results = tool_node.invoke({"messages": tool_messages_input})
+        tool_invoke_input: dict[str, Any] = {"messages": tool_messages_input}
+        thread_workspace = state.get("workspace")
+        if thread_workspace:
+            tool_invoke_input["workspace"] = thread_workspace
+        tool_results = tool_node.invoke(tool_invoke_input)
 
         # Extract results and update findings
         new_messages = tool_results.get("messages", [])
