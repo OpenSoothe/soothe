@@ -607,10 +607,12 @@ def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
     mock_client_instance.connect = AsyncMock()
     mock_client_instance.close = AsyncMock()
 
-    # Patch SDK client helpers (WebSocket RPC checks)
+    # Patch SDK client helpers (WebSocket RPC checks).
+    # First call: pipeline decides daemon is not live (stale path). Second call:
+    # readiness loop sees daemon ready — avoids real asyncio.sleep + 30s timeout.
     monkeypatch.setattr(
         "soothe_cli.cli.execution.headless.is_daemon_live",
-        AsyncMock(return_value=False),  # Daemon not responsive (stale)
+        AsyncMock(side_effect=[False, True]),
     )
     monkeypatch.setattr(
         "soothe_cli.cli.execution.headless.request_daemon_shutdown",
@@ -620,24 +622,20 @@ def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
         "soothe_cli.cli.execution.headless.WebSocketClient",
         MagicMock(return_value=mock_client_instance),  # Return mock instance
     )
+    monkeypatch.setattr(
+        "soothe_cli.cli.execution.daemon.run_headless_via_daemon",
+        AsyncMock(return_value=0),
+    )
 
-    # Track asyncio.run calls
+    # run_headless uses a single asyncio.run(_run_headless_pipeline()); run the coroutine
+    # on a fresh loop and return its exit code (mirroring asyncio.run).
     def _fake_asyncio_run(coro: object) -> object:
         captured_coros.append(coro)
-        # First run: _check_and_ensure_daemon
-        # Second run: run_headless_via_daemon
-        if len(captured_coros) == 1:
-            # Execute the async _check_and_ensure_daemon function
-            # Use a fresh event loop since we're inside patched asyncio.run
-            loop = asyncio.new_event_loop()
-            try:
-                loop.run_until_complete(coro)
-            finally:
-                loop.close()
-            return None
-        else:
-            # Second call: run_headless_via_daemon returns exit code
-            return 0
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(coro)
+        finally:
+            loop.close()
 
     monkeypatch.setattr("asyncio.run", _fake_asyncio_run)
     monkeypatch.setattr("subprocess.Popen", subprocess_popen)
@@ -651,9 +649,8 @@ def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
     assert exc.value.code == 0
     shutdown_called.assert_called_once()  # Stale daemon cleanup called
     subprocess_popen.assert_called_once()  # Daemon restart via subprocess
-    assert len(captured_coros) == 2
-    assert captured_coros[0].cr_code.co_name == "_check_and_ensure_daemon"
-    assert captured_coros[1].cr_code.co_name == "run_headless_via_daemon"
+    assert len(captured_coros) == 1
+    assert captured_coros[0].cr_code.co_name == "_run_headless_pipeline"
     # Close coroutines to avoid warnings
     for coro in captured_coros:
         if hasattr(coro, "close"):

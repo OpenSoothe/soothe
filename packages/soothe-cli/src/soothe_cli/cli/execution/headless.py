@@ -40,8 +40,8 @@ def run_headless(
     ws_url = websocket_url_from_config(cfg)
 
     # Auto-start daemon if not running (RFC-0013) - WebSocket RPC checks (IG-174 Phase 1)
-    async def _check_and_ensure_daemon() -> None:
-        """Check daemon status and auto-start if needed."""
+    async def _run_headless_pipeline() -> int:
+        """Ensure daemon is reachable, then run the headless daemon session."""
         daemon_live = await is_daemon_live(ws_url, timeout=5.0)
 
         if not daemon_live:
@@ -74,18 +74,15 @@ def run_headless(
             # Note: We don't fail here - let the connection attempt handle errors
             # This allows tests and edge cases to proceed with mocked daemons
 
-    asyncio.run(_check_and_ensure_daemon())
-
-    # Connect to daemon and execute
-    daemon_exit_code = asyncio.run(
-        run_headless_via_daemon(
+        return await run_headless_via_daemon(
             cfg,
             prompt,
             thread_id=thread_id,
             autonomous=autonomous,
             max_iterations=max_iterations,
         )
-    )
+
+    daemon_exit_code = asyncio.run(_run_headless_pipeline())
 
     # Handle daemon fallback (unresponsive daemon)
     if daemon_exit_code == _DAEMON_FALLBACK_EXIT_CODE:

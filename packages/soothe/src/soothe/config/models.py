@@ -721,7 +721,7 @@ class ConsoleLoggingConfig(BaseModel):
     enabled: bool = False
     level: str = "WARNING"
     stream: Literal["stdout", "stderr"] = "stderr"
-    format: str = "%(levelname)-8s %(name)s %(message)s"
+    format: str = "%(level_short)s %(name)s %(message)s"
 
 
 class GlobalHistoryConfig(BaseModel):

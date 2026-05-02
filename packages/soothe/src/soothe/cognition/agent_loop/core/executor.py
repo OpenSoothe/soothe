@@ -1074,7 +1074,7 @@ class Executor:
                             delegate_task_final_parts.append(clipped)
 
                     logger.debug(
-                        "[Act TOOL #%d] %s(%s) → %s, %dB%s",
+                        "Tool #%d %s(%s) → %s, %dB%s",
                         tool_call_count,
                         tool_name,
                         tool_call_id,

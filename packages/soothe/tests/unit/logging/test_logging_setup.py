@@ -251,3 +251,49 @@ class TestLoggingSetup:
         file_handlers = [h for h in root_logger.handlers if isinstance(h, RotatingFileHandler)]
         assert len(file_handlers) == 1
         assert Path(file_handlers[0].baseFilename) == log_file
+
+
+class TestThreadFormatter:
+    """Tests for conversation thread id tags in log lines."""
+
+    def test_thread_tag_shows_first_four_chars_only(self) -> None:
+        """Log tag uses a short prefix of the conversation thread id."""
+        from soothe.logging.context import set_thread_id
+        from soothe.logging.setup import ThreadFormatter
+
+        set_thread_id("abcdefghijklmnop")
+        try:
+            fmt = ThreadFormatter("%(thread_id)s %(message)s")
+            record = logging.LogRecord(
+                name="test",
+                level=logging.INFO,
+                pathname="",
+                lineno=0,
+                msg="x",
+                args=(),
+                exc_info=None,
+            )
+            line = fmt.format(record)
+        finally:
+            set_thread_id(None)
+
+        assert line.startswith("[abcd]")
+
+    def test_thread_tag_main_when_no_context(self) -> None:
+        """Without set_thread_id, tag is ``[main]``."""
+        from soothe.logging.context import set_thread_id
+        from soothe.logging.setup import ThreadFormatter
+
+        set_thread_id(None)
+        fmt = ThreadFormatter("%(thread_id)s %(message)s")
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="x",
+            args=(),
+            exc_info=None,
+        )
+        line = fmt.format(record)
+        assert line.startswith("[main]")

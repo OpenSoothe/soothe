@@ -9,6 +9,7 @@ This module is part of Phase 1 of IG-174: CLI import violations fix.
 import json
 import logging
 import os
+import time
 from datetime import UTC
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,49 @@ from typing import Any
 # Valid values for SOOTHE_LOG_LEVEL (same names as logging module levels).
 _SOOTHE_LOG_LEVEL_ENV = "SOOTHE_LOG_LEVEL"
 _VALID_STD_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
+
+# Single-letter markers for compact log lines (use %(level_short)s in format strings).
+_LEVEL_SHORT_BY_NO: dict[int, str] = {
+    logging.DEBUG: "D",
+    logging.INFO: "I",
+    logging.WARNING: "W",
+    logging.ERROR: "E",
+    logging.CRITICAL: "C",
+}
+
+
+def short_level_letter(levelno: int) -> str:
+    """Return one-letter code for a logging level number."""
+    return _LEVEL_SHORT_BY_NO.get(levelno, "?")
+
+
+class ShortLevelFormatter(logging.Formatter):
+    """Formatter that supplies ``level_short`` and compact ``%(asctime)s`` timestamps.
+
+    Timestamps use ``YYYYMMDDTHHMMSS.mmm`` (local time, same ``converter`` as the
+    standard formatter). This preserves full calendar date, wall-clock time, and
+    millisecond resolution while shortening the default
+    ``YYYY-MM-DD HH:MM:SS,mmm`` form.
+
+    If ``datefmt`` is set on the formatter, that format is used instead (via
+    ``super()``).
+    """
+
+    def formatTime(  # noqa: N802 — matches ``logging.Formatter.formatTime``
+        self, record: logging.LogRecord, datefmt: str | None = None
+    ) -> str:
+        """Format ``record.created`` as compact local time with milliseconds."""
+        if datefmt:
+            return super().formatTime(record, datefmt)
+        ct = self.converter(record.created)
+        stamp = time.strftime("%Y%m%dT%H%M%S", ct)
+        # ``LogRecord.msecs`` is usually int but may be float on some versions/paths.
+        ms = int(round(float(record.msecs))) % 1000
+        return f"{stamp}.{ms:03d}"
+
+    def format(self, record: logging.LogRecord) -> str:
+        record.level_short = short_level_letter(record.levelno)
+        return super().format(record)
 
 
 def resolve_cli_log_level(
@@ -172,7 +216,7 @@ def setup_logging(
     """
     # Default format
     if not format_string:
-        format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        format_string = "%(asctime)s - %(name)s - %(level_short)s - %(message)s"
 
     level_upper = level.upper()
     root_level = getattr(logging, level_upper)
@@ -182,7 +226,7 @@ def setup_logging(
 
     # Console: WARNING only — DEBUG/INFO must not stream to the terminal during TUI.
     console_handler = logging.StreamHandler()
-    console_handler.setFormatter(logging.Formatter(format_string))
+    console_handler.setFormatter(ShortLevelFormatter(format_string))
     console_handler.setLevel(logging.WARNING)
     logging.getLogger().addHandler(console_handler)
 
@@ -190,13 +234,15 @@ def setup_logging(
     if log_file:
         log_file.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_file)
-        file_handler.setFormatter(logging.Formatter(format_string))
+        file_handler.setFormatter(ShortLevelFormatter(format_string))
         file_handler.setLevel(root_level)
         logging.getLogger().addHandler(file_handler)
 
 
 __all__ = [
     "GlobalInputHistory",
+    "ShortLevelFormatter",
     "resolve_cli_log_level",
     "setup_logging",
+    "short_level_letter",
 ]
