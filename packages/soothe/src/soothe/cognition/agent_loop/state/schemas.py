@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -9,6 +10,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+from soothe.protocols.planner import planner_outcome_text_preview
 
 
 class StepAction(BaseModel):
@@ -17,7 +19,7 @@ class StepAction(BaseModel):
     IG-264: Keep execution-critical fields (used by executor).
 
     Attributes:
-        id: Step identifier; after plan assembly use ``\"1\"``, ``\"2\"``, … (``normalize_sequential_step_ids``).
+        id: Step identifier; after plan assembly use stable 3-char ids (``assign_plan_step_ids``).
         description: What this step does
         tools: Tools to use (optional, executor hint)
         subagent: Subagent to invoke (optional, executor hint)
@@ -98,29 +100,54 @@ class AgentDecision(BaseModel):
         return ready
 
 
-def normalize_sequential_step_ids(decision: AgentDecision) -> AgentDecision:
-    """Renumber steps to ``\"1\"``, ``\"2\"``, … and remap in-plan ``dependencies``.
+_STEP_ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+PLAN_STEP_ID_LENGTH = 3
 
-    Presentation layers may render these as ``#1``, ``#2``. Dependency strings that
-    refer to another step in this decision are rewritten; other strings are unchanged
-    (e.g. cross-wave IDs preserved in ``dependency_completion_ids()`` — IG-346, IG-347).
+
+def _allocate_plan_step_id(reserved: set[str]) -> str:
+    """Cryptographically random step id (see ``PLAN_STEP_ID_LENGTH``) not in ``reserved``."""
+    for _ in range(512):
+        candidate = "".join(secrets.choice(_STEP_ID_ALPHABET) for _ in range(PLAN_STEP_ID_LENGTH))
+        if candidate not in reserved:
+            reserved.add(candidate)
+            return candidate
+    msg = f"Could not allocate unique {PLAN_STEP_ID_LENGTH}-char step id after 512 attempts"
+    raise RuntimeError(msg)
+
+
+def assign_plan_step_ids(
+    decision: AgentDecision,
+    *,
+    reserved_ids: set[str] | frozenset[str],
+) -> AgentDecision:
+    """Assign unique 3-character step ids and remap in-plan ``dependencies`` (IG-358).
+
+    New ids never collide with ``reserved_ids`` (typically
+    :meth:`LoopState.dependency_completion_ids`) or with each other.
+    Dependency edges between steps in this decision are rewritten via an internal
+    id map; other dependency strings (e.g. cross-wave ``step_001``) are unchanged
+    (IG-346, IG-347).
 
     Args:
         decision: Parsed or merged execution decision.
+        reserved_ids: Step ids that must not be reused (completed work / externals).
 
     Returns:
-        Copy with normalized ids; unchanged if ``steps`` is empty.
+        Copy with assigned ids; unchanged if ``steps`` is empty.
     """
     if not decision.steps:
         return decision
-    id_map = {step.id: str(i + 1) for i, step in enumerate(decision.steps)}
+    reserved: set[str] = set(reserved_ids)
+    id_map: dict[str, str] = {}
     new_steps: list[StepAction] = []
-    for i, step in enumerate(decision.steps):
-        new_id = str(i + 1)
+    for step in decision.steps:
+        id_map[step.id] = _allocate_plan_step_id(reserved)
+    for step in decision.steps:
+        mapped = id_map[step.id]
         new_deps: list[str] | None = None
         if step.dependencies:
             new_deps = [id_map.get(dep, dep) for dep in step.dependencies]
-        new_steps.append(step.model_copy(update={"id": new_id, "dependencies": new_deps}))
+        new_steps.append(step.model_copy(update={"id": mapped, "dependencies": new_deps}))
     return decision.model_copy(update={"steps": new_steps})
 
 
@@ -389,6 +416,14 @@ class StepResult(BaseModel):
             return f"Step {self.step_id}: ✓ {tool_name} ({status}, {stdout_lines} lines)"
 
         elif outcome_type == "subagent":
+            preview_src = planner_outcome_text_preview(self.outcome)
+            tool_name = self.outcome.get("tool_name", "task")
+            if preview_src:
+                if truncate:
+                    prev = preview_src[:800] + ("…" if len(preview_src) > 800 else "")
+                else:
+                    prev = preview_src
+                return f"Step {self.step_id}: ✓ {tool_name} — {prev}"
             completed = success_indicators.get("completed", False)
             artifacts = success_indicators.get("artifacts_created", 0)
             entity_preview = ", ".join(entities[:3]) if entities else "artifacts"
@@ -421,9 +456,10 @@ class LoopState(BaseModel):
         total_duration_ms: Total loop duration
         working_memory: Loop working-memory instance (RFC-203) when enabled.
         plan_conversation_excerpts: Prior Human/Assistant lines for Plan (IG-128).
-        last_execute_assistant_text: Last CoreAgent assistant text from the latest Execute wave (IG-199).
-        last_wave_answer_from_delegate_final: True when ``last_execute_assistant_text`` was taken from
-            ``task`` tool return payloads (delegate finals), not root-graph AIMessages (IG-355).
+        last_execute_assistant_text: Resolved visible answer for the latest Execute wave — see
+            :mod:`soothe.cognition.agent_loop.core.act_wave_finalize` (IG-357).
+        last_wave_answer_from_delegate_final: True when that text came from ``task`` tool returns
+            (``task_tool_aggregate`` provenance), not root-graph assistant stream (IG-355).
         last_execute_wave_parallel_multi_step: True when the last wave ran multiple parallel steps (IG-199).
         thread_continuation: IG-226 flag for thread continuation intent (adjusts iteration behavior).
     """

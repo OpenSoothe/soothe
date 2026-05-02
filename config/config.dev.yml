@@ -51,11 +51,15 @@ router:
 #   embedding: "mlxserver:nomic-embed"
 
 agentic:
+  max_subagent_tasks_per_wave: 16
   final_response: adaptive
   output_streaming: true  # Default streaming for AgentLoop responses (true=stream, false=batch)
   reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution
 
 execution:
+  concurrency:
+    max_parallel_steps: 16
+    max_parallel_subagents: 16
   llm_rpm_limit: 120
   llm_concurrent_limit: 10
   llm_call_timeout_seconds: 120
