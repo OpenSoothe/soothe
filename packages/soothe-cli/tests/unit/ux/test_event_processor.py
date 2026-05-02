@@ -761,3 +761,27 @@ class TestEventProcessorHeadlessSubgraph:
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert assistant_calls == []
+
+    def test_headless_emits_unphased_main_graph_answer(self) -> None:
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, headless_output=True)
+
+        processor.process_event(
+            {
+                "type": "event",
+                "mode": "messages",
+                "namespace": [],
+                "data": [
+                    {
+                        "type": "ai",
+                        "id": "main-answer",
+                        "content": "There are 12 README files.",
+                    },
+                    {},
+                ],
+            }
+        )
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert len(assistant_calls) == 1
+        assert "12 README" in assistant_calls[0][1][0]

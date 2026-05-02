@@ -5705,12 +5705,11 @@ def run_textual_tui(
     """
     import asyncio
 
-    configured_workspace = getattr(config, "workspace_dir", None)
-    cwd = None
-    if isinstance(configured_workspace, str) and configured_workspace.strip():
-        workspace_value = configured_workspace.strip()
-        if workspace_value != ".":
-            cwd = workspace_value
+    # Use the caller's actual cwd as the thread workspace (IG-344).
+    # config.workspace_dir is the daemon-level default (~/.soothe/Workspace),
+    # not the user's project directory. The user's shell cwd is the correct
+    # workspace for thread isolation.
+    cwd = os.getcwd()
 
     return asyncio.run(
         run_textual_app(

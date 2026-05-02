@@ -230,18 +230,20 @@ class EventProcessor:
     def _suppress_main_assistant_body_for_headless_obj(
         self, msg: AIMessage, *, is_main: bool
     ) -> bool:
-        if not self._headless_output or not is_main:
-            return False
-        ph = assistant_output_phase(msg)
-        return ph is None or ph not in LOOP_ASSISTANT_OUTPUT_PHASES
+        """Headless stdout: never drop main-graph assistant text (unphased streams included).
+
+        Subgraph streams without RFC-614 phases are skipped in ``_handle_ai_message`` before
+        this runs; loop-tagged subgraph finals use ``_dispatch_loop_tagged_assistant_text``.
+        """
+        del msg, is_main
+        return False
 
     def _suppress_main_assistant_body_for_headless_dict(
         self, msg: dict[str, Any], *, is_main: bool, ai_wire: bool
     ) -> bool:
-        if not self._headless_output or not is_main or not ai_wire:
-            return False
-        ph = assistant_output_phase(msg)
-        return ph is None or ph not in LOOP_ASSISTANT_OUTPUT_PHASES
+        """See :meth:`_suppress_main_assistant_body_for_headless_obj`."""
+        del msg, is_main, ai_wire
+        return False
 
     def _dispatch_loop_tagged_assistant_text(
         self,

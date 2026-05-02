@@ -51,12 +51,12 @@ async def run_headless_via_daemon(
 
     try:
         await connect_websocket_with_retries(client)
-        cli_ws = os.environ.get("SOOTHE_CLI_WORKSPACE", "").strip()
+        cli_ws = os.environ.get("SOOTHE_CLI_WORKSPACE", "").strip() or os.getcwd()
         status_event = await bootstrap_thread_session(
             client,
             resume_thread_id=thread_id,
             verbosity="normal",
-            workspace=cli_ws or None,
+            workspace=cli_ws,
             thread_status_timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S,
             subscription_timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S,
         )
