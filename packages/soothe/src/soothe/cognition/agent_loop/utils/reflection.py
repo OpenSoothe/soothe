@@ -375,7 +375,7 @@ def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
 
         steps.append(
             StepAction(
-                id=f"step_{i}",
+                id=str(i + 1),
                 description=step_data.get("description", ""),
                 tools=step_data.get("tools"),
                 subagent=step_data.get("subagent"),
@@ -422,7 +422,7 @@ def _default_agent_decision(goal: str, iteration: int = 0) -> Any:
         type="execute_steps",
         steps=[
             StepAction(
-                id="step_0",
+                id="1",
                 description=action_desc,
                 expected_output="Concrete findings or artifacts that satisfy the goal",
             )

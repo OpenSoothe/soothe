@@ -979,6 +979,9 @@ async def execute_task_textual(
                 suppress_subgraph_assistant_text = (not is_main_agent) and (
                     not direct_subagent_turn
                 )
+                # IG-344: After a direct /subagent route, hide main-graph assistant prose
+                # (wire + Task card already surface the delegated work).
+                suppress_main_agent_assistant_text = direct_subagent_turn and is_main_agent
 
                 # Handle UPDATES stream - for interrupts and todos
                 if current_stream_mode == "updates":
@@ -1401,6 +1404,8 @@ async def execute_task_textual(
                         block_type = block.get("type")
 
                         if block_type == "text":
+                            if suppress_main_agent_assistant_text:
+                                continue
                             task_scope_txt = (
                                 resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
                                 if ns_key
@@ -1409,41 +1414,53 @@ async def execute_task_textual(
                             explore_via_task = (
                                 task_scope_txt is not None and task_scope_txt[1] == "explore"
                             )
+                            compact_subagent_task = task_scope_txt is not None and task_scope_txt[
+                                1
+                            ] in {"claude", "browser", "research"}
                             if suppress_subgraph_assistant_text and not explore_via_task:
                                 continue
                             text = block.get("text", "")
-                            if text:
-                                # Track accumulated text for reference
+                            if not text:
+                                continue
+
+                            if explore_via_task:
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 pending_text += text
                                 pending_text_by_namespace[ns_key] = pending_text
+                                # IG-311: raw JSON streams off-thread; show summary on flush only.
+                                continue
 
-                                if explore_via_task:
-                                    # IG-311: raw JSON streams off-thread; show summary on flush only.
-                                    continue
+                            if compact_subagent_task:
+                                # IG-344: wire milestones + completion line carry UX; drop raw prose.
+                                continue
 
-                                # Get or create assistant message for this namespace
-                                current_msg = assistant_message_by_namespace.get(ns_key)
-                                if current_msg is None:
-                                    # Hide spinner when assistant starts responding
-                                    if adapter._set_spinner:
-                                        await adapter._set_spinner(None)
-                                    msg_id = f"asst-{uuid.uuid4().hex[:8]}"
-                                    # Mark active BEFORE mounting so pruning
-                                    # (triggered by mount) won't remove it
-                                    # (_mount_message can trigger
-                                    # _prune_old_messages if the window exceeds
-                                    # WINDOW_SIZE.)
-                                    if adapter._set_active_message:
-                                        adapter._set_active_message(msg_id)
-                                    current_msg = AssistantMessage(id=msg_id)
-                                    await adapter._mount_message(current_msg)
-                                    assistant_message_by_namespace[ns_key] = current_msg
+                            # Track accumulated text for reference
+                            pending_text = pending_text_by_namespace.get(ns_key, "")
+                            pending_text += text
+                            pending_text_by_namespace[ns_key] = pending_text
 
-                                # Append just the new text chunk for smoother
-                                # streaming (uses MarkdownStream internally for
-                                # better performance)
-                                await current_msg.append_content(text)
+                            # Get or create assistant message for this namespace
+                            current_msg = assistant_message_by_namespace.get(ns_key)
+                            if current_msg is None:
+                                # Hide spinner when assistant starts responding
+                                if adapter._set_spinner:
+                                    await adapter._set_spinner(None)
+                                msg_id = f"asst-{uuid.uuid4().hex[:8]}"
+                                # Mark active BEFORE mounting so pruning
+                                # (triggered by mount) won't remove it
+                                # (_mount_message can trigger
+                                # _prune_old_messages if the window exceeds
+                                # WINDOW_SIZE.)
+                                if adapter._set_active_message:
+                                    adapter._set_active_message(msg_id)
+                                current_msg = AssistantMessage(id=msg_id)
+                                await adapter._mount_message(current_msg)
+                                assistant_message_by_namespace[ns_key] = current_msg
+
+                            # Append just the new text chunk for smoother
+                            # streaming (uses MarkdownStream internally for
+                            # better performance)
+                            await current_msg.append_content(text)
 
                         elif block_type in {"tool_call_chunk", "tool_call", "tool_use"}:
                             chunk_name = block.get("name")

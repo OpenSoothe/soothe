@@ -20,6 +20,20 @@ def test_on_assistant_text_suppresses_subagent_text() -> None:
     assert mock_stdout.getvalue() == ""
 
 
+def test_on_assistant_text_suppresses_claude_task_scope_prose() -> None:
+    """IG-344: Task-scoped claude/browser/research prose is not printed to stdout."""
+    renderer = CliRenderer()
+    scope = ("functions.task:0", "claude")
+    with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+        renderer.on_assistant_text(
+            "## Long report\n\nDetails…",
+            is_main=False,
+            is_streaming=False,
+            task_scope=scope,
+        )
+    assert mock_stdout.getvalue() == ""
+
+
 def test_on_assistant_text_accumulates_turn_buffer() -> None:
     renderer = CliRenderer()
     with patch("sys.stdout"):

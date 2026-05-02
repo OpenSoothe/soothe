@@ -10,6 +10,7 @@ from soothe_sdk.core.subagent_wire import (
     SUBAGENT_CLAUDE_COMPLETED,
     SUBAGENT_CLAUDE_FAILED,
     SUBAGENT_CLAUDE_STARTED,
+    SUBAGENT_CLAUDE_STEP_COMPLETED,
 )
 from soothe_sdk.core.verbosity import VerbosityTier
 
@@ -25,6 +26,16 @@ class ClaudeStartedEvent(SubagentEvent):
     model_config = ConfigDict(extra="allow")
 
 
+class ClaudeStepCompletedEvent(SubagentEvent):
+    """One Claude Code tool use completed (metadata for TUI Task card, IG-344)."""
+
+    type: Literal["soothe.subagent.claude.step.completed"] = SUBAGENT_CLAUDE_STEP_COMPLETED  # type: ignore[assignment]
+    tool_name: str = ""
+    input_preview: str = ""
+
+    model_config = ConfigDict(extra="allow")
+
+
 class ClaudeCompletedEvent(SubagentEvent):
     """Claude subagent finished successfully."""
 
@@ -32,6 +43,7 @@ class ClaudeCompletedEvent(SubagentEvent):
     cost_usd: float = 0.0
     duration_ms: int = 0
     claude_session_id: str | None = None
+    summary: str = ""
 
     model_config = ConfigDict(extra="allow")
 
@@ -51,6 +63,11 @@ register_event(
     summary_template="Claude: {task_preview}",
 )
 register_event(
+    ClaudeStepCompletedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="{tool_name}: {input_preview}",
+)
+register_event(
     ClaudeCompletedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Claude done (${cost_usd}, {duration_ms}ms)",
@@ -65,7 +82,9 @@ __all__ = [
     "SUBAGENT_CLAUDE_COMPLETED",
     "SUBAGENT_CLAUDE_FAILED",
     "SUBAGENT_CLAUDE_STARTED",
+    "SUBAGENT_CLAUDE_STEP_COMPLETED",
     "ClaudeCompletedEvent",
     "ClaudeFailedEvent",
     "ClaudeStartedEvent",
+    "ClaudeStepCompletedEvent",
 ]

@@ -17,7 +17,7 @@ class StepAction(BaseModel):
     IG-264: Keep execution-critical fields (used by executor).
 
     Attributes:
-        id: Unique step identifier (8-char hex)
+        id: Step identifier; after plan assembly use ``\"1\"``, ``\"2\"``, … (``normalize_sequential_step_ids``).
         description: What this step does
         tools: Tools to use (optional, executor hint)
         subagent: Subagent to invoke (optional, executor hint)
@@ -96,6 +96,32 @@ class AgentDecision(BaseModel):
                 continue
             ready.append(step)
         return ready
+
+
+def normalize_sequential_step_ids(decision: AgentDecision) -> AgentDecision:
+    """Renumber steps to ``\"1\"``, ``\"2\"``, … and remap in-plan ``dependencies``.
+
+    Presentation layers may render these as ``#1``, ``#2``. Dependency strings that
+    refer to another step in this decision are rewritten; other strings are unchanged
+    (e.g. cross-wave IDs preserved in ``dependency_completion_ids()`` — IG-346, IG-347).
+
+    Args:
+        decision: Parsed or merged execution decision.
+
+    Returns:
+        Copy with normalized ids; unchanged if ``steps`` is empty.
+    """
+    if not decision.steps:
+        return decision
+    id_map = {step.id: str(i + 1) for i, step in enumerate(decision.steps)}
+    new_steps: list[StepAction] = []
+    for i, step in enumerate(decision.steps):
+        new_id = str(i + 1)
+        new_deps: list[str] | None = None
+        if step.dependencies:
+            new_deps = [id_map.get(dep, dep) for dep in step.dependencies]
+        new_steps.append(step.model_copy(update={"id": new_id, "dependencies": new_deps}))
+    return decision.model_copy(update={"steps": new_steps})
 
 
 class PlanResult(BaseModel):
@@ -449,6 +475,21 @@ class LoopState(BaseModel):
         if result.success:
             self.completed_step_ids.add(result.step_id)
 
+    def dependency_completion_ids(self) -> set[str]:
+        """Step IDs that satisfy ``StepAction.dependencies`` edges.
+
+        Combines the current-wave ``completed_step_ids`` with every successful
+        ``step_results`` ID. When ``plan_action == 'new'`` clears
+        ``completed_step_ids``, replanned steps that still depend on prior-wave
+        IDs (e.g. ``step_001``) remain schedulable because historical successes
+        stay in ``step_results`` (IG-346).
+
+        Returns:
+            Union of completed IDs for dependency checks.
+        """
+        historical = {r.step_id for r in self.step_results if r.success}
+        return self.completed_step_ids | historical
+
     def add_action_to_history(self, action: str) -> None:
         """Add action description to history for progression tracking.
 
@@ -477,4 +518,4 @@ class LoopState(BaseModel):
         """
         if not self.current_decision:
             return False
-        return self.current_decision.has_remaining_steps(self.completed_step_ids)
+        return self.current_decision.has_remaining_steps(self.dependency_completion_ids())

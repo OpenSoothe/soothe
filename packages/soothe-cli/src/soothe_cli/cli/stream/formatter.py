@@ -235,6 +235,7 @@ def format_subagent_done(
     task_scope: tuple[str, str] | None = None,
     task_description: str | None = None,
     task_done_success: bool = True,
+    answer_summary: str | None = None,
 ) -> DisplayLine:
     """Format a subagent completion line with metrics.
 
@@ -248,6 +249,7 @@ def format_subagent_done(
         namespace: Event namespace.
         task_description: Original brief (e.g. explore ``search_target``) when available.
         task_done_success: False for delegated failures (e.g. Claude subagent error).
+        answer_summary: Optional one-line answer tail after metrics (IG-344).
 
     Returns:
         DisplayLine for subagent completion.
@@ -258,7 +260,9 @@ def format_subagent_done(
         quoted = format_task_subagent_line(st, desc)
         ms = max(0, int(duration_s * 1000))
         outcome = "✓ Completed" if task_done_success else "✗ Failed"
-        content = f"{quoted} -> {outcome} ({ms}ms)"
+        tail = (answer_summary or "").strip()
+        base = f"{quoted} -> {outcome} ({ms}ms)"
+        content = f"{base}: {tail}" if tail else base
         return DisplayLine(
             level=2,
             content=content,

@@ -21,7 +21,12 @@ from soothe.cognition.agent_loop.core.thread_continuation_bootstrap import (
 from soothe.cognition.agent_loop.policies.goal_completion_policy import (
     determine_completion_action,
 )
-from soothe.cognition.agent_loop.state.schemas import AgentDecision, LoopState, PlanResult
+from soothe.cognition.agent_loop.state.schemas import (
+    AgentDecision,
+    LoopState,
+    PlanResult,
+    normalize_sequential_step_ids,
+)
 from soothe.cognition.agent_loop.state.state_manager import AgentLoopStateManager
 from soothe.cognition.agent_loop.state.working_memory import LoopWorkingMemory
 from soothe.cognition.agent_loop.utils.reflection import _default_agent_decision
@@ -436,6 +441,8 @@ class AgentLoop:
                 )
                 return
 
+            decision = normalize_sequential_step_ids(decision)
+
             if plan_result.plan_action == "new":
                 state.completed_step_ids.clear()
                 state.current_decision = decision
@@ -452,7 +459,7 @@ class AgentLoop:
                 },
             )
 
-            ready_steps = decision.get_ready_steps(state.completed_step_ids)
+            ready_steps = decision.get_ready_steps(state.dependency_completion_ids())
             for step in ready_steps:
                 yield (
                     "step_started",
@@ -595,7 +602,7 @@ class AgentLoop:
                 },
             )
 
-            ready_after = decision.get_ready_steps(state.completed_step_ids)
+            ready_after = decision.get_ready_steps(state.dependency_completion_ids())
             if ready_after:
                 logger.info(
                     "[→] %d step(s) remaining in current plan; next cycle will re-reason",

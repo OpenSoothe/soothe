@@ -14,6 +14,7 @@ SUBAGENT_BROWSER_STEP_COMPLETED = "soothe.subagent.browser.step.completed"
 
 # --- Claude ---
 SUBAGENT_CLAUDE_STARTED = "soothe.subagent.claude.started"
+SUBAGENT_CLAUDE_STEP_COMPLETED = "soothe.subagent.claude.step.completed"
 SUBAGENT_CLAUDE_COMPLETED = "soothe.subagent.claude.completed"
 SUBAGENT_CLAUDE_FAILED = "soothe.subagent.claude.failed"
 
@@ -33,6 +34,7 @@ ALLOWLISTED_SUBAGENT_EVENT_TYPES: frozenset[str] = frozenset(
         SUBAGENT_BROWSER_COMPLETED,
         SUBAGENT_BROWSER_STEP_COMPLETED,
         SUBAGENT_CLAUDE_STARTED,
+        SUBAGENT_CLAUDE_STEP_COMPLETED,
         SUBAGENT_CLAUDE_COMPLETED,
         SUBAGENT_CLAUDE_FAILED,
         SUBAGENT_EXPLORE_STARTED,
@@ -84,6 +86,9 @@ def clip_wire_event_payload(data: dict[str, Any]) -> dict[str, Any]:
         "message": _LONG_PREVIEW_LEN,
         "error": _LONG_PREVIEW_LEN,
         "action_preview": _DEFAULT_PREVIEW_LEN,
+        "tool_name": _DEFAULT_PREVIEW_LEN,
+        "input_preview": _DEFAULT_PREVIEW_LEN,
+        "summary": _LONG_PREVIEW_LEN,
         "url": _LONG_PREVIEW_LEN,
         "title": _DEFAULT_PREVIEW_LEN,
         "query_preview": _DEFAULT_PREVIEW_LEN,
@@ -105,6 +110,7 @@ __all__ = [
     "SUBAGENT_CLAUDE_COMPLETED",
     "SUBAGENT_CLAUDE_FAILED",
     "SUBAGENT_CLAUDE_STARTED",
+    "SUBAGENT_CLAUDE_STEP_COMPLETED",
     "SUBAGENT_EXPLORE_COMPLETED",
     "SUBAGENT_EXPLORE_MILESTONE",
     "SUBAGENT_EXPLORE_STARTED",
