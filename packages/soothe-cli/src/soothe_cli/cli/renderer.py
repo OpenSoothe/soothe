@@ -171,6 +171,10 @@ class CliRenderer(RendererBase):
             if not payload.strip():
                 self._schedule_assistant_leading_bullet()
                 return
+        elif task_scope and task_scope[1] in {"claude", "browser", "research"}:
+            # IG-344: wire milestones + completion summary carry UX; suppress raw subgraph prose.
+            self._schedule_assistant_leading_bullet()
+            return
         else:
             payload = text if is_streaming else self.repair_concatenated_output(text)
 

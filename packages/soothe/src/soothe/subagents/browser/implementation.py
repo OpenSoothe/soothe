@@ -18,6 +18,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
 from soothe.config import BrowserSubagentConfig
+from soothe.subagents.browser.display_summary import browser_result_summary_for_display
 from soothe.subagents.browser.events import (
     BrowserCompletedEvent,
     BrowserStartedEvent,
@@ -395,19 +396,22 @@ def _build_browser_graph(
                         raise
 
                 history = agent.history
-                result = history.final_result() or "Browser task completed (no extracted content)."
+                result = history.final_result() or "Browser task completed (no extracted content.)"
+                result_str = str(result)
+                completion_summary = browser_result_summary_for_display(result_str)
                 logger.info(
                     "Browser subagent: loop finished total_wall=%.1fs steps_executed=%d "
                     "result_preview=%s",
                     time.perf_counter() - run_t0,
                     len(history.history) if history.history else 0,
-                    preview_first(str(result), 300),
+                    preview_first(result_str, 300),
                 )
 
                 emit_subagent_wire_event(
                     BrowserCompletedEvent(
                         duration_ms=int((time.perf_counter() - run_t0) * 1000),
                         success=True,
+                        summary=completion_summary,
                     ).to_dict(),
                     logger,
                 )
@@ -434,6 +438,7 @@ def _build_browser_graph(
                 BrowserCompletedEvent(
                     duration_ms=int((time.perf_counter() - run_t0) * 1000),
                     success=False,
+                    summary=browser_result_summary_for_display(error_msg),
                 ).to_dict(),
                 logger,
             )

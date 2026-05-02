@@ -41,7 +41,7 @@ class PlanPhase:
             "goal": log_preview(goal, 60),
             "steps": {
                 "total": len(state.step_results),
-                "done": len(state.completed_step_ids),
+                "done": len(state.dependency_completion_ids()),
             },
             "wave": {
                 "calls": state.last_wave_tool_call_count,

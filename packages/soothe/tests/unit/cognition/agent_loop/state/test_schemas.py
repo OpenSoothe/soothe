@@ -10,6 +10,7 @@ from soothe.cognition.agent_loop.state.schemas import (
     PlanResult,
     StepAction,
     StepResult,
+    normalize_sequential_step_ids,
 )
 
 
@@ -150,6 +151,37 @@ class TestAgentDecision:
         # All completed
         ready = decision.get_ready_steps({"s1", "s2", "s3"})
         assert len(ready) == 0
+
+    def test_normalize_sequential_step_ids_renumbers_and_remaps_dependencies(self) -> None:
+        """IG-347: stable ``1``, ``2`` ids and in-plan dependency rewrite."""
+        d0 = StepAction(
+            id="a1b2c3d4",
+            description="First",
+            expected_output="o",
+        )
+        d1 = StepAction(
+            id="9f8e7d6c",
+            description="Second",
+            expected_output="o",
+            dependencies=["a1b2c3d4"],
+        )
+        d2 = StepAction(
+            id="ff00ee11",
+            description="Third",
+            expected_output="o",
+            dependencies=["9f8e7d6c", "step_001"],
+        )
+        decision = AgentDecision(
+            type="execute_steps",
+            steps=[d0, d1, d2],
+            execution_mode="sequential",
+            reasoning="t",
+        )
+        out = normalize_sequential_step_ids(decision)
+        assert [s.id for s in out.steps] == ["1", "2", "3"]
+        assert out.steps[0].dependencies is None
+        assert out.steps[1].dependencies == ["1"]
+        assert out.steps[2].dependencies == ["2", "step_001"]
 
 
 class TestPlanResult:
@@ -395,3 +427,36 @@ class TestLoopState:
         # Step completed
         state.completed_step_ids.add("s1")
         assert state.has_remaining_steps() is False
+
+    def test_dependency_completion_ids_survives_replan_clear(self) -> None:
+        """After replan clears ``completed_step_ids``, deps on prior waves still resolve (IG-346)."""
+        state = LoopState(goal="Count READMEs", thread_id="t1")
+        state.add_step_result(
+            StepResult(
+                step_id="step_001",
+                success=True,
+                duration_ms=100,
+                thread_id="t1",
+            )
+        )
+        state.completed_step_ids.clear()
+
+        follow_up = StepAction(
+            id="step_002",
+            description="Filter results",
+            expected_output="OK",
+            dependencies=["step_001"],
+        )
+        decision = AgentDecision(
+            type="execute_steps",
+            steps=[follow_up],
+            execution_mode="sequential",
+            reasoning="Continue after explore",
+        )
+
+        ready = decision.get_ready_steps(state.dependency_completion_ids())
+        assert len(ready) == 1
+        assert ready[0].id == "step_002"
+
+        state.current_decision = decision
+        assert state.has_remaining_steps() is True

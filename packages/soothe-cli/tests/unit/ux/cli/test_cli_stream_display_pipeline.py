@@ -21,6 +21,7 @@ from soothe_cli.cli.stream.formatter import (
     format_tool_result,
 )
 from soothe_cli.cli.stream.pipeline import StreamDisplayPipeline
+from soothe_sdk.core.subagent_wire import SUBAGENT_CLAUDE_STEP_COMPLETED
 
 _STEP_DONE_MARK = "\u2705\ufe0f"
 
@@ -186,6 +187,20 @@ class TestFormatters:
         assert line.content == 'Task(explore, "Count README files") -> ✓ Completed (5900ms)'
         assert line.duration_ms is None
 
+    def test_format_subagent_done_task_scope_with_answer_summary(self) -> None:
+        """IG-344: Optional answer tail after completion metrics inside Task scope."""
+        line = format_subagent_done(
+            "$0.01, session=abc12345",
+            40.852,
+            task_scope=("functions.task:0", "claude"),
+            task_description="Count README files",
+            answer_summary="Found 88 README files in the workspace.",
+        )
+        assert (
+            line.content
+            == 'Task(claude, "Count README files") -> ✓ Completed (40852ms): Found 88 README files in the workspace.'
+        )
+
     def test_format_step_done(self) -> None:
         """Success with no description emits nothing (no generic Step line)."""
         lines = format_step_done(3.2)
@@ -271,6 +286,21 @@ class TestStreamDisplayPipeline:
     Note: Tool events are handled by CliRenderer.on_tool_call/on_tool_result
     via EventProcessor. The pipeline focuses on goal/step/subagent events.
     """
+
+    def test_claude_step_wire_emits_task_scoped_milestone(self) -> None:
+        """IG-344: Claude tool-use wire events render as Task-scoped milestones."""
+        pipeline = StreamDisplayPipeline()
+        event = {
+            "type": SUBAGENT_CLAUDE_STEP_COMPLETED,
+            "tool_name": "Glob",
+            "input_preview": "pattern=**/*.md",
+            "task_scope": ("functions.task:0", "claude"),
+        }
+        lines = pipeline.process(event)
+        assert len(lines) == 1
+        assert lines[0].icon == "⚙"
+        assert "Task(claude):#0" in lines[0].content
+        assert "Glob" in lines[0].content
 
     def test_goal_started(self) -> None:
         pipeline = StreamDisplayPipeline()
@@ -445,19 +475,20 @@ class TestStreamDisplayPipeline:
         assert len(lines) == 0  # Filtered out (INTERNAL tier)
 
     def test_subagent_completed(self) -> None:
+        """Wire ``*.completed`` without task_scope renders (IG-340 suppresses when scoped)."""
         pipeline = StreamDisplayPipeline()
 
         event = {
             "type": "soothe.subagent.research.completed",
             "result_count": 5,
+            "answer_length": 1200,
             "duration_s": 45.2,
-            "task_scope": ("functions.task:9", "research"),
         }
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert lines[0].content == 'Task(research, "5 results") -> ✓ Completed (45200ms)'
-        assert lines[0].duration_ms is None
+        assert "1200 chars" in lines[0].content
+        assert lines[0].duration_ms == 45200
 
     def test_explore_completed_includes_search_target_in_done_line(self) -> None:
         """IG-340: Wire completed event suppressed when task_scope is present.
