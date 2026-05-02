@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from soothe_cli.cli.headless_renderer import HeadlessCliRenderer
+from soothe_cli.cli.execution.headless_renderer import HeadlessCliRenderer
 
 
 def test_streaming_chunks_do_not_insert_newlines_between_parts(

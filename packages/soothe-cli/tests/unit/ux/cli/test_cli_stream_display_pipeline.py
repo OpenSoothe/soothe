@@ -3,26 +3,23 @@
 NOTE: Tool call lines are not produced by this pipeline. The TUI uses
 ``StreamDisplayPipeline`` for goal/step/subagent progress; tool invocations are rendered
 in message widgets. Headless mode does not print tool/progress lines.
-Tool formatters remain for subagent dispatch display.
 """
 
 from __future__ import annotations
 
+from soothe_sdk.core.subagent_wire import SUBAGENT_CLAUDE_STEP_COMPLETED
+
 from soothe_cli.cli.stream.context import PipelineContext
 from soothe_cli.cli.stream.display_line import DisplayLine, indent_for_level
 from soothe_cli.cli.stream.formatter import (
-    abbreviate_text,
     format_goal_done,
     format_goal_header,
     format_step_done,
     format_step_header,
     format_subagent_done,
     format_subagent_milestone,
-    format_tool_call,
-    format_tool_result,
 )
 from soothe_cli.cli.stream.pipeline import StreamDisplayPipeline
-from soothe_sdk.core.subagent_wire import SUBAGENT_CLAUDE_STEP_COMPLETED
 
 _STEP_DONE_MARK = "\u2705\ufe0f"
 
@@ -96,26 +93,6 @@ class TestIndentForLevel:
 class TestFormatters:
     """Tests for formatter functions."""
 
-    def test_abbreviate_text_short(self) -> None:
-        """Short text is not abbreviated."""
-        result = abbreviate_text("Short text")
-        assert result == "Short text"
-
-    def test_abbreviate_text_long(self) -> None:
-        """Long text is abbreviated with ellipsis."""
-        text = "Run cloc on src/ and tests/ directories to count Soothe source and test code"
-        result = abbreviate_text(text, max_length=50)
-        assert "Run cloc on src/ and" in result
-        assert "..." in result
-        assert "test code" in result
-        assert len(result) < len(text)
-
-    def test_abbreviate_text_preserves_threshold(self) -> None:
-        """Text at max_length threshold is not abbreviated."""
-        text = "Exactly fifty characters long text here okay"
-        result = abbreviate_text(text, max_length=50)
-        assert result == text  # Should not be abbreviated
-
     def test_format_goal_header(self) -> None:
         line = format_goal_header("Analyze codebase")
         assert line.level == 1
@@ -133,27 +110,6 @@ class TestFormatters:
         line = format_step_header("Read files", parallel=True)
         assert line.content == "❇️ Read files (parallel)"
         assert line.icon == "○"
-
-    def test_format_tool_call_sequential(self) -> None:
-        line = format_tool_call("read_file", '"config.yml"', running=False)
-        assert line.level == 2
-        assert line.content == '🔧 ReadFile("config.yml")'
-        assert line.status is None
-
-    def test_format_tool_call_parallel(self) -> None:
-        line = format_tool_call("read_file", '"config.yml"', running=True)
-        assert line.status == "running"
-
-    def test_format_tool_result_success(self) -> None:
-        line = format_tool_result("Read 42 lines", 150, is_error=False)
-        assert line.level == 3
-        assert line.content == "✨ Read 42 lines"
-        assert line.icon == "●"
-        assert line.duration_ms == 150
-
-    def test_format_tool_result_error(self) -> None:
-        line = format_tool_result("File not found", 10, is_error=True)
-        assert line.icon == "✗"
 
     def test_format_subagent_milestone(self) -> None:
         line = format_subagent_milestone("arxiv: 15 results")
@@ -240,45 +196,47 @@ class TestFormatters:
 
 
 class TestPipelineContext:
-    """Tests for PipelineContext."""
+    """Tests for PipelineContext (goal/step state only)."""
 
-    def test_start_tool_call(self) -> None:
-        ctx = PipelineContext()
-        ctx.start_tool_call("tc1", "read_file", '"file.txt"', 0.0)
-        assert "tc1" in ctx.pending_tool_calls
-        assert ctx.pending_tool_calls["tc1"].name == "read_file"
-
-    def test_parallel_mode_detection(self) -> None:
-        ctx = PipelineContext()
-        ctx.start_tool_call("tc1", "tool1", "", 0.0)
-        assert not ctx.parallel_mode
-
-        ctx.start_tool_call("tc2", "tool2", "", 0.0)
-        assert ctx.parallel_mode
-
-    def test_complete_tool_call(self) -> None:
-        ctx = PipelineContext()
-        ctx.start_tool_call("tc1", "read_file", "", 0.0)
-        ctx.start_tool_call("tc2", "glob", "", 0.0)
-        assert ctx.parallel_mode
-
-        ctx.complete_tool_call("tc1")
-        assert ctx.parallel_mode  # Still parallel
-
-        ctx.complete_tool_call("tc2")
-        assert not ctx.parallel_mode  # No longer parallel
-
-    def test_reset_step(self) -> None:
+    def test_reset_step_clears_active_step(self) -> None:
         ctx = PipelineContext()
         ctx.current_step_id = "s1"
-        ctx.start_tool_call("tc1", "tool", "", 0.0)
-        ctx.parallel_mode = True
+        ctx.current_step_description = "do thing"
+        ctx.step_start_time = 1.0
 
         ctx.reset_step()
 
         assert ctx.current_step_id is None
-        assert not ctx.pending_tool_calls
-        assert not ctx.parallel_mode
+        assert ctx.current_step_description is None
+        assert ctx.step_start_time is None
+
+    def test_complete_step_increments_count_and_clears_active(self) -> None:
+        ctx = PipelineContext()
+        ctx._active_step_ids.extend(["s1", "s2"])
+
+        ctx.complete_step("s1")
+        assert ctx.steps_completed == 1
+        assert ctx._active_step_ids == ["s2"]
+
+        ctx.complete_step("s2")
+        assert ctx.steps_completed == 2
+        assert ctx._active_step_ids == []
+
+    def test_reset_goal_clears_everything(self) -> None:
+        ctx = PipelineContext()
+        ctx.current_goal = "g"
+        ctx.steps_total = 3
+        ctx.steps_completed = 1
+        ctx._active_step_ids.append("s1")
+        ctx.step_descriptions["s1"] = "first"
+
+        ctx.reset_goal()
+
+        assert ctx.current_goal is None
+        assert ctx.steps_total == 0
+        assert ctx.steps_completed == 0
+        assert ctx._active_step_ids == []
+        assert ctx.step_descriptions == {}
 
 
 class TestStreamDisplayPipeline:
