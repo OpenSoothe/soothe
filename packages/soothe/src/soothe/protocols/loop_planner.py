@@ -10,11 +10,11 @@ from soothe.protocols.planner import PlanContext
 
 @runtime_checkable
 class LoopPlannerProtocol(Protocol):
-    """Protocol for the Layer 2 Plan step (planning + progress in one LLM call).
+    """Protocol for the AgentLoop Plan step (assessment + optional plan generation).
 
-    The Plan phase combines planning, progress assessment, and goal-distance estimation
-    in a single structured response (PlanResult). This replaces the old Reason phase
-    terminology to better reflect the two-phase Plan-and-Execute architecture.
+    Implementations typically perform structured LLM calls (see RFC-604 ``LLMPlanner``:
+    ``StatusAssessment`` then, when needed, ``PlanGeneration``) and return a unified
+    ``PlanResult``. Naming replaces the older Reason-phase terminology.
     """
 
     async def plan(

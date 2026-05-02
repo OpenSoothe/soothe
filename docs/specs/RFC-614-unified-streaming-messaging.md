@@ -159,6 +159,9 @@ Early RFC-614 drafts described a `_wrap_streaming_output()` helper that re-publi
 3. Loop tags: preserve `phase` metadata so clients can classify `goal_completion`, `chitchat`, `quiz`, and `autonomous_goal`.
 4. Namespace: carry LangGraph namespace through to the client so concurrent subgraphs do not interleave text.
 
+**Delegate finals & headless (IG-355)**  
+Intermediate subgraph assistant prose stays **off** the root orchestration summary path (`iter_messages_for_act_aggregation` yields root-graph `messages` only). Answers that exist only inside a delegated run are promoted from ordered **`task`** `ToolMessage` return bodies at the delegation boundary (not by replaying raw subgraph AIMessage streams). When the loop completes, the runner may emit **one** additional loop-tagged **`phase=goal_completion`** chunk so headless clients (`--no-tui`), which only print RFC-614 phases on stdout, still receive the user-visible answer.
+
 #### StreamingTextAccumulator (State Machine)
 
 ```python
@@ -279,7 +282,7 @@ CLI/TUI `EventProcessor` paths use these helpers to treat **`mode="messages"`** 
 ### Phase 5: Client Layer (Display & Concatenation)
 
 **Primary modules**:
-1. `packages/soothe-cli/src/soothe_cli/shared/event_processor.py` — `StreamingTextAccumulator` keyed by internal namespace for **`phase=goal_completion`** message streaming; `_handle_messages_event` uses `assistant_output_phase`.
+1. `packages/soothe-cli/src/soothe_cli/shared/core/event_processor.py` — `StreamingTextAccumulator` keyed by internal namespace for **`phase=goal_completion`** message streaming; message handlers use `assistant_output_phase` (`soothe_sdk.ux.loop_stream`).
 2. `packages/soothe-cli/src/soothe_cli/tui/textual_adapter.py` — mirrors the same `messages` + `phase` behavior for the TUI.
 
 **Goal-completion accumulation** (conceptual):

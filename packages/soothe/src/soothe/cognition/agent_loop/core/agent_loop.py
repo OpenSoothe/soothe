@@ -55,7 +55,7 @@ class AgentLoop:
 
     Attributes:
         core_agent: Layer 1 CoreAgent for step execution
-        loop_planner: Protocol for the Plan phase (one LLM call per iteration)
+        loop_planner: Plan phase (RFC-604: assessment + conditional plan generation per iteration)
         config: Soothe configuration
     """
 
@@ -422,14 +422,19 @@ class AgentLoop:
                     state.total_duration_ms,
                     action,
                 )
+                skip_wire_dup = action in ("skip", "direct") and not getattr(
+                    state,
+                    "last_wave_answer_from_delegate_final",
+                    False,
+                )
                 yield (
                     "completed",
                     {
                         "result": updated_result,
                         "step_results_count": len(state.step_results),
-                        # Runner must not emit ``phase=goal_completion`` chunks for this body:
-                        # clients already received it via Execute ``messages`` stream.
-                        "skip_goal_completion_wire_duplicate": action in ("skip", "direct"),
+                        # Runner repeats ``phase=goal_completion`` when the visible answer came only
+                        # from ``task`` tool returns (subgraph AIMessages are not on root stream; IG-355).
+                        "skip_goal_completion_wire_duplicate": skip_wire_dup,
                     },
                 )
                 return

@@ -118,6 +118,7 @@ This index reflects the canonical RFC set and defines which files are active for
 - **RFC-614**: [Unified Daemon → Client Streaming Messaging Framework](RFC-614*.md)
   - Status: Draft
   - Extends: RFC-450 (Daemon Communication), RFC-401 (Event Processing)
+  - See also: [IG-355](../impl/IG-355-subagent-completion-wire.md) (delegate finals / headless wire parity)
   - Created: 2026-04-27
 
 ### Daemon & Transport

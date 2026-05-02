@@ -24,3 +24,4 @@ Wire-level ``preferred_subagent`` (slash routes such as ``/claude``) is a **hint
 ## References
 
 - IG-349 (unified subagent routing), RFC-211 (outcome metadata), RFC-201 (AgentLoop), deepagents ``task`` tool meta (`outcome_type=subagent`).
+- **IG-355**: User-visible completion for delegate-heavy runs—promote ordered **`task`** return text into goal completion / RFC-614 replay so headless CLI receives loop-tagged output without piping subgraph AIMessage streams into main context.
