@@ -121,7 +121,7 @@ observability:
     enabled: false
     level: WARNING
     stream: stderr
-    format: "%(levelname)-8s %(name)s %(message)s"
+    format: "%(level_short)s %(name)s %(message)s"
 
   global_history:
     enabled: true

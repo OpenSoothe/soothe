@@ -118,7 +118,7 @@ class TestLoggingConfig:
         assert cfg.logging.console.enabled is False
         assert cfg.logging.console.level == "WARNING"
         assert cfg.logging.console.stream == "stderr"
-        assert cfg.logging.console.format == "%(levelname)-8s %(name)s %(message)s"
+        assert cfg.logging.console.format == "%(level_short)s %(name)s %(message)s"
 
     def test_file_logging_custom_config(self) -> None:
         """Test custom file logging configuration."""

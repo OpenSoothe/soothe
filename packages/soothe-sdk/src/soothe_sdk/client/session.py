@@ -139,7 +139,8 @@ async def bootstrap_thread_session(
         verbosity=verbosity,
         timeout=subscription_timeout_s,
     )
-    logger.info("Subscribed to thread %s with verbosity=%s", actual_thread_id, verbosity)
+    # Preformatted message: avoids ``msg % args`` when ``thread_id`` contains ``%`` sequences.
+    logger.info(f"Subscribed to thread {actual_thread_id} with verbosity={verbosity}")
 
     return status_event
 

@@ -9,18 +9,31 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from soothe_sdk.utils.logging import ShortLevelFormatter
+
 from soothe.config import SOOTHE_HOME
 from soothe.logging.context import get_thread_id
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
+# Prefix length for conversation thread id in log lines (full id stays in context vars).
+_THREAD_ID_LOG_PREFIX_LEN = 4
 
-class ThreadFormatter(logging.Formatter):
-    """Custom formatter that includes the Soothe conversation thread ID."""
+
+def _short_thread_id_for_log(thread_id: str) -> str:
+    """Return first N characters of thread id for compact log tags."""
+    tid = thread_id.strip()
+    if not tid:
+        return ""
+    return tid[:_THREAD_ID_LOG_PREFIX_LEN]
+
+
+class ThreadFormatter(ShortLevelFormatter):
+    """Custom formatter that includes a short Soothe conversation thread id tag."""
 
     def format(self, record: logging.LogRecord) -> str:
-        """Format the log record with both Soothe and OS thread IDs.
+        """Format the log record with a short conversation thread id prefix.
 
         Args:
             record: The log record to format.
@@ -29,7 +42,11 @@ class ThreadFormatter(logging.Formatter):
             The formatted log message string.
         """
         soothe_thread_id = get_thread_id()
-        record.thread_id = f"[{soothe_thread_id}]" if soothe_thread_id else "[main]"
+        if soothe_thread_id:
+            short = _short_thread_id_for_log(soothe_thread_id)
+            record.thread_id = f"[{short}]" if short else "[main]"
+        else:
+            record.thread_id = "[main]"
         return super().format(record)
 
 
@@ -75,7 +92,7 @@ def setup_logging(config: SootheConfig | None = None, *, foreground: bool = Fals
         )
         file_handler.setFormatter(
             ThreadFormatter(
-                "%(asctime)s %(levelname)-8s %(thread_id)s %(name)s:%(lineno)d %(message)s"
+                "%(asctime)s %(level_short)s %(thread_id)s %(name)s:%(lineno)d %(message)s"
             )
         )
         file_handler.setLevel(file_level)
@@ -93,7 +110,7 @@ def setup_logging(config: SootheConfig | None = None, *, foreground: bool = Fals
             for h in root_logger.handlers
         ):
             console_handler = logging.StreamHandler(console_stream)
-            console_handler.setFormatter(logging.Formatter(cfg.logging.console.format))
+            console_handler.setFormatter(ShortLevelFormatter(cfg.logging.console.format))
             console_handler.setLevel(console_level)
             root_logger.addHandler(console_handler)
 
