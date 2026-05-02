@@ -4,6 +4,9 @@ Public UX surface for user-visible assistant text from the main loop: stream
 ``mode="messages"`` chunks whose payload carries a recognized ``phase`` (see
 ``LOOP_ASSISTANT_OUTPUT_PHASES``). Custom daemon events are not used for this
 text path.
+
+Headless CLI relies on these phases for stdout (IG-343). Delegate-only answers may appear
+as an extra ``phase=goal_completion`` replay after Act when sourced from ``task`` returns (IG-355).
 """
 
 from __future__ import annotations

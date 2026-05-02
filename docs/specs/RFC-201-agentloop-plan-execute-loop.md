@@ -92,7 +92,7 @@ async def run_with_progress(...):
 
 When the Plan phase returns `status: done`, AgentLoop must produce the user-visible completion text. Two strategies exist:
 
-1. **Reuse last Execute assistant text**: After each Execute wave on the goal thread, AgentLoop records the assistant-visible text from the CoreAgent stream. For simple goals (light evidence, single-wave semantics, no parallel multi-step wave), this text may be returned directly without a second CoreAgent turn.
+1. **Reuse last Execute assistant text**: After each Execute wave on the goal thread, AgentLoop records assistant-visible text. Root-graph AIMessage chunks are aggregated from the Act stream for orchestration (`iter_messages_for_act_aggregation` is root-only). When delegation ran via the **`task`** tool, the bounded **return payload** text is also captured (ordered, capped; IG-355)—that is the delegate **final**, not subgraph AIMessage chatter—and preferred for adaptive completion when present so user-visible answers are not lost when subgraph streams stay isolated.
 2. **Final thread synthesis**: An additional CoreAgent turn asks for a consolidated report over full thread history. Used when evidence heuristics indicate a multi-step or heavy run, when the last wave used parallel multi-step execution, when the subagent task cap was hit, or when no assistant text was captured.
 
 Configuration (`agentic.final_response`): `adaptive` (default) applies the policy above; `always_synthesize` always runs the report turn; `always_last_execute` skips the report when last Execute text exists (falling back to plan evidence otherwise).

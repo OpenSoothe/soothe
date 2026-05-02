@@ -6,13 +6,15 @@
 **Kind**: Architecture Design
 **Created**: 2026-04-28
 **Dependencies**: RFC-201, RFC-603
-**Related**: IG-199, IG-295, IG-296
+**Related**: IG-199, IG-295, IG-296, IG-355
 
 ---
 
 ## Abstract
 
 This RFC defines a modular architecture for AgentLoop goal completion logic, extracting the complex decision tree from monolithic orchestration code into a dedicated GoalCompletionModule with clear separation of concerns. The module encapsulates all decisions and execution logic for producing user-visible goal completion responses, making AgentLoop orchestration simpler, testable, and extensible.
+
+**Wire parity (IG-355):** When completion policy selects `skip` or `direct` because `require_goal_completion` is false, the runner normally avoids replaying `phase=goal_completion`. If the user-visible answer came only from **`task`** delegate return text (not root-graph AIMessages), AgentLoop marks the completion event so the runner **does** emit one loop-tagged replay—otherwise headless clients would print nothing.
 
 ---
 

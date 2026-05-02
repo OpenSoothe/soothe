@@ -1,8 +1,9 @@
-"""LLMPlanner -- single LLM call planner for simple/medium tasks."""
+"""LLMPlanner -- RFC-604 Plan-phase planner (sequential structured LLM calls)."""
 
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage
@@ -34,6 +35,29 @@ if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _plan_prompt_text_length(messages: list[Any]) -> int:
+    """Approximate total characters in plan prompt messages (text parts only).
+
+    Args:
+        messages: LangChain messages from ``build_plan_messages``.
+
+    Returns:
+        Sum of string lengths of textual ``content`` fields.
+    """
+    total = 0
+    for m in messages:
+        content = getattr(m, "content", None)
+        if isinstance(content, str):
+            total += len(content)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, str):
+                    total += len(block)
+                elif isinstance(block, dict) and block.get("type") == "text":
+                    total += len(str(block.get("text", "")))
+    return total
 
 
 def _calculate_evidence_based_confidence(
@@ -306,13 +330,16 @@ _SIMPLE_PLANNER_HINT_MAP = {
 
 
 class LLMPlanner:
-    """PlannerProtocol using single LLM call for planning.
+    """PlannerProtocol for AgentLoop Plan phase using RFC-604 structured LLM calls.
 
     For simple/medium tasks. Produces flat plans (typically 1-3 steps).
 
-    Optimizations:
-    - Unified planning prompt combines classification + planning
-    - Heuristic reflection (no LLM needed)
+    Flow:
+    - ``StatusAssessment`` runs each iteration.
+    - If status is not ``done``, ``PlanGeneration`` runs (two LLM calls).
+    - If status is ``done`` after assessment, hybrid completion logic runs without plan generation.
+
+    Heuristic reflection uses no LLM (see ``reflect``).
 
     Args:
         model: Langchain BaseChatModel supporting structured output.
@@ -940,12 +967,19 @@ class LLMPlanner:
                 break
         logger.debug("Plan msgs=%d types=%s human=%s", len(messages), msg_types, human_preview)
 
+        prompt_chars = _plan_prompt_text_length(messages)
+        logger.debug("Plan prompt_chars=%d", prompt_chars)
+
         max_retries = 3
         result = None
 
         for attempt in range(max_retries):
             try:
+                t_assess = time.perf_counter()
                 assessment = await self._assess_status(messages, goal, state.iteration)
+                assess_ms = (time.perf_counter() - t_assess) * 1000
+                plan_gen_ms = 0.0
+                llm_calls = 1
 
                 # Guard against false "done" at iteration 0
                 if assessment.status == "done":
@@ -993,9 +1027,12 @@ class LLMPlanner:
                         full_output=state.last_execute_assistant_text,
                     )
                 else:
+                    t_plan = time.perf_counter()
                     plan_result = await self._generate_plan(
                         messages, assessment, goal, state.iteration
                     )
+                    plan_gen_ms = (time.perf_counter() - t_plan) * 1000
+                    llm_calls = 2
 
                     result = self._combine_results(assessment, plan_result)
 
@@ -1011,6 +1048,15 @@ class LLMPlanner:
                     result.goal_progress * 100,
                     result.confidence * 100,
                     decision_info,
+                )
+                logger.info(
+                    "[LLMPlanner] timings iter=%d assess_ms=%.1f plan_gen_ms=%.1f llm_calls=%d "
+                    "prompt_chars=%d",
+                    state.iteration,
+                    assess_ms,
+                    plan_gen_ms,
+                    llm_calls,
+                    prompt_chars,
                 )
                 break
 

@@ -422,6 +422,8 @@ class LoopState(BaseModel):
         working_memory: Loop working-memory instance (RFC-203) when enabled.
         plan_conversation_excerpts: Prior Human/Assistant lines for Plan (IG-128).
         last_execute_assistant_text: Last CoreAgent assistant text from the latest Execute wave (IG-199).
+        last_wave_answer_from_delegate_final: True when ``last_execute_assistant_text`` was taken from
+            ``task`` tool return payloads (delegate finals), not root-graph AIMessages (IG-355).
         last_execute_wave_parallel_multi_step: True when the last wave ran multiple parallel steps (IG-199).
         thread_continuation: IG-226 flag for thread continuation intent (adjusts iteration behavior).
     """
@@ -461,6 +463,7 @@ class LoopState(BaseModel):
 
     # Last Execute wave assistant text for adaptive final response (IG-199)
     last_execute_assistant_text: str | None = None
+    last_wave_answer_from_delegate_final: bool = False
     last_execute_wave_parallel_multi_step: bool = False
     thread_continuation: bool = False  # IG-226: Thread continuation mode flag
     intent: Any | None = None  # IG-268: Intent classification for response length intelligence

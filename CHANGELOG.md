@@ -23,6 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - IG-300: default ``security.allow_paths_outside_workspace`` to false (template + dev overlay); ``ConfigDrivenPolicy`` applies filesystem deny/allow/workspace rules to real deepagents tool names; workspace backend expands ``~`` in normalized paths; explore/research/claude subagents align with the security flag
 
 ### Fixed
+- IG-355: headless (`--no-tui`) prints subagent answers by aggregating ``task`` tool return text at Act finalize and replaying ``phase=goal_completion`` when needed; removes the IG-354 EventProcessor delegate flag
 - Version mismatch in packaging
 - IG-301: adaptive per-call LLM timeout for large prompts (goal-completion synthesis no longer cut off at the 60s floor when the provider needs longer)
 - IG-302: goal-completion synthesis runs under an ephemeral LangGraph ``thread_id`` so the checkpointer does not replay the full AgentLoop conversation; stream tags still use the parent thread id

@@ -1,6 +1,8 @@
 """Minimal stdout-only renderer for headless CLI (IG-343).
 
-Emits RFC-614 loop-tagged main-graph assistant text only; stderr is used for errors.
+Emits RFC-614 loop-tagged assistant text for the main graph (empty LangGraph namespace)
+and loop-tagged finals (including replayed ``goal_completion`` from IG-355). Subgraph
+namespaced prose is suppressed unless loop-tagged. Stderr is used for errors.
 """
 
 from __future__ import annotations
