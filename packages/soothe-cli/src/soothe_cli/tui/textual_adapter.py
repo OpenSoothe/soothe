@@ -291,7 +291,7 @@ def _format_task_scoped_tool_invocation_line(
     tool_args: dict[str, Any],
 ) -> str:
     """One stderr-style line for Task subgraph tools (⚙ prefix, display name, args)."""
-    from soothe_cli.cli.task_scope_display import format_task_scope_prefix
+    from soothe_cli.cli.stream.task_scope import format_task_scope_prefix
 
     display_name = get_tool_display_name(tool_name)
     raw_fb = tool_args.get("_raw", "")
@@ -2330,7 +2330,7 @@ async def _flush_assistant_text_ns(
     Finalizes the streaming by stopping the MarkdownStream.
     If no message exists yet, creates one with the full content.
     """
-    from soothe_cli.cli.task_scope_display import format_task_scope_prefix
+    from soothe_cli.cli.stream.task_scope import format_task_scope_prefix
     from soothe_cli.shared.explore_task_display import format_explore_task_json_blob_for_display
 
     repaired_text = RendererBase.repair_concatenated_output(text)

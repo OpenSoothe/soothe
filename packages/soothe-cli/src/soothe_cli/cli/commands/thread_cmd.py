@@ -19,6 +19,11 @@ from soothe_sdk.client import WebSocketClient, is_daemon_live, websocket_url_fro
 
 from soothe_cli.shared import load_config
 
+thread_app = typer.Typer(
+    name="thread",
+    help="Inspect conversation threads (read-only diagnostics)",
+)
+
 # Display limits for thread list
 _TOPIC_DISPLAY_LIMIT = 30  # Max chars for last human message
 _TOPIC_TRUNCATE_KEEP = 27  # Leave room for "..."
@@ -116,6 +121,7 @@ def _echo_thread_table(rows: list[dict[str, object]]) -> None:
         typer.echo(f"{tid:<20}  {t_status:<10}  {created:<19}  {last_msg:<19}  {topic:<30}")
 
 
+@thread_app.command("list")
 def thread_list(
     config: Annotated[
         str | None,
@@ -186,6 +192,7 @@ def thread_list(
     asyncio.run(_list())
 
 
+@thread_app.command("show")
 def thread_show(
     thread_id: Annotated[str, typer.Argument(help="Thread ID to show.")],
     config: Annotated[
@@ -239,6 +246,7 @@ def thread_show(
     asyncio.run(_show())
 
 
+@thread_app.command("export")
 def thread_export(
     thread_id: Annotated[str, typer.Argument(help="Thread ID to export.")],
     output: Annotated[
@@ -309,6 +317,7 @@ def thread_export(
     asyncio.run(_export())
 
 
+@thread_app.command("stats")
 def thread_stats(
     thread_id: Annotated[str, typer.Argument(help="Thread ID.")],
     config: Annotated[
@@ -368,6 +377,7 @@ def thread_stats(
     asyncio.run(_stats())
 
 
+@thread_app.command("artifacts")
 def thread_artifacts(
     thread_id: Annotated[str, typer.Argument(help="Thread ID to list artifacts for.")],
     config: Annotated[

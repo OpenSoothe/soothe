@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from soothe_sdk.utils import get_tool_display_name
-
 from soothe_cli.cli.stream.display_line import DisplayLine, indent_for_level
-from soothe_cli.cli.task_scope_display import (
+from soothe_cli.cli.stream.task_scope import (
     format_task_scope_prefix,
     format_task_subagent_line,
 )
@@ -23,181 +21,47 @@ def _step_done_tool_suffix(tool_call_count: int) -> str:
     return f", {tool_call_count} tools"
 
 
-def abbreviate_text(text: str, max_length: int = 50) -> str:
-    """Abbreviate text to max_length, preserving start and end.
-
-    Args:
-        text: Text to abbreviate.
-        max_length: Maximum length before abbreviation.
-
-    Returns:
-        Abbreviated text with "..." in middle if too long.
-
-    Examples:
-        >>> abbreviate_text("Short text")
-        "Short text"
-        >>> abbreviate_text(
-        ...     "Run cloc on src/ and tests/ directories to count Soothe source and test code"
-        ... )
-        "Run cloc on src/ and ... test code"
-    """
-    if len(text) <= max_length:
-        return text
-
-    # Find word boundary in first ~25 chars
-    first_end = min(25, len(text))
-    while first_end > 0 and text[first_end] != " ":
-        first_end -= 1
-    if first_end == 0:
-        first_end = 25  # No space found, use fixed position
-
-    # Find word boundary in last ~10 chars
-    last_start = max(len(text) - 10, 0)
-    while last_start < len(text) and text[last_start] != " ":
-        last_start += 1
-    if last_start == len(text):
-        last_start = len(text) - 10  # No space found, use fixed position
-
-    first_part = text[:first_end].rstrip()
-    last_part = text[last_start:].lstrip()
-    return f"{first_part} ... {last_part}"
-
-
-def _derive_source_prefix(
-    namespace: tuple[str, ...],
-) -> str | None:
-    """Reserved for future debug namespaces; single UX tier omits prefixes (IG-343)."""
-    del namespace
-    return None
-
-
-def format_goal_header(
-    goal: str,
-    *,
-    namespace: tuple[str, ...] = (),
-) -> DisplayLine:
+def format_goal_header(goal: str) -> DisplayLine:
     """Format a goal header line.
 
     Args:
         goal: Goal description.
-        namespace: Event namespace (empty for main, non-empty for subagent).
 
     Returns:
         DisplayLine for goal header.
     """
-    # Add inline symbol for goal marker
     content = f"📍 {goal}"
     return DisplayLine(
         level=1,
         content=content,
         icon="●",
         indent=indent_for_level(1),
-        source_prefix=_derive_source_prefix(namespace),
     )
 
 
-def format_step_header(
-    description: str,
-    *,
-    parallel: bool = False,
-    namespace: tuple[str, ...] = (),
-) -> DisplayLine:
+def format_step_header(description: str, *, parallel: bool = False) -> DisplayLine:
     """Format a step header line with checkbox style.
 
     Args:
         description: Step description.
         parallel: Whether step has parallel tools.
-        namespace: Event namespace.
 
     Returns:
         DisplayLine for step header with hollow circle icon.
     """
     suffix = " (parallel)" if parallel else ""
-    # Add inline symbol for step progression
     content = f"❇️ {description}{suffix}"
     return DisplayLine(
         level=2,
         content=content,
         icon="○",  # Hollow circle for in-progress step
         indent=indent_for_level(2),
-        source_prefix=_derive_source_prefix(namespace),
-    )
-
-
-def format_tool_call(
-    name: str,
-    args_summary: str,
-    *,
-    running: bool = False,
-    namespace: tuple[str, ...] = (),
-) -> DisplayLine:
-    """Format a tool/subagent call line.
-
-    IG-256: Restored uniform tool display - no subagent differentiation.
-    All tools/subagents use same wrench emoji and gear icon.
-
-    Args:
-        name: Tool or subagent name.
-        args_summary: Truncated args or query preview.
-        running: Whether tool/subagent is running.
-        namespace: Event namespace.
-
-    Returns:
-        DisplayLine for tool/subagent call with uniform wrench icon.
-    """
-    # Transform to PascalCase for display
-    display_name = get_tool_display_name(name)
-
-    # IG-256: No differentiation - use wrench for all tools/subagents
-    icon_emoji = "🔧"
-    icon_char = "⚙"
-
-    content = f"{icon_emoji} {display_name}({args_summary})"
-    return DisplayLine(
-        level=2,
-        content=content,
-        icon=icon_char,
-        indent=indent_for_level(2),
-        status="running" if running else None,
-        source_prefix=_derive_source_prefix(namespace),
-    )
-
-
-def format_tool_result(
-    summary: str,
-    duration_ms: int,
-    *,
-    is_error: bool = False,
-    namespace: tuple[str, ...] = (),
-) -> DisplayLine:
-    """Format a tool result line.
-
-    Args:
-        summary: Result summary.
-        duration_ms: Duration in milliseconds.
-        is_error: Whether result is an error.
-        namespace: Event namespace.
-
-    Returns:
-        DisplayLine for tool result.
-    """
-    # Add inline symbol for result status
-    inline_symbol = "❌" if is_error else "✨"
-    content = f"{inline_symbol} {summary}"
-    return DisplayLine(
-        level=3,
-        content=content,
-        icon="✗" if is_error else "●",  # Solid bullet for success (polish)
-        indent=indent_for_level(3),
-        duration_ms=duration_ms,
-        source_prefix=_derive_source_prefix(namespace),
     )
 
 
 def format_subagent_milestone(
     brief: str,
     *,
-    namespace: tuple[str, ...] = (),
     task_scope: tuple[str, str] | None = None,
 ) -> DisplayLine:
     """Format a subagent milestone line showing progress.
@@ -206,7 +70,7 @@ def format_subagent_milestone(
 
     Args:
         brief: Milestone description (e.g., explore milestone text).
-        namespace: Event namespace.
+        task_scope: Optional ``(task_tool_call_id, subagent_type)`` for delegated rows.
 
     Returns:
         DisplayLine for milestone.
@@ -223,7 +87,6 @@ def format_subagent_milestone(
         content=content,
         icon=milestone_icon,
         indent=indent_for_level(2),
-        source_prefix=_derive_source_prefix(namespace),
     )
 
 
@@ -231,7 +94,6 @@ def format_subagent_done(
     summary: str,
     duration_s: float,
     *,
-    namespace: tuple[str, ...] = (),
     task_scope: tuple[str, str] | None = None,
     task_description: str | None = None,
     task_done_success: bool = True,
@@ -246,7 +108,7 @@ def format_subagent_done(
     Args:
         summary: Metrics fallback when task_description is absent (or failure detail).
         duration_s: Duration in seconds.
-        namespace: Event namespace.
+        task_scope: Optional ``(task_tool_call_id, subagent_type)`` for delegated rows.
         task_description: Original brief (e.g. explore ``search_target``) when available.
         task_done_success: False for delegated failures (e.g. Claude subagent error).
         answer_summary: Optional one-line answer tail after metrics (IG-344).
@@ -269,7 +131,6 @@ def format_subagent_done(
             icon="⚙",
             indent=indent_for_level(2),
             duration_ms=None,
-            source_prefix=_derive_source_prefix(namespace),
         )
 
     duration_ms = int(duration_s * 1000)
@@ -280,16 +141,10 @@ def format_subagent_done(
         icon="✓",
         indent=indent_for_level(3),
         duration_ms=duration_ms,
-        source_prefix=_derive_source_prefix(namespace),
     )
 
 
-def format_plan_phase_reasoning(
-    label: str,
-    text: str,
-    *,
-    namespace: tuple[str, ...] = (),
-) -> DisplayLine:
+def format_plan_phase_reasoning(label: str, text: str) -> DisplayLine:
     """Format a labeled plan-phase reasoning line (assessment vs plan strategy).
 
     IG-225: Uses level=2 (flat, no indent) for prominent visibility alongside step headers.
@@ -297,7 +152,6 @@ def format_plan_phase_reasoning(
 
     IG-257: When label is empty, shows text without prefix (just emoji + text).
     """
-    # IG-257: Handle empty label (no prefix)
     if label:
         content = f"💭 {label}: {text}"
     else:
@@ -307,16 +161,10 @@ def format_plan_phase_reasoning(
         content=content,
         icon="●",  # Solid bullet matching goal icon (polish)
         indent=indent_for_level(2),
-        source_prefix=_derive_source_prefix(namespace),
     )
 
 
-def format_judgement(
-    judgement: str,
-    action: str,
-    *,
-    namespace: tuple[str, ...] = (),
-) -> DisplayLine:
+def format_judgement(judgement: str, action: str) -> DisplayLine:
     """Format a judgement line for LLM decision reasoning.
 
     IG-089: Shows meaningful judgement info without raw intermediate data.
@@ -325,21 +173,19 @@ def format_judgement(
     Args:
         judgement: Human-readable summary of the decision.
         action: Action taken ("continue" or "complete").
-        namespace: Event namespace.
 
     Returns:
         DisplayLine for judgement.
     """
-    action_icon = "○" if action == "continue" else "●"  # Polish: ○ for continue, ● for complete
+    action_icon = "○" if action == "continue" else "●"
 
     content = f"🌟 {judgement}"
 
     return DisplayLine(
-        level=2,  # Use level 2 for more prominence (like step headers)
+        level=2,
         content=content,
         icon=action_icon,
         indent=indent_for_level(2),
-        source_prefix=_derive_source_prefix(namespace),
     )
 
 
@@ -350,7 +196,6 @@ def format_step_done(
     success: bool = True,
     error_msg: str | None = None,
     step_description: str = "",
-    namespace: tuple[str, ...] = (),
 ) -> list[DisplayLine]:
     """Format step completion — same structural pattern as ``format_goal_done`` (IG-333).
 
@@ -363,7 +208,6 @@ def format_step_done(
         success: Whether step succeeded.
         error_msg: Error message if failed.
         step_description: Human-readable step text (from pipeline context).
-        namespace: Event namespace.
 
     Returns:
         One display line on success when ``step_description`` is non-empty; otherwise an
@@ -378,9 +222,7 @@ def format_step_done(
     if success and not desc_stripped:
         return []
     desc = desc_stripped or "Step"
-    source_prefix = _derive_source_prefix(namespace)
 
-    # Match goal-done: level 1, bullet icon, full description in content (no tree indent).
     if success:
         content = f"{_STEP_DONE_OK_MARK} {desc} (done{tools})"
         return [
@@ -390,7 +232,6 @@ def format_step_done(
                 icon="●",
                 indent=indent_for_level(1),
                 duration_ms=duration_ms,
-                source_prefix=source_prefix,
             )
         ]
 
@@ -401,7 +242,6 @@ def format_step_done(
             icon="●",
             indent=indent_for_level(1),
             duration_ms=duration_ms,
-            source_prefix=source_prefix,
         )
     ]
     if error_msg:
@@ -411,32 +251,23 @@ def format_step_done(
                 content=f"Error: {error_msg}",
                 icon="",
                 indent="",
-                source_prefix=source_prefix,
             )
         )
     return lines
 
 
-def format_goal_done(
-    goal: str,
-    steps: int,
-    total_s: float,
-    *,
-    namespace: tuple[str, ...] = (),
-) -> DisplayLine:
+def format_goal_done(goal: str, steps: int, total_s: float) -> DisplayLine:
     """Format a goal completion line.
 
     Args:
         goal: Goal description.
         steps: Total steps completed.
         total_s: Total duration in seconds.
-        namespace: Event namespace.
 
     Returns:
         DisplayLine for goal done.
     """
     duration_ms = int(total_s * 1000)
-    # Add inline symbol for goal completion celebration
     content = f"🏆 {goal} (complete, {steps} steps)"
     return DisplayLine(
         level=1,
@@ -444,12 +275,10 @@ def format_goal_done(
         icon="●",
         indent=indent_for_level(1),
         duration_ms=duration_ms,
-        source_prefix=_derive_source_prefix(namespace),
     )
 
 
 __all__ = [
-    "abbreviate_text",
     "format_goal_done",
     "format_goal_header",
     "format_judgement",
@@ -458,6 +287,4 @@ __all__ = [
     "format_step_header",
     "format_subagent_done",
     "format_subagent_milestone",
-    "format_tool_call",
-    "format_tool_result",
 ]

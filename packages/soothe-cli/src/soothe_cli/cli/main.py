@@ -126,146 +126,22 @@ def main(
 
 
 # ---------------------------------------------------------------------------
-# Thread Command (Nested Subcommands) - Read-Only Diagnostics
+# Sub-command groups (nested Typer apps)
 # ---------------------------------------------------------------------------
-# NOTE: Thread commands are read-only diagnostics per RFC-503 (Loop-First UX).
-# Users manage loops (primary entity), not threads (internal execution contexts).
-# For thread lifecycle management, use loop commands: soothe loop <subcommand>
-
-thread_app = typer.Typer(
-    name="thread",
-    help="Inspect conversation threads (read-only diagnostics)",
-)
-add_help_alias(thread_app)
-app.add_typer(thread_app)
-
-
-@thread_app.command("list")
-def _thread_list(
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-    status: Annotated[
-        str | None,
-        typer.Option("--status", "-s", help="Filter by status (active, archived)."),
-    ] = None,
-) -> None:
-    """List all agent threads (read-only diagnostics).
-
-    Examples:
-        soothe thread list
-        soothe thread list --status active
-
-    Note: For thread lifecycle management, use loop commands (RFC-503).
-    """
-    from soothe_cli.cli.commands.thread_cmd import thread_list
-
-    thread_list(config=config, status=status)
-
-
-@thread_app.command("show")
-def _thread_show(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID to show.")],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-) -> None:
-    """Show thread details (read-only diagnostics).
-
-    Example:
-        soothe thread show abc123
-
-    Note: For thread lifecycle management, use loop commands (RFC-503).
-    """
-    from soothe_cli.cli.commands.thread_cmd import thread_show
-
-    thread_show(thread_id=thread_id, config=config)
-
-
-@thread_app.command("export")
-def _thread_export(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID to export.")],
-    output: Annotated[
-        str | None,
-        typer.Option("--output", "-o", help="Output file path."),
-    ] = None,
-    export_format: Annotated[
-        str,
-        typer.Option("--format", "-f", help="Export format: jsonl or md."),
-    ] = "jsonl",
-) -> None:
-    """Export thread conversation to a file (read-only diagnostics).
-
-    Example:
-        soothe thread export abc123 --output out.jsonl
-
-    Note: For thread lifecycle management, use loop commands (RFC-503).
-    """
-    from soothe_cli.cli.commands.thread_cmd import thread_export
-
-    thread_export(thread_id=thread_id, output=output, export_format=export_format)
-
-
-@thread_app.command("stats")
-def _thread_stats(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID.")],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-) -> None:
-    """Show thread execution statistics (read-only diagnostics).
-
-    Example:
-        soothe thread stats abc123
-
-    Note: For thread lifecycle management, use loop commands (RFC-503).
-    """
-    from soothe_cli.cli.commands.thread_cmd import thread_stats
-
-    thread_stats(thread_id=thread_id, config=config)
-
-
-@thread_app.command("artifacts")
-def _thread_artifacts(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID to list artifacts for.")],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-) -> None:
-    """List artifacts for a thread (read-only diagnostics).
-
-    Example:
-        soothe thread artifacts abc123
-
-    Note: For thread lifecycle management, use loop commands (RFC-503).
-    """
-    from soothe_cli.cli.commands.thread_cmd import thread_artifacts
-
-    thread_artifacts(thread_id=thread_id, config=config)
-
-
-# ---------------------------------------------------------------------------
-# Loop Command (Nested Subcommands)
-# ---------------------------------------------------------------------------
-
-from soothe_cli.loop_commands import loop_app as _loop_app  # noqa: E402
-
-add_help_alias(_loop_app)
-app.add_typer(_loop_app, name="loop")
-
-
-# ---------------------------------------------------------------------------
-# Autopilot Command (Nested Subcommands)
-# ---------------------------------------------------------------------------
+# Thread: read-only diagnostics per RFC-503 (Loop-First UX). Lifecycle
+# management lives under `soothe loop <subcommand>`.
 
 from soothe_cli.cli.commands.autopilot_cmd import app as _autopilot_app  # noqa: E402
+from soothe_cli.cli.commands.thread_cmd import thread_app as _thread_app  # noqa: E402
+from soothe_cli.loop_commands import loop_app as _loop_app  # noqa: E402
 
-add_help_alias(_autopilot_app)
-app.add_typer(_autopilot_app, name="autopilot")
+for _sub_app, _name in (
+    (_thread_app, "thread"),
+    (_loop_app, "loop"),
+    (_autopilot_app, "autopilot"),
+):
+    add_help_alias(_sub_app)
+    app.add_typer(_sub_app, name=_name)
 
 
 # ---------------------------------------------------------------------------

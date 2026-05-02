@@ -19,7 +19,7 @@ class RoutingClassification(BaseModel):
     Args:
         task_complexity: Routing complexity (chitchat | medium | complex).
         chitchat_response: Direct response for chitchat queries.
-        preferred_subagent: Preferred subagent name for direct routing.
+        preferred_subagent: Wire or classifier hint for which subagent to prefer in AgentLoop.
         routing_hint: Routing strategy hint.
     """
 
@@ -32,7 +32,7 @@ class RoutingClassification(BaseModel):
     )
     preferred_subagent: str | None = Field(
         default=None,
-        description="Preferred subagent name for direct routing (e.g., 'browser', 'claude')",
+        description="Preferred subagent name from slash routing or classifier (e.g. 'browser', 'claude')",
     )
     routing_hint: str | None = Field(
         default=None, description="Routing strategy hint: 'subagent', 'tool', 'llm_only', etc."
