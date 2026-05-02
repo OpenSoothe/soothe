@@ -117,10 +117,9 @@ def _first_nonempty_str_arg(tool_args: dict[str, Any], keys: tuple[str, ...]) ->
 
 
 def format_tool_cli_style_command(tool_name: str, tool_args: dict[str, Any] | None) -> str:
-    """Format a tool invocation like headless CLI (``CliRenderer.on_tool_call``).
+    """Format a tool invocation for TUI display (shared args formatting with flat CLI style).
 
-    Uses ``get_tool_display_name`` + ``format_tool_call_args`` so the TUI command line
-    matches stderr tool blocks.
+    Uses ``get_tool_display_name`` + ``format_tool_call_args`` for one-line command text.
 
     Args:
         tool_name: Raw tool name from the model or wire.
