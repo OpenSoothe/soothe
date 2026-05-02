@@ -358,6 +358,25 @@ class TestStepResult:
         assert "✗" in evidence
         assert "Error: Error occurred" in evidence
 
+    def test_to_evidence_string_subagent_includes_delegate_preview(self):
+        """Subagent steps surface bounded delegate preview for planning (IG-356)."""
+        result = StepResult(
+            step_id="s1",
+            success=True,
+            outcome={
+                "type": "subagent",
+                "tool_name": "task",
+                "delegate_evidence_preview": "Report intro… full delegate body here.",
+                "size_bytes": 100,
+            },
+            duration_ms=100,
+            thread_id="t1",
+        )
+        evidence = result.to_evidence_string()
+        assert "task" in evidence
+        assert "Report intro" in evidence
+        assert "delegation completed" not in evidence
+
 
 class TestLoopState:
     """Tests for LoopState schema."""

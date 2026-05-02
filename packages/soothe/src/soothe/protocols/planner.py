@@ -110,6 +110,15 @@ class StepResult(BaseModel):
         elif outcome_type == "code_exec":
             return f"Step {self.step_id}: ✓ {tool_name} (executed successfully)"
         elif outcome_type == "subagent":
+            preview_src = self.outcome.get("delegate_evidence_preview") or self.outcome.get(
+                "output_summary"
+            )
+            if preview_src:
+                if truncate:
+                    prev = preview_src[:800] + ("…" if len(preview_src) > 800 else "")
+                else:
+                    prev = preview_src
+                return f"Step {self.step_id}: ✓ {tool_name} — {prev}"
             return f"Step {self.step_id}: ✓ {tool_name} (delegation completed)"
         else:
             # Generic outcome

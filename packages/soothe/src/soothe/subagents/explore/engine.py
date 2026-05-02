@@ -10,7 +10,6 @@ The LLM decides which tool to call at each step based on accumulated findings.
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 from typing import TYPE_CHECKING, Any, Literal
@@ -23,7 +22,12 @@ from soothe.utils.subagent_emit import emit_subagent_wire_event
 
 from .events import ExploreCompletedEvent, ExploreMilestoneEvent, ExploreStartedEvent
 from .prompts import ASSESS_RESULTS, PLAN_SEARCH, SYNTHESIZE
-from .schemas import ExploreResult, ExploreState, ExploreSubagentConfig
+from .schemas import (
+    ExploreResult,
+    ExploreState,
+    ExploreSubagentConfig,
+    format_explore_result_markdown,
+)
 from .search_target import resolve_explore_search_target
 from .tools import get_explore_tools
 
@@ -460,8 +464,8 @@ def build_explore_engine(
 
         logger.info("Explore: completed %d matches in %dms", len(result.matches), elapsed_ms)
 
-        # Return final result as AIMessage
-        return {"messages": [AIMessage(content=json.dumps(result.model_dump(), indent=2))]}
+        # User-facing markdown final (structured model retained via ExploreResult above).
+        return {"messages": [AIMessage(content=format_explore_result_markdown(result))]}
 
     # Build the graph
     graph = StateGraph(ExploreState)
