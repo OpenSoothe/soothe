@@ -4,7 +4,7 @@ This module centralizes all event filtering, content processing, and display
 policy decisions in one place. Both CLI and TUI renderers use this policy
 to determine:
 
-1. Which events to show/hide based on verbosity
+1. Which events to show/hide (fixed “normal”-equivalent gating, IG-343)
 2. Which content to filter from assistant text
 3. Which message types are internal vs user-facing
 4. How to handle different event categories
@@ -18,7 +18,7 @@ Design Principles:
 Usage:
     from soothe_cli.shared.display_policy import DisplayPolicy
 
-    policy = DisplayPolicy(verbosity="normal")
+    policy = DisplayPolicy()
 
     if policy.should_show_event(event_type, data):
         render_event(data)
@@ -30,7 +30,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from soothe_sdk.core.verbosity import VerbosityLevel, VerbosityTier, should_show
+from soothe_sdk.core.verbosity import VerbosityTier, should_show
 from soothe_sdk.ux import classify_event_to_tier
 from soothe_sdk.ux.internal import (
     INTERNAL_JSON_KEYS,
@@ -40,37 +40,6 @@ from soothe_sdk.ux.internal import (
     filter_search_data_tags,
     normalize_internal_whitespace,
 )
-
-# =============================================================================
-# Type Definitions
-# =============================================================================
-
-
-def normalize_verbosity(verbosity: str) -> VerbosityLevel:
-    """Normalize external verbosity values to canonical internal names."""
-    if verbosity == "minimal":
-        return "normal"
-    if verbosity in {"quiet", "normal", "detailed", "debug"}:
-        return verbosity
-    return "normal"
-
-
-def should_show_tool_call_ui(verbosity: str | VerbosityLevel) -> bool:
-    """Whether the TUI should mount tool-call rows (``ToolCallMessage`` / tool output).
-
-    Controlled only by ``logging.verbosity`` in the CLI client config
-    (``~/.soothe/config/cli_config.yml``), same scale as CLI progress — not by
-    LangGraph namespace or event type. ``quiet`` hides tool UI; other levels show it.
-
-    Args:
-        verbosity: Raw or normalized verbosity string (e.g. from ``cli_config.yml``).
-
-    Returns:
-        False when verbosity is ``quiet``; True for ``normal``, ``detailed``, and ``debug``.
-    """
-    v = normalize_verbosity(verbosity) if isinstance(verbosity, str) else verbosity
-    return v != "quiet"
-
 
 # =============================================================================
 # Policy Configuration Constants
@@ -110,9 +79,6 @@ MILESTONE_EVENT_TYPES = frozenset(
     }
 )
 
-QUIET_SENTENCE_MAX_LEN = 120
-QUIET_FALLBACK_MAX_LEN = 160
-QUIET_TRUNCATED_MAX_LEN = 157
 TRAILING_EMBELLISHMENT_WORDS = frozenset(
     {
         "beautiful",
@@ -146,13 +112,9 @@ class DisplayPolicy:
 
     This class centralizes all decisions about what to show/hide,
     what content to filter, and how to process events for display.
+
+    Event visibility uses a single fixed ceiling equivalent to the former **normal** mode (IG-343).
     """
-
-    verbosity: VerbosityLevel = "normal"
-
-    def __post_init__(self) -> None:
-        """Normalize compatibility aliases after initialization."""
-        self.verbosity = normalize_verbosity(self.verbosity)
 
     # Track internal context state
     internal_context_active: bool = field(default=False, repr=False)
@@ -186,7 +148,6 @@ class DisplayPolicy:
         if event_type in SKIP_EVENT_TYPES:
             return False
 
-        # Classify and check verbosity
         tier = self._classify_event(event_type, namespace)
         return self._should_show_tier(tier)
 
@@ -199,8 +160,8 @@ class DisplayPolicy:
         return classify_event_to_tier(event_type, namespace)
 
     def _should_show_tier(self, tier: VerbosityTier) -> bool:
-        """Check if a tier should be shown at current verbosity."""
-        return should_show(tier, self.verbosity)
+        """Check if a tier should be shown (fixed normal-equivalent gating)."""
+        return should_show(tier, "normal")
 
     # ==========================================================================
     # Internal Context Tracking
@@ -257,49 +218,6 @@ class DisplayPolicy:
         for pattern in DECORATIVE_FILLER_PATTERNS:
             text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.MULTILINE)
         return text
-
-    def extract_quiet_answer(self, text: str) -> str:
-        """Extract a compact answer for quiet mode with safe fallback."""
-        cleaned = self.filter_content(text)
-        if not cleaned:
-            return ""
-
-        single_line = re.sub(r"\s+", " ", cleaned).strip()
-        if re.fullmatch(r"[-+]?\d+(?:\.\d+)?", single_line):
-            return single_line
-
-        if re.fullmatch(
-            r"[-+]?\d+(?:\.\d+)?\s*[+\-*/]\s*[-+]?\d+(?:\.\d+)?\s*=\s*([-+]?\d+(?:\.\d+)?)",
-            single_line,
-        ):
-            equation_match = re.search(r"=\s*([-+]?\d+(?:\.\d+)?)$", single_line)
-            if equation_match:
-                return equation_match.group(1)
-
-        numeric_match = re.search(
-            r"\b(?:that(?:'s| is)|it(?:'s| is)|answer(?: is)?|result(?: is)?)\s+([-+]?\d+(?:\.\d+)?)\b",
-            single_line,
-            re.IGNORECASE,
-        )
-        if numeric_match:
-            return numeric_match.group(1)
-
-        sentences = [
-            part.strip() for part in re.split(r"(?<=[.!?])\s+", single_line) if part.strip()
-        ]
-        if sentences:
-            first = self._strip_sentence_embellishment(sentences[0])
-            if len(first) <= QUIET_SENTENCE_MAX_LEN:
-                return first
-
-        if len(single_line) <= QUIET_FALLBACK_MAX_LEN:
-            return self._strip_sentence_embellishment(single_line)
-        return (
-            self._strip_sentence_embellishment(
-                single_line[:QUIET_TRUNCATED_MAX_LEN].rsplit(" ", 1)[0]
-            )
-            + "..."
-        )
 
     def _strip_sentence_embellishment(self, text: str) -> str:
         """Remove lightweight trailing flourish from otherwise factual answers."""
@@ -358,18 +276,9 @@ class DisplayPolicy:
 # =============================================================================
 
 
-def create_display_policy(
-    verbosity: VerbosityLevel = "normal",
-) -> DisplayPolicy:
-    """Create a display policy with the given verbosity level.
-
-    Args:
-        verbosity: Verbosity level for filtering
-
-    Returns:
-        Configured DisplayPolicy instance
-    """
-    return DisplayPolicy(verbosity=verbosity)
+def create_display_policy() -> DisplayPolicy:
+    """Create the shared display policy instance (single fixed UX tier)."""
+    return DisplayPolicy()
 
 
 # =============================================================================
@@ -381,9 +290,6 @@ __all__ = [
     "INTERNAL_JSON_KEYS",
     "SKIP_EVENT_TYPES",
     "DisplayPolicy",
-    "VerbosityLevel",
     "VerbosityTier",
     "create_display_policy",
-    "normalize_verbosity",
-    "should_show_tool_call_ui",
 ]

@@ -8,7 +8,7 @@ from typing import Any
 
 from soothe_sdk.client.config import SOOTHE_HOME
 
-# Sole on-disk location for CLI client settings (WebSocket address, progress verbosity, …).
+# Sole on-disk location for CLI client settings (WebSocket address, logging, …).
 CLI_CONFIG_FILE = Path(SOOTHE_HOME) / "config" / "cli_config.yml"
 
 
@@ -24,12 +24,9 @@ class CLIConfig:
     daemon_host: str = "127.0.0.1"
     daemon_port: int = 8765
 
-    # CLI behavior — verbosity: progress/event display (quiet … debug).
-    verbosity: str = "normal"
-    # logging_level: DEBUG/INFO/… for ~/.soothe/logs/soothe-cli.log; None = derive from verbosity.
+    # logging_level: DEBUG/INFO/… for ~/.soothe/logs/soothe-cli.log; None = default INFO.
     logging_level: str | None = None
 
-    output_format: str = "text"
     final_output_mode: str = "streaming"
 
     # Output streaming overrides (RFC-614)
@@ -128,37 +125,9 @@ class CLIConfig:
         return cls(
             daemon_host=websocket.get("host", websocket_legacy.get("host", "127.0.0.1")),
             daemon_port=websocket.get("port", websocket_legacy.get("port", 8765)),
-            verbosity=data.get("verbosity", ui_section.get("verbosity", "normal")),
             logging_level=raw_level,
             final_output_mode=final_output_mode,
             soothe_home=Path(data.get("home", str(Path.home() / ".soothe"))),
-        )
-
-    @classmethod
-    def from_soothe_config(cls, soothe_config: Any) -> CLIConfig:
-        """Create CLIConfig from full SootheConfig (compatibility helper).
-
-        Used during transition period where some code still has SootheConfig.
-
-        Args:
-            soothe_config: Full SootheConfig instance.
-
-        Returns:
-            CLIConfig with WebSocket settings extracted.
-        """
-        level_from_full = getattr(soothe_config.logging, "level", None)
-        if isinstance(level_from_full, str) and level_from_full.strip():
-            logging_level = level_from_full.strip()
-        else:
-            logging_level = None
-
-        return cls(
-            daemon_host=soothe_config.daemon.transports.websocket.host,
-            daemon_port=soothe_config.daemon.transports.websocket.port,
-            verbosity=soothe_config.observability.verbosity,
-            logging_level=logging_level,
-            final_output_mode="streaming",
-            soothe_home=Path(soothe_config.home),
         )
 
     # Compatibility properties for transition period
@@ -191,7 +160,7 @@ class CLIConfig:
         return type(
             "LoggingConfig",
             (),
-            {"verbosity": self.verbosity, "level": self.logging_level},
+            {"level": self.logging_level},
         )()
 
     @property

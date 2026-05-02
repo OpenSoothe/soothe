@@ -62,9 +62,9 @@ class ProcessorState:
     )
     """Unified streaming text accumulator with namespace isolation."""
 
-    # Exactly-once final-output guard keyed by namespace
-    final_output_emitted_by_namespace: set[tuple[str, ...]] = field(default_factory=set)
-    """Namespaces that already emitted final goal completion output this turn."""
+    # Exactly-once final-output guard per loop phase + namespace (RFC-614)
+    final_loop_output_emitted: set[tuple[str, tuple[str, ...]]] = field(default_factory=set)
+    """(phase, namespace) pairs that already emitted final loop-tagged output this turn."""
 
     # Task tool spawn queue → bind first subgraph namespace (FIFO; IG-334)
     task_spawn_queue: deque[tuple[str, str]] = field(default_factory=deque)
@@ -82,7 +82,7 @@ class ProcessorState:
         self.emitted_tool_result_ids.clear()
         self.streaming_accumulator.finalize_all()
         self.streaming_accumulator.clear()
-        self.final_output_emitted_by_namespace.clear()
+        self.final_loop_output_emitted.clear()
         self.task_spawn_queue.clear()
         self.namespace_task_bindings.clear()
 
@@ -99,6 +99,6 @@ class ProcessorState:
         self.emitted_tool_call_ids.clear()
         self.emitted_tool_result_ids.clear()
         self.streaming_accumulator.clear()
-        self.final_output_emitted_by_namespace.clear()
+        self.final_loop_output_emitted.clear()
         self.task_spawn_queue.clear()
         self.namespace_task_bindings.clear()
