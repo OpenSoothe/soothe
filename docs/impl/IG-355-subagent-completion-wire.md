@@ -16,6 +16,8 @@ Headless CLI (`--no-tui`) shows RFC-614 loop–tagged assistant text only. Subag
 
 4. **Runner** [`packages/soothe/src/soothe/core/runner/_runner_agentic.py`](packages/soothe/src/soothe/core/runner/_runner_agentic.py): When `skip_goal_completion_wire_duplicate` is False and status is `done`, emit `loop_assistant_messages_chunk(..., phase="goal_completion")` from `full_output`, including **single-iteration** runs (not only `max_iterations > 1`).
 
+5. **Namespaced ``task`` returns (Explore)** [`stream_normalize.iter_messages_for_delegate_task_scan`](packages/soothe/src/soothe/cognition/agent_loop/utils/stream_normalize.py): Compiled subgraphs (e.g. Explore) may emit the parent **`task`** `ToolMessage` only on **non-empty** LangGraph namespaces. Act aggregation intentionally skips those chunks for AIMessage/token metrics; delegate-final collection must still scan them so `last_execute_assistant_text` and goal-completion replay stay populated.
+
 ## Reverted
 
 - IG-354 client flags (`headless_delegate_subgraph`) — removed.

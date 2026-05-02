@@ -8,6 +8,7 @@ from soothe.cognition.agent_loop.utils.stream_normalize import (
     GoalCompletionAccumState,
     extract_text_from_message_content,
     iter_messages_for_act_aggregation,
+    iter_messages_for_delegate_task_scan,
     join_text_fragments,
     parse_tuple_stream_chunk,
     resolve_goal_completion_text,
@@ -63,6 +64,15 @@ def test_iter_messages_skips_subgraph_namespace() -> None:
     msg = AIMessage(content="x")
     chunk = (("sub",), "messages", (msg, {}))
     assert list(iter_messages_for_act_aggregation(chunk)) == []
+
+
+def test_iter_messages_delegate_scan_finds_namespaced_task_tool() -> None:
+    """Explore-style subgraphs may emit the parent ``task`` return under a namespace (IG-355)."""
+    msg = ToolMessage(content="explore-final-body", tool_call_id="tc-explore", name="task")
+    chunk = (("functions.task:0",), "messages", (msg, {}))
+    out = list(iter_messages_for_delegate_task_scan(chunk))
+    assert len(out) == 1
+    assert out[0].content == "explore-final-body"
 
 
 def test_iter_messages_dict_model_branch() -> None:
