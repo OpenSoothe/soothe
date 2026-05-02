@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from soothe_cli.shared.tool_formatters.base import BaseFormatter
-from soothe_cli.shared.tool_message_format import try_parse_run_python_result_envelope
-from soothe_cli.shared.tool_output_formatter import ToolBrief
+from soothe_cli.shared.tools.tool_formatters.base import BaseFormatter
+from soothe_cli.shared.tools.tool_message_format import try_parse_run_python_result_envelope
+from soothe_cli.shared.tools.tool_output_formatter import ToolBrief
 
 
 class ExecutionFormatter(BaseFormatter):

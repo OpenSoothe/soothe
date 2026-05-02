@@ -6,8 +6,8 @@ from typing import Any
 
 from soothe_sdk.client.protocol import preview_first
 
-from soothe_cli.shared.tool_formatters.base import BaseFormatter
-from soothe_cli.shared.tool_output_formatter import ToolBrief
+from soothe_cli.shared.tools.tool_formatters.base import BaseFormatter
+from soothe_cli.shared.tools.tool_output_formatter import ToolBrief
 
 
 class StructuredFormatter(BaseFormatter):

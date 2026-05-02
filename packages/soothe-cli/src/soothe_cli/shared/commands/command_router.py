@@ -12,7 +12,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe_cli.shared.subagent_routing import parse_subagent_from_input
+from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -75,7 +75,7 @@ def find_command_by_daemon_command(daemon_command: str) -> dict[str, Any] | None
     Returns:
         Command entry dict or None if not found
     """
-    from soothe_cli.shared.slash_commands import COMMANDS
+    from soothe_cli.shared.commands.slash_commands import COMMANDS
 
     for cmd_name, entry in COMMANDS.items():
         if entry.get("daemon_command") == daemon_command:
@@ -121,7 +121,7 @@ async def route_slash_command(cmd_input: str, console: Console, client: WebSocke
     Returns:
         True if command was handled, False if unknown command
     """
-    from soothe_cli.shared.slash_commands import COMMANDS
+    from soothe_cli.shared.commands.slash_commands import COMMANDS
 
     command, query = parse_slash_command(cmd_input)
 
