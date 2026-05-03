@@ -124,7 +124,6 @@ class AgentLoop:
         git_status: dict[str, Any] | None = None,
         max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
         loop_id: str | None = None,  # IG-246: explicit loop_id parameter
-        plan_conversation_excerpts: list[str] | None = None,
         intent: Any | None = None,  # Intent classification
         unified_classification: Any | None = None,  # IG-349: RoutingClassification
     ) -> AsyncGenerator[tuple[str, Any], None]:
@@ -139,7 +138,6 @@ class AgentLoop:
             git_status: Optional git snapshot for RFC-104-aligned Reason prompts.
             max_iterations: Maximum loop iterations (default: 8)
             loop_id: Optional loop_id (None → auto-generate UUID)
-            plan_conversation_excerpts: Prior thread lines (User/Assistant) for Plan phase (IG-128).
             intent: IntentClassification from unified classifier (IG-226). Determines goal handling:
                 - thread_continuation: Adjust iteration behavior, reuse working memory
                 - new_goal: Normal goal execution flow
@@ -203,21 +201,12 @@ class AgentLoop:
                 goal_record = None
                 recovery_valid_resume = False
 
-            # Derive prior conversation from step outputs (RFC-205)
-            prior_outputs = state_manager.derive_plan_conversation(limit=10)
-            # RFC-217: Add goal-level context to plan excerpts
-            plan_goal_excerpts = await goal_context_manager.get_plan_context()
-            runner_prior = list(plan_conversation_excerpts or [])
-            plan_excerpts = plan_goal_excerpts + runner_prior + list(prior_outputs)
+            # RFC-214: Ledger is already populated in goal_record.loop_messages
+            # No need to derive plan conversation separately
         else:
             # Initialize new checkpoint (RFC-216: pass thread_id, not goal)
             checkpoint = await state_manager.initialize(thread_id, max_iterations)
             iteration = 0  # New goal starts at iteration 0
-            # RFC-217: Inject previous goal context for Plan phase
-            plan_goal_excerpts = await goal_context_manager.get_plan_context()
-            # Prior Human/Assistant turns from LangGraph checkpointer (IG-128, IG-198)
-            runner_prior = list(plan_conversation_excerpts or [])
-            plan_excerpts = plan_goal_excerpts + runner_prior
             # Create new goal_record for this goal execution
             goal_record = state_manager.start_new_goal(goal, max_iterations)
             checkpoint.goal_history.append(goal_record)  # Append FIRST
@@ -240,9 +229,9 @@ class AgentLoop:
             git_status=git_status,
             iteration=iteration,  # Use recovered or initial iteration
             max_iterations=max_iterations,
-            plan_conversation_excerpts=plan_excerpts,
             intent=intent,
             unified_classification=unified_classification,
+            loop_messages=goal_record.loop_messages if goal_record else [],
         )
 
         # IG-226: Set thread continuation flag for working memory context
@@ -705,7 +694,7 @@ class AgentLoop:
 
         return PlanContext(
             available_capabilities=available_tools + available_subagents,
-            recent_messages=list(state.plan_conversation_excerpts),
+            recent_messages=[],  # RFC-214: Now using loop_messages ledger directly
             completed_steps=completed_steps,
             unified_classification=getattr(state, "unified_classification", None),
             workspace=state.workspace,

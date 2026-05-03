@@ -334,6 +334,9 @@ class IntentClassifier:
     ) -> str:
         """Format conversation messages for LLM prompt.
 
+        Uses ``<user>`` / ``<assistant>`` XML blocks (IG-363), matching AgentLoop plan
+        excerpt style; includes Human and AI turns only (skips tool/system messages).
+
         Args:
             messages: Recent conversation messages.
             max_messages: Maximum messages to include.
@@ -345,20 +348,25 @@ class IntentClassifier:
         if not messages:
             return ""
 
-        lines = []
-        from langchain_core.messages import HumanMessage
+        from langchain_core.messages import AIMessage, HumanMessage
 
+        lines: list[str] = []
         for msg in messages[-max_messages:]:
-            role = "User" if isinstance(msg, HumanMessage) else "Assistant"
+            if isinstance(msg, HumanMessage):
+                tag = "user"
+            elif isinstance(msg, AIMessage):
+                tag = "assistant"
+            else:
+                continue
             content = getattr(msg, "content", "")
             if not isinstance(content, str):
                 content = str(content)
 
             preview = preview_first(content, preview_chars).strip()
             if preview:
-                lines.append(f"{role}: {preview}")
+                lines.append(f"<{tag}>\n{preview}\n</{tag}>")
 
-        return "\n" + "\n".join(lines) if lines else ""
+        return "\n\n".join(lines) if lines else ""
 
     def _format_active_goal_context(
         self,

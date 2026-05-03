@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 _SOOTHE_MSGPACK_MODULES: list[tuple[str, str]] = [
     ("soothe.cognition.agent_loop.utils.messages", "LoopHumanMessage"),
     ("soothe.cognition.agent_loop.utils.messages", "LoopAIMessage"),
+    ("soothe.cognition.agent_loop.state.checkpoint", "GoalExecutionRecord"),
 ]
 
 

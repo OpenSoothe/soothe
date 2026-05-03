@@ -656,7 +656,13 @@ class Executor:
             # RFC-214: Extract N outcomes and record N adjacent pairs in ledger
             step_outcomes = self._extract_sequential_outcomes(messages, steps, state)
             step_results = self._record_batch_ledger_pairs(
-                state, step_messages, step_outcomes, steps
+                state,
+                step_messages,
+                step_outcomes,
+                steps,
+                subagent_task_completions=budget.subagent_task_completions,
+                hit_subagent_cap=budget.hit_subagent_cap,
+                tool_call_count=tool_call_count,
             )
 
             # Aggregate metrics into LoopState
@@ -1216,6 +1222,10 @@ class Executor:
         step_messages: list[LoopHumanMessage],
         step_outcomes: dict[str, LoopAIMessage],
         steps: list,
+        *,
+        subagent_task_completions: int = 0,
+        hit_subagent_cap: bool = False,
+        tool_call_count: int = 0,
     ) -> list:
         """Record N adjacent Human-AI pairs in ledger (RFC-214).
 
@@ -1230,6 +1240,9 @@ class Executor:
             step_messages: Human inputs (one per step)
             step_outcomes: AI outcomes (one per step)
             steps: Step metadata
+            subagent_task_completions: Count of completed ``task`` tool returns this wave (IG-130).
+            hit_subagent_cap: True when the wave stopped early due to subagent cap.
+            tool_call_count: Total tool messages observed this wave (first step carries count).
 
         Returns:
             List of StepResult for metrics/execution tracking
@@ -1253,7 +1266,7 @@ class Executor:
 
         # Build StepResult for metrics (RFC-211 outcome metadata)
         step_results = []
-        for step in steps:
+        for idx, step in enumerate(steps):
             ai_msg = step_outcomes[step.id]
 
             result = StepResult(
@@ -1265,6 +1278,9 @@ class Executor:
                 },
                 duration_ms=0,  # Will be aggregated separately
                 thread_id=state.thread_id,
+                tool_call_count=tool_call_count if idx == 0 else 0,
+                subagent_task_completions=subagent_task_completions if idx == 0 else 0,
+                hit_subagent_cap=hit_subagent_cap if idx == 0 else False,
             )
             step_results.append(result)
 

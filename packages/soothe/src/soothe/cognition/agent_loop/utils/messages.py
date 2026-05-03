@@ -58,9 +58,17 @@ class LoopHumanMessage(HumanMessage):
     iteration: int | None = None
     goal_summary: str | None = Field(default=None, max_length=200)
     workspace: str | None = None
-    phase: Literal["execute_wave", "execute_step", "goal_completion", "chitchat", "quiz"] | None = (
-        None
-    )
+    phase: (
+        Literal[
+            "plan",
+            "execute_wave",
+            "execute_step",
+            "goal_completion",
+            "chitchat",
+            "quiz",
+        ]
+        | None
+    ) = None
     wave_id: str | None = None  # UUID[:8] for wave tracking
 
     # Preserve langchain type discrimination
