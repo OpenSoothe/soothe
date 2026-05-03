@@ -686,12 +686,6 @@ class AgentLoop:
             for r in state.step_results
         ]
 
-        wm_excerpt: str | None = None
-        if state.working_memory is not None:
-            rendered = state.working_memory.render_for_reason().strip()
-            if rendered:
-                wm_excerpt = rendered
-
         return PlanContext(
             available_capabilities=available_tools + available_subagents,
             recent_messages=[],  # RFC-214: Now using loop_messages ledger directly
@@ -699,5 +693,5 @@ class AgentLoop:
             unified_classification=getattr(state, "unified_classification", None),
             workspace=state.workspace,
             git_status=state.git_status,
-            working_memory_excerpt=wm_excerpt,
+            thread_id=state.thread_id,
         )

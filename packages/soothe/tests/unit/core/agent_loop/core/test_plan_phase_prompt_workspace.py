@@ -74,8 +74,8 @@ def test_build_loop_plan_messages_omits_workspace_rules_without_workspace() -> N
     assert "<WORKSPACE_RULES>" not in system_content
 
 
-def test_build_loop_plan_messages_includes_working_memory_excerpt() -> None:
-    """Test build_plan_messages() includes working memory in HumanMessage."""
+def test_build_loop_plan_messages_omits_working_memory_in_plan_human_ig371() -> None:
+    """Plan-context human does not embed WORKING_MEMORY; ledger carries execution context (IG-371)."""
     state = LoopState(goal="g", thread_id="t1", max_iterations=8)
     ctx = PlanContext(
         workspace=None,
@@ -85,10 +85,8 @@ def test_build_loop_plan_messages_includes_working_memory_excerpt() -> None:
     messages = builder.build_plan_messages("g", state, ctx)
 
     human_content = messages[1].content
-    # RFC-207: Removed SOOTHE_ prefix from WORKING_MEMORY tag
-    # Working memory is in HumanMessage (dynamic context)
-    assert "<WORKING_MEMORY>" in human_content
-    assert "listed src/" in human_content
+    assert "<WORKING_MEMORY>" not in human_content
+    assert "listed src/" not in human_content
 
 
 def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:

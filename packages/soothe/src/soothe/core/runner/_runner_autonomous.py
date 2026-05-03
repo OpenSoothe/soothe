@@ -947,7 +947,9 @@ class AutonomousMixin(GoalDirectivesMixin):
                 )
             elif self._planner and iter_state.plan and reflection:
                 try:
-                    revised = await self._planner.revise_plan(iter_state.plan, reflection.feedback)
+                    revised = await self._planner.revise_plan(
+                        iter_state.plan, reflection.feedback, thread_id=thread_id
+                    )
                     # Assign new plan ID for revision
                     goal.plan_count += 1
                     revised.id = f"P_{goal.plan_count}"

@@ -85,13 +85,17 @@ class PlanPhase:
             )
 
         if result.is_done():
-            full_outputs = [
-                r.to_evidence_string(truncate=False) for r in state.step_results if r.success
-            ]
-            if full_outputs:
-                result = result.model_copy(
-                    update={"full_output": "\n\n".join(full_outputs)},
-                )
+            # Prefer Execute-visible assistant text (RFC-214 ledger / IG-357); do not replace
+            # with step metadata summaries when the planner already supplied an answer (IG-370).
+            existing_full = (result.full_output or "").strip()
+            if not existing_full:
+                full_outputs = [
+                    r.to_evidence_string(truncate=False) for r in state.step_results if r.success
+                ]
+                if full_outputs:
+                    result = result.model_copy(
+                        update={"full_output": "\n\n".join(full_outputs)},
+                    )
 
         # Track action in history (full reasoning chain for progression detection)
         state.add_action_to_history(result.next_action or "")

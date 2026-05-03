@@ -749,6 +749,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                     unified_classification=state.unified_classification,
                     workspace=state.workspace,  # Pass workspace for planning context
                     git_status=getattr(state, "git_status", None),
+                    thread_id=getattr(state, "thread_id", None),
                 )
 
                 plan = await self._planner.create_plan(user_input, context)

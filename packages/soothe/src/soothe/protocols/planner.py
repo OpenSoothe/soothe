@@ -153,7 +153,8 @@ class PlanContext(BaseModel):
         unified_classification: Pre-computed unified classification (RFC-0012).
         workspace: Current workspace directory path.
         git_status: Optional git snapshot from runner (same shape as ``get_git_status``).
-        working_memory_excerpt: Optional pre-rendered loop working memory (RFC-203).
+        working_memory_excerpt: Reserved; not embedded in Plan-phase human text (IG-371).
+        thread_id: Daemon thread id for observability (Langfuse session on plan LLM calls).
     """
 
     recent_messages: list[str] = Field(default_factory=list)
@@ -163,6 +164,10 @@ class PlanContext(BaseModel):
     workspace: str | None = None  # Current workspace directory
     git_status: dict[str, Any] | None = None
     working_memory_excerpt: str | None = None
+    thread_id: str | None = Field(
+        default=None,
+        description="Daemon thread id for observability (e.g. Langfuse session_id on plan LLM calls).",
+    )
 
 
 class StepReport(BaseModel):
@@ -320,12 +325,19 @@ class PlannerProtocol(Protocol):
         """
         ...
 
-    async def revise_plan(self, plan: Plan, reflection: str) -> Plan:
+    async def revise_plan(
+        self,
+        plan: Plan,
+        reflection: str,
+        *,
+        thread_id: str | None = None,
+    ) -> Plan:
         """Revise a plan based on reflection feedback.
 
         Args:
             plan: The current plan.
             reflection: Feedback from the reflection step.
+            thread_id: Optional thread id for Langfuse session correlation.
 
         Returns:
             A revised plan.

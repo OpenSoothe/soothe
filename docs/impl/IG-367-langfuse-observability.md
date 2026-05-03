@@ -17,14 +17,14 @@ Integrate Langfuse tracing for LangChain / LangGraph runs driven by `observabili
 From repo root:
 
 ```bash
-docker compose --profile langfuse up -d
+docker compose up -d
 ```
 
-- UI / API base URL: `http://localhost:3300` (host port **3300** → container **3000**).
+- UI / API base URL: `http://localhost:3300` (host port **3300** → Langfuse web **3000**).
 - Default dev API keys (overridable via `LANGFUSE_INIT_PROJECT_*` env): `pk-lf-soothe-local` / `sk-lf-soothe-local`.
 - Headless UI user (compose defaults): `dev@soothe.local` / `SootheLangfuseLocalDev1` — override with `LANGFUSE_INIT_USER_*` before first boot.
 - Enable tracing in Soothe via `observability.langfuse` in `config/config.dev.yml` (or your chosen YAML).
-- Use profile `langfuse` so the stack stays pgvector-only unless you opt in.
+- Langfuse services are part of the default `docker compose` stack (same file as `soothe-pgvector`); omit or scale them to zero if you only need the database.
 
 ## Verification
 
