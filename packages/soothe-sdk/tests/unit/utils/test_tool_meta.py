@@ -388,3 +388,9 @@ class TestPolicyFilesystemMetadata:
     def test_extract_path_grep_optional(self) -> None:
         assert extract_filesystem_path_for_policy("grep", {"pattern": "foo"}) is None
         assert extract_filesystem_path_for_policy("grep", {"pattern": "x", "path": "/tmp"}) == "/tmp"
+
+    def test_extract_path_glob_defaults_virtual_root(self) -> None:
+        """IG-366: pattern-only glob uses virtual ``/`` for workspace containment."""
+        assert extract_filesystem_path_for_policy("glob", {"pattern": "**/README*"}) == "/"
+        assert extract_filesystem_path_for_policy("glob", {"pattern": "x", "path": "/pkg"}) == "/pkg"
+        assert extract_filesystem_path_for_policy("glob", {"pattern": "x", "path": ""}) == "/"

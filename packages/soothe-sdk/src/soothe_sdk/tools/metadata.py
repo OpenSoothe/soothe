@@ -730,6 +730,12 @@ def extract_filesystem_path_for_policy(tool_name: str, tool_args: dict[str, Any]
         A non-empty path string, or ``None`` when no candidate is present.
     """
     meta = get_tool_meta(tool_name)
+    # Glob defaults to virtual search root when `path` is omitted (IG-366).
+    if meta and meta.name == "glob":
+        raw_path = tool_args.get("path")
+        if raw_path is None or (isinstance(raw_path, str) and not raw_path.strip()):
+            return "/"
+
     keys = meta.path_arg_keys if meta and meta.path_arg_keys else _FALLBACK_PATH_ARG_KEYS
     for key in keys:
         val = tool_args.get(key)

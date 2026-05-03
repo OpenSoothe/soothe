@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from soothe.core.agent_loop.state.schemas import LoopState
+from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.core.prompts import PromptBuilder
 from soothe.protocols.planner import PlanContext
 
@@ -20,8 +21,8 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
     builder = PromptBuilder(config)
     messages = builder.build_plan_messages("analyze architecture", state, ctx)
 
-    # Should return [SystemMessage, HumanMessage]
-    assert len(messages) == 2
+    # System + plan-context human; optional ledger tail (RFC-214)
+    assert len(messages) >= 2
     assert isinstance(messages[0], SystemMessage)
     assert isinstance(messages[1], HumanMessage)
 
@@ -47,7 +48,7 @@ def test_build_loop_plan_messages_without_config_workspace_only() -> None:
     builder = PromptBuilder()
     messages = builder.build_plan_messages("analyze architecture", state, ctx)
 
-    assert len(messages) == 2
+    assert len(messages) >= 2
     system_content = messages[0].content
     human_content = messages[1].content
 
@@ -134,7 +135,34 @@ def test_build_loop_plan_messages_plan_continue_when_steps_remain() -> None:
     builder = PromptBuilder()
     messages = builder.build_plan_messages("g", state, PlanContext())
 
-    # Should still return valid messages
-    assert len(messages) == 2
+    assert len(messages) >= 2
     assert isinstance(messages[0], SystemMessage)
     assert isinstance(messages[1], HumanMessage)
+
+
+def test_build_plan_messages_appends_ledger_loop_messages() -> None:
+    """Ledger is appended as native LoopHumanMessage / LoopAIMessage after plan context."""
+    state = LoopState(goal="read readme", thread_id="t1", max_iterations=8)
+    state.loop_messages = [
+        LoopHumanMessage(
+            content="Execute: read top of README",
+            thread_id="t1",
+            iteration=0,
+            phase="execute_step",
+        ),
+        LoopAIMessage(
+            content="First lines of README here.",
+            thread_id="t1",
+            iteration=0,
+            phase="execute_step",
+        ),
+    ]
+    builder = PromptBuilder()
+    messages = builder.build_plan_messages("read readme", state, PlanContext())
+
+    assert len(messages) == 4
+    assert isinstance(messages[2], LoopHumanMessage)
+    assert isinstance(messages[3], LoopAIMessage)
+    assert messages[2].content.startswith("Execute:")
+    assert "First lines of README" in messages[3].content
+    assert "<AGENTLOOP_HISTORY>" not in messages[1].content

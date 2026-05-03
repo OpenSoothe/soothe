@@ -22,6 +22,7 @@ from soothe.core.agent_loop.utils.reflection import (
     _extract_text_content,
     reflect_heuristic,
 )
+from soothe.middleware.llm_rate_limit import _estimate_content_chars
 from soothe.protocols.planner import (
     GoalContext,
     Plan,
@@ -35,29 +36,6 @@ if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
-
-
-def _plan_prompt_text_length(messages: list[Any]) -> int:
-    """Approximate total characters in plan prompt messages (text parts only).
-
-    Args:
-        messages: LangChain messages from ``build_plan_messages``.
-
-    Returns:
-        Sum of string lengths of textual ``content`` fields.
-    """
-    total = 0
-    for m in messages:
-        content = getattr(m, "content", None)
-        if isinstance(content, str):
-            total += len(content)
-        elif isinstance(content, list):
-            for block in content:
-                if isinstance(block, str):
-                    total += len(block)
-                elif isinstance(block, dict) and block.get("type") == "text":
-                    total += len(str(block.get("text", "")))
-    return total
 
 
 def _calculate_evidence_based_confidence(
@@ -983,9 +961,6 @@ class LLMPlanner:
                 break
         logger.debug("Plan msgs=%d types=%s human=%s", len(messages), msg_types, human_preview)
 
-        prompt_chars = _plan_prompt_text_length(messages)
-        logger.debug("Plan prompt_chars=%d", prompt_chars)
-
         max_retries = 3
         result = None
 
@@ -1068,6 +1043,9 @@ class LLMPlanner:
                     result.goal_progress * 100,
                     result.confidence * 100,
                     decision_info,
+                )
+                prompt_chars = sum(
+                    _estimate_content_chars(getattr(m, "content", None)) for m in messages
                 )
                 logger.info(
                     "[LLMPlanner] timings iter=%d assess_ms=%.1f plan_gen_ms=%.1f llm_calls=%d "
