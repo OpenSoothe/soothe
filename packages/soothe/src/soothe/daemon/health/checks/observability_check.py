@@ -191,7 +191,7 @@ def _check_dotenv_availability() -> CheckResult:
             message="No .env file found (using system environment)",
             details={
                 **details,
-                "remediation": "Create .env file from config/env.example for easier configuration",
+                "remediation": "Set observability.langfuse in config YAML and export referenced env vars (or use literals for local dev only)",
             },
         )
 

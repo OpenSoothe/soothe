@@ -9,7 +9,7 @@ Integrate Langfuse tracing for LangChain / LangGraph runs driven by `observabili
 - Pydantic models under `observability.langfuse` (enabled, keys, host, environment, release, sample_rate, trace_name).
 - Runtime helper to register the Langfuse SDK client (when keys are set in config) and merge `CallbackHandler` + session metadata into Runnable configs.
 - Wire into `SootheRunner` stream phase, `AgentLoop` executor streams, and goal-completion synthesis stream.
-- Optional dependency `soothe[langfuse]`; template + dev YAML and `config/env.example` documentation.
+- Optional dependency `soothe[langfuse]`; template `config.yml` + `config/config.dev.yml` documentation.
 - Doctor observability category: Langfuse check when integration is enabled.
 
 ## Local Langfuse (Docker)
@@ -22,6 +22,8 @@ docker compose --profile langfuse up -d
 
 - UI / API base URL: `http://localhost:3300` (host port **3300** → container **3000**).
 - Default dev API keys (overridable via `LANGFUSE_INIT_PROJECT_*` env): `pk-lf-soothe-local` / `sk-lf-soothe-local`.
+- Headless UI user (compose defaults): `dev@soothe.local` / `SootheLangfuseLocalDev1` — override with `LANGFUSE_INIT_USER_*` before first boot.
+- Enable tracing in Soothe via `observability.langfuse` in `config/config.dev.yml` (or your chosen YAML).
 - Use profile `langfuse` so the stack stays pgvector-only unless you opt in.
 
 ## Verification

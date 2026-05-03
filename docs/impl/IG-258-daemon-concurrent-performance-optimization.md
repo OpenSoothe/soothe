@@ -541,7 +541,7 @@ Integration with existing daemon health checks.
 - Performance benchmarks must be established before changes
 - Monitor production metrics during rollout
 - Consider A/B testing for high-risk changes
-- Document all config changes in env.example
+- Document all config changes in `config.yml` / `config.dev.yml`
 
 ---
 

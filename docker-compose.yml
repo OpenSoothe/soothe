@@ -4,6 +4,9 @@
 # Optional local Langfuse (LLM observability UI + API, IG-367):
 #   docker compose --profile langfuse up -d
 # UI/API: http://localhost:3300  — set soothe observability.langfuse.host to match.
+# Headless init provisions org + soothe-dev project + API keys + a dev UI user (override via LANGFUSE_INIT_*).
+# Default sign-in: dev@soothe.local / SootheLangfuseLocalDev1 (override via LANGFUSE_INIT_*; mirror keys in config YAML).
+# Fresh DB only: if you already ran Langfuse without these vars, remove volume langfuse_postgres_data or run down -v.
 services:
   pgvector:
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/pgvector:pg17
@@ -52,10 +55,17 @@ services:
       SALT: ${LANGFUSE_SALT:-langfuse_local_salt_min32chars_please}
       ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
       TELEMETRY_ENABLED: "false"
+      # Headless initialization (https://langfuse.com/self-hosting/v2/deployment-guide#initialization)
+      # Do not double-quote LANGFUSE_INIT_* values in Compose (Langfuse #3398).
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-soothe-local-org}
       LANGFUSE_INIT_ORG_NAME: Soothe Local
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-soothe-dev}
       LANGFUSE_INIT_PROJECT_NAME: soothe-dev
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-pk-lf-soothe-local}
       LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-sk-lf-soothe-local}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-dev@soothe.local}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-Soothe Dev}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-SootheLangfuseLocalDev1}
 
 volumes:
   postgres_data:
