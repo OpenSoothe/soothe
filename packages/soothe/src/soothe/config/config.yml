@@ -1,5 +1,12 @@
 # Soothe Configuration Template
-# Use: soothe --config config/config.yml
+# ------------------------------------------------------------------------------
+# Usage: soothe --config /path/to/this-file.yaml
+# Local dev: start from config/config.dev.yml (repo root) and adjust providers.
+# Secrets: use "${ENV_VAR}" under providers/tools; export those variables from your shell
+#   or CI (e.g. OPENAI_API_KEY, ANTHROPIC_API_KEY, DASHSCOPE_API_KEY).
+# Optional tool keys: TAVILY_API_KEY, JINA_API_KEY, SERPER_API_KEY, GITHUB_TOKEN (see tools.*).
+# Langfuse: observability.langfuse block below; local Docker defaults in docker-compose.yml.
+# Infra env for compose (Postgres, etc.): see docker-compose.yml at repo root.
 
 # Model Providers - Define LLM providers with API keys (supports ${ENV_VAR} syntax)
 
