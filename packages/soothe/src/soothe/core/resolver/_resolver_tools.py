@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
     from langchain_core.tools import BaseTool
 
-    from soothe.cognition import GoalEngine
+    from soothe.core.goal_engine import GoalEngine
 
 logger = logging.getLogger(__name__)
 
@@ -487,7 +487,7 @@ def resolve_goal_engine(config: SootheConfig) -> GoalEngine:
     Returns:
         A configured GoalEngine with backoff reasoner support.
     """
-    from soothe.cognition import GoalEngine
+    from soothe.core.goal_engine import GoalEngine
 
     # RFC-200: Pass config for GoalBackoffReasoner initialization
     return GoalEngine(

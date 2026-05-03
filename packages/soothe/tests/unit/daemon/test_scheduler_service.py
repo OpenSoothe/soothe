@@ -4,13 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from soothe.cognition.scheduler import (
-    ScheduledTask,
-    SchedulerService,
-    ScheduleSpec,
-    _parse_cron_field,
-    _parse_duration,
-)
+from soothe.core.goal_engine import ScheduledTask, SchedulerService, ScheduleSpec
+from soothe.core.goal_engine.scheduled_tasks import _parse_cron_field, _parse_duration
 
 
 class TestScheduledTask:

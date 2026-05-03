@@ -15,7 +15,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command, Interrupt
 from soothe_sdk.core.exceptions import ConfigurationError
 
-from soothe.cognition.agent_loop.utils.messages import loop_assistant_messages_chunk
+from soothe.core.agent_loop.utils.messages import loop_assistant_messages_chunk
 from soothe.core.events import (
     PlanCreatedEvent,
     PlanReflectedEvent,

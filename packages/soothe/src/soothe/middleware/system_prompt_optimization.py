@@ -16,10 +16,10 @@ from soothe.utils.text_preview import preview_first
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from soothe.cognition.intention import RoutingClassification  # IG-226
     from soothe.config import SootheConfig
     from soothe.core.context.tool_registry import ToolContextRegistry
     from soothe.core.context.trigger_registry import ToolTriggerRegistry
+    from soothe.core.intention import RoutingClassification  # IG-226
     from soothe.protocols.memory import MemoryItem
 
 logger = logging.getLogger(__name__)

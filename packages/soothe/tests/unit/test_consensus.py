@@ -2,7 +2,7 @@
 
 import pytest
 
-from soothe.cognition.goal_engine.consensus import (
+from soothe.core.goal_engine.consensus import (
     _build_consensus_prompt,
     _extract_reasoning,
     _heuristic_evaluation,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from soothe.cognition.agent_loop.utils.messages import (
+from soothe.core.agent_loop.utils.messages import (
     LoopAIMessageChunk,
     loop_message_assistant_output_phase,
 )
