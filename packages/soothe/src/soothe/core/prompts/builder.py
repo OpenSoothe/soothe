@@ -44,8 +44,11 @@ class PromptBuilder:
 
         Constructs proper message type separation:
         - SystemMessage: environment, workspace, policies, instructions, loop config, capabilities
-        - LoopHumanMessage: goal, plan status, prior thread (no ledger blob; IG-371: no WM block)
         - ``state.loop_messages``: ledger as native ``LoopHumanMessage`` / ``LoopAIMessage`` turns
+        - LoopHumanMessage: goal, plan status, prior thread (no ledger blob; IG-371: no WM block)
+
+        Ledger precedes the plan-context human so ``plan-assess`` / ``plan-generate`` see
+        execute evidence as prior turns and the assess framing as the latest user message (IG-372).
 
         Args:
             goal: User's goal description
@@ -53,7 +56,7 @@ class PromptBuilder:
             context: Planning context with workspace, capabilities
 
         Returns:
-            Messages to send to the plan LLM: system, plan-context human, then ledger copies.
+            Messages to send to the plan LLM: system, ledger copies, then plan-context human.
         """
         from soothe.core.agent_loop.utils.messages import LoopHumanMessage
 
@@ -69,13 +72,11 @@ class PromptBuilder:
             phase="plan",  # RFC-214: Plan phase marker
         )
 
-        out: list[BaseMessage] = [
-            SystemMessage(content=system_content),
-            plan_human_msg,
-        ]
+        out: list[BaseMessage] = [SystemMessage(content=system_content)]
         # RFC-214: full execute (and future) ledger as real messages — better cache boundaries
         # than a single human blob embedding ``<AGENTLOOP_HISTORY>``.
         out.extend(state.loop_messages)
+        out.append(plan_human_msg)
         return out
 
     def _build_system_message(
