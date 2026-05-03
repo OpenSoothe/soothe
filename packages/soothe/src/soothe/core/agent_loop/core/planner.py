@@ -30,6 +30,7 @@ from soothe.protocols.planner import (
     Reflection,
     StepResult,
 )
+from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, preview_first
 
 if TYPE_CHECKING:
@@ -353,6 +354,28 @@ class LLMPlanner:
         self._config = config
         self._prompt_builder = PromptBuilder(config)
 
+    def _planner_langfuse_run_config(
+        self,
+        *,
+        thread_id: str | None,
+        phase: str,
+    ) -> dict[str, Any] | None:
+        """RunnableConfig for planner LLM calls when Langfuse is enabled (IG-369)."""
+        if self._config is None:
+            return None
+        base: dict[str, Any] = {}
+        tn = (self._config.observability.langfuse.trace_name or "").strip()
+        run_name = f"{tn}:{phase}" if tn else phase
+        merged = merge_langfuse_runnable_config(
+            base,
+            self._config,
+            session_id=thread_id,
+            run_name=run_name,
+        )
+        if merged is base:
+            return None
+        return merged
+
     async def create_plan(self, goal: str, context: PlanContext) -> Plan:
         """Create plan via LLM structured output."""
         # Direct LLM call - no template fallback
@@ -369,13 +392,23 @@ class LLMPlanner:
 
         return plan
 
-    async def revise_plan(self, plan: Plan, reflection: str) -> Plan:
+    async def revise_plan(
+        self,
+        plan: Plan,
+        reflection: str,
+        *,
+        thread_id: str | None = None,
+    ) -> Plan:
         """Revise plan based on reflection feedback."""
         prompt = self._build_revision_prompt(plan, reflection)
 
         try:
             structured_model = self._model.with_structured_output(Plan)
-            revised = await structured_model.ainvoke(prompt)
+            lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="revise-plan")
+            if lf_cfg is not None:
+                revised = await structured_model.ainvoke(prompt, config=lf_cfg)
+            else:
+                revised = await structured_model.ainvoke(prompt)
             revised.status = "revised"
             return self._normalize_hints(revised)
         except Exception as e:
@@ -553,16 +586,30 @@ class LLMPlanner:
 
         try:
             structured_model = self._model.with_structured_output(Plan)
-            plan = await structured_model.ainvoke(prompt)
+            lf_cfg = self._planner_langfuse_run_config(
+                thread_id=context.thread_id, phase="create-plan-structured"
+            )
+            if lf_cfg is not None:
+                plan = await structured_model.ainvoke(prompt, config=lf_cfg)
+            else:
+                plan = await structured_model.ainvoke(prompt)
             return self._normalize_hints(plan)
         except Exception as e:
             logger.warning("Structured output failed, trying manual parse: %s", e)
-            return await self._fallback_parse(goal, prompt)
+            return await self._fallback_parse(goal, prompt, thread_id=context.thread_id)
 
-    async def _fallback_parse(self, goal: str, prompt: str) -> Plan:
+    async def _fallback_parse(
+        self, goal: str, prompt: str, *, thread_id: str | None = None
+    ) -> Plan:
         """Fallback plan parsing from raw LLM response."""
         try:
-            response = await self._model.ainvoke(prompt)
+            lf_cfg = self._planner_langfuse_run_config(
+                thread_id=thread_id, phase="create-plan-fallback"
+            )
+            if lf_cfg is not None:
+                response = await self._model.ainvoke(prompt, config=lf_cfg)
+            else:
+                response = await self._model.ainvoke(prompt)
             content = getattr(response, "content", str(response))
             return self._parse_json_from_response(_extract_text_content(content), goal)
         except Exception as e:
@@ -791,6 +838,8 @@ class LLMPlanner:
         messages: list[Any],
         goal: str,
         iteration: int,
+        *,
+        thread_id: str | None,
     ) -> Any:
         """StatusAssessment call: assess goal progress without plan generation (RFC-604).
 
@@ -801,6 +850,7 @@ class LLMPlanner:
             messages: Prompt messages from build_plan_messages()
             goal: Goal description for fallback decision
             iteration: Current iteration for varied fallback
+            thread_id: Thread id for Langfuse session correlation.
 
         Returns:
             StatusAssessment with status, progress, confidence.
@@ -812,7 +862,11 @@ class LLMPlanner:
         )
 
         try:
-            assessment = await structured_model.ainvoke(messages)
+            lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="plan-assess")
+            if lf_cfg is not None:
+                assessment = await structured_model.ainvoke(messages, config=lf_cfg)
+            else:
+                assessment = await structured_model.ainvoke(messages)
 
             if assessment is None:
                 raise ValueError("StatusAssessment returned None")
@@ -842,6 +896,8 @@ class LLMPlanner:
         assessment: Any,
         goal: str,
         iteration: int,
+        *,
+        thread_id: str | None,
     ) -> Any:
         """PlanGeneration call: generate execution plan when goal incomplete (RFC-604).
 
@@ -853,6 +909,7 @@ class LLMPlanner:
             assessment: StatusAssessment result from previous call
             goal: Goal description for fallback decision
             iteration: Current iteration for varied fallback
+            thread_id: Thread id for Langfuse session correlation.
 
         Returns:
             PlanGeneration with plan_action, decision.
@@ -872,7 +929,11 @@ class LLMPlanner:
         )
 
         try:
-            plan_result = await structured_model.ainvoke(plan_messages)
+            lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="plan-generate")
+            if lf_cfg is not None:
+                plan_result = await structured_model.ainvoke(plan_messages, config=lf_cfg)
+            else:
+                plan_result = await structured_model.ainvoke(plan_messages)
 
             if plan_result is None:
                 raise ValueError("PlanGeneration returned None")
@@ -967,7 +1028,9 @@ class LLMPlanner:
         for attempt in range(max_retries):
             try:
                 t_assess = time.perf_counter()
-                assessment = await self._assess_status(messages, goal, state.iteration)
+                assessment = await self._assess_status(
+                    messages, goal, state.iteration, thread_id=state.thread_id
+                )
                 assess_ms = (time.perf_counter() - t_assess) * 1000
                 plan_gen_ms = 0.0
                 llm_calls = 1
@@ -1024,7 +1087,11 @@ class LLMPlanner:
                 else:
                     t_plan = time.perf_counter()
                     plan_result = await self._generate_plan(
-                        messages, assessment, goal, state.iteration
+                        messages,
+                        assessment,
+                        goal,
+                        state.iteration,
+                        thread_id=state.thread_id,
                     )
                     plan_gen_ms = (time.perf_counter() - t_plan) * 1000
                     llm_calls = 2
@@ -1087,7 +1154,13 @@ class LLMPlanner:
                     if is_json_error and attempt == max_retries - 2:
                         logger.info("[Retry] fallback: manual JSON parse")
                         try:
-                            response = await self._model.ainvoke(messages)
+                            lf_retry = self._planner_langfuse_run_config(
+                                thread_id=state.thread_id, phase="plan-json-retry"
+                            )
+                            if lf_retry is not None:
+                                response = await self._model.ainvoke(messages, config=lf_retry)
+                            else:
+                                response = await self._model.ainvoke(messages)
                             raw_content = _extract_text_content(response.content)
 
                             logger.debug(

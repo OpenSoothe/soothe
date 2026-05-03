@@ -41,3 +41,17 @@ def test_merge_adds_callback_and_metadata(monkeypatch) -> None:
     assert out["metadata"]["langfuse_session_id"] == "sess-1"
     assert out["run_name"] == "soothe-test"
     assert out["configurable"]["thread_id"] == "t1"
+
+
+def test_merge_run_name_override(monkeypatch) -> None:
+    obs = ObservabilityConfig(
+        langfuse=LangfuseIntegrationConfig(enabled=True, trace_name="soothe-test"),
+    )
+    cfg = SootheConfig(observability=obs)
+    handler = MagicMock()
+    monkeypatch.setattr(langfuse_util, "_langfuse_callback_handler", lambda _c: handler)
+    base = {"configurable": {"thread_id": "t1"}}
+    out = merge_langfuse_runnable_config(
+        base, cfg, session_id="sess-1", run_name="soothe-test:plan-assess"
+    )
+    assert out["run_name"] == "soothe-test:plan-assess"

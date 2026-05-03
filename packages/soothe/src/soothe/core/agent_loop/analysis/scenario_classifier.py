@@ -129,12 +129,11 @@ def _extract_execution_summary(state: LoopState) -> dict:
         if tool_name:
             tools_used.append(tool_name)
 
-    # Calculate evidence volume (character count from successful steps)
+    # Rough character scale for routing (truncate=True avoids duplicating ledger-scale blobs).
     evidence_volume = 0
     for result in state.step_results:
         if result.success:
-            evidence_str = result.to_evidence_string(truncate=False)
-            evidence_volume += len(evidence_str)
+            evidence_volume += len(result.to_evidence_string(truncate=True))
 
     return {
         "total_steps": total_steps,

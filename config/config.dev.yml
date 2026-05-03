@@ -7,7 +7,7 @@
 # Docker prerequisites (repo root):
 #   1. PostgreSQL + pgvector (RFC-612 DBs):  docker compose up -d
 #      Host port 6432 → container 5432; databases from config/init-db.sql
-#   2. Langfuse UI (optional profile):     docker compose --profile langfuse up -d
+#   2. Langfuse UI (same compose file):     docker compose up -d
 #      UI/API at http://localhost:3300 — keys pk-lf-soothe-local / sk-lf-soothe-local;
 #      headless UI login dev@soothe.local / SootheLangfuseLocalDev1 (docker-compose.yml LANGFUSE_INIT_*).
 providers:
@@ -162,7 +162,7 @@ protocols:
 # =============================================================================
 # Persistence Configuration
 # =============================================================================
-# PostgreSQL via docker-compose pgvector service (host port 6432, RFC-612 multi-DB).
+# PostgreSQL via docker-compose soothe-pgvector service (host port 6432, RFC-612 multi-DB).
 persistence:
   default_backend: postgresql
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"

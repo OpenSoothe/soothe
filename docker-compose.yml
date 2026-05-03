@@ -1,14 +1,16 @@
 # Docker Compose for Soothe development environment
 # RFC-612: Multi-database PostgreSQL architecture
 #
-# Optional local Langfuse (LLM observability UI + API, IG-367):
-#   docker compose --profile langfuse up -d
-# UI/API: http://localhost:3300  — set soothe observability.langfuse.host to match.
+# Local Langfuse v3 (LLM observability UI + API, IG-367, IG-369) starts with the default stack:
+#   docker compose up -d
+# UI/API: http://localhost:3300 — set soothe observability.langfuse.host to match.
+# Stack: langfuse-web + langfuse-worker + Postgres + ClickHouse + Redis + MinIO (Python SDK 3.x).
+# Langfuse app images are pulled from ghcr.io (not Docker Hub) to avoid registry-1.docker.io / auth.docker.io token EOF on some networks.
 # Headless init provisions org + soothe-dev project + API keys + a dev UI user (override via LANGFUSE_INIT_*).
 # Default sign-in: dev@soothe.local / SootheLangfuseLocalDev1 (override via LANGFUSE_INIT_*; mirror keys in config YAML).
-# Fresh DB only: if you already ran Langfuse without these vars, remove volume langfuse_postgres_data or run down -v.
+# Fresh Langfuse DB/volumes: docker compose down -v (removes Langfuse + soothe-pgvector volumes — use selective volume rm to keep soothe-pgvector).
 services:
-  pgvector:
+  soothe-pgvector:
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/pgvector:pg17
     restart: always
     environment:
@@ -22,7 +24,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./config/init-db.sql:/docker-entrypoint-initdb.d/10-init-databases.sql:ro
 
-  # Dedicated Postgres for Langfuse (do not share with pgvector / RFC-612 init script).
+  # --- Langfuse v3 — do not share DB with soothe-pgvector / RFC-612 init script ---
   langfuse-postgres:
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/postgres:17.5-alpine3.21
     restart: unless-stopped
@@ -39,24 +41,153 @@ services:
     volumes:
       - langfuse_postgres_data:/var/lib/postgresql/data
 
-  langfuse:
-    image: langfuse/langfuse:2
+  langfuse-clickhouse:
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/clickhouse:24.8
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    expose:
+      - "8123"
+      - "9000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "clickhouse-client --user clickhouse --password clickhouse --query 'SELECT 1' || exit 1",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  langfuse-redis:
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/redis:8-alpine3.21
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${LANGFUSE_REDIS_PASSWORD:-myredissecret}
+      --maxmemory-policy noeviction
+    expose:
+      - "6379"
+    volumes:
+      - langfuse_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD:-myredissecret}", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  langfuse-minio:
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/minio:RELEASE.2025-05-24T17-08-30Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${LANGFUSE_MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
+    ports:
+      - "127.0.0.1:19090:9000"
+    expose:
+      - "9000"
+      - "9001"
+    volumes:
+      - langfuse_minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+
+  langfuse-minio-init:
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/minio-mc:latest
+    depends_on:
+      langfuse-minio:
+        condition: service_healthy
+    # One argv for `sh -c` (multiline `command: |` breaks /bin/sh -c with some compose merges).
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        set -e;
+        mc alias set --insecure local http://langfuse-minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD";
+        mc mb --ignore-existing local/langfuse
+    environment:
+      MINIO_ROOT_USER: ${LANGFUSE_MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
+    restart: "no"
+
+  langfuse-worker:
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/langfuse-worker:3
     restart: unless-stopped
     depends_on:
       langfuse-postgres:
         condition: service_healthy
-    ports:
-      - "3300:3000"
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@langfuse-postgres:5432/langfuse
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+      langfuse-minio-init:
+        condition: service_completed_successfully
+      langfuse-web:
+        condition: service_started
+    expose:
+      - "3030"
+    environment: &langfuse_app_env
       NEXTAUTH_URL: http://localhost:3300
-      # Dev-only defaults; override via shell env or a .env file next to this compose file.
-      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-langfuse_local_nextauth_secret_min32chars}
+      DATABASE_URL: postgresql://postgres:postgres@langfuse-postgres:5432/langfuse
       SALT: ${LANGFUSE_SALT:-langfuse_local_salt_min32chars_please}
       ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
       TELEMETRY_ENABLED: "false"
-      # Headless initialization (https://langfuse.com/self-hosting/v2/deployment-guide#initialization)
-      # Do not double-quote LANGFUSE_INIT_* values in Compose (Langfuse #3398).
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:clickhouse@langfuse-clickhouse:9000
+      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-myredissecret}
+      REDIS_TLS_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://127.0.0.1:19090
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+
+  langfuse-web:
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/langfuse:3
+    restart: unless-stopped
+    depends_on:
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+      langfuse-minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "3300:3000"
+    environment:
+      <<: *langfuse_app_env
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-langfuse_local_nextauth_secret_min32chars}
       LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-soothe-local-org}
       LANGFUSE_INIT_ORG_NAME: Soothe Local
       LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-soothe-dev}
@@ -70,3 +201,7 @@ services:
 volumes:
   postgres_data:
   langfuse_postgres_data:
+  langfuse_clickhouse_data:
+  langfuse_clickhouse_logs:
+  langfuse_minio_data:
+  langfuse_redis_data:

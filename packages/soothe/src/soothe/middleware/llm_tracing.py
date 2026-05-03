@@ -38,9 +38,8 @@ class LLMTracingMiddleware(AgentMiddleware):
     - Understanding message flow
 
     Example log output:
-        [LLM Trace #123] Request: 3 messages (1.2K chars)
-        [LLM Trace #123] System: "You are a helpful assistant..."
-        [LLM Trace #123] Response: 256 tokens, 340ms, "Here's the answer..."
+        Request #123: {'msg_count': 3, 'chars': '1.2K', ...}
+        Response #123: {'duration_ms': 340, 'tokens': {...}, ...}
     """
 
     def __init__(self, *, log_preview_length: int = 200) -> None:
@@ -169,7 +168,7 @@ class LLMTracingMiddleware(AgentMiddleware):
             if state_keys:
                 req_summary["state"] = state_keys[:5]  # Limit to first 5 keys
 
-        logger.debug("[LLM Trace #%d] Request: %s", trace_id, req_summary)
+        logger.debug("Request #%d: %s", trace_id, req_summary)
 
     def _log_response(self, trace_id: int, response: ModelResponse[Any], duration_ms: int) -> None:
         """Log compact response details in structured format.
@@ -213,13 +212,13 @@ class LLMTracingMiddleware(AgentMiddleware):
                 tool_names = [tc.get("name", "unknown") for tc in ai_message.tool_calls[:5]]
                 resp_summary["tools"] = {"count": len(ai_message.tool_calls), "names": tool_names}
 
-            logger.debug("[LLM Trace #%d] Response: %s", trace_id, resp_summary)
+            logger.debug("Response #%d: %s", trace_id, resp_summary)
         else:
             fallback_type = None
             if messages:
                 fallback_type = type(messages[-1]).__name__
             logger.debug(
-                "[LLM Trace #%d] Response: %s",
+                "Response #%d: %s",
                 trace_id,
                 {
                     "duration_ms": duration_ms,
@@ -237,7 +236,7 @@ class LLMTracingMiddleware(AgentMiddleware):
             duration_ms: Request duration before failure.
         """
         logger.error(
-            "[LLM Trace #%d] Error after %dms: %s: %s",
+            "Error #%d after %dms: %s: %s",
             trace_id,
             duration_ms,
             type(error).__name__,

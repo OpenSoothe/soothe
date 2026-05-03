@@ -91,6 +91,7 @@ def merge_langfuse_runnable_config(
     soothe_config: SootheConfig,
     *,
     session_id: str | None = None,
+    run_name: str | None = None,
 ) -> dict[str, Any]:
     """Return Runnable config like ``base`` with Langfuse callbacks and session metadata merged in.
 
@@ -101,6 +102,8 @@ def merge_langfuse_runnable_config(
         base: RunnableConfig-compatible dict (e.g. ``{"configurable": {...}}``).
         soothe_config: Active Soothe configuration.
         session_id: Optional thread id stored as ``langfuse_session_id`` metadata.
+        run_name: Optional root run name (e.g. ``soothe-dev:plan-assess``). When omitted,
+            uses ``observability.langfuse.trace_name`` when set.
 
     Returns:
         New dict with merged ``callbacks`` / ``metadata`` / ``run_name``, or ``base``.
@@ -120,7 +123,9 @@ def merge_langfuse_runnable_config(
         meta.setdefault("langfuse_session_id", session_id)
     if meta:
         out["metadata"] = meta
-    tn = (soothe_config.observability.langfuse.trace_name or "").strip()
-    if tn:
-        out["run_name"] = tn
+    name = (run_name or "").strip()
+    if not name:
+        name = (soothe_config.observability.langfuse.trace_name or "").strip()
+    if name:
+        out["run_name"] = name
     return out
