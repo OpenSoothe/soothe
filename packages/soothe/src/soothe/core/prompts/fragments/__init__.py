@@ -21,6 +21,13 @@ PLAN_EXECUTE_INSTRUCTIONS_FRAGMENT = (
     .strip()
 )
 
+# Plan-assess only: matches StatusAssessment schema (IG-372)
+PLAN_ASSESS_INSTRUCTIONS_FRAGMENT = (
+    _FRAGMENTS_DIR.joinpath("instructions/plan_assess_instructions.xml")
+    .read_text(encoding="utf-8")
+    .strip()
+)
+
 # Prefetch static policy fragments (IG-183 merged policies)
 EXECUTION_POLICIES_FRAGMENT = (
     _FRAGMENTS_DIR.joinpath("system/policies/execution_policies.xml")
@@ -30,5 +37,6 @@ EXECUTION_POLICIES_FRAGMENT = (
 
 __all__ = [
     "PLAN_EXECUTE_INSTRUCTIONS_FRAGMENT",
+    "PLAN_ASSESS_INSTRUCTIONS_FRAGMENT",
     "EXECUTION_POLICIES_FRAGMENT",
 ]
