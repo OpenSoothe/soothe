@@ -1,10 +1,13 @@
 """Observability and tracing health check implementation."""
 
+import importlib.util
 import os
+from typing import Any
 
 from soothe.config import SootheConfig
 from soothe.daemon.health.formatters import aggregate_status
 from soothe.daemon.health.models import CategoryResult, CheckResult, CheckStatus
+from soothe.utils.observability.langfuse import _resolve_str
 
 
 def _check_langsmith_config() -> CheckResult:
@@ -82,6 +85,63 @@ def _check_langsmith_config() -> CheckResult:
     )
 
 
+def _check_langfuse_from_config(config: SootheConfig | None) -> CheckResult:
+    """Check Langfuse integration when enabled in ``observability.langfuse``."""
+    if config is None:
+        return CheckResult(
+            name="langfuse",
+            status=CheckStatus.INFO,
+            message="Langfuse: no config loaded (skipped)",
+            details={},
+        )
+    lf = config.observability.langfuse
+    if not lf.enabled:
+        return CheckResult(
+            name="langfuse",
+            status=CheckStatus.INFO,
+            message="Langfuse integration disabled (observability.langfuse.enabled=false)",
+            details={"enabled": False},
+        )
+    if importlib.util.find_spec("langfuse") is None:
+        return CheckResult(
+            name="langfuse",
+            status=CheckStatus.WARNING,
+            message="Langfuse enabled in config but the langfuse package is not installed",
+            details={
+                "enabled": True,
+                "remediation": "pip install 'soothe[langfuse]' (or pip install langfuse)",
+            },
+        )
+
+    pub = _resolve_str(lf.public_key) or os.environ.get("LANGFUSE_PUBLIC_KEY", "").strip()
+    sec = _resolve_str(lf.secret_key) or os.environ.get("LANGFUSE_SECRET_KEY", "").strip()
+    details: dict[str, Any] = {
+        "enabled": True,
+        "public_key_present": bool(pub),
+        "secret_key_present": bool(sec),
+    }
+    host = _resolve_str(lf.host) or os.environ.get("LANGFUSE_HOST", "").strip()
+    if host:
+        details["host"] = host
+
+    if pub and sec:
+        return CheckResult(
+            name="langfuse",
+            status=CheckStatus.OK,
+            message="Langfuse tracing enabled with credentials available",
+            details=details,
+        )
+    return CheckResult(
+        name="langfuse",
+        status=CheckStatus.WARNING,
+        message="Langfuse enabled but credentials are incomplete",
+        details={
+            **details,
+            "remediation": "Set observability.langfuse.public_key / secret_key (or LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY)",
+        },
+    )
+
+
 def _check_dotenv_availability() -> CheckResult:
     """Check if python-dotenv is available and .env file exists.
 
@@ -147,20 +207,21 @@ def _check_dotenv_availability() -> CheckResult:
         )
 
 
-async def check_observability(config: SootheConfig | None = None) -> CategoryResult:  # noqa: ARG001
+async def check_observability(config: SootheConfig | None = None) -> CategoryResult:
     """Check observability and tracing configuration.
 
-    Validates LangSmith integration, environment variable setup,
-    and observability tooling configuration.
+    Validates LangSmith integration, Langfuse configuration when enabled,
+    environment variable setup, and observability tooling configuration.
 
     Args:
-        config: SootheConfig instance (not used for observability checks)
+        config: SootheConfig instance (used for Langfuse integration checks).
 
     Returns:
         CategoryResult with observability check results
     """
     checks = [
         _check_langsmith_config(),
+        _check_langfuse_from_config(config),
         _check_dotenv_availability(),
     ]
 

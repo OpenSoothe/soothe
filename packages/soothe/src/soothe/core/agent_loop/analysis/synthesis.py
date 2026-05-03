@@ -10,15 +10,18 @@ Separation of concerns (IG-300):
 - analysis/synthesis.py: Execution logic ("how to synthesize?")
 
 Checkpoint isolation (IG-302): synthesis uses a fresh LangGraph ``thread_id`` so the
-checkpointer does not replay the full AgentLoop message history; only system + the
-synthesis human turn are loaded.
+checkpointer does not replay the parent thread. The model receives copies of the
+AgentLoop ledger (``loop_messages``) plus a final goal-completion instruction turn.
 """
 
 from __future__ import annotations
 
+import copy
 import logging
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from langchain_core.messages import BaseMessage, HumanMessage
 
 from soothe.core.agent_loop.analysis.scenario_classifier import (
     ScenarioClassification,
@@ -29,6 +32,8 @@ from soothe.core.agent_loop.utils.messages import (
     LoopHumanMessage,
     tag_messages_stream_chunk_for_goal_completion,
 )
+from soothe.core.agent_loop.utils.stream_normalize import extract_text_from_message_content
+from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -124,7 +129,7 @@ class SynthesisGenerator:
 
         Two-phase flow:
         1. Classify scenario from goal + intent + execution
-        2. Build synthesis prompt using classification
+        2. Assemble ``messages``: copies of ``state.loop_messages`` (plus a final instruction turn)
         3. Stream via CoreAgent
 
         Yields LangGraph ``messages``-mode stream tuples tagged with ``phase=goal_completion``
@@ -140,29 +145,37 @@ class SynthesisGenerator:
         """
         _ = plan_result  # Reserved for future use
 
-        # Extract evidence
-        evidence = self._extract_evidence(state)
-
         # Phase 1: Classify scenario
         classification = await self._classify_scenario(goal, state)
 
-        # Phase 2: Build synthesis prompt from classification
-        prompt = self._build_synthesis_prompt(goal, evidence, classification)
+        # Phase 2: Ledger copies + final instruction (no flattened EXECUTION EVIDENCE string)
+        instruction = self._build_synthesis_instruction(goal, classification)
+        max_total = self._synthesis_max_chars()
+        ledger_budget = max(0, max_total - len(instruction) - 256)
+        ledger_messages = self._ledger_messages_for_synthesis(state, ledger_budget)
+        messages = [
+            *ledger_messages,
+            self._synthesis_instruction_message(state, instruction),
+        ]
+        # Hard cap: drop oldest ledger turns if instruction + ledger exceeds configured maximum.
+        while len(messages) > 1:
+            approx = sum(
+                len(extract_text_from_message_content(getattr(m, "content", ""))) for m in messages
+            )
+            if approx <= max_total:
+                break
+            messages.pop(0)
 
-        # Create human message
-        human_msg = LoopHumanMessage(
-            content=prompt,
-            thread_id=state.thread_id,
-            iteration=state.iteration,
-            goal_summary=state.goal[:200] if state.goal else None,
-            phase="goal_completion",
+        approx_chars = sum(
+            len(extract_text_from_message_content(getattr(m, "content", ""))) for m in messages
         )
-
         logger.info(
-            "Synthesis generator: scenario=%s sections=%d evidence_chars=%d",
+            "Synthesis generator: scenario=%s sections=%d ledger_msgs=%d prompt_msgs=%d approx_chars=%d",
             classification.scenario,
             len(classification.sections),
-            len(evidence),
+            len(state.loop_messages),
+            len(messages),
+            approx_chars,
         )
 
         # IG-302: Fresh checkpoint thread so LangGraph does not replay full AgentLoop history.
@@ -176,9 +189,17 @@ class SynthesisGenerator:
             state.thread_id,
         )
 
+        graph_config: dict[str, Any] = {"configurable": configurable}
+        if self._soothe_config is not None:
+            graph_config = merge_langfuse_runnable_config(
+                graph_config,
+                self._soothe_config,
+                session_id=state.thread_id,
+            )
+
         async for chunk in self.core_agent.astream(
-            {"messages": [human_msg]},
-            config={"configurable": configurable},
+            {"messages": messages},
+            config=graph_config,
             stream_mode=["messages"],
             subgraphs=False,
         ):
@@ -188,42 +209,115 @@ class SynthesisGenerator:
                 iteration=state.iteration,
             )
 
-    def _extract_evidence(self, state: LoopState) -> str:
-        """Build bounded detailed evidence for synthesis (IG-317)."""
-        evidence_parts: list[str] = []
-        for result in state.step_results:
-            if result.success:
-                evidence_parts.append(result.get_detailed_evidence_string())
-
-        if not evidence_parts:
-            return "No execution evidence available (goal completed without tools)"
-
-        raw = "\n\n".join(evidence_parts)
+    def _synthesis_max_chars(self) -> int:
+        """Return max total extracted text for ledger + instruction (IG-317)."""
         max_chars = _DEFAULT_SYNTHESIS_EVIDENCE_MAX
         if self._soothe_config is not None:
             cap = self._soothe_config.agentic.report_output.synthesis_max_chars
             if cap > 0:
                 max_chars = cap
-        if len(raw) > max_chars:
-            marker = "\n\n[evidence truncated for synthesis prompt]\n"
-            return raw[: max_chars - len(marker)] + marker
-        return raw
+        return max_chars
 
-    def _build_synthesis_prompt(
+    @staticmethod
+    def _copy_message_for_synthesis(msg: BaseMessage) -> BaseMessage:
+        """Deep-copy a ledger message so CoreAgent cannot mutate AgentLoop state."""
+        copier = getattr(msg, "model_copy", None)
+        if callable(copier):
+            return copier(deep=True)
+        return copy.deepcopy(msg)
+
+    def _ledger_messages_for_synthesis(
+        self,
+        state: LoopState,
+        ledger_char_budget: int,
+    ) -> list[BaseMessage]:
+        """Return bounded ledger copies, or a single Human fallback when the ledger is empty."""
+        budget = max(0, ledger_char_budget)
+
+        if state.loop_messages:
+            copies = [self._copy_message_for_synthesis(m) for m in state.loop_messages]
+            return self._trim_messages_by_extracted_chars(copies, budget)
+
+        evidence_parts = [
+            r.to_evidence_string(truncate=False) for r in state.step_results if r.success
+        ]
+        body = (
+            "\n\n".join(evidence_parts)
+            if evidence_parts
+            else "No execution evidence available (goal completed without tools)"
+        )
+        if budget > 0 and len(body) > budget:
+            marker = "\n\n[execution summary truncated for synthesis]\n"
+            body = body[: max(0, budget - len(marker))] + marker
+        return [
+            HumanMessage(
+                content=(
+                    "AgentLoop execution ledger was unavailable. "
+                    "Use the following compact step summaries as execution context:\n\n" + body
+                )
+            )
+        ]
+
+    def _trim_messages_by_extracted_chars(
+        self,
+        messages: list[BaseMessage],
+        max_chars: int,
+    ) -> list[BaseMessage]:
+        """Drop oldest messages (or truncate a single oversized body) to respect ``max_chars``."""
+        if max_chars <= 0 or not messages:
+            return []
+
+        def total_len(ms: list[BaseMessage]) -> int:
+            return sum(
+                len(extract_text_from_message_content(getattr(m, "content", ""))) for m in ms
+            )
+
+        out = list(messages)
+        while out and total_len(out) > max_chars:
+            if len(out) == 1:
+                m0 = out[0]
+                text = extract_text_from_message_content(m0.content)
+                if len(text) <= max_chars:
+                    break
+                marker = "\n…[truncated for synthesis]\n"
+                clipped = text[: max_chars - len(marker)] + marker
+                copier = getattr(m0, "model_copy", None)
+                if callable(copier):
+                    out[0] = m0.model_copy(update={"content": clipped})
+                else:
+                    out[0] = HumanMessage(content=clipped)
+                break
+            out.pop(0)
+
+        return out
+
+    def _synthesis_instruction_message(
+        self, state: LoopState, instruction: str
+    ) -> LoopHumanMessage:
+        """Final human turn: scenario template only; execution context is prior messages."""
+        return LoopHumanMessage(
+            content=instruction,
+            thread_id=state.thread_id,
+            iteration=state.iteration,
+            goal_summary=state.goal[:200] if state.goal else None,
+            phase="goal_completion",
+        )
+
+    def _build_synthesis_instruction(
         self,
         goal: str,
-        evidence: str,
         classification: ScenarioClassification,
     ) -> str:
-        """Build synthesis prompt from scenario classification (RFC-616, IG-300).
+        """Build the closing synthesis instruction (scenario template; no embedded evidence).
+
+        Prior messages in the same request carry the AgentLoop ledger (RFC-214).
 
         Args:
             goal: Goal description.
-            evidence: Concatenated evidence from successful steps.
             classification: Scenario classification from Phase 1.
 
         Returns:
-            Complete synthesis prompt text with scenario structure and focus.
+            Instruction text for the final ``LoopHumanMessage``.
         """
         focus_items = "\n".join(f"- {focus}" for focus in classification.contextual_focus)
 
@@ -238,16 +332,10 @@ CONTEXTUAL FOCUS:
 EVIDENCE EMPHASIS:
 {classification.evidence_emphasis}
 
-EXECUTION EVIDENCE:
-{evidence}
-
 INSTRUCTIONS:
-1. Follow the scenario structure - address each section purposefully
-2. Focus on the contextual areas identified above
-3. Judge appropriate depth and detail level based on the goal and evidence
-4. Extract and present actual content from tool results (file contents, search results, etc.)
-   - ToolMessage.content contains the actual file content, search results, etc.
-   - For file reading: show the actual file content (with line numbers if applicable)
-   - For web/research: show actual search results or fetched content
-5. Be concrete and actionable - show findings, not just confirmations
-6. Use the full execution history available in the conversation context"""
+1. Use the AgentLoop execution messages above (human execute prompts and assistant outcomes) as primary evidence.
+2. Follow the scenario structure - address each section purposefully.
+3. Focus on the contextual areas identified above.
+4. Extract and present actual content reflected in that history (file contents, search results, tool outcomes, etc.).
+5. Be concrete and actionable - show findings, not just confirmations.
+6. If prior turns are missing or sparse, state what is unknown rather than inventing execution detail."""
