@@ -21,7 +21,7 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
     builder = PromptBuilder(config)
     messages = builder.build_plan_messages("analyze architecture", state, ctx)
 
-    # System + plan-context human; optional ledger tail (RFC-214)
+    # System + optional ledger middle + plan-context human last (RFC-214, IG-372)
     assert len(messages) >= 2
     assert isinstance(messages[0], SystemMessage)
     assert isinstance(messages[1], HumanMessage)
@@ -139,7 +139,7 @@ def test_build_loop_plan_messages_plan_continue_when_steps_remain() -> None:
 
 
 def test_build_plan_messages_appends_ledger_loop_messages() -> None:
-    """Ledger is appended as native LoopHumanMessage / LoopAIMessage after plan context."""
+    """Ledger (execute turns) precedes plan-context human so assess sees history then framing (IG-372)."""
     state = LoopState(goal="read readme", thread_id="t1", max_iterations=8)
     state.loop_messages = [
         LoopHumanMessage(
@@ -159,8 +159,12 @@ def test_build_plan_messages_appends_ledger_loop_messages() -> None:
     messages = builder.build_plan_messages("read readme", state, PlanContext())
 
     assert len(messages) == 4
-    assert isinstance(messages[2], LoopHumanMessage)
-    assert isinstance(messages[3], LoopAIMessage)
-    assert messages[2].content.startswith("Execute:")
-    assert "First lines of README" in messages[3].content
-    assert "<AGENTLOOP_HISTORY>" not in messages[1].content
+    assert isinstance(messages[1], LoopHumanMessage)
+    assert isinstance(messages[2], LoopAIMessage)
+    assert messages[1].content.startswith("Execute:")
+    assert "First lines of README" in messages[2].content
+    plan_human = messages[3]
+    assert isinstance(plan_human, LoopHumanMessage)
+    assert getattr(plan_human, "phase", None) == "plan"
+    assert "Goal: read readme" in plan_human.content
+    assert "<AGENTLOOP_HISTORY>" not in plan_human.content
