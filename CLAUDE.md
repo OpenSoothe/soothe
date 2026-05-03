@@ -379,8 +379,9 @@ Use single backticks for inline code in docstrings (not Sphinx double backticks)
 
 | File | Purpose |
 |------|---------|
-| [config/env.example](config/env.example) | All environment variables |
-| [config/config.yml](config/config.yml) | Full YAML config example |
+| [packages/soothe/src/soothe/config/config.yml](packages/soothe/src/soothe/config/config.yml) | Full YAML template (`${ENV}` for secrets) |
+| [config/config.dev.yml](config/config.dev.yml) | Local development defaults |
+| [config/config.minimal.yml](config/config.minimal.yml) | Minimal end-user YAML example |
 | [docs/user_guide.md](docs/user_guide.md) | End-user guide |
 
 ---

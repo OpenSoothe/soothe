@@ -8,7 +8,8 @@
 #   1. PostgreSQL + pgvector (RFC-612 DBs):  docker compose up -d
 #      Host port 6432 → container 5432; databases from config/init-db.sql
 #   2. Langfuse UI (optional profile):     docker compose --profile langfuse up -d
-#      UI/API at http://localhost:3300 — keys default to pk-lf-soothe-local / sk-lf-soothe-local
+#      UI/API at http://localhost:3300 — keys pk-lf-soothe-local / sk-lf-soothe-local;
+#      headless UI login dev@soothe.local / SootheLangfuseLocalDev1 (docker-compose.yml LANGFUSE_INIT_*).
 providers:
   - name: dashscope
     provider_type: openai
