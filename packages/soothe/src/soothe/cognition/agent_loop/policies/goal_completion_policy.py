@@ -4,13 +4,13 @@ Unified decision logic combining hybrid assessment with completion action select
 Consolidated from synthesis_policy.py and strategy selection (IG-299).
 
 Decision flow:
-1. Hybrid logic: LLM primary + execution heuristics (determine_goal_completion_needs)
-2. Completion action: skip/direct/synthesis/summary (determine_completion_action)
+1. Goal completion needs: LLM and/or heuristics per ``mode`` (``determine_goal_completion_needs``)
+2. Completion action: skip/direct/synthesis/summary (``determine_completion_action``)
 
-Decision modes (hybrid):
-- llm_only: Trust LLM decision completely (no fallback)
+Decision modes (``determine_goal_completion_needs`` ``mode``):
+- llm_only: Trust LLM decision completely (no heuristic fallback; default)
 - heuristic_only: Ignore LLM, use execution metrics only
-- hybrid: LLM primary, heuristic fallback (default)
+- hybrid: LLM primary, heuristic fallback when LLM returns false
 
 ``state.last_execute_assistant_text`` is resolved per wave by
 :mod:`soothe.cognition.agent_loop.core.act_wave_finalize` from root assistant stream text and/or
@@ -18,10 +18,8 @@ ordered ``task`` tool return bodies (IG-355, IG-357).
 
 Heuristic categories (execution-focused, IG-298):
 - Wave execution: Parallel multi-step, subagent cap
-- Multi-wave: Multiple execution waves (≥2)
-- Step complexity: Many steps (≥3), DAG dependencies
+- DAG complexity: Rich dependency edges on the current plan
 - Completion quality: Failed steps with low success rate
-- Step diversity: Multiple execution types
 
 Removed: Word count, evidence vs output ratio (output metrics unreliable).
 """
@@ -42,8 +40,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Execution complexity thresholds (IG-298)
-_COMPLEX_WAVE_THRESHOLD = 3  # multiple waves indicates multi-stage execution
-_COMPLEX_STEPS_THRESHOLD = 3  # multiple steps indicates non-trivial task
 _DAG_DEPENDENCY_THRESHOLD = 3  # dag dependencies indicates complex orchestration
 _LOW_SUCCESS_RATE_THRESHOLD = 0.6  # lower success rate needs explanation
 
@@ -54,19 +50,20 @@ _STRUCTURED_PAYLOAD_MIN_LINES = 6
 def determine_goal_completion_needs(
     llm_decision: bool,
     state: TYPE_CHECKING.Any,  # LoopState
-    mode: str = "hybrid",
+    mode: str = "llm_only",
 ) -> bool:
-    """Unified hybrid decision for goal completion synthesis.
+    """Decide whether goal-completion synthesis/reporting is required (RFC-219, IG-298).
 
-    Priority (hybrid mode):
-    1. LLM primary: If assessment.require_goal_completion=True → True
-    2. Heuristic fallback: If LLM returns False → check execution complexity
-    3. Agree to skip: Only False if both LLM and heuristics agree
+    Priority by ``mode``:
+    - ``llm_only``: Return ``llm_decision`` (``StatusAssessment.require_goal_completion``).
+    - ``heuristic_only``: Return execution-heuristic result only.
+    - ``hybrid``: True if LLM says true; else heuristic fallback when LLM is false.
 
     Args:
         llm_decision: LLM's require_goal_completion from StatusAssessment.
         state: Loop state with execution history and wave metrics.
-        mode: Decision mode (llm_only, heuristic_only, hybrid).
+        mode: ``llm_only`` (default), ``heuristic_only``, or ``hybrid``. Configure via
+            ``agentic.goal_completion_mode`` in YAML.
 
     Returns:
         Final require_goal_completion decision.
@@ -99,11 +96,9 @@ def _heuristic_requires_goal_completion(state: TYPE_CHECKING.Any) -> bool:
     """Check execution complexity indicators requiring synthesis.
 
     Simplified heuristics (IG-298):
-    - Zero execution: No steps executed at all (iteration 0 with empty results)
     - Execution complexity (parallel multi-step, subagent cap)
-    - Step diversity (multiple step types, DAG dependencies)
-    - Wave patterns (multiple execution waves)
     - Completion quality (failed steps needing explanation)
+    - DAG edges on the current plan
 
     Removed word count metrics (output-focused, unreliable).
 
@@ -113,13 +108,6 @@ def _heuristic_requires_goal_completion(state: TYPE_CHECKING.Any) -> bool:
     Returns:
         True if execution complexity suggests synthesis needed.
     """
-    # 0. Zero execution check: No steps executed at all
-    # When iteration=0 and step_results=[], we have NO evidence the goal was achieved
-    # Force synthesis to generate proper goal completion response
-    if state.iteration == 0 and len(state.step_results) == 0:
-        logger.info("Heuristic: zero_execution (iter=0, results=0) → synthesis required")
-        return True
-
     # 1. Wave execution complexity (IG-130, IG-132)
     if state.last_execute_wave_parallel_multi_step:
         logger.info("Heuristic: parallel_multi_step=True")
@@ -129,12 +117,7 @@ def _heuristic_requires_goal_completion(state: TYPE_CHECKING.Any) -> bool:
         logger.info("Heuristic: subagent_cap=True")
         return True
 
-    # 2. Multi-wave execution (≥2 waves indicates non-trivial task)
-    if state.iteration >= _COMPLEX_WAVE_THRESHOLD:
-        logger.info("Heuristic: multi_wave (iter=%d)", state.iteration)
-        return True
-
-    # 3. Completion quality: failed steps need explanation
+    # 2. Completion quality: failed steps need explanation
     failed_count = sum(1 for r in state.step_results if not r.success)
     if failed_count > 0:
         # Failed steps with low success rate need synthesis
@@ -148,18 +131,9 @@ def _heuristic_requires_goal_completion(state: TYPE_CHECKING.Any) -> bool:
         logger.debug(
             "Heuristic: failed_steps_high_success (rate=%.0f%%) → skip", success_rate * 100
         )
-        # Don't return - continue to check other indicators
-        # But skip step complexity check below for this case
+        # Don't return — continue to DAG check
 
-    # 4. Step complexity (≥3 steps or DAG dependencies)
-    # Only check when all steps are successful OR when we want complexity for other reasons
-    # Skip this check when there are failed steps with high success rate (handled above)
-    if failed_count == 0:  # Only trigger on step count when no failures
-        if len(state.step_results) >= _COMPLEX_STEPS_THRESHOLD:
-            logger.info("Heuristic: many_steps (count=%d)", len(state.step_results))
-            return True
-
-    # Check for DAG dependencies in current decision
+    # 3. DAG dependencies on the current plan
     if state.current_decision:
         has_deps = any(
             step.dependencies and len(step.dependencies) >= _DAG_DEPENDENCY_THRESHOLD
@@ -167,18 +141,6 @@ def _heuristic_requires_goal_completion(state: TYPE_CHECKING.Any) -> bool:
         )
         if has_deps:
             logger.info("Heuristic: dag_dependencies=True")
-            return True
-
-    # 5. Step diversity: multiple execution modes
-    if len(state.step_results) >= 2:
-        # Check if steps used different tools/subagents
-        step_types = set()
-        for result in state.step_results:
-            outcome_type = result.outcome.get("type", "unknown")
-            step_types.add(outcome_type)
-
-        if len(step_types) >= 2:
-            logger.info("Heuristic: diverse_execution (types=%d)", len(step_types))
             return True
 
     logger.debug("Heuristic: simple_execution (skip synthesis)")
