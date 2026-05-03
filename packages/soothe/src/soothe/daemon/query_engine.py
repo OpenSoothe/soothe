@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -143,6 +144,10 @@ class QueryEngine:
             d._thread_logger.log_user_input(effective_text)
 
         await d._runner.touch_thread_activity_timestamp(thread_id)
+
+        st_activity = d._thread_registry.get(thread_id)
+        if st_activity:
+            st_activity.last_activity = datetime.now(UTC)
 
         # Add to global cross-thread input history
         if d._global_history:
@@ -501,6 +506,10 @@ class QueryEngine:
             d._thread_logger.log_user_input(effective_text)
 
         await d._runner.touch_thread_activity_timestamp(thread_id)
+
+        st_activity = d._thread_registry.get(thread_id)
+        if st_activity:
+            st_activity.last_activity = datetime.now(UTC)
 
         # Add to global cross-thread input history
         if d._global_history:
