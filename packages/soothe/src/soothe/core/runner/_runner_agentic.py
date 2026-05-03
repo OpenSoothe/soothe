@@ -11,14 +11,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe.cognition.agent_loop import AgentLoop
-from soothe.cognition.agent_loop.utils.events import LoopAgentReasonEvent
-from soothe.cognition.agent_loop.utils.messages import (
+from soothe.config import SootheConfig
+from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+from soothe.core.agent_loop import AgentLoop
+from soothe.core.agent_loop.utils.events import LoopAgentReasonEvent
+from soothe.core.agent_loop.utils.messages import (
     loop_assistant_messages_chunk,
     loop_message_assistant_output_phase,
 )
-from soothe.config import SootheConfig
-from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.events import (
     AgenticLoopCompletedEvent,
     AgenticLoopStartedEvent,
@@ -72,10 +72,10 @@ def _resolve_agentic_report_run_dir(
 
     Uses new isolated directory structure (RFC-215).
     """
-    from soothe.cognition.agent_loop.state.persistence.directory_manager import (
+    from soothe.config import SOOTHE_HOME
+    from soothe.core.agent_loop.state.persistence.directory_manager import (
         PersistenceDirectoryManager,
     )
-    from soothe.config import SOOTHE_HOME
 
     _ = workspace, config, SOOTHE_HOME  # Spool location is always under SOOTHE_HOME (IG-124).
     return PersistenceDirectoryManager.get_thread_directory(thread_id)

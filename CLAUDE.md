@@ -39,7 +39,7 @@
 **ALL tests MUST be placed in package-specific test directories, NOT in root `tests/` directory**:
 - Unit tests: `packages/<package>/tests/unit/<module_path>/`
 - Integration tests: `packages/<package>/tests/integration/<module_path>/`
-- Example: Tests for `packages/soothe/src/soothe/cognition/agent_loop/` go in `packages/soothe/tests/unit/cognition/agent_loop/`
+- Example: Tests for `packages/soothe/src/soothe/core/agent_loop/` go in `packages/soothe/tests/unit/core/agent_loop/`
 - **Why**: Tests should be close to the code they test, making it easier to find and maintain
 - **How to apply**: When creating tests, always place them in the corresponding package's test directory matching the source code structure
 

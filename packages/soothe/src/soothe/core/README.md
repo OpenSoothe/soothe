@@ -33,7 +33,6 @@ No transport or UI dependencies.
 ┌──────────────────────▼──────────────────────────────┐
 │  soothe.protocols   (abstract protocol interfaces)  │
 │  soothe.backends    (protocol implementations)      │
-│  soothe.cognition   (goal engine)                   │
 │  soothe.config      (SootheConfig)                  │
 │  soothe.logging     (shared logging primitives)     │
 │  deepagents / langchain / langgraph                 │
@@ -58,6 +57,11 @@ No transport or UI dependencies.
 | `resolver/` | Wires protocols from config: checkpointer, durability, goal engine, tools. |
 | `prompts/` | System prompt building — `PromptBuilder`, context XML generation, prompt template loading. |
 | `event_replay/` | Event replay and state reconstruction utilities. |
+| `agent_loop/` | Plan–execute AgentLoop (RFC-201), persistence, branching, planner. |
+| `goal_engine/` | Autonomous goal lifecycle, proposals, webhooks, dreaming (RFC-200). |
+| `channel/` | In-process goal channel inbox/outbox (RFC-204). |
+| `intention/` | LLM intent classification for routing (RFC-217). |
+| `goal_engine/scheduled_tasks.py` | RFC-204 wall-clock scheduled tasks (`SchedulerService`); distinct from `scheduling/` (DAG concurrency). |
 
 ---
 
@@ -194,7 +198,7 @@ SootheRunner.astream(user_input)
 - `soothe.config` — `SootheConfig`
 - `soothe.protocols` — 8 abstract protocol interfaces
 - `soothe.backends` — protocol implementations (resolved at runtime)
-- `soothe.cognition` — `GoalEngine`
+- `soothe.core.goal_engine` — `GoalEngine`
 - `soothe.logging` — `ThreadLogger`, `set_thread_id`
 
 ## Downstream consumers

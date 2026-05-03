@@ -12,10 +12,10 @@ from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
-from soothe.cognition.agent_loop import AgentLoop
-from soothe.cognition.agent_loop.state.schemas import PlanResult
-from soothe.cognition.agent_loop.utils.messages import loop_assistant_messages_chunk
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+from soothe.core.agent_loop import AgentLoop
+from soothe.core.agent_loop.state.schemas import PlanResult
+from soothe.core.agent_loop.utils.messages import loop_assistant_messages_chunk
 from soothe.core.events import (
     GoalFailedEvent,
     PlanCreatedEvent,
@@ -50,7 +50,7 @@ class AutonomousMixin(GoalDirectivesMixin):
         Args:
             soothe_home: Path to $SOOTHE_HOME
         """
-        from soothe.cognition.goal_engine.discovery import discover_goals
+        from soothe.core.goal_engine.discovery import discover_goals
 
         autopilot_dir = soothe_home / "autopilot"
 
@@ -242,7 +242,7 @@ class AutonomousMixin(GoalDirectivesMixin):
             if friendly_message:
                 logger.debug("Goal friendly message: %s", friendly_message[:100])
 
-        from soothe.cognition.goal_engine.proposal_queue import ProposalQueue
+        from soothe.core.goal_engine.proposal_queue import ProposalQueue
 
         from ._types import IterationRecord
 
@@ -766,7 +766,7 @@ class AutonomousMixin(GoalDirectivesMixin):
 
             # RFC-204: Consensus loop — validate goal completion before accepting
             if self._goal_engine and self._model and not should_continue:
-                from soothe.cognition.goal_engine.consensus import evaluate_goal_completion
+                from soothe.core.goal_engine.consensus import evaluate_goal_completion
 
                 success_criteria = getattr(goal, "_success_criteria", None)
                 c_decision, c_reasoning = await evaluate_goal_completion(
@@ -1066,7 +1066,7 @@ class AutonomousMixin(GoalDirectivesMixin):
         Args:
             proposal: Proposal with type 'suggest_goal'.
         """
-        from soothe.cognition.goal_engine.criticality import evaluate_criticality_async
+        from soothe.core.goal_engine.criticality import evaluate_criticality_async
 
         description = proposal.payload.get("description", "")
         priority = proposal.payload.get("priority", 50)
@@ -1134,8 +1134,8 @@ class AutonomousMixin(GoalDirectivesMixin):
 
         # Send via channel outbox
         try:
-            from soothe.cognition.channel.models import ChannelMessage
-            from soothe.cognition.channel.outbox import ChannelOutbox
+            from soothe.core.channel.models import ChannelMessage
+            from soothe.core.channel.outbox import ChannelOutbox
 
             outbox = ChannelOutbox(autopilot_dir / "outbox")
             msg = ChannelMessage(
@@ -1162,7 +1162,7 @@ class AutonomousMixin(GoalDirectivesMixin):
             payload: Event-specific payload dict.
         """
         try:
-            from soothe.cognition.goal_engine.webhooks import WebhookConfig, WebhookService
+            from soothe.core.goal_engine.webhooks import WebhookConfig, WebhookService
 
             webhook_url = None
             if self._config and hasattr(self._config, "autopilot"):
@@ -1195,7 +1195,7 @@ class AutonomousMixin(GoalDirectivesMixin):
             return []
 
         try:
-            from soothe.cognition.goal_engine.relationship_detector import (
+            from soothe.core.goal_engine.relationship_detector import (
                 auto_apply_relationships,
                 detect_relationships,
             )
@@ -1243,7 +1243,7 @@ class AutonomousMixin(GoalDirectivesMixin):
 
         # Check for scheduled tasks
         try:
-            from soothe.cognition.scheduler import SchedulerService
+            from soothe.core.goal_engine import SchedulerService
 
             persist_path = autopilot_dir / "scheduler.json"
             scheduler = SchedulerService(persist_path=str(persist_path))
@@ -1267,7 +1267,7 @@ class AutonomousMixin(GoalDirectivesMixin):
 
         # No scheduled tasks — enter dreaming mode
         try:
-            from soothe.cognition.goal_engine.dreaming import DreamingMode
+            from soothe.core.goal_engine.dreaming import DreamingMode
 
             dreaming = DreamingMode(
                 soothe_home=SOOTHE_HOME,
