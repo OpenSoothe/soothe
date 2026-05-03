@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-04-27
-**Total RFCs**: 45
+**Last Updated**: 2026-05-03
+**Total RFCs**: 46
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -61,6 +61,11 @@ This index reflects the canonical RFC set and defines which files are active for
 - **RFC-213**: [AgentLoop Reasoning Quality & Robustness](RFC-213*.md)
   - Status: Draft
   - Created: 2026-04-17
+
+- **RFC-214**: [AgentLoop Loop Message Surface and Plan Context](RFC-214*.md)
+  - Status: Draft
+  - Extends: RFC-201, RFC-206, RFC-409
+  - Created: 2026-05-03
 
 ### Agent Behavior
 
@@ -193,6 +198,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 ## Recently Added
 
+- RFC-214: AgentLoop Loop Message Surface and Plan Context (2026-05-03)
 - RFC-603: Reasoning Quality & Progressive Actions (2026-04-09)
 - RFC-604: Plan Phase Robustness (Three-Layer Defense) (2026-04-11)
 - RFC-605: Explore Subagent and Parallel Spawning (2026-04-13)
