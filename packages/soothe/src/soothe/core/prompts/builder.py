@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 from langchain_core.messages import BaseMessage, SystemMessage
 
 if TYPE_CHECKING:
-    from soothe.cognition.agent_loop.state.schemas import LoopState
     from soothe.config import SootheConfig
+    from soothe.core.agent_loop.state.schemas import LoopState
     from soothe.protocols.planner import PlanContext
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ class PromptBuilder:
         Returns:
             List of [SystemMessage, LoopHumanMessage] to send to LLM.
         """
-        from soothe.cognition.agent_loop.utils.messages import LoopHumanMessage
+        from soothe.core.agent_loop.utils.messages import LoopHumanMessage
 
         system_content = self._build_system_message(context, state)
         human_content = self._build_human_message_from_ledger(goal, state, context)  # RFC-214
@@ -301,7 +301,7 @@ class PromptBuilder:
         Returns:
             Formatted AgentLoop history string.
         """
-        from soothe.cognition.agent_loop.utils.messages import LoopAIMessage
+        from soothe.core.agent_loop.utils.messages import LoopAIMessage
 
         lines = ["<AGENTLOOP_HISTORY>"]
 

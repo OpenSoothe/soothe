@@ -7,8 +7,8 @@ from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from soothe.cognition.intention import RoutingClassification
 from soothe.config import SootheConfig
+from soothe.core.intention import RoutingClassification
 from soothe.middleware import SystemPromptOptimizationMiddleware
 
 

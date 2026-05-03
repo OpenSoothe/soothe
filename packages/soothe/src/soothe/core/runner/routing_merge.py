@@ -20,7 +20,7 @@ def build_loop_unified_classification(
     Returns:
         ``RoutingClassification`` or None when neither source applies.
     """
-    from soothe.cognition.intention import RoutingClassification
+    from soothe.core.intention import RoutingClassification
 
     if intent is None:
         if preferred_subagent:

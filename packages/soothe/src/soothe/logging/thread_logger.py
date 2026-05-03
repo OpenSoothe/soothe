@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from soothe.cognition.agent_loop.state.persistence.directory_manager import (
+from soothe.core.agent_loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
 

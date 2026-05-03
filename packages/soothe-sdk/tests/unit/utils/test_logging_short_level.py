@@ -40,7 +40,7 @@ def test_short_level_letter_unknown_level() -> None:
         ("httpx", "httpx"),
         ("soothe.core", "soothe.core"),
         (
-            "soothe.cognition.agent_loop.state.state_manager",
+            "soothe.core.agent_loop.state.state_manager",
             "s.c.a.state.state_manager",
         ),
         ("a.b.c.d", "a.b.c.d"),
@@ -53,7 +53,7 @@ def test_abbreviate_logger_name(name: str, expected: str) -> None:
 def test_short_level_formatter_abbreviates_name_in_output() -> None:
     fmt = ShortLevelFormatter("%(name)s %(message)s")
     record = logging.LogRecord(
-        name="soothe.cognition.agent_loop.state.state_manager",
+        name="soothe.core.agent_loop.state.state_manager",
         level=logging.INFO,
         pathname="",
         lineno=0,
@@ -63,7 +63,7 @@ def test_short_level_formatter_abbreviates_name_in_output() -> None:
     )
     line = fmt.format(record)
     assert line == "s.c.a.state.state_manager x"
-    assert record.name == "soothe.cognition.agent_loop.state.state_manager"
+    assert record.name == "soothe.core.agent_loop.state.state_manager"
 
 
 def test_short_level_formatter_inserts_level_short() -> None:

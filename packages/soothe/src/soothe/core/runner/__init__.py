@@ -55,8 +55,8 @@ __all__ = [
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from soothe.cognition import GoalEngine
     from soothe.core.agent import CoreAgent
+    from soothe.core.goal_engine import GoalEngine
     from soothe.protocols.memory import MemoryProtocol
 
 logger = logging.getLogger(__name__)
@@ -82,8 +82,8 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         """Initialize the runner with optional config."""
         import time
 
-        from soothe.cognition.intention import IntentClassifier
         from soothe.core.agent import create_soothe_agent
+        from soothe.core.intention import IntentClassifier
         from soothe.core.resolver import (
             resolve_checkpointer,
             resolve_durability,
@@ -96,7 +96,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         self._config = config or SootheConfig()
         self._checkpointer_pool = None  # Will be set if using PostgreSQL
 
-        # Initialize intent classifier (IG-226: cognition.intention module).
+        # Initialize intent classifier (IG-226: core.intention module).
         # Unified classification is always enabled; classifier is omitted only if fast model is unavailable.
         fast_model = None
         try:

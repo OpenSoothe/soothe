@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from soothe.cognition.intention import IntentClassification, IntentClassifier
+from soothe.core.intention import IntentClassification, IntentClassifier
 
 # ---------------------------------------------------------------------------
 # Pydantic model tests

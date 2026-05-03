@@ -1136,7 +1136,7 @@ class MessageRouter:
 
         import aiosqlite
 
-        from soothe.cognition.agent_loop.state.persistence.directory_manager import (
+        from soothe.core.agent_loop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
 
@@ -1202,7 +1202,7 @@ class MessageRouter:
 
         import aiosqlite
 
-        from soothe.cognition.agent_loop.state.persistence.directory_manager import (
+        from soothe.core.agent_loop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
 
@@ -1320,7 +1320,7 @@ class MessageRouter:
         """
         import json
 
-        from soothe.cognition.agent_loop.state.persistence.manager import (
+        from soothe.core.agent_loop.state.persistence.manager import (
             AgentLoopCheckpointPersistenceManager,
         )
 
@@ -1410,7 +1410,7 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message with loop_id and format.
         """
-        from soothe.cognition.agent_loop.state.persistence.manager import (
+        from soothe.core.agent_loop.state.persistence.manager import (
             AgentLoopCheckpointPersistenceManager,
         )
 
@@ -1512,7 +1512,7 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message with loop_id, retention_days, and dry_run.
         """
-        from soothe.cognition.agent_loop.state.persistence.manager import (
+        from soothe.core.agent_loop.state.persistence.manager import (
             AgentLoopCheckpointPersistenceManager,
         )
 
@@ -1583,7 +1583,7 @@ class MessageRouter:
         """
         import shutil
 
-        from soothe.cognition.agent_loop.state.persistence.directory_manager import (
+        from soothe.core.agent_loop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
 
@@ -1830,7 +1830,7 @@ class MessageRouter:
 
         from uuid_utils import uuid7
 
-        from soothe.cognition.agent_loop.state.persistence.directory_manager import (
+        from soothe.core.agent_loop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
 

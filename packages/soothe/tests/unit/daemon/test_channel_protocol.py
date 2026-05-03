@@ -2,14 +2,14 @@
 
 import json
 
-from soothe.cognition.channel.inbox import ChannelInbox
-from soothe.cognition.channel.models import (
+from soothe.core.channel.inbox import ChannelInbox
+from soothe.core.channel.models import (
     CHANNEL_SOOTHE_TO_USER,
     CHANNEL_USER_TO_SOOTHE,
     CRITICAL_MESSAGE_TYPES,
     ChannelMessage,
 )
-from soothe.cognition.channel.outbox import MAX_RETRIES, ChannelOutbox
+from soothe.core.channel.outbox import MAX_RETRIES, ChannelOutbox
 
 
 class TestChannelMessageDefaults:
