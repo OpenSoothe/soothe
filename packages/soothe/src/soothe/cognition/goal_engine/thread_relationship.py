@@ -1,6 +1,6 @@
 """ThreadRelationshipModule: Goal similarity computation and thread selection.
 
-RFC-609 §95-172: Implements goal similarity hierarchy (exact > semantic > dependency)
+RFC-217 §95-172: Implements goal similarity hierarchy (exact > semantic > dependency)
 and thread selection strategies for goal context construction.
 """
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class ThreadRelationshipModule:
     """Thread relationship analysis for goal context construction.
 
-    RFC-609 §95-172: Computes goal similarity and constructs context
+    RFC-217 §95-172: Computes goal similarity and constructs context
     with thread ecosystem awareness using embedding integration.
 
     Args:

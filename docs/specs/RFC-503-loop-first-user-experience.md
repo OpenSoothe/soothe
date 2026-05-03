@@ -5,14 +5,14 @@
 > **RFC Number**: RFC-503
 > **Status**: Draft
 > **Created**: 2026-04-22
-> **Dependencies**: RFC-608 (Multi-Thread Lifecycle), RFC-450 (Daemon Communication), RFC-500 (CLI/TUI), RFC-454 (Slash Commands)
+> **Dependencies**: RFC-216 (Multi-Thread Lifecycle), RFC-450 (Daemon Communication), RFC-500 (CLI/TUI), RFC-454 (Slash Commands)
 > **Author**: Claude Sonnet 4.6
 
 ---
 
 ## Abstract
 
-This RFC defines the architectural shift from **thread-based user experience** to **loop-based user experience**. AgentLoop becomes the primary user-facing concept, while CoreAgent threads become internal implementation details invisible to users. This aligns with RFC-608's vision: loops span multiple threads, users interact with loops, threads are execution contexts managed internally.
+This RFC defines the architectural shift from **thread-based user experience** to **loop-based user experience**. AgentLoop becomes the primary user-facing concept, while CoreAgent threads become internal implementation details invisible to users. This aligns with RFC-216's vision: loops span multiple threads, users interact with loops, threads are execution contexts managed internally.
 
 ---
 
@@ -27,7 +27,7 @@ This RFC defines the architectural shift from **thread-based user experience** t
 - User mental model: "I work with threads"
 
 **Architectural mismatch**:
-- RFC-608 defines loops as primary entity spanning threads
+- RFC-216 defines loops as primary entity spanning threads
 - Users see threads, but loops are the orchestrating entity
 - Thread IDs exposed to users, but loop_id is internal
 - Thread detachment keeps thread running, but loop context is lost
@@ -602,11 +602,11 @@ await handle_loop_subscribe(client_id, loop_abc123)
 
 ## Related Specifications
 
-- RFC-608: AgentLoop Multi-Thread Lifecycle
+- RFC-216: AgentLoop Multi-Thread Lifecycle
 - RFC-450: Daemon Communication Protocol
 - RFC-500: CLI/TUI Architecture
 - RFC-454: Slash Command Architecture
-- RFC-409: AgentLoop Persistence Backend
+- RFC-215: AgentLoop Persistence Backend
 - RFC-411: Event Stream Replay
 
 ---

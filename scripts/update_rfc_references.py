@@ -12,7 +12,7 @@ RFC Mapping:
 - RFC-403 → RFC-402 (MemoryProtocol)
 - RFC-405 → RFC-404 (PlannerProtocol)
 - RFC-407 → RFC-406 (PolicyProtocol)
-- RFC-409 → RFC-203 (CheckpointEnvelope moved to Layer 2)
+- RFC-215 → RFC-203 (CheckpointEnvelope moved to Layer 2)
 """
 
 import re

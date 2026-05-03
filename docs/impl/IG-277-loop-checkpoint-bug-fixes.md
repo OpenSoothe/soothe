@@ -2,7 +2,7 @@
 
 **Status**: ✅ Completed
 **Date**: 2026-04-23
-**RFC References**: RFC-608 (Multi-thread spanning), RFC-409 (Persistence backend)
+**RFC References**: RFC-216 (Multi-thread spanning), RFC-215 (Persistence backend)
 
 ---
 
@@ -262,8 +262,8 @@ Bug introduced at schema creation (schema_version='3.1') due to:
 
 ## References
 
-- **RFC-608**: Multi-thread spanning with loop_id as primary key
-- **RFC-409**: Unified global SQLite persistence backend
+- **RFC-216**: Multi-thread spanning with loop_id as primary key
+- **RFC-215**: Unified global SQLite persistence backend
 - **RFC-205**: AgentLoop checkpoint lifecycle management
 - **Analysis**: `docs/analysis/loop_checkpoint_flaws.md`
 - **Cleanup Script**: `scripts/fix_orphaned_goals.py`

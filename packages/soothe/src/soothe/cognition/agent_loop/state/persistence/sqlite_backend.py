@@ -1,6 +1,6 @@
 """SQLite backend for AgentLoop checkpoint persistence.
 
-RFC-409: AgentLoop Persistence Backend Architecture
+RFC-215: AgentLoop Persistence Backend Architecture
 IG-055: Backend-agnostic implementation with connection pooling
 """
 
@@ -767,7 +767,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                 ON failed_branches(loop_id, iteration)
             """)
 
-            # Create goal_records table
+            # Create goal_records table (RFC-214: loop_messages replaces reason_history/act_history)
             db.execute("""
                 CREATE TABLE IF NOT EXISTS goal_records (
                     goal_id TEXT PRIMARY KEY,
@@ -776,8 +776,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                     thread_id TEXT NOT NULL,
                     iteration INTEGER NOT NULL,
                     status TEXT NOT NULL,
-                    reason_history TEXT,
-                    act_history TEXT,
+                    loop_messages TEXT,
                     goal_completion TEXT,
                     evidence_summary TEXT,
                     duration_ms INTEGER DEFAULT 0,

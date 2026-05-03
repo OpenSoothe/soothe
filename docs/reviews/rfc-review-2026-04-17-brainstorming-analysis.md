@@ -3,7 +3,7 @@
 **Review Date**: 2026-04-17
 **Reviewer**: Platonic Coding Orchestrator
 **Input**: Brainstorming session intermediate artifact (removed during consolidation cleanup on 2026-04-17)
-**RFCs Reviewed**: RFC-000, RFC-001, RFC-200, RFC-201, RFC-203, RFC-205, RFC-609
+**RFCs Reviewed**: RFC-000, RFC-001, RFC-200, RFC-201, RFC-203, RFC-205, RFC-217
 
 ---
 
@@ -29,8 +29,8 @@
 | **#11**: GoalEngine-CoreAgent LLM Unity | RFC-200 Plan phase uses same LLM type | ✅ Implemented | No |
 | **#12**: Direct Provisioning Task Package | RFC-201 Executor config injection | ✅ Implemented (different technique) | No |
 | **#13-16**: ContextRetrievalModule | RFC-001 Module 1 already defines this | ✅ **Already in RFC** | No |
-| **#17-19**: GoalContextManager Construction | RFC-609 ThreadRelationshipModule | ✅ **Already in RFC** | No |
-| **#20-23**: Thread Relationship Analysis | RFC-609 ThreadRelationshipModule | ✅ **Already in RFC** | No |
+| **#17-19**: GoalContextManager Construction | RFC-217 ThreadRelationshipModule | ✅ **Already in RFC** | No |
+| **#20-23**: Thread Relationship Analysis | RFC-217 ThreadRelationshipModule | ✅ **Already in RFC** | No |
 | **#24**: AgentLoop Control Flow Hierarchy | RFC-200 AgentLoop = Layer 2 runner | ✅ Correct | No |
 | **#25-26**: Durability Architecture | RFC-001 + RFC-205 dual persistence | ✅ Already implemented | No |
 | **#27-31**: Thread Coordination | RFC-200 Executor thread management | ✅ Implemented | No |
@@ -110,15 +110,15 @@ class GoalBackoffReasoner:
 
 **Brainstorming Concept**: Goal context construction module, thread relationship analysis, goal similarity metrics
 
-**RFC Reality**: RFC-609 **already defines**:
+**RFC Reality**: RFC-217 **already defines**:
 - `GoalContextManager` module
 - `ThreadRelationshipModule` for similarity computation
 - `ContextConstructionOptions` with strategies
 - Goal-centric retrieval API
 
-**Validation**: RFC-609 directly implements Brainstorming Categories #17-23.
+**Validation**: RFC-217 directly implements Brainstorming Categories #17-23.
 
-**No Enhancement Needed**: RFC-609 is complete, implementation pending.
+**No Enhancement Needed**: RFC-217 is complete, implementation pending.
 
 ---
 
@@ -214,7 +214,7 @@ goal_engine:
 
 ### Proposal #3: ThreadRelationshipModule ❌ ALREADY EXISTS
 
-**Status**: RFC-609 already defines ThreadRelationshipModule.
+**Status**: RFC-217 already defines ThreadRelationshipModule.
 
 **Action**: Mark as "Already Specified" in brainstorming summary, no RFC change.
 
@@ -235,19 +235,19 @@ goal_engine:
 **RFC Reality**: RFC-201 Executor uses config injection:
 - Current: `soothe_step_tools`, `soothe_step_subagent` via config
 - Works correctly, integrates with ExecutionHintsMiddleware
-- RFC-609 adds GoalContextManager for goal-level context
+- RFC-217 adds GoalContextManager for goal-level context
 
-**Recommendation**: Keep current config injection approach, add RFC-609 integration:
+**Recommendation**: Keep current config injection approach, add RFC-217 integration:
 
 ```python
-# executor.py (ENHANCED with RFC-609)
+# executor.py (ENHANCED with RFC-217)
 goal_context_manager = GoalContextManager(state_manager, config.goal_context)
 goal_briefing = goal_context_manager.get_execute_briefing()
 
 config = {
     "configurable": {
         "thread_id": tid,
-        "soothe_goal_briefing": goal_briefing,  # NEW: RFC-609 integration
+        "soothe_goal_briefing": goal_briefing,  # NEW: RFC-217 integration
         "soothe_step_tools": step.tools,        # EXISTING: works well
         "soothe_step_subagent": step.subagent,
         "soothe_step_expected_output": step.expected_output,
@@ -325,7 +325,7 @@ config = {
 ### High Priority
 
 1. **RFC-200 Enhancement**: Add GoalBackoffReasoner module for LLM-driven backoff reasoning
-2. **RFC-609 Implementation**: Implement ThreadRelationshipModule and GoalContextManager (already specified, pending implementation)
+2. **RFC-217 Implementation**: Implement ThreadRelationshipModule and GoalContextManager (already specified, pending implementation)
 
 ### Medium Priority
 
@@ -346,9 +346,9 @@ config = {
 | ContextProtocol | Consciousness concept | ✅ Already implements | Document connection |
 | GoalEngine backoff | LLM-driven reasoning | ⚠️ Gap identified | Add GoalBackoffReasoner |
 | ContextRetrievalModule | Goal-centric retrieval | ✅ Already in RFC-001 | No change (implement pending) |
-| ThreadRelationshipModule | Goal similarity | ✅ Already in RFC-609 | No change (implement pending) |
+| ThreadRelationshipModule | Goal similarity | ✅ Already in RFC-217 | No change (implement pending) |
 | Dual persistence | Layer 2 + Layer 1 separate | ✅ Already implemented | Document in invariants |
-| Goal context injection | Plan + Execute briefing | ✅ Already in RFC-609 | Implement pending |
+| Goal context injection | Plan + Execute briefing | ✅ Already in RFC-217 | Implement pending |
 
 ---
 
@@ -363,7 +363,7 @@ config = {
 **Next Steps**:
 
 1. Add RFC-200 enhancement for GoalBackoffReasoner
-2. Implement RFC-609 (GoalContextManager + ThreadRelationshipModule)
+2. Implement RFC-217 (GoalContextManager + ThreadRelationshipModule)
 3. Implement RFC-001 ContextRetrievalModule
 4. Add architectural clarifications to RFC-000, RFC-200
 

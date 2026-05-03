@@ -1,7 +1,8 @@
-"""AgentLoop Checkpoint Models (RFC-205, RFC-608).
+"""AgentLoop Checkpoint Models (RFC-205, RFC-216, RFC-214).
 
 Defines step-level semantic traces for agentic goal execution.
-RFC-608 extends to multi-thread spanning with infinite lifecycle.
+RFC-216 extends to multi-thread spanning with infinite lifecycle.
+RFC-214 introduces unified message ledger replacing fragmented traces.
 """
 
 from __future__ import annotations
@@ -10,6 +11,8 @@ from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+from soothe.cognition.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 class ToolCallRecord(BaseModel):
@@ -112,7 +115,7 @@ class WorkingMemoryState(BaseModel):
     )
 
 
-# RFC-608: New models for multi-thread lifecycle
+# RFC-216: New models for multi-thread lifecycle
 
 
 class ThreadHealthMetrics(BaseModel):
@@ -197,21 +200,23 @@ class GoalThreadRelevanceAnalysis(BaseModel):
 
 
 class GoalExecutionRecord(BaseModel):
-    """Single goal execution record (RFC-608: on specific thread)."""
+    """Single goal execution record (RFC-216: on specific thread, RFC-214: ledger-based)."""
 
-    # Identity (RFC-608: goal_id independent of thread)
+    # Identity (RFC-216: goal_id independent of thread)
     goal_id: str  # "{loop_id}_goal_{seq}"
     goal_text: str
-    thread_id: str  # RFC-608: which thread executed this goal
+    thread_id: str  # RFC-216: which thread executed this goal
 
     # Execution state
     iteration: int = 0
     max_iterations: int = 10
     status: Literal["running", "completed", "failed", "cancelled"] = "running"
 
-    # Execution traces
-    reason_history: list[ReasonStepRecord] = Field(default_factory=list)
-    act_history: list[ActWaveRecord] = Field(default_factory=list)
+    # RFC-214: Unified message ledger (replaces reason_history/act_history)
+    loop_messages: list[LoopHumanMessage | LoopAIMessage] = Field(
+        default_factory=list,
+        description="Ordered adjacent Human-AI message pairs for all orchestration turns",
+    )
 
     # Goal output
     goal_completion: str = ""
@@ -227,33 +232,33 @@ class GoalExecutionRecord(BaseModel):
 
 
 class AgentLoopCheckpoint(BaseModel):
-    """Complete AgentLoop state (RFC-608: multi-thread spanning)."""
+    """Complete AgentLoop state (RFC-216: multi-thread spanning)."""
 
-    # Identity (RFC-608: loop_id independent of thread)
+    # Identity (RFC-216: loop_id independent of thread)
     loop_id: str  # UUID
     thread_ids: list[str] = Field(default_factory=list)  # All threads loop operated on
     current_thread_id: str  # Active thread
 
-    # Status (RFC-608: loop-scoped)
+    # Status (RFC-216: loop-scoped)
     status: Literal["running", "ready_for_next_goal", "finalized", "cancelled"]
 
-    # Goal execution history (RFC-608: across all threads)
+    # Goal execution history (RFC-216: across all threads)
     goal_history: list[GoalExecutionRecord] = Field(default_factory=list)
     current_goal_index: int = -1  # -1 if no active goal
 
     # Working memory (cleared per-goal)
     working_memory_state: WorkingMemoryState = Field(default_factory=WorkingMemoryState)
 
-    # Thread health (RFC-608: monitoring)
+    # Thread health (RFC-216: monitoring)
     thread_health_metrics: ThreadHealthMetrics
 
-    # Loop-level metrics (RFC-608: extended)
+    # Loop-level metrics (RFC-216: extended)
     total_goals_completed: int = 0
     total_thread_switches: int = 0
     total_duration_ms: int = 0
     total_tokens_used: int = 0
 
-    # RFC-609: Goal context injection control
+    # RFC-217: Goal context injection control
     thread_switch_pending: bool = False
     """Flag indicating thread just switched, Execute phase needs goal briefing.
 

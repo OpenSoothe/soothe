@@ -6,7 +6,7 @@ Tests end-to-end smart retry cycle across all components:
 - Failure analysis
 - Smart retry execution
 
-RFC-611: AgentLoop Checkpoint Tree Architecture
+RFC-218: AgentLoop Checkpoint Tree Architecture
 IG-243: Checkpoint Tree Integration Testing
 """
 

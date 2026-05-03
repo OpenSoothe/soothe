@@ -53,7 +53,7 @@ class ThreadLogger:
             max_size_mb: Maximum total size for thread logs (not enforced yet).
         """
         tid = str(thread_id or "default")
-        # Use new isolated directory structure (RFC-409)
+        # Use new isolated directory structure (RFC-215)
         default_dir = PersistenceDirectoryManager.get_thread_directory(tid) / "logs"
         self._thread_dir = Path(thread_dir or default_dir).expanduser()
         self._thread_id = tid
@@ -79,7 +79,7 @@ class ThreadLogger:
         """
         tid = str(thread_id)
         self._thread_id = tid
-        # Use new isolated directory structure (RFC-409)
+        # Use new isolated directory structure (RFC-215)
         default_dir = PersistenceDirectoryManager.get_thread_directory(tid) / "logs"
         self._thread_dir = default_dir.expanduser()
         self._initialized = False

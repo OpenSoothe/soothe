@@ -1,4 +1,4 @@
-"""Goal models for autonomous iteration (RFC-0007, RFC-204, RFC-200, RFC-609)."""
+"""Goal models for autonomous iteration (RFC-0007, RFC-204, RFC-200, RFC-217)."""
 
 from __future__ import annotations
 
@@ -143,11 +143,11 @@ class GoalSubDAGStatus(BaseModel):
     )
 
 
-# RFC-609 §95-172: Context construction options for thread selection
+# RFC-217 §95-172: Context construction options for thread selection
 class ContextConstructionOptions(BaseModel):
     """Options for goal context construction.
 
-    RFC-609 §95-172: Thread selection and similarity filtering configuration.
+    RFC-217 §95-172: Thread selection and similarity filtering configuration.
     Used by ThreadRelationshipModule and GoalContextManager.
 
     Args:

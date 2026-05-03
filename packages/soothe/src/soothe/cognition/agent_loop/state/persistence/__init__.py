@@ -3,7 +3,7 @@
 This module provides persistence infrastructure for AgentLoop checkpoints
 with thread/loop isolation and dual backend support (SQLite/PostgreSQL).
 
-RFC-409: AgentLoop Persistence Backend Architecture
+RFC-215: AgentLoop Persistence Backend Architecture
 """
 
 from soothe.cognition.agent_loop.state.persistence.manager import (

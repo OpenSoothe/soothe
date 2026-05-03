@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, SystemMessage
 
 if TYPE_CHECKING:
     from soothe.cognition.agent_loop.state.schemas import LoopState
@@ -43,26 +43,37 @@ class PromptBuilder:
         state: LoopState,
         context: PlanContext,
     ) -> list[BaseMessage]:
-        """Build SystemMessage + HumanMessage for Plan phase (RFC-207).
+        """Build SystemMessage + LoopHumanMessage for Plan phase (RFC-207, RFC-214).
 
         Constructs proper message type separation:
         - SystemMessage: environment, workspace, policies, instructions, loop config, capabilities
-        - HumanMessage: goal, evidence, working memory, prior conversation
+        - LoopHumanMessage: goal, plan status, AgentLoop history from ledger
 
         Args:
             goal: User's goal description
-            state: Current loop state with iteration, evidence, working memory
+            state: Current loop state with ledger, plan metadata
             context: Planning context with workspace, capabilities
 
         Returns:
-            List of [SystemMessage, HumanMessage] to send to LLM.
+            List of [SystemMessage, LoopHumanMessage] to send to LLM.
         """
+        from soothe.cognition.agent_loop.utils.messages import LoopHumanMessage
+
         system_content = self._build_system_message(context, state)
-        human_content = self._build_human_message(goal, state, context)
+        human_content = self._build_human_message_from_ledger(goal, state, context)  # RFC-214
+
+        # RFC-214: Use LoopHumanMessage for Plan turns
+        plan_human_msg = LoopHumanMessage(
+            content=human_content,
+            thread_id=state.thread_id,
+            iteration=state.iteration,
+            goal_summary=goal[:200],
+            phase="plan",  # RFC-214: Plan phase marker
+        )
 
         return [
             SystemMessage(content=system_content),
-            HumanMessage(content=human_content),
+            plan_human_msg,  # LoopHumanMessage instead of HumanMessage
         ]
 
     def _build_system_message(
@@ -265,3 +276,106 @@ class PromptBuilder:
                 parts.append(f"- Next action: {prev.next_action}")
 
         return "\n".join(parts)
+
+    def _build_human_message_from_ledger(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+    ) -> str:
+        """Construct Plan prompt from ledger-only context (RFC-214).
+
+        Replaces:
+        - CONCRETE EVIDENCE string blocks
+        - WORKING_MEMORY excerpts
+        - PRIOR_CONVERSATION XML
+
+        With unified AgentLoop history from loop_messages ledger.
+
+        Args:
+            goal: User's goal description
+            state: Current loop state with ledger
+            context: Planning context (unused for legacy sections)
+
+        Returns:
+            Formatted prompt string with goal, plan status, and ledger history.
+        """
+        parts: list[str] = []
+
+        # Goal
+        parts.append(f"Goal: {goal}\n")
+
+        # Plan snapshot (current strategy)
+        if state.previous_plan:
+            parts.append("\nCURRENT PLAN STATUS:")
+            parts.append(f"- Status: {state.previous_plan.status}")
+            parts.append(f"- Progress: {state.previous_plan.goal_progress:.0%}")
+            if state.previous_plan.next_action:
+                parts.append(f"- Next action: {state.previous_plan.next_action}")
+
+        # RFC-214: AgentLoop history from ledger (replaces all legacy sections)
+        ledger_history = self._format_ledger_as_agentloop_history(state.loop_messages)
+        parts.append(ledger_history)
+
+        return "\n".join(parts)
+
+    def _format_ledger_as_agentloop_history(
+        self,
+        loop_messages: list,
+    ) -> str:
+        """Format AgentLoop ledger as conversation history (RFC-214).
+
+        Adjacent Human-AI pairs → structured history blocks.
+
+        Example output:
+        <AGENTLOOP_HISTORY>
+        [Plan Iteration 10] Human: Plan next steps...
+        [Plan Iteration 10] Assistant: Next actions: 1. Query database...
+        [Execute Step abc] Human: Query database for user records
+        [Execute Step abc] Assistant: Found 150 records matching criteria
+        ...
+        </AGENTLOOP_HISTORY>
+
+        Args:
+            loop_messages: List of LoopHumanMessage/LoopAIMessage instances
+
+        Returns:
+            Formatted AgentLoop history string.
+        """
+        from soothe.cognition.agent_loop.utils.messages import LoopAIMessage
+
+        lines = ["<AGENTLOOP_HISTORY>"]
+
+        i = 0
+        while i < len(loop_messages):
+            human_msg = loop_messages[i]
+
+            # Ensure adjacent AI message exists
+            if i + 1 < len(loop_messages) and isinstance(loop_messages[i + 1], LoopAIMessage):
+                ai_msg = loop_messages[i + 1]
+
+                # Format pair based on phase
+                if human_msg.phase == "plan":
+                    lines.append(
+                        f"[Plan Iteration {human_msg.iteration}] Human: {human_msg.content[:300]}..."
+                    )
+                    lines.append(
+                        f"[Plan Iteration {ai_msg.iteration}] Assistant: {ai_msg.content[:500]}..."
+                    )
+                elif human_msg.phase == "execute_step":
+                    step_id = human_msg.step_id or "unknown"
+                    lines.append(f"[Execute Step {step_id}] Human: {human_msg.content[:200]}")
+                    lines.append(f"[Execute Step {step_id}] Assistant: {ai_msg.content[:300]}...")
+                elif human_msg.phase == "goal_completion":
+                    lines.append(f"[Goal Completion] Human: {human_msg.content[:200]}")
+                    lines.append(f"[Goal Completion] Assistant: {ai_msg.content[:500]}...")
+
+                i += 2  # Skip to next pair
+            else:
+                # Malformed ledger (missing AI response)
+                logger.warning("Ledger has unpaired Human message at index %d", i)
+                i += 1
+
+        lines.append("</AGENTLOOP_HISTORY>")
+
+        return "\n".join(lines)

@@ -1,4 +1,4 @@
-"""Goal-Thread Relevance Analysis (RFC-608).
+"""Goal-Thread Relevance Analysis (RFC-216).
 
 LLM-based semantic analysis to determine if current thread context
 hinders next goal execution (goal independence, domain mismatch, pollution).
@@ -75,7 +75,7 @@ async def analyze_goal_thread_relevance(
     policy: ThreadSwitchPolicy,
     model: BaseChatModel,
 ) -> GoalThreadRelevanceAnalysis:
-    """LLM-based analysis of goal-thread relevance (RFC-608).
+    """LLM-based analysis of goal-thread relevance (RFC-216).
 
     Args:
         checkpoint: Loop checkpoint with goal history

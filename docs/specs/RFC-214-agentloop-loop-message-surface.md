@@ -5,8 +5,8 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-05-03
-**Dependencies**: RFC-201 (AgentLoop Plan–Execute), RFC-100 (CoreAgent Runtime), RFC-206 (Prompt Architecture), RFC-207 (Thread & Goal Context), RFC-203 (AgentLoop State & Memory), RFC-409 (AgentLoop Persistence), RFC-611 (Checkpoint Tree), RFC-608 (Multi-Thread Lifecycle)
-**Related**: RFC-211 (Tool Result Shaping), RFC-213 (AgentLoop Reasoning Quality), RFC-609 (Goal Context Injection), RFC-614 (Streaming Messaging)
+**Dependencies**: RFC-201 (AgentLoop Plan–Execute), RFC-100 (CoreAgent Runtime), RFC-206 (Prompt Architecture), RFC-207 (Thread & Goal Context), RFC-203 (AgentLoop State & Memory), RFC-215 (AgentLoop Persistence), RFC-218 (Checkpoint Tree), RFC-216 (Multi-Thread Lifecycle)
+**Related**: RFC-211 (Tool Result Shaping), RFC-213 (AgentLoop Reasoning Quality), RFC-217 (Goal Context Injection), RFC-614 (Streaming Messaging)
 
 ---
 
@@ -132,7 +132,7 @@ The AgentLoop surface maintains four logical partitions:
 
 | Partition | Contents | Purpose |
 |-----------|----------|---------|
-| **Goal** | `goal_id`, `goal_text`, status, iteration counters, thread id(s) | Goal lifecycle tracking per RFC-608 |
+| **Goal** | `goal_id`, `goal_text`, status, iteration counters, thread id(s) | Goal lifecycle tracking per RFC-216 |
 | **Plan** | Latest plan metadata: status, progress, confidence, reasoning, `next_action`, `plan_action`, structured `AgentDecision` | Current execution strategy |
 | **Steps** | Ordered `StepAction` metadata: `id`, `description`, hints (`tools`, `subagent`, `expected_output`, `dependencies`), lifecycle status | Execution queue state |
 | **Loop Ledger** | Ordered list of **adjacent Human-AI message pairs** (`LoopHumanMessage` / `LoopAIMessage`) | Orchestration-visible conversation history |
@@ -259,7 +259,7 @@ If batch execution fails mid-stream (e.g., step B crashes):
 - Step B (failed): ledger records `(LoopHuman_B, LoopAI_B_error)` with error content
 - Step C (not started): ledger records `(LoopHuman_C, LoopAI_C_skipped)` or omitted
 
-Exact failure semantics depend on RFC-611 checkpoint tree behavior.
+Exact failure semantics depend on RFC-218 checkpoint tree behavior.
 
 **Ledger Structure After Batch:**
 
@@ -423,7 +423,7 @@ Plan turns are NOT user-thread turns (internal orchestration), but recorded for 
 
 ### 4. Checkpoint Persistence
 
-**AgentLoop checkpoints** (SQLite / PostgreSQL per RFC-409) persist:
+**AgentLoop checkpoints** (SQLite / PostgreSQL per RFC-215) persist:
 
 **Metadata Fields:**
 - Loop status, thread health metrics
@@ -453,7 +453,7 @@ loop_messages: list[LoopHumanMessage | LoopAIMessage]  # Ordered, unbounded, adj
 
 Plan phase reads entire ledger (with efficient iteration markers). Storage concerns addressed via:
 - Efficient serialization (avoid duplication with LangGraph checkpoints)
-- Checkpoint rotation policy (per RFC-409, archive old checkpoints)
+- Checkpoint rotation policy (per RFC-215, archive old checkpoints)
 - Ledger is orchestration-level (compact compared to full LangGraph transcript)
 
 **Plan Phase Context Assembly:**
@@ -790,7 +790,7 @@ Special execution paths:
 **Target Fix:**
 - Synthesis flows: `LoopAIMessage(phase=”goal_completion”)`
 - Thread checks: `LoopHumanMessage(phase=”thread_check”)`
-- Parallel branches: branch IDs in message metadata (RFC-611)
+- Parallel branches: branch IDs in message metadata (RFC-218)
 - All orchestration turns in ledger
 
 **Files Affected:** `synthesis.py`, thread management utilities
@@ -898,7 +898,7 @@ flowchart TB
 
 - Add synthesis phase messages
 - Add thread check phase messages
-- Add branch identifiers for parallel execution (RFC-611)
+- Add branch identifiers for parallel execution (RFC-218)
 
 **5. Remove Legacy Code**
 
@@ -946,7 +946,7 @@ Legacy fields and functions are removed entirely. Implementation may proceed inc
 
 ## Implementation Considerations
 
-### RFC-611 Interaction: Checkpoint Tree and Retry Branches
+### RFC-218 Interaction: Checkpoint Tree and Retry Branches
 
 **Branch Identifiers in Ledger:**
 
@@ -964,7 +964,7 @@ LoopAIMessage(
 
 **Parallel Execution Branches:**
 
-If steps execute in parallel (RFC-611 tree), each branch maintains its own ledger segment:
+If steps execute in parallel (RFC-218 tree), each branch maintains its own ledger segment:
 
 ```python
 # Main thread ledger
@@ -1200,7 +1200,7 @@ for step in checkpoint.steps:
     assert len(ai_msgs) == 1     # Exactly one AI outcome
 ```
 
-Edge cases: retry branches per RFC-611 must still pair correctly.
+Edge cases: retry branches per RFC-218 must still pair correctly.
 
 **3. Serde Round-Trip Fidelity**
 

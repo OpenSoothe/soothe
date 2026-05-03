@@ -147,9 +147,9 @@ CREATE TABLE langgraph_checkpoints (
 );
 
 CREATE TABLE loop_checkpoints (
-    -- RFC-409 schema (already implemented)
+    -- RFC-215 schema (already implemented)
     loop_id TEXT PRIMARY KEY,
-    -- ... see RFC-409 for full schema
+    -- ... see RFC-215 for full schema
 );
 
 -- soothe_metadata
@@ -500,7 +500,7 @@ class PostgreSQLPersistStore:
 2. Add provisioning tests
 3. Add production restriction tests
 4. Write migration guide
-5. Update RFC-409 and related docs
+5. Update RFC-215 and related docs
 6. Update user guide
 
 **Test coverage**:
@@ -513,7 +513,7 @@ class PostgreSQLPersistStore:
 
 **Documentation**:
 - `docs/persistence-migration.md` - SQLite → PostgreSQL guide
-- RFC-409 updates - Reference RFC-612 architecture
+- RFC-215 updates - Reference RFC-612 architecture
 - User guide - New persistence configuration section
 
 ---
@@ -555,7 +555,7 @@ class PostgreSQLPersistStore:
 
 ## Related RFCs
 
-- **RFC-409**: AgentLoop Persistence Backend Architecture (loop_checkpoints.db)
+- **RFC-215**: AgentLoop Persistence Backend Architecture (loop_checkpoints.db)
 - **RFC-0002**: Core Modules Architecture (DurabilityProtocol, VectorStoreProtocol)
 - **RFC-0013**: Daemon Multi-Transport Configuration (production deployment)
 
@@ -631,7 +631,7 @@ protocols:
 ```sql
 -- soothe_checkpoints database
 CREATE TABLE langgraph_checkpoints (...);
-CREATE TABLE loop_checkpoints (...);  -- RFC-409 schema
+CREATE TABLE loop_checkpoints (...);  -- RFC-215 schema
 CREATE TABLE checkpoint_anchors (...);
 CREATE TABLE failed_branches (...);
 CREATE TABLE goal_records (...);

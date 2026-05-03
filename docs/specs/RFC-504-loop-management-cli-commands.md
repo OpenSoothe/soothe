@@ -5,7 +5,7 @@
 > **RFC Number**: RFC-504
 > **Status**: Draft
 > **Created**: 2026-04-22
-> **Dependencies**: RFC-503 (Loop-First UX), RFC-611 (Checkpoint Tree), RFC-454 (Slash Commands)
+> **Dependencies**: RFC-503 (Loop-First UX), RFC-218 (Checkpoint Tree), RFC-454 (Slash Commands)
 > **Author**: Claude Sonnet 4.6
 
 ---
@@ -705,10 +705,10 @@ loop_app.command("status")(show_loop_status)
 ## Related Specifications
 
 - RFC-612: Loop-First User Experience
-- RFC-611: AgentLoop Checkpoint Tree Architecture
-- RFC-409: AgentLoop Persistence Backend
+- RFC-218: AgentLoop Checkpoint Tree Architecture
+- RFC-215: AgentLoop Persistence Backend
 - RFC-454: Slash Command Architecture
 
 ---
 
-**End of RFC-615 Draft**
+**End of RFC-219 Draft**

@@ -2,7 +2,7 @@
 
 **Status**: Draft
 **Created**: 2026-04-28
-**Related**: RFC-603, RFC-615, IG-298, IG-299
+**Related**: RFC-603, RFC-219, IG-298, IG-299
 
 ## Abstract
 
