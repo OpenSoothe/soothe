@@ -17,7 +17,7 @@ Architecture:
 - Robust fallbacks to safe defaults
 - Single structured LLM call (~2-4s latency)
 
-Related RFCs: RFC-201, RFC-609, RFC-200, RFC-0016
+Related RFCs: RFC-201, RFC-217, RFC-200, RFC-0016
 """
 
 from __future__ import annotations

@@ -2,10 +2,10 @@
 
 > Design draft for SQLite/PostgreSQL persistence backend with thread/loop isolation.
 >
-> **RFC Number**: RFC-409
+> **RFC Number**: RFC-215
 > **Status**: Draft
 > **Created**: 2026-04-22
-> **Dependencies**: RFC-608 (Multi-Thread Lifecycle), RFC-611 (Checkpoint Tree), RFC-503 (Loop-First UX)
+> **Dependencies**: RFC-216 (Multi-Thread Lifecycle), RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX)
 > **Author**: Claude Sonnet 4.6
 
 ---
@@ -527,8 +527,8 @@ agentloop_checkpoint:
 
 ## Related Specifications
 
-- RFC-611: AgentLoop Checkpoint Tree Architecture
-- RFC-608: AgentLoop Multi-Thread Lifecycle
+- RFC-218: AgentLoop Checkpoint Tree Architecture
+- RFC-216: AgentLoop Multi-Thread Lifecycle
 - RFC-503: Loop-First User Experience
 - RFC-411: Event Stream Replay
 - RFC-602: SQLite Backend (existing)

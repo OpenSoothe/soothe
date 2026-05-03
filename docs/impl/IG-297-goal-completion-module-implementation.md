@@ -2,14 +2,14 @@
 
 **Status**: Completed
 **Date**: 2026-04-28
-**RFC**: RFC-615
+**RFC**: RFC-219
 **Issue**: Monolithic goal completion logic in AgentLoop orchestration
 
 ---
 
 ## Objective
 
-Extract ~200 lines of goal completion logic from `agent_loop.py` into dedicated `completion/` module hierarchy following RFC-615 architecture design.
+Extract ~200 lines of goal completion logic from `agent_loop.py` into dedicated `completion/` module hierarchy following RFC-219 architecture design.
 
 **Goals**:
 - Simplify AgentLoop orchestration (reduce from ~200 lines to ~10 lines)
@@ -162,7 +162,7 @@ Run verification suite:
 ### File 1: `completion/__init__.py`
 
 ```python
-"""Goal completion module (RFC-615)."""
+"""Goal completion module (RFC-219)."""
 
 from .goal_completion import GoalCompletionModule
 
@@ -247,7 +247,7 @@ def test_module_integration():
 
 ## References
 
-- RFC-615: Goal Completion Module Architecture
+- RFC-219: Goal Completion Module Architecture
 - RFC-201: AgentLoop Plan-Execute Loop (§90-97 adaptive final response)
 - IG-295: Planner recommendation honored
 - IG-296: Synthesis policy module refactoring

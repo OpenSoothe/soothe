@@ -70,7 +70,7 @@ def _resolve_agentic_report_run_dir(
 ) -> Path:
     """Run root aligned with ``RunArtifactStore`` (RFC-0010 / IG-123).
 
-    Uses new isolated directory structure (RFC-409).
+    Uses new isolated directory structure (RFC-215).
     """
     from soothe.cognition.agent_loop.state.persistence.directory_manager import (
         PersistenceDirectoryManager,

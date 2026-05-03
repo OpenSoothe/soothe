@@ -238,7 +238,7 @@ await context.ingest(evidence_entry)
 
 **Critical Foundation**: ContextProtocol is specified but not yet implemented. This is a foundational protocol required by:
 - GoalBackoffReasoner (RFC-200) - needs ContextProtocol for evidence storage
-- ThreadRelationshipModule (RFC-609) - needs ContextProtocol for embedding model access
+- ThreadRelationshipModule (RFC-217) - needs ContextProtocol for embedding model access
 - AgentLoop.Executor (RFC-201) - needs ContextProtocol for goal-centric retrieval
 
 **Recommended Implementation Sequence**:

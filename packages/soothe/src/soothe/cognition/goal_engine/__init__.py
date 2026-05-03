@@ -1,4 +1,4 @@
-"""Goal lifecycle management and related utilities (RFC-0007, RFC-204, RFC-200, RFC-609)."""
+"""Goal lifecycle management and related utilities (RFC-0007, RFC-204, RFC-200, RFC-217)."""
 
 from soothe.cognition.goal_engine.backoff_reasoner import GoalBackoffReasoner
 from soothe.cognition.goal_engine.engine import GoalEngine

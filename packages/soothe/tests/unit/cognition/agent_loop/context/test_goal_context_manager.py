@@ -1,4 +1,4 @@
-"""Unit tests for GoalContextManager (RFC-609)."""
+"""Unit tests for GoalContextManager (RFC-217)."""
 
 from __future__ import annotations
 

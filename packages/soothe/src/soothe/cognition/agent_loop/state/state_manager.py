@@ -1,8 +1,8 @@
-"""AgentLoop State Manager (RFC-205, RFC-608, IG-055).
+"""AgentLoop State Manager (RFC-205, RFC-216, IG-055).
 
 Manages checkpoint lifecycle: initialize, save, load, recovery.
-RFC-608: Multi-thread spanning with loop_id as primary key.
-RFC-409: Unified global SQLite persistence backend (loop_checkpoints.db).
+RFC-216: Multi-thread spanning with loop_id as primary key.
+RFC-215: Unified global SQLite persistence backend (loop_checkpoints.db).
 IG-055: PostgreSQL backend support using soothe_checkpoints database.
 IG-258 Phase 2: Connection pooling to eliminate database lock contention.
 """
@@ -19,11 +19,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from soothe.cognition.agent_loop.state.checkpoint import (
-    ActWaveRecord,
     AgentLoopCheckpoint,
     GoalExecutionRecord,
-    ReasonStepRecord,
-    StepExecutionRecord,
     ThreadHealthMetrics,
     ThreadSwitchPolicy,
     WorkingMemoryState,
@@ -34,6 +31,7 @@ from soothe.cognition.agent_loop.state.persistence.directory_manager import (
 from soothe.cognition.agent_loop.state.persistence.sqlite_backend import (
     SQLitePersistenceBackend,
 )
+from soothe.cognition.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 if TYPE_CHECKING:
     from soothe.cognition.agent_loop.state.schemas import (
@@ -49,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 
 class AgentLoopStateManager:
-    """Manages AgentLoop checkpoint lifecycle (RFC-608: loop-scoped, multi-thread).
+    """Manages AgentLoop checkpoint lifecycle (RFC-216: loop-scoped, multi-thread).
 
     IG-055: Configuration-driven backend selection (PostgreSQL or SQLite).
     Uses PostgreSQL soothe_checkpoints database when configured, SQLite fallback.
@@ -214,7 +212,7 @@ class AgentLoopStateManager:
         return conn
 
     async def initialize(self, thread_id: str, max_iterations: int = 10) -> AgentLoopCheckpoint:
-        """Create new loop for thread (RFC-608: loop-scoped).
+        """Create new loop for thread (RFC-216: loop-scoped).
 
         IG-258 Phase 2: Database schema initialized lazily by writer connection.
 
@@ -257,7 +255,7 @@ class AgentLoopStateManager:
         return checkpoint
 
     async def load(self) -> AgentLoopCheckpoint | None:
-        """Load existing loop checkpoint (RFC-608: by loop_id).
+        """Load existing loop checkpoint (RFC-216: by loop_id).
 
         IG-055: Backend-aware load (PostgreSQL or SQLite).
         IG-258 Phase 2: Use reader connection pool for concurrent reads (SQLite).
@@ -334,6 +332,15 @@ class AgentLoopStateManager:
 
                 goal_history = []
                 for goal_row in goal_rows_data:
+                    # Deserialize loop_messages (RFC-214: replaces reason_history/act_history)
+                    loop_messages_raw = json.loads(goal_row[6]) if goal_row[6] else []
+                    loop_messages = [
+                        LoopHumanMessage.model_validate(msg)
+                        if msg.get("type") == "human"
+                        else LoopAIMessage.model_validate(msg)
+                        for msg in loop_messages_raw
+                    ]
+
                     goal_record = GoalExecutionRecord(
                         goal_id=goal_row[0],
                         goal_text=goal_row[2],
@@ -341,8 +348,7 @@ class AgentLoopStateManager:
                         iteration=goal_row[4],
                         max_iterations=10,  # Default
                         status=goal_row[5],
-                        reason_history=json.loads(goal_row[6]) if goal_row[6] else [],
-                        act_history=json.loads(goal_row[7]) if goal_row[7] else [],
+                        loop_messages=loop_messages,  # RFC-214: ledger
                         goal_completion=goal_row[8] or "",
                         evidence_summary=goal_row[9] or "",
                         duration_ms=goal_row[10],
@@ -441,7 +447,7 @@ class AgentLoopStateManager:
         return cursor.fetchall()
 
     async def save(self, checkpoint: AgentLoopCheckpoint) -> None:
-        """Persist loop checkpoint to SQLite (RFC-608: indexed by loop_id).
+        """Persist loop checkpoint to SQLite (RFC-216: indexed by loop_id).
 
         Args:
             checkpoint: Checkpoint to save
@@ -518,17 +524,14 @@ class AgentLoopStateManager:
                 goal_record.goal_id,
                 goal_record.status,
                 goal_record.iteration,
-                len(goal_record.reason_history),
-                len(goal_record.act_history),
+                len(goal_record.loop_messages),
                 goal_record.completed_at.isoformat() if goal_record.completed_at else "None",
             )
 
-            # Serialize complex structures to JSON strings
-            reason_history_json = json.dumps(
-                [r.model_dump(mode="json") for r in goal_record.reason_history], ensure_ascii=False
-            )
-            act_history_json = json.dumps(
-                [a.model_dump(mode="json") for a in goal_record.act_history], ensure_ascii=False
+            # Serialize loop_messages to JSON (RFC-214: replaces reason_history/act_history)
+            loop_messages_json = json.dumps(
+                [msg.model_dump(mode="json") for msg in goal_record.loop_messages],
+                ensure_ascii=False,
             )
             completed_at_str = (
                 goal_record.completed_at.isoformat() if goal_record.completed_at else None
@@ -538,9 +541,9 @@ class AgentLoopStateManager:
                 """
                 INSERT OR REPLACE INTO goal_records
                 (goal_id, loop_id, goal_text, thread_id, iteration, status,
-                 reason_history, act_history, goal_completion, evidence_summary,
+                 loop_messages, goal_completion, evidence_summary,
                  duration_ms, tokens_used, started_at, completed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     goal_record.goal_id,
@@ -549,8 +552,7 @@ class AgentLoopStateManager:
                     goal_record.thread_id,
                     goal_record.iteration,
                     goal_record.status,
-                    reason_history_json,
-                    act_history_json,
+                    loop_messages_json,
                     goal_record.goal_completion,
                     goal_record.evidence_summary,
                     goal_record.duration_ms,
@@ -563,7 +565,7 @@ class AgentLoopStateManager:
         conn.commit()
 
     def start_new_goal(self, goal: str, max_iterations: int = 10) -> GoalExecutionRecord:
-        """Create new goal record and clear working memory (RFC-608).
+        """Create new goal record and clear working memory (RFC-216).
 
         Args:
             goal: Goal description
@@ -599,8 +601,7 @@ class AgentLoopStateManager:
             iteration=0,
             max_iterations=max_iterations,
             status="running",  # Implicit
-            reason_history=[],
-            act_history=[],
+            loop_messages=[],  # RFC-214: Initialize empty ledger
             goal_completion="",
             evidence_summary="",
             duration_ms=0,
@@ -615,7 +616,7 @@ class AgentLoopStateManager:
         return goal_record
 
     async def finalize_goal(self, goal_record: GoalExecutionRecord, goal_completion: str) -> None:
-        """Mark goal completed, update loop metrics (RFC-608).
+        """Mark goal completed, update loop metrics (RFC-216).
 
         Args:
             goal_record: Goal execution record to finalize
@@ -681,7 +682,7 @@ class AgentLoopStateManager:
         )
 
     async def execute_thread_switch(self, new_thread_id: str) -> None:
-        """Execute thread switch: update checkpoint with new thread (RFC-608, RFC-609).
+        """Execute thread switch: update checkpoint with new thread (RFC-216, RFC-217).
 
         Args:
             new_thread_id: New thread to switch to
@@ -696,7 +697,7 @@ class AgentLoopStateManager:
         checkpoint.current_thread_id = new_thread_id
         checkpoint.total_thread_switches += 1
 
-        # RFC-609: Set thread switch flag for Execute briefing injection
+        # RFC-217: Set thread switch flag for Execute briefing injection
         checkpoint.thread_switch_pending = True
 
         # Reset thread health metrics for new thread
@@ -714,7 +715,7 @@ class AgentLoopStateManager:
         )
 
     def inject_previous_goal_context(self, limit: int = 1) -> list[str]:
-        """Inject previous goal completion into Plan phase (RFC-608: same-thread continuation).
+        """Inject previous goal completion into Plan phase (RFC-216: same-thread continuation).
 
         Args:
             limit: Number of previous goals to inject (default: 1)
@@ -750,7 +751,7 @@ class AgentLoopStateManager:
     def auto_recall_on_thread_switch(
         self, next_goal: str | None, policy: ThreadSwitchPolicy
     ) -> list[str]:
-        """Auto /recall knowledge from previous threads on thread switch (RFC-608).
+        """Auto /recall knowledge from previous threads on thread switch (RFC-216).
 
         Args:
             next_goal: Next goal text (for relevance query) or None
@@ -819,7 +820,10 @@ class AgentLoopStateManager:
         state: LoopState,
         working_memory: LoopWorkingMemory | None,
     ) -> None:
-        """Update goal record after each iteration (RFC-608).
+        """Update goal record after each iteration (RFC-216, RFC-214).
+
+        RFC-214: Ledger already contains Plan and Execute turns.
+        This method only updates metrics and working memory.
 
         Args:
             goal_record: Goal execution record to update
@@ -827,7 +831,7 @@ class AgentLoopStateManager:
             plan_result: Plan phase result
             decision: AgentDecision that was executed (or None for immediate completion)
             step_results: Step execution results
-            state: LoopState with metrics
+            state: LoopState with metrics and ledger
             working_memory: Current working memory state (optional)
         """
         if self._checkpoint is None:
@@ -850,39 +854,13 @@ class AgentLoopStateManager:
             return
 
         logger.debug(
-            "record_iteration: found id=%s same_obj=%s",
+            "record_iteration: found id=%s same_obj=%s ledger_len=%d",
             target_goal.goal_id,
             target_goal is goal_record,
+            len(state.loop_messages),
         )
 
-        # Record Plan step
-        reason_record = ReasonStepRecord(
-            iteration=iteration,
-            timestamp=datetime.now(UTC),
-            goal_text=state.goal,
-            prior_step_outputs=self._derive_prior_step_outputs(target_goal),
-            assessment_reasoning=plan_result.assessment_reasoning,
-            plan_reasoning=plan_result.plan_reasoning,
-            status=plan_result.status,
-            goal_progress=plan_result.goal_progress,
-            decision=decision.model_dump() if decision else None,
-            next_action=plan_result.next_action,
-        )
-        target_goal.reason_history.append(reason_record)
-
-        logger.debug(
-            "record_iteration: added reason=%d",
-            len(target_goal.reason_history),
-        )
-
-        # Record Act wave
-        act_record = self._build_act_wave_record(iteration, decision, step_results, state)
-        target_goal.act_history.append(act_record)
-
-        logger.debug(
-            "record_iteration: added act=%d",
-            len(target_goal.act_history),
-        )
+        # RFC-214: Ledger already contains Plan and Execute turns (no separate recording needed)
 
         # Record working memory state
         if working_memory is not None:
@@ -890,41 +868,19 @@ class AgentLoopStateManager:
 
         # Update goal metrics
         target_goal.iteration = iteration + 1
-        target_goal.duration_ms += act_record.duration_ms
+        target_goal.duration_ms += sum(r.duration_ms for r in step_results)
         target_goal.tokens_used = state.total_tokens_used
 
         logger.debug(
-            "record_iteration: updated iter=%d dur=%dms tok=%d",
+            "record_iteration: updated iter=%d dur=%dms tok=%d ledger=%d",
             target_goal.iteration,
             target_goal.duration_ms,
             target_goal.tokens_used,
+            len(target_goal.loop_messages),
         )
 
         # Save checkpoint
         await self.save(checkpoint)
-
-    def derive_plan_conversation(self, limit: int = 10) -> list[str]:
-        """Derive prior conversation from current goal's step outputs.
-
-        Args:
-            limit: Maximum step outputs to include
-
-        Returns:
-            List of XML-formatted assistant turns
-        """
-        if self._checkpoint is None or self._checkpoint.current_goal_index < 0:
-            return []
-
-        goal_record = self._checkpoint.goal_history[self._checkpoint.current_goal_index]
-
-        conversation = [
-            f"<assistant>\n{step.output}\n</assistant>"
-            for act_wave in goal_record.act_history
-            for step in act_wave.steps
-            if step.success and step.output
-        ]
-
-        return conversation[-limit:]
 
     async def finalize_loop(self, status: str) -> None:
         """Mark loop finalized (no more goals accepted).
@@ -939,75 +895,6 @@ class AgentLoopStateManager:
         await self.save(self._checkpoint)
 
         logger.info("Finalized loop %s (status: %s)", self.loop_id, status)
-
-    def _derive_prior_step_outputs(self, goal_record: GoalExecutionRecord | None) -> list[str]:
-        """Get prior step outputs from goal's previous Act waves."""
-        if not goal_record or not goal_record.act_history:
-            return []
-
-        return [
-            step.output
-            for act_wave in goal_record.act_history
-            for step in act_wave.steps
-            if step.success and step.output
-        ]
-
-    def _build_act_wave_record(
-        self,
-        iteration: int,
-        decision: AgentDecision | None,
-        step_results: list[StepResult],
-        state: LoopState,  # noqa: ARG002 - Reserved for future metrics extraction
-    ) -> ActWaveRecord:
-        """Convert execution results to ActWaveRecord.
-
-        Args:
-            iteration: Iteration number
-            decision: AgentDecision (None for immediate completion without execution)
-            step_results: Step execution results (empty list for no execution)
-            state: LoopState with metrics
-
-        Returns:
-            ActWaveRecord with step details and metrics
-        """
-        # Build step execution records
-        step_records = []
-        step_desc_map = {s.id: s.description for s in decision.steps} if decision else {}
-
-        for result in step_results:
-            step_input = step_desc_map.get(result.step_id, "")
-            outcome_summary = result.to_evidence_string(truncate=False) if result.success else ""
-
-            step_record = StepExecutionRecord(
-                step_id=result.step_id,
-                description=step_desc_map.get(result.step_id, ""),
-                step_input=step_input,
-                success=result.success,
-                output=outcome_summary,
-                error=result.error,
-                tool_calls=[],  # Reserved for future extraction
-                subagent_calls=[],  # Reserved for future extraction
-            )
-            step_records.append(step_record)
-
-        # Aggregate metrics
-        total_tool_calls = sum(r.tool_call_count for r in step_results)
-        total_subagent_tasks = sum(r.subagent_task_completions for r in step_results)
-        hit_cap = any(r.hit_subagent_cap for r in step_results)
-        error_count = sum(1 for r in step_results if not r.success)
-        duration_ms = sum(r.duration_ms for r in step_results)
-
-        return ActWaveRecord(
-            iteration=iteration,
-            timestamp=datetime.now(UTC),
-            steps=step_records,
-            execution_mode=decision.execution_mode if decision else "sequential",  # Handle None
-            duration_ms=duration_ms,
-            tool_call_count=total_tool_calls,
-            subagent_task_count=total_subagent_tasks,
-            hit_subagent_cap=hit_cap,
-            error_count=error_count,
-        )
 
     def _serialize_working_memory(self, working_memory: LoopWorkingMemory) -> WorkingMemoryState:
         """Serialize working memory state."""

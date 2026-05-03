@@ -24,10 +24,10 @@ if TYPE_CHECKING:
 
 # Module-class pairs for all Soothe custom message types that travel
 # through LangGraph checkpoints.  Keep in sync with
-# ``soothe.cognition.agent_loop.messages``.
+# ``soothe.cognition.agent_loop.utils.messages`` (RFC-214).
 _SOOTHE_MSGPACK_MODULES: list[tuple[str, str]] = [
-    ("soothe.cognition.agent_loop.messages", "LoopHumanMessage"),
-    ("soothe.cognition.agent_loop.messages", "LoopAIMessage"),
+    ("soothe.cognition.agent_loop.utils.messages", "LoopHumanMessage"),
+    ("soothe.cognition.agent_loop.utils.messages", "LoopAIMessage"),
 ]
 
 

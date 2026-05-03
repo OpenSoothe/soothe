@@ -109,7 +109,7 @@ class RunArtifactStore:
         """
         self._thread_id = thread_id
         self._config = config
-        # Use new isolated directory structure (RFC-409): data/threads/{thread_id}
+        # Use new isolated directory structure (RFC-215): data/threads/{thread_id}
         self._run_dir = Path(soothe_home).expanduser() / "data" / "threads" / thread_id
         self._file_lock = _lock_for_run_dir(self._run_dir)
 

@@ -2,7 +2,7 @@
 
 **Status**: In Progress
 **Date**: 2026-04-28
-**RFC**: RFC-615
+**RFC**: RFC-219
 **Issue**: Verbosity, overdesign, and overlaps in goal completion/synthesis modules (8 files, 1,085 lines)
 
 ---
@@ -529,7 +529,7 @@ Expected results:
 
 ## References
 
-- RFC-615: Goal Completion Module Architecture
+- RFC-219: Goal Completion Module Architecture
 - IG-298: Hybrid decision policy (LLM primary + execution heuristics)
 - IG-297: Goal completion module (current overdesigned implementation)
 - IG-296: Synthesis policy module (merged into goal_completion_policy)

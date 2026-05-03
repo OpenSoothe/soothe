@@ -5,7 +5,7 @@
 > **RFC Number**: RFC-411
 > **Status**: Draft
 > **Created**: 2026-04-22
-> **Dependencies**: RFC-611 (Checkpoint Tree), RFC-503 (Loop-First UX), RFC-409 (Persistence Backend)
+> **Dependencies**: RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX), RFC-215 (Persistence Backend)
 > **Author**: Claude Sonnet 4.6
 
 ---
@@ -578,7 +578,7 @@ class EventProcessor:
 
 ## Related Specifications
 
-- RFC-611: AgentLoop Checkpoint Tree Architecture
+- RFC-218: AgentLoop Checkpoint Tree Architecture
 - RFC-612: Loop-First User Experience
 - RFC-613: AgentLoop Persistence Backend
 - RFC-401: Event Processing (existing)

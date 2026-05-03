@@ -49,7 +49,7 @@ class LoopWorkingMemory:
         """Write spill file under ``SOOTHE_HOME/data/threads/{thread_id}/working_memory/``; return relative path (posix)."""
         seq = self._next_spill_seq(step_id)
         safe_step = re.sub(r"[^a-zA-Z0-9._-]+", "_", step_id)[:64] or "step"
-        # Use new isolated directory structure (RFC-409)
+        # Use new isolated directory structure (RFC-215)
         abs_dir = (
             PersistenceDirectoryManager.get_thread_directory(self.thread_id) / "working_memory"
         )

@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Dependencies**: RFC-201, RFC-203, RFC-608
+**Dependencies**: RFC-201, RFC-203, RFC-216
 **Related**: RFC-213 (Reasoning)
 
 ---
@@ -409,8 +409,8 @@ agentic:
 
 - RFC-201: AgentLoop Plan-Execute Loop Architecture
 - RFC-203: AgentLoop State & Memory Architecture
-- RFC-608: Loop Multi-Thread Lifecycle (original source)
-- RFC-609: Goal Context Management (original source)
+- RFC-216: Loop Multi-Thread Lifecycle (original source)
+- RFC-217: Goal Context Management (original source)
 
 ---
 
