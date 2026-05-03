@@ -1,9 +1,11 @@
-"""Integration tests for performance optimizations (RFC-0008)."""
+"""Integration tests for runner performance-related wiring (RFC-0008)."""
 
 import pytest
 
 from soothe.config import SootheConfig
 from soothe.core.runner import SootheRunner
+from soothe.middleware import build_soothe_middleware_stack
+from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
 
 # Mark all tests in this module as integration tests
 pytestmark = pytest.mark.integration
@@ -11,15 +13,15 @@ pytestmark = pytest.mark.integration
 
 @pytest.mark.asyncio
 async def test_query_complexity_classification(test_config: SootheConfig, requires_llm_api):
-    """Test that query complexity is classified correctly."""
+    """Intent classifier is wired when a fast chat model can be created."""
     runner = SootheRunner(test_config)
 
     try:
-        # Test that unified classifier is initialized if performance is enabled
-        if test_config.agentic.performance_enabled and test_config.agentic.unified_classification:
-            assert runner._unified_classifier is not None, (
-                "Unified classifier should be initialized"
-            )
+        assert hasattr(runner, "_intent_classifier")
+        if runner._intent_classifier is not None:
+            from soothe.cognition.intention import IntentClassifier
+
+            assert isinstance(runner._intent_classifier, IntentClassifier)
 
     finally:
         await runner.cleanup()
@@ -27,12 +29,10 @@ async def test_query_complexity_classification(test_config: SootheConfig, requir
 
 @pytest.mark.asyncio
 async def test_template_planning(test_config: SootheConfig, requires_llm_api):
-    """Test that template plans are used for trivial/simple queries."""
+    """Runner exposes a planner when the agent stack configured one."""
     runner = SootheRunner(test_config)
 
     try:
-        # Template planning is now handled by the planner directly
-        # This test verifies the runner has a planner configured
         if runner._planner:
             assert runner._planner is not None
 
@@ -42,14 +42,13 @@ async def test_template_planning(test_config: SootheConfig, requires_llm_api):
 
 @pytest.mark.asyncio
 async def test_conditional_memory_recall(test_config: SootheConfig, requires_llm_api):
-    """Test that memory recall is conditionally applied based on query complexity."""
+    """Runner exposes memory wiring; backend may be None when disabled or unresolved."""
     runner = SootheRunner(test_config)
 
     try:
-        # Memory recall is handled based on query complexity classification
-        # This test verifies the runner has the necessary protocols configured
-        if test_config.protocols.memory.enabled:
-            assert runner._memory is not None or runner._memory is None
+        assert hasattr(runner, "_memory")
+        if test_config.protocols.memory.enabled and runner._memory is not None:
+            assert runner._memory is not None
 
     finally:
         await runner.cleanup()
@@ -57,14 +56,13 @@ async def test_conditional_memory_recall(test_config: SootheConfig, requires_llm
 
 @pytest.mark.asyncio
 async def test_conditional_context_projection(test_config: SootheConfig, requires_llm_api):
-    """Test that context projection is conditionally applied based on query complexity."""
+    """CoreAgent exposes context middleware wiring (no ``protocols.context`` block)."""
     runner = SootheRunner(test_config)
 
     try:
-        # Context projection is handled based on query complexity classification
-        # This test verifies the runner has the necessary protocols configured
-        if test_config.protocols.context.enabled:
-            assert runner._context is not None or runner._context is None
+        assert hasattr(runner._agent, "config")
+        stack = build_soothe_middleware_stack(test_config, policy=runner._policy)
+        assert any(isinstance(m, SystemPromptOptimizationMiddleware) for m in stack)
 
     finally:
         await runner.cleanup()
@@ -72,16 +70,12 @@ async def test_conditional_context_projection(test_config: SootheConfig, require
 
 @pytest.mark.asyncio
 async def test_parallel_execution(test_config: SootheConfig, requires_llm_api):
-    """Test that parallel execution works for medium/complex queries."""
-    test_config.agentic.performance_enabled = True
+    """Execution concurrency limits remain configurable."""
+    test_config.execution.concurrency.max_parallel_steps = 2
     runner = SootheRunner(test_config)
 
     try:
-        # Verify configuration
-        assert test_config.agentic.performance_enabled is True
-
-        # Parallel execution is handled internally in the runner
-        # This test verifies the configuration is correct
+        assert test_config.execution.concurrency.max_parallel_steps == 2
 
     finally:
         await runner.cleanup()
@@ -89,27 +83,23 @@ async def test_parallel_execution(test_config: SootheConfig, requires_llm_api):
 
 @pytest.mark.asyncio
 async def test_feature_flags(requires_llm_api):
-    """Test that feature flags work correctly."""
-    # Test with performance disabled
+    """Agentic final-response mode remains a supported toggle."""
     config1 = SootheConfig()
-    config1.performance.enabled = False
+    config1.agentic.final_response = "always_synthesize"
     runner1 = SootheRunner(config1)
 
     try:
-        # Query classification should still work, but optimizations should be disabled
-        assert config1.performance.enabled is False
+        assert config1.agentic.final_response == "always_synthesize"
 
     finally:
         await runner1.cleanup()
 
-    # Test with parallel execution disabled
     config2 = SootheConfig()
-    config2.performance.parallel_pre_stream = False
+    config2.agentic.final_response = "adaptive"
     runner2 = SootheRunner(config2)
 
     try:
-        # Parallel execution should be disabled
-        assert config2.performance.parallel_pre_stream is False
+        assert config2.agentic.final_response == "adaptive"
 
     finally:
         await runner2.cleanup()

@@ -30,6 +30,32 @@ def _client_label(client_id: Any) -> str:
     return f"obj:{id(client_id) & 0xFFFF_FFFF:x}"
 
 
+def _coerce_loop_input_text(content: Any) -> str | None:
+    """Normalize ``loop_input`` content to a non-empty user text string (IG-361).
+
+    Preferred wire shape is a bare string. Some clients send a small JSON
+    object (e.g. ``{"text": "..."}``); extract the first known string field.
+
+    Args:
+        content: Raw ``content`` field from a ``loop_input`` message.
+
+    Returns:
+        Stripped non-empty text, or ``None`` if no usable string was found.
+    """
+    if isinstance(content, str):
+        stripped = content.strip()
+        return stripped if stripped else None
+    if isinstance(content, dict):
+        for key in ("text", "prompt", "message", "input"):
+            val = content.get(key)
+            if isinstance(val, str):
+                s = val.strip()
+                if s:
+                    return s
+        return None
+    return None
+
+
 class MessageRouter:
     """Dispatches client messages by ``type`` field."""
 
@@ -1849,15 +1875,15 @@ class MessageRouter:
         d = self._daemon
         request_id = msg.get("request_id")
         loop_id = msg.get("loop_id")
-        content = msg.get("content")
+        prompt_text = _coerce_loop_input_text(msg.get("content"))
 
-        if not loop_id or not content:
+        if not loop_id or prompt_text is None:
             await d._send_client_message(
                 client_id,
                 {
                     "type": "error",
                     "code": "INVALID_REQUEST",
-                    "message": "loop_id and content required",
+                    "message": "loop_id and non-empty content (string or object with text) required",
                     "request_id": request_id,
                 },
             )
@@ -1936,14 +1962,14 @@ class MessageRouter:
             "Queueing input for loop %s (thread %s): %s",
             loop_id,
             thread_id,
-            preview_first(content, 50),
+            preview_first(prompt_text, 50),
         )
 
         # Queue input for QueryEngine execution
         await d._current_input_queue.put(
             {
                 "type": "input",
-                "text": content,
+                "text": prompt_text,
                 "autonomous": bool(msg.get("autonomous", False)),
                 "max_iterations": msg.get("max_iterations"),
                 "preferred_subagent": msg.get("preferred_subagent"),

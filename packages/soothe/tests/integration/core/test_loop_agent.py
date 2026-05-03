@@ -47,6 +47,8 @@ class MockLoopPlanner:
     def __init__(self, scenario: str = "success") -> None:
         self.scenario = scenario
         self.plan_count = 0
+        # AgentLoop goal completion constructs ``SynthesisGenerator(loop_planner._model, ...)``.
+        self._model = MagicMock()
 
     async def plan(self, goal: str, state, context: PlanContext) -> PlanResult:
         self.plan_count += 1
@@ -269,6 +271,7 @@ async def test_loop_agent_parallel_execution() -> None:
     class ParallelPlanner:
         def __init__(self) -> None:
             self.plan_count = 0
+            self._model = MagicMock()
 
         async def plan(self, goal, state, context):
             self.plan_count += 1
@@ -313,6 +316,7 @@ async def test_loop_agent_parallel_execution() -> None:
         max_iterations=8,
     )
 
-    # 3 parallel steps in first iteration + 1 plan call in second iteration = 4
-    assert core_agent.call_count == 4
+    # One CoreAgent stream per parallel step in the first Act wave; second iteration
+    # completes in Plan without an extra Execute call when completion skips synthesis.
+    assert core_agent.call_count == 3
     assert result.status == "done"

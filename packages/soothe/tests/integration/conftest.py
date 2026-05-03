@@ -28,20 +28,25 @@ def pytest_addoption(parser) -> None:
 def pytest_configure(config) -> None:
     """Configure pytest markers."""
     config.addinivalue_line("markers", "integration: mark test as integration test")
+    config.addinivalue_line("markers", "slow: long-running or stress tests")
     config.addinivalue_line("markers", "requires_postgresql: requires PostgreSQL database")
-    config.addinivalue_line("markers", "requires_weaviate: requires Weaviate vector store")
     config.addinivalue_line("markers", "requires_llm_api: requires LLM API keys")
 
 
 def pytest_collection_modifyitems(config, items) -> None:
-    """Skip integration tests unless --run-integration is passed."""
+    """Skip tests marked ``integration`` unless ``--run-integration`` is passed.
+
+    Use ``get_closest_marker("integration")`` only: ``item.keywords`` also contains
+    the parent package name ``integration``, which would skip every test under
+    ``tests/integration/`` even when the module is not marked.
+    """
     if config.getoption("--run-integration"):
         # --run-integration given in cli: do not skip integration tests
         return
 
     skip_integration = pytest.mark.skip(reason="need --run-integration option to run")
     for item in items:
-        if "integration" in item.keywords:
+        if item.get_closest_marker("integration") is not None:
             item.add_marker(skip_integration)
 
 
@@ -56,13 +61,6 @@ def _has_postgresql() -> bool:
     has_postgres_host = os.getenv("POSTGRES_HOST") or os.getenv("PGHOST")
     has_postgres_url = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL")
     return bool(has_postgres_host or has_postgres_url)
-
-
-def _has_weaviate() -> bool:
-    """Check if Weaviate vector store is available for integration tests."""
-    # Check for Weaviate connection parameters
-    has_weaviate_host = os.getenv("WEAVIATE_HOST") or os.getenv("WEAVIATE_URL")
-    return bool(has_weaviate_host)
 
 
 def _has_valid_api_key() -> bool:
@@ -151,13 +149,6 @@ def requires_postgresql():
 
 
 @pytest.fixture
-def requires_weaviate():
-    """Fixture that skips test if Weaviate is not available."""
-    if not _has_weaviate():
-        pytest.skip("Test requires Weaviate (set WEAVIATE_HOST or WEAVIATE_URL)")
-
-
-@pytest.fixture
 def requires_llm_api():
     """Fixture that skips test if LLM API key is not available."""
     if not _has_valid_api_key():
@@ -219,7 +210,6 @@ def build_daemon_config(
             "durability": {"backend": "sqlite", "persist_dir": str(tmp_path / "durability")},
         },
         daemon=daemon_config,
-        performance={"unified_classification": False},
     )
 
 
@@ -327,9 +317,6 @@ def integration_config(test_config: SootheConfig) -> SootheConfig:
     test_config.execution.concurrency.max_parallel_steps = 1
     test_config.execution.concurrency.global_max_llm_calls = 3
     test_config.autonomous.max_iterations = 5
-
-    # Disable unified classification for tests to avoid model compatibility issues
-    test_config.agentic.unified_classification = False
 
     return test_config
 
