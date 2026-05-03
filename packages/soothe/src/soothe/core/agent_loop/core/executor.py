@@ -1154,6 +1154,37 @@ class Executor:
 
         return messages
 
+    def _ledger_execute_ai_content(
+        self,
+        *,
+        messages: list[BaseMessage],
+        final_ai_msg: BaseMessage,
+        total_steps: int,
+    ) -> str:
+        """Body for ``LoopAIMessage`` ledger entries (RFC-214, IG-373).
+
+        The stream collector may end with an ``AIMessage`` whose ``content`` is empty while
+        assistant-visible text lives in earlier ``AIMessageChunk`` entries — same situation as
+        ``_assemble_assistant_text_from_stream_messages`` / Act-wave finalize.
+
+        Args:
+            messages: Full message list from ``_stream_and_collect`` (AI + chunk entries).
+            final_ai_msg: AIMessage chosen for this step by sequential pairing.
+            total_steps: Number of steps in this execute wave.
+
+        Returns:
+            Non-empty string when any root assistant text exists; otherwise ``""``.
+        """
+        from soothe.core.agent_loop.utils.stream_normalize import extract_text_from_message_content
+
+        direct = extract_text_from_message_content(getattr(final_ai_msg, "content", None)).strip()
+        if direct:
+            return direct
+        if total_steps != 1:
+            return ""
+        assembled = self._assemble_assistant_text_from_stream_messages(messages).strip()
+        return assembled
+
     def _extract_sequential_outcomes(
         self,
         messages: list[BaseMessage],
@@ -1182,9 +1213,14 @@ class Executor:
             # Assign last N AIMessages to steps (sequential order)
             for i, step in enumerate(steps):
                 final_ai_msg = ai_messages[-(len(steps) - i)]
+                ledger_body = self._ledger_execute_ai_content(
+                    messages=messages,
+                    final_ai_msg=final_ai_msg,
+                    total_steps=len(steps),
+                )
 
                 step_outcomes[step.id] = LoopAIMessage(
-                    content=final_ai_msg.content,
+                    content=ledger_body or final_ai_msg.content,
                     thread_id=state.thread_id,
                     iteration=state.iteration,
                     phase="execute_step",
@@ -1196,8 +1232,13 @@ class Executor:
             for i, step in enumerate(steps):
                 if i < len(ai_messages):
                     final_ai_msg = ai_messages[i]
+                    ledger_body = self._ledger_execute_ai_content(
+                        messages=messages,
+                        final_ai_msg=final_ai_msg,
+                        total_steps=len(steps),
+                    )
                     step_outcomes[step.id] = LoopAIMessage(
-                        content=final_ai_msg.content,
+                        content=ledger_body or final_ai_msg.content,
                         thread_id=state.thread_id,
                         iteration=state.iteration,
                         phase="execute_step",

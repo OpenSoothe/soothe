@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+from langchain_core.messages import AIMessage, AIMessageChunk
 
 from soothe.core.agent_loop.core.executor import Executor
 from soothe.core.agent_loop.state.schemas import (
@@ -64,6 +65,24 @@ async def test_sequential_respects_max_parallel_steps_multiple_waves() -> None:
 
     assert len(out) == 2
     assert mock_agent.astream.call_count == 2
+
+
+def test_extract_sequential_outcomes_single_step_fills_ledger_from_chunks_ig373() -> None:
+    """Trailing empty AIMessage after chunks must not produce empty LoopAIMessage content (IG-373)."""
+    mock_agent = MagicMock()
+    executor = Executor(mock_agent, max_parallel_steps=4)
+    state = LoopState(goal="g", thread_id="tid", iteration=0, max_iterations=8)
+    steps = [StepAction(id="9oi", description="read readme top", expected_output="lines")]
+    messages: list = [
+        AIMessageChunk(content="Here are the first lines:\n"),
+        AIMessageChunk(content="A\nB\n"),
+        AIMessage(content=""),
+    ]
+    outcomes = executor._extract_sequential_outcomes(messages, steps, state)
+    assert "9oi" in outcomes
+    body = outcomes["9oi"].content
+    assert "Here are the first lines" in body
+    assert "A\nB" in body
 
 
 @pytest.mark.asyncio
