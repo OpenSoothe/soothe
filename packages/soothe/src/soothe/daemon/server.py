@@ -448,7 +448,7 @@ class SootheDaemon(DaemonHandlersMixin):
                     )
                     for t in remaining:
                         logger.info(
-                            "  Loop %s: %d goals completed, %d threads",
+                            "Loop %s: %d goals completed, %d threads",
                             t["loop_id"],
                             t["total_goals_completed"],
                             len(t["thread_ids"]),

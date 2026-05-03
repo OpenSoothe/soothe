@@ -152,6 +152,8 @@ async def test_complete_smart_retry_workflow(tmp_path):
         assert failed_branch["failure_reason"] == "Tool execution timeout after 30s"
 
         # 4. Analyze failure (mock LLM)
+        from unittest.mock import patch
+
         from soothe.config import SootheConfig
 
         config = SootheConfig()
@@ -162,14 +164,15 @@ async def test_complete_smart_retry_workflow(tmp_path):
                 content='```json\n{"root_cause": "Large file analysis timeout", "context": "File > 500KB", "patterns": ["Avoid large files without streaming"], "suggestions": ["Use streaming mode", "Split file into chunks"]}\n```'
             )
         )
-        config.create_chat_model = MagicMock(return_value=mock_model)
 
         analyzer = FailureAnalyzer(config)
         failure_context = (
             "Exception Type: TimeoutError\nException Message: Operation timed out after 30s"
         )
 
-        analyzed_branch = await analyzer.analyze_failure(failed_branch, failure_context)
+        # Mock create_chat_model at class level (Pydantic doesn't allow instance attribute setting)
+        with patch.object(SootheConfig, 'create_chat_model', return_value=mock_model):
+            analyzed_branch = await analyzer.analyze_failure(failed_branch, failure_context)
 
         # 5. Verify analysis
         assert "failure_insights" in analyzed_branch
@@ -262,10 +265,10 @@ async def test_multiple_failures_with_learning_accumulation(tmp_path):
         branches = await persistence_manager.get_failed_branches_for_loop(loop_id)
         assert len(branches) == 2
 
-        # Verify branches are distinct
+        # Verify branches are distinct (ordered by created_at DESC, so iteration 4 first)
         assert branches[0]["branch_id"] != branches[1]["branch_id"]
-        assert branches[0]["iteration"] == 2
-        assert branches[1]["iteration"] == 4
+        assert branches[0]["iteration"] == 4  # More recent failure
+        assert branches[1]["iteration"] == 2  # Earlier failure
 
 
 @pytest.mark.integration
@@ -308,7 +311,7 @@ async def test_branch_pruning_retention_policy(tmp_path):
         # Manually set created_at to 60 days ago
         import aiosqlite
 
-        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path(loop_id)
+        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
         async with aiosqlite.connect(db_path) as db:
             old_date = datetime.now(UTC) - timedelta(days=60)
             await db.execute(

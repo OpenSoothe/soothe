@@ -166,4 +166,5 @@ addopts = "-v --strict-markers"
 markers = [
     "asyncio: mark test as async",
     "integration: mark test as integration test",
+    "slow: long-running or stress tests",
 ]
