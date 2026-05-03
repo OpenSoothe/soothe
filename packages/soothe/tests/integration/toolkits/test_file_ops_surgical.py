@@ -167,7 +167,7 @@ class TestInsertLinesTool:
         insert_tool.invoke(
             {
                 "file_path": str(code_file),
-                "line_number": 2,  # Insert before line 2 (between line1 and line2)
+                "line": 2,  # Insert before line 2 (between line1 and line2)
                 "content": "new_line",
             }
         )
@@ -186,7 +186,7 @@ class TestInsertLinesTool:
         insert_tool.invoke(
             {
                 "file_path": str(code_file),
-                "line_number": 1,  # Insert at line 1 (beginning)
+                "line": 1,  # Insert at line 1 (beginning)
                 "content": "first",
             }
         )
@@ -202,7 +202,7 @@ class TestInsertLinesTool:
         insert_tool.invoke(
             {
                 "file_path": str(code_file),
-                "line_number": 2,  # Insert at end (after line 1)
+                "line": 2,  # Insert at end (after line 1)
                 "content": "line1\nline2\nline3",
             }
         )
@@ -220,7 +220,7 @@ class TestInsertLinesTool:
         insert_tool.invoke(
             {
                 "file_path": str(code_file),
-                "line_number": 2,  # Insert before "after"
+                "line": 2,  # Insert before "after"
                 "content": "inserted",
             }
         )

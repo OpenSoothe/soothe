@@ -63,6 +63,7 @@ def _build_http_transport_config(
                 router=base_config.router,
                 vector_stores=base_config.vector_stores,
                 vector_store_router=base_config.vector_store_router,
+                workspace_dir=str(tmp_path / "workspace"),
                 persistence={"persist_dir": str(tmp_path / "persistence")},
                 protocols={
                     "memory": {"enabled": False},
@@ -73,7 +74,6 @@ def _build_http_transport_config(
                 },
                 daemon={
                     "transports": {
-                        "unix_socket": {"enabled": False},
                         "websocket": {
                             "enabled": True,
                             "host": "127.0.0.1",
@@ -90,8 +90,6 @@ def _build_http_transport_config(
                         },
                     },
                 },
-                # Disable unified classification for integration tests to avoid model compatibility issues
-                performance={"unified_classification": False},
             ),
             port,
         )
@@ -172,15 +170,22 @@ async def test_http_transport_thread_lifecycle(
         get_payload = get_response.json()
         assert get_payload["thread"]["thread_id"] == thread_id
 
-        list_response = await client.get("/api/v1/threads")
+        # Global durability may contain many threads; default page is small. Scope by tags.
+        list_response = await client.get(
+            "/api/v1/threads",
+            params={"tags": "integration,http", "limit": 100},
+        )
         assert list_response.status_code == 200
         list_payload = list_response.json()
-        assert list_payload["total"] >= 1
         assert any(item["thread_id"] == thread_id for item in list_payload["threads"])
 
-        filtered = await client.get("/api/v1/threads?priority=normal&limit=20&offset=0")
+        filtered = await client.get(
+            "/api/v1/threads",
+            params={"priority": "normal", "tags": "integration,http", "limit": 50, "offset": 0},
+        )
         assert filtered.status_code == 200
         filtered_payload = filtered.json()
+        assert any(item["thread_id"] == thread_id for item in filtered_payload["threads"])
         assert all(
             item["metadata"].get("priority") == "normal" for item in filtered_payload["threads"]
         )

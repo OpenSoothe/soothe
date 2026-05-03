@@ -35,11 +35,12 @@ def _build_daemon_config(
         router=base_config.router,
         vector_stores=base_config.vector_stores,
         vector_store_router=base_config.vector_store_router,
+        workspace_dir=str(tmp_path / "workspace"),
         persistence={"persist_dir": str(tmp_path / "persistence")},
         protocols={
             "memory": {"enabled": False},
             "durability": {
-                "backend": "json",
+                "backend": "sqlite",
                 "persist_dir": str(tmp_path / "durability"),
             },
         },
@@ -54,7 +55,6 @@ def _build_daemon_config(
             },
             "max_concurrent_threads": max_concurrent_threads,
         },
-        performance={"unified_classification": False},
     )
 
 
@@ -80,8 +80,6 @@ async def daemon_fixture(tmp_path: Path):
 async def test_thread_resume_from_disk(tmp_path: Path) -> None:
     """Test resuming thread after daemon restart (RFC-402)."""
     force_isolated_home(tmp_path / "soothe-home")
-    ws_port = alloc_ephemeral_port()
-
     ws_port = alloc_ephemeral_port()
     config = _build_daemon_config(tmp_path, websocket_port=ws_port)
 

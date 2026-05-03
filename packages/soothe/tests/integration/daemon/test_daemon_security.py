@@ -77,23 +77,29 @@ async def test_websocket_cors_validation(
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_message_size_limit(
-    unix_daemon_fixture: tuple[SootheDaemon, str],
-) -> None:
+async def test_message_size_limit(tmp_path: Path) -> None:
     """Test that messages exceeding 10MB size limit are rejected."""
-    _, ws_port = unix_daemon_fixture
-
-    client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
-    await client.connect()
-
+    force_isolated_home(tmp_path / "soothe-home")
+    ws_port = alloc_ephemeral_port()
+    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    daemon = SootheDaemon(config)
+    await daemon.start()
+    await asyncio.sleep(0.4)
     try:
-        small_message = "x" * (1 * 1024 * 1024)
-        await client.send_thread_create(initial_message=small_message)
-        response = await await_event_type(client.read_event, "thread_created", timeout=5.0)
-        assert response["type"] == "thread_created"
+        client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
+        await client.connect()
 
+        try:
+            small_message = "x" * (1 * 1024 * 1024)
+            await client.send_thread_create(initial_message=small_message)
+            response = await await_event_type(client.read_event, "thread_created", timeout=5.0)
+            assert response["type"] == "thread_created"
+
+        finally:
+            await client.close()
     finally:
-        await client.close()
+        with contextlib.suppress(Exception):
+            await daemon.stop()
 
 
 @pytest.mark.asyncio
