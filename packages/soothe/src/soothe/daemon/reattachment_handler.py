@@ -47,7 +47,7 @@ async def handle_loop_reattach(
         logger.info("Handling loop reattachment for %s (client=%s)", loop_id, client_id)
 
         # Load checkpoint data
-        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        persistence_manager = AgentLoopCheckpointPersistenceManager(config=daemon._config)
 
         # Reconstruct event stream
         event_stream = await reconstruct_event_stream(loop_id, persistence_manager)
@@ -55,10 +55,11 @@ async def handle_loop_reattach(
         # Build thread checkpointer map (from daemon's thread registry)
         checkpointer_thread_map = {}
         if hasattr(daemon, "_thread_registry"):
-            for thread_id in daemon._thread_registry._threads:
+            for thread_id in daemon._thread_registry.all_thread_ids():
                 thread_state = daemon._thread_registry.get(thread_id)
-                if thread_state and thread_state.checkpointer:
-                    checkpointer_thread_map[thread_id] = thread_state.checkpointer
+                cp = getattr(thread_state, "checkpointer", None) if thread_state else None
+                if cp:
+                    checkpointer_thread_map[thread_id] = cp
 
         # Enrich events with checkpoint details
         enriched_stream = await enrich_events_with_coreagent_details(

@@ -165,3 +165,18 @@ class TestSQLitePersistStoreUnit:
             await store.close()  # Should not raise
 
         asyncio.run(_async_test())
+
+    def test_concurrent_writes_single_writer_connection(self) -> None:
+        """Many concurrent saves must not trip sqlite thread-safety (InterfaceError)."""
+
+        async def _async_test():
+            store = self._make_store()
+            try:
+                n = 64
+                await asyncio.gather(*(store.save(f"key{i}", {"i": i}) for i in range(n)))
+                for i in range(n):
+                    assert await store.load(f"key{i}") == {"i": i}
+            finally:
+                await store.close()
+
+        asyncio.run(_async_test())

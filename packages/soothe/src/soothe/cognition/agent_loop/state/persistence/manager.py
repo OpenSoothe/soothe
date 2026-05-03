@@ -35,6 +35,15 @@ class AgentLoopCheckpointPersistenceManager:
             config: SootheConfig for backend selection.
                     If None, defaults to SQLite (backward compatibility).
         """
+        if isinstance(config, str):
+            # Legacy call sites passed "sqlite" / "postgresql" as first arg; treat as unset config.
+            logger.warning(
+                "AgentLoopCheckpointPersistenceManager received legacy backend string %r; "
+                "use config=SootheConfig(...) or None. Ignoring string.",
+                config,
+            )
+            config = None
+
         # Determine backend type
         backend_type = "sqlite"  # Default for backward compatibility
         if config and config.persistence.default_backend == "postgresql":

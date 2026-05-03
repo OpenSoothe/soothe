@@ -26,6 +26,7 @@ class SQLitePersistStore:
     - asyncio.Lock instead of threading.Lock
     - Connection pool for concurrent reads
     - asyncio.to_thread for sync SQLite operations
+    - asyncio.Lock serializes writer use (connections are not thread-safe)
 
     Uses WAL mode for concurrent reads with single writer.
     Provides namespace isolation like PostgreSQLPersistStore.
@@ -57,6 +58,9 @@ class SQLitePersistStore:
 
         # Async lock (doesn't block event loop) - IG-258 Phase 2
         self._lock = asyncio.Lock()
+
+        # Writer connection must not be used concurrently across thread-pool workers.
+        self._writer_lock = asyncio.Lock()
 
         logger.info(
             "SQLite persist store initialized: path=%s namespace=%s pool_size=%d",
@@ -171,17 +175,18 @@ class SQLitePersistStore:
             key: Storage key.
             data: JSON-serialisable data.
         """
-        conn = await self._ensure_writer_connection()
-        serialized = json.dumps(data, ensure_ascii=False)
+        async with self._writer_lock:
+            conn = await self._ensure_writer_connection()
+            serialized = json.dumps(data, ensure_ascii=False)
 
-        # Execute sync SQLite operation in thread pool
-        await asyncio.to_thread(
-            self._save_sync,
-            conn,
-            self._namespace,
-            key,
-            serialized,
-        )
+            # Execute sync SQLite operation in thread pool
+            await asyncio.to_thread(
+                self._save_sync,
+                conn,
+                self._namespace,
+                key,
+                serialized,
+            )
 
     def _save_sync(
         self, conn: sqlite3.Connection, namespace: str, key: str, serialized: str
@@ -243,15 +248,16 @@ class SQLitePersistStore:
         Args:
             key: Storage key.
         """
-        conn = await self._ensure_writer_connection()
+        async with self._writer_lock:
+            conn = await self._ensure_writer_connection()
 
-        # Execute sync delete in thread pool
-        await asyncio.to_thread(
-            self._delete_sync,
-            conn,
-            self._namespace,
-            key,
-        )
+            # Execute sync delete in thread pool
+            await asyncio.to_thread(
+                self._delete_sync,
+                conn,
+                self._namespace,
+                key,
+            )
 
     def _delete_sync(self, conn: sqlite3.Connection, namespace: str, key: str) -> None:
         """Sync delete operation executed in thread pool."""
@@ -297,18 +303,19 @@ class SQLitePersistStore:
 
     async def close(self) -> None:
         """Commit pending changes and close all connections (async, Phase 2)."""
-        async with self._lock:
-            # Close writer connection
-            if self._writer_conn is not None:
-                await asyncio.to_thread(self._close_conn_sync, self._writer_conn)
-                self._writer_conn = None
+        async with self._writer_lock:
+            async with self._lock:
+                # Close writer connection
+                if self._writer_conn is not None:
+                    await asyncio.to_thread(self._close_conn_sync, self._writer_conn)
+                    self._writer_conn = None
 
-            # Close reader pool
-            for conn in self._reader_pool:
-                await asyncio.to_thread(self._close_conn_sync, conn)
-            self._reader_pool.clear()
+                # Close reader pool
+                for conn in self._reader_pool:
+                    await asyncio.to_thread(self._close_conn_sync, conn)
+                self._reader_pool.clear()
 
-            logger.info("SQLite persist store closed")
+                logger.info("SQLite persist store closed")
 
     def _close_conn_sync(self, conn: sqlite3.Connection) -> None:
         """Sync connection close executed in thread pool."""

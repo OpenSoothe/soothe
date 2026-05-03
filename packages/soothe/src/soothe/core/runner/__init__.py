@@ -284,18 +284,18 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
     async def touch_thread_activity_timestamp(self, thread_id: str) -> None:
         """Refresh ``updated_at`` on thread metadata (activity ping)."""
-        from datetime import UTC, datetime
-
         if not thread_id:
             return
         try:
-            # IG-258 Phase 2: Use durability protocol methods instead of direct store access
-            thread_info = await self._durability.get_thread(thread_id)
-            thread_info = thread_info.model_copy(update={"updated_at": datetime.now(UTC)})
-            await self._durability.update_thread_metadata(
-                thread_id, thread_info.metadata.model_copy(update={"updated_at": datetime.now(UTC)})
-            )
+            # Empty merge still reloads and persists with a fresh ``ThreadInfo.updated_at``
+            # (``get_thread`` can be None for non-durability / not-yet-created records).
+            await self._durability.update_thread_metadata(thread_id, {})
             logger.debug("Thread %s updated_at refreshed", thread_id)
+        except KeyError:
+            logger.debug(
+                "touch_thread_activity_timestamp: no durability record for %s",
+                thread_id,
+            )
         except Exception:
             logger.debug("touch_thread_activity_timestamp failed", exc_info=True)
 

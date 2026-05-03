@@ -618,16 +618,33 @@ class MessageRouter:
             )
             return
 
-        # Check thread registry for runtime state
-        thread_state = d._thread_registry.get(thread_id)
+        active_tasks = getattr(d, "_active_threads", {}) or {}
+        query_task = active_tasks.get(thread_id)
+        has_active_query = query_task is not None and not query_task.done()
+
+        last_activity: str | None = None
+        if d._runner:
+            try:
+                info = await d._runner.get_persisted_thread(thread_id)
+            except KeyError:
+                info = None
+            except Exception:
+                logger.debug(
+                    "thread_status: get_persisted_thread failed for %s",
+                    thread_id,
+                    exc_info=True,
+                )
+                info = None
+            if info is not None:
+                at = getattr(info, "last_activity_at", None) or getattr(info, "updated_at", None)
+                if at is not None:
+                    last_activity = at.isoformat()
 
         status = {
             "thread_id": thread_id,
-            "state": "idle"
-            if not thread_state
-            else ("running" if thread_state.query_running else "idle"),
-            "has_active_query": thread_state.query_running if thread_state else False,
-            "last_activity": thread_state.last_activity if thread_state else None,
+            "state": "running" if has_active_query else "idle",
+            "has_active_query": has_active_query,
+            "last_activity": last_activity,
         }
 
         await d._send_client_message(
@@ -1306,7 +1323,7 @@ class MessageRouter:
             return
 
         # Load checkpoint database
-        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        persistence_manager = AgentLoopCheckpointPersistenceManager(config=d._config)
 
         # Get failed branches
         branches = await persistence_manager.get_failed_branches_for_loop(loop_id)
@@ -1379,7 +1396,7 @@ class MessageRouter:
             )
             return
 
-        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        persistence_manager = AgentLoopCheckpointPersistenceManager(config=d._config)
 
         # Get checkpoint anchors (main line)
         anchors = await persistence_manager.get_checkpoint_anchors_for_range(loop_id, 0, 1000)
@@ -1483,7 +1500,7 @@ class MessageRouter:
             )
             return
 
-        persistence_manager = AgentLoopCheckpointPersistenceManager("sqlite")
+        persistence_manager = AgentLoopCheckpointPersistenceManager(config=d._config)
 
         if dry_run:
             # Get branches but don't delete
