@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from soothe.cognition.agent_loop.policies.goal_completion_policy import (
-    _COMPLEX_WAVE_THRESHOLD,
     _heuristic_requires_goal_completion,
     determine_goal_completion_needs,
 )
@@ -44,6 +43,13 @@ def test_llm_only_mode_false():
     state = mock_loop_state()
     result = determine_goal_completion_needs(llm_decision=False, state=state, mode="llm_only")
     assert result is False
+
+
+def test_default_mode_is_llm_only():
+    """Omitting ``mode`` defaults to llm_only: heuristics do not override LLM=False."""
+    state = mock_loop_state(last_execute_wave_parallel_multi_step=True)
+    assert determine_goal_completion_needs(llm_decision=False, state=state) is False
+    assert determine_goal_completion_needs(llm_decision=True, state=state) is True
 
 
 def test_heuristic_only_mode_parallel_multi_step():
@@ -88,18 +94,13 @@ def test_hybrid_mode_both_false():
     assert result is False
 
 
-def test_hybrid_mode_zero_execution_requires_synthesis():
-    """Hybrid mode should return True when zero execution (iter=0, results=[]).
-
-    This is the guard against premature 'done' assessment without any execution.
-    When LLM claims done but no steps were executed, we force synthesis.
-    """
+def test_hybrid_mode_zero_execution_no_heuristic_fallback():
+    """Hybrid with LLM=False and no execution signals: heuristics do not force completion."""
     state = mock_loop_state(
         iteration=0, step_results=[], last_execute_wave_parallel_multi_step=False
     )
-    # LLM=False (claims done), but heuristic=True (zero execution guard)
     result = determine_goal_completion_needs(llm_decision=False, state=state, mode="hybrid")
-    assert result is True
+    assert result is False
 
 
 def test_heuristic_parallel_multi_step():
@@ -116,30 +117,11 @@ def test_heuristic_subagent_cap():
     assert result is True
 
 
-def test_heuristic_multi_wave():
-    """Multi-wave execution (≥2 iterations) requires synthesis."""
-    state = mock_loop_state(iteration=_COMPLEX_WAVE_THRESHOLD)
-    result = _heuristic_requires_goal_completion(state)
-    assert result is True
-
-
 def test_heuristic_single_wave():
     """Single wave execution does not require synthesis (simple case)."""
     state = mock_loop_state(iteration=1)
     result = _heuristic_requires_goal_completion(state)
     assert result is False
-
-
-def test_heuristic_many_steps():
-    """Many steps (≥3) requires synthesis."""
-    step_results = [
-        StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
-        StepResult(step_id="S2", success=True, outcome={}, duration_ms=100, thread_id="t1"),
-        StepResult(step_id="S3", success=True, outcome={}, duration_ms=100, thread_id="t1"),
-    ]
-    state = mock_loop_state(step_results=step_results)
-    result = _heuristic_requires_goal_completion(state)
-    assert result is True
 
 
 def test_heuristic_few_steps():
@@ -153,11 +135,15 @@ def test_heuristic_few_steps():
 
 
 def test_heuristic_dag_dependencies():
-    """DAG dependencies (≥2) requires synthesis."""
+    """DAG dependencies (≥ threshold) requires synthesis."""
     decision = AgentDecision(
         type="execute_steps",
         steps=[
-            StepAction(id="S1", description="Step 1", dependencies=["S0", "S2"]),  # 2 dependencies
+            StepAction(
+                id="S1",
+                description="Step 1",
+                dependencies=["S0", "S2", "S3"],  # 3 dependencies (meets threshold)
+            ),
             StepAction(id="S2", description="Step 2", dependencies=[]),
         ],
         execution_mode="dependency",
@@ -216,59 +202,11 @@ def test_heuristic_failed_steps_high_success_rate():
     assert result is False
 
 
-def test_heuristic_step_diversity():
-    """Multiple execution types (≥2) requires synthesis."""
-    step_results = [
-        StepResult(
-            step_id="S1",
-            success=True,
-            outcome={"type": "file_read"},
-            duration_ms=100,
-            thread_id="t1",
-        ),
-        StepResult(
-            step_id="S2",
-            success=True,
-            outcome={"type": "web_search"},
-            duration_ms=100,
-            thread_id="t1",
-        ),
-    ]
-    # 2 different outcome types
-    state = mock_loop_state(step_results=step_results)
-    result = _heuristic_requires_goal_completion(state)
-    assert result is True
-
-
-def test_heuristic_single_execution_type():
-    """Single execution type does not require synthesis."""
-    step_results = [
-        StepResult(
-            step_id="S1",
-            success=True,
-            outcome={"type": "file_read"},
-            duration_ms=100,
-            thread_id="t1",
-        ),
-        StepResult(
-            step_id="S2",
-            success=True,
-            outcome={"type": "file_read"},
-            duration_ms=100,
-            thread_id="t1",
-        ),
-    ]
-    # All same outcome type
-    state = mock_loop_state(step_results=step_results)
-    result = _heuristic_requires_goal_completion(state)
-    assert result is False
-
-
 def test_heuristic_combined_complexity():
-    """Combined complexity indicators should trigger synthesis."""
+    """Parallel multi-step flag triggers synthesis regardless of outcome types."""
     state = mock_loop_state(
-        iteration=2,  # Multi-wave
-        last_execute_wave_parallel_multi_step=True,  # Parallel execution
+        iteration=2,
+        last_execute_wave_parallel_multi_step=True,
         step_results=[
             StepResult(
                 step_id="S1",
@@ -280,13 +218,12 @@ def test_heuristic_combined_complexity():
             StepResult(
                 step_id="S2",
                 success=True,
-                outcome={"type": "web_search"},
+                outcome={"type": "file_read"},
                 duration_ms=100,
                 thread_id="t1",
             ),
         ],
     )
-    # Multiple complexity indicators present
     result = _heuristic_requires_goal_completion(state)
     assert result is True
 
@@ -314,11 +251,8 @@ def test_heuristic_simple_execution():
     assert result is False
 
 
-def test_heuristic_zero_execution():
-    """Zero execution (iter=0, results=[]) should require synthesis.
-
-    Guard against premature 'done' without any evidence.
-    """
+def test_heuristic_empty_step_results_no_completion_signal():
+    """No steps and no other complexity flags does not require synthesis via heuristics."""
     state = mock_loop_state(
         iteration=0,
         step_results=[],
@@ -326,9 +260,8 @@ def test_heuristic_zero_execution():
         last_wave_hit_subagent_cap=False,
         current_decision=None,
     )
-    # Zero execution: no steps were executed
     result = _heuristic_requires_goal_completion(state)
-    assert result is True
+    assert result is False
 
 
 if __name__ == "__main__":

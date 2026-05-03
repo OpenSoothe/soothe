@@ -583,6 +583,8 @@ class ReportOutputConfig(BaseModel):
 
 AgenticFinalResponseMode = Literal["adaptive", "always_synthesize", "always_last_execute"]
 
+AgenticGoalCompletionMode = Literal["llm_only", "heuristic_only", "hybrid"]
+
 
 class AgenticLoopConfig(BaseModel):
     """Configuration for agentic loop execution mode (RFC-201).
@@ -601,6 +603,8 @@ class AgenticLoopConfig(BaseModel):
         report_output: Goal report display and synthesis limits.
         output_streaming: Enable streaming mode for all AI outputs (true=stream, false=batch).
         reject_done_at_iteration_zero: Guard against premature completion at iteration 0.
+        goal_completion_mode: How planner completion (`require_goal_completion`) combines with
+            execution heuristics when the goal is assessed as done (IG-298).
 
     Note: Performance optimizations (unified_classification, optimize_system_prompts, parallel_pre_stream)
     are always enabled by design and not configurable.
@@ -636,6 +640,14 @@ class AgenticLoopConfig(BaseModel):
             "On goal completion: adaptive uses heuristics to choose last Execute text vs "
             "a final CoreAgent report; always_synthesize always runs the report; always_last_execute "
             "skips the report when last Execute text exists"
+        ),
+    )
+
+    goal_completion_mode: AgenticGoalCompletionMode = Field(
+        default="llm_only",
+        description=(
+            "When the planner marks the goal done: llm_only trusts StatusAssessment only; "
+            "heuristic_only uses execution heuristics only; hybrid uses LLM first with heuristic fallback"
         ),
     )
 

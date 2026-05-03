@@ -37,8 +37,10 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
         )
 
     mock_gr = Mock()
+    mock_gr.loop_messages = []  # RFC-214: Required list field for LoopState
     mock_ckpt = Mock()
     mock_ckpt.goal_history = []
+    mock_ckpt.loop_messages = []  # RFC-214: Required list field for LoopState
 
     mock_sm = Mock()
     mock_sm.load = AsyncMock(return_value=None)
@@ -104,8 +106,10 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
         )
 
     mock_gr = Mock()
+    mock_gr.loop_messages = []  # RFC-214: Required list field for LoopState
     mock_ckpt = Mock()
     mock_ckpt.goal_history = []
+    mock_ckpt.loop_messages = []  # RFC-214: Required list field for LoopState
 
     mock_sm = Mock()
     mock_sm.load = AsyncMock(return_value=None)
@@ -170,8 +174,10 @@ async def test_completed_payload_skip_goal_completion_wire_duplicate_false_for_s
         )
 
     mock_gr = Mock()
+    mock_gr.loop_messages = []  # RFC-214: Required list field for LoopState
     mock_ckpt = Mock()
     mock_ckpt.goal_history = []
+    mock_ckpt.loop_messages = []  # RFC-214: Required list field for LoopState
 
     mock_sm = Mock()
     mock_sm.load = AsyncMock(return_value=None)
