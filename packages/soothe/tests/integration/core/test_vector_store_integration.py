@@ -6,7 +6,7 @@ import uuid
 import pytest
 import pytest_asyncio
 
-# Default matches repo docker-compose.yml: pgvector service on host port 6432,
+# Default matches repo docker-compose.yml: soothe-pgvector service on host port 6432,
 # database soothe_vectors (see config/init-db.sql).
 _DEFAULT_PGVECTOR_DSN = "postgresql://postgres:postgres@127.0.0.1:6432/soothe_vectors"
 

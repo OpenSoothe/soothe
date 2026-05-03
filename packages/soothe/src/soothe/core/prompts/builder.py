@@ -21,7 +21,7 @@ class PromptBuilder:
 
     Structure (RFC-207):
         SystemMessage: environment, workspace, policies, instructions (static)
-        HumanMessage: goal, evidence, working memory, prior conversation (dynamic)
+        HumanMessage: goal, evidence, prior conversation (dynamic)
 
     IG-183: Uses prefetched fragments for cache optimization.
     """
@@ -44,7 +44,7 @@ class PromptBuilder:
 
         Constructs proper message type separation:
         - SystemMessage: environment, workspace, policies, instructions, loop config, capabilities
-        - LoopHumanMessage: goal, plan status, working memory, prior thread (no ledger blob)
+        - LoopHumanMessage: goal, plan status, prior thread (no ledger blob; IG-371: no WM block)
         - ``state.loop_messages``: ledger as native ``LoopHumanMessage`` / ``LoopAIMessage`` turns
 
         Args:
@@ -219,16 +219,17 @@ class PromptBuilder:
         state: LoopState,
         context: PlanContext,
     ) -> str:
-        """Construct plan-context human text (goal, plan status, WM, prior thread) without ledger (RFC-214).
+        """Construct plan-context human text (goal, plan status, prior thread) without ledger (RFC-214).
 
         AgentLoop ledger messages are appended separately in ``build_plan_messages`` so the
         plan model sees native human/AI turns instead of a single flattened ``<AGENTLOOP_HISTORY>`` block.
-        Execute-step evidence lives in those ledger messages (IG-368).
+        Execute-step evidence lives in those ledger messages (IG-368). Working memory is not duplicated
+        here; the ledger carries execution narrative (IG-371).
 
         Args:
             goal: User's goal description
             state: Current loop state with optional plan snapshot
-            context: Planning context (working memory excerpt, prior thread XML)
+            context: Planning context (prior thread XML, etc.)
 
         Returns:
             Formatted prompt string for the plan-context ``LoopHumanMessage`` only.
@@ -245,16 +246,6 @@ class PromptBuilder:
             parts.append(f"- Progress: {state.previous_plan.goal_progress:.0%}")
             if state.previous_plan.next_action:
                 parts.append(f"- Next action: {state.previous_plan.next_action}")
-
-        # Working memory excerpt (RFC-203)
-        if context.working_memory_excerpt:
-            parts.append("\n<WORKING_MEMORY>")
-            parts.append(
-                "Structured scratchpad for this goal — treat as authoritative for what was already inspected. "
-                "Prefer read_file on referenced paths instead of repeating large listings.\n"
-            )
-            parts.append(context.working_memory_excerpt)
-            parts.append("</WORKING_MEMORY>\n")
 
         # Prior conversation (IG-128, RFC-209)
         if context.recent_messages:
