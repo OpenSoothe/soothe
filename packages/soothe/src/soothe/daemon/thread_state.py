@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ class ThreadState:
     is_draft: bool = False
     query_running: bool = False
     query_task: asyncio.Task | None = None
+    last_activity: datetime | None = None
 
 
 class ThreadStateRegistry:
