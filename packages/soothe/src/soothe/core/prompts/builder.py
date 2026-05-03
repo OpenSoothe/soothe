@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from langchain_core.messages import BaseMessage, SystemMessage
 
@@ -11,6 +11,8 @@ if TYPE_CHECKING:
     from soothe.config import SootheConfig
     from soothe.core.agent_loop.state.schemas import LoopState
     from soothe.protocols.planner import PlanContext
+
+PlanPromptPhase = Literal["assess", "generate"]
 
 
 class PromptBuilder:
@@ -39,6 +41,8 @@ class PromptBuilder:
         goal: str,
         state: LoopState,
         context: PlanContext,
+        *,
+        plan_phase: PlanPromptPhase = "assess",
     ) -> list[BaseMessage]:
         """Build SystemMessage + plan context + ledger for Plan phase (RFC-207, RFC-214).
 
@@ -54,13 +58,15 @@ class PromptBuilder:
             goal: User's goal description
             state: Current loop state with ledger, plan metadata
             context: Planning context with workspace, capabilities
+            plan_phase: ``assess`` = instructions aligned to ``StatusAssessment``; ``generate`` =
+                full plan/step policy for ``PlanGeneration`` (IG-372).
 
         Returns:
             Messages to send to the plan LLM: system, ledger copies, then plan-context human.
         """
         from soothe.core.agent_loop.utils.messages import LoopHumanMessage
 
-        system_content = self._build_system_message(context, state)
+        system_content = self._build_system_message(context, state, plan_phase=plan_phase)
         human_content = self._build_plan_context_human_text(goal, state, context)
 
         # RFC-214: Use LoopHumanMessage for Plan turns
@@ -83,6 +89,8 @@ class PromptBuilder:
         self,
         context: PlanContext,
         state: LoopState | None = None,
+        *,
+        plan_phase: PlanPromptPhase = "assess",
     ) -> str:
         """Construct static context: policies, instructions, environment, workspace.
 
@@ -93,30 +101,30 @@ class PromptBuilder:
         then ENVIRONMENT (global), then WORKSPACE (dynamic project-specific).
 
         Section ordering (optimized for prompt caching):
-        1. EXECUTION_POLICIES (static-always fragment)
-        2. PLAN_EXECUTE_INSTRUCTIONS (static-always: LOOP/COMPLETION/ACTION/REASONING)
-        3. WORKSPACE_RULES (conditional static, when workspace present)
-        4. FOLLOW_UP_POLICY (conditional static, when prior conversation exists)
-        5. ENVIRONMENT (global, after REASONING_STANDARDS)
-        6. WORKSPACE (dynamic, last)
+        - **assess** (IG-372): PLAN_ASSESS_INSTRUCTIONS only, then conditional blocks, ENVIRONMENT,
+          WORKSPACE.
+        - **generate**: EXECUTION_POLICIES, PLAN_EXECUTE_INSTRUCTIONS (LOOP/COMPLETION/ACTION/
+          REASONING), then conditional blocks, ENVIRONMENT, WORKSPACE.
 
         Args:
             context: Planning context with workspace, capabilities
             state: Optional loop state for iteration limits and capability context
+            plan_phase: Which planner LLM call this system prompt serves (IG-372).
         """
         from soothe.core.prompts.fragments import (
             EXECUTION_POLICIES_FRAGMENT,
+            PLAN_ASSESS_INSTRUCTIONS_FRAGMENT,
             PLAN_EXECUTE_INSTRUCTIONS_FRAGMENT,
         )
 
         parts: list[str] = []
 
-        # Static policy fragments (prefetched, IG-183) - ALWAYS present
-        parts.append(EXECUTION_POLICIES_FRAGMENT + "\n")
-
-        # Plan-Execute instructions (prefetched, IG-183) - ALWAYS present
-        # Contains: PLAN_EXECUTE_LOOP, COMPLETION_SIGNALS, ACTION_PROGRESSION, REASONING_STANDARDS
-        parts.append(PLAN_EXECUTE_INSTRUCTIONS_FRAGMENT + "\n")
+        if plan_phase == "assess":
+            parts.append(PLAN_ASSESS_INSTRUCTIONS_FRAGMENT + "\n")
+        else:
+            # Plan generation: step shape and full loop contract (RFC-604 second call)
+            parts.append(EXECUTION_POLICIES_FRAGMENT + "\n")
+            parts.append(PLAN_EXECUTE_INSTRUCTIONS_FRAGMENT + "\n")
 
         # Conditional static sections (present based on context)
         # Workspace rules (static when workspace present)
@@ -237,23 +245,29 @@ class PromptBuilder:
         """
         parts: list[str] = []
 
-        # Goal
-        parts.append(f"Goal: {goal}\n")
+        cur_iter = state.iteration if state.iteration is not None else 0
+        max_iter = state.max_iterations if state.max_iterations is not None else "?"
 
-        # Plan snapshot (current strategy)
+        # Goal line: compact after iteration 0 (IG-372)
+        if cur_iter == 0:
+            parts.append(f"Goal: {goal}\n")
+        else:
+            parts.append(f"iter={cur_iter}/{max_iter} | {goal}\n")
+
+        # Plan snapshot (current strategy) — one line
         if state.previous_plan:
-            parts.append("\nCURRENT PLAN STATUS:")
-            parts.append(f"- Status: {state.previous_plan.status}")
-            parts.append(f"- Progress: {state.previous_plan.goal_progress:.0%}")
-            if state.previous_plan.next_action:
-                parts.append(f"- Next action: {state.previous_plan.next_action}")
+            prev = state.previous_plan
+            na = (prev.next_action or "").strip()
+            if len(na) > 100:
+                na = na[:97] + "..."
+            suffix = f" | next: {na}" if na else ""
+            parts.append(f"Plan status: {prev.status} {prev.goal_progress:.0%}{suffix}\n")
 
         # Prior conversation (IG-128, RFC-209)
         if context.recent_messages:
             parts.append("\n<PRIOR_CONVERSATION>\n")
             parts.append(
-                "Recent messages in this thread before the current goal. The user may refer to this content "
-                '(e.g. "translate that", "summarize the above", "shorter").\n\n'
+                'Prior thread (same session); user may reference "that" / "the above".\n\n'
             )
             for msg_xml in context.recent_messages:
                 parts.append(msg_xml)
