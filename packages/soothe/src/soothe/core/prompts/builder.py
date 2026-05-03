@@ -81,10 +81,21 @@ class PromptBuilder:
         context: PlanContext,
         state: LoopState | None = None,
     ) -> str:
-        """Construct static context: environment, workspace, policies, instructions.
+        """Construct static context: policies, instructions, environment, workspace.
 
         Maps RFC-206 SYSTEM_CONTEXT + INSTRUCTIONS layers to SystemMessage.
         Uses prefetched fragments for cache optimization (IG-183).
+
+        Reordered per IG-364: Static-always fragments first, conditional static sections,
+        then ENVIRONMENT (global), then WORKSPACE (dynamic project-specific).
+
+        Section ordering (optimized for prompt caching):
+        1. EXECUTION_POLICIES (static-always fragment)
+        2. PLAN_EXECUTE_INSTRUCTIONS (static-always: LOOP/COMPLETION/ACTION/REASONING)
+        3. WORKSPACE_RULES (conditional static, when workspace present)
+        4. FOLLOW_UP_POLICY (conditional static, when prior conversation exists)
+        5. ENVIRONMENT (global, after REASONING_STANDARDS)
+        6. WORKSPACE (dynamic, last)
 
         Args:
             context: Planning context with workspace, capabilities
@@ -97,27 +108,14 @@ class PromptBuilder:
 
         parts: list[str] = []
 
-        # Environment/workspace prefix (RFC-104)
-        if self.config is not None:
-            from soothe.core.prompts.context_xml import (
-                build_shared_environment_workspace_prefix,
-            )
+        # Static policy fragments (prefetched, IG-183) - ALWAYS present
+        parts.append(EXECUTION_POLICIES_FRAGMENT + "\n")
 
-            parts.append(
-                build_shared_environment_workspace_prefix(
-                    self.config,
-                    context.workspace,
-                    context.git_status,
-                    include_workspace_extras=False,
-                )
-            )
-        elif context.workspace:
-            from soothe.core.prompts.context_xml import build_soothe_workspace_section
+        # Plan-Execute instructions (prefetched, IG-183) - ALWAYS present
+        # Contains: PLAN_EXECUTE_LOOP, COMPLETION_SIGNALS, ACTION_PROGRESSION, REASONING_STANDARDS
+        parts.append(PLAN_EXECUTE_INSTRUCTIONS_FRAGMENT + "\n")
 
-            parts.append(
-                build_soothe_workspace_section(Path(context.workspace), context.git_status) + "\n"
-            )
-
+        # Conditional static sections (present based on context)
         # Workspace rules (static when workspace present)
         if context.workspace:
             parts.append(
@@ -132,16 +130,7 @@ class PromptBuilder:
                 "</WORKSPACE_RULES>\n"
             )
 
-        # Available capabilities (system-level resource context with metadata)
-        if context.available_capabilities:
-            capabilities_text = self._format_capabilities_with_metadata(
-                context.available_capabilities, context
-            )
-            parts.append(
-                f"<AVAILABLE_CAPABILITIES>\n{capabilities_text}\n</AVAILABLE_CAPABILITIES>\n"
-            )
-
-        # Prior conversation follow-up policy (static)
+        # Prior conversation follow-up policy (static when prior conversation exists)
         if context.recent_messages:
             parts.append(
                 "<FOLLOW_UP_POLICY>\n"
@@ -154,72 +143,22 @@ class PromptBuilder:
                 "</FOLLOW_UP_POLICY>\n"
             )
 
-        # Static policy fragments (prefetched, IG-183)
-        parts.append(EXECUTION_POLICIES_FRAGMENT + "\n")
+        # Environment section (after REASONING_STANDARDS, before WORKSPACE)
+        if self.config is not None:
+            from soothe.core.prompts.context_xml import build_soothe_environment_section
 
-        # Plan-Execute instructions (prefetched, IG-183)
-        parts.append(PLAN_EXECUTE_INSTRUCTIONS_FRAGMENT + "\n")
+            model = self.config.resolve_model("default")
+            parts.append(build_soothe_environment_section(model=model) + "\n")
+
+        # Workspace section (dynamic, placed last)
+        if context.workspace:
+            from soothe.core.prompts.context_xml import build_soothe_workspace_section
+
+            parts.append(
+                build_soothe_workspace_section(Path(context.workspace), context.git_status) + "\n"
+            )
 
         return "\n".join(parts)
-
-    def _format_capabilities_with_metadata(
-        self, capabilities: list[str], context: PlanContext
-    ) -> str:
-        """Format capabilities with metadata from loaded plugins.
-
-        IG-183: Dynamic assembly from plugin system for extensibility.
-
-        Args:
-            capabilities: List of capability names (tools/subagents)
-            context: PlanContext with optional subagent configs
-
-        Returns:
-            Formatted capabilities text with descriptions and metadata
-        """
-        from soothe.plugin.global_registry import get_plugin_registry
-
-        # Try to get plugin registry (may not be loaded during tests)
-        try:
-            registry = get_plugin_registry()
-        except RuntimeError:
-            # Plugin registry not initialized (tests or early startup)
-            # Fallback to simple format
-            return "\n".join(f"- {cap} (capability)" for cap in sorted(capabilities))
-
-        # Build metadata from registered subagents
-        lines = []
-        for cap_name in sorted(capabilities):
-            # Check if this is a registered subagent
-            subagent_factories = registry.get_all_subagents()
-            matching_subagent = None
-
-            for factory in subagent_factories:
-                # Factory is a method decorated with @subagent
-                # Extract metadata from decorator
-                if hasattr(factory, "_subagent_metadata"):
-                    metadata = factory._subagent_metadata
-                    if metadata.get("name") == cap_name:
-                        matching_subagent = metadata
-                        break
-
-            if matching_subagent:
-                # Enriched format from plugin metadata
-                lines.append(f"- {cap_name} (subagent)")
-                description = matching_subagent.get("description", "")
-                if description:
-                    # Truncate description for token efficiency (max 80 chars)
-                    desc_preview = description[:80] if len(description) > 80 else description
-                    lines.append(f"  Description: {desc_preview}")
-
-                # Add model info if available
-                model = matching_subagent.get("model", "")
-                if model:
-                    lines.append(f"  Model: {model}")
-            else:
-                # Generic format for tools or unknown capabilities
-                lines.append(f"- {cap_name} (capability)")
-
-        return "\n".join(lines)
 
     def _build_human_message(
         self,
@@ -283,22 +222,19 @@ class PromptBuilder:
         state: LoopState,
         context: PlanContext,
     ) -> str:
-        """Construct Plan prompt from ledger-only context (RFC-214).
+        """Construct Plan prompt from ledger plus PlanContext extras (RFC-214).
 
-        Replaces:
-        - CONCRETE EVIDENCE string blocks
-        - WORKING_MEMORY excerpts
-        - PRIOR_CONVERSATION XML
-
-        With unified AgentLoop history from loop_messages ledger.
+        Includes ``loop_messages`` as ``<AGENTLOOP_HISTORY>`` and still injects
+        working-memory excerpts and runner prior-turn XML from ``PlanContext`` when present
+        (RFC-203, IG-128), matching ``_build_human_message`` dynamic sections.
 
         Args:
             goal: User's goal description
-            state: Current loop state with ledger
-            context: Planning context (unused for legacy sections)
+            state: Current loop state with ledger and optional step results
+            context: Planning context (working memory, prior thread excerpts)
 
         Returns:
-            Formatted prompt string with goal, plan status, and ledger history.
+            Formatted prompt string with goal, plan status, context blocks, and ledger history.
         """
         parts: list[str] = []
 
@@ -313,7 +249,30 @@ class PromptBuilder:
             if state.previous_plan.next_action:
                 parts.append(f"- Next action: {state.previous_plan.next_action}")
 
-        # RFC-214: AgentLoop history from ledger (replaces all legacy sections)
+        if state.step_results:
+            parts.append("\nCONCRETE EVIDENCE (highest priority):")
+            parts.extend(r.get_detailed_evidence_string() for r in state.step_results)
+
+        if context.working_memory_excerpt:
+            parts.append("\n<WORKING_MEMORY>")
+            parts.append(
+                "Structured scratchpad for this goal — treat as authoritative for what was already inspected. "
+                "Prefer read_file on referenced paths instead of repeating large listings.\n"
+            )
+            parts.append(context.working_memory_excerpt)
+            parts.append("</WORKING_MEMORY>\n")
+
+        if context.recent_messages:
+            parts.append("\n<PRIOR_CONVERSATION>\n")
+            parts.append(
+                "Recent messages in this thread before the current goal. The user may refer to this content "
+                '(e.g. "translate that", "summarize the above", "shorter").\n\n'
+            )
+            for msg_xml in context.recent_messages:
+                parts.append(msg_xml)
+                parts.append("\n")
+            parts.append("</PRIOR_CONVERSATION>\n")
+
         ledger_history = self._format_ledger_as_agentloop_history(state.loop_messages)
         parts.append(ledger_history)
 

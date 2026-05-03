@@ -21,10 +21,10 @@ def test_loop_human_message_serde_roundtrip():
     )
 
     # Serialize
-    serialized = serde.dumps(msg)
+    serialized = serde.dumps_typed(msg)
 
     # Deserialize
-    deserialized = serde.loads(serialized)
+    deserialized = serde.loads_typed(serialized)
 
     # Verify type preserved (NOT dict)
     assert isinstance(deserialized, LoopHumanMessage)
@@ -52,10 +52,10 @@ def test_loop_ai_message_serde_roundtrip():
     )
 
     # Serialize
-    serialized = serde.dumps(msg)
+    serialized = serde.dumps_typed(msg)
 
     # Deserialize
-    deserialized = serde.loads(serialized)
+    deserialized = serde.loads_typed(serialized)
 
     # Verify type preserved (NOT dict)
     assert isinstance(deserialized, LoopAIMessage)
@@ -116,10 +116,10 @@ def test_goal_execution_record_with_ledger_serde_roundtrip():
     )
 
     # Serialize
-    serialized = serde.dumps(record)
+    serialized = serde.dumps_typed(record)
 
     # Deserialize
-    deserialized = serde.loads(serialized)
+    deserialized = serde.loads_typed(serialized)
 
     # Verify record structure
     assert isinstance(deserialized, GoalExecutionRecord)
@@ -160,8 +160,8 @@ def test_mixed_message_types_in_ledger():
     ]
 
     # Serialize/deserialize
-    serialized = serde.dumps(ledger)
-    deserialized = serde.loads(serialized)
+    serialized = serde.dumps_typed(ledger)
+    deserialized = serde.loads_typed(serialized)
 
     # Verify Loop types preserved
     assert isinstance(deserialized[0], LoopHumanMessage)
@@ -189,8 +189,8 @@ def test_empty_ledger_serde():
     )
 
     # Serialize/deserialize
-    serialized = serde.dumps(record)
-    deserialized = serde.loads(serialized)
+    serialized = serde.dumps_typed(record)
+    deserialized = serde.loads_typed(serialized)
 
     # Verify empty ledger preserved
     assert isinstance(deserialized.loop_messages, list)
