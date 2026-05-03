@@ -18,6 +18,7 @@ async def _handle_command_request(self, msg: dict[str, Any]) -> None:
     Args:
         msg: Command request message with command, thread_id, params
     """
+    request_id = msg.get("request_id")
     command = msg.get("command")
     thread_id = msg.get("thread_id")
     params = msg.get("params", {})
@@ -43,19 +44,28 @@ async def _handle_command_request(self, msg: dict[str, Any]) -> None:
 
         handler = handler_map.get(command)
         if not handler:
-            await self._send_command_response(command, error=f"Unknown command: {command}")
+            await self._send_command_response(
+                command or "",
+                error=f"Unknown command: {command!r}",
+                request_id=request_id,
+            )
             return
 
         result = await handler(thread_id, params)
-        await self._send_command_response(command, data=result)
+        await self._send_command_response(command, data=result, request_id=request_id)
 
     except Exception as exc:
         logger.exception(f"Command {command} failed")
-        await self._send_command_response(command, error=str(exc))
+        await self._send_command_response(command or "", error=str(exc), request_id=request_id)
 
 
 async def _send_command_response(
-    self, command: str, data: dict[str, Any] | None = None, error: str | None = None
+    self,
+    command: str,
+    data: dict[str, Any] | None = None,
+    error: str | None = None,
+    *,
+    request_id: str | None = None,
 ) -> None:
     """Send structured command response (RFC-404).
 
@@ -63,8 +73,9 @@ async def _send_command_response(
         command: Command name
         data: Response data (if successful)
         error: Error message (if failed)
+        request_id: Echo client correlation id when present (WebSocket ``request_response``).
     """
-    response = {
+    response: dict[str, Any] = {
         "type": "command_response",
         "command": command,
     }
@@ -73,6 +84,8 @@ async def _send_command_response(
         response["data"] = data
     if error is not None:
         response["error"] = error
+    if request_id is not None:
+        response["request_id"] = request_id
 
     await self._broadcast(response)
 

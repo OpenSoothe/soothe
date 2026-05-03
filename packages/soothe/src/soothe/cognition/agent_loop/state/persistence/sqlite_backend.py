@@ -504,7 +504,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         cutoff = datetime.now(UTC) - __import__("datetime").timedelta(days=max_age_days)
         cutoff_str = cutoff.isoformat()
 
-        conn.execute(
+        cursor = conn.execute(
             """
             UPDATE failed_branches
             SET pruned_at = ?
@@ -514,7 +514,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         """,
             (datetime.now(UTC).isoformat(), loop_id, cutoff_str),
         )
-        count = conn.total_changes
+        count = cursor.rowcount
         conn.commit()
         logger.info(
             "Pruned %d branches for loop=%s (max_age=%d days)", count, loop_id, max_age_days

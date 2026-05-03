@@ -171,7 +171,7 @@ async def test_complete_smart_retry_workflow(tmp_path):
         )
 
         # Mock create_chat_model at class level (Pydantic doesn't allow instance attribute setting)
-        with patch.object(SootheConfig, 'create_chat_model', return_value=mock_model):
+        with patch.object(SootheConfig, "create_chat_model", return_value=mock_model):
             analyzed_branch = await analyzer.analyze_failure(failed_branch, failure_context)
 
         # 5. Verify analysis
