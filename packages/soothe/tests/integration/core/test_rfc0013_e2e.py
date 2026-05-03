@@ -600,9 +600,12 @@ async def test_protocol_client_id_in_status(tmp_path: Path, requires_llm_api) ->
         client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client1.connect()
         await client1.send_thread_create(initial_message="Client 1")
-        status1 = await await_event_type(client1.read_event, "thread_created", timeout=3.0)
+        created1 = await await_event_type(client1.read_event, "thread_created", timeout=3.0)
+        thread_id1 = created1["thread_id"]
+        await client1.subscribe_thread(thread_id1)
+        sub1 = await await_event_type(client1.read_event, "subscription_confirmed", timeout=3.0)
 
-        client_id1 = status1.get("client_id")
+        client_id1 = sub1.get("client_id")
         assert client_id1 is not None
         assert isinstance(client_id1, str)
 
@@ -610,9 +613,12 @@ async def test_protocol_client_id_in_status(tmp_path: Path, requires_llm_api) ->
         client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
         await client2.send_thread_create(initial_message="Client 2")
-        status2 = await await_event_type(client2.read_event, "thread_created", timeout=3.0)
+        created2 = await await_event_type(client2.read_event, "thread_created", timeout=3.0)
+        thread_id2 = created2["thread_id"]
+        await client2.subscribe_thread(thread_id2)
+        sub2 = await await_event_type(client2.read_event, "subscription_confirmed", timeout=3.0)
 
-        client_id2 = status2.get("client_id")
+        client_id2 = sub2.get("client_id")
         assert client_id2 is not None
         assert isinstance(client_id2, str)
 

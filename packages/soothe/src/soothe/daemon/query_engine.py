@@ -73,7 +73,7 @@ class QueryEngine:
             )
             return
 
-        thread_id = await self.ensure_active_thread_id()
+        thread_id = await self.ensure_active_thread_id(client_id)
 
         st = d._thread_registry.get(thread_id)
         if st and st.is_draft:
@@ -436,7 +436,7 @@ class QueryEngine:
         cancellation targets the query — **not** the ``_input_loop`` task.
         """
         d = self._daemon
-        thread_id = await self.ensure_active_thread_id()
+        thread_id = await self.ensure_active_thread_id(client_id)
 
         st = d._thread_registry.get(thread_id)
         if st and st.is_draft:
@@ -772,9 +772,21 @@ class QueryEngine:
         if d._runner and d._runner.current_thread_id == thread_id:
             d._runner.set_current_thread_id(None)
 
-    async def ensure_active_thread_id(self) -> str:
-        """Ensure current query runs with a concrete thread ID."""
+    async def ensure_active_thread_id(self, client_id: str | None = None) -> str:
+        """Ensure current query runs with a concrete thread ID.
+
+        Prefer the thread last bound to ``client_id`` (``thread_create`` /
+        ``new_thread`` / ``resume``) so ``input`` does not mint a duplicate
+        persisted thread when the runner has no global current thread
+        (IG-361).
+        """
         d = self._daemon
+        if client_id:
+            mapped = (d._thread_registry.get_client_thread(client_id) or "").strip()
+            if mapped:
+                d._runner.set_current_thread_id(mapped)
+                return mapped
+
         current = str(d._runner.current_thread_id or "").strip()
         if current:
             return current

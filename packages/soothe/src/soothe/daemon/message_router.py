@@ -30,6 +30,39 @@ def _client_label(client_id: Any) -> str:
     return f"obj:{id(client_id) & 0xFFFF_FFFF:x}"
 
 
+def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
+    """Normalize optional runner fields shared by ``input`` and ``loop_input`` (IG-362).
+
+    Args:
+        msg: Raw client message dict.
+
+    Returns:
+        Keys to merge into the internal ``input`` queue payload: ``autonomous``,
+        ``max_iterations``, ``preferred_subagent``, ``interactive``, ``model``,
+        ``model_params``.
+    """
+    max_iterations = msg.get("max_iterations")
+    parsed_max: int | None = (
+        max_iterations if isinstance(max_iterations, int) and max_iterations > 0 else None
+    )
+    preferred_subagent = msg.get("preferred_subagent")
+    preferred_norm = (
+        preferred_subagent.strip() or None if isinstance(preferred_subagent, str) else None
+    )
+    raw_model = msg.get("model")
+    model = raw_model.strip() if isinstance(raw_model, str) and raw_model.strip() else None
+    raw_params = msg.get("model_params")
+    model_params = raw_params if isinstance(raw_params, dict) else None
+    return {
+        "autonomous": bool(msg.get("autonomous", False)),
+        "max_iterations": parsed_max,
+        "preferred_subagent": preferred_norm,
+        "interactive": bool(msg.get("interactive", False)),
+        "model": model,
+        "model_params": model_params,
+    }
+
+
 def _coerce_loop_input_text(content: Any) -> str | None:
     """Normalize ``loop_input`` content to a non-empty user text string (IG-361).
 
@@ -92,24 +125,7 @@ class MessageRouter:
             if text or normalized_attachments:
                 # IG-054: Capacity check moved to query_engine.py to eliminate race
                 # between checking len(_active_threads) and actually creating the task
-                max_iterations = msg.get("max_iterations")
-                parsed_max: int | None = (
-                    max_iterations
-                    if isinstance(max_iterations, int) and max_iterations > 0
-                    else None
-                )
-                preferred_subagent = msg.get("preferred_subagent")
-                preferred_subagent = (
-                    preferred_subagent.strip() or None
-                    if isinstance(preferred_subagent, str)
-                    else None
-                )
-                raw_model = msg.get("model")
-                model = (
-                    raw_model.strip() if isinstance(raw_model, str) and raw_model.strip() else None
-                )
-                raw_params = msg.get("model_params")
-                model_params = raw_params if isinstance(raw_params, dict) else None
+                opts = _queue_options_from_daemon_message(msg)
                 logger.debug(
                     "[MsgRouter] Putting input in queue: text=%s, attachments=%d, client=%s",
                     preview_first(text, 30),
@@ -119,13 +135,8 @@ class MessageRouter:
                 payload: dict[str, Any] = {
                     "type": "input",
                     "text": text,
-                    "autonomous": bool(msg.get("autonomous", False)),
-                    "max_iterations": parsed_max,
-                    "preferred_subagent": preferred_subagent,
                     "client_id": client_id,
-                    "interactive": bool(msg.get("interactive", False)),
-                    "model": model,
-                    "model_params": model_params,
+                    **opts,
                 }
                 if normalized_attachments:
                     payload["attachments"] = normalized_attachments
@@ -272,6 +283,11 @@ class MessageRouter:
 
         if msg_type == "config_get":
             await self._handle_config_get(client_id, msg)
+            return
+
+        # RFC-404: structured RPC — same sequential queue as legacy ``command`` (CLI / SDK).
+        if msg_type == "command_request":
+            await d._current_input_queue.put(dict(msg))
             return
 
         logger.debug("Unknown client message type: %s", msg_type)
@@ -423,6 +439,7 @@ class MessageRouter:
                     "new_thread": True,
                     "workspace": str(thread_workspace),
                     "input_history": global_history_list,
+                    "client_id": client_id,
                 },
             )
         logger.info("Created new thread %s with workspace %s", draft_thread_id, thread_workspace)
@@ -464,12 +481,16 @@ class MessageRouter:
             initial_message=initial_message,
             metadata=metadata,
         )
+        tid = thread_info.thread_id
+        d._thread_registry.ensure(tid, is_draft=False)
+        d._thread_registry.set_workspace(tid, Path(d._daemon_workspace))
+        d._thread_registry.set_client_thread(client_id, tid)
 
         await d._send_client_message(
             client_id,
             {
                 "type": "thread_created",
-                "thread_id": thread_info.thread_id,
+                "thread_id": tid,
                 "status": thread_info.status,
                 "request_id": msg.get("request_id"),
             },
@@ -1020,7 +1041,8 @@ class MessageRouter:
         if d._transport_manager is not None:
             for transport in d._transport_manager.get_transport_info():
                 if transport.get("type") == "websocket":
-                    port_live = bool(transport.get("running"))
+                    # Transports report client_count only; port is live when daemon is up.
+                    port_live = bool(running)
                     break
 
         # Count active threads
@@ -1064,7 +1086,7 @@ class MessageRouter:
         logger.info(
             "Daemon shutdown requested via WebSocket RPC from client=%s", _client_label(client_id)
         )
-        await d.shutdown()
+        await d.stop()
 
     async def _handle_config_get(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle config_get RPC request (IG-174 Phase 0).
@@ -1965,18 +1987,13 @@ class MessageRouter:
             preview_first(prompt_text, 50),
         )
 
-        # Queue input for QueryEngine execution
+        # Queue input for QueryEngine execution (same option normalization as ``input``)
         await d._current_input_queue.put(
             {
                 "type": "input",
                 "text": prompt_text,
-                "autonomous": bool(msg.get("autonomous", False)),
-                "max_iterations": msg.get("max_iterations"),
-                "preferred_subagent": msg.get("preferred_subagent"),
                 "client_id": client_id,
-                "interactive": bool(msg.get("interactive", False)),
-                "model": msg.get("model"),
-                "model_params": msg.get("model_params"),
+                **_queue_options_from_daemon_message(msg),
             }
         )
 

@@ -128,7 +128,7 @@ class TestFileInfoTool:
         test_file = tmp_path / "test.txt"
         test_file.write_text("content")
 
-        result = info_tool.invoke({"file_path": str(test_file)})
+        result = info_tool.invoke({"path": str(test_file)})
 
         # Should return file metadata
         assert "Path:" in result
@@ -137,7 +137,7 @@ class TestFileInfoTool:
 
     def test_get_nonexistent_file_info(self, info_tool) -> None:
         """Test getting info for non-existent file."""
-        result = info_tool.invoke({"file_path": "/nonexistent/file.txt"})
+        result = info_tool.invoke({"path": "/nonexistent/file.txt"})
 
         # Should handle gracefully
         assert "Error" in result or "not found" in result.lower()
@@ -213,7 +213,7 @@ class TestInsertLinesTool:
         test_file.write_text("Line 1\nLine 2\nLine 3")
 
         result = insert_tool.invoke(
-            {"file_path": str(test_file), "line_number": 2, "content": "Inserted Line"}
+            {"file_path": str(test_file), "line": 2, "content": "Inserted Line"}
         )
 
         content = test_file.read_text()
@@ -227,9 +227,7 @@ class TestInsertLinesTool:
         test_file = tmp_path / "test.txt"
         test_file.write_text("Line 1\nLine 2")
 
-        _ = insert_tool.invoke(
-            {"file_path": str(test_file), "line_number": 3, "content": "Final Line"}
-        )
+        _ = insert_tool.invoke({"file_path": str(test_file), "line": 3, "content": "Final Line"})
 
         content = test_file.read_text()
         assert "Final Line" in content
