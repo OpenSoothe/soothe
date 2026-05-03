@@ -1,4 +1,4 @@
-"""Schemas for AgentLoop execution (RFC-201, IG-153)."""
+"""Schemas for AgentLoop execution (RFC-201, IG-153, RFC-214)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from soothe.cognition.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.protocols.planner import planner_outcome_text_preview
 
@@ -438,7 +439,7 @@ class StepResult(BaseModel):
 
 
 class LoopState(BaseModel):
-    """State for agentic loop.
+    """State for agentic loop (RFC-201, RFC-214).
 
     Attributes:
         goal: Goal description
@@ -455,7 +456,7 @@ class LoopState(BaseModel):
         started_at: Loop start timestamp
         total_duration_ms: Total loop duration
         working_memory: Loop working-memory instance (RFC-203) when enabled.
-        plan_conversation_excerpts: Prior Human/Assistant lines for Plan (IG-128).
+        loop_messages: RFC-214: Unified message ledger with adjacent Human-AI pairs for all orchestration turns.
         last_execute_assistant_text: Resolved visible answer for the latest Execute wave — see
             :mod:`soothe.cognition.agent_loop.core.act_wave_finalize` (IG-357).
         last_wave_answer_from_delegate_final: True when that text came from ``task`` tool returns
@@ -477,7 +478,12 @@ class LoopState(BaseModel):
     step_results: list[StepResult] = []
     evidence_summary: str = ""
     working_memory: Any | None = None
-    plan_conversation_excerpts: list[str] = Field(default_factory=list)
+
+    # RFC-214: Unified message ledger for orchestration turns
+    loop_messages: list[LoopHumanMessage | LoopAIMessage] = Field(
+        default_factory=list,
+        description="Ordered adjacent Human-AI message pairs for all orchestration turns",
+    )
 
     started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     total_duration_ms: int = 0

@@ -37,16 +37,15 @@ if TYPE_CHECKING:
 
     from soothe.cognition.agent_loop.state.schemas import LoopState, PlanResult
 
-    GoalCompletionMode = Literal["llm_only", "heuristic_only", "hybrid"]
     FinalResponseMode = Literal["adaptive", "always_synthesize", "always_last_execute"]
 
 logger = logging.getLogger(__name__)
 
 # Execution complexity thresholds (IG-298)
-_COMPLEX_WAVE_THRESHOLD = 2  # ≥2 waves indicates multi-stage execution
-_COMPLEX_STEPS_THRESHOLD = 3  # ≥3 steps indicates non-trivial task
-_DAG_DEPENDENCY_THRESHOLD = 2  # ≥2 dependencies indicates complex orchestration
-_LOW_SUCCESS_RATE_THRESHOLD = 0.7  # <70% success rate needs explanation
+_COMPLEX_WAVE_THRESHOLD = 3  # multiple waves indicates multi-stage execution
+_COMPLEX_STEPS_THRESHOLD = 3  # multiple steps indicates non-trivial task
+_DAG_DEPENDENCY_THRESHOLD = 3  # dag dependencies indicates complex orchestration
+_LOW_SUCCESS_RATE_THRESHOLD = 0.6  # lower success rate needs explanation
 
 # Structural fallbacks threshold (IG-300).
 _STRUCTURED_PAYLOAD_MIN_LINES = 6

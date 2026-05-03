@@ -1,34 +1,29 @@
-"""LLM prompts for intent classification (IG-226, IG-250, IG-325).
+"""LLM prompts for intent classification (IG-226, IG-250, IG-325, IG-363, IG-364).
 
 Structured prompts for LLM-driven intent classification with conversation context.
 Pure LLM-driven - no keyword heuristics or language detection shortcuts.
+
+Prompt layout (IG-364): static instructions and schema first; variable runtime fields
+last inside flat XML structure (no nested wrappers), aligned with AgentLoop plan-style.
+
+XML structure:
+- <intent_instructions>: Static content (classification rules, precedence, JSON schema)
+- <intent_inputs>: Dynamic runtime fields as flat XML elements
+  - <current_time>, <thread_id>, <active_goal>: Runtime context (flat, not nested)
+  - <recent_conversation>: Conversation excerpts in <user>/<assistant> blocks
+  - <current_query>: User's query text
 """
 
 from __future__ import annotations
 
 # Intent classification prompt (primary classification)
 INTENT_CLASSIFICATION_PROMPT = """\
-You are {assistant_name}. Classify this query's intent.
-
-Current time: {current_time}
-Thread ID: {thread_id}
-Active goal: {active_goal_context}
-
-Recent conversation:
-{conversation_context}
-
-Query: {query}
+<intent_instructions>
+Classify this query's intent.
 
 CRITICAL OUTPUT RULES:
 - Return ONLY valid JSON matching the schema below
 - "intent_type" MUST be exactly one of: "chitchat", "thread_continuation", "new_goal", "quiz"
-- For "chitchat": set chitchat_response (short friendly reply in user's detected language)
-- For "quiz": set quiz_response (brief factual answer from your knowledge)
-- For "thread_continuation": set reuse_current_goal=true if active_goal exists
-- For "new_goal": set goal_description (normalized task description, 5-15 words) AND friendly_message (action-oriented reinterpretation for user, 1-2 sentences)
-- "task_complexity" is secondary: chitchat | quiz | medium | complex
-- "reasoning" is REQUIRED: brief explanation (1-2 sentences)
-- Do not output placeholders, markdown, comments, or extra keys
 
 Intent classification criteria:
 - chitchat: Greetings, thanks, fillers, conversational pleasantries needing no action
@@ -59,7 +54,7 @@ Intent classification criteria:
   → task_complexity=medium (default) or complex (architecture/migrations)
   → ALSO use new_goal when the user clearly starts a NEW standalone task, repudiates or
     resets prior context, asks to ignore earlier discussion, or switches topic to
-    unrelated work—even if conversation_context is non-empty. Judge intent from the
+    unrelated work—even if recent_conversation is non-empty. Judge intent from the
     query wording, not from the presence of prior turns alone.
 
 Intent precedence (apply in order):
@@ -81,16 +76,28 @@ Required JSON shape:
   "quiz_response": string|null,
   "reasoning": string
 }}
+</intent_instructions>
+
+<current_time>{current_time}</current_time>
+
+<thread_id>{thread_id}</thread_id>
+
+<active_goal>{active_goal_context}</active_goal>
+
+<recent_conversation>
+{conversation_context}
+</recent_conversation>
+
+<current_query>
+{query}
+</current_query>
 """
 
 # Retry prompt (simplified, no conversation context)
 INTENT_CLASSIFICATION_RETRY_PROMPT = """\
+<intent_classification>
+<intent_instructions>
 You are {assistant_name}. Re-classify this query's intent.
-
-Current time: {current_time}
-Active goal: {active_goal_context}
-
-Query: {query}
 
 CRITICAL OUTPUT RULES:
 - Return ONLY valid JSON matching the schema
@@ -120,6 +127,16 @@ Required JSON shape:
   "quiz_response": string|null,
   "reasoning": string
 }}
+</intent_instructions>
+
+<intent_inputs>
+<current_time>{current_time}</current_time>
+<active_goal>{active_goal_context}</active_goal>
+<current_query>
+{query}
+</current_query>
+</intent_inputs>
+</intent_classification>
 """
 
 # Routing classification prompt

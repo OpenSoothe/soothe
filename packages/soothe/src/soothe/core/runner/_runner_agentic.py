@@ -369,12 +369,11 @@ class AgenticMixin:
         # Ensure thread_id is always a string (caller / daemon sets runner thread id; do not mutate here — IG-110)
         tid = str(thread_id or self._current_thread_id or "")
 
-        # One load for unified classification (tail) and Layer-2 Plan (full excerpt list, IG-128, IG-133).
+        # RFC-214: Prior conversation is now in loop_messages ledger, not separate excerpts
+        # One load for unified classification (tail) - IG-128, IG-133
         await self._ensure_checkpointer_initialized()
-        # Use configurable limit for prior conversation (default 10, IG-133)
-        prior_limit = self._config.agentic.prior_conversation_limit if self._config else 10
+        # Load more messages for routing (IG-133)
         recent_for_thread = await self._load_recent_messages(tid, limit=16)  # Load more for routing
-        plan_excerpts = self._format_thread_messages_for_plan(recent_for_thread, limit=prior_limit)
 
         # IG-226: Intent classification (priority over routing)
         intent_classification = None
@@ -518,7 +517,6 @@ class AgenticMixin:
             workspace=workspace,
             git_status=git_status,
             max_iterations=max_iterations,
-            plan_conversation_excerpts=plan_excerpts,
             intent=intent_classification,  # IG-226: Pass intent classification to AgentLoop
             unified_classification=loop_unified_classification,
         ):

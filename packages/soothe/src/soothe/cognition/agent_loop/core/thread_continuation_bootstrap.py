@@ -52,17 +52,17 @@ def thread_continuation_plan_bootstrap_allowed(
             return False
         if goal_record.iteration != 0:
             return False
-        if goal_record.reason_history or goal_record.act_history:
+        if goal_record.loop_messages:
             return False
 
     return True
 
 
 def build_thread_continuation_bootstrap_plan(_goal: str) -> PlanResult:
-    """Build a synthetic first ``PlanResult`` for thread continuation (IG-325).
+    """Build a synthetic first ``PlanResult`` for thread continuation (IG-325, RFC-214).
 
     The loop goal is the user's current request on ``LoopState.goal``; prior turns
-    are supplied via ``plan_conversation_excerpts`` for Execute/Reason prompts.
+    are supplied via ``loop_messages`` ledger for Execute prompts (RFC-214).
 
     Args:
         _goal: Loop goal text (reserved for callers; body uses ``LoopState``).
@@ -75,12 +75,12 @@ def build_thread_continuation_bootstrap_plan(_goal: str) -> PlanResult:
         steps=[
             StepAction(
                 description=(
-                    "Using the prior Human/Assistant excerpts supplied for this plan "
-                    "(plan_conversation_excerpts) and the loop goal as the user's current "
+                    "Using the prior Human/Assistant turns in the AgentLoop ledger "
+                    "(loop_messages) and the loop goal as the user's current "
                     "request, respond and complete the follow-up. Use tools only when needed."
                 ),
                 expected_output=(
-                    "Output that satisfies the user's request in light of the excerpts "
+                    "Output that satisfies the user's request in light of the ledger history "
                     "and the stated goal."
                 ),
             )

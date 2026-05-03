@@ -6,50 +6,33 @@ from soothe.cognition.agent_loop.core.thread_continuation_bootstrap import (
     build_thread_continuation_bootstrap_plan,
     thread_continuation_plan_bootstrap_allowed,
 )
-from soothe.cognition.agent_loop.state.checkpoint import (
-    ActWaveRecord,
-    GoalExecutionRecord,
-    ReasonStepRecord,
-)
+from soothe.cognition.agent_loop.state.checkpoint import GoalExecutionRecord
 from soothe.cognition.agent_loop.state.schemas import LoopState, StepResult
-
-
-def _reason_record() -> ReasonStepRecord:
-    now = datetime.now(UTC)
-    return ReasonStepRecord(
-        iteration=0,
-        timestamp=now,
-        goal_text="g",
-        status="continue",
-        goal_progress=0.0,
-        decision={},
-    )
-
-
-def _act_record() -> ActWaveRecord:
-    return ActWaveRecord(
-        iteration=0,
-        timestamp=datetime.now(UTC),
-        execution_mode="sequential",
-        duration_ms=0,
-    )
+from soothe.cognition.agent_loop.utils.messages import LoopHumanMessage
 
 
 def _goal_record(
     *,
     iteration: int = 0,
-    reason_n: int = 0,
-    act_n: int = 0,
+    ledger_entries: int = 0,
 ) -> GoalExecutionRecord:
-    reasons = [_reason_record() for _ in range(reason_n)]
-    acts = [_act_record() for _ in range(act_n)]
+    """Build a goal record; non-empty ``loop_messages`` blocks continuation bootstrap on recovery."""
+    msgs: list[LoopHumanMessage] = []
+    for i in range(ledger_entries):
+        msgs.append(
+            LoopHumanMessage(
+                content=f"ledger turn {i}",
+                thread_id="tid",
+                iteration=0,
+                phase="execute_step",
+            )
+        )
     return GoalExecutionRecord(
         goal_id="g1",
         goal_text="t",
         thread_id="tid",
         iteration=iteration,
-        reason_history=reasons,
-        act_history=acts,
+        loop_messages=msgs,
         started_at=datetime.now(UTC),
     )
 
@@ -107,7 +90,7 @@ def test_bootstrap_disallowed_recovery_with_reason_history() -> None:
         thread_continuation_mode=True,
         state=state,
         recovery_valid_resume=True,
-        goal_record=_goal_record(reason_n=1),
+        goal_record=_goal_record(ledger_entries=1),
     )
 
 
@@ -117,7 +100,7 @@ def test_bootstrap_disallowed_recovery_with_act_history() -> None:
         thread_continuation_mode=True,
         state=state,
         recovery_valid_resume=True,
-        goal_record=_goal_record(act_n=1),
+        goal_record=_goal_record(ledger_entries=1),
     )
 
 
@@ -147,7 +130,7 @@ def test_bootstrap_allowed_recovery_iteration_zero_clean_record() -> None:
         thread_continuation_mode=True,
         state=state,
         recovery_valid_resume=True,
-        goal_record=_goal_record(iteration=0, reason_n=0, act_n=0),
+        goal_record=_goal_record(iteration=0, ledger_entries=0),
     )
 
 

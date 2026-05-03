@@ -349,12 +349,12 @@ class AgentLoopStateManager:
                         max_iterations=10,  # Default
                         status=goal_row[5],
                         loop_messages=loop_messages,  # RFC-214: ledger
-                        goal_completion=goal_row[8] or "",
-                        evidence_summary=goal_row[9] or "",
-                        duration_ms=goal_row[10],
-                        tokens_used=goal_row[11],
-                        started_at=datetime.fromisoformat(goal_row[12]),
-                        completed_at=datetime.fromisoformat(goal_row[13]) if goal_row[13] else None,
+                        goal_completion=goal_row[7] or "",
+                        evidence_summary=goal_row[8] or "",
+                        duration_ms=goal_row[9],
+                        tokens_used=goal_row[10],
+                        started_at=datetime.fromisoformat(goal_row[11]),
+                        completed_at=datetime.fromisoformat(goal_row[12]) if goal_row[12] else None,
                     )
                     goal_history.append(goal_record)
 
@@ -437,7 +437,7 @@ class AgentLoopStateManager:
         cursor = conn.execute(
             """
             SELECT goal_id, loop_id, goal_text, thread_id, iteration, status,
-                   reason_history, act_history, goal_completion, evidence_summary,
+                   loop_messages, goal_completion, evidence_summary,
                    duration_ms, tokens_used, started_at, completed_at
             FROM goal_records WHERE loop_id = ?
             ORDER BY started_at
@@ -520,7 +520,7 @@ class AgentLoopStateManager:
         # Save goal_history to goal_records table
         for goal_record in checkpoint.goal_history:
             logger.debug(
-                "save goal: id=%s status=%s iter=%d reason=%d act=%d done=%s",
+                "save goal: id=%s status=%s iter=%d ledger_msgs=%d done=%s",
                 goal_record.goal_id,
                 goal_record.status,
                 goal_record.iteration,
@@ -652,11 +652,10 @@ class AgentLoopStateManager:
         target_goal.completed_at = datetime.now(UTC)
 
         logger.debug(
-            "finalize_goal: modified id=%s iter=%d reason=%d act=%d",
+            "finalize_goal: modified id=%s iter=%d ledger_msgs=%d",
             target_goal.goal_id,
             target_goal.iteration,
-            len(target_goal.reason_history),
-            len(target_goal.act_history),
+            len(target_goal.loop_messages),
         )
 
         # Update loop metrics
