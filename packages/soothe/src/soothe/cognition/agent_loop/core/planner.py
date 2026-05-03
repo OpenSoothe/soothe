@@ -349,7 +349,7 @@ class LLMPlanner:
     Flow:
     - ``StatusAssessment`` runs each iteration.
     - If status is not ``done``, ``PlanGeneration`` runs (two LLM calls).
-    - If status is ``done`` after assessment, hybrid completion logic runs without plan generation.
+    - If status is ``done`` after assessment, goal-completion policy runs without plan generation.
 
     Heuristic reflection uses no LLM (see ``reflect``).
 
@@ -1008,24 +1008,28 @@ class LLMPlanner:
                         assessment.status = "replan"
                         assessment.goal_progress = 0.0
 
-                # Early completion: apply hybrid decision logic (IG-298)
+                # Early completion: apply goal-completion policy (IG-298)
                 if assessment.status == "done":
-                    logger.debug("Plan early-complete: applying hybrid logic")
-
-                    # Import hybrid decision policy
                     from soothe.cognition.agent_loop.policies.goal_completion_policy import (
                         determine_goal_completion_needs,
                     )
 
-                    # Hybrid decision: LLM primary, heuristic fallback
+                    gc_mode = (
+                        self._config.agentic.goal_completion_mode
+                        if self._config is not None
+                        else "llm_only"
+                    )
+                    logger.debug("Plan early-complete: goal_completion_mode=%s", gc_mode)
+
                     require_completion = determine_goal_completion_needs(
                         llm_decision=assessment.require_goal_completion,
                         state=state,
-                        mode="hybrid",  # Default mode (configurable in future)
+                        mode=gc_mode,
                     )
 
                     logger.debug(
-                        "Plan hybrid: LLM=%s final=%s",
+                        "Plan goal_completion: mode=%s LLM=%s final=%s",
+                        gc_mode,
                         assessment.require_goal_completion,
                         require_completion,
                     )
@@ -1039,7 +1043,7 @@ class LLMPlanner:
                         plan_action="keep",
                         decision=None,
                         next_action="Goal achieved successfully",
-                        require_goal_completion=require_completion,  # Hybrid decision
+                        require_goal_completion=require_completion,
                         full_output=state.last_execute_assistant_text,
                     )
                 else:
