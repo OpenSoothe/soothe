@@ -847,7 +847,7 @@ class LLMPlanner:
         Generates ~200-250 tokens per call.
 
         Args:
-            messages: Prompt messages from build_plan_messages()
+            messages: Assess-phase messages from ``build_plan_messages(..., plan_phase=\"assess\")``
             goal: Goal description for fallback decision
             iteration: Current iteration for varied fallback
             thread_id: Thread id for Langfuse session correlation.
@@ -905,7 +905,7 @@ class LLMPlanner:
         Generates ~500-800 tokens per call.
 
         Args:
-            messages: Original prompt messages
+            messages: Generate-phase messages from ``build_plan_messages(..., plan_phase=\"generate\")``
             assessment: StatusAssessment result from previous call
             goal: Goal description for fallback decision
             iteration: Current iteration for varied fallback
@@ -1005,31 +1005,39 @@ class LLMPlanner:
     ) -> Any:
         """Plan execution using two-call architecture (RFC-604).
 
-        StatusAssessment call: lightweight status check (~200-250 tokens)
-        PlanGeneration call: conditional plan generation (~500-800 tokens)
+        StatusAssessment call: lightweight status check (compact assess-only system prompt, IG-372)
+        PlanGeneration call: conditional plan generation (full policies + plan instructions)
 
         Returns combined PlanResult with evidence-based metrics applied.
         """
         from soothe.core.agent_loop.state.schemas import PlanResult, StatusAssessment
 
-        messages = self._prompt_builder.build_plan_messages(goal, state, context)
-
-        msg_types = [type(m).__name__ for m in messages]
-        human_preview = ""
-        for msg in messages:
-            if isinstance(msg, HumanMessage):
-                human_preview = create_output_summary(msg.content, first_chars=200, last_chars=100)
-                break
-        logger.debug("Plan msgs=%d types=%s human=%s", len(messages), msg_types, human_preview)
-
         max_retries = 3
         result = None
 
         for attempt in range(max_retries):
+            assess_messages = self._prompt_builder.build_plan_messages(
+                goal, state, context, plan_phase="assess"
+            )
+            messages_for_retry = assess_messages
+
+            msg_types = [type(m).__name__ for m in assess_messages]
+            plan_human = next(
+                (m for m in reversed(assess_messages) if isinstance(m, HumanMessage)), None
+            )
+            human_preview = (
+                create_output_summary(str(plan_human.content), first_chars=200, last_chars=100)
+                if plan_human is not None
+                else ""
+            )
+            logger.debug(
+                "Plan msgs=%d types=%s human=%s", len(assess_messages), msg_types, human_preview
+            )
+
             try:
                 t_assess = time.perf_counter()
                 assessment = await self._assess_status(
-                    messages, goal, state.iteration, thread_id=state.thread_id
+                    assess_messages, goal, state.iteration, thread_id=state.thread_id
                 )
                 assess_ms = (time.perf_counter() - t_assess) * 1000
                 plan_gen_ms = 0.0
@@ -1085,9 +1093,13 @@ class LLMPlanner:
                         full_output=state.last_execute_assistant_text,
                     )
                 else:
+                    generate_messages = self._prompt_builder.build_plan_messages(
+                        goal, state, context, plan_phase="generate"
+                    )
+                    messages_for_retry = generate_messages
                     t_plan = time.perf_counter()
                     plan_result = await self._generate_plan(
-                        messages,
+                        generate_messages,
                         assessment,
                         goal,
                         state.iteration,
@@ -1112,8 +1124,13 @@ class LLMPlanner:
                     decision_info,
                 )
                 prompt_chars = sum(
-                    _estimate_content_chars(getattr(m, "content", None)) for m in messages
+                    _estimate_content_chars(getattr(m, "content", None)) for m in assess_messages
                 )
+                if assessment.status != "done":
+                    prompt_chars += sum(
+                        _estimate_content_chars(getattr(m, "content", None))
+                        for m in generate_messages
+                    )
                 logger.info(
                     "[LLMPlanner] timings iter=%d assess_ms=%.1f plan_gen_ms=%.1f llm_calls=%d "
                     "prompt_chars=%d",
@@ -1158,9 +1175,11 @@ class LLMPlanner:
                                 thread_id=state.thread_id, phase="plan-json-retry"
                             )
                             if lf_retry is not None:
-                                response = await self._model.ainvoke(messages, config=lf_retry)
+                                response = await self._model.ainvoke(
+                                    messages_for_retry, config=lf_retry
+                                )
                             else:
-                                response = await self._model.ainvoke(messages)
+                                response = await self._model.ainvoke(messages_for_retry)
                             raw_content = _extract_text_content(response.content)
 
                             logger.debug(
