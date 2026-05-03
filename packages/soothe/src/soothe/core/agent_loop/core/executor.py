@@ -273,7 +273,6 @@ class Executor:
 
             estimated_tokens = count_tokens(output)
             state.total_tokens_used += estimated_tokens
-            logger.debug("tokens: tiktoken=%d", estimated_tokens)
 
         # Use configurable context limit (IG-151)
         if self._config is not None:
@@ -575,17 +574,10 @@ class Executor:
 
         # Compact input summary log
         logger.debug(
-            "execute-seq: steps=%d thread=%s workspace=%s",
+            "[Execute-Seq] steps=%d thread=%s workspace=%s",
             len(steps),
             state.thread_id[:12] if state.thread_id else "none",
-            state.workspace[:30] if state.workspace else "none",
-        )
-
-        logger.info(
-            "[Execute-Seq] steps=%d mode=%s max_parallel=%d (RFC-214 ledger)",
-            len(steps),
-            state.current_decision.execution_mode if state.current_decision else "sequential",
-            self._max_parallel_steps,
+            state.workspace if state.workspace else "none",
         )
 
         start = time.perf_counter()
@@ -636,18 +628,11 @@ class Executor:
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
-            logger.debug(
-                "wave-seq: dur=%dms evts=%d tools=%d subagents=%d cap=%s",
-                duration_ms,
-                event_count,
-                tool_call_count,
-                budget.subagent_task_completions,
-                budget.hit_subagent_cap,
-            )
             logger.info(
-                "[Wave-Seq] steps=%d duration=%dms tools=%d subagents=%d cap=%s (RFC-214)",
+                "[Wave-Seq] steps=%d dur=%dms evts=%d tools=%d subagents=%d cap=%s (RFC-214)",
                 len(steps),
                 duration_ms,
+                event_count,
                 tool_call_count,
                 budget.subagent_task_completions,
                 budget.hit_subagent_cap,
