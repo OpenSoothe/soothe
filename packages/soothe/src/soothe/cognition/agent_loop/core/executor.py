@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -25,7 +24,7 @@ from soothe.cognition.agent_loop.state.schemas import (
     StepAction,
     StepResult,
 )
-from soothe.cognition.agent_loop.utils.messages import LoopHumanMessage
+from soothe.cognition.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.utils.text_preview import create_output_summary, log_preview, preview, preview_first
 
 if TYPE_CHECKING:
@@ -80,7 +79,7 @@ class Executor:
             core_agent: Layer 1 CoreAgent for step execution
             max_parallel_steps: Max steps per wave; ``0`` means unlimited (RFC-201 / concurrency).
             config: Optional Soothe config for Act wave caps (IG-130).
-            goal_context_manager: Optional GoalContextManager for goal briefing injection (RFC-609).
+            goal_context_manager: Optional GoalContextManager for goal briefing injection (RFC-217).
         """
         self.core_agent = core_agent
         self._max_parallel_steps = max_parallel_steps
@@ -562,7 +561,7 @@ class Executor:
         steps: list,
         state: LoopState,
     ) -> AsyncGenerator[StreamEvent | StepResult, None]:
-        """Execute a wave of steps in one Layer 1 turn; credit every step in the wave.
+        """Execute a wave of steps with ledger recording (RFC-214).
 
         Args:
             steps: Non-empty slice of ready steps
@@ -571,29 +570,27 @@ class Executor:
         Yields:
             StreamEvent during execution, then one StepResult per step in ``steps``.
         """
-        combined_description = self._build_sequential_input(steps)
+        # RFC-214: Build N Human messages (one per step) instead of combined description
+        step_messages = self._build_batch_human_messages(steps, state)
 
         # Compact input summary log
         logger.debug(
-            "execute-seq: steps=%d thread=%s workspace=%s desc_len=%d",
+            "execute-seq: steps=%d thread=%s workspace=%s",
             len(steps),
             state.thread_id[:12] if state.thread_id else "none",
             state.workspace[:30] if state.workspace else "none",
-            len(combined_description),
         )
 
         logger.info(
-            "[Execute-Seq] steps=%d mode=%s max_parallel=%d",
+            "[Execute-Seq] steps=%d mode=%s max_parallel=%d (RFC-214 ledger)",
             len(steps),
             state.current_decision.execution_mode if state.current_decision else "sequential",
             self._max_parallel_steps,
         )
 
         start = time.perf_counter()
-        output = ""
-        event_count = 0  # Track events for debugging
+        event_count = 0
         budget = _ActStreamBudget(max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave())
-        wave_id = str(uuid.uuid4())[:8]  # IG-XXX: Unique wave ID for tracking
 
         try:
             configurable: dict[str, Any] = {"thread_id": state.thread_id}
@@ -602,7 +599,7 @@ class Executor:
             # Pass current_decision for middleware to inject agent loop output contract
             if state.current_decision:
                 configurable["current_decision"] = state.current_decision
-            # RFC-609: Inject goal briefing on thread switch
+            # RFC-217: Inject goal briefing on thread switch
             if self._goal_context_manager:
                 goal_briefing = await self._goal_context_manager.get_execute_briefing()
                 if goal_briefing:
@@ -610,19 +607,10 @@ class Executor:
                     logger.info("Execute briefing injected (%d chars)", len(goal_briefing))
             configurable.update(await self._claude_runner_config_extras(state.thread_id))
 
-            logger.debug("human msg: %s", log_preview(combined_description, chars=150))
-            human_msg = LoopHumanMessage(
-                content=combined_description,
-                thread_id=state.thread_id,
-                iteration=state.iteration,
-                goal_summary=state.goal[:200] if state.goal else None,
-                workspace=state.workspace,
-                phase="execute_wave",
-                wave_id=wave_id,
-            )
+            # RFC-214: Execute batch with N Human messages
             stream = self.core_agent.astream(
                 self._execute_graph_input(
-                    [human_msg],
+                    step_messages,  # N messages instead of combined description
                     unified_classification=getattr(state, "unified_classification", None),
                     workspace=state.workspace,
                     git_status=state.git_status,
@@ -633,9 +621,9 @@ class Executor:
             )
 
             tool_call_count = 0
-            messages: list[BaseMessage] = []  # IG-151: Collect messages for token extraction
-            delegate_final = ""
-            async for final_output, event, tc_count, msg_list, df in self._stream_and_collect(
+            messages: list[BaseMessage] = []
+            output = ""  # Still collect for legacy compatibility
+            async for final_output, event, tc_count, msg_list, _ in self._stream_and_collect(
                 stream, budget=budget
             ):
                 if event is not None:
@@ -644,46 +632,31 @@ class Executor:
                 elif final_output is not None:
                     output = final_output
                     tool_call_count = tc_count
-                    messages = msg_list  # IG-151: Save messages for metrics
-                    delegate_final = df
+                    messages = msg_list
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
-            # Compact wave completion summary log
             logger.debug(
-                "wave-seq: dur=%dms out=%d evts=%d tools=%d subagents=%d cap=%s",
+                "wave-seq: dur=%dms evts=%d tools=%d subagents=%d cap=%s",
                 duration_ms,
-                len(output),
                 event_count,
                 tool_call_count,
                 budget.subagent_task_completions,
                 budget.hit_subagent_cap,
             )
             logger.info(
-                "[Wave-Seq] steps=%d duration=%dms output=%d tools=%d subagents=%d cap=%s",
+                "[Wave-Seq] steps=%d duration=%dms tools=%d subagents=%d cap=%s (RFC-214)",
                 len(steps),
                 duration_ms,
-                len(output),
                 tool_call_count,
                 budget.subagent_task_completions,
                 budget.hit_subagent_cap,
             )
 
-            # Collect step results for metrics aggregation
-            step_results = list(
-                self._step_results_for_chunk(
-                    steps,
-                    combined_description=combined_description,  # IG-148: CoreAgent input evidence
-                    success=True,
-                    output=output,
-                    error=None,
-                    error_type=None,
-                    duration_ms=duration_ms,
-                    tool_call_count=tool_call_count,
-                    thread_id=state.thread_id,
-                    subagent_task_completions=budget.subagent_task_completions,
-                    hit_subagent_cap=budget.hit_subagent_cap,
-                )
+            # RFC-214: Extract N outcomes and record N adjacent pairs in ledger
+            step_outcomes = self._extract_sequential_outcomes(messages, steps, state)
+            step_results = self._record_batch_ledger_pairs(
+                state, step_messages, step_outcomes, steps
             )
 
             # Aggregate metrics into LoopState
@@ -692,7 +665,6 @@ class Executor:
                 state,
                 messages,
                 parallel_multi_step=False,
-                delegate_final_text=delegate_final or None,
             )
 
             # Yield step results
@@ -704,26 +676,42 @@ class Executor:
             logger.exception("Sequential execution failed")
 
             error_msg = self._extract_error_message(e, "Sequential execution failed")
-            et = self._classify_error_severity(e)
+            self._classify_error_severity(e)
 
-            # Collect failed step results for metrics
-            step_results = list(
-                self._step_results_for_chunk(
-                    steps,
-                    success=False,
-                    output=None,
-                    error=error_msg,
-                    error_type=et,
-                    duration_ms=duration_ms,
-                    tool_call_count=0,
+            # RFC-214: Record error outcomes in ledger
+            step_outcomes = {}
+            for step in steps:
+                step_outcomes[step.id] = LoopAIMessage(
+                    content=f"Step failed: {error_msg}",
                     thread_id=state.thread_id,
-                    subagent_task_completions=0,
-                    hit_subagent_cap=False,
+                    iteration=state.iteration,
+                    phase="execute_step",
+                    step_id=step.id,
                 )
-            )
+
+            # Record error pairs in ledger
+            step_messages_err = self._build_batch_human_messages(steps, state)
+            from soothe.cognition.agent_loop.state.schemas import StepResult
+
+            step_results = []
+            for i, step in enumerate(steps):
+                # Append Human-AI error pair
+                state.loop_messages.append(step_messages_err[i])
+                state.loop_messages.append(step_outcomes[step.id])
+
+                # Build error StepResult
+                result = StepResult(
+                    step_id=step.id,
+                    success=False,
+                    outcome={"type": "error", "error": error_msg},
+                    duration_ms=duration_ms,
+                    thread_id=state.thread_id,
+                    error=error_msg,
+                )
+                step_results.append(result)
 
             # Aggregate metrics (includes error count)
-            self._aggregate_wave_metrics(step_results, "", [], state)  # No messages on error
+            self._aggregate_wave_metrics(step_results, "", [], state)
             self._record_execute_wave_for_finalize(state, [], parallel_multi_step=False)
 
             # Yield step results
@@ -815,7 +803,7 @@ class Executor:
             }
             if workspace:
                 configurable["workspace"] = workspace
-            # RFC-609: Inject goal briefing on thread switch (for single-step execution)
+            # RFC-217: Inject goal briefing on thread switch (for single-step execution)
             if self._goal_context_manager:
                 goal_briefing = await self._goal_context_manager.get_execute_briefing()
                 if goal_briefing:
@@ -1129,6 +1117,158 @@ class Executor:
 
         # Final yield with combined output and tool call count
         yield join_text_fragments(chunks), None, tool_call_count, messages, delegate_final_text
+
+    def _build_batch_human_messages(
+        self,
+        steps: list,
+        state: LoopState,
+    ) -> list[LoopHumanMessage]:
+        """Build N LoopHumanMessage inputs for batch execution (RFC-214).
+
+        Each step gets its own LoopHumanMessage with step_id for ledger pairing.
+
+        Args:
+            steps: Steps to execute in this wave
+            state: Current loop state with iteration/thread context
+
+        Returns:
+            List of LoopHumanMessage instances (one per step)
+        """
+        messages = []
+        for step in steps:
+            msg = LoopHumanMessage(
+                content=f"Execute: {step.description}",
+                thread_id=state.thread_id,
+                iteration=state.iteration,
+                goal_summary=state.goal[:200] if state.goal else None,
+                workspace=state.workspace,
+                phase="execute_step",  # RFC-214: per-step phase
+                step_id=step.id,  # RFC-214: step_id for pairing
+            )
+            messages.append(msg)
+
+        return messages
+
+    def _extract_sequential_outcomes(
+        self,
+        messages: list[BaseMessage],
+        steps: list,
+        state: LoopState,
+    ) -> dict[str, LoopAIMessage]:
+        """Extract outcomes from sequential batch (RFC-214).
+
+        Sequential execution produces messages in order.
+        Rule: For N steps, assign last N AIMessages to steps in order.
+
+        Args:
+            messages: All messages from batch execution stream
+            steps: Steps being executed (for step_id matching)
+            state: Current loop state
+
+        Returns:
+            step_id → LoopAIMessage mapping (one outcome per step)
+        """
+        from langchain_core.messages import AIMessage
+
+        ai_messages = [msg for msg in messages if isinstance(msg, AIMessage)]
+
+        step_outcomes = {}
+        if len(ai_messages) >= len(steps):
+            # Assign last N AIMessages to steps (sequential order)
+            for i, step in enumerate(steps):
+                final_ai_msg = ai_messages[-(len(steps) - i)]
+
+                step_outcomes[step.id] = LoopAIMessage(
+                    content=final_ai_msg.content,
+                    thread_id=state.thread_id,
+                    iteration=state.iteration,
+                    phase="execute_step",
+                    step_id=step.id,
+                    response_metadata=getattr(final_ai_msg, "response_metadata", {}),
+                )
+        else:
+            # Fallback: insufficient messages → error outcomes
+            for i, step in enumerate(steps):
+                if i < len(ai_messages):
+                    final_ai_msg = ai_messages[i]
+                    step_outcomes[step.id] = LoopAIMessage(
+                        content=final_ai_msg.content,
+                        thread_id=state.thread_id,
+                        iteration=state.iteration,
+                        phase="execute_step",
+                        step_id=step.id,
+                    )
+                else:
+                    # No AIMessage for this step → error outcome
+                    step_outcomes[step.id] = LoopAIMessage(
+                        content="Step execution failed: no AI response",
+                        thread_id=state.thread_id,
+                        iteration=state.iteration,
+                        phase="execute_step",
+                        step_id=step.id,
+                    )
+
+        return step_outcomes
+
+    def _record_batch_ledger_pairs(
+        self,
+        state: LoopState,
+        step_messages: list[LoopHumanMessage],
+        step_outcomes: dict[str, LoopAIMessage],
+        steps: list,
+    ) -> list:
+        """Record N adjacent Human-AI pairs in ledger (RFC-214).
+
+        Each step gets paired Human-AI messages in ledger:
+        - LoopHumanMessage (input)
+        - LoopAIMessage (outcome)
+        - Both share same step_id
+        - Adjacent in ledger
+
+        Args:
+            state: LoopState with ledger (loop_messages field)
+            step_messages: Human inputs (one per step)
+            step_outcomes: AI outcomes (one per step)
+            steps: Step metadata
+
+        Returns:
+            List of StepResult for metrics/execution tracking
+        """
+        from soothe.cognition.agent_loop.state.schemas import StepResult
+
+        # Validate pairing
+        assert len(step_messages) == len(steps)
+        assert set(step_outcomes.keys()) == {s.id for s in steps}
+
+        # Append N adjacent pairs to ledger
+        for i, step in enumerate(steps):
+            human_msg = step_messages[i]
+            ai_msg = step_outcomes[step.id]
+
+            # Append Human message
+            state.loop_messages.append(human_msg)
+
+            # Append AI message (adjacent)
+            state.loop_messages.append(ai_msg)
+
+        # Build StepResult for metrics (RFC-211 outcome metadata)
+        step_results = []
+        for step in steps:
+            ai_msg = step_outcomes[step.id]
+
+            result = StepResult(
+                step_id=step.id,
+                success=True,  # Or based on AI message content analysis
+                outcome={
+                    "type": "generic",
+                    "output_summary": ai_msg.content[:300] if ai_msg.content else "",
+                },
+                duration_ms=0,  # Will be aggregated separately
+                thread_id=state.thread_id,
+            )
+            step_results.append(result)
+
+        return step_results
 
     def _build_sequential_input(self, steps: list) -> str:
         """Build combined input for sequential execution.

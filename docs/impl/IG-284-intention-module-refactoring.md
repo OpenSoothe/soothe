@@ -454,7 +454,7 @@ cached_response = response_cache.get(cache_key)
 ## References
 
 - **RFC-201**: AgentLoop Plan-Execute Loop
-- **RFC-609**: Goal Context Management  
+- **RFC-217**: Goal Context Management  
 - **RFC-200**: Autonomous Goal Management
 - **IG-226**: Unified Query Intent Classification (original implementation)
 - **IG-226-final-summary.md**: Phase 1-4 completion summary

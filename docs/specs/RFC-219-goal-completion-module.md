@@ -1,6 +1,6 @@
-# RFC-615: Goal Completion Module Architecture
+# RFC-219: Goal Completion Module Architecture
 
-**RFC**: 615
+**RFC**: 219
 **Title**: Goal Completion Module Architecture
 **Status**: Implemented
 **Kind**: Architecture Design

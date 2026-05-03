@@ -4,7 +4,7 @@ Ensures thread/loop isolation:
 - data/threads/ (CoreAgent Layer 1)
 - data/loops/ (AgentLoop Layer 2)
 
-RFC-409: AgentLoop Persistence Backend Architecture
+RFC-215: AgentLoop Persistence Backend Architecture
 """
 
 from __future__ import annotations

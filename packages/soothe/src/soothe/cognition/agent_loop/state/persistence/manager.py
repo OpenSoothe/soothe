@@ -1,6 +1,6 @@
 """AgentLoop checkpoint persistence manager.
 
-RFC-409: AgentLoop Persistence Backend Architecture
+RFC-215: AgentLoop Persistence Backend Architecture
 IG-055: Backend-agnostic delegation pattern supporting PostgreSQL and SQLite
 """
 
@@ -299,7 +299,7 @@ class AgentLoopCheckpointPersistenceManager:
         status: str = "running",
         started_at: datetime | None = None,
     ) -> None:
-        """Save goal execution record (RFC-409).
+        """Save goal execution record (RFC-215).
 
         Args:
             goal_id: Goal identifier.
@@ -334,7 +334,7 @@ class AgentLoopCheckpointPersistenceManager:
         tokens_used: int = 0,
         completed_at: datetime | None = None,
     ) -> None:
-        """Update goal record with execution results (RFC-409).
+        """Update goal record with execution results (RFC-215).
 
         Args:
             goal_id: Goal identifier.
@@ -378,7 +378,7 @@ class AgentLoopCheckpointPersistenceManager:
         cross_validation_notes: str = "",
         step_reports: list[Any] | None = None,
     ) -> None:
-        """Write goal report markdown file at loop level (RFC-409).
+        """Write goal report markdown file at loop level (RFC-215).
 
         Path: data/loops/{loop_id}/goals/{goal_id}/report.md
 
@@ -439,7 +439,7 @@ class AgentLoopCheckpointPersistenceManager:
         duration_ms: int,
         depends_on: list[str] | None = None,
     ) -> None:
-        """Write step report markdown file at loop level (RFC-409).
+        """Write step report markdown file at loop level (RFC-215).
 
         Path: data/loops/{loop_id}/goals/{goal_id}/steps/{step_id}/report.md
 

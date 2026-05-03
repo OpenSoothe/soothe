@@ -64,8 +64,33 @@ This index reflects the canonical RFC set and defines which files are active for
 
 - **RFC-214**: [AgentLoop Loop Message Surface and Plan Context](RFC-214*.md)
   - Status: Draft
-  - Extends: RFC-201, RFC-206, RFC-409
+  - Extends: RFC-201, RFC-206, RFC-215
   - Created: 2026-05-03
+
+- **RFC-215**: [AgentLoop Persistence Backend Architecture](RFC-215*.md)
+  - Status: Draft
+  - Created: 2026-04-22
+  - Renamed from: RFC-409 (2026-05-03)
+
+- **RFC-216**: [AgentLoop Multi-Thread Lifecycle](RFC-216*.md)
+  - Status: Draft
+  - Created: 2026-04-16
+  - Renamed from: RFC-608 (2026-05-03)
+
+- **RFC-217**: [Goal Context Management](RFC-217*.md)
+  - Status: Draft
+  - Created: 2026-04-17
+  - Renamed from: RFC-609 (2026-05-03)
+
+- **RFC-218**: [AgentLoop Checkpoint Tree Architecture](RFC-218*.md)
+  - Status: Draft
+  - Created: 2026-04-22
+  - Renamed from: RFC-611 (2026-05-03)
+
+- **RFC-219**: [Goal Completion Module](RFC-219*.md)
+  - Status: Implemented
+  - Created: 2026-04-28
+  - Renamed from: RFC-615 (2026-05-03)
 
 ### Agent Behavior
 
@@ -173,21 +198,9 @@ This index reflects the canonical RFC set and defines which files are active for
   - Scope: DisplayLine dataclass in CLI stream pipeline
   - Created: 2026-04-14
 
-- **RFC-608**: [AgentLoop Multi-Thread Infinite Lifecycle](RFC-608*.md)
-  - Status: Draft
-  - Created: 2026-04-16
-
-- **RFC-609**: [Goal Context Management for AgentLoop](RFC-609*.md)
-  - Status: Draft
-  - Created: 2026-04-17
-
 - **RFC-610**: [SDK Module Structure Refactoring](RFC-610*.md)
   - Status: Draft
   - Created: 2026-04-17
-
-- **RFC-611**: [Goal context injection](RFC-611*.md)
-  - Status: Draft
-  - Created: 2026-04-22
 
 - **RFC-612**: [Persistence Architecture Refactor](RFC-612*.md)
   - Status: Draft
@@ -199,15 +212,17 @@ This index reflects the canonical RFC set and defines which files are active for
 ## Recently Added
 
 - RFC-214: AgentLoop Loop Message Surface and Plan Context (2026-05-03)
+- RFC-215: AgentLoop Persistence Backend Architecture (renamed from RFC-409, 2026-05-03)
+- RFC-216: AgentLoop Multi-Thread Lifecycle (renamed from RFC-608, 2026-05-03)
+- RFC-217: Goal Context Management (renamed from RFC-609, 2026-05-03)
+- RFC-218: AgentLoop Checkpoint Tree Architecture (renamed from RFC-611, 2026-05-03)
+- RFC-219: Goal Completion Module (renamed from RFC-615, 2026-05-03)
 - RFC-603: Reasoning Quality & Progressive Actions (2026-04-09)
 - RFC-604: Plan Phase Robustness (Three-Layer Defense) (2026-04-11)
 - RFC-605: Explore Subagent and Parallel Spawning (2026-04-13)
 - RFC-606: DeepAgents CLI TUI Migration Specification (2026-04-13)
 - RFC-607: Progressive Display Refinements Post-Migration: Progressive Display Refinements Post-Migration (2026-04-14)
-- RFC-608: AgentLoop Multi-Thread Infinite Lifecycle (2026-04-16)
-- RFC-609: Goal Context Management for AgentLoop (2026-04-17)
 - RFC-610: SDK Module Structure Refactoring (2026-04-17)
-- RFC-611: Goal context injection (2026-04-22)
 - RFC-612: Persistence Architecture Refactor (2026-04-22)
 - RFC-614: Unified Daemon → Client Streaming Messaging Framework (2026-04-27)
 

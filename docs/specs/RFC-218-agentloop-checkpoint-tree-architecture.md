@@ -2,10 +2,10 @@
 
 > Design draft for branch-based checkpoint synchronization and smart retry with learning.
 >
-> **RFC Number**: RFC-611
+> **RFC Number**: RFC-218
 > **Status**: Draft
 > **Created**: 2026-04-22
-> **Dependencies**: RFC-608 (Multi-Thread Lifecycle), IG-238 (Checkpoint Unified Integration)
+> **Dependencies**: RFC-216 (Multi-Thread Lifecycle), IG-238 (Checkpoint Unified Integration)
 > **Author**: Claude Sonnet 4.6
 
 ---
@@ -172,7 +172,7 @@ class CoreAgentCheckpointTreeRef(BaseModel):
 class AgentLoopCheckpoint(BaseModel):
     """Complete AgentLoop state with checkpoint tree reference (v3.1)."""
     
-    # Identity (RFC-608)
+    # Identity (RFC-216)
     loop_id: str  # UUID
     thread_ids: list[str] = Field(default_factory=list)
     current_thread_id: str
@@ -185,20 +185,20 @@ class AgentLoopCheckpoint(BaseModel):
     coreagent_checkpoint_refs: dict[str, CoreAgentCheckpointRef] = Field(default_factory=dict)
     """Mapping: thread_id → CoreAgent checkpoint metadata (IG-238 linkage)."""
     
-    # Status (RFC-608)
+    # Status (RFC-216)
     status: Literal["running", "ready_for_next_goal", "finalized", "cancelled"]
     
-    # Goal execution history (RFC-608)
+    # Goal execution history (RFC-216)
     goal_history: list[GoalExecutionRecord] = Field(default_factory=list)
     current_goal_index: int = -1
     
-    # Working memory (RFC-608)
+    # Working memory (RFC-216)
     working_memory_state: WorkingMemoryState = Field(default_factory=WorkingMemoryState)
     
-    # Thread health (RFC-608)
+    # Thread health (RFC-216)
     thread_health_metrics: ThreadHealthMetrics
     
-    # RFC-609: Goal context injection
+    # RFC-217: Goal context injection
     thread_switch_pending: bool = False
     
     # Loop metrics
@@ -544,11 +544,11 @@ async def prune_old_branches(loop_id: str, policy: BranchPruningPolicy):
 
 ## Related Specifications
 
-- RFC-608: AgentLoop Multi-Thread Lifecycle
-- RFC-409: AgentLoop Persistence Backend
+- RFC-216: AgentLoop Multi-Thread Lifecycle
+- RFC-215: AgentLoop Persistence Backend
 - RFC-411: Event Stream Replay & History Reconstruction
 - IG-238: AgentLoop Checkpoint Unified Integration
 
 ---
 
-**End of RFC-611 Draft**
+**End of RFC-218 Draft**

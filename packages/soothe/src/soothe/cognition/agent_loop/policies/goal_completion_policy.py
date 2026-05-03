@@ -1,4 +1,4 @@
-"""Goal completion decision policy (RFC-615, IG-298, IG-299).
+"""Goal completion decision policy (RFC-219, IG-298, IG-299).
 
 Unified decision logic combining hybrid assessment with completion action selection.
 Consolidated from synthesis_policy.py and strategy selection (IG-299).

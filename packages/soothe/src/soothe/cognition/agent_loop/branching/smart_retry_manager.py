@@ -3,7 +3,7 @@
 Manages smart retry workflow: rewind to root checkpoint, inject learning
 insights, and retry execution with adjustments applied.
 
-RFC-611: AgentLoop Checkpoint Tree Architecture
+RFC-218: AgentLoop Checkpoint Tree Architecture
 """
 
 from __future__ import annotations

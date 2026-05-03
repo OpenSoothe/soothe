@@ -1,4 +1,4 @@
-"""Thread Switching Policy Manager (RFC-608).
+"""Thread Switching Policy Manager (RFC-216).
 
 Extensible policy for automatic thread switching triggers.
 """
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class ThreadSwitchPolicyManager:
-    """Manages thread switching policy evaluation (RFC-608)."""
+    """Manages thread switching policy evaluation (RFC-216)."""
 
     def __init__(self, policy: ThreadSwitchPolicy | None = None):
         """Initialize with policy configuration.

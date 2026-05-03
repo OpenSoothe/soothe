@@ -6,6 +6,11 @@ This document tracks the change history of all RFCs in this project.
 
 | Date | RFC | Status | Description |
 |------|-----|--------|-------------|
+| 2026-05-03 | RFC-409 → RFC-215 | Renumbered | AgentLoop Persistence Backend moved to 2xx series (architecture alignment) |
+| 2026-05-03 | RFC-608 → RFC-216 | Renumbered | AgentLoop Multi-Thread Lifecycle moved to 2xx series |
+| 2026-05-03 | RFC-609 → RFC-217 | Renumbered | Goal Context Management moved to 2xx series |
+| 2026-05-03 | RFC-611 → RFC-218 | Renumbered | Checkpoint Tree Architecture moved to 2xx series |
+| 2026-05-03 | RFC-615 → RFC-219 | Renumbered | Goal Completion Module moved to 2xx series |
 | 2026-05-03 | RFC-214 | Draft | AgentLoop Loop Message Surface and Plan Context — unified ledger of LoopHumanMessage/LoopAIMessage per step as sole Plan context; checkpoint persistence for loop_messages; gap analysis vs combined-wave Execute, StepResult evidence, derive_plan_conversation, LangGraph transcript |
 | 2026-04-13 | RFC-605 | Draft | Explore Subagent and Parallel Spawning — targeted filesystem search with wave-based strategy, LLM-driven search planning, match validation; parallel subagent spawning via StepAction.subagents list field; breaking schema migration (no backward compatibility) |
 | 2026-04-10 | RFC-211 | Draft | Layer 2 Tool Result Optimization — minimal data contract with outcome metadata, tool_call_id uniqueness, file system cache for large results, final report generation shifted to Layer 1 |

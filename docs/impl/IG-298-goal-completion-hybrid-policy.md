@@ -2,7 +2,7 @@
 
 **Status**: Completed
 **Date**: 2026-04-28
-**RFC**: RFC-615
+**RFC**: RFC-219
 **Issue**: Planner overrides LLM decision with word-count heuristics; duplicate decision logic across modules
 
 ---
@@ -140,7 +140,7 @@ _LOW_SUCCESS_RATE_THRESHOLD = 0.7  # <70% success → needs explanation
 
 ## References
 
-- RFC-615: Goal Completion Module Architecture
+- RFC-219: Goal Completion Module Architecture
 - IG-295: Planner recommendation honored
 - IG-296: Synthesis policy module refactoring
 - IG-297: Goal completion module implementation

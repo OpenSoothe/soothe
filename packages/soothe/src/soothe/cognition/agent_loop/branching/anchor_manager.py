@@ -3,7 +3,7 @@
 Captures checkpoint anchors at iteration boundaries (start/end) to enable
 precise rewinding and checkpoint tree management.
 
-RFC-611: AgentLoop Checkpoint Tree Architecture
+RFC-218: AgentLoop Checkpoint Tree Architecture
 IG-055: Backend-agnostic persistence with config-driven backend selection
 """
 

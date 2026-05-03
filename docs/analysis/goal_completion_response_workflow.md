@@ -1,6 +1,6 @@
 # Goal Completion Response Generation Workflow
 
-> **RFC Reference**: RFC-204 (Consensus Loop), RFC-603 (Synthesis Phase), RFC-608 (Goal Lifecycle)
+> **RFC Reference**: RFC-204 (Consensus Loop), RFC-603 (Synthesis Phase), RFC-216 (Goal Lifecycle)
 > **Implementation Guides**: IG-199 (Adaptive Final Response), IG-268 (Response Length Intelligence), IG-273 (Structural Richness)
 > **Last Updated**: 2026-04-28
 
@@ -604,7 +604,7 @@ Runs:
 
 - **RFC-204**: Consensus Loop for Layer 3 Validation
 - **RFC-603**: Synthesis Phase for Comprehensive Reports
-- **RFC-608**: Goal Lifecycle Management
+- **RFC-216**: Goal Lifecycle Management
 
 ### Implementation Guides
 

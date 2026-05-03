@@ -168,18 +168,18 @@ class AgentLoop:
                 # Thread continuation may benefit from fewer iterations (follow-up actions)
                 # but keep max_iterations unchanged for now - let Plan phase determine completion
 
-        # RFC-609: Create GoalContextManager for goal-level context injection
+        # RFC-217: Create GoalContextManager for goal-level context injection
         from soothe.config.models import GoalContextConfig
 
         goal_context_config = getattr(self.config.agentic, "goal_context", GoalContextConfig())
         goal_context_manager = GoalContextManager(state_manager, goal_context_config)
 
-        # Try to recover from checkpoint (RFC-608: loop-scoped)
+        # Try to recover from checkpoint (RFC-216: loop-scoped)
         checkpoint = await state_manager.load()
         # IG-325: valid resume of a running checkpoint (structural plan-bootstrap guard)
         recovery_valid_resume = False
         if checkpoint and checkpoint.status == "running":
-            # Get current goal iteration (RFC-608: per-goal tracking)
+            # Get current goal iteration (RFC-216: per-goal tracking)
             current_goal_index = checkpoint.current_goal_index
             if current_goal_index >= 0 and current_goal_index < len(checkpoint.goal_history):
                 goal_record = checkpoint.goal_history[current_goal_index]
@@ -205,15 +205,15 @@ class AgentLoop:
 
             # Derive prior conversation from step outputs (RFC-205)
             prior_outputs = state_manager.derive_plan_conversation(limit=10)
-            # RFC-609: Add goal-level context to plan excerpts
+            # RFC-217: Add goal-level context to plan excerpts
             plan_goal_excerpts = await goal_context_manager.get_plan_context()
             runner_prior = list(plan_conversation_excerpts or [])
             plan_excerpts = plan_goal_excerpts + runner_prior + list(prior_outputs)
         else:
-            # Initialize new checkpoint (RFC-608: pass thread_id, not goal)
+            # Initialize new checkpoint (RFC-216: pass thread_id, not goal)
             checkpoint = await state_manager.initialize(thread_id, max_iterations)
             iteration = 0  # New goal starts at iteration 0
-            # RFC-609: Inject previous goal context for Plan phase
+            # RFC-217: Inject previous goal context for Plan phase
             plan_goal_excerpts = await goal_context_manager.get_plan_context()
             # Prior Human/Assistant turns from LangGraph checkpointer (IG-128, IG-198)
             runner_prior = list(plan_conversation_excerpts or [])
@@ -284,7 +284,7 @@ class AgentLoop:
                 },
             )
 
-            # Capture iteration start checkpoint anchor (RFC-611)
+            # Capture iteration start checkpoint anchor (RFC-218)
             try:
                 await anchor_manager.capture_iteration_start_anchor(
                     iteration=state.iteration,
@@ -344,7 +344,7 @@ class AgentLoop:
                     working_memory=state.working_memory,
                 )
 
-                # RFC-615 / IG-299: Goal completion — consolidated decision + execution
+                # RFC-219 / IG-299: Goal completion — consolidated decision + execution
                 # Simplified from 8 files to 3 files (policy, synthesis, fallback)
 
                 # 1. Create synthesis generator
@@ -483,7 +483,7 @@ class AgentLoop:
                 )
 
             step_results = []
-            # RFC-609: Create Executor with GoalContextManager for this run
+            # RFC-217: Create Executor with GoalContextManager for this run
             run_executor = Executor(
                 self.core_agent,
                 max_parallel_steps=self.config.execution.concurrency.max_parallel_steps,
@@ -508,7 +508,7 @@ class AgentLoop:
                     "Fatal error detected, aborting loop: %s",
                     fatal_errors[0].error,
                 )
-                # Mark goal as failed (RFC-608: update goal_record status)
+                # Mark goal as failed (RFC-216: update goal_record status)
                 goal_record.status = "failed"
                 goal_record.completed_at = datetime.now(UTC)
                 checkpoint.status = "ready_for_next_goal"
@@ -584,7 +584,7 @@ class AgentLoop:
                 working_memory=state.working_memory,
             )
 
-            # Capture iteration end checkpoint anchor (RFC-611)
+            # Capture iteration end checkpoint anchor (RFC-218)
             # Build execution summary from plan_result and step_results
             execution_summary = {
                 "status": getattr(plan_result, "status", "success"),
@@ -632,7 +632,7 @@ class AgentLoop:
             state.previous_plan.goal_progress * 100 if state.previous_plan else 0,
         )
 
-        # Mark goal as failed due to max iterations (RFC-608)
+        # Mark goal as failed due to max iterations (RFC-216)
         goal_record.status = "failed"
         goal_record.completed_at = datetime.now(UTC)
         checkpoint.status = "ready_for_next_goal"

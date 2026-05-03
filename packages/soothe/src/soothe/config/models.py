@@ -549,7 +549,7 @@ class EarlyTerminationConfig(BaseModel):
 
 
 class GoalContextConfig(BaseModel):
-    """Goal context injection configuration (RFC-609).
+    """Goal context injection configuration (RFC-217).
 
     Args:
         plan_limit: Number of previous goals to inject into Plan phase.
@@ -597,7 +597,7 @@ class AgenticLoopConfig(BaseModel):
         planning: Planning configuration.
         early_termination: Early termination configuration.
         working_memory: Working memory / spill configuration (RFC-203).
-        goal_context: Goal context injection for Plan/Execute phases (RFC-609).
+        goal_context: Goal context injection for Plan/Execute phases (RFC-217).
         report_output: Goal report display and synthesis limits.
         output_streaming: Enable streaming mode for all AI outputs (true=stream, false=batch).
         reject_done_at_iteration_zero: Guard against premature completion at iteration 0.
@@ -683,7 +683,7 @@ class AgenticLoopConfig(BaseModel):
 
     goal_context: GoalContextConfig = Field(
         default_factory=GoalContextConfig,
-        description="Goal context injection for Plan/Execute phases (RFC-609)",
+        description="Goal context injection for Plan/Execute phases (RFC-217)",
     )
 
     report_output: ReportOutputConfig = Field(

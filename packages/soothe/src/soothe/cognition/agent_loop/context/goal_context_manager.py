@@ -1,4 +1,4 @@
-"""Goal-level context management for AgentLoop (RFC-609)."""
+"""Goal-level context management for AgentLoop (RFC-217)."""
 
 from __future__ import annotations
 

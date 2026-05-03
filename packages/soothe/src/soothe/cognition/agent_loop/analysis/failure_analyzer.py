@@ -3,7 +3,7 @@
 Analyzes execution failures using LLM to extract root causes,
 avoid patterns, and suggested adjustments for smart retry.
 
-RFC-611: AgentLoop Checkpoint Tree Architecture
+RFC-218: AgentLoop Checkpoint Tree Architecture
 """
 
 from __future__ import annotations

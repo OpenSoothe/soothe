@@ -3,7 +3,7 @@
 Creates failed branches on iteration failure detection, preserving
 execution path for learning analysis and smart retry.
 
-RFC-611: AgentLoop Checkpoint Tree Architecture
+RFC-218: AgentLoop Checkpoint Tree Architecture
 IG-055: Backend-agnostic persistence with config-driven backend selection
 """
 

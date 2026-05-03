@@ -45,7 +45,7 @@ class ToolResultCache:
         """
         self.thread_id = thread_id
         self.size_threshold = size_threshold
-        # Use new isolated directory structure (RFC-409)
+        # Use new isolated directory structure (RFC-215)
         self.cache_dir = (
             PersistenceDirectoryManager.get_thread_directory(thread_id) / "tool_results"
         )
