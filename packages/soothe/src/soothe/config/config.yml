@@ -137,6 +137,17 @@ observability:
   thread_logging_retention_days: 30  # Days to retain thread logs before cleanup
   thread_logging_max_size_mb: 100  # Maximum total size for thread logs directory
 
+  # Langfuse LLM observability (optional: pip install 'soothe[langfuse]')
+  langfuse:
+    enabled: false
+    public_key: null  # or "${LANGFUSE_PUBLIC_KEY}"
+    secret_key: null  # or "${LANGFUSE_SECRET_KEY}"
+    host: null  # default cloud host; set for self-hosted (e.g. https://langfuse.example.com)
+    environment: null  # e.g. production, staging
+    release: null  # deployment release label
+    sample_rate: null  # optional 0.0–1.0 client sampling
+    trace_name: null  # optional RunnableConfig run_name for root graph runs
+
 # Daemon Multi-Transport Configuration (RFC-0013) - WebSocket (required) + HTTP REST (optional)
 
 daemon:

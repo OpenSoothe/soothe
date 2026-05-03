@@ -28,6 +28,7 @@ from soothe.core.events import (
 )
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.protocols.policy import ActionRequest, PolicyContext
+from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 
 from ._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom, _validate_goal
 
@@ -494,6 +495,12 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
             except Exception:
                 logger.debug("Claude session snapshot load failed", exc_info=True)
             config["configurable"]["soothe_durability"] = self._durability
+
+        config = merge_langfuse_runnable_config(
+            config,
+            self._config,
+            session_id=lg_tid,
+        )
 
         hitl_iterations = 0
         while True:

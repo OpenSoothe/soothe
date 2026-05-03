@@ -1,5 +1,9 @@
 # Docker Compose for Soothe development environment
 # RFC-612: Multi-database PostgreSQL architecture
+#
+# Optional local Langfuse (LLM observability UI + API, IG-367):
+#   docker compose --profile langfuse up -d
+# UI/API: http://localhost:3300  — set soothe observability.langfuse.host to match.
 services:
   pgvector:
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/pgvector:pg17
@@ -15,5 +19,44 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./config/init-db.sql:/docker-entrypoint-initdb.d/10-init-databases.sql:ro
 
+  # Dedicated Postgres for Langfuse (do not share with pgvector / RFC-612 init script).
+  langfuse-postgres:
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/postgres:17.5-alpine3.21
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d langfuse"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 20s
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+
+  langfuse:
+    image: langfuse/langfuse:2
+    restart: unless-stopped
+    depends_on:
+      langfuse-postgres:
+        condition: service_healthy
+    ports:
+      - "3300:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@langfuse-postgres:5432/langfuse
+      NEXTAUTH_URL: http://localhost:3300
+      # Dev-only defaults; override via shell env or a .env file next to this compose file.
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-langfuse_local_nextauth_secret_min32chars}
+      SALT: ${LANGFUSE_SALT:-langfuse_local_salt_min32chars_please}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      TELEMETRY_ENABLED: "false"
+      LANGFUSE_INIT_ORG_NAME: Soothe Local
+      LANGFUSE_INIT_PROJECT_NAME: soothe-dev
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-pk-lf-soothe-local}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-sk-lf-soothe-local}
+
 volumes:
   postgres_data:
+  langfuse_postgres_data:

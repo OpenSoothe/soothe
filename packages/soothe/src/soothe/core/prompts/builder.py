@@ -44,7 +44,7 @@ class PromptBuilder:
 
         Constructs proper message type separation:
         - SystemMessage: environment, workspace, policies, instructions, loop config, capabilities
-        - LoopHumanMessage: goal, plan status, evidence, working memory, prior conversation (no ledger blob)
+        - LoopHumanMessage: goal, plan status, working memory, prior thread (no ledger blob)
         - ``state.loop_messages``: ledger as native ``LoopHumanMessage`` / ``LoopAIMessage`` turns
 
         Args:
@@ -168,22 +168,17 @@ class PromptBuilder:
         state: LoopState,
         context: PlanContext,
     ) -> str:
-        """Construct dynamic task: goal, evidence, working memory, prior conversation.
+        """Construct dynamic task: goal, working memory, prior conversation.
 
         Maps RFC-206 USER_TASK layer to HumanMessage.
 
-        IG-148: Enhanced evidence ordering - concrete findings first, working memory,
-        prior conversation, then previous assessment. Removed redundant completed_steps.
+        Execution narrative for Plan is supplied via ``state.loop_messages`` in
+        ``build_plan_messages`` (RFC-214), not duplicated here (IG-368).
         """
         parts: list[str] = []
 
         # Goal (iteration info moved to SystemMessage per RFC-207 optimization)
         parts.append(f"Goal: {goal}\n")
-
-        # IG-148: Evidence from steps (using detailed evidence with CoreAgent input/output)
-        if state.step_results:
-            parts.append("\nCONCRETE EVIDENCE (highest priority):")
-            parts.extend(r.get_detailed_evidence_string() for r in state.step_results)
 
         # Working memory excerpt (RFC-203)
         if context.working_memory_excerpt:
@@ -224,15 +219,16 @@ class PromptBuilder:
         state: LoopState,
         context: PlanContext,
     ) -> str:
-        """Construct plan-context human text (goal, evidence, WM, prior thread) without ledger (RFC-214).
+        """Construct plan-context human text (goal, plan status, WM, prior thread) without ledger (RFC-214).
 
         AgentLoop ledger messages are appended separately in ``build_plan_messages`` so the
         plan model sees native human/AI turns instead of a single flattened ``<AGENTLOOP_HISTORY>`` block.
+        Execute-step evidence lives in those ledger messages (IG-368).
 
         Args:
             goal: User's goal description
-            state: Current loop state with optional step results and plan snapshot
-            context: Planning context (working memory, prior thread excerpts)
+            state: Current loop state with optional plan snapshot
+            context: Planning context (working memory excerpt, prior thread XML)
 
         Returns:
             Formatted prompt string for the plan-context ``LoopHumanMessage`` only.
@@ -250,10 +246,7 @@ class PromptBuilder:
             if state.previous_plan.next_action:
                 parts.append(f"- Next action: {state.previous_plan.next_action}")
 
-        if state.step_results:
-            parts.append("\nCONCRETE EVIDENCE (highest priority):")
-            parts.extend(r.get_detailed_evidence_string() for r in state.step_results)
-
+        # Working memory excerpt (RFC-203)
         if context.working_memory_excerpt:
             parts.append("\n<WORKING_MEMORY>")
             parts.append(
@@ -263,6 +256,7 @@ class PromptBuilder:
             parts.append(context.working_memory_excerpt)
             parts.append("</WORKING_MEMORY>\n")
 
+        # Prior conversation (IG-128, RFC-209)
         if context.recent_messages:
             parts.append("\n<PRIOR_CONVERSATION>\n")
             parts.append(
