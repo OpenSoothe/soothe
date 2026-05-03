@@ -6,6 +6,7 @@ This document tracks the change history of all RFCs in this project.
 
 | Date | RFC | Status | Description |
 |------|-----|--------|-------------|
+| 2026-05-03 | RFC-214 | Draft | AgentLoop Loop Message Surface and Plan Context — unified ledger of LoopHumanMessage/LoopAIMessage per step as sole Plan context; checkpoint persistence for loop_messages; gap analysis vs combined-wave Execute, StepResult evidence, derive_plan_conversation, LangGraph transcript |
 | 2026-04-13 | RFC-605 | Draft | Explore Subagent and Parallel Spawning — targeted filesystem search with wave-based strategy, LLM-driven search planning, match validation; parallel subagent spawning via StepAction.subagents list field; breaking schema migration (no backward compatibility) |
 | 2026-04-10 | RFC-211 | Draft | Layer 2 Tool Result Optimization — minimal data contract with outcome metadata, tool_call_id uniqueness, file system cache for large results, final report generation shifted to Layer 1 |
 | 2026-04-09 | RFC-207 | Draft | Executor Thread Isolation Simplification — remove manual thread ID generation, leverage langgraph concurrency and task tool automatic isolation, ~80 lines simplified |
