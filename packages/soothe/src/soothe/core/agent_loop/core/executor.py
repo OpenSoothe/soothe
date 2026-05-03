@@ -25,6 +25,7 @@ from soothe.core.agent_loop.state.schemas import (
     StepResult,
 )
 from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, log_preview, preview, preview_first
 
 if TYPE_CHECKING:
@@ -600,6 +601,13 @@ class Executor:
             configurable.update(await self._claude_runner_config_extras(state.thread_id))
 
             # RFC-214: Execute batch with N Human messages
+            graph_config: dict[str, Any] = {"configurable": configurable}
+            if self._config is not None:
+                graph_config = merge_langfuse_runnable_config(
+                    graph_config,
+                    self._config,
+                    session_id=state.thread_id,
+                )
             stream = self.core_agent.astream(
                 self._execute_graph_input(
                     step_messages,  # N messages instead of combined description
@@ -607,7 +615,7 @@ class Executor:
                     workspace=state.workspace,
                     git_status=state.git_status,
                 ),
-                config={"configurable": configurable},
+                config=graph_config,
                 stream_mode=["messages", "updates", "custom"],
                 subgraphs=True,
             )
@@ -808,7 +816,13 @@ class Executor:
             # Pass current_decision for middleware to inject agent loop output contract
             # Note: For single step execution, we don't have LoopState here
             # The middleware should check for absence and not inject contract
-            config = {"configurable": configurable}
+            config: dict[str, Any] = {"configurable": configurable}
+            if self._config is not None:
+                config = merge_langfuse_runnable_config(
+                    config,
+                    self._config,
+                    session_id=cfg_thread,
+                )
 
             step_body = f"Execute: {step.description}"
             logger.debug("[Human Message] %s", log_preview(step_body, chars=150))

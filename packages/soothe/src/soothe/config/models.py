@@ -783,6 +783,61 @@ class PreviewDefaults(BaseModel):
     """Default line limit for line-based previews."""
 
 
+class LangfuseIntegrationConfig(BaseModel):
+    """Langfuse OpenTelemetry + LangChain callback integration (optional extra ``soothe[langfuse]``).
+
+    When ``enabled`` is true, Soothe attaches Langfuse's LangChain ``CallbackHandler`` to
+    LangGraph ``astream`` calls. Credentials may be set here (values support ``${ENV}``) or
+    omitted to use standard Langfuse environment variables (``LANGFUSE_PUBLIC_KEY``,
+    ``LANGFUSE_SECRET_KEY``, ``LANGFUSE_HOST``).
+
+    Args:
+        enabled: Turn Langfuse tracing on for graph runs.
+        public_key: Langfuse public key (optional if set via environment).
+        secret_key: Langfuse secret key (optional if set via environment).
+        host: Langfuse API base URL (e.g. ``https://cloud.langfuse.com`` or self-hosted origin).
+        environment: Langfuse ``environment`` tag (e.g. ``production``, ``dev``).
+        release: Langfuse ``release`` tag for deployment correlation.
+        sample_rate: Client-side sampling rate ``0.0``–``1.0`` (passed to the Langfuse client).
+        trace_name: Optional LangGraph ``run_name`` for the root run when set.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable Langfuse LangChain callbacks on CoreAgent LangGraph streams",
+    )
+    public_key: str | None = Field(
+        default=None,
+        description="Langfuse public key; supports ${ENV_VAR}",
+    )
+    secret_key: str | None = Field(
+        default=None,
+        description="Langfuse secret key; supports ${ENV_VAR}",
+    )
+    host: str | None = Field(
+        default=None,
+        description="Langfuse API host / base URL; supports ${ENV_VAR}",
+    )
+    environment: str | None = Field(
+        default=None,
+        description="Langfuse environment label (e.g. production, staging)",
+    )
+    release: str | None = Field(
+        default=None,
+        description="Langfuse release / version label",
+    )
+    sample_rate: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional Langfuse client sample rate between 0.0 and 1.0",
+    )
+    trace_name: str | None = Field(
+        default=None,
+        description="If set, used as RunnableConfig run_name for traced graph invocations",
+    )
+
+
 class ObservabilityConfig(BaseModel):
     """Unified observability configuration for debugging and monitoring.
 
@@ -800,6 +855,7 @@ class ObservabilityConfig(BaseModel):
         thread_logging_enabled: Whether thread-specific logging is enabled.
         thread_logging_retention_days: Days to retain thread logs before cleanup.
         thread_logging_max_size_mb: Maximum total size for thread logs directory.
+        langfuse: Langfuse OpenTelemetry / LangChain callback settings.
     """
 
     # LLM tracing settings
@@ -868,6 +924,11 @@ class ObservabilityConfig(BaseModel):
         default=100,
         ge=1,
         description="Maximum total size for thread logs directory",
+    )
+
+    langfuse: LangfuseIntegrationConfig = Field(
+        default_factory=LangfuseIntegrationConfig,
+        description="Langfuse tracing (install optional extra soothe[langfuse])",
     )
 
 

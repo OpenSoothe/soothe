@@ -111,8 +111,12 @@ dev = [
     "ruff>=0.12.0",
     "mypy>=1.0.0",
 ]
+# Langfuse LangChain / OpenTelemetry export (optional observability)
+langfuse = [
+    "langfuse>=3.0.0,<4.0.0",
+]
 all = [
-    "soothe[research,websearch,tabular,document,media,video,claude,github,dashscope,postgres,cli]",
+    "soothe[research,websearch,tabular,document,media,video,claude,github,dashscope,postgres,cli,langfuse]",
 ]
 
 [project.scripts]
