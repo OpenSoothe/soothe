@@ -28,6 +28,7 @@ class StepAction(BaseModel):
         tools: Tools to use (optional, executor hint)
         subagent: Subagent to invoke (optional, executor hint)
         expected_output: Expected result for evidence accumulation
+        supportive_evidence: Which prior ledger facts justify this step (plan-generate; IG-381).
         dependencies: Step IDs this depends on (for DAG execution). Use the same local ``id``
             strings as sibling steps (e.g. ``01``, ``02``); runtime remaps aliases such as ``1`` → ``01``
             when unambiguous (IG-379).
@@ -44,6 +45,11 @@ class StepAction(BaseModel):
         description='Optional; use "explore" for readonly workspace search via task tool.',
     )
     expected_output: str = "Step completed successfully"
+    supportive_evidence: str = Field(
+        default="",
+        max_length=500,
+        description="Plan-generate only: cite execute-ledger evidence this step builds on, or state none yet.",
+    )
     dependencies: list[str] | None = None
 
 

@@ -30,3 +30,23 @@ def test_format_explore_result_markdown_includes_summary_and_matches() -> None:
     assert "Two modules" in md
     assert "`src/auth/jwt.py`" in md
     assert "```text" in md
+
+
+def test_format_explore_result_markdown_includes_ig380_sections_when_set() -> None:
+    """IG-380 optional sections render when non-empty."""
+    result = ExploreResult(
+        target="map cli package",
+        thoroughness="thorough",
+        summary="Entry is soothe_cli/main.py.",
+        matches=[],
+        suggested_next_actions="- read_file packages/soothe-cli/src/soothe_cli/main.py",
+        coverage_gaps="Did not scan node_modules.",
+        architecture_notes="- CLI entry: Typer app\n- TUI: Textual",
+    )
+    md = format_explore_result_markdown(result)
+    assert "## Suggested next actions" in md
+    assert "soothe_cli/main.py" in md
+    assert "## Coverage and gaps" in md
+    assert "node_modules" in md
+    assert "## Architecture notes" in md
+    assert "Typer" in md

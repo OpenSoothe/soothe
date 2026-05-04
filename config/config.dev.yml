@@ -63,10 +63,16 @@ agentic:
   goal_completion_mode: llm_only
   output_streaming: true  # Default streaming for AgentLoop responses (true=stream, false=batch)
   reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution
+  # IG-380: dev caps for plan prompts (template keeps zeros for backward compat)
+  plan_prompt_ledger:
+    plan_ledger_max_messages: 80
+    plan_ledger_max_total_chars: 120000
+    plan_ledger_max_message_chars: 24000
 
 execution:
   concurrency:
-    max_parallel_steps: 16
+    # IG-380: lower parallel execute-step fan-out locally (template remains 16)
+    max_parallel_steps: 8
     max_parallel_subagents: 16
   llm_rpm_limit: 120
   llm_concurrent_limit: 10

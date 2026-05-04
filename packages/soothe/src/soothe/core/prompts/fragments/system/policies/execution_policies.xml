@@ -5,4 +5,14 @@
 - Step descriptions: imperative tool actions (not raw goal string)
 - Merge related filesystem reads into one step when sequential tool-only
 - Parallel mode: independent readonly steps may run together if descriptions name disjoint scopes (e.g. separate explore targets)
+
+**Filesystem discovery**:
+- Do not fan out many parallel shallow ``list_files`` / ``glob`` calls on overlapping paths; prefer one reconnaissance step then sequential targeted ``read_file`` / ``grep``.
+- Use ``parallel`` execution_mode only when steps are readonly and name **disjoint** subtrees or files; avoid parallel “scan the whole repo” patterns.
+- ``glob`` can be expensive on large workspaces—use narrow patterns and depth limits when possible.
+
+**Explore / read-heavy plans**:
+- When the next work is mostly **readonly** discovery (search, skim many files, map structure), **batch** related reads into **one or a few** steps with ``subagent: explore`` and a single rich task description per step, instead of many separate root-level micro-read steps.
+- Split into multiple explore steps only when scopes are genuinely disjoint (e.g. unrelated subtrees) or when parallelism policy requires disjoint slices.
+- After explore returns consolidated findings, follow with smaller tool-only or synthesis steps that cite those results in ``supportive_evidence``.
 </EXECUTION_POLICIES>
