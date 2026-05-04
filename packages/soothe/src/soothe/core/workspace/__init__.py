@@ -31,14 +31,12 @@ from __future__ import annotations
 from .backend import (
     NormalizedPathBackend,
     WorkspaceAwareBackend,
-    create_workspace_aware_backend,
 )
 
 # Framework filesystem singleton
 from .framework_filesystem import FrameworkFilesystem
 
 # Workspace resolution and validation
-from .path_normalization import strict_workspace_path
 from .resolution import (
     get_git_status,  # Git status collection utility
     resolve_daemon_workspace,
@@ -51,11 +49,6 @@ from .stream_resolution import (
     ResolvedWorkspace,
     resolve_workspace_for_stream,
 )
-from .tool_path_resolution import (
-    filesystem_virtual_mode_from_soothe_config,
-    max_file_size_mb_for_filesystem_backend,
-    resolve_backend_os_path,
-)
 
 __all__ = [
     # Resolution and validation
@@ -63,17 +56,12 @@ __all__ = [
     "resolve_loop_daemon_workspace",
     "validate_client_workspace",
     "get_git_status",
-    "strict_workspace_path",
-    "resolve_backend_os_path",
-    "filesystem_virtual_mode_from_soothe_config",
-    "max_file_size_mb_for_filesystem_backend",
     # Stream resolution
     "ResolvedWorkspace",
     "resolve_workspace_for_stream",
     # Backend
     "WorkspaceAwareBackend",
     "NormalizedPathBackend",
-    "create_workspace_aware_backend",
     # Framework filesystem
     "FrameworkFilesystem",
 ]
