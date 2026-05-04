@@ -18,6 +18,15 @@ _CLIENT_INITIALIZED_FOR_PUBLIC_KEY: set[str] = set()
 _HANDLERS: dict[str, Any] = {}
 
 
+def _resolved_langfuse_tags(soothe_config: SootheConfig) -> list[str] | None:
+    """Normalize ``observability.langfuse.tags`` to non-empty stripped strings."""
+    raw = soothe_config.observability.langfuse.tags
+    if not raw:
+        return None
+    out = [str(t).strip() for t in raw if str(t).strip()]
+    return out or None
+
+
 def _resolve_str(value: str | None) -> str | None:
     """Strip and resolve ``${ENV}`` placeholders; return None if unresolved or empty."""
     from soothe.config.env import _resolve_env
@@ -105,6 +114,10 @@ def merge_langfuse_runnable_config(
         run_name: Optional root run name (e.g. ``soothe-dev:plan-assess``, ``soothe-dev:execute-step``). When omitted,
             uses ``observability.langfuse.trace_name`` when set.
 
+    When ``observability.langfuse.tags`` / ``user_id`` are set, merges ``langfuse_tags`` /
+    ``langfuse_user_id`` into metadata if those keys are not already present (Langfuse
+    LangChain ``CallbackHandler`` reads them for trace attributes and Cost Dashboard filters).
+
     Returns:
         New dict with merged ``callbacks`` / ``metadata`` / ``run_name``, or ``base``.
     """
@@ -121,6 +134,12 @@ def merge_langfuse_runnable_config(
     meta = dict(out.get("metadata") or {})
     if session_id:
         meta.setdefault("langfuse_session_id", session_id)
+    tags_cfg = _resolved_langfuse_tags(soothe_config)
+    if tags_cfg is not None and "langfuse_tags" not in meta:
+        meta["langfuse_tags"] = tags_cfg
+    uid = _resolve_str(soothe_config.observability.langfuse.user_id)
+    if uid and "langfuse_user_id" not in meta:
+        meta["langfuse_user_id"] = uid
     if meta:
         out["metadata"] = meta
     name = (run_name or "").strip()
