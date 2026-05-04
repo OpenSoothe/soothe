@@ -5,6 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-05-03
+**Last Updated**: 2026-05-04 (IG-376 plan-context human: `Goal` + `Execute iteration`)
 **Dependencies**: RFC-201 (AgentLoop Plan–Execute), RFC-100 (CoreAgent Runtime), RFC-206 (Prompt Architecture), RFC-207 (Thread & Goal Context), RFC-203 (AgentLoop State & Memory), RFC-215 (AgentLoop Persistence), RFC-218 (Checkpoint Tree), RFC-216 (Multi-Thread Lifecycle)
 **Related**: RFC-211 (Tool Result Shaping), RFC-213 (AgentLoop Reasoning Quality), RFC-217 (Goal Context Injection), RFC-614 (Streaming Messaging)
 
@@ -379,7 +380,10 @@ plan_context = build_plan_prompt(
 prompt = f"""
 {system_fragments}  # RFC-206: capabilities, workspace, policies
 
-{goal_text}
+# Plan-context human (latest turn; RFC-372 / IG-376):
+#   Goal: <user goal text>
+#   Execute iteration: <1-based cycle>/<max_iterations>
+#   [optional plan snapshot line when previous_plan exists]
 
 {plan_snapshot}
 
@@ -465,9 +469,9 @@ Plan builds LLM request from:
 - Tool/subagent registries, constraint definitions
 
 **Dynamic Fragments:**
-- **Current goal text** and status
-- **Plan snapshot** (latest reasoning, next actions)
-- **Full loop message ledger** formatted as AgentLoop history (no truncation)
+- **Plan-context human** (`LoopHumanMessage`, `phase="plan"`): always includes `Goal: …` and `Execute iteration: <1-based cycle>/<max_iterations>` so StatusAssessment can align guards (e.g. first cycle vs ledger tool output) without embedding the iteration inside the goal line (IG-376).
+- **Plan snapshot** line when `previous_plan` exists (status, prior `goal_progress`, truncated `next_action`)
+- **Full loop message ledger** as native `LoopHumanMessage` / `LoopAIMessage` turns before that human (no truncation)
 
 **AgentLoop History Format:**
 
@@ -714,14 +718,14 @@ Plan indirectly depends on overlapping content:
 `create_soothe_serde` allowlist (`soothe_sdk/utils/serde.py`):
 ```python
 allowlist=[
-    (“soothe.cognition.agent_loop.messages”, “LoopHumanMessage”),
+    (“soothe.core.agent_loop.utils.messages”, “LoopHumanMessage”),
     # Wrong path!
 ]
 ```
 
 Actual implementation location:
 ```python
-# soothe/cognition/agent_loop/utils/messages.py
+# packages/soothe/src/soothe/core/agent_loop/utils/messages.py
 class LoopHumanMessage(BaseMessage):
     ...
 ```
@@ -736,12 +740,12 @@ class LoopHumanMessage(BaseMessage):
 ```python
 # Fix allowlist path
 allowlist=[
-    (“soothe.cognition.agent_loop.utils.messages”, “LoopHumanMessage”),
-    (“soothe.cognition.agent_loop.utils.messages”, “LoopAIMessage”),
+    (“soothe.core.agent_loop.utils.messages”, “LoopHumanMessage”),
+    (“soothe.core.agent_loop.utils.messages”, “LoopAIMessage”),
 ]
 
 # Or canonical re-export:
-# soothe/cognition/agent_loop/messages.py
+# (types live in soothe.core.agent_loop.utils.messages)
 from .utils.messages import LoopHumanMessage, LoopAIMessage
 ```
 

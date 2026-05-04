@@ -35,7 +35,7 @@ This document defines the terminology and naming conventions used in this projec
 | `MemoryProtocol` | Protocol for cross-thread long-term memory (remember, recall, forget). | RFC-001 |
 | `MemoryItem` | A unit of long-term knowledge (id, content, tags, importance, metadata). | RFC-001 |
 | `PlannerProtocol` | Protocol for goal decomposition, plan creation, reflection, and revision. | RFC-001 |
-| `LLMPlanner` | Unified planner using two-phase architecture (StatusAssessment + PlanGeneration) for token efficiency. Replaces SimplePlanner, ClaudePlanner, AutoPlanner after IG-150 consolidation. | RFC-001, RFC-604 |
+| `LLMPlanner` | Unified planner using two-phase architecture (`StatusAssessment` + conditional `PlanGeneration` → `PlanResult`) for token efficiency; IG-372/IG-329 prompt and schema alignment. Replaces SimplePlanner, ClaudePlanner, AutoPlanner after IG-150 consolidation. | RFC-001, RFC-604 |
 | `PolicyProtocol` | Protocol for permission checking and enforcement. | RFC-001 |
 | `Permission` | A structured permission with category, action, and scope (e.g., `Permission("shell", "execute", "!rm")`). | RFC-001 |
 | `PolicyMiddleware` | deepagents `AgentMiddleware` that enforces `PolicyProtocol`. | RFC-001 |
@@ -78,7 +78,7 @@ This document defines the terminology and naming conventions used in this projec
 | Channel Protocol | Message-centric protocol for user ↔ Soothe communication. Generic routing by type prefix. | RFC-203 |
 | ChannelMessage | Data structure with type, payload, timestamp, sender fields for channel communication. | RFC-203 |
 | CriticalityEvaluator | Module in GoalEngine that determines if a proposed goal requires user confirmation (MUST status). | RFC-203 |
-| SchedulerService | Independent service in `cognition/scheduler/` for time-based task execution (delay, cron, recurrence). | RFC-203 |
+| SchedulerService | Independent service in `core/goal_engine/scheduled_tasks.py` for time-based task execution (delay, cron, recurrence). | RFC-203 |
 | Goal Relationship | Connection between goals: `depends_on` (hard), `informs` (soft), `conflicts_with` (mutual exclusion). | RFC-203 |
 | Context Envelope | Rich context package sent from Layer 3 to Layer 2 containing world info, goals, memory, instructions. | RFC-203 |
 | Same-Cron Conflict | Multiple tasks with identical cron expression. Resolved by sequential execution, ordered by creation/priority. | RFC-203 |

@@ -154,7 +154,7 @@ while total_iterations < max_iterations and not GoalEngine.is_complete():
 
 ## Components
 
-### 1. GoalEngine (`cognition/goal_engine.py`)
+### 1. GoalEngine (`packages/soothe/src/soothe/core/goal_engine/engine.py`)
 
 Goal lifecycle manager driven synchronously by the runner.
 
@@ -202,7 +202,7 @@ class Goal(BaseModel):
 
 **Integration with Layer 2**: GoalEngine provides goal state service. AgentLoop queries via `get_next_ready_goal()`, reports via `complete_goal()` / `fail_goal()` (§48-82).
 
-### 2. GoalBackoffReasoner (`cognition/goal_engine/backoff_reasoner.py`)
+### 2. GoalBackoffReasoner (`packages/soothe/src/soothe/core/goal_engine/backoff_reasoner.py`)
 
 **Canonical ownership note**: This RFC is the single source of truth for `GoalBackoffReasoner`, `BackoffDecision`, and goal-failure backoff semantics. Other RFCs reference these models for integration only and must not redefine authoritative schemas.
 

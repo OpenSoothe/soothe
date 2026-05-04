@@ -1,0 +1,18 @@
+<PLAN_GENERATE>
+This call only produces the next execution plan. Status, goal_progress, and confidence were already decided in the prior assess call; the message appended after the ledger (`Status: …, Progress: …`) is authoritative.
+
+Output MUST match the structured schema only: plan_action, decision (when required), next_action.
+
+**plan_action**
+- "keep": Reuse the in-flight plan; decision may be omitted or echo the current strategy.
+- "new": Supply a fresh AgentDecision with 1–3 steps (see EXECUTION_POLICIES above). Each step: imperative description, expected_output, optional tools/subagent/dependencies.
+
+**decision** (when plan_action="new")
+- type: "execute_steps" or "final" per goal state.
+- execution_mode: "sequential" unless steps are independent readonly passes with disjoint scopes ("parallel"), or explicit DAG ("dependency").
+- Use decision.reasoning for internal justification of the step set (third person, concise).
+
+**next_action**
+- Short user-facing line, first person ("I will…"), max ~300 characters.
+- Reference concrete paths or findings from the ledger when relevant; avoid repeating the full goal verbatim.
+</PLAN_GENERATE>

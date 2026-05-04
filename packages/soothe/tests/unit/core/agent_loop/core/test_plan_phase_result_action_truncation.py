@@ -25,8 +25,6 @@ def sample_assessment() -> StatusAssessment:
         status="continue",
         goal_progress=0.36,
         confidence=0.85,
-        brief_reasoning="Progress is 36%, need to examine subdirectories",
-        next_action="I'll examine the UX module subdirectories (cli, client, shared, tui)",
     )
 
 
@@ -47,7 +45,6 @@ def sample_plan_result() -> PlanGeneration:
             execution_mode="sequential",
             reasoning="Need to check implementation details",
         ),
-        brief_reasoning="Plan to check implementation files",
         next_action="Read key implementation files from cli/, shared/, and tui/ directories",
     )
 
@@ -61,9 +58,8 @@ def test_next_action_uses_plan_action(
 
     result = planner._combine_results(sample_assessment, sample_plan_result)
 
-    # IG-264: Only plan_result.brief_reasoning used (assessment removed)
-    assert result.assessment_reasoning == ""  # IG-264: Empty
-    assert result.plan_reasoning == sample_plan_result.brief_reasoning
+    assert result.assessment_reasoning == ""
+    assert result.plan_reasoning == ""  # IG-329: no phase-2 strategy string
 
     # Should use plan_result.next_action (concrete action)
     assert result.next_action == sample_plan_result.next_action
@@ -87,15 +83,10 @@ def test_next_action_preserves_full_text(
     plan_result = PlanGeneration(
         plan_action="new",
         decision=sample_plan_result.decision,
-        brief_reasoning="Detailed plan",
         next_action=long_action,
     )
 
-    assessment = StatusAssessment(
-        status="continue",
-        goal_progress=0.5,
-        confidence=0.8,
-    )
+    assessment = StatusAssessment(status="continue", goal_progress=0.5, confidence=0.8)
 
     planner = LLMPlanner.__new__(LLMPlanner)
     result = planner._combine_results(assessment, plan_result)

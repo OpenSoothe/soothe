@@ -59,7 +59,7 @@ class PromptBuilder:
             state: Current loop state with ledger, plan metadata
             context: Planning context with workspace, capabilities
             plan_phase: ``assess`` = instructions aligned to ``StatusAssessment``; ``generate`` =
-                full plan/step policy for ``PlanGeneration`` (IG-372).
+                execution policies + instructions aligned to ``PlanGeneration`` only (IG-372, IG-329).
 
         Returns:
             Messages to send to the plan LLM: system, ledger copies, then plan-context human.
@@ -103,8 +103,8 @@ class PromptBuilder:
         Section ordering (optimized for prompt caching):
         - **assess** (IG-372): PLAN_ASSESS_INSTRUCTIONS only, then conditional blocks, ENVIRONMENT,
           WORKSPACE.
-        - **generate**: EXECUTION_POLICIES, PLAN_EXECUTE_INSTRUCTIONS (LOOP/COMPLETION/ACTION/
-          REASONING), then conditional blocks, ENVIRONMENT, WORKSPACE.
+        - **generate**: EXECUTION_POLICIES, PLAN_GENERATE_INSTRUCTIONS (schema-aligned PlanGeneration
+          only), then conditional blocks, ENVIRONMENT, WORKSPACE.
 
         Args:
             context: Planning context with workspace, capabilities
@@ -114,7 +114,7 @@ class PromptBuilder:
         from soothe.core.prompts.fragments import (
             EXECUTION_POLICIES_FRAGMENT,
             PLAN_ASSESS_INSTRUCTIONS_FRAGMENT,
-            PLAN_EXECUTE_INSTRUCTIONS_FRAGMENT,
+            PLAN_GENERATE_INSTRUCTIONS_FRAGMENT,
         )
 
         parts: list[str] = []
@@ -122,9 +122,9 @@ class PromptBuilder:
         if plan_phase == "assess":
             parts.append(PLAN_ASSESS_INSTRUCTIONS_FRAGMENT + "\n")
         else:
-            # Plan generation: step shape and full loop contract (RFC-604 second call)
+            # Plan generation: step policy + schema-aligned PlanGeneration only (IG-329)
             parts.append(EXECUTION_POLICIES_FRAGMENT + "\n")
-            parts.append(PLAN_EXECUTE_INSTRUCTIONS_FRAGMENT + "\n")
+            parts.append(PLAN_GENERATE_INSTRUCTIONS_FRAGMENT + "\n")
 
         # Conditional static sections (present based on context)
         # Workspace rules (static when workspace present)
@@ -247,12 +247,11 @@ class PromptBuilder:
 
         cur_iter = state.iteration if state.iteration is not None else 0
         max_iter = state.max_iterations if state.max_iterations is not None else "?"
+        # 1-based cycle index for assess/generate human (IG-376): iteration 0 → round 1 of max.
+        cycle_one_based = int(cur_iter) + 1
 
-        # Goal line: compact after iteration 0 (IG-372)
-        if cur_iter == 0:
-            parts.append(f"Goal: {goal}\n")
-        else:
-            parts.append(f"iter={cur_iter}/{max_iter} | {goal}\n")
+        parts.append(f"Goal: {goal}")
+        parts.append(f"Execute iteration: {cycle_one_based}/{max_iter}")
 
         # Plan snapshot (current strategy) — one line
         if state.previous_plan:
@@ -261,7 +260,7 @@ class PromptBuilder:
             if len(na) > 100:
                 na = na[:97] + "..."
             suffix = f" | next: {na}" if na else ""
-            parts.append(f"Plan status: {prev.status} {prev.goal_progress:.0%}{suffix}\n")
+            parts.append(f"Plan status: {prev.status} {prev.goal_progress:.0%}{suffix}")
 
         # Prior conversation (IG-128, RFC-209)
         if context.recent_messages:

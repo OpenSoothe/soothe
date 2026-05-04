@@ -267,7 +267,7 @@ CLI/TUI `EventProcessor` paths use these helpers to treat **`mode="messages"`** 
 
 **Primary modules**:
 1. `packages/soothe/src/soothe/core/runner/_runner_agentic.py` — multiplex `stream_event` into client `mode="messages"` / `custom`, enforce IG-119 / IG-304 suppression, forward loop-tagged assistant chunks for configured phases.
-2. `packages/soothe/src/soothe/cognition/agent_loop/core/agent_loop.py` — emit `stream_event` tuples consumed by the runner.
+2. `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py` — emit `stream_event` tuples consumed by the runner.
 
 **Forwarding contract** (summary): forward **tool UI** `messages` chunks; forward **loop assistant** `messages` chunks when `assistant_output_phase(...)` is non-null; suppress plain execute-phase assistant prose.
 
