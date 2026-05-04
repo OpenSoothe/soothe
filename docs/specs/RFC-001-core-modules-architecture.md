@@ -159,15 +159,15 @@ class PlannerProtocol(Protocol):
 
 ### Implementations
 
-- `LLMPlanner` -- single LLM call with structured output for tasks of all complexity levels, implements two-phase architecture (StatusAssessment + PlanGeneration) for token efficiency per RFC-604
+- `LLMPlanner` -- structured-output planning: two-phase architecture (`StatusAssessment`, then conditional `PlanGeneration` merged into `PlanResult`) per RFC-604; assess/generate prompts split (IG-372) with trimmed plan-generate schema (IG-329)
 
 **Architectural evolution**:
 - IG-028: DirectPlanner → SimplePlanner
 - IG-036: Removed SubagentPlanner indirection
 - IG-149: Implemented RFC-604 two-phase Plan architecture
-- IG-150: Removed ClaudePlanner and AutoPlanner, consolidated to LLMPlanner, merged cognition.planning into cognition.agent_loop module
+- IG-150: Removed ClaudePlanner and AutoPlanner, consolidated to LLMPlanner; planning merged into `soothe.core.agent_loop` (historically `cognition.*` paths)
 
-**Module location**: `src/soothe/cognition/agent_loop/planner.py` (after IG-150 consolidation)
+**Module location**: `packages/soothe/src/soothe/core/agent_loop/core/planner.py` (after IG-150 consolidation; package `soothe.core`)
 
 ## Module 4: PolicyProtocol
 

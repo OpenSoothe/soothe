@@ -284,7 +284,7 @@ class ChannelMessage:
 
 ### 4.1 Location
 
-`soothe/cognition/scheduler/` — Independent service feeding GoalEngine.
+`packages/soothe/src/soothe/core/goal_engine/scheduled_tasks.py` (`SchedulerService`) — persisted task scheduling feeding GoalEngine.
 
 ### 4.2 Capabilities
 
@@ -563,7 +563,7 @@ All three tools added to `create_layer2_tools()` return list.
 
 **Gap 5 — Queuing semantics for Layer 2 proposals**
 
-- New `ProposalQueue` class in `soothe/cognition/proposal_queue.py`:
+- New `ProposalQueue` class in `packages/soothe/src/soothe/core/goal_engine/proposal_queue.py`:
   ```python
   @dataclass
   class Proposal:
@@ -604,7 +604,7 @@ All three tools added to `create_layer2_tools()` return list.
 
 **Gap 8 — Relationship auto-detection**
 
-- New module `soothe/cognition/relationship_detector.py`
+- New module `packages/soothe/src/soothe/core/goal_engine/relationship_detector.py`
 - `detect_relationships(completed_goal, all_goals)` function:
   - **`informs`**: Text overlap between completed goal's findings/description and other goals' descriptions. Shared tags increase confidence.
   - **`conflicts_with`**: Both goals reference same resource paths (file patterns, tool names) with write intent. High confidence auto-apply.

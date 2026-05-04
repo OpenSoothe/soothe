@@ -20,18 +20,17 @@
 - `packages/soothe/src/soothe/core/prompts/builder.py`
 - `packages/soothe/src/soothe/core/runner/_runner_agentic.py` (removed unused variable)
 
-**New ordering (static-always → conditional static → global → dynamic)**:
+**New ordering (static-always → conditional static → global → dynamic)** — plan-generate phase today (IG-329):
 ```xml
 <EXECUTION_POLICIES>        <!-- static-always fragment -->
-<PLAN_EXECUTE_LOOP>         <!-- static-always instructions -->
-<COMPLETION_SIGNALS>        <!-- static-always instructions -->
-<ACTION_PROGRESSION>        <!-- static-always instructions -->
-<REASONING_STANDARDS>       <!-- static-always instructions -->
+<PLAN_GENERATE>             <!-- schema-aligned plan-generate instructions (single fragment) -->
 <WORKSPACE_RULES>           <!-- conditional static (when workspace present) -->
-<FOLLOW_UP_POLICY>          <!-- conditional static (when prior conversation exists) -->
+<FOLLOW_UP_POLICY>         <!-- conditional static (when prior conversation exists) -->
 <ENVIRONMENT>               <!-- global (platform, model) -->
 <WORKSPACE>                 <!-- dynamic (project path, git branch) -->
 ```
+
+Plan-assess uses `PLAN_ASSESS` instead of the first two blocks above.
 
 **Benefits**:
 - Improved prompt cache efficiency (static-always fragments cached longest)
@@ -111,16 +110,16 @@ if context.workspace:
 if context.available_capabilities:
     parts.append(f"<AVAILABLE_CAPABILITIES>...")
 
-# Static fragments
+# Static fragments (historical note: pre-IG-329 used a combined loop instructions XML here)
 parts.append(EXECUTION_POLICIES_FRAGMENT)
-parts.append(PLAN_EXECUTE_INSTRUCTIONS_FRAGMENT)
+# ... plan-phase instruction fragment (see IG-329 / IG-372)
 ```
 
-**After** (optimized ordering):
+**After** (optimized ordering; IG-329 plan-generate):
 ```python
 # Static-always fragments first (best cache efficiency)
 parts.append(EXECUTION_POLICIES_FRAGMENT)
-parts.append(PLAN_EXECUTE_INSTRUCTIONS_FRAGMENT)  # Contains LOOP/COMPLETION/ACTION/REASONING
+parts.append(PLAN_GENERATE_INSTRUCTIONS_FRAGMENT)
 
 # Conditional static sections (present based on context)
 if context.workspace:
@@ -139,7 +138,7 @@ if context.workspace:
 ```
 
 **Rationale for ordering**:
-- **Static-always fragments** (EXECUTION_POLICIES, PLAN_EXECUTE_INSTRUCTIONS): Always present, placed first for maximum cache efficiency
+- **Static-always fragments** (EXECUTION_POLICIES + plan-phase instructions: `PLAN_ASSESS_INSTRUCTIONS_FRAGMENT` or `PLAN_GENERATE_INSTRUCTIONS_FRAGMENT`): Placed first for maximum cache efficiency
 - **Conditional static sections** (WORKSPACE_RULES, FOLLOW_UP_POLICY): Present based on context, but still static content when included
 - **Global section** (ENVIRONMENT): Contains platform/model info, changes rarely
 - **Dynamic section** (WORKSPACE): Contains project-specific path/git info, changes frequently, placed last

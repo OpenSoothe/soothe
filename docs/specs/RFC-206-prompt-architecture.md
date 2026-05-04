@@ -131,26 +131,13 @@ The hierarchical nesting makes it impossible for the LLM to confuse system metad
 ### Directory Structure
 
 ```
-src/soothe/prompts/
+packages/soothe/src/soothe/core/prompts/
 ├── __init__.py
 ├── builder.py              # PromptBuilder class
 ├── fragments/              # XML fragment templates
-│   ├── system/
-│   │   ├── environment.xml
-│   │   ├── workspace.xml
-│   │   ├── capabilities.xml
-│   │   └── policies/
-│   │       ├── delegation.xml
-│   │       ├── granularity.xml
-│   │       └── workspace_rules.xml
-│   ├── user/
-│   │   ├── goal.xml
-│   │   ├── prior_conversation.xml
-│   │   └── evidence.xml
-│   └── instructions/
-│       ├── output_format.xml
-│       └── execution_rules.xml
-└── README.md
+│   ├── instructions/       # plan_assess, plan_generate; execution_policies under system/policies/
+│   └── ...
+└── (see tree in repo; RFC-183 prefetch layout)
 ```
 
 ### PromptBuilder API
@@ -250,7 +237,7 @@ Check PRIOR_CONVERSATION in USER_TASK?
 
 ### LLMPlanner Refactor
 
-**Before** (`src/soothe/cognition/agent_loop/simple.py`):
+**Before** (historical `simple.py`; superseded by `packages/soothe/src/soothe/core/agent_loop/core/planner.py`):
 ```python
 async def reason(self, goal, state, context):
     prompt = self._build_reason_prompt(goal, state, context)
@@ -325,8 +312,8 @@ class LLMPlanner:
 
 ### Affected Code
 
-- `src/soothe/cognition/agent_loop/simple.py`
-- `src/soothe/cognition/agent_loop/claude.py` (if exists)
+- `packages/soothe/src/soothe/core/agent_loop/core/planner.py` (LLMPlanner / RFC-604)
+- `packages/soothe/src/soothe/core/prompts/builder.py` (PromptBuilder)
 - Any tests that construct prompts directly
 
 ---
@@ -341,6 +328,9 @@ class LLMPlanner:
 ---
 
 ## Changelog
+
+**2026-05-04**:
+- Documented `instructions/` contents for plan phase: `plan_assess_instructions.xml`, `plan_generate_instructions.xml`; `execution_policies.xml` under `system/policies/` (IG-329 / IG-372). Removed obsolete `plan_execute_instructions.xml`.
 
 **2026-04-08 (created)**:
 - Initial RFC defining hierarchical prompt architecture

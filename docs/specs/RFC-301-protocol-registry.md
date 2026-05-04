@@ -450,7 +450,7 @@ plan = await planner.create_plan(
 
 ## 10. Open Questions
 
-1. **JudgeProtocol** — Should judge be added to registry or kept separate in cognition layer?
+1. **JudgeProtocol** — Should judge be added to registry or kept separate in the core agent / planning layer (`soothe.core`)?
 2. **PersistStore** — Currently documented under RFC-001/RFC-400 context persistence sections; should it move here as cross-protocol dependency?
 3. **Protocol versioning** — How to handle breaking changes to protocol interfaces?
 

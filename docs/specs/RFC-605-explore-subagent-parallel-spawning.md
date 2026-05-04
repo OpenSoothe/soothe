@@ -316,9 +316,9 @@ class StepAction(BaseModel):
 - `subagent="research"` → `subagents=["research"]`
 
 **Files requiring updates**:
-- `src/soothe/cognition/agent_loop/schemas.py`
-- `src/soothe/cognition/agent_loop/executor.py`
-- `src/soothe/cognition/agent_loop/planner.py`
+- `packages/soothe/src/soothe/core/agent_loop/state/schemas.py`
+- `packages/soothe/src/soothe/core/agent_loop/core/executor.py`
+- `packages/soothe/src/soothe/core/agent_loop/core/planner.py`
 - All test files with StepAction usage
 
 ### 3. Parallel Spawning Implementation

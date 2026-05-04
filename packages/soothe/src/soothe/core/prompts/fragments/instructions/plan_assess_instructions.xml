@@ -1,17 +1,20 @@
 <PLAN_ASSESS>
-Classify progress toward the user goal using the conversation and execute ledger above.
-Your reply MUST match the structured output schema only (status, goal_progress, confidence, require_goal_completion).
+Judge progress toward the goal using the execute ledger (human/AI turns above this message) plus the goal and execute-iteration header in the latest plan message.
+
+Output MUST match the structured schema only: status, goal_progress, confidence, require_goal_completion.
 
 **status**
-- "done": Goal satisfied by evidence in the ledger (tool/subagent output, completed steps).
-- "continue": More execution on the current approach is appropriate.
-- "replan": Replace the strategy; current plan or steps are wrong or blocked.
+- "done": The ledger already contains concrete evidence that the stated goal is satisfied (e.g. requested file lines, command output, or subagent result matching the ask). Prefer "done" when the user’s literal request is visibly fulfilled in tool/subagent content.
+- "continue": Evidence is partial or the next execute step is still needed on the current strategy.
+- "replan": The approach is wrong, blocked, or contradicted by evidence; choose a different strategy.
 
-**goal_progress / confidence**: Calibrate from evidence (0.0–1.0). Vague guesses → lower confidence.
+**goal_progress** (0.0–1.0): Your direct estimate of how much of the goal is satisfied by the ledger—**not** a budget meter. Use high values (≥0.9) when the answer is present in evidence even if polish or narration could follow. Use low values when little or nothing toward the goal has been produced.
 
-**require_goal_completion**: Use true only when status="done" but the final user-facing answer still needs a separate synthesis pass; otherwise false.
+**confidence** (0.0–1.0): How certain you are about status and goal_progress given the ledger; lower when evidence is thin or ambiguous.
+
+**require_goal_completion**: true only when status="done" but the user still needs a separate synthesis pass to produce the final user-facing reply; otherwise false. For read-only or extract goals where the tool output is itself the deliverable, prefer false.
 
 **Guards**
-- At loop iteration 0 with no tool/subagent results in the thread: NEVER status="done".
-- Do not mark done without concrete evidence that the stated goal is met.
+- When the header shows execute iteration 1 (first cycle) and the ledger has no tool/subagent results yet: NEVER status="done".
+- Never set status="done" without ledger evidence that matches the goal.
 </PLAN_ASSESS>

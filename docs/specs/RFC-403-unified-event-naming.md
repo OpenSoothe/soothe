@@ -241,7 +241,7 @@ soothe.plugin.unloaded        # Plugin unloaded
 **Example**:
 
 ```python
-from soothe.core.event_catalog import register_event
+from soothe.core.events import register_event
 from soothe_sdk.events import SootheEvent
 
 class MyPluginEvent(SootheEvent):
@@ -304,20 +304,22 @@ Add validation script to CI pipeline:
 #### Phase 1: Event Catalog Migration (1-2 days)
 
 **Tasks**:
-1. Update `event_catalog.py` type string constants
+1. Update `core/events/catalog.py` type string constants
 2. Update event class `type` field default values
 3. Update `_reg()` calls with new type strings
 4. Update `register_event()` calls in module event files:
-   - `cognition/agent_loop/events.py`
-   - `subagents/browser/events.py`
-   - `subagents/claude/events.py`
-   - `subagents/research/events.py`
-   - `plugin/events.py`
+   - `packages/soothe/src/soothe/core/events/catalog.py` (core registry)
+   - `packages/soothe/src/soothe/core/agent_loop/utils/events.py` (AgentLoop typed events)
+   - `packages/soothe/src/soothe/subagents/browser/events.py`
+   - `packages/soothe/src/soothe/subagents/claude/events.py`
+   - `packages/soothe/src/soothe/subagents/research/events.py`
+   - `packages/soothe/src/soothe/plugin/events.py`
 5. Delete old type string constants completely
 
 **Files**:
-- `packages/soothe/src/soothe/core/event_catalog.py`
-- `packages/soothe/src/soothe/cognition/agent_loop/events.py`
+- `packages/soothe/src/soothe/core/events/catalog.py`
+- `packages/soothe/src/soothe/core/events/constants.py`
+- `packages/soothe/src/soothe/core/agent_loop/utils/events.py`
 - `packages/soothe/src/soothe/subagents/*/events.py`
 - `packages/soothe/src/soothe/plugin/events.py`
 
@@ -330,7 +332,7 @@ Add validation script to CI pipeline:
 
 **Files**:
 - All files that emit events using `custom_event()`
-- All files that import event constants from `event_catalog`
+- All files that import event constants from `soothe.core.events` / `soothe.core.events.catalog`
 
 #### Phase 3: Test Migration (1 day)
 
@@ -454,8 +456,8 @@ The following table recorded an abandoned rename toward `soothe.capability.*`. *
 
 ### 9.2 Phase 1: Event Catalog
 
-- [ ] Migrate `event_catalog.py` core events
-- [ ] Migrate `cognition/agent_loop/events.py`
+- [ ] Migrate `core/events/catalog.py` core events
+- [ ] Migrate `core/events/catalog.py` and per-module `register_event()` sites (e.g. `core/agent_loop/utils/events.py`)
 - [ ] Migrate `subagents/browser/events.py`
 - [ ] Migrate `subagents/claude/events.py`
 - [ ] Migrate `subagents/research/events.py`

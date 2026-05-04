@@ -7,7 +7,7 @@ Completed (verify_finally.sh passed).
 ## Goal
 
 - Align system instructions with RFC-604 two-call planner: **assess** uses instructions that match `StatusAssessment` only; **generate** keeps full plan/step policy (`PlanGeneration` + `AgentDecision`).
-- Reduce token load on `plan-assess` (drop full `PLAN_EXECUTE_LOOP` / action progression / reasoning standards from assess).
+- Reduce token load on `plan-assess` (drop the old combined plan/execute instruction block from the assess system prompt).
 - Compact plan-context human when `iteration > 0` and tighten prior-conversation intro.
 
 ## Scope

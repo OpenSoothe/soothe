@@ -12,7 +12,7 @@
 
 ## Abstract
 
-This RFC defines PlannerProtocol, Soothe's plan creation and revision interface for complex goal decomposition. PlannerProtocol provides plan creation, revision, and reflection methods with LLMPlanner default implementation using two-phase architecture (StatusAssessment + PlanGeneration) for token efficiency. This protocol serves Layer 2 (AgentLoop) and Layer 3 (GoalEngine) planning needs.
+This RFC defines PlannerProtocol, Soothe's plan creation and revision interface for complex goal decomposition. PlannerProtocol provides plan creation, revision, and reflection methods with LLMPlanner default implementation using two-phase architecture (`StatusAssessment` then conditional `PlanGeneration`, merged into `PlanResult`; RFC-604, IG-372/IG-329) for token efficiency. This protocol serves AgentLoop and autonomous goal management planning needs.
 
 ---
 
@@ -125,16 +125,13 @@ class Reflection(BaseModel):
 
 **Note**: Two-phase Plan execution is Layer 2 implementation detail, not protocol requirement. LLMPlanner uses this pattern for efficiency.
 
-**Phase 1: StatusAssessment** (Low token cost):
-- Evaluate current progress
-- Assess goal distance
-- Determine replan need
-- Output: Brief status
+**Phase 1: StatusAssessment** (Low token cost; assess-only system prompt per IG-372):
+- Emit structured `StatusAssessment` (`status`, `goal_progress`, `confidence`, `require_goal_completion`)
 
-**Phase 2: PlanGeneration** (Conditional, high token cost):
-- Only if replan needed
-- Generate full Plan/PlanResult
-- Create execution steps
+**Phase 2: PlanGeneration** (Conditional, higher token cost; skipped when `status="done"`):
+- Emit structured `PlanGeneration` (`plan_action`, `decision`, `next_action` only; IG-329)
+- Uses execution policies plus `plan_generate_instructions`
+- Merged with phase 1 in AgentLoop’s `LLMPlanner` into `PlanResult` for execution
 
 **Implementation** (in Layer 2 AgentLoop, RFC-201):
 ```python
@@ -187,17 +184,14 @@ Plans support hierarchical decomposition:
 ## Configuration
 
 ```yaml
-cognition:
-  planner:
-    enabled: true
-    llm_role: default  # Model role for planning
-
-  # Two-phase execution (Layer 2 implementation)
-  agentic:
-    two_phase_plan:
-      enabled: true
-      phase1_max_tokens: 150
-      phase2_max_tokens: 500
+# Planning is configured on SootheConfig.agentic (see packages/soothe/src/soothe/config/config.yml).
+# LLMPlanner / two-phase StatusAssessment + PlanGeneration (RFC-604, IG-372, IG-329):
+# packages/soothe/src/soothe/core/agent_loop/core/planner.py
+agentic:
+  max_iterations: 10
+  reject_done_at_iteration_zero: false
+  goal_completion_mode: llm_only
+  # ... (full template in repo)
 ```
 
 ---
@@ -226,6 +220,9 @@ cognition:
 ---
 
 ## Changelog
+
+### 2026-05-04
+- Abstract and two-phase bullets aligned with RFC-604 / IG-372 / IG-329 (`StatusAssessment` fields, trimmed `PlanGeneration`, plan-generate prompt fragment).
 
 ### 2026-04-17
 - Consolidated RFC-001 Module 3 (PlannerProtocol) with plan architecture design

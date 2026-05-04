@@ -199,8 +199,8 @@ class PlanResult(BaseModel):
         status: Whether to finish, continue current plan, or replan.
         goal_progress: Estimated progress toward the goal (0.0-1.0).
         confidence: Model confidence in the assessment (0.0-1.0).
-        assessment_reasoning: Phase-1 status justification (StatusAssessment.brief_reasoning).
-        plan_reasoning: Phase-2 plan-strategy text (PlanGeneration.brief_reasoning).
+        assessment_reasoning: Phase-1 status justification (reserved; StatusAssessment has no LLM text field).
+        plan_reasoning: Reserved for phase-2 strategy text; not populated from PlanGeneration (IG-329).
         next_action: User-facing action summary (full text, no truncation).
         full_action: Complete concatenated action from both phases (max 500 chars).
         plan_action: Reuse the in-flight AgentDecision or supply a new one.
@@ -217,10 +217,10 @@ class PlanResult(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0, default=0.8)
 
     assessment_reasoning: str = Field(default="", max_length=500)
-    """StatusAssessment justification (distinct from plan generation reasoning)."""
+    """Reserved; assess-phase schema has no separate justification string (IG-329)."""
 
     plan_reasoning: str = Field(default="", max_length=500)
-    """PlanGeneration strategy justification."""
+    """Reserved; plan-generate structured output does not include a separate strategy string (IG-329)."""
 
     next_action: str = Field(default="", max_length=500)
     """Complete action text from both phases (no truncation, full reasoning chain visible)."""
@@ -281,24 +281,19 @@ class StatusAssessment(BaseModel):
 class PlanGeneration(BaseModel):
     """PlanGeneration: generate execution plan when goal incomplete (RFC-604).
 
-    Conditional schema for plan generation, generates ~400-600 tokens.
-    IG-264: Keep LLM-generated brief_reasoning and next_action for message variety.
+    Conditional schema for the plan-generate LLM call (IG-329: minimal fields only).
 
     Attributes:
         plan_action: Reuse in-flight AgentDecision or supply a new one.
-        decision: New steps to execute (None when plan_action='keep').
-        brief_reasoning: Why this plan strategy was chosen (max 100 chars).
+        decision: New steps to execute (required when plan_action='new').
         next_action: User-facing next step (plan-specific, max 300 chars).
     """
 
     plan_action: Literal["keep", "new"] = "new"
     decision: AgentDecision | None = None
 
-    brief_reasoning: str = Field(default="", max_length=100)
-    """Why this plan strategy was chosen (LLM-generated for variety)."""
-
     next_action: str = Field(default="", max_length=300)
-    """User-facing next step (plan-specific, LLM-generated for variety)."""
+    """User-facing next step (plan-specific)."""
 
     @model_validator(mode="after")
     def _validate_plan_action(self) -> PlanGeneration:

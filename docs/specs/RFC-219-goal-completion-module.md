@@ -53,18 +53,16 @@ This violates **separation of concerns** (RFC-001 §28) and makes AgentLoop orch
 Extract goal completion logic into dedicated module hierarchy:
 
 ```
-cognition/agent_loop/
-├── completion/                    # NEW module directory
-│   ├── __init__.py
-│   ├── goal_completion.py         # Main orchestrator
-│   ├── response_categorizer.py    # Length/goal type classification
-│   ├── synthesis_executor.py      # LLM synthesis execution
-│   └── completion_strategies.py   # Strategy implementations
-└── core/
-    ├── agent_loop.py              # Simplified (calls completion module)
-    ├── executor.py                # Unchanged
-    └── plan_phase.py              # Unchanged
+packages/soothe/src/soothe/core/
+├── agent_loop/
+│   ├── policies/goal_completion_policy.py
+│   ├── analysis/synthesis.py      # synthesis helper(s)
+│   ├── core/agent_loop.py         # invokes goal-completion flow
+│   ├── core/plan_phase.py
+│   └── core/executor.py
+└── runner/                        # wires AgentLoop + streaming (e.g. _runner_agentic)
 ```
+*(Historical draft showed `cognition/agent_loop/completion/`; implementation lives under `core/` per IG consolidation.)*
 
 ### Module Responsibilities
 
@@ -78,10 +76,9 @@ cognition/agent_loop/
 ### Clean Architecture Principles
 
 **Separation of Concerns** (RFC-001 §28):
-- **Policy Layer**: `synthesis_policy.py` (decisions)
-- **Execution Layer**: `completion/synthesis_executor.py` (LLM calls, streaming)
-- **Classification Layer**: `completion/response_categorizer.py` (categorization logic)
-- **Orchestration Layer**: `completion/goal_completion.py` (strategy selection, flow control)
+- **Policy Layer**: `agent_loop/policies/goal_completion_policy.py` and related config (`SootheConfig.agentic.final_response`)
+- **Execution / synthesis**: `agent_loop/analysis/synthesis.py`, `agent_loop/core/agent_loop.py`, runner modules under `core/runner/`
+- *(Historical draft referenced `cognition/agent_loop/completion/*`; code now lives under `packages/soothe/src/soothe/core/`.)*
 
 **Dependency Rule** (Clean Architecture):
 - Orchestration → Strategies → Execution → CoreAgent

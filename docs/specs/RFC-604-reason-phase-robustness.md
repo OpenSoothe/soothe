@@ -3,7 +3,7 @@
 **Status**: Implemented
 **Authors**: Claude Sonnet 4.6
 **Created**: 2026-04-11
-**Last Updated**: 2026-04-12 (IG-153 terminology refactoring)
+**Last Updated**: 2026-05-04 (IG-376: `goal_progress` semantics; plan-context human — RFC-214; IG-329: plan-generate prompt + `PlanGeneration` schema trim)
 **Depends on**: RFC-603-reasoning-quality-progressive-actions, RFC-201-agentloop-plan-execute-loop
 **Supersedes**: ---
 **Stage**: Cognition/AgentLoop
@@ -13,7 +13,9 @@
 
 ## 1. Abstract
 
-This RFC defines a three-layer defense strategy to prevent JSON truncation failures in the Plan phase structured output generation. The strategy combines proactive prevention (schema simplification and query splitting) with reactive fallback (existing retry logic) to ensure reliable operation across all LLM providers, particularly those with constrained output token budgets (DashScope/Kimi). The architecture separates status assessment from plan generation, reducing per-call token requirements while preserving reasoning quality through concatenated phase outputs.
+This RFC defines a three-layer defense strategy to prevent JSON truncation failures in the Plan phase structured output generation. The strategy combines proactive prevention (schema simplification and query splitting) with reactive fallback (existing retry logic) to ensure reliable operation across all LLM providers, particularly those with constrained output token budgets (DashScope/Kimi). The architecture separates status assessment from plan generation, reducing per-call token requirements while preserving decision quality through a merged `PlanResult` (IG-372 assess-only prompt, IG-329 schema-aligned plan-generate prompt and minimal `PlanGeneration` fields).
+
+**`goal_progress` (IG-376, RFC-603 §3.2)**: After Phase 1 returns `StatusAssessment`, `PlanResult.goal_progress` follows the assess model’s numeric field (merged in `_combine_results`). It is **not** overwritten by a secondary evidence/step blend; optional completion heuristics may still raise `status` / progress when the model stalls. **`confidence`** may still be calibrated with execution evidence in `LLMPlanner.plan()` per RFC-603 §3.1.
 
 ---
 
@@ -280,7 +282,7 @@ All in one output → large schema → truncation risk.
 
 #### Call 1: Status Assessment (Lightweight)
 
-**Schema**:
+**Schema** (matches `StatusAssessment` in code; IG-264 / IG-372):
 ```python
 class StatusAssessment(BaseModel):
     """Phase 1: Quick progress/status check."""
@@ -288,15 +290,11 @@ class StatusAssessment(BaseModel):
     status: Literal["continue", "replan", "done"]
     goal_progress: float = Field(default=0.0, ge=0.0, le=1.0)
     confidence: float = Field(default=0.8, ge=0.0, le=1.0)
-
-    brief_reasoning: str = Field(default="", max_length=100)
-    """1-2 sentence status justification."""
-
-    next_action: str = Field(default="", max_length=100)
-    """User-facing next step description."""
+    require_goal_completion: bool = Field(default=False)
+    """When status=\"done\", whether a separate goal-completion / synthesis pass is still required."""
 ```
 
-**Token Budget**: ~400-600 tokens (very lightweight)
+**Token Budget**: ~200–400 tokens (compact assess-only prompt; see IG-372)
 
 **Execution Pattern**:
 - Always executed first
@@ -304,8 +302,7 @@ class StatusAssessment(BaseModel):
 - If `status="continue"/"replan"`: Proceed to Call 2
 
 **Early Completion Optimization**:
-- Simple goals complete in Call 1 only → faster execution
-- User sees Phase 1 reasoning + next_action immediately
+- Simple goals complete after Call 1 only → faster execution (no plan-generate LLM call)
 - No wasted latency on unnecessary plan generation
 
 #### Call 2: Plan Generation (Conditional)
@@ -316,16 +313,13 @@ class PlanGeneration(BaseModel):
     """Phase 2: Generate execution plan (conditional)."""
 
     plan_action: Literal["keep", "new"] = "new"
-    decision: AgentDecision
+    decision: AgentDecision | None = None
 
-    brief_reasoning: str = Field(default="", max_length=100)
-    """Why this plan strategy was chosen."""
-
-    next_action: str = Field(default="", max_length=100)
+    next_action: str = Field(default="", max_length=300)
     """User-facing next step (plan-specific)."""
 ```
 
-**Token Budget**: ~900-1300 tokens (focused on plan only)
+**Token Budget**: ~500–900 tokens (execution policies + plan-generate instructions; schema trimmed, IG-329)
 
 **Execution Pattern**:
 - Only executed if `status != "done"`
@@ -345,59 +339,45 @@ plan_messages = messages + [context_msg]
 
 **Result Combination Pattern**:
 ```python
-# Concatenate reasoning from both phases
-combined_reasoning = (
-    f"[Assessment] {assessment.brief_reasoning}\n"
-    f"[Plan] {plan_result.brief_reasoning}"
-)
+# Phase-2 structured output does not include a separate plan strategy string (IG-329).
+# PlanResult.plan_reasoning remains available for compatibility but is left empty from this path.
+combined_reasoning = ""
 
-# Concatenate next_action from both phases
-combined_next_action = (
-    f"{assessment.next_action}\n"
-    f"{plan_result.next_action}"
-)
+# User-facing action line comes from plan-generate (IG-329); assess has no next_action field.
+next_action = (plan_result.next_action or "").strip()
 
-# Build final PlanResult
+# Build final PlanResult (illustrative; see LLMPlanner._combine_results)
 return PlanResult(
     status=assessment.status,
     goal_progress=assessment.goal_progress,
     confidence=assessment.confidence,
-    reasoning=combined_reasoning,
+    assessment_reasoning="",
+    plan_reasoning=combined_reasoning,
     plan_action=plan_result.plan_action,
     decision=plan_result.decision,
-    next_action=combined_next_action,
+    next_action=next_action,
 )
 ```
 
-**User Display Pattern**:
-```
-[Reason Phase 1 - Status Assessment]
-Reasoning: Goal is mostly complete, evidence shows UX module analyzed.
-Next action: I'll finalize the UX architecture summary.
+**User Display Pattern** (illustrative; actual UI uses `PlanResult` / stream events):
+- After **assess**: progress and status drive whether plan-generate runs; there is no separate assess-phase prose field on the schema.
+- After **plan-generate** (when run): user-facing line is primarily `PlanResult.next_action` from `PlanGeneration.next_action`; `PlanResult.plan_reasoning` is not filled from structured plan output (IG-329).
 
-[Reason Phase 2 - Plan Generation]
-Reasoning: Since goal is complete, no new plan needed.
-Next action: I'll compile the final UX architecture report.
-```
-
-**Benefit**: User sees complete reasoning chain (transparent execution).
+**Benefit**: Smaller structured schemas, fewer truncation failures, prompts aligned to each call’s Pydantic model.
 
 ### 7.3 Token Budget Per Phase
 
 **Phase 1 (StatusAssessment)**:
 ```
-brief_reasoning:   ~50-100 tokens (max 100 chars)
-next_action:       ~50-100 tokens (max 100 chars)
-status/progress:   ~10-20 tokens
+status/progress/confidence/require_goal_completion: ~30-80 tokens
 
 Total Phase 1:     ~200-250 tokens ✅ (very safe)
 ```
 
 **Phase 2 (PlanGeneration)**:
 ```
-brief_reasoning:   ~50-100 tokens (max 100 chars)
-next_action:       ~50-100 tokens (max 100 chars)
-decision.steps:    ~250-500 tokens (5 steps max)
+plan_action + next_action: ~30-80 tokens
+decision.steps:    ~250-500 tokens (few steps; see execution policies)
 
 Total Phase 2:     ~500-800 tokens ✅ (safe margin)
 ```
@@ -424,7 +404,7 @@ Total Phase 2:     ~500-800 tokens ✅ (safe margin)
 
 ### 8.1 Existing Fallback Logic
 
-**Location**: `src/soothe/cognition/agent_loop/llm.py` (lines 1088-1189)
+**Location**: `packages/soothe/src/soothe/core/agent_loop/core/planner.py` (structured Plan / retry; historical refs to `llm.py` pre-merge)
 
 **Current Pipeline**:
 ```python
@@ -568,7 +548,7 @@ for attempt in range(3):
 |-----------|--------|-------------|
 | Latency acceptable | ≤15s for complex goals | Integration test measurements |
 | User experience unchanged | Clear progress display | Manual UX testing |
-| Combined reasoning quality | Complete chain visible | Manual review of phase outputs |
+| Plan UX clarity | Action line + execution evidence visible | Manual review of `PlanResult` / stream events |
 | Early completion optimization | Faster simple goals | Latency comparison (simple vs complex) |
 
 ### 11.3 Nice to Have
@@ -585,11 +565,11 @@ for attempt in range(3):
 
 ### 12.1 Reasoning Field Length
 
-**Question**: Should `reasoning` be 500 chars or shorter (200 chars)?
+**Question**: Should nested `AgentDecision.reasoning` (and similar internal fields) be capped at 500 chars or shorter (200 chars)?
 
 **Options**:
-- 500 chars: Allows combined reasoning from both phases (100+100=200 chars)
-- 200 chars: Matches current logging truncation (very brief)
+- 500 chars: Room for evidence-citing step rationale inside `AgentDecision`
+- 200 chars: Matches terse logging / display truncation
 
 **Recommendation**: Start with 500 chars (allows expansion), reduce to 200 if budget still exceeds limits.
 
@@ -615,13 +595,9 @@ for attempt in range(3):
 
 ### 12.4 Phase Display Strategy
 
-**Question**: Should both phases display `next_action` to user?
+**Question**: How should UX surface plan phase output?
 
-**Options**:
-- Both phases: Transparent execution (user sees reasoning chain)
-- Plan only: Cleaner display, less verbosity
-
-**Recommendation**: Display both phases (transparent execution, shows reasoning chain).
+**Resolved (IG-329 / IG-372)**: `StatusAssessment` has no `next_action` or `brief_reasoning` fields. The user-facing iteration summary comes from merged `PlanResult.next_action` (from `PlanGeneration.next_action` when plan-generate runs). Optional events may still expose `plan_reasoning` for compatibility; it is left empty from the plan-generate structured path.
 
 ---
 
@@ -642,7 +618,7 @@ for attempt in range(3):
 
 ## 14. Conclusion
 
-This RFC defines a robust three-layer defense strategy to prevent JSON truncation failures in structured output generation. By combining proactive schema simplification (Layer 1) and query splitting (Layer 2) with reactive fallback (Layer 3), the architecture ensures reliable Plan phase operation across all LLM providers. The design reduces token budgets by 40-60% while preserving critical reasoning quality through concatenated phase outputs and evidence-based metrics. The universal approach eliminates provider-specific complexity while gracefully handling edge cases through existing fallback mechanisms.
+This RFC defines a robust three-layer defense strategy to prevent JSON truncation failures in structured output generation. By combining proactive schema simplification (Layer 1) and query splitting (Layer 2) with reactive fallback (Layer 3), the architecture ensures reliable Plan phase operation across all LLM providers. The design reduces token budgets by 40-60% while preserving actionable plan output through a merged `PlanResult` (assess metrics + plan-generate `next_action` / `decision`) and evidence-based metrics. The universal approach eliminates provider-specific complexity while gracefully handling edge cases through existing fallback mechanisms.
 
 > **Reliability through layered defense: proactive prevention before reactive fallback**
 
@@ -686,6 +662,12 @@ This RFC defines a robust three-layer defense strategy to prevent JSON truncatio
 | **Total** | | **~360 lines** |
 
 **Timeline**: 1-2 days implementation + testing.
+
+---
+
+## Document history
+
+- **2026-05-04 (IG-329)**: `StatusAssessment` / `PlanGeneration` schema snippets and §7.2 merge example aligned with code; plan-generate prompt uses `plan_generate_instructions.xml`; §12 open questions updated where superseded by implementation.
 
 ---
 

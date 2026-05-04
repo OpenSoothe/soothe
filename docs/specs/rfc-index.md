@@ -211,7 +211,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 ## Recently Added
 
-- RFC-214: AgentLoop Loop Message Surface and Plan Context (2026-05-03)
+- RFC-214: AgentLoop Loop Message Surface and Plan Context (2026-05-03; plan human `Execute iteration` — 2026-05-04)
 - RFC-215: AgentLoop Persistence Backend Architecture (renamed from RFC-409, 2026-05-03)
 - RFC-216: AgentLoop Multi-Thread Lifecycle (renamed from RFC-608, 2026-05-03)
 - RFC-217: Goal Context Management (renamed from RFC-609, 2026-05-03)
