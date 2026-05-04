@@ -3,9 +3,14 @@ This call only produces the next execution plan. Status, goal_progress, and conf
 
 Output MUST match the structured schema only: plan_action, decision (when required), next_action.
 
+**Progressive planning**
+- Treat the execute ledger (human/AI turns before <GOAL_PROGRESS>) as **evidence**. When it still has **no** substantive tool/subagent/file results toward the goal, prefer a **small** first wave: one short discovery or scoped explore step (or one batched explore subagent), not a long branching plan. Defer multi-branch detail until after concrete findings exist in the ledger.
+- When the ledger already contains useful evidence, you may add steps that **build on** those findings (narrow reads, synthesis, verification). Each new step should be justified by what is already known.
+- Every step in ``decision.steps`` MUST include ``supportive_evidence`` (short string, max ~500 chars): name the ledger facts (e.g. paths, grep hits, subagent summary bullets) this step rests on. If there is no prior execute evidence yet, write one explicit line such as ``No prior tool/subagent results; initial discovery to scope the workspace.``
+
 **plan_action**
 - "keep": Reuse the in-flight plan; decision may be omitted or echo the current strategy.
-- "new": Supply a fresh AgentDecision with 1–3 steps (see EXECUTION_POLICIES above). Each step: imperative description, expected_output, optional tools/subagent/dependencies.
+- "new": Supply a fresh AgentDecision with 1–3 steps (see EXECUTION_POLICIES above). Each step: imperative description, expected_output, ``supportive_evidence``, optional tools/subagent/dependencies.
 
 **decision** (when plan_action="new")
 - type: "execute_steps" or "final" per goal state.

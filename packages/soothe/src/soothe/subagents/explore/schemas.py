@@ -42,6 +42,18 @@ class ExploreResult(BaseModel):
     thoroughness: str
     matches: list[MatchEntry]  # Top matches, sorted by relevance
     summary: str  # Brief answer to the search target
+    suggested_next_actions: str = Field(
+        default="",
+        description="Markdown bullets: concrete next steps for parent (read_file/grep paths)",
+    )
+    coverage_gaps: str = Field(
+        default="",
+        description="What was not searched, limits, assumptions",
+    )
+    architecture_notes: str = Field(
+        default="",
+        description="Optional bullets for broad architecture-style targets; empty if N/A",
+    )
 
 
 def _md_single_line(text: str, max_len: int) -> str:
@@ -94,6 +106,33 @@ def format_explore_result_markdown(result: ExploreResult) -> str:
                 lines.append(snippet)
                 lines.append("```")
             lines.append("")
+    if (result.suggested_next_actions or "").strip():
+        lines.extend(
+            [
+                "## Suggested next actions",
+                "",
+                result.suggested_next_actions.strip(),
+                "",
+            ]
+        )
+    if (result.coverage_gaps or "").strip():
+        lines.extend(
+            [
+                "## Coverage and gaps",
+                "",
+                result.coverage_gaps.strip(),
+                "",
+            ]
+        )
+    if (result.architecture_notes or "").strip():
+        lines.extend(
+            [
+                "## Architecture notes",
+                "",
+                result.architecture_notes.strip(),
+                "",
+            ]
+        )
     return "\n".join(lines).strip() + "\n"
 
 

@@ -586,6 +586,33 @@ AgenticFinalResponseMode = Literal["adaptive", "always_synthesize", "always_last
 AgenticGoalCompletionMode = Literal["llm_only", "heuristic_only", "hybrid"]
 
 
+class PlanPromptLedgerConfig(BaseModel):
+    """Caps for RFC-214 ledger copies sent to plan-assess / plan-generate (IG-380).
+
+    All limits use 0 to mean unlimited (preserve legacy behavior: full ledger, no copies).
+    When any limit is positive, the plan phase uses deep-copied, trimmed messages only.
+    """
+
+    plan_ledger_max_messages: int = Field(
+        default=0,
+        ge=0,
+        le=500,
+        description="Max ledger messages tail for plan prompts (0 = unlimited)",
+    )
+    plan_ledger_max_total_chars: int = Field(
+        default=0,
+        ge=0,
+        le=2_000_000,
+        description="Max total extracted characters for plan ledger projection (0 = unlimited)",
+    )
+    plan_ledger_max_message_chars: int = Field(
+        default=0,
+        ge=0,
+        le=500_000,
+        description="Max extracted characters per ledger message in plan projection (0 = unlimited)",
+    )
+
+
 class AgenticLoopConfig(BaseModel):
     """Configuration for agentic loop execution mode (RFC-201).
 
@@ -605,6 +632,7 @@ class AgenticLoopConfig(BaseModel):
         reject_done_at_iteration_zero: Guard against premature completion at iteration 0.
         goal_completion_mode: How planner completion (`require_goal_completion`) combines with
             execution heuristics when the goal is assessed as done (IG-298).
+        plan_prompt_ledger: Ledger projection caps for Plan-phase LLM prompts (IG-380).
 
     Note: Performance optimizations (unified_classification, optimize_system_prompts, parallel_pre_stream)
     are always enabled by design and not configurable.
@@ -701,6 +729,11 @@ class AgenticLoopConfig(BaseModel):
     report_output: ReportOutputConfig = Field(
         default_factory=ReportOutputConfig,
         description="Terminal/file behavior for synthesized goal reports",
+    )
+
+    plan_prompt_ledger: PlanPromptLedgerConfig = Field(
+        default_factory=PlanPromptLedgerConfig,
+        description="Plan-phase ledger projection limits (IG-380); zeros = full ledger passthrough",
     )
 
 
