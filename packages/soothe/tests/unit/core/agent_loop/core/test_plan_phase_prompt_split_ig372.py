@@ -87,13 +87,16 @@ def test_assess_iteration_zero_goal_progress_footer() -> None:
     assert "Execute iteration: 1/8" in system
 
 
-def test_generate_human_still_includes_goal_and_execute_iteration() -> None:
-    """Plan-generate keeps Goal + Execute iteration on the plan-context human."""
+def test_generate_goal_progress_in_system_not_human_ig378() -> None:
+    """Plan-generate puts Goal + Execute iteration in system <GOAL_PROGRESS>; no trailing human without prior thread."""
     state = LoopState(goal="read readme", thread_id="t1", iteration=2, max_iterations=8)
     builder = PromptBuilder()
     messages = builder.build_plan_messages(
         "read readme", state, PlanContext(), plan_phase="generate"
     )
-    human = messages[-1].content
-    assert human.startswith("Goal: read readme\nExecute iteration: 3/8")
-    assert "<GOAL_PROGRESS>" not in human
+    assert len(messages) == 1
+    system = messages[0].content
+    assert "<PLAN_GENERATE>" in system
+    assert "<GOAL_PROGRESS>" in system
+    assert "Goal: read readme" in system
+    assert "Execute iteration: 3/8" in system

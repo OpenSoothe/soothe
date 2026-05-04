@@ -1,5 +1,5 @@
 <PLAN_GENERATE>
-This call only produces the next execution plan. Status, goal_progress, and confidence were already decided in the prior assess call; the message appended after the ledger (`Status: …, Progress: …`) is authoritative.
+This call only produces the next execution plan. Status, goal_progress, and confidence were already decided in the prior assess call; the message appended after the ledger (`Status: …, Progress: …`) is authoritative. Use the goal and execute-iteration values in the <GOAL_PROGRESS> block at the end of this system prompt for scope and iteration context.
 
 Output MUST match the structured schema only: plan_action, decision (when required), next_action.
 
