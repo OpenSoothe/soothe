@@ -98,7 +98,6 @@ class RunnerState:
         workspace: Thread-specific workspace path (RFC-103)
         recalled_memories: Memory items recalled for this query
         recalled_memory_count: Number of memories recalled
-        unified_classification: Routing classification (deprecated, use intent_classification)
         intent_classification: IG-226 Intent classification with goal handling strategy
         git_status: Git snapshot for planner prompts
         protocol_summary: Protocol backend summary for system prompt
@@ -124,7 +123,6 @@ class RunnerState:
     recalled_memories: list[Any] = field(default_factory=list)
     seen_message_ids: set[str] = field(default_factory=set)
     stream_error: str | None = None
-    unified_classification: Any = None  # Type: UnifiedClassification
     intent_classification: Any = (
         None  # IG-226: Type: IntentClassification with goal handling strategy
     )

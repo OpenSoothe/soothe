@@ -460,13 +460,16 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
             user_input,
         )
 
-        # Inject classification into agent state for middleware access
+        # Inject classification into agent state for middleware access (IG-296: use intent_classification)
         stream_input: dict[str, Any] | Command = {"messages": enriched_messages}
-        if state.unified_classification:
-            stream_input["unified_classification"] = state.unified_classification
+        if state.intent_classification:
+            # Middleware expects RoutingClassification format
+            stream_input["unified_classification"] = (
+                state.intent_classification.to_routing_classification()
+            )
             logger.debug(
                 "Injected LLM classification into agent state: task_complexity=%s",
-                state.unified_classification.task_complexity,
+                state.intent_classification.task_complexity,
             )
 
         # Inject context for system prompt XML sections (RFC-104)
@@ -620,8 +623,8 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
         Args:
             user_input: User query text.
             state: Mutable RunnerState.
-            complexity: Override complexity (when known from unified classification).
-                Falls back to state.unified_classification or "medium".
+            complexity: Override complexity (when known from intent classification).
+                Falls back to state.intent_classification.task_complexity or "medium".
         """
         self._ensure_runner_state_workspace(state)
 
@@ -631,8 +634,8 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
 
         if complexity is None:
             complexity = (
-                state.unified_classification.task_complexity
-                if state.unified_classification
+                state.intent_classification.task_complexity
+                if state.intent_classification
                 else "medium"
             )
 
@@ -737,7 +740,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
         """Planning phase of pre-stream.  Requires enrichment (template_intent) in state.
 
         Must be called after tier-2 enrichment completes and
-        ``state.unified_classification`` is populated.
+        ``state.intent_classification`` is populated.
         """
         if self._planner:
             try:
@@ -746,7 +749,9 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                     recent_messages=[user_input],
                     available_capabilities=capabilities,
                     completed_steps=[],
-                    unified_classification=state.unified_classification,
+                    unified_classification=state.intent_classification.to_routing_classification()
+                    if state.intent_classification
+                    else None,
                     workspace=state.workspace,  # Pass workspace for planning context
                     git_status=getattr(state, "git_status", None),
                     thread_id=getattr(state, "thread_id", None),

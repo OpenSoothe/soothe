@@ -180,10 +180,9 @@ class AutonomousMixin(GoalDirectivesMixin):
                     yield chunk
                 return
 
-            # Convert IntentClassification to RoutingClassification for routing
-            state.unified_classification = intent_classification.to_routing_classification()
+            # IG-296: unified_classification deprecated - intent_classification is authoritative
+            # No need to set unified_classification, backward compatibility property handles it
         else:
-            state.unified_classification = None
             state.intent_classification = None
 
         async for chunk in self._pre_stream_independent(user_input, state):
@@ -607,7 +606,7 @@ class AutonomousMixin(GoalDirectivesMixin):
             iter_state.workspace = getattr(parent_state, "workspace", None)
             self._ensure_runner_state_workspace(iter_state)
             self._ensure_artifact_store(iter_state)
-            iter_state.unified_classification = parent_state.unified_classification
+            iter_state.intent_classification = getattr(parent_state, "intent_classification", None)
             iter_state.context_projection = getattr(parent_state, "context_projection", None)
             iter_state.recalled_memories = list(
                 getattr(parent_state, "recalled_memories", []) or []
