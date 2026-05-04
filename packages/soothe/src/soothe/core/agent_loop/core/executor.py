@@ -87,6 +87,21 @@ class Executor:
         self._config = config
         self._goal_context_manager = goal_context_manager
 
+    def _executor_langfuse_merge_for_stream(
+        self, base: dict[str, Any], *, thread_id: str | None
+    ) -> dict[str, Any]:
+        """Merge Langfuse callback into RunnableConfig with execute-phase run name (IG-377)."""
+        if self._config is None:
+            return base
+        tn = (self._config.observability.langfuse.trace_name or "").strip()
+        run_name = f"{tn}:execute-step" if tn else "execute-step"
+        return merge_langfuse_runnable_config(
+            base,
+            self._config,
+            session_id=thread_id,
+            run_name=run_name,
+        )
+
     async def _claude_runner_config_extras(self, thread_id: str) -> dict[str, Any]:
         """Load Claude session ids + durability handle for subagent resume (IG-202)."""
         if not thread_id or self._config is None:
@@ -702,10 +717,8 @@ class Executor:
             # RFC-214: Execute batch with N Human messages
             graph_config: dict[str, Any] = {"configurable": configurable}
             if self._config is not None:
-                graph_config = merge_langfuse_runnable_config(
-                    graph_config,
-                    self._config,
-                    session_id=state.thread_id,
+                graph_config = self._executor_langfuse_merge_for_stream(
+                    graph_config, thread_id=state.thread_id
                 )
             stream = self.core_agent.astream(
                 self._execute_graph_input(
@@ -917,11 +930,7 @@ class Executor:
             # The middleware should check for absence and not inject contract
             config: dict[str, Any] = {"configurable": configurable}
             if self._config is not None:
-                config = merge_langfuse_runnable_config(
-                    config,
-                    self._config,
-                    session_id=cfg_thread,
-                )
+                config = self._executor_langfuse_merge_for_stream(config, thread_id=cfg_thread)
 
             step_body = f"Execute: {step.description}"
             logger.debug("[Human Message] %s", log_preview(step_body, chars=150))
