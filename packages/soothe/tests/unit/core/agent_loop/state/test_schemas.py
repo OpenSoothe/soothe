@@ -194,6 +194,50 @@ class TestAgentDecision:
         assert out.steps[1].dependencies == ["KFA-001"]
         assert out.steps[2].dependencies == ["KFA-002", "step_001"]
 
+    def test_assign_plan_step_ids_digit_alias_dependency_ig379(self) -> None:
+        """Numeric dependency string maps to the unique digit-only step id (IG-379)."""
+        d0 = StepAction(id="01", description="First", expected_output="o")
+        d1 = StepAction(
+            id="02",
+            description="Second",
+            expected_output="o",
+            dependencies=["1"],
+        )
+        decision = AgentDecision(
+            type="execute_steps",
+            steps=[d0, d1],
+            execution_mode="dependency",
+            reasoning="t",
+        )
+        out = assign_plan_step_ids(decision, plan_id="ZZZ")
+        assert out.steps[0].id == "ZZZ-01"
+        assert out.steps[1].dependencies == ["ZZZ-01"]
+
+    def test_assign_plan_step_ids_ambiguous_digit_dependency_untouched(self, caplog) -> None:
+        """Two digit-only ids with the same int value: do not guess; leave dep unchanged."""
+        import logging
+
+        from soothe.core.agent_loop.state import schemas as schemas_mod
+
+        d0 = StepAction(id="01", description="a", expected_output="o")
+        d1 = StepAction(id="001", description="b", expected_output="o")
+        d2 = StepAction(
+            id="03",
+            description="c",
+            expected_output="o",
+            dependencies=["1"],
+        )
+        decision = AgentDecision(
+            type="execute_steps",
+            steps=[d0, d1, d2],
+            execution_mode="dependency",
+            reasoning="t",
+        )
+        with caplog.at_level(logging.WARNING, logger=schemas_mod.logger.name):
+            out = assign_plan_step_ids(decision, plan_id="ZZZ")
+        assert out.steps[2].dependencies == ["1"]
+        assert any("Ambiguous numeric dependency" in r.message for r in caplog.records)
+
     def test_assign_plan_step_ids_duplicate_composite_raises(self) -> None:
         """Model id 001 and already-scoped KFA-001 collapse under the same plan."""
         d0 = StepAction(id="001", description="a", expected_output="o")

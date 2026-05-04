@@ -41,14 +41,11 @@ from ._runner_checkpoint import CheckpointMixin
 from ._runner_phases import PhasesMixin
 from ._runner_shared import StreamChunk
 from ._runner_steps import StepLoopMixin
-from ._types import IterationRecord, RunnerState, _generate_thread_id
+from ._types import _generate_thread_id
 
 # Re-export types
 __all__ = [
-    "IterationRecord",
-    "RunnerState",
     "SootheRunner",
-    "StreamChunk",
     "_generate_thread_id",
 ]
 

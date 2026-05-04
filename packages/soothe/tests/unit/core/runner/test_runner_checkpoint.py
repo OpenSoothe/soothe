@@ -10,8 +10,9 @@ import pytest
 
 from soothe.config import SootheConfig
 from soothe.core.persistence import RunArtifactStore
-from soothe.core.runner import RunnerState, SootheRunner
+from soothe.core.runner import SootheRunner
 from soothe.core.runner._runner_autonomous import AutonomousMixin
+from soothe.core.runner._types import RunnerState
 from soothe.protocols.planner import Plan, PlanStep
 
 
