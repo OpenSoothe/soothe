@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **IG-339**: Removed `soothe.capability.*` custom-stream event types for built-in subagents. External integrators must subscribe to allowlisted `soothe.subagent.*` types (see `soothe_sdk.core.subagent_wire`) and use the `messages` stream for full tool/assistant transcripts where applicable.
 
 ### Added
+- IG-379: Langfuse Cost Dashboard bridge — `observability.langfuse.tags` / `user_id` merged into Runnable metadata; implementation guide for model pricing and verification
 - Dockerfile for Soothe daemon with full extras and Playwright support
 - IG-300: per-loop daemon workspace under ``$SOOTHE_HOME/Workspace/<loop_id>/``; unified tool metadata helpers for policy path extraction; ``PolicyContext.workspace`` for stream-scoped filesystem checks
 

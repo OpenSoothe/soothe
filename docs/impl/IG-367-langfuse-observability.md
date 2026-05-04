@@ -26,6 +26,10 @@ docker compose up -d
 - Enable tracing in Soothe via `observability.langfuse` in `config/config.dev.yml` (or your chosen YAML).
 - Langfuse services are part of the default `docker compose` stack (same file as `soothe-pgvector`); omit or scale them to zero if you only need the database.
 
+## Cost Dashboard and pricing
+
+For Langfuse **Cost Dashboard** setup (tags, optional `user_id`, model `match_pattern` examples, verification), see [IG-379](IG-379-langfuse-cost-dashboard-bridge.md).
+
 ## Verification
 
 Run `./scripts/verify_finally.sh` before merge.
