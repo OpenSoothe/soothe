@@ -250,68 +250,6 @@ def _actions_semantically_similar(action1: str, action2: str) -> bool:
     return similarity >= 0.7  # 70% word overlap indicates similar actions
 
 
-def _calculate_evidence_based_progress(
-    state: LoopState,
-    plan_result: Any,
-) -> float:
-    """Calculate progress from evidence, not just LLM estimate.
-
-    Formula:
-    progress = (
-        llm_progress * 0.6 +
-        step_completion_ratio * 0.2 +
-        evidence_growth_rate * 0.2
-    )
-
-    Args:
-        state: Loop state with accumulated evidence
-        plan_result: Plan result with LLM progress
-
-    Returns:
-        Float between 0.0 and 1.0
-    """
-    # Special case: if status is "done", return 1.0
-    if plan_result.status == "done":
-        return 1.0
-
-    # LLM progress (60% weight)
-    llm_progress = plan_result.goal_progress or 0.0
-
-    # Step completion ratio (20% weight)
-    if not state.step_results:
-        step_completion_ratio = 0.0
-    else:
-        completed = sum(1 for r in state.step_results if r.success)
-        step_completion_ratio = completed / len(state.step_results)
-
-    # Evidence growth rate (20% weight)
-    # Compare recent evidence to earlier evidence
-    min_results_for_growth = 2
-    if len(state.step_results) < min_results_for_growth:
-        evidence_growth_rate = 0.5  # Neutral if insufficient data
-    else:
-        # Recent evidence (last 3 results)
-        # RFC-211: Use outcome metadata to get size
-        recent_length = sum(
-            r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0
-            for r in state.step_results[-3:]
-        )
-        # Earlier evidence (first results)
-        earlier_length = sum(
-            r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0
-            for r in state.step_results[:3]
-        )
-
-        evidence_growth_rate = (
-            0.5 if earlier_length == 0 else min(recent_length / earlier_length, 1.0)
-        )
-
-    # Combined score
-    progress = llm_progress * 0.6 + step_completion_ratio * 0.2 + evidence_growth_rate * 0.2
-
-    return min(max(progress, 0.0), 1.0)  # Clamp to [0, 1]
-
-
 _SIMPLE_PLANNER_HINT_MAP = {
     "browser": "subagent",
     "search": "tool",
@@ -953,7 +891,6 @@ class LLMPlanner:
             return PlanGeneration(
                 plan_action="new",
                 decision=_default_agent_decision(goal, iteration),
-                brief_reasoning="Plan generation failed, using fallback",
                 next_action="I'll proceed with a default plan.",
             )
 
@@ -964,7 +901,7 @@ class LLMPlanner:
     ) -> Any:
         """Combine StatusAssessment and PlanGeneration results (RFC-604, IG-152).
 
-        Uses LLM-generated brief_reasoning and next_action for variety.
+        Uses plan_result.next_action for the user-facing action line (IG-329).
 
         Args:
             assessment: StatusAssessment result
@@ -975,9 +912,6 @@ class LLMPlanner:
         """
         from soothe.core.agent_loop.state.schemas import PlanResult
         from soothe.utils.text_preview import preview_first
-
-        # IG-264: Only use plan_result.brief_reasoning (assessment removed)
-        pr = (plan_result.brief_reasoning or "").strip()
 
         # Use plan_result.next_action (concrete, actionable)
         action_text = plan_result.next_action.strip()
@@ -990,7 +924,7 @@ class LLMPlanner:
             goal_progress=assessment.goal_progress,
             confidence=assessment.confidence,
             assessment_reasoning="",
-            plan_reasoning=pr,
+            plan_reasoning="",
             plan_action=plan_result.plan_action,
             decision=plan_result.decision,
             next_action=action_text,
@@ -1006,7 +940,7 @@ class LLMPlanner:
         """Plan execution using two-call architecture (RFC-604).
 
         StatusAssessment call: lightweight status check (compact assess-only system prompt, IG-372)
-        PlanGeneration call: conditional plan generation (full policies + plan instructions)
+        PlanGeneration call: conditional plan generation (execution policies + plan-generate instructions, IG-329)
 
         Returns combined PlanResult with evidence-based metrics applied.
         """
@@ -1248,9 +1182,8 @@ class LLMPlanner:
                     }
                 )
 
-        # RFC-603: Apply evidence-based confidence and progress
+        # RFC-603: Apply evidence-based confidence; goal_progress stays LLM assess output (IG-376).
         result.confidence = _calculate_evidence_based_confidence(state, result)
-        result.goal_progress = _calculate_evidence_based_progress(state, result)
 
         # Fallback completion detection (IG-134)
         result = _detect_completion_fallback(state, result, goal)

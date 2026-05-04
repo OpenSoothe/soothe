@@ -4,13 +4,14 @@
 **Type**: Feature Enhancement
 **Authors**: Claude Code
 **Created**: 2026-04-09
-**Related**: IG-143, RFC-0008 (Agentic Loop)
+**Last Updated**: 2026-05-04 (IG-376: LLM-only `goal_progress`; confidence blend path; RFC cross-refs)
+**Related**: IG-143, IG-376, RFC-0008 (Agentic Loop), RFC-214, RFC-604
 
 ---
 
 ## Abstract
 
-Refactor the reasoning layer to ensure progressive action descriptions and comprehensive final reports. This RFC addresses IG-143 Issues #2 and #3 by implementing prompt engineering, post-processing, and an optional synthesis phase. Additionally improves confidence estimation and progress tracking with evidence-based calculations.
+Refactor the reasoning layer to ensure progressive action descriptions and comprehensive final reports. This RFC addresses IG-143 Issues #2 and #3 by implementing prompt engineering, post-processing, and an optional synthesis phase. Additionally improves **confidence** estimation with an evidence-based blend in `LLMPlanner` (`packages/soothe/src/soothe/core/agent_loop/core/planner.py`). **`goal_progress`** is the assess model’s own estimate (see §3.2); it is not blended with step/evidence ratios (IG-376).
 
 ---
 
@@ -52,9 +53,9 @@ It's a Python-based system with ~18K lines across 338 files...
 
 ### Problem 3: Unreliable Quality Metrics
 
-Current confidence and progress metrics rely solely on LLM self-assessment without evidence validation.
+LLM **confidence** benefits from calibration against execution outcomes. **`goal_progress`**, by contrast, is easier for users to interpret when it tracks the assess model’s judgment of how much of the goal the ledger satisfies, without a second hidden blend (IG-376).
 
-**Impact**: Confidence/progress often inaccurate, misleading users about actual completion.
+**Impact**: Misleading confidence is mitigated with evidence-aware blending; `goal_progress` stays aligned with StatusAssessment output (plus completion heuristics where applicable).
 
 ---
 
@@ -107,7 +108,7 @@ def get_recent_actions(self, n: int = 3) -> list[str]
 
 #### 2.1 Synthesis Trigger Logic
 
-**Location**: `src/soothe/cognition/agent_loop/synthesis.py` (NEW)
+**Location**: `packages/soothe/src/soothe/core/agent_loop/analysis/synthesis.py` (target / evolution)
 
 **Class**: `SynthesisPhase`
 
@@ -171,7 +172,7 @@ Evidence-based heuristics only (no keyword matching).
 
 #### 2.4 Integration
 
-**Location**: `src/soothe/cognition/agent_loop/loop_agent.py`
+**Location**: `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py`
 
 **Trigger Point**: After `reason_result.is_done()` returns True
 
@@ -190,7 +191,7 @@ Evidence-based heuristics only (no keyword matching).
 
 #### 3.1 Evidence-Based Confidence
 
-**Location**: `src/soothe/cognition/planning/simple.py`
+**Location**: `packages/soothe/src/soothe/core/agent_loop/core/planner.py` (`_calculate_evidence_based_confidence`)
 
 **Function**:
 ```python
@@ -215,36 +216,15 @@ confidence = (
 - Evidence volume (30%): 0 chars = 0.0, 2000+ chars = 1.0
 - Iteration efficiency (40%): Progress per iteration
 
-**Integration**: Apply after parsing LLM response in `parse_reason_response_text()`.
+**Integration**: Applied at the end of `LLMPlanner.plan()` after `StatusAssessment` / `PlanGeneration` are combined into `PlanResult` (RFC-604; IG-329: plan-generate structured output is `plan_action`, `decision`, `next_action` only).
 
-#### 3.2 Evidence-Based Progress
+#### 3.2 Goal progress (LLM-only)
 
-**Location**: `src/soothe/cognition/planning/simple.py`
+**Status**: **Superseded (IG-376, 2026-05-04)**
 
-**Function**:
-```python
-def _calculate_evidence_based_progress(
-    state: LoopState,
-    reason_result: ReasonResult,
-) -> float
-```
+Earlier drafts described blending `goal_progress` with step-completion and evidence-growth ratios. That approach is **removed**. `PlanResult.goal_progress` is taken from **Phase 1 `StatusAssessment.goal_progress`** (and carried through `_combine_results`), except where completion fallback logic adjusts `status` / `goal_progress` for stuck loops.
 
-**Formula**:
-```
-progress = (
-    llm_progress * 0.6 +
-    step_completion_ratio * 0.2 +
-    evidence_growth_rate * 0.2
-)
-```
-
-**Factors**:
-- Step completion (20%): Completed steps / total steps
-- Evidence growth (20%): Recent vs earlier evidence ratio
-
-**Special Case**: If `status="done"`, return 1.0.
-
-**Integration**: Apply after parsing LLM response in `parse_reason_response_text()`.
+**Rationale**: Numeric blending often disagreed with user-visible evidence and obscured the assess model’s answer; UX and prompts now emphasize a clear **Execute iteration** header in the plan-context human message (RFC-214) so the model can align `goal_progress` with the ledger and cycle index.
 
 #### 3.3 Better Reasoning Guidance
 
@@ -270,7 +250,7 @@ Status=continue to examine remaining backends."
 
 #### 4.1 ReasonResult Updates
 
-**Location**: `src/soothe/cognition/agent_loop/schemas.py`
+**Location**: `packages/soothe/src/soothe/core/agent_loop/state/schemas.py`
 
 **New Fields**:
 
@@ -297,7 +277,7 @@ evidence_quality_score: float = Field(
 
 #### 4.2 LoopState Updates
 
-**Location**: `src/soothe/cognition/agent_loop/schemas.py`
+**Location**: `packages/soothe/src/soothe/core/agent_loop/state/schemas.py`
 
 **New Fields**:
 
@@ -334,7 +314,7 @@ def get_recent_actions(self, n: int = 3) -> list[str]
 ### Phase 2: Quality Improvements (0.5 days)
 
 **Files**:
-- `simple.py`: Add evidence-based confidence/progress
+- `packages/soothe/src/soothe/core/agent_loop/core/planner.py`: Evidence-based confidence (`goal_progress` is assess-only per IG-376)
 - `output_format.xml`: Add reasoning quality guidance
 
 **Tests**:
@@ -450,8 +430,8 @@ No backward compatibility maintained.
 - IG-143: CLI Display Architecture Refactoring
 - RFC-0008: Layer 2 Agentic Loop
 - RFC-000: System Conceptual Design
-- `src/soothe/cognition/agent_loop/` - Agentic loop implementation
-- `src/soothe/cognition/planning/` - Reasoning backend
+- `packages/soothe/src/soothe/core/agent_loop/` — AgentLoop implementation (planner, executor, state, analysis)
+- Planning (`LLMPlanner`, RFC-604) lives under `core/agent_loop/core/`, not a separate `cognition/planning` package
 
 ---
 

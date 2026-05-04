@@ -83,13 +83,13 @@ class GoalContextManager:
 ### Module Structure
 
 ```
-cognition/agent_loop/
-├─ goal_context_manager.py (NEW)
-├─ thread_relationship.py (NEW - ThreadRelationshipModule)
-├─ state_manager.py (MODIFIED - add flag management)
-├─ agent_loop.py (MODIFIED - integrate GoalContextManager)
-├─ executor.py (MODIFIED - inject briefing into CoreAgent)
-└─ checkpoint.py (MODIFIED - add thread_switch_pending field)
+packages/soothe/src/soothe/core/
+├─ agent_loop/context/goal_context_manager.py
+├─ agent_loop/state/state_manager.py
+├─ agent_loop/core/agent_loop.py
+├─ agent_loop/core/executor.py
+├─ agent_loop/state/checkpoint.py
+└─ goal_engine/thread_relationship.py   # related-thread analysis
 ```
 
 ### Thread Relationship Module
@@ -115,7 +115,7 @@ class ContextConstructionOptions(BaseModel):
     """Embedding similarity threshold for goal matching."""
 
 ```python
-# cognition/goal_context/thread_relationship.py
+# packages/soothe/src/soothe/core/goal_engine/thread_relationship.py (illustrative)
 
 class ContextConstructionOptions(BaseModel):
     """Options for goal context construction."""

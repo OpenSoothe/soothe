@@ -151,7 +151,7 @@ class LoopWorkingMemoryProtocol(Protocol):
 
 ### Concrete Implementations
 
-- **`LoopWorkingMemory`**: In-memory deque/list + spill writer (`soothe.cognition.loop_working_memory`)
+- **`LoopWorkingMemory`**: In-memory deque/list + spill writer (`soothe.core.agent_loop.state.working_memory`)
 - **`NullLoopWorkingMemory`**: No-op when disabled (optional)
 
 ### Integration Points

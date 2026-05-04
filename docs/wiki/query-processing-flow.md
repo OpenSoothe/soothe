@@ -2,6 +2,8 @@
 
 This document describes how a user query flows through Soothe from CLI entry to final response.
 
+**Repository layout:** Daemon and AgentLoop live under `packages/soothe/src/soothe/` (notably `core/runner/`, `core/agent_loop/`). The CLI Typer app lives under `packages/soothe-cli/src/soothe_cli/`. Older `src/soothe/cognition/*` paths have been folded into `core/`.
+
 ## Overview
 
 ```
@@ -36,10 +38,10 @@ headless.py   run_tui()
 run_headless()
 ```
 
-**Key Files:**
-- `src/soothe/ux/cli/main.py` - Typer app entry point
-- `src/soothe/ux/cli/commands/run_cmd.py` - `run_impl()` routing logic
-- `src/soothe/ux/cli/execution/headless.py` - Headless execution
+**Key files:**
+- `packages/soothe-cli/src/soothe_cli/cli/main.py` — Typer app entry point
+- `packages/soothe-cli/src/soothe_cli/cli/commands/run_cmd.py` — `run_impl()` routing logic
+- `packages/soothe-cli/src/soothe_cli/cli/execution/headless.py` — Headless execution
 
 ### Daemon Connection
 
@@ -58,8 +60,8 @@ DaemonClient      ↓
 run_headless_via_daemon()
 ```
 
-**Key Files:**
-- `src/soothe/ux/cli/execution/daemon.py` - Daemon client interaction
+**Key files:**
+- `packages/soothe-cli/src/soothe_cli/cli/execution/daemon.py` — Daemon client interaction
 
 ## 2. Daemon Processing
 
@@ -86,10 +88,10 @@ SootheRunner.astream(text, thread_id, ...)
 Broadcast events → EventBus → Subscribed clients
 ```
 
-**Key Files:**
-- `src/soothe/daemon/server.py` - `SootheDaemon` class
-- `src/soothe/daemon/_handlers.py` - Query handling logic
-- `src/soothe/daemon/event_bus.py` - Event routing
+**Key files:**
+- `packages/soothe/src/soothe/daemon/server.py` — `SootheDaemon` class
+- `packages/soothe/src/soothe/daemon/_handlers.py` — Query handling logic
+- `packages/soothe/src/soothe/daemon/event_bus.py` — Event routing
 
 ## 3. Runner Orchestration
 
@@ -121,10 +123,10 @@ response    mode         execution
 | `autonomous=True` | Autonomous | Goal-driven execution |
 | Default | Agentic Loop | Iterative observe-act-verify |
 
-**Key Files:**
-- `src/soothe/core/runner/__init__.py` - Main runner entry
-- `src/soothe/core/runner/_runner_agentic.py` - Agentic loop
-- `src/soothe/core/runner/_runner_autonomous.py` - Autonomous mode
+**Key files:**
+- `packages/soothe/src/soothe/core/runner/__init__.py` — Runner package entry
+- `packages/soothe/src/soothe/core/runner/_runner_agentic.py` — Agentic loop
+- `packages/soothe/src/soothe/core/runner/_runner_autonomous.py` — Autonomous mode
 
 ## 4. Agentic Loop (RFC-200)
 
@@ -163,9 +165,9 @@ The default execution mode follows an iterative observe-act-verify cycle:
 
 ```python
 # _agentic_act()
-- Determine planning strategy (none, lightweight, comprehensive)
-- Create plan via AutoPlanner
-- Execute plan (single step or multi-step DAG)
+- Delegate to `AgentLoop` (`packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py`)
+- Plan via `LLMPlanner` (`core/agent_loop/core/planner.py`, RFC-604 two-phase assess + generate)
+- Execute plan (single step or multi-step DAG via `core/agent_loop/core/executor.py`)
 ```
 
 ### Verify Phase
@@ -176,42 +178,22 @@ The default execution mode follows an iterative observe-act-verify cycle:
 - Decision: continue to next iteration or complete
 ```
 
-**Key Files:**
-- `src/soothe/core/runner/_runner_agentic.py` - Loop implementation
-- `src/soothe/core/runner/_runner_phases.py` - Phase helpers
+**Key files:**
+- `packages/soothe/src/soothe/core/runner/_runner_agentic.py` — Agentic loop
+- `packages/soothe/src/soothe/core/runner/_runner_phases.py` — Phase helpers
 
-## 5. Planning System
+## 5. Planning (AgentLoop + LLMPlanner)
 
-### AutoPlanner Router
+Planning is implemented inside **AgentLoop**, not a separate `cognition/planning` package. **`LLMPlanner`** (`packages/soothe/src/soothe/core/agent_loop/core/planner.py`, RFC-604) performs:
 
-The `AutoPlanner` routes based on task complexity:
+1. **StatusAssessment** — structured `status`, `goal_progress`, `confidence`, `require_goal_completion`
+2. **PlanGeneration** (when not `done`) — `plan_action`, `AgentDecision` steps, `next_action`
 
-```python
-# src/soothe/cognition/planning/router.py
+Routing (chitchat vs agentic vs subagent) happens earlier in **`SootheRunner`** / unified classification. Historical **AutoPlanner / SimplePlanner / ClaudePlanner** routers have been removed (IG-150 consolidation).
 
-class AutoPlanner:
-    def create_plan(self, ...):
-        complexity = unified_classification.task_complexity
+### Plan structure (conceptual)
 
-        if complexity == "chitchat":
-            return None  # No plan needed
-
-        elif complexity in ("simple", "medium"):
-            return SimplePlanner().create_plan(...)
-
-        elif complexity == "complex":
-            return ClaudePlanner().create_plan(...)
-```
-
-### Planner Comparison
-
-| Planner | When Used | Method |
-|---------|-----------|--------|
-| SimplePlanner | Simple/Medium tasks | LLM with structured output |
-| ClaudePlanner | Complex tasks | Claude subagent invocation |
-| (None) | Chitchat | Direct response |
-
-### Plan Structure
+`PlanResult` / `AgentDecision` still expose DAG-shaped work:
 
 ```python
 class Plan(BaseModel):
@@ -224,10 +206,10 @@ class PlanStep(BaseModel):
     depends_on: list[str] = []  # DAG dependencies
 ```
 
-**Key Files:**
-- `src/soothe/cognition/planning/router.py` - AutoPlanner
-- `src/soothe/cognition/planning/simple.py` - SimplePlanner
-- `src/soothe/cognition/planning/claude.py` - ClaudePlanner
+**Key files:**
+- `packages/soothe/src/soothe/core/agent_loop/core/planner.py` — `LLMPlanner`
+- `packages/soothe/src/soothe/core/agent_loop/core/plan_phase.py` — Plan phase wiring
+- `packages/soothe/src/soothe/core/prompts/builder.py` — `PromptBuilder` for assess/generate prompts
 
 ## 6. Step Execution (DAG-based)
 

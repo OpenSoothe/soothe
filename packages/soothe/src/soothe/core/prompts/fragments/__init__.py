@@ -14,16 +14,16 @@ from pathlib import Path
 
 _FRAGMENTS_DIR = Path(__file__).parent
 
-# Prefetch static instruction fragments (IG-183 unified structure)
-PLAN_EXECUTE_INSTRUCTIONS_FRAGMENT = (
-    _FRAGMENTS_DIR.joinpath("instructions/plan_execute_instructions.xml")
+# Plan-assess only: matches StatusAssessment schema (IG-372)
+PLAN_ASSESS_INSTRUCTIONS_FRAGMENT = (
+    _FRAGMENTS_DIR.joinpath("instructions/plan_assess_instructions.xml")
     .read_text(encoding="utf-8")
     .strip()
 )
 
-# Plan-assess only: matches StatusAssessment schema (IG-372)
-PLAN_ASSESS_INSTRUCTIONS_FRAGMENT = (
-    _FRAGMENTS_DIR.joinpath("instructions/plan_assess_instructions.xml")
+# Plan-generate only: matches PlanGeneration schema (IG-329)
+PLAN_GENERATE_INSTRUCTIONS_FRAGMENT = (
+    _FRAGMENTS_DIR.joinpath("instructions/plan_generate_instructions.xml")
     .read_text(encoding="utf-8")
     .strip()
 )
@@ -36,7 +36,7 @@ EXECUTION_POLICIES_FRAGMENT = (
 )
 
 __all__ = [
-    "PLAN_EXECUTE_INSTRUCTIONS_FRAGMENT",
     "PLAN_ASSESS_INSTRUCTIONS_FRAGMENT",
+    "PLAN_GENERATE_INSTRUCTIONS_FRAGMENT",
     "EXECUTION_POLICIES_FRAGMENT",
 ]

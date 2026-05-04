@@ -2,7 +2,7 @@
 
 > **RFC Reference**: RFC-204 (Consensus Loop), RFC-603 (Synthesis Phase), RFC-216 (Goal Lifecycle)
 > **Implementation Guides**: IG-199 (Adaptive Final Response), IG-268 (Response Length Intelligence), IG-273 (Structural Richness)
-> **Last Updated**: 2026-04-28
+> **Last Updated**: 2026-05-04
 
 ---
 
@@ -12,15 +12,13 @@ The goal completion response generation workflow in Soothe is a multi-layer adap
 
 ---
 
-## Architecture Layers
+## Architecture (components)
 
-Soothe uses a three-layer architecture for goal completion:
-
-| Layer | Module | Role |
-|-------|--------|------|
-| **Layer 2** | `AgentLoop` (cognition/agent_loop) | Detects completion, generates response candidates |
-| **Layer 3** | `GoalEngine` + `Consensus` (cognition/goal_engine) | Validates completion, manages goal lifecycle |
-| **Interface** | `Runner` (core/runner) | Delivers final response to CLI/TUI |
+| Component | Python package / path | Role |
+|-----------|------------------------|------|
+| **AgentLoop** | `packages/soothe/src/soothe/core/agent_loop/` | Plan–Execute loop; completion detection; adaptive final response |
+| **GoalEngine** | `packages/soothe/src/soothe/core/goal_engine/` | Goal lifecycle, consensus, DAG scheduling |
+| **Runner** | `packages/soothe/src/soothe/core/runner/` | Wires AgentLoop to transports and streams |
 
 ---
 
@@ -28,7 +26,7 @@ Soothe uses a three-layer architecture for goal completion:
 
 ### Stage 1: Completion Detection (Plan Phase)
 
-**Location**: `cognition/agent_loop/planner.py`
+**Location**: `packages/soothe/src/soothe/core/agent_loop/core/planner.py`
 
 #### Primary Detection: LLM-Based Assessment
 
@@ -38,18 +36,9 @@ The Plan phase produces a `PlanResult` with:
 - `confidence`: Model confidence in assessment (0.0-1.0)
 - `full_output`: Final user-visible answer when `status="done"`
 
-**Progress Calculation Formula** (`planner.py:234-293`):
+**Progress (`goal_progress`)**: Taken from the assess model’s `StatusAssessment.goal_progress` and carried into `PlanResult` (RFC-604). Evidence-based **blending** of `goal_progress` was **removed** (IG-376); **`confidence`** may still be calibrated from execution metrics in `LLMPlanner.plan()`.
 
-```python
-progress = llm_progress * 0.6 + step_completion_ratio * 0.2 + evidence_growth_rate * 0.2
-```
-
-Where:
-- `llm_progress`: Model's self-assessed progress (weighted 60%)
-- `step_completion_ratio`: Ratio of successful steps (weighted 20%)
-- `evidence_growth_rate`: Evidence accumulation rate (weighted 20%)
-
-#### Fallback Detection: Action-Based Heuristics
+#### Fallback detection: action-based heuristics
 
 When LLM fails to set `status="done"` despite clear completion signals, `_detect_completion_fallback()` (`planner.py:91-202`) forces completion based on:
 
@@ -90,9 +79,9 @@ if len(completion_indicators) >= 2 or "action_repetition" in completion_indicato
 
 ### Stage 2: Response Length Determination (IG-268)
 
-**Location**: `cognition/agent_loop/response_length_policy.py`
+**Location**: Length / scenario logic lives under `packages/soothe/src/soothe/core/agent_loop/analysis/` (e.g. scenario classification) and `packages/soothe/src/soothe/core/agent_loop/policies/goal_completion_policy.py` for completion actions. Older standalone `response_length_policy.py` references in this doc are **historical**.
 
-Before generating any response, the system determines the optimal response length category based on scenario analysis.
+Before generating any response, the system uses configuration (`SootheConfig.agentic.final_response`) and policies to choose synthesis vs direct execute vs summary.
 
 #### Response Length Categories
 
@@ -153,7 +142,7 @@ def calculate_evidence_metrics(step_results: list) -> tuple[int, int]:
 
 ### Stage 3: Adaptive Response Generation (IG-199)
 
-**Location**: `cognition/agent_loop/agent_loop.py:330-529`
+**Location**: `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py` (goal completion branch after `plan_result.is_done()`)
 
 Once `plan_result.is_done()` returns true, the system chooses one of three generation branches based on evidence patterns and configuration.
 
@@ -321,11 +310,11 @@ else:
 
 ---
 
-### Stage 4: Layer 3 Consensus Validation
+### Stage 4: GoalEngine consensus validation
 
-**Location**: `cognition/goal_engine/consensus.py`
+**Location**: `packages/soothe/src/soothe/core/goal_engine/consensus.py`
 
-After AgentLoop produces `status="done"` response, Layer 3 validates the completion before accepting.
+After AgentLoop produces `status="done"` response, GoalEngine consensus validates completion before accepting.
 
 #### Validation Process
 
@@ -392,9 +381,9 @@ def _heuristic_evaluation(response_text, evidence_summary, success_criteria) -> 
 
 ---
 
-### Stage 5: Goal Lifecycle Management
+### Stage 5: Goal lifecycle management
 
-**Location**: `cognition/goal_engine/engine.py`
+**Location**: `packages/soothe/src/soothe/core/goal_engine/engine.py`
 
 #### Goal Completion Methods
 
@@ -402,7 +391,7 @@ def _heuristic_evaluation(response_text, evidence_summary, success_criteria) -> 
 
 ```python
 async def complete_goal(self, goal_id: str, completion_response: str) -> None:
-    """Mark goal as completed after Layer 3 validation.
+    """Mark goal as completed after GoalEngine validation.
     
     1. Update goal status to 'completed'
     2. Set completion_timestamp
@@ -423,7 +412,7 @@ async def complete_goal(self, goal_id: str, completion_response: str) -> None:
 
 ```python
 async def fail_goal(self, goal_id: str, error: str, evidence: EvidenceBundle) -> None:
-    """Mark goal as failed with EvidenceBundle for Layer 3 review.
+    """Mark goal as failed with EvidenceBundle for GoalEngine review.
     
     1. Update goal status to 'failed'
     2. Store failure_reason and EvidenceBundle
@@ -442,7 +431,7 @@ async def fail_goal(self, goal_id: str, error: str, evidence: EvidenceBundle) ->
 
 **Other Lifecycle Actions**:
 
-- `validate_goal()`: Layer 3 accepted completion → status transition to `validated`
+- `validate_goal()`: GoalEngine accepted completion → status transition to `validated`
 - `suspend_goal()`: Send-back budget exhaustion → status `suspended`
 - `block_goal()`: Awaiting external input → status `blocked`
 - `check_reactivated_goals()`: Auto-reactivate when dependencies resolved
@@ -451,12 +440,11 @@ async def fail_goal(self, goal_id: str, error: str, evidence: EvidenceBundle) ->
 
 ## Key Design Principles
 
-### 1. Evidence-Based Completion (RFC-204)
+### 1. Evidence-aware completion (RFC-204)
 
-**Never rely solely on LLM self-assessment**:
-- Combine LLM progress with execution metrics
-- Use formula: `progress = 0.6 * llm + 0.2 * steps + 0.2 * evidence`
-- Fallback detection when LLM misses clear signals
+- **`goal_progress`**: From StatusAssessment (IG-376); optional completion heuristics in `planner.py` can still force `done` when stuck.
+- **`confidence`**: May blend LLM self-score with execution metrics in `LLMPlanner.plan()`.
+- **Fallback detection**: `_detect_completion_fallback()` when the model misses clear completion signals.
 
 ### 2. Adaptive Response Sizing (IG-268)
 
@@ -473,10 +461,10 @@ async def fail_goal(self, goal_id: str, error: str, evidence: EvidenceBundle) ->
 - **Synthesis**: Generate when evidence requires consolidation
 - **Fallback Summary**: Simple message when synthesis unavailable
 
-### 4. Layer 3 Validation (RFC-204)
+### 4. GoalEngine validation (RFC-204)
 
 **Holistic evaluation before accepting completion**:
-- AgentLoop's "done" judgment requires independent validation
+- AgentLoop's `done` judgment can be validated independently
 - Consensus can send back for refinement or suspend when exhausted
 - Prevents premature completion declaration
 
@@ -524,7 +512,7 @@ agentic:
 | `GoalCompletedEvent` | `soothe.cognition.goal.completed` | Goal marked completed |
 | `GoalFailedEvent` | `soothe.cognition.goal.failed` | Goal marked failed (includes retry_count) |
 | `GoalReportEvent` | `soothe.cognition.goal.report` | Step counts and summary |
-| `LoopAgentReasonEvent` | `soothe.cognition.agent_loop.reason` | User-visible progress after Plan phase |
+| `LoopAgentReasonEvent` | `soothe.cognition.agent_loop.reasoned` | User-visible progress after Plan phase (wire name unchanged) |
 
 ### Streaming Events
 
@@ -541,24 +529,24 @@ agentic:
 
 | Class | Location | Purpose |
 |-------|----------|---------|
-| `AgentLoop` | `cognition/agent_loop/agent_loop.py:47` | Plan-Execute orchestration |
-| `LLMPlanner` | `cognition/agent_loop/planner.py:304` | Two-call Plan architecture |
-| `PlanResult` | `cognition/agent_loop/schemas.py:93` | Plan phase output with reasoning chain |
-| `StatusAssessment` | `cognition/agent_loop/schemas.py:157` | Lightweight status check |
-| `GoalCompletionAccumState` | `cognition/agent_loop/stream_chunk_normalize.py:142` | Streaming accumulator |
-| `GoalEngine` | `cognition/goal_engine/engine.py:29` | Goal lifecycle manager with DAG scheduling |
-| `EvidenceBundle` | `cognition/goal_engine/models.py:70` | Layer 2 → Layer 3 evidence exchange |
+| `AgentLoop` | `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py` | Plan–Execute orchestration |
+| `LLMPlanner` | `packages/soothe/src/soothe/core/agent_loop/core/planner.py` | Two-call Plan architecture (RFC-604) |
+| `PlanResult` | `packages/soothe/src/soothe/core/agent_loop/state/schemas.py` | Plan phase output |
+| `StatusAssessment` | `packages/soothe/src/soothe/core/agent_loop/state/schemas.py` | Lightweight status check |
+| `GoalCompletionAccumState` | `packages/soothe/src/soothe/core/agent_loop/utils/stream_normalize.py` | Streaming accumulator for goal completion |
+| `GoalEngine` | `packages/soothe/src/soothe/core/goal_engine/engine.py` | Goal lifecycle manager |
+| `EvidenceBundle` | `packages/soothe/src/soothe/core/goal_engine/models.py` | AgentLoop → GoalEngine evidence exchange |
 
 ### Key Functions
 
 | Function | Location | Purpose |
 |----------|----------|---------|
-| `should_return_goal_completion_directly()` | `final_response_policy.py:110` | Check Execute text eligibility |
-| `needs_final_thread_synthesis()` | `final_response_policy.py:77` | Determine synthesis need |
-| `determine_response_length()` | `response_length_policy.py:50` | Calculate response category |
-| `evidence_requires_final_synthesis()` | `synthesis.py:30` | Evidence-based trigger check |
-| `evaluate_goal_completion()` | `consensus.py:25` | Layer 3 validation |
-| `_detect_completion_fallback()` | `planner.py:91` | Force completion detection |
+| `determine_completion_action()` | `packages/soothe/src/soothe/core/agent_loop/policies/goal_completion_policy.py` | Choose skip / direct / synthesis / summary |
+| `determine_goal_completion_needs()` | `goal_completion_policy.py` | `require_goal_completion` vs config mode |
+| `generate_user_fallback_summary()` | `packages/soothe/src/soothe/core/agent_loop/core/fallback_summary.py` | User-safe summary when synthesis unavailable |
+| `SynthesisGenerator` (class) | `packages/soothe/src/soothe/core/agent_loop/analysis/synthesis.py` | Optional synthesis stream for goal completion |
+| `evaluate_goal_completion()` | `packages/soothe/src/soothe/core/goal_engine/consensus.py` | Consensus validation |
+| `_detect_completion_fallback()` | `packages/soothe/src/soothe/core/agent_loop/core/planner.py` | Force completion when stuck |
 
 ---
 
@@ -568,11 +556,11 @@ agentic:
 
 | Test Type | Location |
 |-----------|----------|
-| **Plan Phase Completion** | `packages/soothe/tests/unit/cognition/agent_loop/test_planner.py` |
-| **Response Policy** | `packages/soothe/tests/unit/cognition/agent_loop/test_final_response_policy.py` |
-| **Response Length** | `packages/soothe/tests/unit/cognition/agent_loop/test_response_length_policy.py` |
-| **Consensus Validation** | `packages/soothe/tests/unit/cognition/goal_engine/test_consensus.py` |
-| **Goal Lifecycle** | `packages/soothe/tests/integration/cognition/goal_engine/test_goal_lifecycle.py` |
+| **Plan phase / planner** | `packages/soothe/tests/unit/core/agent_loop/core/` (`test_plan_phase_*.py`, etc.) |
+| **Goal completion policy** | `packages/soothe/tests/unit/core/agent_loop/policies/test_goal_completion_policy.py` |
+| **Adaptive final response** | `packages/soothe/tests/unit/core/agent_loop/core/test_agent_loop_adaptive_final.py` |
+| **GoalEngine** | `packages/soothe/tests/unit/core/goal_engine/` |
+| **AgentLoop integration** | `packages/soothe/tests/integration/core/agent_loop/` |
 
 ### Verification Command
 
@@ -602,7 +590,7 @@ Runs:
 
 ### RFC Documents
 
-- **RFC-204**: Consensus Loop for Layer 3 Validation
+- **RFC-204**: Consensus loop for GoalEngine validation
 - **RFC-603**: Synthesis Phase for Comprehensive Reports
 - **RFC-216**: Goal Lifecycle Management
 
@@ -624,10 +612,10 @@ Runs:
 
 The goal completion response generation workflow in Soothe is a sophisticated adaptive system with:
 
-1. **Evidence-based completion detection** combining LLM assessment with execution metrics
-2. **Three-branch response generation** optimizing for user experience and efficiency
-3. **Response length intelligence** matching output size to task complexity
-4. **Layer 3 validation** ensuring goal satisfaction before accepting completion
-5. **Comprehensive lifecycle management** handling completion, failure, retry, and reactivation
+1. **Completion detection** from `StatusAssessment` plus heuristics (`_detect_completion_fallback`)
+2. **Adaptive final response** (`agentic.final_response`) choosing direct execute vs synthesis vs summary
+3. **Policies and analysis modules** under `core/agent_loop/policies` and `core/agent_loop/analysis`
+4. **GoalEngine consensus** where applicable before accepting completion
+5. **Lifecycle management** in `core/goal_engine` for completion, failure, retry, and reactivation
 
-This architecture ensures goals complete reliably with user-appropriate responses, validated independently to prevent premature completion while maintaining efficiency through adaptive response sizing.
+Implementation paths use `packages/soothe/src/soothe/core/` (AgentLoop and GoalEngine migrated from legacy `cognition/` packages).
