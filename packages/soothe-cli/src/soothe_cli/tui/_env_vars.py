@@ -40,9 +40,6 @@ DEBUG_FILE = "SOOTHE_CLI_DEBUG_FILE"
 EXTRA_SKILLS_DIRS = "SOOTHE_CLI_EXTRA_SKILLS_DIRS"
 """Colon-separated paths added to the skill containment allowlist."""
 
-LANGSMITH_PROJECT = "SOOTHE_CLI_LANGSMITH_PROJECT"
-"""Override LangSmith project name for agent traces."""
-
 NO_UPDATE_CHECK = "SOOTHE_CLI_NO_UPDATE_CHECK"
 """Disable automatic update checking when set."""
 
@@ -53,4 +50,4 @@ SHELL_ALLOW_LIST = "SOOTHE_CLI_SHELL_ALLOW_LIST"
 """Comma-separated shell commands to allow (or 'recommended'/'all')."""
 
 USER_ID = "SOOTHE_CLI_USER_ID"
-"""Attach a user identifier to LangSmith trace metadata."""
+"""Attach a user identifier to stream metadata (when set)."""

@@ -20,7 +20,7 @@ class StepAction(BaseModel):
     IG-264: Keep execution-critical fields (used by executor).
 
     Attributes:
-        id: Step identifier; after plan assembly use stable 3-char ids (``assign_plan_step_ids``).
+        id: Step identifier; after plan assembly use ``assign_plan_step_ids`` (IG-303: ``<PLANID>-<model-id>``).
         description: What this step does
         tools: Tools to use (optional, executor hint)
         subagent: Subagent to invoke (optional, executor hint)
@@ -101,48 +101,85 @@ class AgentDecision(BaseModel):
         return ready
 
 
-_STEP_ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
-PLAN_STEP_ID_LENGTH = 3
+PLAN_ID_LENGTH = 3
+PLAN_ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
-def _allocate_plan_step_id(reserved: set[str]) -> str:
-    """Cryptographically random step id (see ``PLAN_STEP_ID_LENGTH``) not in ``reserved``."""
-    for _ in range(512):
-        candidate = "".join(secrets.choice(_STEP_ID_ALPHABET) for _ in range(PLAN_STEP_ID_LENGTH))
-        if candidate not in reserved:
-            reserved.add(candidate)
-            return candidate
-    msg = f"Could not allocate unique {PLAN_STEP_ID_LENGTH}-char step id after 512 attempts"
+def composite_step_id(raw_id: str, plan_id: str) -> str:
+    """Build scoped step id ``PLAN-MODEL``; idempotent if ``raw_id`` already has this plan prefix (IG-303)."""
+    prefix = f"{plan_id}-"
+    if raw_id.startswith(prefix):
+        return raw_id
+    return f"{prefix}{raw_id}"
+
+
+def allocate_plan_id(
+    decision: AgentDecision,
+    *,
+    reserved_step_ids: set[str] | frozenset[str],
+) -> str:
+    """Allocate a unique uppercase 3-letter plan id so scoped step ids do not collide (IG-303).
+
+    Tries random plan ids until every ``composite_step_id(step.id, plan_id)`` is disjoint
+    from ``reserved_step_ids`` and pairwise distinct within ``decision.steps``.
+
+    Args:
+        decision: Parsed execution decision (model step ids in ``StepAction.id``).
+        reserved_step_ids: Completed or external step ids (e.g. ``dependency_completion_ids()``).
+
+    Returns:
+        Three uppercase letters (A–Z).
+
+    Raises:
+        RuntimeError: If no plan id is found within the attempt budget.
+    """
+    if not decision.steps:
+        return "".join(secrets.choice(PLAN_ID_ALPHABET) for _ in range(PLAN_ID_LENGTH))
+    reserved = set(reserved_step_ids)
+    for _ in range(4096):
+        plan_id = "".join(secrets.choice(PLAN_ID_ALPHABET) for _ in range(PLAN_ID_LENGTH))
+        composites = [composite_step_id(s.id, plan_id) for s in decision.steps]
+        if len(set(composites)) != len(composites):
+            continue
+        if set(composites) & reserved:
+            continue
+        return plan_id
+    msg = f"Could not allocate unique plan id after 4096 attempts ({PLAN_ID_LENGTH}-char A–Z)"
     raise RuntimeError(msg)
 
 
 def assign_plan_step_ids(
     decision: AgentDecision,
     *,
-    reserved_ids: set[str] | frozenset[str],
+    plan_id: str,
 ) -> AgentDecision:
-    """Assign unique 3-character step ids and remap in-plan ``dependencies`` (IG-358).
+    """Scope model step ids with ``plan_id`` and remap in-plan ``dependencies`` (IG-303).
 
-    New ids never collide with ``reserved_ids`` (typically
-    :meth:`LoopState.dependency_completion_ids`) or with each other.
-    Dependency edges between steps in this decision are rewritten via an internal
-    id map; other dependency strings (e.g. cross-wave ``step_001``) are unchanged
-    (IG-346, IG-347).
+    Each step becomes ``composite_step_id(step.id, plan_id)``, preserving the model suffix
+    (e.g. ``001`` → ``KFA-001``). Dependency edges between steps in this decision are
+    rewritten via an internal id map; other dependency strings (e.g. cross-wave refs)
+    are unchanged (IG-346).
 
     Args:
         decision: Parsed or merged execution decision.
-        reserved_ids: Step ids that must not be reused (completed work / externals).
+        plan_id: Uppercase plan id from :func:`allocate_plan_id` or inherited ``LoopState.plan_id``.
 
     Returns:
-        Copy with assigned ids; unchanged if ``steps`` is empty.
+        Copy with scoped ids; unchanged if ``steps`` is empty.
+
+    Raises:
+        ValueError: If two steps collapse to the same composite id after scoping.
     """
     if not decision.steps:
         return decision
-    reserved: set[str] = set(reserved_ids)
-    id_map: dict[str, str] = {}
+    id_map: dict[str, str] = {
+        step.id: composite_step_id(step.id, plan_id) for step in decision.steps
+    }
+    mapped_values = list(id_map.values())
+    if len(set(mapped_values)) != len(mapped_values):
+        msg = "Plan step ids collapse to duplicate composite ids after scoping"
+        raise ValueError(msg)
     new_steps: list[StepAction] = []
-    for step in decision.steps:
-        id_map[step.id] = _allocate_plan_step_id(reserved)
     for step in decision.steps:
         mapped = id_map[step.id]
         new_deps: list[str] | None = None
@@ -401,6 +438,7 @@ class LoopState(BaseModel):
         iteration: Current iteration number
         max_iterations: Maximum iterations allowed
         current_decision: Current AgentDecision being executed
+        plan_id: Active plan scope (3 uppercase letters); new plan allocates, keep reuses (IG-303).
         completed_step_ids: Set of completed step IDs
         previous_plan: Previous Plan phase result
         step_results: All step results from execution
@@ -425,6 +463,7 @@ class LoopState(BaseModel):
     max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 
     current_decision: AgentDecision | None = None
+    plan_id: str | None = None
     completed_step_ids: set[str] = Field(default_factory=set)
     previous_plan: PlanResult | None = None
     step_results: list[StepResult] = []

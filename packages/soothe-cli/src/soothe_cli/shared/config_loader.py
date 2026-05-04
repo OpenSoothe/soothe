@@ -29,7 +29,7 @@ def load_config(config_path: str | None = None) -> CLIConfig:
         A ``CLIConfig`` instance.
     """
     # Load environment variables from .env file
-    # This ensures LangSmith and other env vars are available
+    # This ensures API keys and other env vars from .env are available
     load_dotenv()
 
     if config_path is not None:

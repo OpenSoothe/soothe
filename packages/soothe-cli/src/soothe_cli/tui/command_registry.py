@@ -101,11 +101,6 @@ COMMANDS: tuple[SlashCommand, ...] = (
         hidden_keywords="continue history sessions",
     ),
     SlashCommand(
-        name="/trace",
-        description="Open current thread in LangSmith",
-        bypass_tier=BypassTier.SIDE_EFFECT_FREE,
-    ),
-    SlashCommand(
         name="/browser",
         description="Route prompt to Browser subagent (usage: /browser <query>)",
         bypass_tier=BypassTier.QUEUED,

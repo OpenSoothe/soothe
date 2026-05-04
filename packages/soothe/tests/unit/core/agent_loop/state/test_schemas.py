@@ -13,7 +13,9 @@ from soothe.core.agent_loop.state.schemas import (
     PlanResult,
     StepAction,
     StepResult,
+    allocate_plan_id,
     assign_plan_step_ids,
+    composite_step_id,
 )
 
 
@@ -155,32 +157,30 @@ class TestAgentDecision:
         ready = decision.get_ready_steps({"s1", "s2", "s3"})
         assert len(ready) == 0
 
-    def test_assign_plan_step_ids_remaps_dependencies(self) -> None:
-        """IG-347/358: 3-char ids and in-plan dependency rewrite."""
+    def test_composite_step_id_idempotent(self) -> None:
+        """Already-scoped ids for the same plan are unchanged."""
+        assert composite_step_id("KFA-001", "KFA") == "KFA-001"
+        assert composite_step_id("001", "KFA") == "KFA-001"
 
-        def fake_rand(reserved: set[str]) -> str:
-            for c in ("a01", "b02", "c03"):
-                if c not in reserved:
-                    reserved.add(c)
-                    return c
-            raise AssertionError("exhausted fake ids")
+    def test_assign_plan_step_ids_remaps_dependencies(self) -> None:
+        """IG-303: preserve model suffix; in-plan dependency rewrite."""
 
         d0 = StepAction(
-            id="a1b2c3d4",
+            id="001",
             description="First",
             expected_output="o",
         )
         d1 = StepAction(
-            id="9f8e7d6c",
+            id="002",
             description="Second",
             expected_output="o",
-            dependencies=["a1b2c3d4"],
+            dependencies=["001"],
         )
         d2 = StepAction(
-            id="ff00ee11",
+            id="003",
             description="Third",
             expected_output="o",
-            dependencies=["9f8e7d6c", "step_001"],
+            dependencies=["002", "step_001"],
         )
         decision = AgentDecision(
             type="execute_steps",
@@ -188,50 +188,42 @@ class TestAgentDecision:
             execution_mode="sequential",
             reasoning="t",
         )
-        with patch.object(schemas_mod, "_allocate_plan_step_id", side_effect=fake_rand):
-            out = assign_plan_step_ids(decision, reserved_ids=set())
-        assert [s.id for s in out.steps] == ["a01", "b02", "c03"]
+        out = assign_plan_step_ids(decision, plan_id="KFA")
+        assert [s.id for s in out.steps] == ["KFA-001", "KFA-002", "KFA-003"]
         assert out.steps[0].dependencies is None
-        assert out.steps[1].dependencies == ["a01"]
-        assert out.steps[2].dependencies == ["b02", "step_001"]
+        assert out.steps[1].dependencies == ["KFA-001"]
+        assert out.steps[2].dependencies == ["KFA-002", "step_001"]
 
-    def test_assign_plan_step_ids_respects_reserved_ids(self) -> None:
-        """Generator skips ids already reserved (e.g. completed waves)."""
-
-        def fake_rand(reserved: set[str]) -> str:
-            # First free id in sequence when z01 is reserved
-            for c in ("a02", "b03"):
-                if c not in reserved:
-                    reserved.add(c)
-                    return c
-            raise AssertionError("exhausted fake ids")
-
-        d0 = StepAction(id="x", description="First", expected_output="o")
-        d1 = StepAction(
-            id="y",
-            description="Second",
-            expected_output="o",
-            dependencies=["x"],
-        )
+    def test_assign_plan_step_ids_duplicate_composite_raises(self) -> None:
+        """Model id 001 and already-scoped KFA-001 collapse under the same plan."""
+        d0 = StepAction(id="001", description="a", expected_output="o")
+        d1 = StepAction(id="KFA-001", description="b", expected_output="o")
         decision = AgentDecision(
             type="execute_steps",
             steps=[d0, d1],
             execution_mode="sequential",
             reasoning="t",
         )
-        with patch.object(schemas_mod, "_allocate_plan_step_id", side_effect=fake_rand):
-            out = assign_plan_step_ids(decision, reserved_ids={"z01"})
-        assert [s.id for s in out.steps] == ["a02", "b03"]
-        assert out.steps[1].dependencies == ["a02"]
+        with pytest.raises(ValueError, match="duplicate composite"):
+            assign_plan_step_ids(decision, plan_id="KFA")
+
+    def test_allocate_plan_id_skips_reserved_composite(self) -> None:
+        """First random plan id blocked by reserved composite; second attempt succeeds."""
+        decision = AgentDecision(
+            type="execute_steps",
+            steps=[StepAction(id="001", description="x", expected_output="o")],
+            execution_mode="sequential",
+            reasoning="r",
+        )
+        reserved = {"KFA-001"}
+        with patch.object(schemas_mod.secrets, "choice", side_effect=list("KFAZZZ")):
+            pid = allocate_plan_id(decision, reserved_step_ids=reserved)
+        assert pid == "ZZZ"
+        scoped = assign_plan_step_ids(decision, plan_id=pid)
+        assert scoped.steps[0].id == "ZZZ-001"
 
     def test_replan_collision_avoids_empty_ready_steps(self) -> None:
-        """Completed step id must appear in reserved so new ids never collide."""
-
-        def fake_rand(reserved: set[str]) -> str:
-            if "q9z" not in reserved:
-                reserved.add("q9z")
-                return "q9z"
-            raise AssertionError("unexpected second call")
+        """Scoped id must not equal a completed historical step id."""
 
         sr = StepResult(
             step_id="1",
@@ -241,21 +233,20 @@ class TestAgentDecision:
             thread_id="t",
         )
         state = LoopState(goal="g", thread_id="t", step_results=[sr])
-        new_step = StepAction(id="uuid-step", description="More work", expected_output="o")
+        new_step = StepAction(id="more", description="More work", expected_output="o")
         decision = AgentDecision(
             type="execute_steps",
             steps=[new_step],
             execution_mode="sequential",
             reasoning="r",
         )
-        with patch.object(schemas_mod, "_allocate_plan_step_id", side_effect=fake_rand):
-            normalized = assign_plan_step_ids(
-                decision,
-                reserved_ids=set(state.dependency_completion_ids()),
-            )
+        reserved = set(state.dependency_completion_ids())
+        plan_id = allocate_plan_id(decision, reserved_step_ids=reserved)
+        normalized = assign_plan_step_ids(decision, plan_id=plan_id)
         ready = normalized.get_ready_steps(state.dependency_completion_ids())
         assert len(ready) == 1
-        assert ready[0].id == "q9z"
+        assert ready[0].id not in reserved
+        assert ready[0].id.endswith("-more")
 
 
 class TestPlanResult:
