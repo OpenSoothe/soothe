@@ -193,7 +193,7 @@ class StepLoopMixin:
                 )
                 parts.append(f"Results from prior steps:\n{dep_text}")
 
-            classification = getattr(state, "unified_classification", None)
+            classification = getattr(state, "intent_classification", None)
             preferred = (
                 getattr(classification, "preferred_subagent", None) if classification else None
             )
@@ -241,7 +241,7 @@ class StepLoopMixin:
             step_state = RunnerState()
             step_state.thread_id = state.thread_id
             step_state.langgraph_thread_id = thread_id if thread_id != state.thread_id else None
-            step_state.unified_classification = getattr(state, "unified_classification", None)
+            step_state.intent_classification = getattr(state, "intent_classification", None)
             step_state.workspace = getattr(state, "workspace", None)
             self._ensure_runner_state_workspace(step_state)
 
