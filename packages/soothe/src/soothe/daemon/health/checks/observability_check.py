@@ -10,81 +10,6 @@ from soothe.daemon.health.models import CategoryResult, CheckResult, CheckStatus
 from soothe.utils.observability.langfuse import _resolve_str
 
 
-def _check_langsmith_config() -> CheckResult:
-    """Check LangSmith configuration and availability.
-
-    Returns:
-        CheckResult with LangSmith configuration status
-    """
-    # Check for LangSmith environment variables (new naming)
-    langsmith_tracing = os.getenv("LANGSMITH_TRACING", "").lower()
-    langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
-    langsmith_project = os.getenv("LANGSMITH_PROJECT")
-    langsmith_endpoint = os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")
-
-    # Check for legacy LangChain environment variables
-    langchain_tracing = os.getenv("LANGCHAIN_TRACING_V2", "").lower()
-    langchain_api_key = os.getenv("LANGCHAIN_API_KEY")
-    langchain_project = os.getenv("LANGCHAIN_PROJECT")
-
-    # Determine if tracing is enabled
-    tracing_enabled = langsmith_tracing == "true" or langchain_tracing == "true"
-    has_api_key = bool(langsmith_api_key or langchain_api_key)
-
-    # Build details dict
-    details = {
-        "tracing_enabled": tracing_enabled,
-        "api_key_present": has_api_key,
-    }
-
-    if langsmith_project:
-        details["project"] = langsmith_project
-    elif langchain_project:
-        details["project"] = langchain_project
-
-    if langsmith_endpoint:
-        details["endpoint"] = langsmith_endpoint
-
-    # Determine status
-    if tracing_enabled and has_api_key:
-        project_name = langsmith_project or langchain_project or "default"
-        return CheckResult(
-            name="langsmith",
-            status=CheckStatus.OK,
-            message=f"LangSmith tracing enabled (project: {project_name})",
-            details=details,
-        )
-    if tracing_enabled and not has_api_key:
-        return CheckResult(
-            name="langsmith",
-            status=CheckStatus.ERROR,
-            message="LangSmith tracing enabled but API key missing",
-            details={
-                **details,
-                "remediation": "Set LANGSMITH_API_KEY or LANGCHAIN_API_KEY in .env file",
-            },
-        )
-    if not tracing_enabled and has_api_key:
-        return CheckResult(
-            name="langsmith",
-            status=CheckStatus.INFO,
-            message="LangSmith API key present but tracing disabled",
-            details={
-                **details,
-                "remediation": "Set LANGSMITH_TRACING=true to enable tracing",
-            },
-        )
-    return CheckResult(
-        name="langsmith",
-        status=CheckStatus.INFO,
-        message="LangSmith tracing not configured (optional)",
-        details={
-            **details,
-            "remediation": "Add LANGSMITH_TRACING=true and LANGSMITH_API_KEY to .env to enable tracing",
-        },
-    )
-
-
 def _check_langfuse_from_config(config: SootheConfig | None) -> CheckResult:
     """Check Langfuse integration when enabled in ``observability.langfuse``."""
     if config is None:
@@ -210,8 +135,8 @@ def _check_dotenv_availability() -> CheckResult:
 async def check_observability(config: SootheConfig | None = None) -> CategoryResult:
     """Check observability and tracing configuration.
 
-    Validates LangSmith integration, Langfuse configuration when enabled,
-    environment variable setup, and observability tooling configuration.
+    Validates Langfuse configuration when enabled, environment variable setup,
+    and observability tooling configuration.
 
     Args:
         config: SootheConfig instance (used for Langfuse integration checks).
@@ -220,7 +145,6 @@ async def check_observability(config: SootheConfig | None = None) -> CategoryRes
         CategoryResult with observability check results
     """
     checks = [
-        _check_langsmith_config(),
         _check_langfuse_from_config(config),
         _check_dotenv_availability(),
     ]

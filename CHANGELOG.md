@@ -14,6 +14,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - IG-300: per-loop daemon workspace under ``$SOOTHE_HOME/Workspace/<loop_id>/``; unified tool metadata helpers for policy path extraction; ``PolicyContext.workspace`` for stream-scoped filesystem checks
 
 ### Changed
+- IG-375: Removed first-party LangSmith tracing integration (CLI `/trace`, env bootstrap for LangSmith, doctor LangSmith check, `ls_integration` stream metadata); local ``observability.llm_tracing`` log middleware unchanged
+- IG-303: AgentLoop plan step ids use ``<PLANID>-<model-step-id>`` (random 3-letter uppercase ``plan_id`` per new plan, ``LoopState.plan_id`` reused on ``plan_action=keep``); replaces per-step random 3-char ids while keeping IG-358 collision safety against prior ``step_results``
 - Migrated soothe-community to standalone project ([github.com/OpenSoothe/soothe-community](https://github.com/OpenSoothe/soothe-community))
 - Removed soothe-community from monorepo workspace
 - Centralized version management across monorepo packages
@@ -23,7 +25,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - IG-300: default ``security.allow_paths_outside_workspace`` to false (template + dev overlay); ``ConfigDrivenPolicy`` applies filesystem deny/allow/workspace rules to real deepagents tool names; workspace backend expands ``~`` in normalized paths; explore/research/claude subagents align with the security flag
 
 ### Fixed
-- IG-358: AgentLoop assigns unique **3-character** random plan step ids via ``assign_plan_step_ids`` (reserved against completed waves) so replans never collide with prior ``step_results`` ids
+- IG-374: Parallel execute waves now append ``loop_messages`` ledger pairs (same contract as sequential) so ``plan-assess`` / ``plan-generate`` receive evidence from all prior parallel steps
 - IG-357: Act-wave visible answer resolution centralized in ``act_wave_finalize.compute_act_wave_finalize``; planner outcomes distinguish ``task_return_preview`` (per ``task`` tool) vs ``wave_join_preview`` (Execute wave join) with ``planner_outcome_text_preview()``
 - IG-356: Explore delegate finals use markdown from structured results; parallel multi-step waves merge ordered ``task`` return bodies into goal-completion text; bounded planner previews on outcomes for evidence strings
 - IG-355: headless (`--no-tui`) prints subagent answers by aggregating ``task`` tool return text at Act finalize (including **namespaced** stream chunks for Explore) and replaying ``phase=goal_completion`` when needed; removes the IG-354 EventProcessor delegate flag

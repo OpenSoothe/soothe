@@ -422,6 +422,102 @@ class Executor:
                 )
         return results
 
+    def _append_parallel_wave_ledger(
+        self,
+        state: LoopState,
+        steps: list[StepAction],
+        gather_results: list[Any],
+    ) -> None:
+        """Append RFC-214 Human/AI ledger pairs for each parallel step (IG-374).
+
+        Sequential execution records the ledger inside ``_execute_sequential_chunk``. Parallel
+        waves historically skipped ``state.loop_messages``, which hid execute evidence from
+        subsequent ``plan-assess`` / ``plan-generate`` prompts built in ``PromptBuilder``.
+
+        Args:
+            state: Loop state whose ``loop_messages`` list is extended in wave order.
+            steps: Ready steps for this wave (same order as ``gather_results``).
+            gather_results: Results from ``asyncio.gather`` over per-step tasks — each entry is
+                either an exception or the tuple returned by ``_execute_step_collecting_events``.
+        """
+        from langchain_core.messages import AIMessage
+
+        from soothe.core.agent_loop.utils.stream_normalize import extract_text_from_message_content
+
+        for i, step in enumerate(steps):
+            raw = gather_results[i]
+            human_msg = LoopHumanMessage(
+                content=f"Execute: {step.description}",
+                thread_id=state.thread_id,
+                iteration=state.iteration,
+                goal_summary=(state.goal[:200] if state.goal else None),
+                workspace=state.workspace,
+                phase="execute_step",
+                step_id=step.id,
+            )
+            if isinstance(raw, Exception):
+                err_text = str(raw).strip() or repr(raw)
+                state.loop_messages.append(human_msg)
+                state.loop_messages.append(
+                    LoopAIMessage(
+                        content=f"Step failed: {err_text}",
+                        thread_id=state.thread_id,
+                        iteration=state.iteration,
+                        phase="execute_step",
+                        step_id=step.id,
+                    )
+                )
+                continue
+
+            _events, step_result, step_messages, delegate_final = raw
+            ai_messages = [m for m in step_messages if isinstance(m, AIMessage)]
+            final_ai = ai_messages[-1] if ai_messages else None
+
+            if step_result.success:
+                content = ""
+                if final_ai is not None:
+                    ledger_body = self._ledger_execute_ai_content(
+                        messages=step_messages,
+                        final_ai_msg=final_ai,
+                        total_steps=1,
+                    )
+                    content = (ledger_body or "").strip()
+                    if not content:
+                        content = extract_text_from_message_content(
+                            getattr(final_ai, "content", None)
+                        ).strip()
+                df = (delegate_final or "").strip()
+                if not content and df:
+                    content = (
+                        df if len(df) <= DELEGATE_FINAL_WAVE_CAP else df[:DELEGATE_FINAL_WAVE_CAP]
+                    )
+                if not content:
+                    content = "Step completed with no AI text captured"
+            else:
+                content = (step_result.error or "").strip() or "Step failed"
+                if final_ai is not None:
+                    ledger_body = self._ledger_execute_ai_content(
+                        messages=step_messages,
+                        final_ai_msg=final_ai,
+                        total_steps=1,
+                    )
+                    lb = (ledger_body or "").strip()
+                    if lb:
+                        content = lb
+
+            meta = getattr(final_ai, "response_metadata", {}) if final_ai is not None else {}
+            state.loop_messages.append(human_msg)
+            state.loop_messages.append(
+                LoopAIMessage(
+                    content=content,
+                    thread_id=state.thread_id,
+                    iteration=state.iteration,
+                    phase="execute_step",
+                    step_id=step.id,
+                    response_metadata=meta,
+                )
+            )
+
     async def _execute_parallel(
         self,
         steps: list,
@@ -511,6 +607,10 @@ class Executor:
                 # Then yield the result
                 yield step_result
 
+        # RFC-214: parallel waves must update the ledger like sequential chunks so Plan-assess
+        # receives prior execute evidence via ``state.loop_messages`` (IG-374).
+        self._append_parallel_wave_ledger(state, steps, results)
+
         parallel_multi = len(steps) > 1
         merged_parallel_delegate = "\n\n---\n\n".join(wave_delegate_parts)
         if parallel_multi:
@@ -536,8 +636,7 @@ class Executor:
                 r.outcome.get("size_bytes", 0) for r in all_step_results if r.success and r.outcome
             ]
             max_output_len = max(output_lengths) if output_lengths else 0
-            # IG-151: For parallel execution, we don't have unified messages (each step has its own)
-            # This is acceptable as token tracking is more relevant for sequential mode
+            # Token totals: parallel steps stream independently; per-step messages are not merged here.
             self._aggregate_wave_metrics(all_step_results, "", [], state)
             state.last_wave_output_length = max_output_len
 

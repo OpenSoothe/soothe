@@ -1,7 +1,7 @@
 """Main CLI entry point using Typer."""
 
 # Load environment variables from .env file BEFORE any langchain imports
-# This is required for LangSmith tracing to be activated at import time
+# so provider API keys and other env-backed config are visible at import time.
 from dotenv import load_dotenv
 
 load_dotenv()
