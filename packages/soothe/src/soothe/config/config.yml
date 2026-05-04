@@ -92,6 +92,12 @@ agentic:
     preview_chars: 500
     synthesis_max_chars: 0  # 0 = unlimited LLM-synthesized goal reports
 
+  # Plan-phase ledger projection for plan-assess / plan-generate (IG-380). All zeros = full ledger.
+  plan_prompt_ledger:
+    plan_ledger_max_messages: 0
+    plan_ledger_max_total_chars: 0
+    plan_ledger_max_message_chars: 0
+
 # Output Streaming Configuration (simplified RFC-614)
 
 # Single boolean in agentic section controls streaming behavior

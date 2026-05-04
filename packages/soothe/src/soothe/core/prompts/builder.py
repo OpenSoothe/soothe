@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from langchain_core.messages import BaseMessage, SystemMessage
+
+from soothe.core.prompts.plan_ledger_projection import project_loop_messages_for_plan
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
@@ -48,7 +53,9 @@ class PromptBuilder:
 
         Constructs proper message type separation:
         - SystemMessage: environment, workspace, policies, instructions, loop config, capabilities.
-        - ``state.loop_messages``: ledger as native ``LoopHumanMessage`` / ``LoopAIMessage`` turns
+        - Projected ``state.loop_messages`` ledger (IG-380): native ``LoopHumanMessage`` /
+          ``LoopAIMessage`` turns, optionally tail-trimmed when ``agentic.plan_prompt_ledger`` caps
+          are set; persisted ``loop_messages`` are never modified.
         - LoopHumanMessage: ``<GOAL_PROGRESS>`` (goal + execute iteration) for both ``assess`` and
           ``generate``, plus optional ``<PRIOR_CONVERSATION>`` when ``recent_messages`` is set
           (IG-371: no WM block on this human).
@@ -76,9 +83,19 @@ class PromptBuilder:
         human_content = self._build_plan_context_human_text(goal, state, context)
 
         out: list[BaseMessage] = [SystemMessage(content=system_content)]
-        # RFC-214: full execute (and future) ledger as real messages — better cache boundaries
-        # than a single human blob embedding ``<AGENTLOOP_HISTORY>``.
-        out.extend(state.loop_messages)
+        # RFC-214: execute ledger as real messages (IG-380: optional projection for plan caps).
+        ledger_cfg = None
+        if self.config is not None:
+            ledger_cfg = self.config.agentic.plan_prompt_ledger
+        projected = project_loop_messages_for_plan(state.loop_messages, ledger_cfg)
+        out.extend(projected)
+        if len(projected) != len(state.loop_messages):
+            logger.debug(
+                "Plan messages: ledger projection len=%d (raw=%d) phase=%s",
+                len(projected),
+                len(state.loop_messages),
+                plan_phase,
+            )
         if human_content.strip():
             out.append(
                 LoopHumanMessage(

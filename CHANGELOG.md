@@ -10,6 +10,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **IG-339**: Removed `soothe.capability.*` custom-stream event types for built-in subagents. External integrators must subscribe to allowlisted `soothe.subagent.*` types (see `soothe_sdk.core.subagent_wire`) and use the `messages` stream for full tool/assistant transcripts where applicable.
 
 ### Added
+- IG-381: Progressive plan-generate instructions (evidence-aware step sizing), per-step `supportive_evidence` on `StepAction`, execution-policy guidance to batch readonly exploration into `explore` subagent steps (`docs/impl/IG-381-plan-generate-progressive-evidence-explore-bundle.md`)
+- IG-380: Plan-phase ledger projection (`agentic.plan_prompt_ledger` caps), execution policy text for filesystem discovery fan-out, dev `max_parallel_steps: 8` overlay; explore `ExploreResult` extended with parent-facing sections in delegate markdown (implementation guide `docs/impl/IG-380-agentloop-plan-ledger-explore-messages.md`)
 - IG-379: Langfuse Cost Dashboard bridge — `observability.langfuse.tags` / `user_id` merged into Runnable metadata; implementation guide for model pricing and verification
 - Dockerfile for Soothe daemon with full extras and Playwright support
 - IG-300: per-loop daemon workspace under ``$SOOTHE_HOME/Workspace/<loop_id>/``; unified tool metadata helpers for policy path extraction; ``PolicyContext.workspace`` for stream-scoped filesystem checks
