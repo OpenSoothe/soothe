@@ -800,6 +800,10 @@ class LangfuseIntegrationConfig(BaseModel):
         release: Langfuse ``release`` tag for deployment correlation.
         sample_rate: Client-side sampling rate ``0.0``–``1.0`` (passed to the Langfuse client).
         trace_name: Optional LangGraph ``run_name`` for the root run when set.
+        tags: Optional list of trace tags (Langfuse ``langfuse_tags`` metadata) for
+            dashboard filters and cost breakdowns.
+        user_id: Optional Langfuse ``user_id`` (``langfuse_user_id`` metadata); supports
+            ``${ENV_VAR}``. Prefer non-PII stable tenant ids in production.
     """
 
     enabled: bool = Field(
@@ -835,6 +839,14 @@ class LangfuseIntegrationConfig(BaseModel):
     trace_name: str | None = Field(
         default=None,
         description="If set, used as RunnableConfig run_name for traced graph invocations",
+    )
+    tags: list[str] | None = Field(
+        default=None,
+        description="Optional Langfuse trace tags (langfuse_tags in Runnable metadata)",
+    )
+    user_id: str | None = Field(
+        default=None,
+        description="Optional Langfuse user id (langfuse_user_id); supports ${ENV_VAR}",
     )
 
 

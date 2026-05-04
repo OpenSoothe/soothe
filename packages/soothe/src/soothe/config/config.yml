@@ -154,6 +154,8 @@ observability:
     release: null  # deployment release label
     sample_rate: null  # optional 0.0–1.0 client sampling
     trace_name: null  # optional RunnableConfig run_name for root graph runs
+    tags: null  # optional list e.g. [soothe, production] → Langfuse trace tags (Cost Dashboard filters)
+    user_id: null  # optional Langfuse user id; supports ${ENV} (maps to langfuse_user_id metadata)
 
 # Daemon Multi-Transport Configuration (RFC-0013) - WebSocket (required) + HTTP REST (optional)
 

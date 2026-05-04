@@ -96,6 +96,8 @@ observability:
     secret_key: sk-lf-soothe-local
     host: http://localhost:3300
     trace_name: soothe-dev
+    tags:
+      - soothe
 
 daemon:
   max_concurrent_threads: 100
