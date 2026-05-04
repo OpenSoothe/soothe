@@ -32,8 +32,6 @@ from .step_scheduler import StepScheduler
 # Tool caching
 from .tool_cache import (
     cache_tools,
-    clear_tool_cache,
-    get_cache_stats,
     get_cached_tools,
 )
 
@@ -45,6 +43,4 @@ __all__ = [
     # Tool caching
     "get_cached_tools",
     "cache_tools",
-    "clear_tool_cache",
-    "get_cache_stats",
 ]

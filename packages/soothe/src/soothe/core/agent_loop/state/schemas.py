@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 import uuid
 from datetime import UTC, datetime
@@ -12,6 +13,8 @@ from pydantic import BaseModel, Field, model_validator
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.protocols.planner import planner_outcome_text_preview
+
+logger = logging.getLogger(__name__)
 
 
 class StepAction(BaseModel):
@@ -25,7 +28,9 @@ class StepAction(BaseModel):
         tools: Tools to use (optional, executor hint)
         subagent: Subagent to invoke (optional, executor hint)
         expected_output: Expected result for evidence accumulation
-        dependencies: Step IDs this depends on (for DAG execution)
+        dependencies: Step IDs this depends on (for DAG execution). Use the same local ``id``
+            strings as sibling steps (e.g. ``01``, ``02``); runtime remaps aliases such as ``1`` → ``01``
+            when unambiguous (IG-379).
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
@@ -113,6 +118,49 @@ def composite_step_id(raw_id: str, plan_id: str) -> str:
     return f"{prefix}{raw_id}"
 
 
+def _resolve_in_plan_dependency(dep: str, id_map: dict[str, str]) -> str:
+    """Map a model dependency string to a scoped in-plan composite id when resolvable.
+
+    Resolution order:
+    1. Strip; exact key in ``id_map`` (model local id, e.g. ``01``).
+    2. If dependency is all digits, match the unique in-plan step whose ``id`` is all digits and
+       has the same integer value (``1`` matches ``01``); if multiple in-plan digit ids collide,
+       leave ``dep`` unchanged and log once.
+    3. Case-insensitive match against raw step ids when exactly one step matches.
+
+    Otherwise returns ``dep`` unchanged (cross-plan / historical composite refs, IG-346).
+
+    Args:
+        dep: Dependency string from the model.
+        id_map: Raw step ``id`` → composite ``PLANID-raw`` for the current decision.
+
+    Returns:
+        Scoped composite id, or ``dep`` if external / unresolved.
+    """
+    d = dep.strip()
+    if not d:
+        return dep
+    if d in id_map:
+        return id_map[d]
+    raw_ids = list(id_map.keys())
+    if d.isdigit():
+        matches = [rid for rid in raw_ids if rid.isdigit() and int(rid, 10) == int(d, 10)]
+        if len(matches) == 1:
+            return id_map[matches[0]]
+        if len(matches) > 1:
+            logger.warning(
+                "Ambiguous numeric dependency %r matches in-plan step ids %s; leaving as-is (IG-379)",
+                d,
+                matches,
+            )
+            return dep
+    lower = d.lower()
+    ci_matches = [rid for rid in raw_ids if rid.lower() == lower]
+    if len(ci_matches) == 1:
+        return id_map[ci_matches[0]]
+    return dep
+
+
 def allocate_plan_id(
     decision: AgentDecision,
     *,
@@ -157,8 +205,9 @@ def assign_plan_step_ids(
 
     Each step becomes ``composite_step_id(step.id, plan_id)``, preserving the model suffix
     (e.g. ``001`` → ``KFA-001``). Dependency edges between steps in this decision are
-    rewritten via an internal id map; other dependency strings (e.g. cross-wave refs)
-    are unchanged (IG-346).
+    rewritten via :func:`_resolve_in_plan_dependency` (exact id, digit-alias, or
+    single case-insensitive match); other dependency strings (e.g. cross-wave refs)
+    are unchanged (IG-346, IG-379).
 
     Args:
         decision: Parsed or merged execution decision.
@@ -184,7 +233,7 @@ def assign_plan_step_ids(
         mapped = id_map[step.id]
         new_deps: list[str] | None = None
         if step.dependencies:
-            new_deps = [id_map.get(dep, dep) for dep in step.dependencies]
+            new_deps = [_resolve_in_plan_dependency(dep, id_map) for dep in step.dependencies]
         new_steps.append(step.model_copy(update={"id": mapped, "dependencies": new_deps}))
     return decision.model_copy(update={"steps": new_steps})
 

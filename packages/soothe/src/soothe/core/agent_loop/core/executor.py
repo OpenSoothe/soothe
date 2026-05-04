@@ -38,6 +38,35 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _log_dependency_execution_residual(
+    decision: AgentDecision,
+    *,
+    local_done: set[str],
+    failed_sticky: set[str],
+) -> None:
+    """Emit a warning when dependency execution stopped with steps never started (IG-379).
+
+    Typical causes: unsatisfied or mistyped dependency ids, cycles, or steps blocked behind
+    failures (failed step ids are not in ``local_done`` but are excluded from ``never_started``).
+    """
+    never_started = [
+        s for s in decision.steps if s.id not in local_done and s.id not in failed_sticky
+    ]
+    if not never_started:
+        return
+    details: list[str] = []
+    for s in never_started:
+        deps = s.dependencies or []
+        unresolved = [x for x in deps if x not in local_done]
+        details.append(f"id={s.id!r} unresolved_dependencies={unresolved!r}")
+    logger.warning(
+        "[Execute] dependency mode finished with %d/%d step(s) never started: %s",
+        len(never_started),
+        len(decision.steps),
+        "; ".join(details),
+    )
+
+
 @dataclass
 class _ActStreamBudget:
     """Mutable counters for a single CoreAgent stream (IG-130)."""
@@ -860,6 +889,10 @@ class Executor:
                         local_done.add(item.step_id)
                     else:
                         failed_sticky.add(item.step_id)
+
+        _log_dependency_execution_residual(
+            decision, local_done=local_done, failed_sticky=failed_sticky
+        )
 
     async def _execute_step_collecting_events(
         self,

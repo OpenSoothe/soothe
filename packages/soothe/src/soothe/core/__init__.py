@@ -3,7 +3,6 @@
 from typing import Any
 
 __all__ = [
-    "INVALID_WORKSPACE_DIRS",
     "ConfigDrivenPolicy",
     "CoreAgent",
     "FrameworkFilesystem",
@@ -40,10 +39,6 @@ def __getattr__(name: str) -> Any:
         from soothe.core.prompts import PromptBuilder
 
         return PromptBuilder
-    if name == "INVALID_WORKSPACE_DIRS":
-        from soothe_sdk.utils import INVALID_WORKSPACE_DIRS
-
-        return INVALID_WORKSPACE_DIRS
     if name == "resolve_daemon_workspace":
         # NEW: Import from workspace package
         from soothe.core.workspace import resolve_daemon_workspace
