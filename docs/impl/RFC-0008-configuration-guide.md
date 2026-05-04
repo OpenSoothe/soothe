@@ -335,7 +335,7 @@ agentic:
 
 ## Support
 
-- **RFC**: `docs/specs/RFC-200-agentic-loop-execution.md`
+- **RFC**: `docs/specs/RFC-201-agentloop-plan-execute-loop.md`
 - **Implementation**: `docs/impl/IG-074-final-summary.md`
 - **Progress**: `docs/impl/IG-074-implementation-progress.md`
 

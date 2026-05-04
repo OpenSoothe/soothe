@@ -102,7 +102,7 @@ def merge_langfuse_runnable_config(
         base: RunnableConfig-compatible dict (e.g. ``{"configurable": {...}}``).
         soothe_config: Active Soothe configuration.
         session_id: Optional thread id stored as ``langfuse_session_id`` metadata.
-        run_name: Optional root run name (e.g. ``soothe-dev:plan-assess``). When omitted,
+        run_name: Optional root run name (e.g. ``soothe-dev:plan-assess``, ``soothe-dev:execute-step``). When omitted,
             uses ``observability.langfuse.trace_name`` when set.
 
     Returns:

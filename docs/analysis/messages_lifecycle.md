@@ -713,7 +713,7 @@ SUBAGENT_CLAUDE_TEXT = "soothe.subagent.claude.text"
 **Protocol Definition:**
 
 ```python
-# From protocols/context.py
+# Conceptual ledger shape; see RFC-400 / RFC-300 and `LoopWorkingMemoryProtocol`
 class ContextEntry(BaseModel):
     """Single entry in the context ledger."""
     source: str  # Origin: tool, subagent, user, memory
@@ -1119,22 +1119,22 @@ sequenceDiagram
 
 | Component | File Path | Purpose |
 |-----------|-----------|---------|
-| Daemon Server | `src/soothe/daemon/server.py` | Multi-transport daemon |
-| Message Handlers | `src/soothe/daemon/_handlers.py` | Client message routing |
-| Thread Logger | `src/soothe/daemon/thread_logger.py` | Session logging |
-| Protocol Encoding | `src/soothe/daemon/protocol.py` | JSON serialization |
-| Protocol Validation | `src/soothe/daemon/protocol_v2.py` | Message type validation |
-| Transport Manager | `src/soothe/daemon/transport_manager.py` | Multi-transport coordination |
-| Unix Socket Transport | `src/soothe/daemon/transports/unix_socket.py` | Unix socket implementation |
-| Daemon Client | `src/soothe/daemon/client.py` | Client-side connection |
-| Runner Core | `src/soothe/core/runner/__init__.py` | Protocol orchestration |
-| Runner Phases | `src/soothe/core/runner/_runner_phases.py` | Pre/post-stream logic |
-| Event Types | `src/soothe/core/events.py` | Event type definitions |
-| Context Protocol | `src/soothe/protocols/context.py` | Context ledger interface |
-| Memory Protocol | `src/soothe/protocols/memory.py` | Long-term memory interface |
-| Durability Protocol | `src/soothe/protocols/durability.py` | Thread metadata interface |
-| Persist Store | `src/soothe/protocols/persistence.py` | Generic persistence interface |
-| TUI App | `src/soothe/ux/tui/app.py` | Textual TUI application |
+| Daemon Server | `packages/soothe/src/soothe/daemon/server.py` | Multi-transport daemon |
+| Message Handlers | `packages/soothe/src/soothe/daemon/_handlers.py` | Client message routing |
+| Message Router | `packages/soothe/src/soothe/daemon/message_router.py` | In-daemon message routing |
+| Query Engine | `packages/soothe/src/soothe/daemon/query_engine.py` | Query execution entry |
+| Protocol Validation | `packages/soothe/src/soothe/daemon/protocol_v2.py` | Message type validation |
+| Transport Manager | `packages/soothe/src/soothe/daemon/transport_manager.py` | Multi-transport coordination |
+| Unix Socket Transport | `packages/soothe/src/soothe/daemon/transports/` | Transport implementations |
+| Daemon Client Session | `packages/soothe/src/soothe/daemon/client_session.py` | Client-side session wiring |
+| Runner Core | `packages/soothe/src/soothe/core/runner/__init__.py` | Protocol orchestration |
+| Runner Phases | `packages/soothe/src/soothe/core/runner/_runner_phases.py` | Pre/post-stream logic |
+| Event Types | `packages/soothe/src/soothe/core/events/constants.py` | Event type constants |
+| Loop working memory | `packages/soothe/src/soothe/protocols/loop_working_memory.py` | Plan–Execute scratchpad (`LoopWorkingMemoryProtocol`, RFC-203) |
+| Memory Protocol | `packages/soothe/src/soothe/protocols/memory.py` | Long-term memory interface |
+| Durability Protocol | `packages/soothe/src/soothe/protocols/durability.py` | Thread metadata interface |
+| Persist Store | `packages/soothe/src/soothe/protocols/persistence.py` | Generic persistence interface |
+| TUI App | `packages/soothe-cli/src/soothe_cli/tui/app.py` | Textual TUI application |
 
 ---
 
@@ -1142,7 +1142,7 @@ sequenceDiagram
 
 - [RFC-000: System Conceptual Design](../specs/RFC-000-system-conceptual-design.md)
 - [RFC-300: Context and Memory Architecture Design](../specs/RFC-300-context-memory-protocols.md)
-- [RFC-200: Agentic Goal Execution](../specs/RFC-200-agentic-goal-execution.md)
-- [RFC-200: DAG Execution & Failure Recovery](../specs/RFC-200-dag-execution.md)
-- [RFC-400: Daemon Communication Protocol](../specs/RFC-400-daemon-communication.md)
-- [RFC-402: Unified Thread Management Architecture](../specs/RFC-402-unified-thread-management.md)
+- [RFC-201: AgentLoop Plan–Execute Loop](../specs/RFC-201-agentloop-plan-execute-loop.md)
+- [RFC-200: Autonomous Goal Management](../specs/RFC-200-autonomous-goal-management.md)
+- [RFC-450: Daemon Communication Protocol](../specs/RFC-450-daemon-communication-protocol.md)
+- [RFC-452: Unified Thread Management](../specs/RFC-452-unified-thread-management.md)
