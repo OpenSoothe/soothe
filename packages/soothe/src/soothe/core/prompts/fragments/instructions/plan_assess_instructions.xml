@@ -1,5 +1,5 @@
 <PLAN_ASSESS>
-Judge progress toward the goal using the execute ledger (human/AI turns above this message) plus the goal and execute-iteration header in the latest plan message.
+Judge progress toward the goal using the execute ledger (human/AI turns after this system prompt, if any) plus the goal and execute-iteration values in the <GOAL_PROGRESS> block at the end of this system prompt.
 
 Output MUST match the structured schema only: status, goal_progress, confidence, require_goal_completion.
 
@@ -15,6 +15,6 @@ Output MUST match the structured schema only: status, goal_progress, confidence,
 **require_goal_completion**: true only when status="done" but the user still needs a separate synthesis pass to produce the final user-facing reply; otherwise false. For read-only or extract goals where the tool output is itself the deliverable, prefer false.
 
 **Guards**
-- When the header shows execute iteration 1 (first cycle) and the ledger has no tool/subagent results yet: NEVER status="done".
+- When <GOAL_PROGRESS> shows execute iteration 1 (first cycle) and the ledger has no tool/subagent results yet: NEVER status="done".
 - Never set status="done" without ledger evidence that matches the goal.
 </PLAN_ASSESS>

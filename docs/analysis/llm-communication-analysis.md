@@ -57,7 +57,7 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
 **When**: Before entering execution loop
 **Model**: Fast model (role="fast")
 **Purpose**: Determine query complexity and routing strategy
-**Location**: `src/soothe/core/unified_classifier.py`
+**Location**: `packages/soothe/src/soothe/core/intention/classifier.py` (unified / routing classification; historical `unified_classifier.py` name)
 
 #### Input to LLM
 
@@ -226,7 +226,7 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
    - List of enabled tools
    - List of enabled subagents
 
-**Prompt Construction**: `src/soothe/core/prompts/builder.py` → `build_reason_messages()`
+**Prompt Construction**: `packages/soothe/src/soothe/core/prompts/builder.py` → `build_reason_messages()`
 
 #### Output from LLM
 
@@ -324,35 +324,35 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
 ### Phase 4.1: Middleware Stack (Pre-Model Processing)
 
 **Order**: Sequential processing before LLM call
-**Location**: `src/soothe/core/middleware/_builder.py`
+**Location**: `packages/soothe/src/soothe/core/middleware/_builder.py`
 
 #### Middleware Chain
 
 1. **WorkspaceContextMiddleware**:
    - Sets ContextVar for workspace path
    - Enables file operations without explicit path passing
-   - Location: `src/soothe/core/middleware/workspace_context.py`
+   - Location: `packages/soothe/src/soothe/core/middleware/workspace_context.py`
 
 2. **SoothePolicyMiddleware**:
    - Checks permissions for tool/subagent calls
    - Enforces PolicyProtocol before execution
    - Returns deny/allow/need-approval decisions
-   - Location: `src/soothe/core/middleware/policy.py`
+   - Location: `packages/soothe/src/soothe/core/middleware/policy.py`
 
 3. **SystemPromptOptimizationMiddleware**:
    - Dynamic system prompt based on complexity
    - Injects XML context sections (RFC-104)
-   - Location: `src/soothe/core/middleware/system_prompt_optimization.py`
+   - Location: `packages/soothe/src/soothe/core/middleware/system_prompt_optimization.py`
 
 4. **ExecutionHintsMiddleware**:
    - Injects Layer 2 execution hints
    - Advisory suggestions (tools, subagent, expected output)
-   - Location: `src/soothe/core/middleware/execution_hints.py`
+   - Location: `packages/soothe/src/soothe/core/middleware/execution_hints.py`
 
 5. **SubagentContextMiddleware**:
    - Injects context briefing for subagent delegations
    - Scoped projection (max 1200 tokens)
-   - Location: `src/soothe/core/middleware/subagent_context.py`
+   - Location: `packages/soothe/src/soothe/core/middleware/subagent_context.py`
 
 ---
 
@@ -737,7 +737,7 @@ This section analyzes the message flow between Layer 1 CoreAgent and Layer 2 Loo
 - **Thread ID keyed**: `{thread_id}` as primary key
 - **Subagent isolation**: ToolMessage(name="task") contains subagent results
 
-**Storage Location**: `src/soothe/core/runner/_runner_phases.py` lines 307-324
+**Storage Location**: `packages/soothe/src/soothe/core/runner/_runner_phases.py` lines 307-324
 
 #### 2. What is passed to the AgentLoop Plan phase
 
@@ -760,7 +760,7 @@ else:
 
 **What's in `reason_conversation_excerpts`**:
 
-From `src/soothe/core/runner/_runner_phases.py` lines 259-296:
+From `packages/soothe/src/soothe/core/runner/_runner_phases.py` lines 259-296:
 
 ```python
 # Format: <user>...</user> and <assistant>...</assistant> XML tags
@@ -858,7 +858,7 @@ while state.iteration < state.max_iterations:
 #### HumanMessage
 
 **Created at**:
-- CLI user input (`src/soothe/core/runner/_runner_phases.py` line 796)
+- CLI user input (`packages/soothe/src/soothe/core/runner/_runner_phases.py` line 796)
 - Executor for Act phase (`packages/soothe/src/soothe/core/agent_loop/core/executor.py` lines 370, 531)
 
 **Stored in**:
@@ -1030,16 +1030,16 @@ Translation scenario (contamination risk):
 ### Key Source Files
 
 **Layer 1 Checkpointer**:
-- `src/soothe/core/runner/_runner_phases.py`: Message persistence (lines 307-324)
-- `src/soothe/core/runner/_runner_agentic.py`: Thread loading (lines 191-195)
+- `packages/soothe/src/soothe/core/runner/_runner_phases.py`: Message persistence (lines 307-324)
+- `packages/soothe/src/soothe/core/runner/_runner_agentic.py`: Thread loading (lines 191-195)
 
 **Layer 2 State Management**:
 - `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py`: Checkpoint recovery (lines 124-137)
-- `packages/soothe/src/soothe/core/agent_loop/state/state_manager.py`: Layer 2 checkpoint operations
+- `packages/soothe/src/soothe/core/agent_loop/state/state_manager.py`: AgentLoop checkpoint operations
 - `packages/soothe/src/soothe/core/agent_loop/state/schemas.py`: LoopState schema definition
 
 **Message Formatting**:
-- `src/soothe/core/runner/_runner_phases.py`: XML excerpt formatting (lines 259-296)
+- `packages/soothe/src/soothe/core/runner/_runner_phases.py`: XML excerpt formatting (lines 259-296)
 
 **Evidence Accumulation**:
 - `packages/soothe/src/soothe/core/agent_loop/core/planner.py`: Evidence aggregation (lines 35-62)
@@ -1117,9 +1117,9 @@ Translation scenario (contamination risk):
 ### Key Source Files
 
 **Runner and Orchestration**:
-- `src/soothe/core/runner/__init__.py`: Main runner
-- `src/soothe/core/runner/_runner_agentic.py`: Layer 2 loop
-- `src/soothe/core/runner/_runner_phases.py`: Stream phases
+- `packages/soothe/src/soothe/core/runner/__init__.py`: Main runner
+- `packages/soothe/src/soothe/core/runner/_runner_agentic.py`: Agentic loop driver
+- `packages/soothe/src/soothe/core/runner/_runner_phases.py`: Stream phases
 
 **Loop Agent**:
 - `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py`: AgentLoop class
@@ -1127,22 +1127,22 @@ Translation scenario (contamination risk):
 - `packages/soothe/src/soothe/core/agent_loop/core/executor.py`: Act executor
 
 **Middleware Stack**:
-- `src/soothe/core/middleware/_builder.py`: Stack construction
-- `src/soothe/core/middleware/system_prompt_optimization.py`: Prompt optimization
-- `src/soothe/core/middleware/subagent_context.py`: Context briefing
+- `packages/soothe/src/soothe/core/middleware/_builder.py`: Stack construction
+- `packages/soothe/src/soothe/core/middleware/system_prompt_optimization.py`: Prompt optimization
+- `packages/soothe/src/soothe/core/middleware/subagent_context.py`: Context briefing
 
 **Prompt Building**:
-- `src/soothe/core/prompts/builder.py`: Reason prompt construction
-- `src/soothe/core/prompts/context_xml.py`: XML context sections
-- `src/soothe/core/prompts/fragments/`: Static prompt fragments
+- `packages/soothe/src/soothe/core/prompts/builder.py`: Reason prompt construction
+- `packages/soothe/src/soothe/core/prompts/context_xml.py`: XML context sections
+- `packages/soothe/src/soothe/core/prompts/fragments/`: Static prompt fragments
 
 **Classification**:
-- `src/soothe/core/unified_classifier.py`: Query classification
+- `packages/soothe/src/soothe/core/unified_classifier.py`: Query classification
 
 **Protocols**:
-- `src/soothe/protocols/context.py`: ContextProtocol
-- `src/soothe/protocols/memory.py`: MemoryProtocol
-- `src/soothe/protocols/planner.py`: PlannerProtocol
+- `packages/soothe/src/soothe/protocols/loop_working_memory.py`: `LoopWorkingMemoryProtocol` (bounded Plan–Execute scratchpad)
+- `packages/soothe/src/soothe/protocols/memory.py`: MemoryProtocol
+- `packages/soothe/src/soothe/protocols/planner.py`: PlannerProtocol
 
 ### Configuration Files
 

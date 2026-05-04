@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import SystemMessage
 
 from soothe.core.agent_loop.state.schemas import LoopState
 from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -21,13 +21,11 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
     builder = PromptBuilder(config)
     messages = builder.build_plan_messages("analyze architecture", state, ctx)
 
-    # System + optional ledger middle + plan-context human last (RFC-214, IG-372)
-    assert len(messages) >= 2
+    # Assess: system + optional ledger; goal in <GOAL_PROGRESS> on system when no prior thread
+    assert len(messages) == 1
     assert isinstance(messages[0], SystemMessage)
-    assert isinstance(messages[1], HumanMessage)
 
     system_content = messages[0].content
-    human_content = messages[1].content
 
     # RFC-207: SystemMessage has static context
     # RFC-207: Removed SOOTHE_ prefix from all tags
@@ -37,8 +35,9 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
     assert "<WORKSPACE_RULES>" in system_content
     assert "Do NOT ask the user" in system_content
 
-    # RFC-207: HumanMessage has goal and dynamic context
-    assert "Goal: analyze architecture" in human_content
+    assert "<GOAL_PROGRESS>" in system_content
+    assert "Goal: analyze architecture" in system_content
+    assert "Execute iteration: 1/8" in system_content
 
 
 def test_build_loop_plan_messages_without_config_workspace_only() -> None:
@@ -48,9 +47,8 @@ def test_build_loop_plan_messages_without_config_workspace_only() -> None:
     builder = PromptBuilder()
     messages = builder.build_plan_messages("analyze architecture", state, ctx)
 
-    assert len(messages) >= 2
+    assert len(messages) == 1
     system_content = messages[0].content
-    human_content = messages[1].content
 
     # RFC-207: Removed SOOTHE_ prefix from all tags
     assert "<ENVIRONMENT" not in system_content
@@ -58,8 +56,8 @@ def test_build_loop_plan_messages_without_config_workspace_only() -> None:
     assert "/abs/path/to/repo" in system_content
     assert "<WORKSPACE_RULES>" in system_content
 
-    # HumanMessage has goal
-    assert "Goal: analyze architecture" in human_content
+    assert "<GOAL_PROGRESS>" in system_content
+    assert "Goal: analyze architecture" in system_content
 
 
 def test_build_loop_plan_messages_omits_workspace_rules_without_workspace() -> None:
@@ -84,9 +82,9 @@ def test_build_loop_plan_messages_omits_working_memory_in_plan_human_ig371() -> 
     builder = PromptBuilder()
     messages = builder.build_plan_messages("g", state, ctx)
 
-    human_content = messages[1].content
-    assert "<WORKING_MEMORY>" not in human_content
-    assert "listed src/" not in human_content
+    full = "\n".join(m.content for m in messages)
+    assert "<WORKING_MEMORY>" not in full
+    assert "listed src/" not in full
 
 
 def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
@@ -107,9 +105,12 @@ def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
     human_content = messages[1].content
 
     # RFC-207: Removed SOOTHE_ prefix from PRIOR_CONVERSATION tag
-    # Prior conversation is in HumanMessage (dynamic context)
+    # Prior conversation stays on plan-context human; assess goal lines live in system
     assert "<PRIOR_CONVERSATION>" in human_content
     assert "Infrastructure" in human_content
+    assert not human_content.strip().startswith("Goal:")
+    assert "<GOAL_PROGRESS>" in system_content
+    assert "Goal: 翻译成中文" in system_content
 
     # FOLLOW_UP_POLICY in SystemMessage (static rule)
     assert "<FOLLOW_UP_POLICY>" in system_content
@@ -133,9 +134,8 @@ def test_build_loop_plan_messages_plan_continue_when_steps_remain() -> None:
     builder = PromptBuilder()
     messages = builder.build_plan_messages("g", state, PlanContext())
 
-    assert len(messages) >= 2
+    assert len(messages) == 1
     assert isinstance(messages[0], SystemMessage)
-    assert isinstance(messages[1], HumanMessage)
 
 
 def test_build_plan_messages_appends_ledger_loop_messages() -> None:
@@ -158,13 +158,13 @@ def test_build_plan_messages_appends_ledger_loop_messages() -> None:
     builder = PromptBuilder()
     messages = builder.build_plan_messages("read readme", state, PlanContext())
 
-    assert len(messages) == 4
+    assert len(messages) == 3
     assert isinstance(messages[1], LoopHumanMessage)
     assert isinstance(messages[2], LoopAIMessage)
     assert messages[1].content.startswith("Execute:")
     assert "First lines of README" in messages[2].content
-    plan_human = messages[3]
-    assert isinstance(plan_human, LoopHumanMessage)
-    assert getattr(plan_human, "phase", None) == "plan"
-    assert "Goal: read readme" in plan_human.content
-    assert "<AGENTLOOP_HISTORY>" not in plan_human.content
+    system = messages[0].content
+    assert "<GOAL_PROGRESS>" in system
+    assert "Goal: read readme" in system
+    assert "Execute iteration: 1/8" in system
+    assert "<AGENTLOOP_HISTORY>" not in system

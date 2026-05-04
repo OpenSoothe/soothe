@@ -47,12 +47,15 @@ class PromptBuilder:
         """Build SystemMessage + plan context + ledger for Plan phase (RFC-207, RFC-214).
 
         Constructs proper message type separation:
-        - SystemMessage: environment, workspace, policies, instructions, loop config, capabilities
+        - SystemMessage: environment, workspace, policies, instructions, loop config, capabilities.
+          For ``plan_phase="assess"``, ends with ``<GOAL_PROGRESS>`` (goal + execute iteration).
         - ``state.loop_messages``: ledger as native ``LoopHumanMessage`` / ``LoopAIMessage`` turns
-        - LoopHumanMessage: goal, plan status, prior thread (no ledger blob; IG-371: no WM block)
+        - LoopHumanMessage (optional): prior thread only for assess when ``recent_messages`` is set;
+          plan-generate still uses goal + execute iteration + prior thread here (IG-371: no WM block).
 
-        Ledger precedes the plan-context human so ``plan-assess`` / ``plan-generate`` see
-        execute evidence as prior turns and the assess framing as the latest user message (IG-372).
+        Ledger precedes the optional plan-context human so ``plan-assess`` / ``plan-generate`` see
+        execute evidence as prior turns; assess has no trailing human when there is no prior thread
+        (goal lives in system ``<GOAL_PROGRESS>`` only).
 
         Args:
             goal: User's goal description
@@ -62,27 +65,38 @@ class PromptBuilder:
                 execution policies + instructions aligned to ``PlanGeneration`` only (IG-372, IG-329).
 
         Returns:
-            Messages to send to the plan LLM: system, ledger copies, then plan-context human.
+            Messages to send to the plan LLM: system, ledger copies, then optional plan-context human.
         """
         from soothe.core.agent_loop.utils.messages import LoopHumanMessage
 
-        system_content = self._build_system_message(context, state, plan_phase=plan_phase)
-        human_content = self._build_plan_context_human_text(goal, state, context)
-
-        # RFC-214: Use LoopHumanMessage for Plan turns
-        plan_human_msg = LoopHumanMessage(
-            content=human_content,
-            thread_id=state.thread_id,
-            iteration=state.iteration,
-            goal_summary=goal[:200],
-            phase="plan",  # RFC-214: Plan phase marker
+        assess_goal_in_system = plan_phase == "assess"
+        system_content = self._build_system_message(
+            context,
+            state,
+            plan_phase=plan_phase,
+            goal=goal if assess_goal_in_system else None,
+        )
+        human_content = self._build_plan_context_human_text(
+            goal,
+            state,
+            context,
+            include_goal_lines=not assess_goal_in_system,
         )
 
         out: list[BaseMessage] = [SystemMessage(content=system_content)]
         # RFC-214: full execute (and future) ledger as real messages — better cache boundaries
         # than a single human blob embedding ``<AGENTLOOP_HISTORY>``.
         out.extend(state.loop_messages)
-        out.append(plan_human_msg)
+        if human_content.strip():
+            out.append(
+                LoopHumanMessage(
+                    content=human_content,
+                    thread_id=state.thread_id,
+                    iteration=state.iteration,
+                    goal_summary=goal[:200],
+                    phase="plan",  # RFC-214: Plan phase marker
+                )
+            )
         return out
 
     def _build_system_message(
@@ -91,6 +105,7 @@ class PromptBuilder:
         state: LoopState | None = None,
         *,
         plan_phase: PlanPromptPhase = "assess",
+        goal: str | None = None,
     ) -> str:
         """Construct static context: policies, instructions, environment, workspace.
 
@@ -102,7 +117,7 @@ class PromptBuilder:
 
         Section ordering (optimized for prompt caching):
         - **assess** (IG-372): PLAN_ASSESS_INSTRUCTIONS only, then conditional blocks, ENVIRONMENT,
-          WORKSPACE.
+          WORKSPACE, then ``<GOAL_PROGRESS>`` when ``goal`` is provided.
         - **generate**: EXECUTION_POLICIES, PLAN_GENERATE_INSTRUCTIONS (schema-aligned PlanGeneration
           only), then conditional blocks, ENVIRONMENT, WORKSPACE.
 
@@ -110,6 +125,8 @@ class PromptBuilder:
             context: Planning context with workspace, capabilities
             state: Optional loop state for iteration limits and capability context
             plan_phase: Which planner LLM call this system prompt serves (IG-372).
+            goal: When ``plan_phase`` is ``assess``, appended inside trailing ``<GOAL_PROGRESS>``;
+                ignored for ``generate``.
         """
         from soothe.core.prompts.fragments import (
             EXECUTION_POLICIES_FRAGMENT,
@@ -169,7 +186,23 @@ class PromptBuilder:
                 build_soothe_workspace_section(Path(context.workspace), context.git_status) + "\n"
             )
 
+        if plan_phase == "assess" and goal is not None and state is not None:
+            parts.append(self._format_goal_progress_footer(goal, state))
+
         return "\n".join(parts)
+
+    @staticmethod
+    def _format_goal_progress_footer(goal: str, state: LoopState) -> str:
+        """Trailing assess-only block: goal line and 1-based execute iteration (RFC-214, IG-376)."""
+        cur_iter = state.iteration if state.iteration is not None else 0
+        max_iter = state.max_iterations if state.max_iterations is not None else "?"
+        cycle_one_based = int(cur_iter) + 1
+        return (
+            "<GOAL_PROGRESS>\n"
+            f"Goal: {goal}\n"
+            f"Execute iteration: {cycle_one_based}/{max_iter}\n"
+            "</GOAL_PROGRESS>\n"
+        )
 
     def _build_human_message(
         self,
@@ -227,40 +260,36 @@ class PromptBuilder:
         goal: str,
         state: LoopState,
         context: PlanContext,
+        *,
+        include_goal_lines: bool = True,
     ) -> str:
-        """Construct plan-context human text (goal, plan status, prior thread) without ledger (RFC-214).
+        """Construct plan-context human text without ledger (RFC-214).
 
         AgentLoop ledger messages are appended separately in ``build_plan_messages`` so the
         plan model sees native human/AI turns instead of a single flattened ``<AGENTLOOP_HISTORY>`` block.
         Execute-step evidence lives in those ledger messages (IG-368). Working memory is not duplicated
         here; the ledger carries execution narrative (IG-371).
 
+        For plan-assess, ``include_goal_lines=False`` so goal and iteration appear only in the system
+        ``<GOAL_PROGRESS>`` block; this string may be empty or hold only ``<PRIOR_CONVERSATION>``.
+
         Args:
             goal: User's goal description
             state: Current loop state with optional plan snapshot
             context: Planning context (prior thread XML, etc.)
+            include_goal_lines: When True (plan-generate), lead with Goal + Execute iteration lines.
 
         Returns:
-            Formatted prompt string for the plan-context ``LoopHumanMessage`` only.
+            Formatted prompt string for the optional plan-context ``LoopHumanMessage``.
         """
         parts: list[str] = []
 
-        cur_iter = state.iteration if state.iteration is not None else 0
-        max_iter = state.max_iterations if state.max_iterations is not None else "?"
-        # 1-based cycle index for assess/generate human (IG-376): iteration 0 → round 1 of max.
-        cycle_one_based = int(cur_iter) + 1
-
-        parts.append(f"Goal: {goal}")
-        parts.append(f"Execute iteration: {cycle_one_based}/{max_iter}")
-
-        # Plan snapshot (current strategy) — one line
-        if state.previous_plan:
-            prev = state.previous_plan
-            na = (prev.next_action or "").strip()
-            if len(na) > 100:
-                na = na[:97] + "..."
-            suffix = f" | next: {na}" if na else ""
-            parts.append(f"Plan status: {prev.status} {prev.goal_progress:.0%}{suffix}")
+        if include_goal_lines:
+            cur_iter = state.iteration if state.iteration is not None else 0
+            max_iter = state.max_iterations if state.max_iterations is not None else "?"
+            cycle_one_based = int(cur_iter) + 1
+            parts.append(f"Goal: {goal}")
+            parts.append(f"Execute iteration: {cycle_one_based}/{max_iter}")
 
         # Prior conversation (IG-128, RFC-209)
         if context.recent_messages:

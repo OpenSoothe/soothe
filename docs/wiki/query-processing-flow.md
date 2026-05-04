@@ -166,8 +166,8 @@ The default execution mode follows an iterative observe-act-verify cycle:
 ```python
 # _agentic_act()
 - Delegate to `AgentLoop` (`packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py`)
-- Plan via `LLMPlanner` (`core/agent_loop/core/planner.py`, RFC-604 two-phase assess + generate)
-- Execute plan (single step or multi-step DAG via `core/agent_loop/core/executor.py`)
+- Plan via `LLMPlanner` (`packages/soothe/src/soothe/core/agent_loop/core/planner.py`, RFC-604 two-phase assess + generate)
+- Execute plan (single step or multi-step DAG via `packages/soothe/src/soothe/core/agent_loop/core/executor.py`)
 ```
 
 ### Verify Phase
@@ -253,9 +253,9 @@ Step B (no deps) ─┘
 Execution: A + B parallel, then C
 ```
 
-**Key Files:**
-- `src/soothe/core/runner/_runner_steps.py` - Step orchestration
-- `src/soothe/cognition/planning/scheduler.py` - DAG scheduler
+**Key files:**
+- `packages/soothe/src/soothe/core/runner/_runner_steps.py` — Step orchestration (`StepScheduler` for DAG batches)
+- `packages/soothe/src/soothe/core/agent_loop/state/schemas.py` — `AgentDecision`, `StepAction`, dependency metadata
 
 ## 7. Agent Execution
 
@@ -296,9 +296,9 @@ async def _stream_phase(self, ...):
 | `updates` | State updates |
 | `custom` | Protocol events |
 
-**Key Files:**
-- `src/soothe/core/runner/_runner_phases.py` - Phase execution
-- `src/soothe/core/agent.py` - Agent factory
+**Key files:**
+- `packages/soothe/src/soothe/core/runner/_runner_phases.py` — Phase execution
+- `packages/soothe/src/soothe/core/agent.py` — CoreAgent factory
 
 ## 8. Response Streaming
 
@@ -368,9 +368,9 @@ GoalCompletedEvent / GoalFailedEvent
 FinalReportEvent
 ```
 
-**Key Files:**
-- `src/soothe/core/runner/_runner_autonomous.py`
-- `src/soothe/cognition/goal_engine.py`
+**Key files:**
+- `packages/soothe/src/soothe/core/runner/_runner_autonomous.py`
+- `packages/soothe/src/soothe/core/goal_engine/engine.py`
 
 ## 10. Event Flow Summary
 
@@ -394,12 +394,12 @@ User Query
     │
     ▼
 ┌─────────────┐
-│ Classify    │  chitchat / simple / medium / complex
+│ Classify    │  Unified routing (intent, complexity, workspace, …)
 └─────────────┘
     │
     ▼
 ┌─────────────┐
-│ Plan        │  SimplePlanner / ClaudePlanner
+│ Plan        │  `LLMPlanner` / AgentLoop Plan phase
 └─────────────┘
     │
     ▼
@@ -420,26 +420,25 @@ User Query
 
 ## Quick Reference
 
-### Key Files by Layer
+### Key files (quick reference)
 
-| Layer | File | Purpose |
-|-------|------|---------|
-| CLI | `ux/cli/main.py` | Entry point |
-| CLI | `ux/cli/commands/run_cmd.py` | Run command |
-| CLI | `ux/cli/execution/headless.py` | Headless mode |
-| Daemon | `daemon/server.py` | Daemon server |
-| Daemon | `daemon/_handlers.py` | Query handling |
-| Runner | `core/runner/__init__.py` | Main runner |
-| Runner | `core/runner/_runner_agentic.py` | Agentic loop |
-| Runner | `core/runner/_runner_phases.py` | Phase execution |
-| Runner | `core/runner/_runner_steps.py` | Step orchestration |
-| Planning | `cognition/planning/router.py` | Planner router |
-| Planning | `cognition/planning/simple.py` | Simple planner |
-| Agent | `core/agent.py` | Agent factory |
+| Area | File | Purpose |
+|------|------|---------|
+| CLI | `packages/soothe-cli/src/soothe_cli/cli/main.py` | Entry point |
+| CLI | `packages/soothe-cli/src/soothe_cli/cli/commands/run_cmd.py` | Run command |
+| CLI | `packages/soothe-cli/src/soothe_cli/cli/execution/headless.py` | Headless mode |
+| Daemon | `packages/soothe/src/soothe/daemon/server.py` | Daemon server |
+| Daemon | `packages/soothe/src/soothe/daemon/_handlers.py` | Query handling |
+| Runner | `packages/soothe/src/soothe/core/runner/__init__.py` | Runner package |
+| Runner | `packages/soothe/src/soothe/core/runner/_runner_agentic.py` | Agentic loop |
+| Runner | `packages/soothe/src/soothe/core/runner/_runner_phases.py` | Phase execution |
+| Runner | `packages/soothe/src/soothe/core/runner/_runner_steps.py` | Step orchestration |
+| Planning | `packages/soothe/src/soothe/core/agent_loop/core/planner.py` | `LLMPlanner` (RFC-604) |
+| Agent | `packages/soothe/src/soothe/core/agent.py` | CoreAgent factory |
 
 ### RFC References
 
-- [RFC-200](../specs/RFC-200.md) - Agentic Loop Execution
-- [RFC-200](../specs/RFC-200.md) - Autonomous Iteration Loop
-- [RFC-200](../specs/RFC-200.md) - Step Execution
-- [RFC-400](../specs/RFC-400-context-protocol-architecture.md) - Daemon Communication Protocol
+- [RFC-201](../specs/RFC-201-agentloop-plan-execute-loop.md) — AgentLoop plan–execute (observe / act / verify)
+- [RFC-200](../specs/RFC-200-autonomous-goal-management.md) — Autonomous goal management
+- [RFC-604](../specs/RFC-604-reason-phase-robustness.md) — Two-phase plan assess and generation (`LLMPlanner`)
+- [RFC-450](../specs/RFC-450-daemon-communication-protocol.md) — Daemon communication
