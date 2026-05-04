@@ -171,15 +171,15 @@ def resolve_env_var(var_name: str) -> str:
     """Resolve environment variable with SOOTHE_ prefix support.
 
     This function handles two scenarios:
-    1. Direct env var lookup: resolve_env_var("LANGSMITH_API_KEY")
-       - First checks SOOTHE_LANGSMITH_API_KEY
-       - Falls back to LANGSMITH_API_KEY
-    2. Pattern resolution: resolve_env_var("${LANGSMITH_API_KEY}")
+    1. Direct env var lookup: resolve_env_var("OPENAI_API_KEY")
+       - First checks SOOTHE_OPENAI_API_KEY
+       - Falls back to OPENAI_API_KEY
+    2. Pattern resolution: resolve_env_var("${OPENAI_API_KEY}")
        - Resolves ${VAR} patterns within strings
 
     Args:
-        var_name: Environment variable name (e.g., "LANGSMITH_API_KEY")
-                  or pattern string (e.g., "${LANGSMITH_API_KEY}")
+        var_name: Environment variable name (e.g., "OPENAI_API_KEY")
+                  or pattern string (e.g., "${OPENAI_API_KEY}")
 
     Returns:
         Resolved value from environment, or empty string if not found.

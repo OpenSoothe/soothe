@@ -2640,103 +2640,16 @@ class SootheApp(App):
 
     @staticmethod
     async def _build_thread_message(prefix: str, thread_id: str) -> str | Content:
-        """Build a thread status message, hyperlinking the ID when possible.
-
-        Attempts to resolve the LangSmith thread URL with a short timeout.
-        Falls back to plain text if tracing is not configured or resolution
-        fails.
+        """Build a thread status message with the thread id.
 
         Args:
             prefix: Label before the thread ID (e.g. `'Resumed thread'`).
             thread_id: The thread identifier.
 
         Returns:
-            `Content` with a clickable thread ID, or a plain string.
+            Plain status line.
         """
-        from soothe_cli.tui.config import build_langsmith_thread_url
-
-        try:
-            url = await asyncio.wait_for(
-                asyncio.to_thread(build_langsmith_thread_url, thread_id),
-                timeout=2.0,
-            )
-        except (TimeoutError, Exception):  # noqa: BLE001  # Resilient non-interactive mode error handling
-            url = None
-
-        if url:
-            return Content.assemble(
-                f"{prefix}: ",
-                (thread_id, TStyle(link=url)),
-            )
         return f"{prefix}: {thread_id}"
-
-    async def _handle_trace_command(self, command: str) -> None:
-        """Open the current thread in LangSmith.
-
-        Resolves the URL and opens the browser immediately regardless of busy
-        state. When the app is busy, chat output (user echo + clickable link)
-        is deferred until the current task finishes. Error conditions (no
-        session, URL failure, tracing not configured) render immediately
-        regardless of busy state.
-
-        Args:
-            command: The raw command text (displayed as user message).
-        """
-        from soothe_cli.tui.config import build_langsmith_thread_url
-
-        if not self._session_state:
-            await self._mount_message(UserMessage(command))
-            await self._mount_message(AppMessage("No active session."))
-            return
-        thread_id = self._session_state.loop_id
-        try:
-            url = await asyncio.to_thread(build_langsmith_thread_url, thread_id)
-        except Exception:
-            logger.exception("Failed to build LangSmith thread URL for %s", thread_id)
-            await self._mount_message(UserMessage(command))
-            await self._mount_message(AppMessage("Failed to resolve LangSmith thread URL."))
-            return
-        if not url:
-            await self._mount_message(UserMessage(command))
-            await self._mount_message(
-                AppMessage(
-                    "LangSmith tracing is not configured. Set LANGSMITH_API_KEY and LANGSMITH_TRACING=true to enable."
-                )
-            )
-            return
-
-        def _open_browser() -> None:
-            try:
-                webbrowser.open(url)
-            except Exception:
-                logger.debug("Could not open browser for URL: %s", url, exc_info=True)
-
-        asyncio.get_running_loop().run_in_executor(None, _open_browser)
-
-        # Defer chat output while a turn is in progress — rendering the user
-        # echo + link immediately would splice it into the middle of the
-        # streaming assistant response
-        if self._agent_running or self._shell_running:
-            queued_widget = QueuedUserMessage(command)
-            self._queued_widgets.append(queued_widget)
-            await self._mount_message(queued_widget)
-
-            async def _mount_output() -> None:
-                if queued_widget in self._queued_widgets:
-                    self._queued_widgets.remove(queued_widget)
-                with suppress(Exception):
-                    await queued_widget.remove()
-                await self._mount_message(UserMessage(command))
-                link = Content.styled(url, TStyle(dim=True, italic=True, link=url))
-                await self._mount_message(AppMessage(link))
-
-            # Append directly — no dedup; each /trace invocation gets its own output.
-            self._deferred_actions.append(DeferredAction(kind="chat_output", execute=_mount_output))
-            return
-
-        await self._mount_message(UserMessage(command))
-        link = Content.styled(url, TStyle(dim=True, italic=True, link=url))
-        await self._mount_message(AppMessage(link))
 
     async def _handle_command(self, command: str) -> None:
         """Handle a slash command.
@@ -2785,7 +2698,7 @@ class SootheApp(App):
                 "Commands: /quit, /clear, /editor, /autopilot, /mcp, "
                 "/model [--model-params JSON] [--default], /notifications, "
                 "/reload, /skill:<name>, /remember, /theme, "
-                "/tokens, /loops, /trace, "
+                "/tokens, /loops, "
                 "/browser, /claude, /research, /explore, /plan (subagent routing), "
                 "/update, /auto-update, /changelog, /docs, /feedback, /help\n\n"
                 "Interactive Features:\n"
@@ -2869,8 +2782,6 @@ class SootheApp(App):
             await self.action_open_editor()
         elif cmd == "/loops":
             await self._show_loop_selector()
-        elif cmd == "/trace":
-            await self._handle_trace_command(command)
         elif cmd == "/update":
             await self._handle_update_command()
         elif cmd == "/auto-update":

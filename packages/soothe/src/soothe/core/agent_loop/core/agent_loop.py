@@ -26,6 +26,7 @@ from soothe.core.agent_loop.state.schemas import (
     AgentDecision,
     LoopState,
     PlanResult,
+    allocate_plan_id,
     assign_plan_step_ids,
 )
 from soothe.core.agent_loop.state.state_manager import AgentLoopStateManager
@@ -437,16 +438,18 @@ class AgentLoop:
                 )
                 return
 
-            # IG-358: New plans need unique step ids vs completed waves (3-char random).
+            # IG-303: Scoped step ids ``PLAN-MODEL``; new plan gets random uppercase plan_id, keep reuses.
             # plan_action keep + existing current_decision: ids already assigned — do not re-roll.
             if plan_result.plan_action == "new":
                 reserved = set(state.dependency_completion_ids())
-                decision = assign_plan_step_ids(decision, reserved_ids=reserved)
+                plan_id = allocate_plan_id(decision, reserved_step_ids=reserved)
+                state.plan_id = plan_id
+                decision = assign_plan_step_ids(decision, plan_id=plan_id)
             elif plan_result.plan_action == "keep" and state.current_decision is None:
-                decision = assign_plan_step_ids(
-                    decision,
-                    reserved_ids=set(state.dependency_completion_ids()),
-                )
+                reserved = set(state.dependency_completion_ids())
+                plan_id = state.plan_id or allocate_plan_id(decision, reserved_step_ids=reserved)
+                state.plan_id = plan_id
+                decision = assign_plan_step_ids(decision, plan_id=plan_id)
 
             if plan_result.plan_action == "new":
                 state.completed_step_ids.clear()

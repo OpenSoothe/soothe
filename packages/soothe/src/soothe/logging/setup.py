@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -115,7 +114,6 @@ def setup_logging(config: SootheConfig | None = None, *, foreground: bool = Fals
             root_logger.addHandler(console_handler)
 
     _suppress_noisy_third_party()
-    _log_langsmith_status()
 
 
 def _suppress_noisy_third_party() -> None:
@@ -136,28 +134,3 @@ def _suppress_noisy_third_party() -> None:
     )
     for name in noisy:
         logging.getLogger(name).setLevel(logging.WARNING)
-
-
-def _log_langsmith_status() -> None:
-    """Log LangSmith tracing status at startup."""
-    logger = logging.getLogger("soothe.core.tracing")
-
-    langsmith_tracing = os.getenv("LANGSMITH_TRACING", "").lower()
-    langchain_tracing = os.getenv("LANGCHAIN_TRACING_V2", "").lower()
-    langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
-    langchain_api_key = os.getenv("LANGCHAIN_API_KEY")
-    langsmith_project = os.getenv("LANGSMITH_PROJECT")
-    langchain_project = os.getenv("LANGCHAIN_PROJECT")
-
-    tracing_enabled = langsmith_tracing == "true" or langchain_tracing == "true"
-    has_api_key = bool(langsmith_api_key or langchain_api_key)
-
-    if tracing_enabled and has_api_key:
-        project_name = langsmith_project or langchain_project or "default"
-        logger.info("LangSmith tracing enabled (project: %s)", project_name)
-    elif tracing_enabled and not has_api_key:
-        logger.warning("LangSmith tracing enabled but API key is missing")
-    elif has_api_key and not tracing_enabled:
-        logger.info("LangSmith API key found but tracing is disabled")
-    else:
-        logger.debug("LangSmith tracing not configured")

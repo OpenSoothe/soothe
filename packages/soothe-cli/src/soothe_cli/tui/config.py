@@ -24,10 +24,10 @@ from soothe_cli.tui._version import __version__
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Lazy bootstrap: dotenv loading, LANGSMITH_PROJECT override, and start-path
-# detection are deferred until first access of `settings` (via module
-# `__getattr__`).  This avoids disk I/O and path traversal during import for
-# callers that never touch `settings` (e.g. `Soothe --help`).
+# Lazy bootstrap: dotenv loading and start-path detection are deferred until
+# first access of `settings` (via module `__getattr__`).  This avoids disk I/O
+# and path traversal during import for callers that never touch `settings`
+# (e.g. `Soothe --help`).
 # ---------------------------------------------------------------------------
 
 _bootstrap_done = False
@@ -42,13 +42,6 @@ _singleton_lock = threading.Lock()
 
 _bootstrap_start_path: Path | None = None
 """Working directory captured at bootstrap time for dotenv and project discovery."""
-
-_original_langsmith_project: str | None = None
-"""Caller's `LANGSMITH_PROJECT` value before the CLI overrides it for agent traces.
-
-Captured inside `_ensure_bootstrap()` after dotenv loading but before the
-`LANGSMITH_PROJECT` override, so `.env`-only values are visible.
-"""
 
 
 def _find_dotenv_from_start_path(start_path: Path) -> Path | None:
@@ -149,7 +142,7 @@ def _load_dotenv(*, start_path: Path | None = None) -> bool:
 
 
 def _ensure_bootstrap() -> None:
-    """Run one-time bootstrap: dotenv loading and `LANGSMITH_PROJECT` override.
+    """Run one-time bootstrap: dotenv loading from project and global paths.
 
     Idempotent and thread-safe — subsequent calls are no-ops. Called
     automatically by `_get_settings()` when `settings` is first accessed.
@@ -159,7 +152,7 @@ def _ensure_bootstrap() -> None:
     loops. Exceptions are caught and logged at ERROR level; the CLI proceeds
     with the environment as-is.
     """
-    global _bootstrap_done, _bootstrap_start_path, _original_langsmith_project  # noqa: PLW0603
+    global _bootstrap_done, _bootstrap_start_path  # noqa: PLW0603
 
     if _bootstrap_done:
         return
@@ -176,54 +169,10 @@ def _ensure_bootstrap() -> None:
             ctx = _get_server_project_context()
             _bootstrap_start_path = ctx.user_cwd if ctx else None
             _load_dotenv(start_path=_bootstrap_start_path)
-
-            # Capture AFTER dotenv loading so .env-only values are visible,
-            # but BEFORE the override below replaces it.
-            _original_langsmith_project = os.environ.get("LANGSMITH_PROJECT")
-
-            # CRITICAL: Override LANGSMITH_PROJECT to route agent traces to a
-            # separate project. LangSmith reads LANGSMITH_PROJECT at invocation
-            # time, so we override it here and preserve the user's original
-            # value for shell commands.
-            from soothe_cli.tui._env_vars import LANGSMITH_PROJECT
-
-            soothe_project = os.environ.get(LANGSMITH_PROJECT)
-            if soothe_project:
-                os.environ["LANGSMITH_PROJECT"] = soothe_project
-
-            # Propagate prefixed LangSmith env vars to canonical names.
-            # The CLI resolves prefixed vars via resolve_env_var(), but the
-            # LangSmith SDK reads os.environ directly and has no knowledge
-            # of the SOOTHE_ prefix. Setting canonical vars here
-            # bridges that gap.
-            from soothe_cli.tui.model_config import _ENV_PREFIX
-
-            for canonical in (
-                "LANGSMITH_API_KEY",
-                "LANGCHAIN_API_KEY",
-                "LANGSMITH_TRACING",
-                "LANGCHAIN_TRACING_V2",
-            ):
-                prefixed = f"{_ENV_PREFIX}{canonical}"
-                if prefixed not in os.environ:
-                    continue
-                prefixed_val = os.environ[prefixed]
-                if canonical not in os.environ:
-                    # Propagate (including empty string for explicit disable).
-                    os.environ[canonical] = prefixed_val
-                elif os.environ[canonical] != prefixed_val:
-                    os.environ[canonical] = prefixed_val
-                    logger.warning(
-                        "Both %s and %s are set with different values; using %s. Unset %s to silence this warning.",
-                        canonical,
-                        prefixed,
-                        prefixed,
-                        canonical,
-                    )
         except Exception:
             logger.exception(
-                "Bootstrap failed; .env values and LANGSMITH_PROJECT override "
-                "may be missing. The CLI will proceed with environment as-is.",
+                "Bootstrap failed; project .env may not be loaded. "
+                "The CLI will proceed with environment as-is.",
             )
         finally:
             _bootstrap_done = True
@@ -374,15 +323,6 @@ _glyphs_cache: Glyphs | None = None
 
 _editable_cache: tuple[bool, str | None] | None = None
 """Module-level cache for editable install info: (is_editable, source_path)."""
-
-_langsmith_url_cache: tuple[str, str] | None = None
-"""Module-level cache for successful LangSmith project URL lookups."""
-
-_LANGSMITH_URL_LOOKUP_TIMEOUT_SECONDS = 2.0
-"""Max seconds to wait for LangSmith project URL lookup.
-
-Kept short so tracing metadata can never stall CLI flows.
-"""
 
 
 def _resolve_editable_info() -> tuple[bool, str | None]:
@@ -613,8 +553,8 @@ def build_stream_config(
 ) -> RunnableConfig:
     """Build the LangGraph stream config dict.
 
-    Injects CLI and SDK versions into `metadata["versions"]` so LangSmith traces
-    can be correlated with specific releases.
+    Injects CLI and SDK versions into `metadata["versions"]` so runs can be
+    correlated with specific releases.
 
     Why the CLI sets *both* versions:
 
@@ -626,9 +566,6 @@ def build_stream_config(
         the runtime dict **replaces** the graph dict entirely — the SDK
         version would be lost.
     * Including the SDK version here ensures it survives the merge.
-
-    Includes `ls_integration` metadata so LangSmith traces originating from the CLI
-    are distinguishable from bare SDK usage.
 
     Args:
         thread_id: The CLI session thread identifier.
@@ -660,7 +597,6 @@ def build_stream_config(
 
     metadata: dict[str, Any] = {
         "versions": versions,
-        "ls_integration": "Soothe",
     }
     from soothe_cli.tui._env_vars import USER_ID
 
@@ -883,12 +819,6 @@ class Settings:
     google_cloud_project: str | None
     """Google Cloud project ID for VertexAI authentication."""
 
-    soothe_langchain_project: str | None
-    """LangSmith project name for Soothe agent tracing."""
-
-    user_langchain_project: str | None
-    """Original `LANGSMITH_PROJECT` from environment (for user code)."""
-
     model_name: str | None = None
     """Currently active model name, set after model creation."""
 
@@ -940,22 +870,10 @@ class Settings:
         tavily_key = resolve_env_var("TAVILY_API_KEY")
         google_cloud_project = resolve_env_var("GOOGLE_CLOUD_PROJECT")
 
-        # Detect LangSmith configuration
-        # SOOTHE_CLI_LANGSMITH_PROJECT: Project for Soothe agent tracing
-        # user_langchain_project: User's ORIGINAL LANGSMITH_PROJECT (before override)
-        # When accessed via the module-level `settings` singleton,
-        # _ensure_bootstrap() has already run and may have overridden
-        # LANGSMITH_PROJECT. We use the saved original value, not the
-        # current os.environ value. Direct callers should ensure
-        # bootstrap has run if they depend on the override.
         from soothe_cli.tui._env_vars import (
             EXTRA_SKILLS_DIRS,
-            LANGSMITH_PROJECT,
             SHELL_ALLOW_LIST,
         )
-
-        soothe_langchain_project = resolve_env_var(LANGSMITH_PROJECT)
-        user_langchain_project = _original_langsmith_project  # Use saved original!
 
         # Detect project
         from soothe_cli.tui.project_utils import find_project_root
@@ -983,8 +901,6 @@ class Settings:
             nvidia_api_key=nvidia_key,
             tavily_api_key=tavily_key,
             google_cloud_project=google_cloud_project,
-            soothe_langchain_project=soothe_langchain_project,
-            user_langchain_project=user_langchain_project,
             project_root=project_root,
             shell_allow_list=shell_allow_list,
             extra_skills_dirs=extra_skills_dirs,
@@ -994,13 +910,11 @@ class Settings:
         """Reload selected settings from environment variables and project files.
 
         This refreshes only fields that are expected to change at runtime
-        (API keys, Google Cloud project, project root, shell allow-list, and
-        LangSmith tracing project).
+        (API keys, Google Cloud project, project root, and shell allow-list).
 
         Runtime model state (`model_name`, `model_provider`,
-        `model_context_limit`) and the original user LangSmith project
-        (`user_langchain_project`) are intentionally preserved -- they are
-        not in `reloadable_fields` and are never touched by this method.
+        `model_context_limit`) is intentionally preserved — it is not in
+        `reloadable_fields` and is never touched by this method.
 
         !!! note
 
@@ -1034,7 +948,6 @@ class Settings:
             "nvidia_api_key",
             "tavily_api_key",
             "google_cloud_project",
-            "soothe_langchain_project",
             "project_root",
             "shell_allow_list",
             "extra_skills_dirs",
@@ -1042,15 +955,14 @@ class Settings:
         """Fields refreshed on `/reload`.
 
         Runtime model state (`model_name`, `model_provider`, `model_context_limit`)
-        and the original user LangSmith project are intentionally excluded —
-        they are set once and should not change across reloads.
+        is intentionally excluded — it is set once and should not change across
+        reloads.
         """
 
         previous = {field: getattr(self, field) for field in reloadable_fields}
 
         from soothe_cli.tui._env_vars import (
             EXTRA_SKILLS_DIRS,
-            LANGSMITH_PROJECT,
             SHELL_ALLOW_LIST,
         )
 
@@ -1080,7 +992,6 @@ class Settings:
             "nvidia_api_key": resolve_env_var("NVIDIA_API_KEY"),
             "tavily_api_key": resolve_env_var("TAVILY_API_KEY"),
             "google_cloud_project": resolve_env_var("GOOGLE_CLOUD_PROJECT"),
-            "soothe_langchain_project": resolve_env_var(LANGSMITH_PROJECT),
             "project_root": project_root,
             "shell_allow_list": shell_allow_list,
             "extra_skills_dirs": _parse_extra_skills_dirs(
@@ -1091,18 +1002,6 @@ class Settings:
 
         for field, value in refreshed.items():
             setattr(self, field, value)
-
-        # Sync the LANGSMITH_PROJECT env var so LangSmith tracing picks up
-        # the change
-        new_project = refreshed["soothe_langchain_project"]
-        if new_project:
-            os.environ["LANGSMITH_PROJECT"] = new_project
-        elif previous["soothe_langchain_project"]:
-            # Override was previously active but new value is unset; restore.
-            if _original_langsmith_project:
-                os.environ["LANGSMITH_PROJECT"] = _original_langsmith_project
-            else:
-                os.environ.pop("LANGSMITH_PROJECT", None)
 
         def _display(field: str, value: object) -> str:
             if field in api_key_fields:
@@ -1610,148 +1509,6 @@ def is_shell_command_allowed(command: str, allow_list: list[str] | None) -> bool
 
     # All segments are allowed (and we found at least one command)
     return found_command
-
-
-def get_langsmith_project_name() -> str | None:
-    """Resolve the LangSmith project name if tracing is configured.
-
-    Checks for the required API key and tracing environment variables.
-    When both are present, resolves the project name with priority:
-    `settings.soothe_langchain_project` (from
-    `SOOTHE_CLI_LANGSMITH_PROJECT`), then `LANGSMITH_PROJECT` from the
-    environment (note: this may already have been overridden at bootstrap time
-    to match `SOOTHE_CLI_LANGSMITH_PROJECT`), then `'Soothe'`.
-
-    Returns:
-        Project name string when LangSmith tracing is active, None otherwise.
-    """
-    from soothe_cli.tui.model_config import resolve_env_var
-
-    langsmith_key = resolve_env_var("LANGSMITH_API_KEY") or resolve_env_var("LANGCHAIN_API_KEY")
-    langsmith_tracing = resolve_env_var("LANGSMITH_TRACING") or resolve_env_var(
-        "LANGCHAIN_TRACING_V2"
-    )
-    if not (langsmith_key and langsmith_tracing):
-        return None
-
-    return (
-        _get_settings().soothe_langchain_project or os.environ.get("LANGSMITH_PROJECT") or "Soothe"
-    )
-
-
-def fetch_langsmith_project_url(project_name: str) -> str | None:
-    """Fetch the LangSmith project URL via the LangSmith client.
-
-    Successful results are cached at module level so repeated calls do not
-    make additional network requests.
-
-    The network call runs in a daemon thread with a hard timeout of
-    `_LANGSMITH_URL_LOOKUP_TIMEOUT_SECONDS`, so this function blocks the
-    calling thread for at most that duration even if LangSmith is unreachable.
-
-    Returns None (with a debug log) on any failure: missing `langsmith` package,
-    network errors, invalid project names, client initialization issues,
-    or timeouts.
-
-    Args:
-        project_name: LangSmith project name to look up.
-
-    Returns:
-        Project URL string if found, None otherwise.
-    """
-    global _langsmith_url_cache  # noqa: PLW0603  # Module-level cache requires global statement
-
-    if _langsmith_url_cache is not None:
-        cached_name, cached_url = _langsmith_url_cache
-        if cached_name == project_name:
-            return cached_url
-        # Different project name — fall through to fetch.
-
-    try:
-        from langsmith import Client
-    except ImportError:
-        logger.debug(
-            "Could not fetch LangSmith project URL for '%s'",
-            project_name,
-            exc_info=True,
-        )
-        return None
-
-    result: str | None = None
-    lookup_error: Exception | None = None
-    done = threading.Event()
-
-    def _lookup_url() -> None:
-        nonlocal result, lookup_error
-        try:
-            from soothe_cli.tui.model_config import resolve_env_var
-
-            # Explicit api_key because Client() reads os.environ directly
-            # and doesn't know about the SOOTHE_ prefix.
-            api_key = resolve_env_var("LANGSMITH_API_KEY") or resolve_env_var("LANGCHAIN_API_KEY")
-            project = Client(api_key=api_key).read_project(project_name=project_name)
-            result = project.url or None
-        except Exception as exc:  # noqa: BLE001  # LangSmith SDK error types are not stable
-            lookup_error = exc
-        finally:
-            done.set()
-
-    thread = threading.Thread(target=_lookup_url, daemon=True)
-    thread.start()
-
-    if not done.wait(_LANGSMITH_URL_LOOKUP_TIMEOUT_SECONDS):
-        logger.debug(
-            "Timed out fetching LangSmith project URL for '%s' after %.1fs",
-            project_name,
-            _LANGSMITH_URL_LOOKUP_TIMEOUT_SECONDS,
-        )
-        return None
-
-    if lookup_error is not None:
-        logger.debug(
-            "Could not fetch LangSmith project URL for '%s'",
-            project_name,
-            exc_info=(
-                type(lookup_error),
-                lookup_error,
-                lookup_error.__traceback__,
-            ),
-        )
-        return None
-
-    if result is not None:
-        _langsmith_url_cache = (project_name, result)
-    return result
-
-
-def build_langsmith_thread_url(thread_id: str) -> str | None:
-    """Build a full LangSmith thread URL if tracing is configured.
-
-    Combines `get_langsmith_project_name` and `fetch_langsmith_project_url`
-    into a single convenience helper.
-
-    Args:
-        thread_id: Thread identifier to build the URL for.
-
-    Returns:
-        Full thread URL string, or `None` if unavailable (LangSmith is not
-            configured or the project URL cannot be resolved.)
-    """
-    project_name = get_langsmith_project_name()
-    if not project_name:
-        return None
-
-    project_url = fetch_langsmith_project_url(project_name)
-    if not project_url:
-        return None
-
-    return f"{project_url.rstrip('/')}/t/{thread_id}?utm_source=Soothe"
-
-
-def reset_langsmith_url_cache() -> None:
-    """Reset the LangSmith URL cache (for testing)."""
-    global _langsmith_url_cache  # noqa: PLW0603  # Module-level cache requires global statement
-    _langsmith_url_cache = None
 
 
 def get_default_coding_instructions() -> str:
