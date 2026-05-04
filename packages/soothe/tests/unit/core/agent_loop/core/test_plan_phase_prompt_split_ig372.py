@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 from langchain_core.messages import SystemMessage
 
 from soothe.core.agent_loop.state.schemas import LoopState, PlanResult
+from soothe.core.agent_loop.utils.messages import LoopHumanMessage
 from soothe.core.prompts import PromptBuilder
 from soothe.protocols.planner import PlanContext
 
@@ -47,16 +48,19 @@ def test_assess_with_config_still_includes_environment_workspace() -> None:
     builder = PromptBuilder(config)
     messages = builder.build_plan_messages("analyze", state, ctx, plan_phase="assess")
     system = messages[0].content
+    human = messages[1].content
+    assert isinstance(messages[1], LoopHumanMessage)
     assert "<ENVIRONMENT" in system
     assert "<WORKSPACE" in system
     assert "/abs/ws" in system
-    assert "<GOAL_PROGRESS>" in system
-    assert "Goal: analyze" in system
-    assert "Execute iteration: 1/8" in system
+    assert "</GOAL_PROGRESS>" not in system
+    assert "</GOAL_PROGRESS>" in human
+    assert "Goal: analyze" in human
+    assert "Execute iteration: 1/8" in human
 
 
-def test_assess_goal_progress_in_system_not_human_ig376() -> None:
-    """Plan-assess puts Goal + Execute iteration in system <GOAL_PROGRESS>; no trailing plan human without prior thread."""
+def test_assess_goal_progress_in_plan_context_user_message_ig376() -> None:
+    """Plan-assess puts Goal + Execute iteration in user <GOAL_PROGRESS>; system has no goal block."""
     state = LoopState(goal="read readme", thread_id="t1", iteration=2, max_iterations=8)
     state.previous_plan = PlanResult(
         status="continue",
@@ -68,11 +72,13 @@ def test_assess_goal_progress_in_system_not_human_ig376() -> None:
     )
     builder = PromptBuilder()
     messages = builder.build_plan_messages("read readme", state, PlanContext(), plan_phase="assess")
-    assert len(messages) == 1
+    assert len(messages) == 2
     system = messages[0].content
-    assert "<GOAL_PROGRESS>" in system
-    assert "Goal: read readme" in system
-    assert "Execute iteration: 3/8" in system
+    human = messages[1].content
+    assert "</GOAL_PROGRESS>" not in system
+    assert "</GOAL_PROGRESS>" in human
+    assert "Goal: read readme" in human
+    assert "Execute iteration: 3/8" in human
     assert "Plan status:" not in system
 
 
@@ -81,22 +87,24 @@ def test_assess_iteration_zero_goal_progress_footer() -> None:
     state = LoopState(goal="read readme", thread_id="t1", iteration=0, max_iterations=8)
     builder = PromptBuilder()
     messages = builder.build_plan_messages("read readme", state, PlanContext(), plan_phase="assess")
-    assert len(messages) == 1
-    system = messages[0].content
-    assert "Goal: read readme" in system
-    assert "Execute iteration: 1/8" in system
+    assert len(messages) == 2
+    human = messages[1].content
+    assert "Goal: read readme" in human
+    assert "Execute iteration: 1/8" in human
 
 
-def test_generate_goal_progress_in_system_not_human_ig378() -> None:
-    """Plan-generate puts Goal + Execute iteration in system <GOAL_PROGRESS>; no trailing human without prior thread."""
+def test_generate_goal_progress_in_plan_context_user_message() -> None:
+    """Plan-generate puts Goal + Execute iteration in user <GOAL_PROGRESS>; system has no goal block."""
     state = LoopState(goal="read readme", thread_id="t1", iteration=2, max_iterations=8)
     builder = PromptBuilder()
     messages = builder.build_plan_messages(
         "read readme", state, PlanContext(), plan_phase="generate"
     )
-    assert len(messages) == 1
+    assert len(messages) == 2
     system = messages[0].content
+    human = messages[1].content
     assert "<PLAN_GENERATE>" in system
-    assert "<GOAL_PROGRESS>" in system
-    assert "Goal: read readme" in system
-    assert "Execute iteration: 3/8" in system
+    assert "</GOAL_PROGRESS>" not in system
+    assert "</GOAL_PROGRESS>" in human
+    assert "Goal: read readme" in human
+    assert "Execute iteration: 3/8" in human

@@ -48,15 +48,13 @@ class PromptBuilder:
 
         Constructs proper message type separation:
         - SystemMessage: environment, workspace, policies, instructions, loop config, capabilities.
-          Ends with ``<GOAL_PROGRESS>`` (goal + execute iteration) for both ``assess`` and
-          ``generate`` (IG-378).
         - ``state.loop_messages``: ledger as native ``LoopHumanMessage`` / ``LoopAIMessage`` turns
-        - LoopHumanMessage (optional): prior thread when ``recent_messages`` is set (IG-371: no WM
-          block); goal lines are not duplicated on this human (IG-376, IG-378).
+        - LoopHumanMessage: ``<GOAL_PROGRESS>`` (goal + execute iteration) for both ``assess`` and
+          ``generate``, plus optional ``<PRIOR_CONVERSATION>`` when ``recent_messages`` is set
+          (IG-371: no WM block on this human).
 
-        Ledger precedes the optional plan-context human so ``plan-assess`` / ``plan-generate`` see
-        execute evidence as prior turns; with no prior thread there is often no trailing human
-        (goal lives in system ``<GOAL_PROGRESS>`` only).
+        Ledger precedes the plan-context human so ``plan-assess`` / ``plan-generate`` see execute
+        evidence as prior turns, then goal/iteration context in the following user message.
 
         Args:
             goal: User's goal description
@@ -74,14 +72,8 @@ class PromptBuilder:
             context,
             state,
             plan_phase=plan_phase,
-            goal=goal,
         )
-        human_content = self._build_plan_context_human_text(
-            goal,
-            state,
-            context,
-            include_goal_lines=False,
-        )
+        human_content = self._build_plan_context_human_text(goal, state, context)
 
         out: list[BaseMessage] = [SystemMessage(content=system_content)]
         # RFC-214: full execute (and future) ledger as real messages — better cache boundaries
@@ -105,7 +97,6 @@ class PromptBuilder:
         state: LoopState | None = None,
         *,
         plan_phase: PlanPromptPhase = "assess",
-        goal: str | None = None,
     ) -> str:
         """Construct static context: policies, instructions, environment, workspace.
 
@@ -117,16 +108,17 @@ class PromptBuilder:
 
         Section ordering (optimized for prompt caching):
         - **assess** (IG-372): PLAN_ASSESS_INSTRUCTIONS only, then conditional blocks, ENVIRONMENT,
-          WORKSPACE, then ``<GOAL_PROGRESS>`` when ``goal`` and ``state`` are provided.
+          WORKSPACE.
         - **generate**: EXECUTION_POLICIES, PLAN_GENERATE_INSTRUCTIONS (schema-aligned PlanGeneration
-          only), then conditional blocks, ENVIRONMENT, WORKSPACE, then ``<GOAL_PROGRESS>`` when
-          ``goal`` and ``state`` are provided (IG-378).
+          only), then conditional blocks, ENVIRONMENT, WORKSPACE.
+
+        Goal and execute iteration are supplied in the plan-context user message
+        (``<GOAL_PROGRESS>``), not in the system prompt.
 
         Args:
             context: Planning context with workspace, capabilities
             state: Optional loop state for iteration limits and capability context
             plan_phase: Which planner LLM call this system prompt serves (IG-372).
-            goal: When ``goal`` and ``state`` are set, appended inside trailing ``<GOAL_PROGRESS>``.
         """
         from soothe.core.prompts.fragments import (
             EXECUTION_POLICIES_FRAGMENT,
@@ -186,14 +178,11 @@ class PromptBuilder:
                 build_soothe_workspace_section(Path(context.workspace), context.git_status) + "\n"
             )
 
-        if goal is not None and state is not None:
-            parts.append(self._format_goal_progress_footer(goal, state))
-
         return "\n".join(parts)
 
     @staticmethod
     def _format_goal_progress_footer(goal: str, state: LoopState) -> str:
-        """Trailing plan-phase block: goal line and 1-based execute iteration (RFC-214, IG-376, IG-378)."""
+        """``<GOAL_PROGRESS>`` block for plan-context user message (RFC-214, IG-376)."""
         cur_iter = state.iteration if state.iteration is not None else 0
         max_iter = state.max_iterations if state.max_iterations is not None else "?"
         cycle_one_based = int(cur_iter) + 1
@@ -219,7 +208,7 @@ class PromptBuilder:
         """
         parts: list[str] = []
 
-        # Goal (iteration info moved to SystemMessage per RFC-207 optimization)
+        # Goal line for non-plan human paths (plan phase uses ``<GOAL_PROGRESS>`` on plan-context human).
         parts.append(f"Goal: {goal}\n")
 
         # Working memory excerpt (RFC-203)
@@ -260,8 +249,6 @@ class PromptBuilder:
         goal: str,
         state: LoopState,
         context: PlanContext,
-        *,
-        include_goal_lines: bool = True,
     ) -> str:
         """Construct plan-context human text without ledger (RFC-214).
 
@@ -270,27 +257,18 @@ class PromptBuilder:
         Execute-step evidence lives in those ledger messages (IG-368). Working memory is not duplicated
         here; the ledger carries execution narrative (IG-371).
 
-        Goal and execute iteration live in the system ``<GOAL_PROGRESS>`` block for both plan
-        phases (IG-376, IG-378); ``include_goal_lines`` is reserved but should stay False so this
-        human only carries ``<PRIOR_CONVERSATION>`` when applicable.
+        Always opens with ``<GOAL_PROGRESS>`` (goal + execute iteration). Optional
+        ``<PRIOR_CONVERSATION>`` follows when ``recent_messages`` is set.
 
         Args:
             goal: User's goal description
             state: Current loop state with optional plan snapshot
             context: Planning context (prior thread XML, etc.)
-            include_goal_lines: Unused; kept for API stability. Must be False from ``build_plan_messages``.
 
         Returns:
-            Formatted prompt string for the optional plan-context ``LoopHumanMessage``.
+            Formatted prompt string for the plan-context ``LoopHumanMessage``.
         """
-        parts: list[str] = []
-
-        if include_goal_lines:
-            cur_iter = state.iteration if state.iteration is not None else 0
-            max_iter = state.max_iterations if state.max_iterations is not None else "?"
-            cycle_one_based = int(cur_iter) + 1
-            parts.append(f"Goal: {goal}")
-            parts.append(f"Execute iteration: {cycle_one_based}/{max_iter}")
+        parts: list[str] = [self._format_goal_progress_footer(goal, state).rstrip("\n")]
 
         # Prior conversation (IG-128, RFC-209)
         if context.recent_messages:
