@@ -21,11 +21,13 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
     builder = PromptBuilder(config)
     messages = builder.build_plan_messages("analyze architecture", state, ctx)
 
-    # Assess: system + optional ledger; goal in <GOAL_PROGRESS> on system when no prior thread
-    assert len(messages) == 1
+    # Assess: system + optional ledger + plan-context human with <GOAL_PROGRESS>
+    assert len(messages) == 2
     assert isinstance(messages[0], SystemMessage)
+    assert isinstance(messages[1], LoopHumanMessage)
 
     system_content = messages[0].content
+    human_content = messages[1].content
 
     # RFC-207: SystemMessage has static context
     # RFC-207: Removed SOOTHE_ prefix from all tags
@@ -35,9 +37,10 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
     assert "<WORKSPACE_RULES>" in system_content
     assert "Do NOT ask the user" in system_content
 
-    assert "<GOAL_PROGRESS>" in system_content
-    assert "Goal: analyze architecture" in system_content
-    assert "Execute iteration: 1/8" in system_content
+    assert "</GOAL_PROGRESS>" not in system_content
+    assert "</GOAL_PROGRESS>" in human_content
+    assert "Goal: analyze architecture" in human_content
+    assert "Execute iteration: 1/8" in human_content
 
 
 def test_build_loop_plan_messages_without_config_workspace_only() -> None:
@@ -47,8 +50,9 @@ def test_build_loop_plan_messages_without_config_workspace_only() -> None:
     builder = PromptBuilder()
     messages = builder.build_plan_messages("analyze architecture", state, ctx)
 
-    assert len(messages) == 1
+    assert len(messages) == 2
     system_content = messages[0].content
+    human_content = messages[1].content
 
     # RFC-207: Removed SOOTHE_ prefix from all tags
     assert "<ENVIRONMENT" not in system_content
@@ -56,8 +60,9 @@ def test_build_loop_plan_messages_without_config_workspace_only() -> None:
     assert "/abs/path/to/repo" in system_content
     assert "<WORKSPACE_RULES>" in system_content
 
-    assert "<GOAL_PROGRESS>" in system_content
-    assert "Goal: analyze architecture" in system_content
+    assert "</GOAL_PROGRESS>" not in system_content
+    assert "</GOAL_PROGRESS>" in human_content
+    assert "Goal: analyze architecture" in human_content
 
 
 def test_build_loop_plan_messages_omits_workspace_rules_without_workspace() -> None:
@@ -105,12 +110,12 @@ def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
     human_content = messages[1].content
 
     # RFC-207: Removed SOOTHE_ prefix from PRIOR_CONVERSATION tag
-    # Prior conversation stays on plan-context human; assess goal lines live in system
+    # Prior conversation and <GOAL_PROGRESS> on plan-context human after ledger (none here)
     assert "<PRIOR_CONVERSATION>" in human_content
     assert "Infrastructure" in human_content
-    assert not human_content.strip().startswith("Goal:")
-    assert "<GOAL_PROGRESS>" in system_content
-    assert "Goal: 翻译成中文" in system_content
+    assert human_content.strip().startswith("<GOAL_PROGRESS>")
+    assert "</GOAL_PROGRESS>" not in system_content
+    assert "Goal: 翻译成中文" in human_content
 
     # FOLLOW_UP_POLICY in SystemMessage (static rule)
     assert "<FOLLOW_UP_POLICY>" in system_content
@@ -134,8 +139,9 @@ def test_build_loop_plan_messages_plan_continue_when_steps_remain() -> None:
     builder = PromptBuilder()
     messages = builder.build_plan_messages("g", state, PlanContext())
 
-    assert len(messages) == 1
+    assert len(messages) == 2
     assert isinstance(messages[0], SystemMessage)
+    assert isinstance(messages[1], LoopHumanMessage)
 
 
 def test_build_plan_messages_appends_ledger_loop_messages() -> None:
@@ -158,13 +164,16 @@ def test_build_plan_messages_appends_ledger_loop_messages() -> None:
     builder = PromptBuilder()
     messages = builder.build_plan_messages("read readme", state, PlanContext())
 
-    assert len(messages) == 3
+    assert len(messages) == 4
     assert isinstance(messages[1], LoopHumanMessage)
     assert isinstance(messages[2], LoopAIMessage)
+    assert isinstance(messages[3], LoopHumanMessage)
     assert messages[1].content.startswith("Execute:")
     assert "First lines of README" in messages[2].content
     system = messages[0].content
-    assert "<GOAL_PROGRESS>" in system
-    assert "Goal: read readme" in system
-    assert "Execute iteration: 1/8" in system
+    plan_human = messages[3].content
+    assert "</GOAL_PROGRESS>" not in system
+    assert "</GOAL_PROGRESS>" in plan_human
+    assert "Goal: read readme" in plan_human
+    assert "Execute iteration: 1/8" in plan_human
     assert "<AGENTLOOP_HISTORY>" not in system
