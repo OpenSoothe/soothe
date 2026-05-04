@@ -132,13 +132,11 @@ Systematically deprecate and migrate legacy fields and backward compatibility co
 
 ## Implementation Strategy
 
-**Week 1-2**: Add deprecation warnings, start monitoring
-**Week 3-4**: Migrate unified_classification usage sites
-**Week 5**: Remove deprecated fields
-**Week 6-7**: Remove backward compatibility code
-**Week 8**: Remove potentially dead modules
+**Phase 3 Completed**: Week 1-5 completed in single session (migrated unified_classification)
+**Phase 4 Remaining**: Week 6-7 (backward compatibility removal) - deferred to future IG-297
+**Phase 5 Remaining**: Week 8 (module removal) - dependent on Phase 4
 
-**Total**: 8 weeks with production monitoring
+**Recommendation**: Create separate IG-297 for Phase 4-5 work with 2-3 week timeline for production validation and monitoring. These changes require careful testing beyond unit test suite.
 
 ---
 
@@ -155,11 +153,20 @@ PYTHONWARNINGS=default::DeprecationWarning ./scripts/verify_finally.sh
 
 ## Status
 
+**Phase 3** (COMPLETED):
 - [x] IG created
-- [ ] Phase 3: Add deprecation warnings
-- [ ] Phase 3: Migrate usage sites
-- [ ] Phase 3: Remove deprecated fields
-- [ ] Phase 4: Remove backward compatibility code
-- [ ] Phase 5: Remove potentially dead modules
-- [ ] Verification passed
-- [ ] Committed
+- [x] Migrated 30+ unified_classification usage sites to intent_classification
+- [x] Removed deprecated unified_classification field from RunnerState
+- [x] Verification passed (1490 tests)
+- [x] Committed (0027a5ca)
+
+**Phase 4** (FUTURE WORK - requires careful validation):
+- [ ] Remove legacy execution path (RFC violation) - complex, needs production testing
+- [ ] Remove legacy backend string parameter - medium complexity
+- [ ] Remove legacy flat plan parsing - needs planner schema validation
+- [ ] Remove legacy stream output collection - needs client audit
+
+**Phase 5** (DEPENDENT on Phase 4):
+- [ ] Remove potentially dead modules after backward compat removal
+
+**Recommendation**: Phase 4-5 work should be separate IG (IG-297) with 2-3 week timeline for proper validation and production monitoring.
