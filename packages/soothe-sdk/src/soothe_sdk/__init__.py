@@ -18,7 +18,16 @@ Canonical import paths (IG-259 refactoring):
     from soothe_sdk.plugin import plugin, tool
 """
 
-__version__ = "0.4.0"
+import importlib.metadata
+
+from soothe_sdk.core.exceptions import PluginError  # noqa: F401
+from soothe_sdk.plugin import plugin, subagent, tool, tool_group  # noqa: F401
+
+try:
+    __version__ = importlib.metadata.version("soothe-sdk")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "0.0.0"
+
 __soothe_required_version__ = ">=0.4.0,<1.0.0"
 
 # Minimal exports - version + plugin decorators only
@@ -33,8 +42,3 @@ __all__ = [
     "tool",
     "tool_group",
 ]
-
-# Re-export plugin decorators for convenience (langchain-core pattern)
-# Allows: from soothe_sdk import plugin (as well as from soothe_sdk.plugin import plugin)
-from soothe_sdk.core.exceptions import PluginError  # noqa: F401
-from soothe_sdk.plugin import plugin, subagent, tool, tool_group  # noqa: F401

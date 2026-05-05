@@ -557,6 +557,8 @@ def resolve_subagents(
         model_override = (
             None
             if name == "claude"
+            else sub_cfg.model or config.create_chat_model("fast")
+            if name == "explore"
             else sub_cfg.model or default_model or config.resolve_model("default")
         )
 

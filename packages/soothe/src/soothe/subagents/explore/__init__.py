@@ -54,7 +54,6 @@ class ExplorePlugin:
             "Inputs: `target` (required), `thoroughness` (optional: 'quick', 'medium', 'thorough'). "
             "Returns matches with paths, descriptions, and optional content snippets."
         ),
-        model="openai:gpt-4o-mini",
         triggers=["find", "locate", "search for", "where is", "look for"],
     )
     async def create_subagent(
