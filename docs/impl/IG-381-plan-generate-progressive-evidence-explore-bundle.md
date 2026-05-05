@@ -1,6 +1,6 @@
 # IG-381: Progressive plan generation, supportive_evidence, explore bundling
 
-**Status:** Completed  
+**Status:** Superseded by IG-399  
 **Scope:** Prompt + schema only (AgentLoop plan-generate path).
 
 ## Problem
@@ -24,3 +24,10 @@
 ## Verification
 
 Run `./scripts/verify_finally.sh` before merge.
+
+## Supersession
+
+IG-399 removes progressive planning/supportive-evidence requirements and replaces them with:
+- split plan nodes (`plan_assess` -> `plan_pre_generate` -> `plan_generate`)
+- bounded pre-generate evidence probes (max three readonly probes)
+- flattened `PlanGeneration` schema fields (no nested `decision` payload)

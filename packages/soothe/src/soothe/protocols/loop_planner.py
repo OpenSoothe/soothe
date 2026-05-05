@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from soothe.core.agent_loop.state.schemas import LoopState, PlanResult
+from soothe.core.agent_loop.state.schemas import LoopState, PlanResult, StatusAssessment
 from soothe.protocols.planner import PlanContext
 
 
@@ -34,4 +34,23 @@ class LoopPlannerProtocol(Protocol):
             PlanResult with status, UX fields, and either ``plan_action='keep'`` or a new
             ``decision`` when ``plan_action='new'``.
         """
+        ...
+
+    async def assess_status(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+    ) -> StatusAssessment:
+        """Run assess-only status evaluation for the current iteration."""
+        ...
+
+    async def generate_from_assessment(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+        assessment: StatusAssessment,
+    ) -> PlanResult:
+        """Generate or keep an execution plan after assess determines work remains."""
         ...

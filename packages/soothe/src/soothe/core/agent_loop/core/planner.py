@@ -855,7 +855,7 @@ class LLMPlanner:
             thread_id: Thread id for Langfuse session correlation.
 
         Returns:
-            PlanGeneration with plan_action, decision.
+            PlanGeneration with plan_action and top-level decision fields.
         """
         from langchain_core.messages import SystemMessage
 
@@ -884,7 +884,9 @@ class LLMPlanner:
             logger.debug(
                 "Plan: action=%s steps=%d next=%s",
                 plan_result.plan_action,
-                len(plan_result.decision.steps) if plan_result.decision else 0,
+                len(plan_result.steps)
+                if plan_result.plan_action == "new" and isinstance(plan_result.steps, list)
+                else 0,
                 preview_first(plan_result.next_action, chars=80),
             )
 
@@ -895,9 +897,32 @@ class LLMPlanner:
             # Fallback: return default plan with LLM-like message
             return PlanGeneration(
                 plan_action="new",
-                decision=_default_agent_decision(goal, iteration),
+                type="execute_steps",
+                execution_mode="sequential",
+                reasoning="Fallback default plan after plan generation failure.",
+                steps=_default_agent_decision(goal, iteration).steps,
                 next_action="I'll proceed with a default plan.",
             )
+
+    @staticmethod
+    def _plan_generation_to_decision(plan_result: Any) -> AgentDecision | None:
+        """Rebuild `AgentDecision` from flattened `PlanGeneration` fields."""
+        if plan_result.plan_action != "new":
+            return None
+        if (
+            plan_result.type is None
+            or plan_result.execution_mode is None
+            or not isinstance(plan_result.steps, list)
+            or not plan_result.steps
+        ):
+            return None
+        return AgentDecision(
+            type=plan_result.type,
+            steps=plan_result.steps,
+            execution_mode=plan_result.execution_mode,
+            reasoning=plan_result.reasoning or "",
+            adaptive_granularity=plan_result.adaptive_granularity,
+        )
 
     def _combine_results(
         self,
@@ -922,6 +947,7 @@ class LLMPlanner:
         action_text = plan_result.next_action.strip()
 
         logger.debug("Plan action: %s", preview_first(action_text, chars=80))
+        decision = self._plan_generation_to_decision(plan_result)
 
         # Build final PlanResult
         return PlanResult(
@@ -931,9 +957,171 @@ class LLMPlanner:
             assessment_reasoning="",
             plan_reasoning="",
             plan_action=plan_result.plan_action,
-            decision=plan_result.decision,
+            decision=decision,
             next_action=action_text,
             require_goal_completion=assessment.require_goal_completion,
+        )
+
+    def _finalize_generated_plan_result(
+        self,
+        *,
+        result: Any,
+        state: LoopState,
+        context: PlanContext,
+        goal: str,
+    ) -> Any:
+        """Apply postprocessing shared by one-shot and split generate flows."""
+        if (
+            result is not None
+            and result.plan_action == "new"
+            and result.decision is not None
+            and result.decision.steps
+        ):
+            result = result.model_copy(
+                update={
+                    "decision": renumber_decision_local_step_ids_for_goal_continuation(
+                        result.decision,
+                        state,
+                    ),
+                }
+            )
+
+        if result is not None and result.decision is not None:
+            preferred = (
+                getattr(context.routing_classification, "preferred_subagent", None)
+                if context.routing_classification
+                else None
+            )
+            if preferred:
+                result = result.model_copy(
+                    update={
+                        "decision": self._apply_preferred_subagent_to_decision(
+                            result.decision, preferred
+                        )
+                    }
+                )
+
+        result.confidence = _calculate_evidence_based_confidence(state, result)
+        return _detect_completion_fallback(state, result, goal)
+
+    async def assess_status(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+    ) -> Any:
+        """Assess-only planner call used by split graph flow."""
+        assess_messages = self._prompt_builder.build_plan_messages(
+            goal, state, context, plan_phase="assess"
+        )
+        assessment = await self._assess_status(
+            assess_messages,
+            goal,
+            state.iteration,
+            thread_id=state.thread_id,
+        )
+
+        if assessment.status == "done":
+            guard_enabled = False
+            if self._config is not None:
+                guard_enabled = self._config.agentic.reject_done_at_iteration_zero
+            if guard_enabled and state.iteration == 0 and len(state.step_results) == 0:
+                logger.warning("[Guard] Reject 'done' at iter=0 no execution")
+                assessment.status = "replan"
+                assessment.goal_progress = 0.0
+        return assessment
+
+    async def generate_from_assessment(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+        assessment: Any,
+    ) -> Any:
+        """Generate plan after an existing assess result (split graph flow)."""
+        from soothe.core.agent_loop.policies.goal_completion_policy import (
+            determine_goal_completion_needs,
+        )
+        from soothe.core.agent_loop.state.schemas import PlanResult
+
+        if assessment.status == "done":
+            gc_mode = (
+                self._config.agentic.goal_completion_mode
+                if self._config is not None
+                else "llm_only"
+            )
+            require_completion = determine_goal_completion_needs(
+                llm_decision=assessment.require_goal_completion,
+                state=state,
+                mode=gc_mode,
+            )
+            return PlanResult(
+                status=assessment.status,
+                goal_progress=assessment.goal_progress,
+                confidence=assessment.confidence,
+                assessment_reasoning="",
+                plan_reasoning="",
+                plan_action="keep",
+                decision=None,
+                next_action="Goal achieved successfully",
+                require_goal_completion=require_completion,
+                full_output=state.last_execute_assistant_text,
+            )
+
+        task_complexity = ""
+        if state.intent is not None:
+            task_complexity = str(getattr(state.intent, "task_complexity", "") or "")
+        elif context.routing_classification is not None:
+            task_complexity = str(
+                getattr(context.routing_classification, "task_complexity", "") or ""
+            )
+
+        if task_complexity == "simple" and state.iteration == 0 and not state.step_results:
+            direct_instruction = f"Complete this simple request directly: {goal}"
+            result = PlanResult(
+                status=assessment.status,
+                goal_progress=assessment.goal_progress,
+                confidence=assessment.confidence,
+                assessment_reasoning="",
+                plan_reasoning="",
+                plan_action="new",
+                decision=AgentDecision(
+                    type="execute_steps",
+                    execution_mode="sequential",
+                    reasoning="Simple-query bypass: skip plan-generate.",
+                    steps=[
+                        StepAction(
+                            description=direct_instruction,
+                            expected_output="Task completed successfully",
+                        )
+                    ],
+                ),
+                next_action=direct_instruction[:300],
+                require_goal_completion=assessment.require_goal_completion,
+            )
+            return self._finalize_generated_plan_result(
+                result=result,
+                state=state,
+                context=context,
+                goal=goal,
+            )
+
+        generate_messages = self._prompt_builder.build_plan_messages(
+            goal, state, context, plan_phase="generate"
+        )
+        plan_result = await self._generate_plan(
+            generate_messages,
+            assessment,
+            goal,
+            state.iteration,
+            thread_id=state.thread_id,
+        )
+        result = self._combine_results(assessment, plan_result)
+        return self._finalize_generated_plan_result(
+            result=result,
+            state=state,
+            context=context,
+            goal=goal,
         )
 
     async def plan(
@@ -1209,42 +1397,9 @@ class LLMPlanner:
                         next_action="Retrying with simpler approach",
                     )
 
-        # IG-388: Goal-continuous local step ids (01,02 on each model call → next free suffixes).
-        if (
-            result is not None
-            and result.plan_action == "new"
-            and result.decision is not None
-            and result.decision.steps
-        ):
-            result = result.model_copy(
-                update={
-                    "decision": renumber_decision_local_step_ids_for_goal_continuation(
-                        result.decision,
-                        state,
-                    ),
-                }
-            )
-
-        # IG-349: Wire preferred_subagent into AgentDecision (parity with create_plan / Plan).
-        if result is not None and result.decision is not None:
-            preferred = (
-                getattr(context.routing_classification, "preferred_subagent", None)
-                if context.routing_classification
-                else None
-            )
-            if preferred:
-                result = result.model_copy(
-                    update={
-                        "decision": self._apply_preferred_subagent_to_decision(
-                            result.decision, preferred
-                        )
-                    }
-                )
-
-        # RFC-603: Apply evidence-based confidence; goal_progress stays LLM assess output (IG-376).
-        result.confidence = _calculate_evidence_based_confidence(state, result)
-
-        # Fallback completion detection (IG-134)
-        result = _detect_completion_fallback(state, result, goal)
-
-        return result
+        return self._finalize_generated_plan_result(
+            result=result,
+            state=state,
+            context=context,
+            goal=goal,
+        )

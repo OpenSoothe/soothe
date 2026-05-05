@@ -1,44 +1,34 @@
-"""Plan generation (RFC-220 ``plan_generate``).
-
-Combines RFC-604 assessment + plan generation in one planner round-trip via ``PlanPhase``
-(RFC-604 ``LoopPlannerProtocol``). Normative separate ``assess`` LLM node requires planner split.
-"""
+"""Plan generation node (RFC-220 ``plan_generate`` after assess + pre-generate)."""
 
 from __future__ import annotations
 
-import logging
 from typing import Any
-
-from soothe.core.agent_loop.core.thread_continuation_bootstrap import (
-    build_thread_continuation_bootstrap_plan,
-    thread_continuation_plan_bootstrap_allowed,
-)
 
 from ..runtime_context import LoopRuntimeContext
 from ..state import PLAN_ROUTE_EXECUTE, PLAN_ROUTE_GOAL_DONE, PlanRoute
 
-logger = logging.getLogger(__name__)
-
 
 async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Run plan phase; stash ``PlanResult`` on scratch and set routing key for LangGraph edges."""
+    """Run generate phase from prior assess result and set route key."""
     agent_loop = ctx.agent_loop
     state = ctx.loop_state
-
-    if thread_continuation_plan_bootstrap_allowed(
-        thread_continuation_mode=ctx.thread_continuation_mode,
-        state=state,
-        recovery_valid_resume=ctx.recovery_valid_resume,
-        goal_record=ctx.goal_record,
-    ):
-        logger.info("[Plan] iter=0 thread_continuation bootstrap (no planner LLM)")
-        plan_result = build_thread_continuation_bootstrap_plan(state.goal)
-    else:
-        plan_result = await agent_loop.plan_phase.plan(
-            goal=state.goal,
-            state=state,
-            context=agent_loop._build_plan_context(state),
+    assessment = ctx.scratch.plan_assessment
+    if assessment is None:
+        await ctx.emit(
+            "fatal_error",
+            {"error": "plan_generate invoked without prior assessment", "step_id": ""},
         )
+        return {"last_outcome": "fatal"}
+
+    context = agent_loop._build_plan_context(state)
+    if ctx.scratch.pre_generate_evidence:
+        context.pre_generate_evidence = list(ctx.scratch.pre_generate_evidence)
+    plan_result = await agent_loop.plan_phase.generate_from_assessment(
+        goal=state.goal,
+        state=state,
+        context=context,
+        assessment=assessment,
+    )
 
     ctx.scratch.plan_result = plan_result
 

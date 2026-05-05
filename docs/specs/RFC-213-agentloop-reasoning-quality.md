@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Last Updated**: 2026-05-04 (cross-ref: `goal_progress` LLM-only — RFC-603 §3.2, IG-376)
+**Last Updated**: 2026-05-05 (IG-399: progressive planning removed; pre-generate evidence probe added)
 **Dependencies**: RFC-200, RFC-203
 **Related**: RFC-207 (Thread), RFC-214 (plan-context human), RFC-603, RFC-604, IG-376
 
@@ -13,11 +13,11 @@
 
 ## Abstract
 
-This RFC defines AgentLoop reasoning quality enhancements through progressive action strategies and two-phase Plan architecture. Progressive actions enable evidence-driven strategy refinement while two-phase Plan architecture (StatusAssessment + PlanGeneration) improves token efficiency and robustness. This consolidation unifies reasoning quality patterns previously fragmented across separate RFCs.
+This RFC defines AgentLoop reasoning quality enhancements through two-phase Plan architecture. Current runtime behavior removes progressive-planning requirements and instead grounds `plan-generate` with a bounded pre-generate evidence probe before generation. `PlanGeneration` now emits flattened decision fields rather than a nested `decision` object.
 
 ---
 
-## Reasoning Quality Progressive Actions
+## Reasoning Quality Progressive Actions (Historical)
 
 ### Progressive Plan Decisions
 

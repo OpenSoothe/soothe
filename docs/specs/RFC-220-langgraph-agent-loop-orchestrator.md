@@ -87,9 +87,9 @@ Files on disk remain aligned with existing layout: loop runtime under **`$SOOTHE
 1. **`init_or_resume`** — Load or initialize loop checkpoint via `AgentLoopStateManager`; construct `LoopState`; run single-shot intent classification for this loop entry; handle thread-continuation bootstrap where applicable.
 2. **`iteration_start`** — Iteration begin hooks; checkpoint anchors “start” (RFC-218).
 3. **`intent_fast_path`** — Terminal branch for intent `chitchat` / `quiz`; emits graph event payload for runner to execute direct response flow without entering planning nodes.
-4. **`assess`** — RFC-604 `StatusAssessment` structured call only.
-5. **`route_assess`** — Conditional edge: `done` → goal completion branch; `continue` / `replan` → evidence path; terminal if max iterations exceeded.
-6. **`bounded_evidence_gather`** — Bounded tool-use phase (configurable max tool calls, policy allowlist). Appends **Evidence Ledger** entries with stable IDs. May be skipped only when normatively allowed (e.g. assessment says `done`, or bootstrap paths defined in implementation guide — **not** a generic silent skip).
+4. **`bounded_evidence_gather`** — Pre-plan placeholder node in current implementation (retained for topology compatibility).
+5. **`plan_assess`** — RFC-604 `StatusAssessment` structured call only.
+6. **`plan_pre_generate`** — Deterministic readonly preflight probe (max three probes) to collect baseline workspace evidence.
 7. **`plan_generate`** — RFC-604 `PlanGeneration` → `PlanResult` fragment merged into loop contract.
 8. **`validate_evidence_bindings`** — Deterministic validation: each step’s evidence references resolve to ledger entries and/or completed prior step ids in scope. On failure: bounded repair loop back to `plan_generate` and/or `bounded_evidence_gather`.
 9. **`execute`** — Existing Executor-style execution (parallel / sequential / dependency); streams CoreAgent; records `StepResult`s.
@@ -111,7 +111,7 @@ Edges form a directed graph with back-edges only where validation and caps allow
 
 ### Step schema extension
 
-Each **`StepAction`** includes **`evidence_refs: list[str]`** (non-empty when the ledger for this iteration is non-empty). **`supportive_evidence`** remains human-readable text aligned with refs.
+Each **`StepAction`** includes **`evidence_refs: list[str]`** (non-empty when the ledger for this iteration is non-empty).
 
 Validation **rejects** plans where any step violates binding rules.
 

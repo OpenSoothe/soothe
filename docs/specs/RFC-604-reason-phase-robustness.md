@@ -3,8 +3,8 @@
 **Status**: Implemented
 **Authors**: Claude Sonnet 4.6
 **Created**: 2026-04-11
-**Last Updated**: 2026-05-05 (IG-376: `goal_progress` semantics; plan-context human — RFC-214; IG-329: plan-generate prompt + `PlanGeneration` schema trim)
-**Depends on**: RFC-603-reasoning-quality-progressive-actions, RFC-201-agentloop-plan-execute-loop
+**Last Updated**: 2026-05-05 (IG-399: split assess/pre-generate/generate flow; flattened `PlanGeneration`)
+**Depends on**: RFC-201-agentloop-plan-execute-loop
 **Supersedes**: ---
 **Stage**: Cognition/AgentLoop
 **Kind**: Architecture Design
@@ -16,6 +16,8 @@
 This RFC defines a three-layer defense strategy to prevent JSON truncation failures in the Plan phase structured output generation. The strategy combines proactive prevention (schema simplification and query splitting) with reactive fallback (existing retry logic) to ensure reliable operation across all LLM providers, particularly those with constrained output token budgets (DashScope/Kimi). The architecture separates status assessment from plan generation, reducing per-call token requirements while preserving decision quality through a merged `PlanResult` (IG-372 assess-only prompt, IG-329 schema-aligned plan-generate prompt and minimal `PlanGeneration` fields).
 
 **`goal_progress` (IG-376, RFC-603 §3.2)**: After Phase 1 returns `StatusAssessment`, `PlanResult.goal_progress` follows the assess model’s numeric field (merged in `_combine_results`). It is **not** overwritten by a secondary evidence/step blend; optional completion heuristics may still raise `status` / progress when the model stalls. **`confidence`** may still be calibrated with execution evidence in `LLMPlanner.plan()` per RFC-603 §3.1.
+
+**IG-399 addendum**: Progressive planning guidance and `supportive_evidence` fields are removed. The runtime now inserts a bounded `plan_pre_generate` evidence probe (maximum three readonly probes) between assess and generate, and `PlanGeneration` emits flattened decision fields (`type`, `steps`, `execution_mode`, `reasoning`, `adaptive_granularity`) instead of a nested `decision` object.
 
 ---
 

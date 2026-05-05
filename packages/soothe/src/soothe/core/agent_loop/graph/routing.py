@@ -30,6 +30,15 @@ def route_after_plan(state: dict[str, Any]) -> str:
     return "resolve_decision"
 
 
+def route_after_assess(state: dict[str, Any]) -> str:
+    """Branch from assess: done/skip-generate/continue-generate."""
+    if state.get("plan_route") == PLAN_ROUTE_GOAL_DONE:
+        return "goal_completion"
+    if state.get("assess_route") == "skip_generate":
+        return "resolve_decision"
+    return "plan_pre_generate"
+
+
 def route_after_resolve_decision(state: dict[str, Any]) -> str:
     """Stop on planner fatal; otherwise validate evidence refs."""
     if state.get("last_outcome") == "fatal":

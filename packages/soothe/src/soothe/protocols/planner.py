@@ -171,6 +171,13 @@ class PlanContext(BaseModel):
         default=None,
         description="Daemon thread id for observability (e.g. Langfuse session_id on plan LLM calls).",
     )
+    pre_generate_evidence: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Bounded pre-generate evidence probe lines collected before plan generation "
+            "(max three readonly probes)."
+        ),
+    )
 
 
 class StepReport(BaseModel):
