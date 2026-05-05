@@ -14,11 +14,12 @@
 
 ## ⚠️ CRITICAL RULES - READ FIRST
 
-### 1. MUST Create Implementation Guide
-**Before implementing ANY plan or refactoring task**, create a new implementation guide in `docs/impl/`:
+### 1. Implementation guides (IGs)
+**Substantial work** (multi-step plans, cross-module refactors, new features, behavior changes across several files): Create an implementation guide in `docs/impl/` before or as you start work:
 - Naming: `NNN-brief-title.md` (NNN = next available number)
-- Purpose: Track all implementation work
-- Example: This document guides all code changes
+- Purpose: Track scope, decisions, and progress—proportionate to the task
+
+**Minor changes** (small bugfixes, single-file edits, trivial config or doc tweaks): **Do not** create a verbose IG. Use a clear commit message and PR description instead. Only add a `docs/impl/` file if the team needs a numbered traceability stub—and then keep it **minimal** (a short goal, files touched, done)—not a full template or boilerplate narrative.
 
 ### 2. MUST Keep Config Files Synchronized
 **When updating `packages/soothe/src/soothe/config/config.yml` (template)**, you MUST also update `config/config.dev.yml` (dev defaults):
@@ -231,6 +232,7 @@ All implementation guides are in `docs/impl/`. Recent guides:
 | IG-051 | Plugin API Implementation | ✅ Completed |
 | IG-052 | RFC-600 Event System Optimization | ✅ Completed |
 | IG-276 | Core Directory Refactoring | ✅ Completed |
+| IG-394 | LangGraph Agent Loop Orchestrator (RFC-620) | 🔄 In Progress |
 
 **See all guides**: Check `docs/impl/` directory.
 
@@ -283,7 +285,7 @@ class MyPlugin:
 When in plan mode:
 - **ASK for confirmation** when alternatives exist
 - **EXPLORE the codebase** first
-- **CREATE implementation guide** before starting
+- **CREATE an implementation guide** only when the plan is substantial; skip or keep minimal for minor changes (see Critical Rules — Implementation guides)
 - **END with ExitPlanMode** for user approval
 
 ### 2. Implementation
@@ -446,12 +448,12 @@ The `thirdparty/` directory contains source code of upstream dependencies for **
 
 ## 📝 Implementation Guide (IG) Numbering System
 
-Implementation Guides (IGs) track all implementation work in `docs/impl/`.
+Implementation Guides (IGs) in `docs/impl/` track **substantial** implementation work. **Minor changes** should not add verbose IG documents—use commit/PR context, or at most a minimal stub (see Critical Rules).
 
 **Numbering Rules:**
 1. **Sequential Assignment**: Each IG gets next available sequential number (currently IG-277-294 renumbered from duplicates, IG-295+ available for new work)
 2. **No Duplicate Numbers**: Every IG must have unique number
-3. **Document Creation**: Create IG before starting implementation work
+3. **Document Creation**: Create an IG before or during implementation when the change warrants tracked scope (not for every tiny fix)
 4. **Naming Format**: `IG-XXX-brief-title.md` (XXX = 3-digit number, brief-title = short description)
 5. **Reference Format**: Use `(IG-XXX)` in code comments, CHANGELOG.md, documentation
 6. **Archive Threshold**: Archive completed IG batches (e.g., IG-001-050.tar.gz) to maintain manageable file count
@@ -510,12 +512,11 @@ From RFC-000:
 ## 📋 Interaction Rules
 
 ### MUST Rules
-1. **Create implementation guide** before implementing any plan
+1. **Implementation guides**: Create a proportionate IG for substantial plans and refactors; **do not** write verbose IGs for minor changes (commit/PR or a minimal stub only)
 2. **Check langchain ecosystem** before implementing any functionality
 3. **Run verification script** before committing any code
 4. **Fix all linting errors** before committing
 5. **Call platonic-coding skill** when generating plans and implementing code to follow spec-driven development workflow
-6. **DO NOT cheat tests** - Never use superficial fixes (keyword matching, bypassing logic, workarounds) just to pass tests. Tests exist to verify real functionality. If tests fail, fix the actual implementation, not the test expectations. "Passing tests" != "Working correctly"
 6. **DO NOT cheat tests** - Never use superficial fixes (keyword matching, bypassing logic, workarounds) just to pass tests. Tests exist to verify real functionality. If tests fail, fix the actual implementation, not the test expectations. "Passing tests" != "Working correctly"
 
 ### SHOULD Rules

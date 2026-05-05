@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from soothe_cli.shared.tools.tool_formatters.base import BaseFormatter
@@ -12,7 +13,7 @@ class FileOpsFormatter(BaseFormatter):
     """Formatter for file operation tools.
 
     Handles: read_file, write_file, delete_file, list_files, search_files, glob,
-    grep, ls
+    grep, ls, file_info
 
     Provides semantic summaries with size, line count, and item count metrics.
     """
@@ -54,8 +55,39 @@ class FileOpsFormatter(BaseFormatter):
             return self._format_glob(result)
         if normalized == "grep":
             return self._format_search_files(result)
+        if normalized == "file_info":
+            return self._format_file_info(result)
         msg = f"Unknown file operation tool: {tool_name}"
         raise ValueError(msg)
+
+    _SIZE_BYTES_LINE = re.compile(r"Size:\s*(\d+)\s*bytes", re.IGNORECASE)
+
+    def _format_file_info(self, result: str) -> ToolBrief:
+        """Format file_info metadata result (path, size, mtime, …)."""
+        if result.startswith("Error:"):
+            error_msg = result[6:].strip()
+            return ToolBrief(
+                icon="✗",
+                summary="File info failed",
+                detail=self._truncate_text(error_msg, 80),
+                metrics={"error": True},
+            )
+        m = self._SIZE_BYTES_LINE.search(result)
+        if m:
+            size_bytes = int(m.group(1))
+            size_str = self._format_size(size_bytes)
+            return ToolBrief(
+                icon="✓",
+                summary=f"Metadata {size_str}",
+                detail=None,
+                metrics={"size_bytes": size_bytes},
+            )
+        return ToolBrief(
+            icon="✓",
+            summary="File metadata",
+            detail=None,
+            metrics={},
+        )
 
     def _format_read_file(self, result: str) -> ToolBrief:
         r"""Format read_file result.

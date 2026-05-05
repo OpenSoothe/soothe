@@ -178,6 +178,22 @@ class TestFormatterRouting:
         assert brief.metrics.get("count") == 2
         assert "match" in brief.summary.lower()
 
+    def test_file_info_routes_to_file_ops_without_error(self) -> None:
+        """file_info is file_ops in SDK metadata; FileOpsFormatter must handle it."""
+        from soothe_cli.shared.tools.tool_output_formatter import ToolOutputFormatter
+
+        sample = (
+            "Path: /workspace/README.md\n"
+            "Size: 1024 bytes (1.00 KB)\n"
+            "Modified: 2025-01-01 12:00:00\n"
+        )
+        formatter = ToolOutputFormatter()
+        brief = formatter.format("file_info", sample)
+
+        assert brief.icon == "✓"
+        assert "Metadata" in brief.summary
+        assert brief.metrics.get("size_bytes") == 1024
+
     def test_web_tools_route_to_web_formatter(self) -> None:
         """Test that web tools are routed to WebFormatter."""
         from soothe_cli.shared.tools.tool_output_formatter import ToolOutputFormatter

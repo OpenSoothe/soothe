@@ -8,7 +8,7 @@ Integrate Langfuse tracing for LangChain / LangGraph runs driven by `observabili
 
 - Pydantic models under `observability.langfuse` (enabled, keys, host, environment, release, sample_rate, trace_name).
 - Runtime helper to register the Langfuse SDK client (when keys are set in config) and merge `CallbackHandler` + session metadata into Runnable configs.
-- Wire into `SootheRunner` stream phase, `AgentLoop` executor streams, and goal-completion synthesis stream.
+- Wire into `SootheRunner` stream phase, `AgentLoop` executor streams, goal-completion synthesis stream, and **LangGraph Agent Loop** outer `ainvoke` (`build_loop_graph_invoke_config`, run name `{trace_name}:agent-loop-graph`, session = conversation `thread_id`, metadata `loop_id`).
 - Optional dependency `soothe[langfuse]`; template `config.yml` + `config/config.dev.yml` documentation.
 - Doctor observability category: Langfuse check when integration is enabled.
 

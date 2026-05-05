@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-05-03
-**Total RFCs**: 46
+**Last Updated**: 2026-05-05
+**Total RFCs**: 47
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,7 +11,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 29 |
+| Draft | 30 |
 | Implemented | 16 |
 
 ---
@@ -91,6 +91,11 @@ This index reflects the canonical RFC set and defines which files are active for
   - Status: Implemented
   - Created: 2026-04-28
   - Renamed from: RFC-615 (2026-05-03)
+
+- **RFC-620**: [LangGraph Agent Loop Orchestrator](RFC-620*.md)
+  - Status: Draft
+  - Kind: Architecture Design — Layer 2 Loop Graph (cut-over; supersedes RFC-201 imperative driver)
+  - Created: 2026-05-05
 
 ### Agent Behavior
 
@@ -211,6 +216,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 ## Recently Added
 
+- RFC-620: LangGraph Agent Loop Orchestrator (2026-05-05; Loop Graph keyed by `loop_id`, evidence-bound plan steps, no backward compat with imperative loop)
 - RFC-214: AgentLoop Loop Message Surface and Plan Context (2026-05-03; plan human `Execute iteration` — 2026-05-04)
 - RFC-215: AgentLoop Persistence Backend Architecture (renamed from RFC-409, 2026-05-03)
 - RFC-216: AgentLoop Multi-Thread Lifecycle (renamed from RFC-608, 2026-05-03)
