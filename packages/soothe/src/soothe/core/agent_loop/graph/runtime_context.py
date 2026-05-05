@@ -35,6 +35,11 @@ class LoopRuntimeContext:
     recovery_valid_resume: bool
     loop_state: LoopState
     emit: EmitFn
+    intent_classifier: Any | None = None
+    preferred_subagent: str | None = None
+    recent_messages_for_intent: list[Any] | None = None
+    active_goal_id_for_intent: str | None = None
+    active_goal_description_for_intent: str | None = None
     scratch: LoopPhaseScratch = field(default_factory=LoopPhaseScratch)
 
     @property

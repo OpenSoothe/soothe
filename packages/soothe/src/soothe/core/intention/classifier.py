@@ -82,6 +82,7 @@ class IntentClassifier:
         active_goal_id: str | None = None,
         active_goal_description: str | None = None,
         thread_id: str | None = None,
+        observability_metadata: dict[str, str] | None = None,
     ) -> IntentClassification:
         """Unified intent classification with goal awareness.
 
@@ -124,6 +125,7 @@ class IntentClassifier:
                     active_goal_context=active_goal_context,
                     thread_id=thread_id_display,
                     retry_mode=retry_mode,
+                    observability_metadata=observability_metadata,
                 )
                 break
             except Exception as exc:
@@ -208,6 +210,7 @@ class IntentClassifier:
         active_goal_context: str,
         thread_id: str,
         retry_mode: bool = False,
+        observability_metadata: dict[str, str] | None = None,
     ) -> IntentClassification:
         """LLM intent classification with structured output."""
         current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
@@ -225,7 +228,11 @@ class IntentClassifier:
         )
 
         # Add tracing metadata
-        metadata = self._create_llm_metadata("classify_intent", "intent.primary")
+        metadata = self._create_llm_metadata(
+            "classify_intent",
+            "intent.primary",
+            observability_metadata=observability_metadata,
+        )
 
         try:
             result = await self._intent_model.ainvoke(prompt, config={"metadata": metadata})
@@ -271,7 +278,7 @@ class IntentClassifier:
         if result is None:
             raise ValueError("LLM routing returned None")
 
-        if result.task_complexity not in ("chitchat", "quiz", "medium", "complex"):
+        if result.task_complexity not in ("chitchat", "simple", "medium", "complex"):
             raise ValueError(f"Invalid task_complexity: {result.task_complexity!r}")
 
         return result
@@ -476,6 +483,8 @@ class IntentClassifier:
         self,
         purpose: str,
         component: str,
+        *,
+        observability_metadata: dict[str, str] | None = None,
     ) -> dict[str, str]:
         """Create metadata for LLM tracing.
 
@@ -489,15 +498,21 @@ class IntentClassifier:
         try:
             from soothe.middleware._utils import create_llm_call_metadata
 
-            return create_llm_call_metadata(
+            base = create_llm_call_metadata(
                 purpose=purpose,
                 component=f"classifier.{component}",
                 phase="pre-stream",
             )
+            if observability_metadata:
+                base.update(observability_metadata)
+            return base
         except Exception:
             # Fallback if middleware utils unavailable
-            return {
+            metadata = {
                 "purpose": purpose,
                 "component": component,
                 "phase": "pre-stream",
             }
+            if observability_metadata:
+                metadata.update(observability_metadata)
+            return metadata

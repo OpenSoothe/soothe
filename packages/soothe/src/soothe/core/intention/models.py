@@ -17,14 +17,14 @@ class RoutingClassification(BaseModel):
     """Routing complexity classification for execution path selection.
 
     Args:
-        task_complexity: Routing complexity (chitchat | medium | complex).
+        task_complexity: Routing complexity (chitchat | simple | medium | complex).
         chitchat_response: Direct response for chitchat queries.
         preferred_subagent: Wire or classifier hint for which subagent to prefer in AgentLoop.
         routing_hint: Routing strategy hint.
     """
 
-    task_complexity: Literal["chitchat", "medium", "complex"] = Field(
-        description="Routing complexity level: chitchat (direct LLM), medium (AgentLoop), complex (multi-step)"
+    task_complexity: Literal["chitchat", "simple", "medium", "complex"] = Field(
+        description="Routing complexity level: chitchat (direct reply), simple (single-step), medium, or complex"
     )
     chitchat_response: str | None = Field(
         default=None,
@@ -71,7 +71,7 @@ class IntentClassification(BaseModel):
         default=None,
         description="User-friendly task reinterpretation for display (new_goal only, IG-287)",
     )
-    task_complexity: Literal["chitchat", "quiz", "medium", "complex"] = Field(
+    task_complexity: Literal["chitchat", "quiz", "simple", "medium", "complex"] = Field(
         description="Secondary routing complexity level for execution path refinement"
     )
     chitchat_response: str | None = Field(
@@ -90,8 +90,11 @@ class IntentClassification(BaseModel):
         Returns:
             RoutingClassification with routing attributes from intent.
         """
+        tc = self.task_complexity
+        if tc == "quiz":
+            tc = "chitchat"
         return RoutingClassification(
-            task_complexity=self.task_complexity,
+            task_complexity=tc,
             chitchat_response=self.chitchat_response,
             routing_hint="intent_based",
         )

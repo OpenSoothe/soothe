@@ -106,6 +106,11 @@ class AgentLoop:
         loop_id: str | None = None,  # IG-246: explicit loop_id parameter
         intent: Any | None = None,  # Intent classification
         routing_classification: Any | None = None,  # IG-349, IG-383: RoutingClassification
+        intent_classifier: Any | None = None,
+        preferred_subagent: str | None = None,
+        recent_messages_for_intent: list[Any] | None = None,
+        active_goal_id_for_intent: str | None = None,
+        active_goal_description_for_intent: str | None = None,
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -260,6 +265,11 @@ class AgentLoop:
             recovery_valid_resume=recovery_valid_resume,
             loop_state=state,
             emit=emit,
+            intent_classifier=intent_classifier,
+            preferred_subagent=preferred_subagent,
+            recent_messages_for_intent=recent_messages_for_intent,
+            active_goal_id_for_intent=active_goal_id_for_intent,
+            active_goal_description_for_intent=active_goal_description_for_intent,
         )
 
         async def pump_graph() -> None:
