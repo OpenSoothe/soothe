@@ -212,10 +212,10 @@ All RFCs are in `docs/specs/`. Key specifications:
 **Debugging and diagnostics**: See `docs/howto_debug.md` for comprehensive guide:
 - Log locations (`~/.soothe/logs/`, `~/.soothe/runs/`)
 - Enable debug logs via environment variables (`SOOTHE_DEBUG`, `SOOTHE_LOG_LEVEL`)
-- Enable debug logs via config files (`logging.file.level`, `verbosity`, `llm_tracing`)
+- Enable debug logs via config files (`observability.log_file_level`, `verbosity`) and Langfuse via `observability.langfuse`
 - Diagnose issues with real-time log monitoring
 - Common debugging workflows (agent behavior, LLM, connection, subagent, protocol)
-- LLM request/response tracing
+- LLM traces (Langfuse)
 - Thread conversation auditing
 - Performance profiling with logs
 

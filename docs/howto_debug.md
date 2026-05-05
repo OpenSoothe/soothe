@@ -79,10 +79,7 @@ logging:
     dir: ""             # Empty = ~/.soothe/data/threads/{thread_id}/logs/
     retention_days: 30  # Auto-delete old threads
 
-# LLM request/response tracing (for debugging model behavior)
-llm_tracing:
-  enabled: true         # Enable LLM tracing middleware
-  log_preview_length: 1000  # Max chars to log for message previews (50-1000)
+# LLM traces: enable Langfuse in observability (see config template observability.langfuse)
 ```
 
 #### 2. Enable CLI Client Debug Logs
@@ -154,7 +151,7 @@ tail -f ~/.soothe/logs/soothed.log
 - Protocol backend operations (planner, memory, durability)
 - Tool invocations and responses
 - Subagent delegation and results
-- LLM prompts and responses (with `llm_tracing.enabled: true`)
+- Verbose agent/loop messages (use Langfuse in `observability.langfuse` for full LLM traces)
 - WebSocket message handling
 - Goal execution DAG
 - Checkpoint persistence
@@ -171,8 +168,8 @@ grep -i "subagent" ~/.soothe/logs/soothed.log
 # Find specific tool issues
 grep -i "tool.*browser\|tool.*wizsearch" ~/.soothe/logs/soothed.log
 
-# Find LLM tracing (requires llm_tracing.enabled: true)
-grep -i "llm_tracing\|prompt\|response" ~/.soothe/logs/soothed.log
+# Search daemon log for model-related lines (Langfuse UI for structured traces)
+grep -i "chat model\|ainvoke\|token" ~/.soothe/logs/soothed.log
 ```
 
 ### 2. Monitor CLI Client Logs
@@ -271,12 +268,7 @@ tail -f ~/.soothe/logs/soothed.log
 
 **Steps**:
 
-1. Enable LLM tracing in `~/.soothe/config/config.yml`:
-```yaml
-llm_tracing:
-  enabled: true
-  log_preview_length: 1000  # See full prompts/responses
-```
+1. Enable Langfuse in `~/.soothe/config/config.yml` under `observability.langfuse` (`enabled`, keys, optional `host`). Install optional extra `soothe[langfuse]` if needed.
 
 2. Restart daemon:
 ```bash
@@ -287,7 +279,7 @@ soothed start
 3. Run query and check logs:
 ```bash
 soothe "test query"
-grep -i "llm_tracing\|prompt\|response" ~/.soothe/logs/soothed.log | tail -100
+grep -i "langfuse\|observability" ~/.soothe/logs/soothed.log | tail -100
 ```
 
 4. Inspect:
@@ -404,38 +396,9 @@ cat ~/.soothe/config/config.yml | grep -A 20 "protocols:"
 
 ## 🎯 Advanced Debugging
 
-### LLM Request/Response Tracing
+### LLM traces (Langfuse)
 
-Enable comprehensive LLM tracing to debug model behavior:
-
-```yaml
-llm_tracing:
-  enabled: true
-  log_preview_length: 1000  # Max chars for message previews (50-1000)
-```
-
-**What gets logged**:
-- Full system prompt
-- User message
-- Tool definitions
-- Model response (parsed)
-- Token usage (prompt + completion)
-- Latency metrics
-- Cache hit/miss status
-
-**Example output in daemon log**:
-```
-[LLM Tracing] Request to openai:gpt-4o-mini
-  Prompt preview: "You are a helpful AI assistant..." (truncated to 1000 chars)
-  Tools: browser, wizsearch, explore
-  Temperature: 0.7
-
-[LLM Tracing] Response from openai:gpt-4o-mini
-  Content: "I'll help you with that..."
-  Tool calls: browser(query="...")
-  Token usage: prompt=500, completion=150, total=650
-  Latency: 1.2s
-```
+Configure `observability.langfuse` in daemon config and open the Langfuse UI for generations, spans, and costs. Daemon logs only reflect startup and errors for the integration; detailed prompts/responses live in Langfuse.
 
 ### Thread-Level Conversation Auditing
 
@@ -468,11 +431,8 @@ logging:
 Analyze agent performance from logs:
 
 ```bash
-# Find slow LLM calls (requires llm_tracing.enabled: true)
-grep -i "latency:" ~/.soothe/logs/soothed.log | awk '{print $NF}' | sort -n
-
-# Find token usage patterns
-grep -i "token usage:" ~/.soothe/logs/soothed.log | awk -F'total=' '{print $2}' | sort -n
+# Optional: timing/token hints in logs (Langfuse UI is authoritative for LLM metrics)
+grep -i "latency\|duration_ms\|token" ~/.soothe/logs/soothed.log | tail -50
 
 # Find iteration counts
 grep -i "iteration" ~/.soothe/logs/soothed.log | grep -i "max\|count"
@@ -498,10 +458,7 @@ logging:
     enabled: true
     retention_days: 30
 
-# LLM tracing
-llm_tracing:
-  enabled: true
-  log_preview_length: 1000
+# Langfuse (optional): observability.langfuse.enabled + keys in same file
 
 # Performance tuning (optional, for debugging perf)
 performance:

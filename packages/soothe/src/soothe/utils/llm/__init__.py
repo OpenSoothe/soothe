@@ -1,26 +1,22 @@
 """LLM adaptation utilities for Soothe.
 
-This module consolidates all LLM-related adaptation and compatibility handling:
+This module consolidates LLM-related adaptation and compatibility handling:
 
-1. **LLM Tracing**: Request/response logging for direct model calls
-2. **Provider Compatibility**: Wrappers for limited OpenAI-compatible providers
-3. **Structured Output**: Format conversions for providers with limited API support
+1. **Provider Compatibility**: Wrappers for limited OpenAI-compatible providers
+2. **Structured Output**: Format conversions for providers with limited API support
 
 Architecture:
-- `tracing.py`: LLMTracingWrapper for non-CoreAgent model calls
 - `wrappers.py`: LimitedProviderModelWrapper, JsonSchemaModelWrapper for compatibility
 """
 
 from __future__ import annotations
 
-from soothe.utils.llm.tracing import LLMTracingWrapper
 from soothe.utils.llm.wrappers import (
     JsonSchemaModelWrapper,
     LimitedProviderModelWrapper,
 )
 
 __all__ = [
-    "LLMTracingWrapper",
     "JsonSchemaModelWrapper",
     "LimitedProviderModelWrapper",
 ]

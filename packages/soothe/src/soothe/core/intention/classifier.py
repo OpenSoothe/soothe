@@ -45,39 +45,26 @@ class IntentClassifier:
     Args:
         model: Fast LLM for classification (e.g., gpt-4o-mini).
         assistant_name: Name used in chitchat responses.
-        config: Optional SootheConfig for tracing and provider capabilities.
     """
 
     def __init__(
         self,
         model: BaseChatModel | None,
         assistant_name: str = "Soothe",
-        config: Any | None = None,
     ) -> None:
         """Initialize intent classifier.
 
         Args:
             model: Fast LLM for classification.
             assistant_name: Name used in responses.
-            config: Optional SootheConfig for tracing.
         """
         self._fast_model = model
         self._assistant_name = assistant_name
-        self._config = config
 
         # Pre-create structured output models for performance
         if model:
-            # Apply LLM tracing wrapper to base model BEFORE structured output conversion
-            # This allows tracing the actual AIMessage response, not the Pydantic result
-            traced_model = model
-            if config and config.observability.llm_tracing_enabled:
-                from soothe.utils.llm import LLMTracingWrapper
-
-                traced_model = LLMTracingWrapper(model)
-                logger.debug("[IntentClassifier] LLM tracing enabled for base model")
-
-            self._intent_model = self._create_structured_model(traced_model, IntentClassification)
-            self._routing_model = self._create_structured_model(traced_model, RoutingClassification)
+            self._intent_model = self._create_structured_model(model, IntentClassification)
+            self._routing_model = self._create_structured_model(model, RoutingClassification)
 
             logger.info("[IntentClassifier] Initialized with structured output models")
         else:

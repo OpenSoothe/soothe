@@ -886,13 +886,9 @@ class LangfuseIntegrationConfig(BaseModel):
 class ObservabilityConfig(BaseModel):
     """Unified observability configuration for debugging and monitoring.
 
-    Consolidates LLM tracing, logging, and verbosity settings into a single section
-    for better discoverability and simplified configuration.
+    Consolidates logging, verbosity, thread logs, and Langfuse tracing into one section.
 
     Args:
-        llm_tracing_enabled: Enable DEBUG log tracing for direct LLM calls outside
-            the CoreAgent graph (classifier, consensus, criticality via ``LLMTracingWrapper``).
-            Use Langfuse for full request tracing.
         log_file_level: Logging level for file output (DEBUG, INFO, WARNING, ERROR).
         log_file_path: Log file path (empty = SOOTHE_HOME/logs/soothed.log).
         log_file_max_bytes: Maximum file size before rotation (default: 5 MB).
@@ -903,12 +899,6 @@ class ObservabilityConfig(BaseModel):
         thread_logging_max_size_mb: Maximum total size for thread logs directory.
         langfuse: Langfuse OpenTelemetry / LangChain callback settings.
     """
-
-    # Optional DEBUG logging for direct LLM calls (see utils.llm.LLMTracingWrapper)
-    llm_tracing_enabled: bool = Field(
-        default=False,
-        description="Enable DEBUG log tracing for direct LLM calls (wrapper); use Langfuse for traces",
-    )
 
     # File logging settings
     log_file_level: str = Field(

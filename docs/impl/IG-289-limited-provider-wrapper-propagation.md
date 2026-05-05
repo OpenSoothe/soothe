@@ -17,9 +17,10 @@ LLM returned None - structured output parsing failed
 
 **Root causes**:
 1. Provider type mismatch (`openai` instead of `limited_openai`)
-2. `LLMTracingWrapper` missing `with_structured_output()` delegation
-3. `AIMessage.reasoning_content` stored in `additional_kwargs` (not direct attribute)
-4. `LimitedProviderModelWrapper` only handling `method="json_mode"`
+2. `AIMessage.reasoning_content` stored in `additional_kwargs` (not direct attribute)
+3. `LimitedProviderModelWrapper` only handling `method="json_mode"`
+
+*(Historical: optional `LLMTracingWrapper` around the classifier was removed; Langfuse handles tracing.)*
 
 ### Why Wrapper Was Missing
 
@@ -69,20 +70,12 @@ Response → JsonSchemaModelWrapper parses additional_kwargs["reasoning_content"
 **Files modified**:
 - `packages/soothe/src/soothe/config/models.py` - Provider type documentation
 - `packages/soothe/src/soothe/config/settings.py` - Wrapper application logic (3 locations)
-- `packages/soothe/src/soothe/core/llm/wrappers.py` - Fixed `additional_kwargs` access + method handling
-- `packages/soothe/src/soothe/core/llm/tracing.py` - Added `with_structured_output()` delegation
+- `packages/soothe/src/soothe/utils/llm/wrappers.py` - Fixed `additional_kwargs` access + method handling
 - `config/config.dev.yml` - Changed mlxserver to `limited_openai`
 
 **Key fixes**:
 
-1. **LLMTracingWrapper delegation**:
-```python
-def with_structured_output(self, schema: Any, **kwargs: Any) -> Any:
-    """Delegate structured output to wrapped model."""
-    return self._model.with_structured_output(schema, **kwargs)
-```
-
-2. **AIMessage structure fix**:
+1. **AIMessage structure fix**:
 ```python
 # OLD (wrong) - Direct attribute access
 if hasattr(response, "reasoning_content") and response.reasoning_content:
@@ -97,7 +90,7 @@ if (
     json_str = response.additional_kwargs["reasoning_content"]
 ```
 
-3. **LimitedProviderModelWrapper method handling**:
+2. **LimitedProviderModelWrapper method handling**:
 ```python
 # OLD (only handled json_mode)
 if method == "json_mode":
@@ -177,7 +170,7 @@ async def detect_existing_browser_intent(
 # Test 1: IntentClassifier creates JsonSchemaModelWrapper
 config = SootheConfig(providers=[...], router={"fast": "mlxserver:glm-4.7-flash"})
 model = config.create_chat_model("fast")
-classifier = IntentClassifier(model, config=config)
+classifier = IntentClassifier(model)
 assert type(classifier._intent_model).__name__ == 'JsonSchemaModelWrapper'
 
 # Test 2: AIMessage parsing works
