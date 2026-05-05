@@ -14,8 +14,7 @@ def test_goal_result_model():
         goal_id="test-goal-123",
         status="completed",
         evidence_summary="Task completed successfully",
-        goal_progress=0.95,
-        confidence=0.9,
+        goal_progress="high",
         full_output="Final answer: Task done",
         iteration_count=5,
         duration_ms=3000,
@@ -23,8 +22,7 @@ def test_goal_result_model():
 
     assert result.goal_id == "test-goal-123"
     assert result.status == "completed"
-    assert result.goal_progress == 0.95
-    assert result.confidence == 0.9
+    assert result.goal_progress == "high"
     assert result.iteration_count == 5
     assert result.duration_ms == 3000
 
@@ -34,8 +32,7 @@ def test_plan_result_to_goal_result_conversion():
     plan_result = PlanResult(
         status="done",
         evidence_summary="Evidence accumulated from execution",
-        goal_progress=1.0,
-        confidence=0.85,
+        goal_progress="complete",
         full_output="Goal achieved completely",
     )
 
@@ -44,12 +41,11 @@ def test_plan_result_to_goal_result_conversion():
         status="completed" if plan_result.is_done() else "failed",
         evidence_summary=plan_result.evidence_summary,
         goal_progress=plan_result.goal_progress,
-        confidence=plan_result.confidence,
         full_output=plan_result.full_output,
     )
 
     assert goal_result.status == "completed"
-    assert goal_result.goal_progress == 1.0
+    assert goal_result.goal_progress == "complete"
     assert goal_result.evidence_summary == plan_result.evidence_summary
 
 
@@ -102,8 +98,7 @@ async def test_planner_reflect_with_agentloop_result():
         goal_id="test-123",
         status="completed",
         evidence_summary="Successfully executed",
-        goal_progress=0.95,
-        confidence=0.85,
+        goal_progress="high",
     )
 
     # Create GoalContext
@@ -147,8 +142,7 @@ async def test_planner_reflect_with_failed_agentloop_result():
         goal_id="failed-goal",
         status="failed",
         evidence_summary="Execution failed",
-        goal_progress=0.3,
-        confidence=0.4,
+        goal_progress="low",
     )
 
     goal_context = GoalContext(
@@ -232,8 +226,7 @@ def test_goal_result_serialization():
         goal_id="serial-test",
         status="in_progress",
         evidence_summary="Partial progress",
-        goal_progress=0.6,
-        confidence=0.7,
+        goal_progress="medium",
         iteration_count=3,
         duration_ms=1500,
     )

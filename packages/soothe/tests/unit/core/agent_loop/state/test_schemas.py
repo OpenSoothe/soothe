@@ -296,14 +296,12 @@ class TestPlanResult:
             status="done",
             plan_action="keep",
             next_action="I've completed the task.",
-            goal_progress=1.0,
-            confidence=0.95,
+            goal_progress="complete",
             reasoning="Goal achieved",
         )
 
         assert result.status == "done"
-        assert result.goal_progress == 1.0
-        assert result.confidence == 0.95
+        assert result.goal_progress == "complete"
         assert result.is_done() is True
 
     def test_status_methods(self) -> None:
@@ -312,7 +310,7 @@ class TestPlanResult:
             status="done",
             plan_action="keep",
             next_action="I'm done.",
-            goal_progress=1.0,
+            goal_progress="complete",
             reasoning="Done",
         )
         assert done.is_done() is True
@@ -329,7 +327,7 @@ class TestPlanResult:
                 reasoning="x",
             ),
             next_action="I'll continue working.",
-            goal_progress=0.5,
+            goal_progress="medium",
             reasoning="Continue",
         )
         assert cont.should_continue() is True
@@ -345,7 +343,7 @@ class TestPlanResult:
                 reasoning="r",
             ),
             next_action="I'll replan.",
-            goal_progress=0.3,
+            goal_progress="low",
             reasoning="Replan",
         )
         assert replan.should_replan() is True
@@ -372,7 +370,7 @@ class TestPlanResult:
         PlanResult(
             status="done",
             plan_action="keep",
-            goal_progress=0.5,
+            goal_progress="medium",
             reasoning="Test",
         )
 
@@ -380,7 +378,7 @@ class TestPlanResult:
             PlanResult(
                 status="done",
                 plan_action="keep",
-                goal_progress=1.5,
+                goal_progress="invalid_level",  # Invalid level for testing validation
                 reasoning="Test",
             )
 

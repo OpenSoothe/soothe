@@ -388,10 +388,11 @@ class PlanResult(BaseModel):
     Result of the Plan-And-Execute loop's Plan phase, which combines planning,
     progress assessment, and goal-distance estimation in a single structured response.
 
+    IG-399: Descriptive progress levels instead of numeric, removed confidence field.
+
     Attributes:
         status: Whether to finish, continue current plan, or replan.
-        goal_progress: Estimated progress toward the goal (0.0-1.0).
-        confidence: Model confidence in the assessment (0.0-1.0).
+        goal_progress: Descriptive progress level (none | low | medium | high | complete).
         assessment_reasoning: Phase-1 status justification (reserved; StatusAssessment has no LLM text field).
         plan_reasoning: Reserved for phase-2 strategy text; not populated from PlanGeneration (IG-329).
         next_action: User-facing action summary (full text, no truncation).
@@ -406,8 +407,8 @@ class PlanResult(BaseModel):
 
     status: Literal["continue", "replan", "done"]
     evidence_summary: str = ""
-    goal_progress: float = Field(default=0.0, ge=0.0, le=1.0)
-    confidence: float = Field(ge=0.0, le=1.0, default=0.8)
+    goal_progress: Literal["none", "low", "medium", "high", "complete"] = "none"
+    """Descriptive progress level inherited from assessment (IG-399)."""
 
     assessment_reasoning: str = Field(default="", max_length=500)
     """Reserved; assess-phase schema has no separate justification string (IG-329)."""
@@ -453,20 +454,20 @@ class StatusAssessment(BaseModel):
     """StatusAssessment: quick progress/status check (RFC-604).
 
     Lightweight schema for status assessment, generates ~50-80 tokens.
-    IG-264: Minimal fields (status, progress, confidence) - 60% token reduction.
+    IG-264: Minimal fields (status, progress) - 60% token reduction.
+    IG-399: Descriptive progress levels instead of numeric.
 
     Attributes:
         status: Whether to finish, continue current plan, or replan.
-        goal_progress: Estimated progress toward the goal (0.0-1.0).
-        confidence: Model confidence in the assessment (0.0-1.0).
+        goal_progress: Descriptive progress level (none | low | medium | high | complete).
         require_goal_completion: Whether an extra goal completion LLM call is needed.
             When False, the last AIMessage from execution can be used as goal completion.
             Only relevant when status="done".
     """
 
     status: Literal["continue", "replan", "done"]
-    goal_progress: float = Field(default=0.0, ge=0.0, le=1.0)
-    confidence: float = Field(default=0.8, ge=0.0, le=1.0)
+    goal_progress: Literal["none", "low", "medium", "high", "complete"] = "none"
+    """Descriptive progress level - easier for LLMs to estimate accurately (IG-399)."""
     require_goal_completion: bool = Field(default=False)
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
 

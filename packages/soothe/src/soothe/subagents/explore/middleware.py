@@ -204,6 +204,46 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         thread_ws = state.get("workspace") or self._resolver_workspace
         search_target = resolve_explore_search_target(messages, state.get("search_target"))
         findings = state.get("findings") or []
+
+        # IG-399: Truncate message history to keep only recent turns
+        max_history = self._explore_config.max_history_messages_for_model
+        if len(messages) > max_history:
+            messages = messages[-max_history:]
+
+        # IG-399: Truncate tool outputs in each message
+        max_tool_chars = self._explore_config.max_tool_output_chars_per_turn
+        truncated_messages = []
+        for msg in messages:
+            if isinstance(msg, ToolMessage):
+                content = str(msg.content)
+                if len(content) > max_tool_chars:
+                    content = content[:max_tool_chars] + "...[truncated]"
+                truncated_messages.append(
+                    ToolMessage(content=content, tool_call_id=msg.tool_call_id)
+                )
+            else:
+                truncated_messages.append(msg)
+        messages = truncated_messages
+
+        # IG-399: Early-stop detection when findings stall
+        prev_findings_count = state.get("prev_findings_count", 0)
+        new_findings_count = len(findings)
+        stall_counter = state.get("findings_stall_counter", 0)
+
+        if new_findings_count == prev_findings_count:
+            stall_counter += 1
+        else:
+            stall_counter = 0
+
+        # Force synthesis if findings have stalled for N consecutive turns
+        early_stop_threshold = self._explore_config.early_stop_no_new_findings_turns
+        if stall_counter >= early_stop_threshold and current > 0:
+            logger.info(
+                "Explore: early stop after %d turns with no new findings — synthesizing",
+                stall_counter,
+            )
+            return self._synthesize_findings(findings, search_target, current)
+
         findings_so_far = ""
         if findings:
             findings_so_far = "\nFindings so far:\n" + "\n".join(
@@ -211,36 +251,11 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             )
 
         if current >= self._max_iterations:
-            detail_lines = [
-                f"- {f.get('path', 'unknown')}: {(f.get('snippet') or '')[:100] or '(no snippet)'}"
-                for f in findings[:20]
-            ]
-            findings_detail = "\n".join(detail_lines) if detail_lines else "No findings"
-            prompt = SYNTHESIZE.format(
-                search_target=search_target,
-                findings_detail=findings_detail,
-                max_matches=self._max_matches,
-            )
-            structured = self._model.with_structured_output(ExploreResult).invoke(
-                [HumanMessage(content=prompt)]
-            )
             logger.info(
-                "Explore: budget exhausted after %d model turns — synthesized result",
+                "Explore: budget exhausted after %d model turns — synthesizing result",
                 current,
             )
-            return ExtendedModelResponse(
-                model_response=ModelResponse(
-                    result=[
-                        AIMessage(
-                            content="Iteration budget reached; returning synthesized summary."
-                        )
-                    ],
-                    structured_response=structured,
-                ),
-                command=Command(
-                    update={"explore_model_invocations": current + 1},
-                ),
-            )
+            return self._synthesize_findings(findings, search_target, current)
 
         body = EXPLORE_AGENT_SYSTEM.format(
             search_target=search_target,
@@ -250,11 +265,55 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             max_read_lines=self._explore_config.max_read_lines,
             findings_so_far=findings_so_far,
         )
-        req = request.override(system_message=SystemMessage(content=body))
+        req = request.override(messages=messages, system_message=SystemMessage(content=body))
         response = handler(req)
         return ExtendedModelResponse(
             model_response=response,
-            command=Command(update={"explore_model_invocations": current + 1}),
+            command=Command(
+                update={
+                    "explore_model_invocations": current + 1,
+                    "prev_findings_count": new_findings_count,
+                    "findings_stall_counter": stall_counter,
+                }
+            ),
+        )
+
+    def _synthesize_findings(
+        self,
+        findings: list[dict[str, Any]],
+        search_target: str,
+        current_iter: int,
+    ) -> ExtendedModelResponse[ExploreResult]:
+        """Synthesize findings into structured result (IG-399)."""
+        detail_lines = [
+            f"- {f.get('path', 'unknown')}: {(f.get('snippet') or '')[:100] or '(no snippet)'}"
+            for f in findings[:20]
+        ]
+        findings_detail = "\n".join(detail_lines) if detail_lines else "No findings"
+        prompt = SYNTHESIZE.format(
+            search_target=search_target,
+            findings_detail=findings_detail,
+            max_matches=self._max_matches,
+        )
+        structured = self._model.with_structured_output(ExploreResult).invoke(
+            [HumanMessage(content=prompt)]
+        )
+        logger.info(
+            "Explore: synthesized result after %d iterations",
+            current_iter,
+        )
+        return ExtendedModelResponse(
+            model_response=ModelResponse(
+                result=[AIMessage(content="Synthesized summary (early stop or budget exhausted).")],
+                structured_response=structured,
+            ),
+            command=Command(
+                update={
+                    "explore_model_invocations": current_iter + 1,
+                    "prev_findings_count": len(findings),
+                    "findings_stall_counter": 0,
+                }
+            ),
         )
 
     async def awrap_model_call(

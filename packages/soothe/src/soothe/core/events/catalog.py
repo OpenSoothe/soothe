@@ -222,7 +222,9 @@ class AgenticLoopCompletedEvent(LifecycleEvent):
     type: Literal["soothe.cognition.agent_loop.completed"] = "soothe.cognition.agent_loop.completed"
     thread_id: str
     status: str
-    goal_progress: float
+    goal_progress: Literal[
+        "none", "low", "medium", "high", "complete"
+    ]  # IG-399: descriptive levels
     evidence_summary: str
     # IG-267: Include goal for CLI display trophy message
     goal: str = ""

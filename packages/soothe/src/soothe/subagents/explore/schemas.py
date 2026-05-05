@@ -141,6 +141,9 @@ class ExploreSubagentConfig(BaseModel):
         max_iterations: Per-level iteration caps.
         max_read_lines: Max lines per read_file call.
         max_matches_returned: Max matches in final result.
+        max_history_messages_for_model: Keep only recent N message turns in model request.
+        max_tool_output_chars_per_turn: Truncate oversized tool outputs before sending back to model.
+        early_stop_no_new_findings_turns: Force synthesis if N consecutive turns produce zero net-new findings.
     """
 
     thoroughness: str = "medium"
@@ -153,3 +156,13 @@ class ExploreSubagentConfig(BaseModel):
     )
     max_read_lines: int = 50
     max_matches_returned: int = 5
+
+    # IG-399: context growth capping
+    max_history_messages_for_model: int = 8
+    """Keep only recent N message turns in model request."""
+
+    max_tool_output_chars_per_turn: int = 2000
+    """Truncate oversized tool outputs before sending back to model."""
+
+    early_stop_no_new_findings_turns: int = 2
+    """Force synthesis if N consecutive turns produce zero net-new findings."""

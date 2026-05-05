@@ -9,7 +9,7 @@ def test_agentic_loop_completed_event_has_no_goal_completion_message_field() -> 
     ev = AgenticLoopCompletedEvent(
         thread_id="t-1",
         status="done",
-        goal_progress=1.0,
+        goal_progress="complete",
         evidence_summary="ev",
     )
     d = ev.to_dict()
@@ -21,7 +21,7 @@ def test_agentic_loop_completed_event_none_when_unset() -> None:
     ev = AgenticLoopCompletedEvent(
         thread_id="t-3",
         status="done",
-        goal_progress=1.0,
+        goal_progress="complete",
         evidence_summary="ev",
     )
     d = ev.to_dict()

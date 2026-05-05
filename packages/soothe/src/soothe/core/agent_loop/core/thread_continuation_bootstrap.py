@@ -90,8 +90,7 @@ def build_thread_continuation_bootstrap_plan(_goal: str) -> PlanResult:
     )
     return PlanResult(
         status="continue",
-        goal_progress=0.25,
-        confidence=0.85,
+        goal_progress="low",  # IG-399: descriptive level (initial bootstrap)
         assessment_reasoning="IG-325 thread continuation: initial planner call skipped.",
         plan_reasoning="Single execute wave from thread context and loop goal.",
         next_action="Execute one focused step for the user's follow-up request.",

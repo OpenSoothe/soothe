@@ -58,6 +58,7 @@ router:
 #   embedding: "mlxserver:nomic-embed"
 
 agentic:
+  max_iterations: 6  # IG-399: interactive architecture analysis cap
   max_subagent_tasks_per_wave: 16
   final_response: adaptive
   goal_completion_mode: llm_only
@@ -65,11 +66,11 @@ agentic:
   reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution
   plan_pre_generate_probe_max_uses: 3  # Bounded readonly probes between plan-assess and plan-generate (1-3)
   loop_orchestrator_evidence_validate: true  # RFC-220: enforce evidence_refs when ledger non-empty
-  # IG-380: dev caps for plan prompts (template keeps zeros for backward compat)
+  # IG-399: tighten plan prompt caps (from IG-380)
   plan_prompt_ledger:
-    plan_ledger_max_messages: 80
-    plan_ledger_max_total_chars: 120000
-    plan_ledger_max_message_chars: 24000
+    plan_ledger_max_messages: 40       # IG-399: -50% from 80
+    plan_ledger_max_total_chars: 60000 # IG-399: -50% from 120000
+    plan_ledger_max_message_chars: 8000 # IG-399: -67% from 24000
 
 execution:
   concurrency:
@@ -79,7 +80,7 @@ execution:
   llm_rpm_limit: 120
   llm_concurrent_limit: 10
   llm_call_timeout_seconds: 120
-  llm_call_timeout_max_seconds: 900
+  llm_call_timeout_max_seconds: 240  # IG-399: fail fast on pathological long calls
   llm_call_timeout_adaptive: true
 
 observability:
@@ -202,13 +203,18 @@ subagents:
 
   explore:
     enabled: true
+    model: "openai:gpt-4o-mini"  # IG-399: explicit fast model override
     config:
       thoroughness: "medium"
       max_iterations:
-        quick: 12
-        medium: 24
-        thorough: 48
+        quick: 6      # IG-399: -50% from 12
+        medium: 10    # IG-399: -58% from 24
+        thorough: 16  # IG-399: -67% from 48
       max_read_lines: 50
       max_matches_returned: 5
+      # IG-399: context growth capping
+      max_history_messages_for_model: 8  # Keep only recent N message turns
+      max_tool_output_chars_per_turn: 2000  # Truncate oversized tool outputs
+      early_stop_no_new_findings_turns: 2  # Force synthesis when findings stall
 
 # Note: Logging configuration moved to observability section above

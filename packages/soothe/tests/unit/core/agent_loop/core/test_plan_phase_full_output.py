@@ -18,8 +18,7 @@ async def test_done_preserves_planner_full_output() -> None:
     mock_lp.plan = AsyncMock(
         return_value=PlanResult(
             status="done",
-            goal_progress=1.0,
-            confidence=0.95,
+            goal_progress="complete",
             plan_action="keep",
             decision=None,
             next_action="Goal achieved successfully",
@@ -52,8 +51,7 @@ async def test_done_falls_back_to_step_evidence_when_full_output_empty() -> None
     mock_lp.plan = AsyncMock(
         return_value=PlanResult(
             status="done",
-            goal_progress=1.0,
-            confidence=0.9,
+            goal_progress="complete",
             plan_action="keep",
             decision=None,
             next_action="done",

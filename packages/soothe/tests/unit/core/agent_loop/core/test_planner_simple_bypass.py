@@ -23,8 +23,7 @@ async def test_simple_query_skips_plan_generate_on_first_cycle() -> None:
     planner._assess_status = AsyncMock(  # type: ignore[method-assign]
         return_value=StatusAssessment(
             status="continue",
-            goal_progress=0.1,
-            confidence=0.9,
+            goal_progress="none",
             require_goal_completion=False,
         )
     )

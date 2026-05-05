@@ -2392,13 +2392,21 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         self,
         *,
         status: str,
-        goal_progress: float,
+        goal_progress: str,  # IG-399: descriptive level instead of float
         completion_summary: str,
         total_steps: int,
     ) -> None:
         """Show a compact footer when the agentic loop completes."""
-        pct = int(float(goal_progress) * 100)
-        parts: list[str] = [str(status or "done"), f"{pct}%"]
+        # IG-399: Map descriptive levels to percentage display
+        progress_map = {
+            "none": "0%",
+            "low": "20%",
+            "medium": "50%",
+            "high": "80%",
+            "complete": "100%",
+        }
+        pct_display = progress_map.get(goal_progress, "0%")
+        parts: list[str] = [str(status or "done"), pct_display]
         if total_steps:
             parts.append(f"{total_steps} step(s)")
         cs = (completion_summary or "").strip()
