@@ -1,29 +1,15 @@
 """Explore subagent schemas.
 
-Defines the state, output, and configuration schemas for the
-LLM-orchestrated iterative filesystem search agent (RFC-613).
+Defines the state, output, and configuration schemas for the explore agent (RFC-613).
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+import operator
+from typing import Annotated, Any, Literal, NotRequired
 
-from langgraph.graph.message import add_messages
+from langchain.agents import AgentState
 from pydantic import BaseModel, Field
-from typing_extensions import TypedDict
-
-
-class ExploreState(TypedDict):
-    """State schema for the explore engine graph."""
-
-    messages: Annotated[list, add_messages]
-    search_target: str
-    workspace: str
-    thoroughness: Literal["quick", "medium", "thorough"]
-    findings: list[dict[str, Any]]  # [{path, snippet, relevance}]
-    iterations_used: int
-    max_iterations: int
-    assessment_decision: Literal["continue", "adjust", "finish"]
 
 
 class MatchEntry(BaseModel):
@@ -54,6 +40,17 @@ class ExploreResult(BaseModel):
         default="",
         description="Optional bullets for broad architecture-style targets; empty if N/A",
     )
+
+
+class ExploreAgentState(AgentState[ExploreResult]):
+    """State for LangChain ``create_agent`` explore subgraph."""
+
+    workspace: NotRequired[str]
+    search_target: NotRequired[str]
+    thoroughness: NotRequired[str]
+    findings: NotRequired[Annotated[list[dict[str, Any]], operator.add]]
+    explore_wire_started: NotRequired[bool]
+    explore_model_invocations: NotRequired[int]
 
 
 def _md_single_line(text: str, max_len: int) -> str:
