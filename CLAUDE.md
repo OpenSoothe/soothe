@@ -233,7 +233,7 @@ All implementation guides are in `docs/impl/`. Recent guides:
 | IG-052 | RFC-600 Event System Optimization | ✅ Completed |
 | IG-276 | Core Directory Refactoring | ✅ Completed |
 | IG-394 | LangGraph Agent Loop Orchestrator (RFC-220) | 🔄 In Progress |
-| IG-396 | RFC-220 Loop Graph topology + Langfuse bridge | 🔄 In Progress |
+| IG-396 | RFC-220 Loop Graph topology + Langfuse bridge | ✅ Completed |
 
 **See all guides**: Check `docs/impl/` directory.
 

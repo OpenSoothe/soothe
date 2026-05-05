@@ -29,6 +29,7 @@ from .routing import (
     route_after_validate_evidence,
 )
 from .runtime_context import LoopRuntimeContext
+from .state import LoopGraphState
 
 
 def build_agent_loop_graph(ctx: LoopRuntimeContext):
@@ -64,7 +65,7 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
     async def record_iteration(state: dict[str, Any]) -> dict[str, Any]:
         return await node_record_iteration(ctx, state)
 
-    graph = StateGraph(dict)
+    graph = StateGraph(LoopGraphState)
     graph.add_node("init_or_resume", init_or_resume)
     graph.add_node("iteration_gate", iteration_gate)
     graph.add_node("iteration_start", iteration_start)
