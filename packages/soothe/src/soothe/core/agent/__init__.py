@@ -34,7 +34,6 @@ This module defines the clear boundary between Soothe and deepagents:
 Layer 2 Contract (config.configurable):
     - thread_id: Thread identifier for persistence
     - workspace: Thread-specific workspace path (RFC-103)
-    - soothe_step_tools: Suggested tools (advisory)
     - soothe_step_subagent: Suggested subagent (advisory)
     - soothe_step_expected_output: Expected result (advisory)
 """

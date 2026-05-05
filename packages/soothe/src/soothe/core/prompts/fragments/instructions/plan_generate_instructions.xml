@@ -10,7 +10,7 @@ Output MUST match the structured schema only: plan_action, decision (when requir
 
 **plan_action**
 - "keep": Reuse the in-flight plan; decision may be omitted or echo the current strategy.
-- "new": Supply a fresh AgentDecision with 1–3 steps (see EXECUTION_POLICIES above). Each step: imperative description, expected_output, ``supportive_evidence``, optional tools/subagent/dependencies.
+- "new": Supply a fresh AgentDecision with 1–3 steps (see EXECUTION_POLICIES above). Each step: imperative description, expected_output, ``supportive_evidence``, optional subagent/dependencies.
 
 **decision** (when plan_action="new")
 - type: "execute_steps" or "final" per goal state.

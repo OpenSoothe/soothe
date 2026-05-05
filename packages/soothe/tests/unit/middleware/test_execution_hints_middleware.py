@@ -14,7 +14,6 @@ class TestExecutionHintsMiddleware:
         config = {
             "configurable": {
                 "thread_id": "test-thread",
-                "soothe_step_tools": ["glob", "grep"],
                 "soothe_step_subagent": "browser",
                 "soothe_step_expected_output": "Config file list",
             }
@@ -23,25 +22,23 @@ class TestExecutionHintsMiddleware:
         hints = middleware._extract_hints(config)
 
         assert hints is not None
-        assert hints["tools"] == ["glob", "grep"]
         assert hints["subagent"] == "browser"
         assert hints["expected_output"] == "Config file list"
 
-    def test_extract_hints_tools_only(self):
-        """Test extracting only tools hint."""
+    def test_extract_hints_subagent_only(self):
+        """Test extracting only subagent hint."""
         middleware = ExecutionHintsMiddleware()
         config = {
             "configurable": {
                 "thread_id": "test-thread",
-                "soothe_step_tools": ["read_file"],
+                "soothe_step_subagent": "explore",
             }
         }
 
         hints = middleware._extract_hints(config)
 
         assert hints is not None
-        assert hints["tools"] == ["read_file"]
-        assert hints["subagent"] is None
+        assert hints["subagent"] == "explore"
         assert hints["expected_output"] is None
 
     def test_extract_hints_none_present(self):
@@ -70,38 +67,33 @@ class TestExecutionHintsMiddleware:
         """Test formatting all hints."""
         middleware = ExecutionHintsMiddleware()
         hints = {
-            "tools": ["glob", "grep"],
             "subagent": "browser",
             "expected_output": "Config file list",
         }
 
         text = middleware._format_hints(hints)
 
-        assert "Suggested tools: glob, grep" in text
         assert "Suggested subagent: browser" in text
         assert "Expected output: Config file list" in text
         assert "Consider using the suggested approach first" in text
 
-    def test_format_hints_missing_tools(self):
-        """Test formatting hints without tools."""
+    def test_format_hints_missing_subagent(self):
+        """Test formatting hints without subagent."""
         middleware = ExecutionHintsMiddleware()
         hints = {
-            "tools": None,
-            "subagent": "browser",
+            "subagent": None,
             "expected_output": "Config file list",
         }
 
         text = middleware._format_hints(hints)
 
-        assert "Suggested tools" not in text
-        assert "Suggested subagent: browser" in text
+        assert "Suggested subagent" not in text
         assert "Expected output: Config file list" in text
 
     def test_format_hints_only_expected_output(self):
         """Test formatting with only expected output."""
         middleware = ExecutionHintsMiddleware()
         hints = {
-            "tools": None,
             "subagent": None,
             "expected_output": "File contents",
         }
@@ -109,7 +101,6 @@ class TestExecutionHintsMiddleware:
         text = middleware._format_hints(hints)
 
         assert "Expected output: File contents" in text
-        assert "Suggested tools" not in text
         assert "Suggested subagent" not in text
 
     @pytest.mark.asyncio
@@ -120,19 +111,18 @@ class TestExecutionHintsMiddleware:
         config = {
             "configurable": {
                 "thread_id": "test-thread",
-                "soothe_step_tools": ["read_file"],
+                "soothe_step_subagent": "explore",
                 "soothe_step_expected_output": "File contents",
             }
         }
 
-        # Test via abefore_agent with mocked get_config
         from unittest.mock import patch
 
         with patch("langgraph.config.get_config", return_value=config):
             result = await middleware.abefore_agent(state, runtime=None)
 
         assert "Execution hints:" in state["system_prompt"]
-        assert "Suggested tools: read_file" in state["system_prompt"]
+        assert "Suggested subagent: explore" in state["system_prompt"]
         assert "Expected output: File contents" in state["system_prompt"]
         assert result is not None
         assert "execution_hints_received" in result
@@ -149,7 +139,6 @@ class TestExecutionHintsMiddleware:
             }
         }
 
-        # Test via abefore_agent with mocked get_config
         from unittest.mock import patch
 
         with patch("langgraph.config.get_config", return_value=config):

@@ -31,20 +31,9 @@ class TestStepAction:
 
         assert step.description == "Test step"
         assert step.expected_output == "Test output"
-        assert step.tools is None
         assert step.subagent is None
         assert step.dependencies is None
         assert len(step.id) == 8  # Auto-generated ID
-
-    def test_step_action_with_tools(self):
-        """Test StepAction with tools."""
-        step = StepAction(
-            description="Use tools",
-            tools=["read_file", "write_file"],
-            expected_output="File operations complete",
-        )
-
-        assert step.tools == ["read_file", "write_file"]
 
     def test_step_action_with_dependencies(self):
         """Test StepAction with dependencies."""
