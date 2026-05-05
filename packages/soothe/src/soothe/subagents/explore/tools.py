@@ -52,12 +52,6 @@ def _create_thread_workspace_backend(
         # Use thread workspace if available, else fallback to resolver workspace
         # When runtime is None (direct tool invocation), use initial_workspace
         effective_workspace = thread_workspace or initial_workspace
-        if thread_workspace and thread_workspace != initial_workspace:
-            logger.debug(
-                "Explore backend: thread workspace='%s' (resolver='%s')",
-                thread_workspace,
-                initial_workspace,
-            )
 
         # Create backend with effective workspace
         virtual_mode = not allow_paths_outside_workspace

@@ -80,7 +80,9 @@ class PromptBuilder:
             state,
             plan_phase=plan_phase,
         )
-        human_content = self._build_plan_context_human_text(goal, state, context)
+        human_content = self._build_plan_context_human_text(
+            goal, state, context, plan_phase=plan_phase
+        )
 
         out: list[BaseMessage] = [SystemMessage(content=system_content)]
         # RFC-214: execute ledger as real messages (IG-380: optional projection for plan caps).
@@ -266,6 +268,8 @@ class PromptBuilder:
         goal: str,
         state: LoopState,
         context: PlanContext,
+        *,
+        plan_phase: PlanPromptPhase = "assess",
     ) -> str:
         """Construct plan-context human text without ledger (RFC-214).
 
@@ -281,10 +285,13 @@ class PromptBuilder:
             goal: User's goal description
             state: Current loop state with optional plan snapshot
             context: Planning context (prior thread XML, etc.)
+            plan_phase: When ``generate`` and prior steps exist, append a local step-id hint (IG-388).
 
         Returns:
             Formatted prompt string for the plan-context ``LoopHumanMessage``.
         """
+        from soothe.core.agent_loop.state.schemas import next_goal_local_step_id_start
+
         parts: list[str] = [self._format_goal_progress_footer(goal, state).rstrip("\n")]
 
         # Prior conversation (IG-128, RFC-209)
@@ -297,5 +304,19 @@ class PromptBuilder:
                 parts.append(msg_xml)
                 parts.append("\n")
             parts.append("</PRIOR_CONVERSATION>\n")
+
+        if plan_phase == "generate":
+            nxt = next_goal_local_step_id_start(state)
+            if nxt > 1:
+                width = max(2, len(str(nxt + 1)))
+                ex_a = str(nxt).zfill(width)
+                ex_b = str(nxt + 1).zfill(width)
+                parts.append(
+                    "\n<PLAN_STEP_ID_HINT>\n"
+                    f'This goal already used lower step indices; for plan_action "new", '
+                    f"use the next unused local step ids starting with {ex_a} "
+                    f"(e.g. {ex_a}, {ex_b}, …), not 01/02 again.\n"
+                    "</PLAN_STEP_ID_HINT>\n"
+                )
 
         return "\n".join(parts)
