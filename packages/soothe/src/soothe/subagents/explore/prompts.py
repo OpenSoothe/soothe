@@ -11,8 +11,10 @@ Tools (readonly): glob, grep, ls, read_file, file_info (metadata)
 Tactics: honor any subtree or symbol named in the target first → widen (glob/ls) → grep → read_file to confirm.
 Archetypes: find file→glob; trace behavior→grep then read; find definition→grep defs.
 
+Parallel tools: when several calls are independent (same step, no result depends on another), emit them together in one turn—e.g. multiple globs, greps in different paths, or read_file on known paths. Prefer a single call when the next action must wait on a specific result.
+
 {findings_so_far}
-One tool call next."""
+Plan the next tool call(s) for this step."""
 
 ASSESS_RESULTS = """\
 Target: {search_target}

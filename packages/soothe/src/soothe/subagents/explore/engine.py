@@ -37,6 +37,55 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _tool_call_name_args(tc: Any) -> tuple[str, Any]:
+    """Extract tool name and args from a LangChain tool call object or dict."""
+    if isinstance(tc, dict):
+        return (str(tc.get("name") or "?"), tc.get("args"))
+    name = getattr(tc, "name", None)
+    args = getattr(tc, "args", None)
+    return (str(name if name is not None else "?"), args)
+
+
+def _summarize_tool_args(
+    args: Any,
+    *,
+    value_max: int = 160,
+    total_max: int = 480,
+) -> str:
+    """Render tool arguments for logs; truncates long strings and overall width."""
+    if args is None:
+        return ""
+    if isinstance(args, str):
+        s = args.strip()
+        return (s[: value_max - 3] + "...") if len(s) > value_max else s
+    if not isinstance(args, dict):
+        s = str(args)
+        return (s[: total_max - 3] + "...") if len(s) > total_max else s
+    parts: list[str] = []
+    for key in sorted(args.keys()):
+        val = args[key]
+        vs = val if isinstance(val, str) else repr(val)
+        if len(vs) > value_max:
+            vs = vs[: value_max - 3] + "..."
+        parts.append(f"{key}={vs}")
+    out = ", ".join(parts)
+    if len(out) > total_max:
+        return out[: total_max - 3] + "..."
+    return out
+
+
+def _format_explore_planned_tools(tool_calls: list[Any]) -> str:
+    """Single-line summary of planned tool names and arguments for INFO logs."""
+    if not tool_calls:
+        return "(none)"
+    snippets: list[str] = []
+    for i, tc in enumerate(tool_calls, start=1):
+        name, raw_args = _tool_call_name_args(tc)
+        arg_str = _summarize_tool_args(raw_args)
+        snippets.append(f"{i}.{name}({arg_str})" if arg_str else f"{i}.{name}")
+    return " | ".join(snippets)
+
+
 def route_after_explore_assessment(
     iterations_used: int,
     max_iterations: int,
@@ -193,7 +242,12 @@ def build_explore_engine(
                 ],
             )
 
-        logger.info("Explore: planned %d tools", len(response.tool_calls))
+        planned_summary = _format_explore_planned_tools(response.tool_calls)
+        logger.info(
+            "Explore: planned %d tools — %s",
+            len(response.tool_calls),
+            planned_summary,
+        )
 
         out: dict[str, Any] = {"messages": [response]}
         # Persist target for assess/synthesize when task tool only set HumanMessage (IG-326).
@@ -224,7 +278,16 @@ def build_explore_engine(
         # Pass workspace in the invoke dict so ToolNode._extract_state() includes it
         # in ToolRuntime.state, allowing the callable backend to resolve the thread
         # workspace instead of the stale resolver default (IG-344).
-        logger.info("Explore: executing tools")
+        exec_tool_calls = (
+            last_message.tool_calls
+            if isinstance(last_message, AIMessage) and last_message.tool_calls
+            else []
+        )
+        logger.info(
+            "Explore: executing %d tools — %s",
+            len(exec_tool_calls),
+            _format_explore_planned_tools(exec_tool_calls),
+        )
         tool_invoke_input: dict[str, Any] = {"messages": tool_messages_input}
         thread_workspace = state.get("workspace")
         if thread_workspace:
