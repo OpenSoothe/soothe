@@ -128,7 +128,7 @@ def build_explore_engine(
 
     # Resolve max_iterations based on thoroughness
     thoroughness = config.thoroughness
-    max_iterations = config.max_iterations.get(thoroughness, 4)
+    max_iterations = config.max_iterations.get(thoroughness, 50)
     max_matches = config.max_matches_returned
     max_read_lines = config.max_read_lines
 
@@ -269,7 +269,6 @@ def build_explore_engine(
                         findings_update.append(
                             {"path": path, "snippet": None, "relevance": "unknown"}
                         )
-                    logger.debug("Explore: glob found %d paths", len(paths))
 
                 elif tool_name == "grep":
                     # grep returns list[dict] matches with path field
@@ -291,7 +290,6 @@ def build_explore_engine(
                         findings_update.append(
                             {"path": str(path), "snippet": None, "relevance": "unknown"}
                         )
-                    logger.debug("Explore: grep found %d matches", len(matches))
 
                 elif tool_name == "ls":
                     # ls returns list[str] entries
@@ -306,7 +304,6 @@ def build_explore_engine(
                         findings_update.append(
                             {"path": path, "snippet": None, "relevance": "unknown"}
                         )
-                    logger.debug("Explore: ls found %d entries", len(entries))
 
                 elif tool_name == "read_file":
                     # read_file returns str content
@@ -331,9 +328,6 @@ def build_explore_engine(
                                 "snippet": content_str[:500],
                                 "relevance": "unknown",
                             }
-                        )
-                        logger.debug(
-                            "Explore: read_file %s (%d chars)", last_path, len(content_str)
                         )
 
                 elif tool_name == "file_info":

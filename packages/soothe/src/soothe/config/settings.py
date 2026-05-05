@@ -35,7 +35,7 @@ from soothe.config.models import (
     VectorStoreProviderConfig,
     VectorStoreRouter,
 )
-from soothe.config.prompts import _DEFAULT_SYSTEM_PROMPT
+from soothe.core.prompts import _DEFAULT_SYSTEM_PROMPT
 
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings
