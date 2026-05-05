@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class EvidenceEntry(BaseModel):
-    """Evidence row for plan validation (RFC-620).
+    """Evidence row for plan validation (RFC-220).
 
     Attributes:
         evidence_id: Stable id referenced by ``StepAction.evidence_refs``.
@@ -43,7 +43,7 @@ class StepAction(BaseModel):
         subagent: Subagent to invoke (optional, executor hint)
         expected_output: Expected result for evidence accumulation
         supportive_evidence: Which prior ledger facts justify this step (plan-generate; IG-381).
-        evidence_refs: Machine-checkable ids into ``LoopState.evidence_ledger`` or prior step ids (RFC-620).
+        evidence_refs: Machine-checkable ids into ``LoopState.evidence_ledger`` or prior step ids (RFC-220).
         dependencies: Step IDs this depends on (for DAG execution). Use the same local ``id``
             strings as sibling steps (e.g. ``01``, ``02``); runtime remaps aliases such as ``1`` → ``01``
             when unambiguous (IG-379).
@@ -66,7 +66,7 @@ class StepAction(BaseModel):
     )
     evidence_refs: list[str] = Field(
         default_factory=list,
-        description="Evidence ids (RFC-620); required when evidence_ledger is non-empty.",
+        description="Evidence ids (RFC-220); required when evidence_ledger is non-empty.",
     )
     dependencies: list[str] | None = None
 
@@ -666,7 +666,7 @@ class LoopState(BaseModel):
 
     evidence_ledger: list[EvidenceEntry] = Field(
         default_factory=list,
-        description="Append-only evidence ids for plan validation (RFC-620).",
+        description="Append-only evidence ids for plan validation (RFC-220).",
     )
 
     # RFC-214: Unified message ledger for orchestration turns

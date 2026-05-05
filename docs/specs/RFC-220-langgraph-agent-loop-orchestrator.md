@@ -1,6 +1,6 @@
-# RFC-620: LangGraph Agent Loop Orchestrator
+# RFC-220: LangGraph Agent Loop Orchestrator
 
-**RFC**: RFC-620  
+**RFC**: RFC-220  
 **Title**: LangGraph Agent Loop Orchestrator  
 **Status**: Draft  
 **Kind**: Architecture Design  
@@ -41,7 +41,7 @@ This RFC also mandates **evidence-bound plan steps**: every planned step referen
 
 ## Supersedes and Obsolete Surface
 
-When RFC-620 is **Implemented**:
+When RFC-220 is **Implemented**:
 
 - RFC-201 remains valid for **conceptual** Layer 2 responsibilities (single goal, PlanResult, delegation to CoreAgent) but its **imperative loop construction** is **obsolete**.
 - Code paths that expose “AgentLoop as a hand-written async generator loop” are **deleted**, not deprecated.
@@ -156,13 +156,13 @@ New configuration keys are introduced for evidence caps, allowlists, repair boun
 
 - Replacing deepagents / CoreAgent internals.
 - Changing Layer 3 GoalEngine protocol shapes.
-- Preserving API compatibility with pre-RFC-620 runner entrypoints.
+- Preserving API compatibility with pre-RFC-220 runner entrypoints.
 
 ---
 
 ## Implementation Sequence
 
-1. Follow **Implementation Guide** [IG-394](../impl/IG-394-langgraph-agent-loop-orchestrator.md).
+1. Follow **Implementation Guides** [IG-394](../impl/IG-394-langgraph-agent-loop-orchestrator.md) and [IG-396](../impl/IG-396-rfc-220-loop-graph-topology-langfuse.md).
 2. Implement Loop Graph + delete imperative loop.
 3. Reconcile dependent RFCs and docs in the same merge series.
 4. Run `./scripts/verify_finally.sh`; update RFC status to **Implemented** when complete.
@@ -171,4 +171,4 @@ New configuration keys are introduced for evidence caps, allowlists, repair boun
 
 ## Summary
 
-RFC-620 normatively defines Layer 2 as a **LangGraph Loop Graph** keyed by **`loop_id`**, strictly isolated from CoreAgent’s **`thread_id`** graph, with **mandatory evidence-bound steps** and **no backward compatibility** with the imperative RFC-201 loop driver.
+RFC-220 normatively defines Layer 2 as a **LangGraph Loop Graph** keyed by **`loop_id`**, strictly isolated from CoreAgent’s **`thread_id`** graph, with **mandatory evidence-bound steps** and **no backward compatibility** with the imperative RFC-201 loop driver.

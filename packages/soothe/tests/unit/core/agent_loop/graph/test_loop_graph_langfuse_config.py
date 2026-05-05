@@ -1,4 +1,4 @@
-"""Loop graph RunnableConfig + Langfuse bridge (RFC-620, IG-367)."""
+"""Loop graph RunnableConfig + Langfuse bridge (RFC-220, IG-367, IG-396)."""
 
 from unittest.mock import MagicMock, patch
 
@@ -28,7 +28,11 @@ def test_build_loop_graph_invoke_config_keeps_loop_id_as_graph_thread() -> None:
     out = build_loop_graph_invoke_config(ctx)
 
     assert out["configurable"]["thread_id"] == "loop-abc"
-    assert out["metadata"]["loop_id"] == "loop-abc"
+    meta = out["metadata"]
+    assert meta["loop_id"] == "loop-abc"
+    assert meta["soothe_component"] == "agent_loop_graph"
+    assert meta["soothe_rfc"] == "RFC-220"
+    assert "goal_execution_loop" in meta["langfuse_tags"]
 
 
 def test_build_loop_graph_invoke_config_passes_conversation_thread_to_langfuse_merge() -> None:
