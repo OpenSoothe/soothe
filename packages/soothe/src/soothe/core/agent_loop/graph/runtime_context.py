@@ -1,9 +1,9 @@
-"""Mutable runtime bundle for LangGraph Agent Loop nodes (RFC-620)."""
+"""Mutable runtime bundle for LangGraph Agent Loop nodes (RFC-220)."""
 
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from soothe.core.agent_loop.branching.anchor_manager import CheckpointAnchorManager
@@ -11,6 +11,8 @@ from soothe.core.agent_loop.context.goal_context_manager import GoalContextManag
 from soothe.core.agent_loop.state.checkpoint import AgentLoopCheckpoint, GoalExecutionRecord
 from soothe.core.agent_loop.state.schemas import LoopState
 from soothe.core.agent_loop.state.state_manager import AgentLoopStateManager
+
+from .phase_scratch import LoopPhaseScratch
 
 if TYPE_CHECKING:
     from soothe.core.agent import CoreAgent
@@ -33,6 +35,7 @@ class LoopRuntimeContext:
     recovery_valid_resume: bool
     loop_state: LoopState
     emit: EmitFn
+    scratch: LoopPhaseScratch = field(default_factory=LoopPhaseScratch)
 
     @property
     def core_agent(self) -> CoreAgent:

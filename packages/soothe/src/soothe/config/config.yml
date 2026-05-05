@@ -86,7 +86,7 @@ agentic:
 
   # Performance guard - only user-facing control (performance optimizations always enabled by design)
   reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution
-  loop_orchestrator_evidence_validate: true  # RFC-620: enforce evidence_refs when ledger non-empty
+  loop_orchestrator_evidence_validate: true  # RFC-220: enforce evidence_refs when ledger non-empty
 
   report_output:
     display_threshold: 20000

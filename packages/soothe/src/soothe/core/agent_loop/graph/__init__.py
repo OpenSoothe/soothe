@@ -1,4 +1,4 @@
-"""LangGraph Loop orchestrator (RFC-620).
+"""LangGraph Loop orchestrator (RFC-220).
 
 Avoid importing the compiled graph builder from this package root to prevent import cycles
 during ``soothe.config`` initialization.

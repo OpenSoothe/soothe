@@ -1,7 +1,7 @@
-# IG-394: LangGraph Agent Loop Orchestrator (RFC-620)
+# IG-394: LangGraph Agent Loop Orchestrator (RFC-220)
 
-**Status**: In Progress (graph shell + iteration extraction landed; optional bounded gather / Track-B checkpointing remain)  
-**RFC**: [RFC-620](../specs/RFC-620-langgraph-agent-loop-orchestrator.md)  
+**Status**: In Progress (RFC-220 topology nodes landed per IG-396; optional bounded gather / repair loops remain)  
+**RFC**: [RFC-220](../specs/RFC-220-langgraph-agent-loop-orchestrator.md)  
 **Created**: 2026-05-05  
 
 ---
@@ -44,29 +44,31 @@ Implement Layer 2 goal execution as a **compiled LangGraph Loop Graph**, delete 
 
 ### 2. Loop Graph package
 
-Suggested layout (adjust to repo conventions):
+Layout (IG-396):
 
 ```
 packages/soothe/src/soothe/core/agent_loop/graph/
   __init__.py
-  builder.py          # compile graph, attach checkpointer
-  state.py            # graph state TypedDict / reducer annotations
+  builder.py
+  phase_scratch.py
+  state.py
+  routing.py
   nodes/
-    init.py
+    init_or_resume.py
+    iteration_gate.py
     iteration_start.py
-    assess.py
-    evidence_gather.py
-    plan.py
-    validate_bindings.py
-    execute.py
-    record_iteration.py
+    bounded_evidence_gather.py
+    plan_generate.py
     goal_completion.py
-  routing.py          # conditional edge functions
-  streaming.py        # map LangGraph stream → runner events
+    resolve_decision.py
+    validate_evidence_bindings.py
+    execute_steps.py
+    record_iteration.py
+    max_iterations_terminal.py
 ```
 
-- [ ] Implement nodes delegating to existing `PlanPhase` / `LLMPlanner` splits, `Executor`, `AgentLoopStateManager`, `CheckpointAnchorManager`, `SynthesisGenerator`, `determine_completion_action`.
-- [ ] Wire conditional edges per RFC-620 topology.
+- [x] Implement nodes delegating to existing `PlanPhase` / `LLMPlanner` splits, `Executor`, `AgentLoopStateManager`, `CheckpointAnchorManager`, `SynthesisGenerator`, `determine_completion_action`.
+- [x] Wire conditional edges per RFC-220 topology ([IG-396](IG-396-rfc-220-loop-graph-topology-langfuse.md)).
 
 ### 3. Identity isolation
 
@@ -76,7 +78,7 @@ packages/soothe/src/soothe/core/agent_loop/graph/
 
 ### 4. Bounded evidence gather
 
-- [ ] Config: `max_tool_calls`, tool allowlist (read-biased default set), optional skip predicates aligned with RFC-620 (only normative skips).
+- [ ] Config: `max_tool_calls`, tool allowlist (read-biased default set), optional skip predicates aligned with RFC-220 (only normative skips).
 - [ ] Invoke CoreAgent (or narrowed tool runner) with strict caps; append ledger rows via RFC-211-style metadata summarization.
 - [ ] Emit ledger IDs stable for the current goal iteration.
 
@@ -88,9 +90,9 @@ packages/soothe/src/soothe/core/agent_loop/graph/
 
 ### 6. Runner integration
 
-- [x] `invoke_agent_loop_graph` uses `merge_langfuse_runnable_config` with run name `{trace_name}:agent-loop-graph`, session = conversation `thread_id`, configurable `thread_id` = `loop_id`; metadata includes `loop_id` (IG-367 bridge).
+- [x] `invoke_agent_loop_graph` uses `merge_langfuse_runnable_config` with run name `{trace_name}:agent-loop-graph`, session = conversation `thread_id`, configurable `thread_id` = `loop_id`; metadata includes `loop_id`, Langfuse tags, `soothe_component` / `soothe_rfc` ([IG-396](IG-396-rfc-220-loop-graph-topology-langfuse.md)).
 - [x] Replace imperative loop with compiled graph + queue (`run_with_progress`).
-- [ ] Preserve stream suppression rules for execute phase (IG-304) — unchanged in `loop_iteration`.
+- [ ] Preserve stream suppression rules for execute phase (IG-304) — unchanged in `execute_steps` node.
 - [ ] Map graph outputs to existing event sequence expected by CLI/daemon (adjust **only** if RFC-614 / event catalog updated in same PR).
 
 ### 7. Delete imperative driver
@@ -112,10 +114,10 @@ packages/soothe/src/soothe/core/agent_loop/graph/
 
 ### 10. Documentation reconciliation
 
-Update or add pointers so nothing contradicts RFC-620:
+Update or add pointers so nothing contradicts RFC-220:
 
-- [ ] `CLAUDE.md` — Layer 2 description points to Loop Graph + RFC-620.
-- [ ] `docs/specs/RFC-201-*.md` — banner or section: imperative driver superseded by RFC-620 (keep conceptual sections).
+- [ ] `CLAUDE.md` — Layer 2 description points to Loop Graph + RFC-220.
+- [ ] `docs/specs/RFC-201-*.md` — banner or section: imperative driver superseded by RFC-220 (keep conceptual sections).
 - [ ] Touch as needed: RFC-203, RFC-214, RFC-216, RFC-217 snippets that reference the hand-written loop.
 
 ---
@@ -144,5 +146,6 @@ Cut-over: rollback is **revert the merge** (Git), not runtime toggles.
 
 ## References
 
-- RFC-620, RFC-604, RFC-211, RFC-218, RFC-219  
+- RFC-220, RFC-604, RFC-211, RFC-218, RFC-219  
+- [IG-396](IG-396-rfc-220-loop-graph-topology-langfuse.md)  
 - Prior related IGs: IG-372 (plan split), IG-381 (evidence / explore), IG-374 (parallel ledger)

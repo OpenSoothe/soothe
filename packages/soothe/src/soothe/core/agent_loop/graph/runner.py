@@ -1,9 +1,9 @@
-"""Invoke the compiled Loop graph (RFC-620).
+"""Invoke the compiled Loop graph (RFC-220).
 
-Langfuse (IG-367): outer ``ainvoke`` receives the same LangChain callback handler as other
-LangGraph streams; ``langfuse_session_id`` uses the conversation ``thread_id`` so planner /
-execute / loop orchestration traces share one session; Runnable ``thread_id`` remains
-``loop_id`` for LangGraph checkpoint routing.
+Langfuse (IG-367, IG-396): outer ``ainvoke`` receives the LangChain callback handler so the
+Loop Graph run nests planner / CoreAgent spans under one trace; ``langfuse_session_id`` is the
+conversation ``thread_id``; Runnable ``configurable.thread_id`` stays ``loop_id`` for checkpoint
+routing. Metadata adds ``soothe_component``, ``soothe_rfc``, and dashboard tags for AgentLoop.
 """
 
 from __future__ import annotations
@@ -13,15 +13,37 @@ from typing import Any
 
 from soothe.core.agent_loop.graph.builder import build_agent_loop_graph
 from soothe.core.agent_loop.graph.runtime_context import LoopRuntimeContext
-from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
+from soothe.utils.observability.langfuse import (
+    loop_graph_langfuse_run_display_name,
+    merge_langfuse_runnable_config,
+    patch_langfuse_trace_goal_io,
+    resolve_langfuse_config_str,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _langfuse_goal_output_text(ctx: LoopRuntimeContext) -> str:
+    """Best-effort final user-visible text for Langfuse trace output (IG-395)."""
+    gr = ctx.goal_record
+    if gr is not None and (gr.goal_completion or "").strip():
+        return gr.goal_completion.strip()
+    pp = ctx.loop_state.previous_plan
+    if pp is not None:
+        if pp.full_output and str(pp.full_output).strip():
+            return str(pp.full_output).strip()
+        if pp.next_action and str(pp.next_action).strip():
+            return str(pp.next_action).strip()
+    last = ctx.loop_state.last_execute_assistant_text
+    if last and str(last).strip():
+        return str(last).strip()
+    return ""
 
 
 def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     """Build RunnableConfig for ``CompiledGraph.ainvoke`` with Langfuse + loop metadata.
 
-    Configurable ``thread_id`` is ``loop_id`` (RFC-620). Langfuse session correlation uses
+    Configurable ``thread_id`` is ``loop_id`` (RFC-220). Langfuse session correlation uses
     ``loop_state.thread_id`` so traces align with planner LLM and CoreAgent execute streams.
 
     Args:
@@ -33,8 +55,7 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     loop_id = ctx.state_manager.loop_id
     base: dict[str, Any] = {"configurable": {"thread_id": loop_id}}
     cfg = ctx.agent_loop.config
-    tn = (cfg.observability.langfuse.trace_name or "").strip()
-    run_name = f"{tn}:agent-loop-graph" if tn else "agent-loop-graph"
+    run_name = loop_graph_langfuse_run_display_name(cfg.observability.langfuse.trace_name)
     merged = merge_langfuse_runnable_config(
         base,
         cfg,
@@ -44,6 +65,13 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     out = dict(merged)
     meta = dict(out.get("metadata") or {})
     meta.setdefault("loop_id", loop_id)
+    meta.setdefault("soothe_component", "agent_loop_graph")
+    meta.setdefault("soothe_rfc", "RFC-220")
+    tags = list(meta.get("langfuse_tags") or [])
+    for label in ("goal_execution_loop", "agent-loop-graph"):
+        if label not in tags:
+            tags.append(label)
+    meta["langfuse_tags"] = tags
     out["metadata"] = meta
     return out
 
@@ -60,3 +88,17 @@ async def invoke_agent_loop_graph(ctx: LoopRuntimeContext) -> None:
     compiled = build_agent_loop_graph(ctx)
     config = build_loop_graph_invoke_config(ctx)
     await compiled.ainvoke({"last_outcome": None}, config=config)
+
+    cfg = ctx.agent_loop.config
+    if cfg.observability.langfuse.enabled:
+        pub = resolve_langfuse_config_str(cfg.observability.langfuse.public_key)
+        patch_langfuse_trace_goal_io(
+            config,
+            goal_text=ctx.loop_state.goal,
+            output_text=_langfuse_goal_output_text(ctx),
+            trace_display_name=loop_graph_langfuse_run_display_name(
+                cfg.observability.langfuse.trace_name
+            ),
+            session_id=ctx.loop_state.thread_id,
+            public_key=pub,
+        )

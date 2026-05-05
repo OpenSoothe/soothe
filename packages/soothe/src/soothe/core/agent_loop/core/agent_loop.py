@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 class AgentLoop:
-    """Agentic goal execution using Plan-and-Execute pattern (RFC-620 Loop Graph).
+    """Agentic goal execution using Plan-and-Execute pattern (RFC-220 Loop Graph).
 
     Orchestration is a compiled LangGraph whose configurable checkpoint key is ``loop_id``.
     Plan combines assessment and planning; Execute runs steps via CoreAgent (``thread_id``).

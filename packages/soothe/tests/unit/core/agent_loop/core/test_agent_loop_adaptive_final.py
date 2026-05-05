@@ -134,7 +134,7 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.core.agent_loop.graph.loop_iteration.determine_completion_action",
+            "soothe.core.agent_loop.graph.nodes.goal_completion.determine_completion_action",
             return_value=("skip", "from plan full_output"),
         ),
     ):
@@ -203,11 +203,11 @@ async def test_completed_payload_skip_goal_completion_wire_duplicate_false_for_s
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.core.agent_loop.graph.loop_iteration.determine_completion_action",
+            "soothe.core.agent_loop.graph.nodes.goal_completion.determine_completion_action",
             return_value=("summary", None),
         ),
         patch(
-            "soothe.core.agent_loop.graph.loop_iteration.generate_user_fallback_summary",
+            "soothe.core.agent_loop.graph.nodes.goal_completion.generate_user_fallback_summary",
             return_value="fallback summary",
         ),
     ):

@@ -92,10 +92,11 @@ This index reflects the canonical RFC set and defines which files are active for
   - Created: 2026-04-28
   - Renamed from: RFC-615 (2026-05-03)
 
-- **RFC-620**: [LangGraph Agent Loop Orchestrator](RFC-620*.md)
+- **RFC-220**: [LangGraph Agent Loop Orchestrator](RFC-220*.md)
   - Status: Draft
   - Kind: Architecture Design — Layer 2 Loop Graph (cut-over; supersedes RFC-201 imperative driver)
   - Created: 2026-05-05
+  - Supersedes draft id: RFC-620 (renumbered into 2xx AgentLoop series)
 
 ### Agent Behavior
 
@@ -216,7 +217,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 ## Recently Added
 
-- RFC-620: LangGraph Agent Loop Orchestrator (2026-05-05; Loop Graph keyed by `loop_id`, evidence-bound plan steps, no backward compat with imperative loop)
+- RFC-220: LangGraph Agent Loop Orchestrator (2026-05-05; Loop Graph keyed by `loop_id`, evidence-bound plan steps, no backward compat with imperative loop; renumbered from RFC-620)
 - RFC-214: AgentLoop Loop Message Surface and Plan Context (2026-05-03; plan human `Execute iteration` — 2026-05-04)
 - RFC-215: AgentLoop Persistence Backend Architecture (renamed from RFC-409, 2026-05-03)
 - RFC-216: AgentLoop Multi-Thread Lifecycle (renamed from RFC-608, 2026-05-03)
