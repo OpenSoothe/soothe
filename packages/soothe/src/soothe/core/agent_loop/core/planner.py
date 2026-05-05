@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage
 
-from soothe.core.agent_loop.state.schemas import AgentDecision, LoopState, StepAction
+from soothe.core.agent_loop.state.schemas import (
+    AgentDecision,
+    LoopState,
+    StepAction,
+    renumber_decision_local_step_ids_for_goal_continuation,
+)
 from soothe.core.agent_loop.utils.json_parsing import (
     _extract_balanced_json_object,
     _load_llm_json_dict,
@@ -1165,6 +1170,22 @@ class LLMPlanner:
                         plan_reasoning="",
                         next_action="Retrying with simpler approach",
                     )
+
+        # IG-388: Goal-continuous local step ids (01,02 on each model call → next free suffixes).
+        if (
+            result is not None
+            and result.plan_action == "new"
+            and result.decision is not None
+            and result.decision.steps
+        ):
+            result = result.model_copy(
+                update={
+                    "decision": renumber_decision_local_step_ids_for_goal_continuation(
+                        result.decision,
+                        state,
+                    ),
+                }
+            )
 
         # IG-349: Wire preferred_subagent into AgentDecision (parity with create_plan / Plan).
         if result is not None and result.decision is not None:
