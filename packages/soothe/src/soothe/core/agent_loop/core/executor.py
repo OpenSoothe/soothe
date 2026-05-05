@@ -830,6 +830,9 @@ class Executor:
             for sr in step_results:
                 yield sr
 
+        except asyncio.CancelledError:
+            logger.info("Sequential execution cancelled")
+            raise
         except Exception as e:
             duration_ms = int((time.perf_counter() - start) * 1000)
             logger.exception("Sequential execution failed")
@@ -1067,6 +1070,15 @@ class Executor:
                 delegate_final,
             )
 
+        except asyncio.CancelledError:
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            logger.info(
+                "Step %s cancelled after %dms [subagent=%s]",
+                step.id,
+                duration_ms,
+                step.subagent,
+            )
+            raise
         except Exception as e:
             duration_ms = int((time.perf_counter() - start) * 1000)
             logger.exception(
