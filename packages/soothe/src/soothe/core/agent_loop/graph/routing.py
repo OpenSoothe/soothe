@@ -9,6 +9,13 @@ from langgraph.graph import END
 from .state import PLAN_ROUTE_GOAL_DONE
 
 
+def route_after_init(state: dict[str, Any]) -> str:
+    """Branch to fast-path terminal or normal iteration flow."""
+    if state.get("intent_route") == "fast_path":
+        return END
+    return "iteration_gate"
+
+
 def route_after_iteration_gate(state: dict[str, Any]) -> str:
     """End graph after max-iteration terminal; otherwise begin iteration body."""
     if state.get("last_outcome") == "max_iterations":

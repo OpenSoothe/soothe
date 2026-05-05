@@ -24,9 +24,11 @@ from __future__ import annotations
 
 from .classifier import IntentClassifier
 from .models import IntentClassification, RoutingClassification
+from .routing_merge import build_loop_routing_classification
 
 __all__ = [
     "IntentClassifier",
     "IntentClassification",
     "RoutingClassification",
+    "build_loop_routing_classification",
 ]

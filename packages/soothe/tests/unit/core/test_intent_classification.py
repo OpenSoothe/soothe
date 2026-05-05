@@ -72,6 +72,16 @@ class TestIntentClassification:
         assert intent.goal_description is None
         assert intent.chitchat_response is None
 
+    def test_model_creation_new_goal_simple(self) -> None:
+        """IntentClassification accepts simple complexity for one-step tasks."""
+        intent = IntentClassification(
+            intent_type="new_goal",
+            goal_description="Count README files in workspace",
+            task_complexity="simple",
+            reasoning="One focused step is sufficient",
+        )
+        assert intent.task_complexity == "simple"
+
 
 # ---------------------------------------------------------------------------
 # Classifier init tests

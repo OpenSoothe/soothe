@@ -22,6 +22,7 @@ from .nodes.resolve_decision import node_resolve_decision
 from .nodes.validate_evidence_bindings import node_validate_evidence_bindings
 from .routing import (
     route_after_execute,
+    route_after_init,
     route_after_iteration_gate,
     route_after_plan,
     route_after_record_iteration,
@@ -78,7 +79,11 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
     graph.add_node("record_iteration", record_iteration)
 
     graph.add_edge(START, "init_or_resume")
-    graph.add_edge("init_or_resume", "iteration_gate")
+    graph.add_conditional_edges(
+        "init_or_resume",
+        route_after_init,
+        {"iteration_gate": "iteration_gate", END: END},
+    )
     graph.add_conditional_edges(
         "iteration_gate",
         route_after_iteration_gate,

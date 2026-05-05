@@ -11,6 +11,7 @@ from soothe.core.agent_loop.state.schemas import (
     AgentDecision,
     LoopState,
     PlanResult,
+    StatusAssessment,
     StepAction,
     StepResult,
     allocate_plan_id,
@@ -478,6 +479,46 @@ class TestStepResult:
         assert "task" in evidence
         assert "Report intro" in evidence
         assert "delegation completed" not in evidence
+
+
+class TestStatusAssessment:
+    """Tests for StatusAssessment cross-field normalization."""
+
+    def test_direct_instruction_forces_skip_plan_generation_true(self) -> None:
+        """Non-empty direct instruction implies skip_plan_generation=true."""
+        assessment = StatusAssessment(
+            status="continue",
+            goal_progress=0.1,
+            confidence=0.9,
+            skip_plan_generation=False,
+            direct_execute_instruction="  Read first 10 lines of README  ",
+        )
+        assert assessment.skip_plan_generation is True
+        assert assessment.direct_execute_instruction == "Read first 10 lines of README"
+
+    def test_skip_false_forces_empty_direct_instruction(self) -> None:
+        """When skip bypass is false, instruction is forced empty."""
+        assessment = StatusAssessment(
+            status="continue",
+            goal_progress=0.2,
+            confidence=0.8,
+            skip_plan_generation=False,
+            direct_execute_instruction="",
+        )
+        assert assessment.skip_plan_generation is False
+        assert assessment.direct_execute_instruction == ""
+
+    def test_skip_true_without_instruction_normalizes_to_false(self) -> None:
+        """Bypass cannot remain enabled with empty direct instruction."""
+        assessment = StatusAssessment(
+            status="continue",
+            goal_progress=0.2,
+            confidence=0.8,
+            skip_plan_generation=True,
+            direct_execute_instruction="   ",
+        )
+        assert assessment.skip_plan_generation is False
+        assert assessment.direct_execute_instruction == ""
 
 
 class TestLoopState:

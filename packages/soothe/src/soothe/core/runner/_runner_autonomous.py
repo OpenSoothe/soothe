@@ -403,15 +403,54 @@ class AutonomousMixin(GoalDirectivesMixin):
 
             # Use AgentLoop.run_with_progress() to get streaming events
             goal_result = None
+            from soothe.core.intention import build_loop_routing_classification
+
+            intent_for_loop = getattr(parent_state, "intent_classification", None)
+            routing_for_loop = build_loop_routing_classification(intent_for_loop, None)
+            recent_for_classify = await self._load_recent_messages(thread_id, limit=6)
+
             async for event_type, event_data in agent_loop.run_with_progress(
                 goal=goal.description,
                 thread_id=thread_id,
                 workspace=getattr(parent_state, "workspace", None),
                 git_status=getattr(parent_state, "git_status", None),
                 max_iterations=DEFAULT_AGENT_LOOP_MAX_ITERATIONS,  # AgentLoop iteration budget
+                intent=intent_for_loop,
+                routing_classification=routing_for_loop,
+                intent_classifier=self._intent_classifier,
+                recent_messages_for_intent=recent_for_classify,
+                active_goal_id_for_intent=goal.id,
+                active_goal_description_for_intent=goal.description,
             ):
                 # Propagate AgentLoop events to autonomous stream
-                if event_type == "completed":
+                if event_type == "intent_fast_path":
+                    classification = (
+                        event_data.get("classification") if isinstance(event_data, dict) else None
+                    )
+                    intent_type = (
+                        event_data.get("intent_type") if isinstance(event_data, dict) else None
+                    )
+                    if intent_type == "quiz":
+                        async for chunk in self._run_quiz(
+                            goal.description, thread_id, classification=classification
+                        ):
+                            yield chunk
+                    else:
+                        async for chunk in self._run_chitchat(
+                            goal.description, thread_id, classification=classification
+                        ):
+                            yield chunk
+                    goal_result = GoalResult(
+                        goal_id=goal.id,
+                        status="completed",
+                        evidence_summary="Handled via intent fast path",
+                        goal_progress=1.0,
+                        confidence=1.0,
+                        full_output="",
+                        iteration_count=0,
+                    )
+                    break
+                elif event_type == "completed":
                     plan_result = event_data.get("result")
                     if isinstance(plan_result, PlanResult):
                         goal_result = GoalResult(

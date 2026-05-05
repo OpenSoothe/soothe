@@ -475,6 +475,29 @@ class StatusAssessment(BaseModel):
     confidence: float = Field(default=0.8, ge=0.0, le=1.0)
     require_goal_completion: bool = Field(default=False)
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
+    skip_plan_generation: bool = Field(default=False)
+    """When true, planner may execute a single direct step without plan generation."""
+    direct_execute_instruction: str = Field(default="", max_length=240)
+    """Single-step instruction used when `skip_plan_generation` is true."""
+
+    @model_validator(mode="after")
+    def _normalize_direct_execute_bypass(self) -> StatusAssessment:
+        """Enforce cross-field consistency for assess bypass controls.
+
+        Rules:
+        - Non-empty `direct_execute_instruction` forces `skip_plan_generation=True`.
+        - `skip_plan_generation=False` forces `direct_execute_instruction=''`.
+        """
+        instruction = (self.direct_execute_instruction or "").strip()
+        if instruction:
+            self.direct_execute_instruction = instruction
+            self.skip_plan_generation = True
+            return self
+
+        # Empty instruction cannot request bypass.
+        self.direct_execute_instruction = ""
+        self.skip_plan_generation = False
+        return self
 
 
 class PlanGeneration(BaseModel):

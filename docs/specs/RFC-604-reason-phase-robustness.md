@@ -3,7 +3,7 @@
 **Status**: Implemented
 **Authors**: Claude Sonnet 4.6
 **Created**: 2026-04-11
-**Last Updated**: 2026-05-04 (IG-376: `goal_progress` semantics; plan-context human — RFC-214; IG-329: plan-generate prompt + `PlanGeneration` schema trim)
+**Last Updated**: 2026-05-05 (IG-397: assess-phase direct execute bypass; graph intent integration follow-up)
 **Depends on**: RFC-603-reasoning-quality-progressive-actions, RFC-201-agentloop-plan-execute-loop
 **Supersedes**: ---
 **Stage**: Cognition/AgentLoop
@@ -292,6 +292,10 @@ class StatusAssessment(BaseModel):
     confidence: float = Field(default=0.8, ge=0.0, le=1.0)
     require_goal_completion: bool = Field(default=False)
     """When status=\"done\", whether a separate goal-completion / synthesis pass is still required."""
+    skip_plan_generation: bool = Field(default=False)
+    """When status is not done, allow direct single-step execute without Phase 2."""
+    direct_execute_instruction: str = Field(default="", max_length=240)
+    """Single-step instruction used when skip_plan_generation is true."""
 ```
 
 **Token Budget**: ~200–400 tokens (compact assess-only prompt; see IG-372)
@@ -299,7 +303,8 @@ class StatusAssessment(BaseModel):
 **Execution Pattern**:
 - Always executed first
 - If `status="done"`: Return immediately (skip plan generation)
-- If `status="continue"/"replan"`: Proceed to Call 2
+- If `status!="done"` and `skip_plan_generation=true` with non-empty `direct_execute_instruction`: bypass Call 2 and execute one direct step
+- Else (`status="continue"/"replan"`): Proceed to Call 2
 
 **Early Completion Optimization**:
 - Simple goals complete after Call 1 only → faster execution (no plan-generate LLM call)
@@ -394,8 +399,8 @@ Total Phase 2:     ~500-800 tokens ✅ (safe margin)
 - Call 2 (plan): ~5-10s (conditional, only if status!=done)
 - Total: ~8-15s (similar for complex goals, faster for simple goals)
 
-**Optimization**: Early "done" detection saves latency:
-- Simple goals: Only Call 1 → 3-5s (faster completion)
+**Optimization**: Early "done" detection and assess-driven direct execute save latency:
+- Simple goals: Only Call 1 → 3-5s (faster completion) or Call 1 + direct single-step execute (no plan-generate call)
 - Complex goals: Call 1 + Call 2 → 8-15s (unchanged)
 
 ---

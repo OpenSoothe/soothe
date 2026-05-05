@@ -19,39 +19,33 @@ from __future__ import annotations
 # Intent classification prompt (primary classification)
 INTENT_CLASSIFICATION_PROMPT = """\
 <intent_instructions>
-Classify this query's intent.
+Classify the user's query intent and task complexity.
 
 CRITICAL OUTPUT RULES:
 - Return ONLY valid JSON matching the schema below
 - "intent_type" MUST be exactly one of: "chitchat", "thread_continuation", "new_goal", "quiz"
+- Keep "reasoning" short (one sentence)
 
 Intent classification criteria:
 - chitchat: Greetings, thanks, fillers, conversational pleasantries needing no action
-  Examples: "hello", "你好", "thanks", "good morning"
-  → Requires chitchat_response in detected user language (analyze query language)
+  → chitchat_response required in detected user language
   → task_complexity=chitchat
 
 - quiz: Factual knowledge questions, trivia, definitions, simple math
-  Examples: "What is the capital of France?", "Who wrote Romeo and Juliet?",
-           "What's quantum entanglement?", "What is 15 * 23?"
-  Detection: Question asking for known facts, no tools/files/analysis needed
-  → quiz_response (brief factual answer from your knowledge, 1-3 sentences)
+  → quiz_response required (brief factual answer, 1-3 sentences)
   → task_complexity=quiz
 
 - thread_continuation: References prior conversation/results, follow-up actions, refinements
-  Examples: "translate that", "explain the result", "continue from where we stopped", "refine the output"
-  Detection: Analyze recent conversation context, look for references ("that", "this", "result", "output")
   → reuse_current_goal=true if active_goal exists, false otherwise
   → task_complexity=medium (follow-up actions)
 
 - new_goal: Standalone tasks requiring tools (file ops, web search, analysis, coding)
-  Examples: "analyze the codebase", "build authentication system",
-           "search web for recent AI papers", "read config and extract settings"
   → goal_description required (normalized task description, 5-15 words)
-          Example: "analyze the codebase"
-  → friendly_message required (action-oriented reinterpretation, 1-2 sentences, friendly tone)
-          Example: "I will read the project readme files and show the first 10 lines"
-  → task_complexity=medium (default) or complex (architecture/migrations)
+  → friendly_message required (friendly, action-oriented, 1-2 sentences)
+  → task_complexity: simple | medium | complex
+     - simple: one focused execute step should finish (e.g., count all README files)
+     - medium: several steps, moderate exploration or tool use
+     - complex: architecture, migration, broad refactor, or deep multi-phase work
   → ALSO use new_goal when the user clearly starts a NEW standalone task, repudiates or
     resets prior context, asks to ignore earlier discussion, or switches topic to
     unrelated work—even if recent_conversation is non-empty. Judge intent from the
@@ -71,7 +65,7 @@ Required JSON shape:
   "reuse_current_goal": boolean,
   "goal_description": string|null,
   "friendly_message": string|null,
-  "task_complexity": "chitchat"|"quiz"|"medium"|"complex",
+  "task_complexity": "chitchat"|"quiz"|"simple"|"medium"|"complex",
   "chitchat_response": string|null,
   "quiz_response": string|null,
   "reasoning": string
@@ -106,7 +100,7 @@ CRITICAL OUTPUT RULES:
 - For "quiz": set quiz_response (brief factual answer)
 - For "thread_continuation": set reuse_current_goal based on active_goal
 - For "new_goal": set goal_description AND friendly_message (action-oriented reinterpretation)
-- "task_complexity": chitchat | quiz | medium | complex
+- "task_complexity": chitchat | quiz | simple | medium | complex
 - "reasoning" is REQUIRED
 
 Intent precedence:
@@ -122,7 +116,7 @@ Required JSON shape:
   "reuse_current_goal": boolean,
   "goal_description": string|null,
   "friendly_message": string|null,
-  "task_complexity": "chitchat"|"quiz"|"medium"|"complex",
+  "task_complexity": "chitchat"|"quiz"|"simple"|"medium"|"complex",
   "chitchat_response": string|null,
   "quiz_response": string|null,
   "reasoning": string
@@ -148,17 +142,18 @@ Request: {query}
 
 CRITICAL OUTPUT RULES:
 - Return ONLY valid JSON.
-- "task_complexity" MUST be exactly one of: "chitchat", "medium", "complex".
+- "task_complexity" MUST be exactly one of: "chitchat", "simple", "medium", "complex".
 - For "chitchat", provide a short friendly "chitchat_response" string in detected user language.
-- For "medium" or "complex", set "chitchat_response" to null.
+- For "simple", "medium", or "complex", set "chitchat_response" to null.
 - Do not output placeholders, punctuation, comments, markdown, or extra keys.
 
 Required JSON shape:
-{{"task_complexity": "chitchat"|"medium"|"complex", "chitchat_response": string|null}}
+{{"task_complexity": "chitchat"|"simple"|"medium"|"complex", "chitchat_response": string|null}}
 
 Classification rules:
 - chitchat: Greetings, thanks, fillers needing no action. Set chitchat_response in detected language.
-- medium: Research, questions, tasks, debugging, follow-up actions. DEFAULT when uncertain.
+- simple: One focused step should complete the request.
+- medium: Multi-step task with moderate tool use. DEFAULT when uncertain.
 - complex: Architecture design, large migrations, major refactoring.
 """
 
@@ -170,11 +165,11 @@ Request: {query}
 
 CRITICAL OUTPUT RULES:
 - Return ONLY valid JSON.
-- "task_complexity" MUST be exactly one of: "chitchat", "medium", "complex".
+- "task_complexity" MUST be exactly one of: "chitchat", "simple", "medium", "complex".
 - For "chitchat", provide a short friendly "chitchat_response" string.
-- For "medium" or "complex", set "chitchat_response" to null.
+- For "simple", "medium", or "complex", set "chitchat_response" to null.
 - Do not output placeholders, punctuation, comments, markdown, or extra keys.
 
 Required JSON shape:
-{{"task_complexity": "chitchat"|"medium"|"complex", "chitchat_response": string|null}}
+{{"task_complexity": "chitchat"|"simple"|"medium"|"complex", "chitchat_response": string|null}}
 """
