@@ -217,11 +217,11 @@ subagents:
     # Explore subagent for targeted filesystem search (RFC-613)
     # Uses LLM-orchestrated iterative search with configurable thoroughness
     config:
-      thoroughness: "medium"  # quick (30), medium (50), thorough (100) iteration cap
+      thoroughness: "medium"  # quick (12), medium (24), thorough (48) model-turn cap
       max_iterations:
-        quick: 30
-        medium: 50
-        thorough: 100
+        quick: 12
+        medium: 24
+        thorough: 48
       max_read_lines: 50  # Max lines per read_file call
       max_matches_returned: 5  # Max matches in final result
 
