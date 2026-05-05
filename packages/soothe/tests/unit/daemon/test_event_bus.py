@@ -1,9 +1,12 @@
 """Unit tests for EventBus."""
 
 import asyncio
+import logging
+from types import SimpleNamespace
 
 import pytest
 
+from soothe.core.events import EventPriority
 from soothe.daemon.event_bus import EventBus
 
 
@@ -80,6 +83,24 @@ async def test_unsubscribe_all():
 
     with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(queue.get(), timeout=0.1)
+
+
+@pytest.mark.asyncio
+async def test_normal_drop_warnings_throttled(caplog: pytest.LogCaptureFixture) -> None:
+    """Many NORMAL drops to a full queue produce at most one WARNING per throttle window."""
+    bus = EventBus()
+    queue: asyncio.Queue[dict[str, any]] = asyncio.Queue(maxsize=1)
+    meta = SimpleNamespace(priority=EventPriority.NORMAL)
+
+    await bus.subscribe("thread:flood", queue)
+
+    with caplog.at_level(logging.WARNING):
+        for _ in range(100):
+            await bus.publish("thread:flood", {"type": "drop"}, event_meta=meta)
+
+    warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warn_records) == 1
+    assert "suppressing similar logs" in warn_records[0].message
 
 
 @pytest.mark.asyncio
