@@ -571,6 +571,9 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
 
                     yield chunk
 
+            except asyncio.CancelledError:
+                logger.info("Agent stream cancelled")
+                raise
             except Exception as exc:
                 logger.exception("Error during agent stream")
                 if hasattr(state, "stream_error"):

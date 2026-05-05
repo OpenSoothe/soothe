@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -102,3 +103,28 @@ async def test_stream_phase_suppress_does_not_hide_other_errors() -> None:
 
     assert "boom" in (state.stream_error or "")
     assert len(chunks) == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_phase_cancelled_error_propagates() -> None:
+    runner = object.__new__(SootheRunner)
+    runner._config = SootheConfig()
+    runner._durability = MagicMock()
+    runner._durability.get_thread = AsyncMock(return_value=None)
+    runner._ensure_checkpointer_initialized = AsyncMock()
+
+    async def _raising_astream(*_a: object, **_kw: object):
+        raise asyncio.CancelledError()
+        if False:
+            yield ((), "messages", ())  # pragma: no cover
+
+    runner._agent = MagicMock()
+    runner._agent.astream = _raising_astream
+    runner._build_enriched_input = MagicMock(return_value=[HumanMessage(content="hi")])
+
+    state = RunnerState()
+    state.thread_id = "tid-cancel"
+
+    with pytest.raises(asyncio.CancelledError):
+        async for _ in runner._stream_phase("hello", state):
+            pass

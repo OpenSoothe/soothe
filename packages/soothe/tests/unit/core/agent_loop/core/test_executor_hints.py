@@ -1,5 +1,6 @@
 """Unit tests for Executor hint passing."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -141,3 +142,22 @@ class TestExecutorHints:
         configurable = call_args.kwargs["config"]["configurable"]
         assert configurable["thread_id"] == "logical-thread__pa1b2c3d4"
         assert step_result.thread_id == "logical-thread"
+
+    @pytest.mark.asyncio
+    async def test_executor_step_cancelled_error_propagates(self) -> None:
+        """Cancellation should stop step execution immediately."""
+
+        async def _cancel_stream():
+            raise asyncio.CancelledError
+            if False:
+                yield None  # pragma: no cover
+
+        mock_agent = MagicMock()
+        mock_agent.astream = MagicMock(return_value=_cancel_stream())
+        executor = Executor(mock_agent)
+        step = StepAction(
+            id="step-cancel", description="Run cancellable step", expected_output="n/a"
+        )
+
+        with pytest.raises(asyncio.CancelledError):
+            await executor._execute_step_collecting_events(step, "thread-cancel")
