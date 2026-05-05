@@ -36,7 +36,7 @@ def route_after_assess(state: dict[str, Any]) -> str:
         return "goal_completion"
     if state.get("assess_route") == "skip_generate":
         return "resolve_decision"
-    return "plan_pre_generate"
+    return "plan_generate"
 
 
 def route_after_resolve_decision(state: dict[str, Any]) -> str:

@@ -164,8 +164,7 @@ async def test_completed_payload_skip_goal_completion_wire_duplicate_false_for_s
         return PlanResult(
             status="done",
             evidence_summary="evidence body",
-            goal_progress=1.0,
-            confidence=0.9,
+            goal_progress="complete",
             reasoning="",
             next_action="done",
             plan_action="new",

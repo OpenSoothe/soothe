@@ -21,9 +21,9 @@ async def emit_max_iterations_terminal(ctx: LoopRuntimeContext) -> None:
     checkpoint = ctx.checkpoint
 
     logger.warning(
-        "[⚠] Max iterations (%d) reached (progress=%.0f%%)",
+        "[⚠] Max iterations (%d) reached (progress=%s)",
         state.max_iterations,
-        state.previous_plan.goal_progress * 100 if state.previous_plan else 0,
+        state.previous_plan.goal_progress if state.previous_plan else "none",
     )
 
     if goal_record is not None:
@@ -39,8 +39,7 @@ async def emit_max_iterations_terminal(ctx: LoopRuntimeContext) -> None:
         plan_action="new",
         decision=_default_agent_decision(state.goal),
         evidence_summary=state.evidence_summary,
-        goal_progress=0.0,
-        confidence=0.0,
+        goal_progress="none",  # IG-399
         next_action="I've hit the iteration limit; I'll pause here.",
     )
     await ctx.emit(

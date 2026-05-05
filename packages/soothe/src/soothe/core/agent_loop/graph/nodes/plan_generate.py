@@ -21,8 +21,6 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
         return {"last_outcome": "fatal"}
 
     context = agent_loop._build_plan_context(state)
-    if ctx.scratch.pre_generate_evidence:
-        context.pre_generate_evidence = list(ctx.scratch.pre_generate_evidence)
     plan_result = await agent_loop.plan_phase.generate_from_assessment(
         goal=state.goal,
         state=state,

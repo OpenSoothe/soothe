@@ -86,7 +86,6 @@ agentic:
 
   # Performance guard - only user-facing control (performance optimizations always enabled by design)
   reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution
-  plan_pre_generate_probe_max_uses: 3  # Bounded readonly probes between plan-assess and plan-generate (1-3)
   loop_orchestrator_evidence_validate: true  # RFC-220: enforce evidence_refs when ledger non-empty
 
   report_output:

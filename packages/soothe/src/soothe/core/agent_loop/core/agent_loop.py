@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -91,8 +92,7 @@ class AgentLoop:
             plan_action="new",
             decision=_default_agent_decision(goal),
             evidence_summary="",
-            goal_progress=0.0,
-            confidence=0.0,
+            goal_progress="none",  # IG-399
             next_action="I need to stop here before completion.",
         )
 
@@ -287,8 +287,18 @@ class AgentLoop:
                 if item is _graph_sentinel:
                     break
                 yield item
+        except asyncio.CancelledError:
+            pump_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await pump_task
+            raise
         finally:
-            await pump_task
+            if not pump_task.done():
+                pump_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await pump_task
+            else:
+                await pump_task
 
     def _resolve_decision(
         self,
