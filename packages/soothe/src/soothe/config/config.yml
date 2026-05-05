@@ -215,7 +215,7 @@ subagents:
 
   explore:
     enabled: true
-    model: "openai:gpt-4o-mini"  # IG-399: explicit fast model for explore
+    # Explore subagent uses router fast role by default
     # Explore subagent for targeted filesystem search (RFC-613)
     # Uses LLM-orchestrated iterative search with configurable thoroughness
     config:

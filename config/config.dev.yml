@@ -202,7 +202,7 @@ subagents:
 
   explore:
     enabled: true
-    model: "openai:gpt-4o-mini"  # IG-399: explicit fast model override
+    # Model uses router fast role (coding-plan:kimi-k2.5)
     config:
       thoroughness: "medium"
       max_iterations:
