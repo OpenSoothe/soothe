@@ -1033,21 +1033,59 @@ class LLMPlanner:
                         full_output=state.last_execute_assistant_text,
                     )
                 else:
-                    generate_messages = self._prompt_builder.build_plan_messages(
-                        goal, state, context, plan_phase="generate"
-                    )
-                    messages_for_retry = generate_messages
-                    t_plan = time.perf_counter()
-                    plan_result = await self._generate_plan(
-                        generate_messages,
-                        assessment,
-                        goal,
-                        state.iteration,
-                        thread_id=state.thread_id,
-                    )
-                    plan_gen_ms = (time.perf_counter() - t_plan) * 1000
-                    llm_calls = 2
-                    result = self._combine_results(assessment, plan_result)
+                    task_complexity = ""
+                    if state.intent is not None:
+                        task_complexity = str(getattr(state.intent, "task_complexity", "") or "")
+                    elif context.routing_classification is not None:
+                        task_complexity = str(
+                            getattr(context.routing_classification, "task_complexity", "") or ""
+                        )
+
+                    # Simple-query fast lane: skip plan-generate on first planning cycle and
+                    # execute one focused step directly.
+                    if (
+                        task_complexity == "simple"
+                        and state.iteration == 0
+                        and not state.step_results
+                    ):
+                        direct_instruction = f"Complete this simple request directly: {goal}"
+                        result = PlanResult(
+                            status=assessment.status,
+                            goal_progress=assessment.goal_progress,
+                            confidence=assessment.confidence,
+                            assessment_reasoning="",
+                            plan_reasoning="",
+                            plan_action="new",
+                            decision=AgentDecision(
+                                type="execute_steps",
+                                execution_mode="sequential",
+                                reasoning="Simple-query bypass: skip plan-generate.",
+                                steps=[
+                                    StepAction(
+                                        description=direct_instruction,
+                                        expected_output="Task completed successfully",
+                                    )
+                                ],
+                            ),
+                            next_action=direct_instruction[:300],
+                            require_goal_completion=assessment.require_goal_completion,
+                        )
+                    else:
+                        generate_messages = self._prompt_builder.build_plan_messages(
+                            goal, state, context, plan_phase="generate"
+                        )
+                        messages_for_retry = generate_messages
+                        t_plan = time.perf_counter()
+                        plan_result = await self._generate_plan(
+                            generate_messages,
+                            assessment,
+                            goal,
+                            state.iteration,
+                            thread_id=state.thread_id,
+                        )
+                        plan_gen_ms = (time.perf_counter() - t_plan) * 1000
+                        llm_calls = 2
+                        result = self._combine_results(assessment, plan_result)
 
                 decision_info = ""
                 if result.decision:
