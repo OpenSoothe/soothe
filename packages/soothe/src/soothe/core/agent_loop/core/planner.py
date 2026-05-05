@@ -1033,45 +1033,21 @@ class LLMPlanner:
                         full_output=state.last_execute_assistant_text,
                     )
                 else:
-                    direct_instruction = (assessment.direct_execute_instruction or "").strip()
-                    if assessment.skip_plan_generation and direct_instruction:
-                        result = PlanResult(
-                            status=assessment.status,
-                            goal_progress=assessment.goal_progress,
-                            confidence=assessment.confidence,
-                            assessment_reasoning="",
-                            plan_reasoning="",
-                            plan_action="new",
-                            decision=AgentDecision(
-                                type="execute_steps",
-                                execution_mode="sequential",
-                                reasoning="Assess bypass: single-step direct execute.",
-                                steps=[
-                                    StepAction(
-                                        description=direct_instruction,
-                                        expected_output="Task completed successfully",
-                                    )
-                                ],
-                            ),
-                            next_action=direct_instruction[:300],
-                            require_goal_completion=assessment.require_goal_completion,
-                        )
-                    else:
-                        generate_messages = self._prompt_builder.build_plan_messages(
-                            goal, state, context, plan_phase="generate"
-                        )
-                        messages_for_retry = generate_messages
-                        t_plan = time.perf_counter()
-                        plan_result = await self._generate_plan(
-                            generate_messages,
-                            assessment,
-                            goal,
-                            state.iteration,
-                            thread_id=state.thread_id,
-                        )
-                        plan_gen_ms = (time.perf_counter() - t_plan) * 1000
-                        llm_calls = 2
-                        result = self._combine_results(assessment, plan_result)
+                    generate_messages = self._prompt_builder.build_plan_messages(
+                        goal, state, context, plan_phase="generate"
+                    )
+                    messages_for_retry = generate_messages
+                    t_plan = time.perf_counter()
+                    plan_result = await self._generate_plan(
+                        generate_messages,
+                        assessment,
+                        goal,
+                        state.iteration,
+                        thread_id=state.thread_id,
+                    )
+                    plan_gen_ms = (time.perf_counter() - t_plan) * 1000
+                    llm_calls = 2
+                    result = self._combine_results(assessment, plan_result)
 
                 decision_info = ""
                 if result.decision:
