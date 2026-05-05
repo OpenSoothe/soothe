@@ -33,18 +33,16 @@ def sample_plan_result() -> PlanGeneration:
     """Create sample Phase 2 plan."""
     return PlanGeneration(
         plan_action="new",
-        decision=AgentDecision(
-            type="execute_steps",
-            steps=[
-                StepAction(
-                    id="step-001",
-                    description="Read key implementation files from cli/, shared/, and tui/",
-                    expected_output="Architecture understanding",
-                ),
-            ],
-            execution_mode="sequential",
-            reasoning="Need to check implementation details",
-        ),
+        type="execute_steps",
+        steps=[
+            StepAction(
+                id="step-001",
+                description="Read key implementation files from cli/, shared/, and tui/",
+                expected_output="Architecture understanding",
+            ),
+        ],
+        execution_mode="sequential",
+        reasoning="Need to check implementation details",
         next_action="Read key implementation files from cli/, shared/, and tui/ directories",
     )
 
@@ -82,7 +80,10 @@ def test_next_action_preserves_full_text(
 
     plan_result = PlanGeneration(
         plan_action="new",
-        decision=sample_plan_result.decision,
+        type=sample_plan_result.type,
+        steps=sample_plan_result.steps,
+        execution_mode=sample_plan_result.execution_mode,
+        reasoning=sample_plan_result.reasoning,
         next_action=long_action,
     )
 

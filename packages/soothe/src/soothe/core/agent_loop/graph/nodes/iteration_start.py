@@ -39,4 +39,4 @@ async def node_iteration_start(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
             exc_info=True,
         )
 
-    return {"plan_route": None, "last_outcome": None}
+    return {"plan_route": None, "assess_route": None, "last_outcome": None}

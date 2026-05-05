@@ -113,7 +113,7 @@ def emit_progress(event: dict[str, Any], logger: logging.Logger) -> None:
         logger: Caller's logger instance for logging.
     """
     # Always log to file first for audit trail (compact format)
-    logger.info(_format_event_compact(event))
+    logger.debug(_format_event_compact(event))
 
     # Inject step_id if available in context
     step_id = get_step_id()
