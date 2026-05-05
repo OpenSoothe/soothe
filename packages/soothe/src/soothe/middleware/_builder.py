@@ -77,19 +77,15 @@ def build_soothe_middleware_stack(
        not thread level. Uses sliding window for RPM and semaphore for concurrent
        requests. Solves thread hanging issues from thread-level blocking.
 
-    4. **LLMTracingMiddleware** - Traces LLM request/response lifecycle for
-       debugging. Logs request details, response details, and latency metrics.
-       Enabled via SOOTHE_LOG_LEVEL=DEBUG or config.observability.llm_tracing_enabled=True.
-
-    5. **ExecutionHintsMiddleware** - Injects Layer 2 execution hints
+    4. **ExecutionHintsMiddleware** - Injects Layer 2 execution hints
        (soothe_step_subagent, soothe_step_expected_output)
        into system prompt via abefore_agent hook. Runs before agent loop starts.
 
-    6. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
+    5. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
        abefore_agent/aafter_agent hooks. Must be set before tools run to
        enable thread-aware filesystem operations.
 
-    7. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
+    6. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
        for the current asyncio Task (daemon per-turn ``input``), replaces the
        chat model for that stream via ``ModelRequest.override``.
 
@@ -105,7 +101,6 @@ def build_soothe_middleware_stack(
     """
     from .execution_hints import ExecutionHintsMiddleware
     from .llm_rate_limit import LLMRateLimitMiddleware
-    from .llm_tracing import LLMTracingMiddleware
     from .per_turn_model import PerTurnModelMiddleware
     from .policy import SoothePolicyMiddleware
     from .system_prompt_optimization import SystemPromptOptimizationMiddleware
@@ -164,32 +159,15 @@ def build_soothe_middleware_stack(
         timeout_adaptive,
     )
 
-    # 4. LLM tracing (debug info for request/response lifecycle)
-    # Enabled when logging level is DEBUG or explicitly configured
-    import os
-
-    log_level = os.environ.get("SOOTHE_LOG_LEVEL", "INFO")
-    llm_tracing_enabled = log_level == "DEBUG" or config.observability.llm_tracing_enabled
-    if llm_tracing_enabled:
-        preview_length = config.observability.llm_tracing_preview_length
-        stack.append(LLMTracingMiddleware(log_preview_length=preview_length))
-        logger.debug("[Middleware] LLM tracing enabled")
-
-        # Auto-configure logging level for LLM tracing module (IG-140)
-        import logging
-
-        llm_logger = logging.getLogger("soothe.middleware.llm_tracing")
-        llm_logger.setLevel(logging.DEBUG)
-
-    # 5. Execution hints (Layer 2 → Layer 1 integration)
+    # 4. Execution hints (Layer 2 → Layer 1 integration)
     stack.append(ExecutionHintsMiddleware())
     logger.debug("[Middleware] Execution hints enabled")
 
-    # 6. Workspace context (thread-aware filesystem)
+    # 5. Workspace context (thread-aware filesystem)
     stack.append(WorkspaceContextMiddleware())
     logger.debug("[Middleware] Workspace context enabled")
 
-    # 7. Per-turn model override (daemon / stream context) — innermost around the LLM
+    # 6. Per-turn model override (daemon / stream context) — innermost around the LLM
     stack.append(PerTurnModelMiddleware(config))
     logger.debug("[Middleware] Per-turn model override enabled")
 

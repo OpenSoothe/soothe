@@ -890,8 +890,9 @@ class ObservabilityConfig(BaseModel):
     for better discoverability and simplified configuration.
 
     Args:
-        llm_tracing_enabled: Enable LLM request/response tracing middleware for debugging.
-        llm_tracing_preview_length: Maximum characters to log for message previews in trace logs.
+        llm_tracing_enabled: Enable DEBUG log tracing for direct LLM calls outside
+            the CoreAgent graph (classifier, consensus, criticality via ``LLMTracingWrapper``).
+            Use Langfuse for full request tracing.
         log_file_level: Logging level for file output (DEBUG, INFO, WARNING, ERROR).
         log_file_path: Log file path (empty = SOOTHE_HOME/logs/soothed.log).
         log_file_max_bytes: Maximum file size before rotation (default: 5 MB).
@@ -903,17 +904,10 @@ class ObservabilityConfig(BaseModel):
         langfuse: Langfuse OpenTelemetry / LangChain callback settings.
     """
 
-    # LLM tracing settings
+    # Optional DEBUG logging for direct LLM calls (see utils.llm.LLMTracingWrapper)
     llm_tracing_enabled: bool = Field(
         default=False,
-        description="Enable LLM request/response tracing middleware for debugging",
-    )
-
-    llm_tracing_preview_length: int = Field(
-        default=200,
-        ge=50,
-        le=1000,
-        description="Maximum characters to log for message previews in trace logs",
+        description="Enable DEBUG log tracing for direct LLM calls (wrapper); use Langfuse for traces",
     )
 
     # File logging settings
