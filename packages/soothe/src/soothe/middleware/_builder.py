@@ -69,7 +69,7 @@ def build_soothe_middleware_stack(
        tool/subagent call.
 
     2. **SystemPromptOptimizationMiddleware** - Modifies prompts BEFORE the
-       LLM call. Requires unified_classification state injected by Layer 2
+       LLM call. Requires ``routing_classification`` state injected by AgentLoop / runner
        runner during pre-stream phase. Only enabled when performance features
        are fully configured.
 
@@ -123,7 +123,7 @@ def build_soothe_middleware_stack(
         )
         logger.debug("[Middleware] Policy enforcement enabled")
 
-    # 2. System prompt optimization (requires unified_classification from AgentLoop pre-stream)
+    # 2. System prompt optimization (requires routing_classification from AgentLoop / runner)
     trigger_registry, context_registry = _build_tool_registries(config)
 
     stack.append(

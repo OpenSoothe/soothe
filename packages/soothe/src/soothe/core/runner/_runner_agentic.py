@@ -505,10 +505,9 @@ class AgenticMixin:
             except Exception:
                 logger.debug("Git status collection failed for agentic loop", exc_info=True)
 
-        from soothe.core.runner.routing_merge import build_loop_unified_classification
+        from soothe.core.runner.routing_merge import build_loop_routing_classification
 
-        # IG-296: Build routing classification from intent for backward compatibility
-        loop_routing_classification = build_loop_unified_classification(
+        loop_routing_classification = build_loop_routing_classification(
             intent_classification, preferred_subagent
         )
 
@@ -519,7 +518,7 @@ class AgenticMixin:
             git_status=git_status,
             max_iterations=max_iterations,
             intent=intent_classification,  # IG-226: Pass intent classification to AgentLoop
-            unified_classification=loop_routing_classification,  # IG-296: RoutingClassification for backward compat
+            routing_classification=loop_routing_classification,
         ):
             if event_type == "iteration_started":
                 # Internal event - not shown to user

@@ -79,7 +79,7 @@ def test_simple_query_gets_minimal_prompt():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification},
+        state={"routing_classification": classification},
         system_message=SystemMessage(content="original prompt"),
     )
 
@@ -103,7 +103,7 @@ def test_medium_query_gets_medium_prompt():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification},
+        state={"routing_classification": classification},
         system_message=SystemMessage(content="original prompt"),
     )
 
@@ -127,7 +127,7 @@ def test_complex_query_gets_full_prompt():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification},
+        state={"routing_classification": classification},
         system_message=SystemMessage(content="original prompt"),
     )
 
@@ -168,7 +168,7 @@ def test_optimization_disabled_uses_default_prompt():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification},
+        state={"routing_classification": classification},
         system_message=SystemMessage(content="original prompt"),
     )
 
@@ -191,7 +191,7 @@ def test_performance_disabled_uses_default_prompt():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification},
+        state={"routing_classification": classification},
         system_message=SystemMessage(content="original prompt"),
     )
 
@@ -213,7 +213,7 @@ def test_custom_system_prompt_for_complex_queries():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification},
+        state={"routing_classification": classification},
         system_message=SystemMessage(content="original prompt"),
     )
 
@@ -242,7 +242,7 @@ def test_all_prompts_include_current_date():
         )
 
         request = MockModelRequest(
-            state={"unified_classification": classification},
+            state={"routing_classification": classification},
             system_message=SystemMessage(content="original"),
         )
 
@@ -262,7 +262,7 @@ def test_chitchat_query_treated_as_chitchat():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification},
+        state={"routing_classification": classification},
         system_message=SystemMessage(content="original prompt"),
     )
 
@@ -289,7 +289,7 @@ def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
         messages=[HumanMessage(content="latest news")],
         system_message=SystemMessage(content="orig"),
         tools=tools,
-        state={"unified_classification": classification},
+        state={"routing_classification": classification},
     )
     modified = middleware.modify_request(request)
     assert len(modified.tools) == 1
@@ -314,7 +314,7 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
         messages=[HumanMessage(content="hi"), AIMessage(content="delegating")],
         system_message=SystemMessage(content="orig"),
         tools=tools,
-        state={"unified_classification": classification},
+        state={"routing_classification": classification},
     )
     modified = middleware.modify_request(request)
     assert len(modified.tools) == 2

@@ -178,7 +178,7 @@ async def get_git_status(workspace: Path) -> dict[str, Any] | None:
         workspace: Workspace directory to check.
 
     Returns:
-        Dict with keys: branch, main_branch, status, recent_commits.
+        Dict with keys: branch, main_branch, recent_commits (no porcelain ``status``; IG-383).
         None if not a git repository.
     """
     if not (workspace / ".git").exists():
@@ -187,16 +187,15 @@ async def get_git_status(workspace: Path) -> dict[str, Any] | None:
     cwd = str(workspace)
 
     try:
-        # Run git commands concurrently via asyncio.to_thread
+        # Run git commands concurrently via asyncio.to_thread (no porcelain status; IG-383)
         branch_future = asyncio.to_thread(_run_git_command, ["branch", "--show-current"], cwd)
         main_ref_future = asyncio.to_thread(
             _run_git_command, ["symbolic-ref", "refs/remotes/origin/HEAD"], cwd
         )
-        status_future = asyncio.to_thread(_run_git_command, ["status", "--short"], cwd)
         commits_future = asyncio.to_thread(_run_git_command, ["log", "--oneline", "-n", "5"], cwd)
 
-        branch, main_ref, status, commits = await asyncio.gather(
-            branch_future, main_ref_future, status_future, commits_future
+        branch, main_ref, commits = await asyncio.gather(
+            branch_future, main_ref_future, commits_future
         )
 
         # Parse main branch from symbolic-ref output
@@ -204,10 +203,6 @@ async def get_git_status(workspace: Path) -> dict[str, Any] | None:
         main_branch = "main"
         if main_ref and "refs/remotes/origin/" in main_ref:
             main_branch = main_ref.split("/")[-1]
-
-        # Truncate git status to max 20 lines
-        status_lines = [line for line in status.split("\n")[:20] if line.strip()]
-        truncated_status = "\n".join(status_lines)
     except Exception:
         logger.debug("Git status collection failed for %s", workspace, exc_info=True)
         return None
@@ -215,6 +210,5 @@ async def get_git_status(workspace: Path) -> dict[str, Any] | None:
         return {
             "branch": branch or "unknown",
             "main_branch": main_branch,
-            "status": truncated_status,
             "recent_commits": commits,
         }

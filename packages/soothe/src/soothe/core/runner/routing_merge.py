@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 
-def build_loop_unified_classification(
+def build_loop_routing_classification(
     intent: Any | None,
     preferred_subagent: str | None,
 ) -> Any | None:
-    """Build ``RoutingClassification`` for ``LoopState.unified_classification``.
+    """Build ``RoutingClassification`` for ``LoopState.routing_classification`` (IG-383).
 
     When ``intent`` is None (e.g. classifier disabled), still honors ``preferred_subagent``.
 
@@ -43,6 +43,10 @@ def build_loop_unified_classification(
             update={"preferred_subagent": preferred_subagent, "routing_hint": "subagent"}
         )
     return base
+
+
+# Back-compat name (IG-349 era)
+build_loop_unified_classification = build_loop_routing_classification
 
 
 def _intent_task_complexity_to_routing(tc: str) -> str:

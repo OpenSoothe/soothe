@@ -55,7 +55,7 @@ class _OptimizationState(TypedDict):
     """State schema for SystemPromptOptimizationMiddleware.
 
     LangGraph merges all middleware state schemas to build the final graph state.
-    This schema declares the unified_classification field so it propagates correctly.
+    This schema declares ``routing_classification`` so it propagates correctly (IG-383).
 
     The ``messages`` key MUST use ``Annotated[..., add_messages]`` to preserve
     the reducer from the base ``AgentState``.  A plain ``list`` annotation
@@ -64,7 +64,7 @@ class _OptimizationState(TypedDict):
     """
 
     messages: Annotated[list[AnyMessage], add_messages]
-    unified_classification: NotRequired[Any]  # Type: RoutingClassification
+    routing_classification: NotRequired[Any]  # Type: RoutingClassification
 
 
 class SystemPromptOptimizationMiddleware(AgentMiddleware):
@@ -76,9 +76,9 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
     - medium: Standard prompt with guidelines
     - complex: Full prompt with all context
 
-    This middleware expects unified_classification to be present in the agent
-    state before the first model call. It should be injected by the runner
-    during the pre-stream phase.
+    This middleware expects ``routing_classification`` in agent state before the
+    first model call (runner / AgentLoop inject). Legacy key ``unified_classification``
+    is still read as a fallback.
 
     Args:
         config: Soothe configuration for resolving prompt templates.
@@ -239,8 +239,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                     sections.append(tool_section.strip())
 
         # IG-268: Scenario-specific guidance (intent/goal-triggered)
-        # Extract intent classification from unified_classification
-        classification = state.get("unified_classification")
+        classification = state.get("routing_classification") or state.get("unified_classification")
         if classification:
             intent_type = ""
             goal_type = ""
@@ -455,13 +454,6 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             content.append(f"  <branch>{branch}</branch>")
             content.append(f"  <main_branch>{main_branch}</main_branch>")
 
-            status = git_status.get("status", "")
-            if status:
-                # Truncate to 20 lines
-                status_lines = status.split("\n")[:20]
-                status_text = "\n    ".join(line for line in status_lines if line)
-                content.append(f"  <status>\n    {status_text}\n  </status>")
-
             commits = git_status.get("recent_commits", "")
             if commits:
                 content.append(f"  <recent_commits>{commits}</recent_commits>")
@@ -604,8 +596,8 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         """
         # Performance optimizations always enabled by design - no config checks needed
         classification: RoutingClassification | dict | None = request.state.get(
-            "unified_classification"
-        )
+            "routing_classification"
+        ) or request.state.get("unified_classification")
         if not classification:
             return request
 

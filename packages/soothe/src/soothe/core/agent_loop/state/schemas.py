@@ -8,7 +8,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -482,7 +482,7 @@ class LoopState(BaseModel):
         goal: Goal description
         thread_id: Thread context
         workspace: Thread-specific workspace path (RFC-103)
-        git_status: Optional git snapshot for planner prompts (RFC-104)
+        git_status: Optional git snapshot for planner prompts (branch, main_branch, recent_commits; IG-383)
         iteration: Current iteration number
         max_iterations: Maximum iterations allowed
         current_decision: Current AgentDecision being executed
@@ -548,7 +548,11 @@ class LoopState(BaseModel):
     last_execute_wave_parallel_multi_step: bool = False
     thread_continuation: bool = False  # IG-226: Thread continuation mode flag
     intent: Any | None = None  # IG-268: Intent classification for response length intelligence
-    unified_classification: Any | None = None  # IG-349: RoutingClassification for Plan + Execute
+    routing_classification: Any | None = Field(
+        default=None,
+        validation_alias=AliasChoices("routing_classification", "unified_classification"),
+        description="RoutingClassification for Plan + Execute (IG-349, IG-383).",
+    )
 
     def add_step_result(self, result: StepResult) -> None:
         """Add step result and update completed set.

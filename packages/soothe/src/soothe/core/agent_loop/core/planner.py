@@ -321,8 +321,8 @@ class LLMPlanner:
 
         # Override execution hints when the user explicitly requested a subagent
         preferred = (
-            getattr(context.unified_classification, "preferred_subagent", None)
-            if context.unified_classification
+            getattr(context.routing_classification, "preferred_subagent", None)
+            if context.routing_classification
             else None
         )
         if preferred:
@@ -1169,8 +1169,8 @@ class LLMPlanner:
         # IG-349: Wire preferred_subagent into AgentDecision (parity with create_plan / Plan).
         if result is not None and result.decision is not None:
             preferred = (
-                getattr(context.unified_classification, "preferred_subagent", None)
-                if context.unified_classification
+                getattr(context.routing_classification, "preferred_subagent", None)
+                if context.routing_classification
                 else None
             )
             if preferred:
