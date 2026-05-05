@@ -1,11 +1,11 @@
-"""Plan phase for AgentLoop Plan-and-Execute execution (RFC-201, IG-153)."""
+"""Plan phase orchestration for AgentLoop Plan-and-Execute execution (RFC-201)."""
 
 from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
 
-from soothe.core.agent_loop.state.schemas import LoopState, PlanResult
+from soothe.core.agent_loop.state.schemas import LoopState, PlanResult, StatusAssessment
 from soothe.utils.text_preview import log_preview
 
 # Maximum evidence summary length before truncating model-supplied evidence
@@ -25,17 +25,14 @@ class PlanPhase:
         """Initialize with a `LoopPlannerProtocol` implementation."""
         self._loop_planner = loop_planner
 
-    async def plan(
-        self,
-        goal: str,
-        state: LoopState,
-        context: PlanContext,
-    ) -> PlanResult:
-        """Run Plan and enrich result with evidence and final output when done."""
+    def _prepare_state_evidence(self, state: LoopState) -> None:
+        """Refresh compact state evidence from step results."""
         evidence_lines = [result.to_evidence_string() for result in state.step_results]
         state.evidence_summary = "\n".join(evidence_lines)
 
-        # --- Debug: compact pre-LLM snapshot in dict format ---
+    @staticmethod
+    def _log_plan_pre_llm(goal: str, state: LoopState, context: PlanContext) -> None:
+        """Emit compact pre-LLM snapshot for observability."""
         pre_llm = {
             "iter": state.iteration,
             "goal": log_preview(goal, 60),
@@ -64,19 +61,17 @@ class PlanPhase:
             pre_llm["actions"] = state.get_recent_actions(3)
         logger.debug("Plan pre-LLM: %s", pre_llm)
 
-        logger.info(
-            "[Plan] iter=%d calling LLM (history=%d, results=%d)",
-            state.iteration,
-            len(state.action_history),
-            len(state.step_results),
-        )
-
-        result = await self._loop_planner.plan(goal=goal, state=state, context=context)
+    def finalize_plan_result(
+        self,
+        *,
+        state: LoopState,
+        context: PlanContext,
+        result: PlanResult,
+    ) -> PlanResult:
+        """Apply shared post-processing and action-history tracking."""
         if not result.evidence_summary and state.evidence_summary:
             result = result.model_copy(update={"evidence_summary": state.evidence_summary})
 
-        # Model-supplied evidence can repeat the full assistant answer; that duplicates streamed
-        # output and blows the loop.completed one-liner. Prefer compact step-derived evidence.
         _ev = (result.evidence_summary or "").strip()
         _compact = (state.evidence_summary or "").strip()
         if len(_ev) > _EVIDENCE_SUMMARY_MAX_CHARS:
@@ -85,19 +80,14 @@ class PlanPhase:
             )
 
         if result.is_done():
-            # Prefer Execute-visible assistant text (RFC-214 ledger / IG-357); do not replace
-            # with step metadata summaries when the planner already supplied an answer (IG-370).
             existing_full = (result.full_output or "").strip()
             if not existing_full:
                 full_outputs = [
                     r.to_evidence_string(truncate=False) for r in state.step_results if r.success
                 ]
                 if full_outputs:
-                    result = result.model_copy(
-                        update={"full_output": "\n\n".join(full_outputs)},
-                    )
+                    result = result.model_copy(update={"full_output": "\n\n".join(full_outputs)})
 
-        # Track action in history (full reasoning chain for progression detection)
         state.add_action_to_history(result.next_action or "")
 
         successes = sum(1 for r in state.step_results if r.success)
@@ -112,5 +102,62 @@ class PlanPhase:
             successes,
             failures,
         )
-
         return result
+
+    async def assess_status(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+    ) -> StatusAssessment:
+        """Run assess-only planner call for the current iteration."""
+        self._prepare_state_evidence(state)
+        self._log_plan_pre_llm(goal, state, context)
+        logger.info(
+            "[Plan] iter=%d calling assess (history=%d, results=%d)",
+            state.iteration,
+            len(state.action_history),
+            len(state.step_results),
+        )
+        return await self._loop_planner.assess_status(goal=goal, state=state, context=context)
+
+    async def generate_from_assessment(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+        assessment: StatusAssessment,
+    ) -> PlanResult:
+        """Run plan-generate call after assess determined work remains."""
+        self._prepare_state_evidence(state)
+        logger.info(
+            "[Plan] iter=%d calling generate (history=%d, results=%d)",
+            state.iteration,
+            len(state.action_history),
+            len(state.step_results),
+        )
+        result = await self._loop_planner.generate_from_assessment(
+            goal=goal,
+            state=state,
+            context=context,
+            assessment=assessment,
+        )
+        return self.finalize_plan_result(state=state, context=context, result=result)
+
+    async def plan(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+    ) -> PlanResult:
+        """Backward-compatible one-shot plan call."""
+        self._prepare_state_evidence(state)
+        self._log_plan_pre_llm(goal, state, context)
+        logger.info(
+            "[Plan] iter=%d calling one-shot plan (history=%d, results=%d)",
+            state.iteration,
+            len(state.action_history),
+            len(state.step_results),
+        )
+        result = await self._loop_planner.plan(goal=goal, state=state, context=context)
+        return self.finalize_plan_result(state=state, context=context, result=result)

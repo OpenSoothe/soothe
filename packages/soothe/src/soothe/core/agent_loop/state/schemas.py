@@ -42,7 +42,6 @@ class StepAction(BaseModel):
         description: What this step does
         subagent: Subagent to invoke (optional, executor hint)
         expected_output: Expected result for evidence accumulation
-        supportive_evidence: Which prior ledger facts justify this step (plan-generate; IG-381).
         evidence_refs: Machine-checkable ids into ``LoopState.evidence_ledger`` or prior step ids (RFC-220).
         dependencies: Step IDs this depends on (for DAG execution). Use the same local ``id``
             strings as sibling steps (e.g. ``01``, ``02``); runtime remaps aliases such as ``1`` → ``01``
@@ -59,11 +58,6 @@ class StepAction(BaseModel):
         description='Optional; use "explore" for readonly workspace search via task tool.',
     )
     expected_output: str = "Step completed successfully"
-    supportive_evidence: str = Field(
-        default="",
-        max_length=500,
-        description="cite execute-ledger evidence this step builds on, or state none yet.",
-    )
     evidence_refs: list[str] = Field(
         default_factory=list,
         description="Evidence ids (RFC-220); required when evidence_ledger is non-empty.",
@@ -484,12 +478,20 @@ class PlanGeneration(BaseModel):
 
     Attributes:
         plan_action: Reuse in-flight AgentDecision or supply a new one.
-        decision: New steps to execute (required when plan_action='new').
+        type: Decision type for a new plan.
+        steps: New steps to execute (required when ``plan_action='new'``).
+        execution_mode: Execution mode for ``steps``.
+        reasoning: Internal rationale for the decision.
+        adaptive_granularity: Optional step granularity hint.
         next_action: User-facing next step (plan-specific, max 300 chars).
     """
 
     plan_action: Literal["keep", "new"] = "new"
-    decision: AgentDecision | None = None
+    type: Literal["execute_steps", "final"] | None = None
+    steps: list[StepAction] = Field(default_factory=list)
+    execution_mode: Literal["parallel", "sequential", "dependency"] | None = None
+    reasoning: str = ""
+    adaptive_granularity: Literal["atomic", "semantic"] | None = None
 
     next_action: str = Field(default="", max_length=300)
     """User-facing next step (plan-specific)."""
@@ -501,8 +503,13 @@ class PlanGeneration(BaseModel):
         IG-264: plan_action='keep' CAN have decision (optional, not enforced).
         Only enforce that plan_action='new' requires decision.
         """
-        if self.plan_action == "new" and self.decision is None:
-            raise ValueError("plan_action 'new' requires decision")
+        if self.plan_action == "new":
+            if self.type is None:
+                raise ValueError("plan_action 'new' requires type")
+            if self.execution_mode is None:
+                raise ValueError("plan_action 'new' requires execution_mode")
+            if not self.steps:
+                raise ValueError("plan_action 'new' requires non-empty steps")
         return self
 
 

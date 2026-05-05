@@ -10,6 +10,7 @@ from soothe.core.agent_loop.state import schemas as schemas_mod
 from soothe.core.agent_loop.state.schemas import (
     AgentDecision,
     LoopState,
+    PlanGeneration,
     PlanResult,
     StepAction,
     StepResult,
@@ -382,6 +383,21 @@ class TestPlanResult:
                 goal_progress=1.5,
                 reasoning="Test",
             )
+
+
+class TestPlanGeneration:
+    """Tests for flattened PlanGeneration schema."""
+
+    def test_new_requires_flattened_fields(self) -> None:
+        """plan_action=new requires top-level decision fields."""
+        with pytest.raises(ValueError):
+            PlanGeneration(plan_action="new", next_action="test")
+
+    def test_keep_can_omit_decision_fields(self) -> None:
+        """plan_action=keep does not require decision fields."""
+        out = PlanGeneration(plan_action="keep", next_action="I will continue.")
+        assert out.plan_action == "keep"
+        assert out.steps == []
 
 
 class TestStepResult:

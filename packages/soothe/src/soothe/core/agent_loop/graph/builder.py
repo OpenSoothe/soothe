@@ -16,11 +16,14 @@ from .nodes.goal_completion import node_goal_completion
 from .nodes.init_or_resume import node_init_or_resume
 from .nodes.iteration_gate import node_iteration_gate
 from .nodes.iteration_start import node_iteration_start
+from .nodes.plan_assess import node_plan_assess
 from .nodes.plan_generate import node_plan_generate
+from .nodes.plan_pre_generate import node_plan_pre_generate
 from .nodes.record_iteration import node_record_iteration
 from .nodes.resolve_decision import node_resolve_decision
 from .nodes.validate_evidence_bindings import node_validate_evidence_bindings
 from .routing import (
+    route_after_assess,
     route_after_execute,
     route_after_init,
     route_after_iteration_gate,
@@ -51,6 +54,12 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
     async def plan_generate(state: dict[str, Any]) -> dict[str, Any]:
         return await node_plan_generate(ctx, state)
 
+    async def plan_assess(state: dict[str, Any]) -> dict[str, Any]:
+        return await node_plan_assess(ctx, state)
+
+    async def plan_pre_generate(state: dict[str, Any]) -> dict[str, Any]:
+        return await node_plan_pre_generate(ctx, state)
+
     async def goal_completion(state: dict[str, Any]) -> dict[str, Any]:
         return await node_goal_completion(ctx, state)
 
@@ -71,6 +80,8 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
     graph.add_node("iteration_gate", iteration_gate)
     graph.add_node("iteration_start", iteration_start)
     graph.add_node("bounded_evidence_gather", bounded_evidence_gather)
+    graph.add_node("plan_assess", plan_assess)
+    graph.add_node("plan_pre_generate", plan_pre_generate)
     graph.add_node("plan_generate", plan_generate)
     graph.add_node("goal_completion", goal_completion)
     graph.add_node("resolve_decision", resolve_decision)
@@ -90,7 +101,17 @@ def build_agent_loop_graph(ctx: LoopRuntimeContext):
         {"iteration_start": "iteration_start", END: END},
     )
     graph.add_edge("iteration_start", "bounded_evidence_gather")
-    graph.add_edge("bounded_evidence_gather", "plan_generate")
+    graph.add_edge("bounded_evidence_gather", "plan_assess")
+    graph.add_conditional_edges(
+        "plan_assess",
+        route_after_assess,
+        {
+            "goal_completion": "goal_completion",
+            "resolve_decision": "resolve_decision",
+            "plan_pre_generate": "plan_pre_generate",
+        },
+    )
+    graph.add_edge("plan_pre_generate", "plan_generate")
     graph.add_conditional_edges(
         "plan_generate",
         route_after_plan,
