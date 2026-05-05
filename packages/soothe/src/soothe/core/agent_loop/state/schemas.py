@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 import uuid
 from datetime import UTC, datetime
@@ -238,6 +239,132 @@ def assign_plan_step_ids(
         new_deps: list[str] | None = None
         if step.dependencies:
             new_deps = [_resolve_in_plan_dependency(dep, id_map) for dep in step.dependencies]
+        new_steps.append(step.model_copy(update={"id": mapped, "dependencies": new_deps}))
+    return decision.model_copy(update={"steps": new_steps})
+
+
+_STEP_ID_TRAILING_DIGITS = re.compile(r"(\d+)$")
+
+
+def trailing_numeric_suffix_from_step_id(step_id: str) -> int | None:
+    """Parse a positive integer suffix used for goal-continuous step numbering (IG-388).
+
+    Prefer the segment after the last hyphen (``KFA-07`` → 7). If there is no hyphen,
+    use the last run of digits (``step_004`` → 4). Returns None when no digits found.
+
+    Args:
+        step_id: Scoped or legacy step identifier.
+
+    Returns:
+        Parsed non-negative integer, or None when not applicable.
+    """
+    s = step_id.strip()
+    if not s:
+        return None
+    if "-" in s:
+        tail = s.rsplit("-", 1)[-1]
+        if tail.isdigit():
+            return int(tail, 10)
+    m = _STEP_ID_TRAILING_DIGITS.search(s)
+    if m:
+        return int(m.group(1), 10)
+    return None
+
+
+def max_goal_step_numeric_suffix(state: LoopState) -> int:
+    """Largest numeric step suffix seen so far on this goal (IG-388).
+
+    Scans successful/failed ``step_results``, ``completed_step_ids``, and any in-flight
+    ``current_decision`` steps so new plans do not reuse lower indices.
+
+    Args:
+        state: Active loop state for the goal.
+
+    Returns:
+        Maximum parsed suffix, or 0 when none found.
+    """
+    max_n = 0
+    for r in state.step_results:
+        n = trailing_numeric_suffix_from_step_id(r.step_id)
+        if n is not None:
+            max_n = max(max_n, n)
+    for sid in state.completed_step_ids:
+        n = trailing_numeric_suffix_from_step_id(sid)
+        if n is not None:
+            max_n = max(max_n, n)
+    if state.current_decision:
+        for step in state.current_decision.steps:
+            n = trailing_numeric_suffix_from_step_id(step.id)
+            if n is not None:
+                max_n = max(max_n, n)
+    return max_n
+
+
+def next_goal_local_step_id_start(state: LoopState) -> int:
+    """Next free 1-based local step index for a new plan wave on this goal (IG-388)."""
+    return max_goal_step_numeric_suffix(state) + 1
+
+
+def _remap_dependency_after_local_renumber(dep: str, old_to_new: dict[str, str]) -> str:
+    """Rewrite a dependency string after local id renumber; leave cross-wave refs unchanged."""
+    d = dep.strip()
+    if not d:
+        return dep
+    if d in old_to_new:
+        return old_to_new[d]
+    old_ids = list(old_to_new.keys())
+    if d.isdigit():
+        matches = [oid for oid in old_ids if oid.isdigit() and int(oid, 10) == int(d, 10)]
+        if len(matches) == 1:
+            return old_to_new[matches[0]]
+    lower = d.lower()
+    ci_matches = [oid for oid in old_ids if oid.lower() == lower]
+    if len(ci_matches) == 1:
+        return old_to_new[ci_matches[0]]
+    return dep
+
+
+def _local_step_token_width(next_start: int, step_count: int) -> int:
+    if step_count <= 0:
+        return 2
+    end = next_start + step_count - 1
+    return max(2, len(str(end)))
+
+
+def renumber_decision_local_step_ids_for_goal_continuation(
+    decision: AgentDecision,
+    state: LoopState,
+) -> AgentDecision:
+    """Assign consecutive local step ids starting after the goal's max suffix (IG-388).
+
+    Models often emit ``01``, ``02`` on every plan-generate call; this rewrites new-plan
+    steps to ``next``, ``next+1``, … before ``assign_plan_step_ids`` scopes them with
+    ``plan_id``. In-plan ``dependencies`` are remapped; other dependency strings are unchanged.
+
+    Args:
+        decision: Parsed execution decision from plan-generate (local ids).
+        state: Loop state carrying prior step ids for the same goal.
+
+    Returns:
+        Copy of ``decision`` with updated step ids and dependencies, or the original when
+        there are no steps.
+    """
+    if not decision.steps:
+        return decision
+    next_start = next_goal_local_step_id_start(state)
+    width = _local_step_token_width(next_start, len(decision.steps))
+    old_to_new: dict[str, str] = {}
+    for i, step in enumerate(decision.steps):
+        new_id = str(next_start + i).zfill(width)
+        old_to_new[step.id] = new_id
+    new_steps: list[StepAction] = []
+    for step in decision.steps:
+        mapped = old_to_new[step.id]
+        new_deps: list[str] | None = None
+        if step.dependencies:
+            new_deps = [
+                _remap_dependency_after_local_renumber(d, old_to_new) for d in step.dependencies
+            ]
         new_steps.append(step.model_copy(update={"id": mapped, "dependencies": new_deps}))
     return decision.model_copy(update={"steps": new_steps})
 

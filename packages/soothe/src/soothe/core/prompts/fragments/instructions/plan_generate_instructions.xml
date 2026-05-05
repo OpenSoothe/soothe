@@ -15,7 +15,7 @@ Output MUST match the structured schema only: plan_action, decision (when requir
 **decision** (when plan_action="new")
 - type: "execute_steps" or "final" per goal state.
 - execution_mode: "sequential" unless steps are independent readonly passes with disjoint scopes ("parallel"), or explicit DAG ("dependency").
-- For ``dependency`` mode: each step ``id`` must be a distinct local token (e.g. ``01``, ``02``); every string in ``dependencies`` must be the ``id`` of another step in the same list (same spelling preferred).
+- For ``dependency`` mode: each step ``id`` must be a distinct local token (e.g. ``01``, ``02``, or the next indices for this goal — see ``<PLAN_STEP_ID_HINT>`` in the user message when present); every string in ``dependencies`` must be the ``id`` of another step in the same list (same spelling preferred). Runtime also renumbers new plans to the next free goal suffixes when the model restarts at ``01``.
 - Use decision.reasoning for internal justification of the step set (third person, concise).
 
 **next_action**

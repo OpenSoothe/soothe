@@ -16,6 +16,10 @@ from soothe.core.agent_loop.state.schemas import (
     allocate_plan_id,
     assign_plan_step_ids,
     composite_step_id,
+    max_goal_step_numeric_suffix,
+    next_goal_local_step_id_start,
+    renumber_decision_local_step_ids_for_goal_continuation,
+    trailing_numeric_suffix_from_step_id,
 )
 
 
@@ -577,3 +581,69 @@ class TestLoopState:
 
         state.current_decision = decision
         assert state.has_remaining_steps() is True
+
+
+class TestGoalContinuousStepIdsIg388:
+    """Goal-scoped sequential local step ids after plan-generate (IG-388)."""
+
+    def test_trailing_numeric_suffix_hyphen_and_legacy(self) -> None:
+        assert trailing_numeric_suffix_from_step_id("KFA-07") == 7
+        assert trailing_numeric_suffix_from_step_id("ZZ-001") == 1
+        assert trailing_numeric_suffix_from_step_id("step_004") == 4
+        assert trailing_numeric_suffix_from_step_id("no-digits-here") is None
+
+    def test_next_start_from_step_results_and_current_decision(self) -> None:
+        state = LoopState(goal="g", thread_id="t1")
+        assert next_goal_local_step_id_start(state) == 1
+        state.add_step_result(
+            StepResult(step_id="ABC-02", success=True, duration_ms=1, thread_id="t1")
+        )
+        assert max_goal_step_numeric_suffix(state) == 2
+        assert next_goal_local_step_id_start(state) == 3
+        state.current_decision = AgentDecision(
+            type="execute_steps",
+            steps=[
+                StepAction(id="ABC-05", description="pending", expected_output="x"),
+            ],
+            execution_mode="sequential",
+            reasoning="",
+        )
+        assert next_goal_local_step_id_start(state) == 6
+
+    def test_renumber_new_plan_after_prior_suffixes(self) -> None:
+        state = LoopState(goal="g", thread_id="t1")
+        state.add_step_result(
+            StepResult(step_id="X-02", success=True, duration_ms=1, thread_id="t1")
+        )
+        d0 = StepAction(id="01", description="a", expected_output="o")
+        d1 = StepAction(id="02", description="b", expected_output="o", dependencies=["01"])
+        decision = AgentDecision(
+            type="execute_steps",
+            steps=[d0, d1],
+            execution_mode="dependency",
+            reasoning="",
+        )
+        out = renumber_decision_local_step_ids_for_goal_continuation(decision, state)
+        assert [s.id for s in out.steps] == ["03", "04"]
+        assert out.steps[1].dependencies == ["03"]
+
+    def test_renumber_preserves_cross_wave_dependency_strings(self) -> None:
+        state = LoopState(goal="g", thread_id="t1")
+        state.add_step_result(
+            StepResult(step_id="PRIOR-01", success=True, duration_ms=1, thread_id="t1")
+        )
+        d0 = StepAction(
+            id="01",
+            description="a",
+            expected_output="o",
+            dependencies=["PRIOR-01"],
+        )
+        decision = AgentDecision(
+            type="execute_steps",
+            steps=[d0],
+            execution_mode="dependency",
+            reasoning="",
+        )
+        out = renumber_decision_local_step_ids_for_goal_continuation(decision, state)
+        assert out.steps[0].id == "02"
+        assert out.steps[0].dependencies == ["PRIOR-01"]
