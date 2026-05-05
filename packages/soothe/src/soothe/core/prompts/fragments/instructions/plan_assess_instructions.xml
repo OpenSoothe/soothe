@@ -1,7 +1,7 @@
 <PLAN_ASSESS>
 Judge progress toward the goal using the execute ledger (human/AI turns after this system prompt, if any) plus the goal and execute-iteration values in the <GOAL_PROGRESS> block in the following user message (after the ledger when present).
 
-Output MUST match the structured schema only: status, goal_progress, confidence, require_goal_completion, skip_plan_generation, direct_execute_instruction.
+Output MUST match the structured schema only: status, goal_progress, confidence, require_goal_completion.
 
 **status**
 - "done": The ledger already contains concrete evidence that the stated goal is satisfied (e.g. requested file lines, command output, or subagent result matching the ask). Prefer "done" when the user’s literal request is visibly fulfilled in tool/subagent content.
@@ -14,15 +14,7 @@ Output MUST match the structured schema only: status, goal_progress, confidence,
 
 **require_goal_completion**: true only when status="done" but the user still needs a separate synthesis pass to produce the final user-facing reply; otherwise false. For read-only or extract goals where the tool output is itself the deliverable, prefer false.
 
-**skip_plan_generation** and **direct_execute_instruction**:
-- Use only when status is not "done" and one focused execute step is clearly sufficient.
-- Example suitable bypass: "count all project readmes" -> set skip_plan_generation=true with a direct instruction that can be executed in one step.
-- Consistency rules:
-  - If direct_execute_instruction is non-empty, skip_plan_generation MUST be true.
-  - If skip_plan_generation is false, direct_execute_instruction MUST be empty.
-
 **Guards**
 - When <GOAL_PROGRESS> shows execute iteration 1 (first cycle) and the ledger has no tool/subagent results yet: NEVER status="done".
 - Never set status="done" without ledger evidence that matches the goal.
-- Never set skip_plan_generation=true without a concrete, executable direct_execute_instruction.
 </PLAN_ASSESS>
