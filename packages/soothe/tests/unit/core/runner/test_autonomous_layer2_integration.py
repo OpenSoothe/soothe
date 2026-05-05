@@ -75,7 +75,7 @@ async def test_agentloop_delegation_basic():
     parent_state.thread_id = "thread-123"
     parent_state.workspace = "/tmp/test"
     parent_state.git_status = None
-    parent_state.unified_classification = None
+    parent_state.routing_classification = None
 
     # Verify planner exists and has LoopPlannerProtocol
     assert runner._planner is not None

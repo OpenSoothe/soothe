@@ -93,7 +93,8 @@ def build_soothe_workspace_section(
 ) -> str:
     """Build nested WORKSPACE XML block (RFC-207: removed SOOTHE_ prefix).
 
-    IG-183: Optimized for prompt caching - excludes volatile fields (status, recent_commits).
+    IG-183: Optimized for prompt caching - omits ``recent_commits`` in this section.
+    IG-383: ``get_git_status`` does not include porcelain ``status``.
 
     Args:
         workspace: Project root; when None, the process current working directory is used.
@@ -120,7 +121,7 @@ def build_soothe_workspace_section(
         lines.append(
             f"  <main_branch>{_xml_text(git_status.get('main_branch', 'main'))}</main_branch>"
         )
-        # IG-183: Removed volatile fields (status, recent_commits) for cache optimization
+        # IG-183 / IG-383: branch info only (no recent_commits in this block)
     lines.append("</vcs>")
 
     if include_layout_preview and root.is_dir():

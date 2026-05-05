@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from soothe.protocols.concurrency import ConcurrencyPolicy
 
@@ -150,9 +150,9 @@ class PlanContext(BaseModel):
         recent_messages: Recent conversation messages for context.
         available_capabilities: Names of available tools and subagents.
         completed_steps: Results from already-completed steps.
-        unified_classification: Pre-computed unified classification (RFC-0012).
+        routing_classification: Pre-computed routing classification (``RoutingClassification``; IG-383).
         workspace: Current workspace directory path.
-        git_status: Optional git snapshot from runner (same shape as ``get_git_status``).
+        git_status: Optional git snapshot from runner (``branch``, ``main_branch``, ``recent_commits``).
         working_memory_excerpt: Reserved; not embedded in Plan-phase human text (IG-371).
         thread_id: Daemon thread id for observability (Langfuse session on plan LLM calls).
     """
@@ -160,7 +160,10 @@ class PlanContext(BaseModel):
     recent_messages: list[str] = Field(default_factory=list)
     available_capabilities: list[str] = Field(default_factory=list)
     completed_steps: list[StepResult] = Field(default_factory=list)
-    unified_classification: Any | None = None  # Type: UnifiedClassification
+    routing_classification: Any | None = Field(
+        default=None,
+        validation_alias=AliasChoices("routing_classification", "unified_classification"),
+    )
     workspace: str | None = None  # Current workspace directory
     git_status: dict[str, Any] | None = None
     working_memory_excerpt: str | None = None
