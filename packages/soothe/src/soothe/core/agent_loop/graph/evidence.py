@@ -1,4 +1,4 @@
-"""Plan evidence validation (RFC-620)."""
+"""Plan evidence validation (RFC-220)."""
 
 from __future__ import annotations
 
