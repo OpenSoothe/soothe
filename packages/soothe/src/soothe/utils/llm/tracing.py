@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 class LLMTracingWrapper:
     """Wraps BaseChatModel to add tracing for non-CoreAgent calls.
 
-    This wrapper provides the same tracing capabilities as LLMTracingMiddleware
-    for components that call LLMs directly outside the CoreAgent middleware chain.
+    Use for components that call LLMs directly outside the CoreAgent graph;
+    prefer Langfuse for end-to-end traces.
 
     Use this when:
     - Calling model.ainvoke() from classifier, consensus, criticality, etc.

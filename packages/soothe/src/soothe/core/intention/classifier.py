@@ -70,11 +70,7 @@ class IntentClassifier:
             # Apply LLM tracing wrapper to base model BEFORE structured output conversion
             # This allows tracing the actual AIMessage response, not the Pydantic result
             traced_model = model
-            if (
-                config
-                and hasattr(config, "llm_tracing")
-                and config.observability.llm_tracing_enabled
-            ):
+            if config and config.observability.llm_tracing_enabled:
                 from soothe.utils.llm import LLMTracingWrapper
 
                 traced_model = LLMTracingWrapper(model)
