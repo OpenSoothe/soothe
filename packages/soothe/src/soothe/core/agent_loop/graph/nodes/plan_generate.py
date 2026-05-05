@@ -38,7 +38,6 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
             "iteration": state.iteration,
             "status": plan_result.status,
             "progress": plan_result.goal_progress,
-            "confidence": plan_result.confidence,
             "next_action": plan_result.next_action,
             "assessment_reasoning": plan_result.assessment_reasoning,
             "plan_reasoning": plan_result.plan_reasoning,

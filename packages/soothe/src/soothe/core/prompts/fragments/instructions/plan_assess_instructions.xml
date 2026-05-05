@@ -1,16 +1,22 @@
 <PLAN_ASSESS>
 Judge progress toward the goal using the execute ledger (human/AI turns after this system prompt, if any) plus the goal and execute-iteration values in the <GOAL_PROGRESS> block in the following user message (after the ledger when present).
 
-Output MUST match the structured schema only: status, goal_progress, confidence, require_goal_completion.
+Output MUST match the structured schema only: status, goal_progress, require_goal_completion.
 
 **status**
 - "done": The ledger already contains concrete evidence that the stated goal is satisfied (e.g. requested file lines, command output, or subagent result matching the ask). Prefer "done" when the user’s literal request is visibly fulfilled in tool/subagent content.
 - "continue": Evidence is partial or the next execute step is still needed on the current strategy.
 - "replan": The approach is wrong, blocked, or contradicted by evidence; choose a different strategy.
 
-**goal_progress** (0.0–1.0): Your direct estimate of how much of the goal is satisfied by the ledger—**not** a budget meter. Use high values (≥0.9) when the answer is present in evidence even if polish or narration could follow. Use low values when little or nothing toward the goal has been produced.
+**goal_progress** (IG-399: descriptive level, not numeric): Choose one of:
+- "none": No progress toward goal (empty ledger or irrelevant evidence)
+- "low": Initial progress (<20% satisfied, early exploration)
+- "medium": Partial progress (20-60% satisfied, key components identified)
+- "high": Near completion (60-90% satisfied, answer present but may need polish)
+- "complete": Fully satisfied (≥90%, goal met, ready for final response)
 
-**confidence** (0.0–1.0): How certain you are about status and goal_progress given the ledger; lower when evidence is thin or ambiguous.
+Use "high" when the answer is present in evidence even if polish/narration could follow.
+Use "low" when little or nothing toward the goal has been produced.
 
 **require_goal_completion**: true only when status="done" but the user still needs a separate synthesis pass to produce the final user-facing reply; otherwise false. For read-only or extract goals where the tool output is itself the deliverable, prefer false.
 

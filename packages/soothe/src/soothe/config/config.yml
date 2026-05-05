@@ -111,7 +111,7 @@ execution:
   llm_rpm_limit: 120
   llm_concurrent_limit: 10
   llm_call_timeout_seconds: 120
-  llm_call_timeout_max_seconds: 900
+  llm_call_timeout_max_seconds: 240  # IG-399: fail fast on pathological long calls
   llm_call_timeout_adaptive: true
   concurrency:
     max_parallel_goals: 1
@@ -216,16 +216,21 @@ subagents:
 
   explore:
     enabled: true
+    model: "openai:gpt-4o-mini"  # IG-399: explicit fast model for explore
     # Explore subagent for targeted filesystem search (RFC-613)
     # Uses LLM-orchestrated iterative search with configurable thoroughness
     config:
-      thoroughness: "medium"  # quick (12), medium (24), thorough (48) model-turn cap
+      thoroughness: "medium"  # IG-399: quick (6), medium (10), thorough (16) model-turn cap
       max_iterations:
-        quick: 12
-        medium: 24
-        thorough: 48
+        quick: 6      # IG-399: -50% from 12
+        medium: 10    # IG-399: -58% from 24
+        thorough: 16  # IG-399: -67% from 48
       max_read_lines: 50  # Max lines per read_file call
       max_matches_returned: 5  # Max matches in final result
+      # IG-399: context growth capping
+      max_history_messages_for_model: 8  # Keep only recent N message turns
+      max_tool_output_chars_per_turn: 2000  # Truncate oversized tool outputs
+      early_stop_no_new_findings_turns: 2  # Force synthesis when findings stall
 
 # =============================================================================
 # Tools Configuration

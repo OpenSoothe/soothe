@@ -27,8 +27,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
         return PlanResult(
             status="done",
             evidence_summary="evidence body",
-            goal_progress=1.0,
-            confidence=0.9,
+            goal_progress="complete",
             reasoning="",
             next_action="done",
             plan_action="new",
@@ -97,8 +96,7 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
         return PlanResult(
             status="done",
             evidence_summary="evidence body",
-            goal_progress=1.0,
-            confidence=0.9,
+            goal_progress="complete",
             reasoning="",
             next_action="done",
             plan_action="new",
