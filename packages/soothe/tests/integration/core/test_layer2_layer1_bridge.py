@@ -13,33 +13,26 @@ class TestLayer2Layer1Bridge:
     @pytest.mark.asyncio
     async def test_hints_propagate_from_stepaction_to_coreagent(self):
         """Test hints flow from StepAction through Executor to CoreAgent."""
-        # Create middleware
         middleware = ExecutionHintsMiddleware()
 
-        # Create agent state
         state = {"system_prompt": "You are Soothe agent."}
 
-        # Create config with hints (as Executor would pass)
         config = {
             "configurable": {
                 "thread_id": "thread-123",
-                "soothe_step_tools": ["glob", "grep"],
-                "soothe_step_expected_output": "Config file list",
+                "soothe_step_subagent": "explore",
+                "soothe_step_expected_output": "Matching paths under src/",
             }
         }
 
-        # Mock runtime
         mock_runtime = MagicMock()
 
-        # Mock get_config to return our test config
         with patch("langgraph.config.get_config", return_value=config):
-            # Process hints using the correct method
             await middleware.abefore_agent(state, mock_runtime)
 
-        # Verify hints injected
         assert "Execution hints:" in state["system_prompt"]
-        assert "Suggested tools: glob, grep" in state["system_prompt"]
-        assert "Expected output: Config file list" in state["system_prompt"]
+        assert "Suggested subagent: explore" in state["system_prompt"]
+        assert "Expected output: Matching paths under src/" in state["system_prompt"]
 
     @pytest.mark.asyncio
     async def test_llm_sees_hints_in_prompt(self):
@@ -51,7 +44,6 @@ class TestLayer2Layer1Bridge:
         config = {
             "configurable": {
                 "thread_id": "test",
-                "soothe_step_tools": ["read_file"],
                 "soothe_step_expected_output": "File contents",
             }
         }
@@ -60,9 +52,7 @@ class TestLayer2Layer1Bridge:
         with patch("langgraph.config.get_config", return_value=config):
             await middleware.abefore_agent(state, mock_runtime)
 
-        # LLM would see the enhanced prompt
         enhanced_prompt = state["system_prompt"]
-        assert "Suggested tools: read_file" in enhanced_prompt
         assert "Expected output: File contents" in enhanced_prompt
         assert "Consider using the suggested approach first" in enhanced_prompt
 
@@ -83,25 +73,19 @@ class TestLayer2Layer1Bridge:
         with patch("langgraph.config.get_config", return_value=config):
             await middleware.abefore_agent(state, mock_runtime)
 
-        # Prompt unchanged
         assert state["system_prompt"] == original_prompt
 
     @pytest.mark.asyncio
     async def test_executor_to_middleware_integration(self):
         """Test Executor → CoreAgent → ExecutionHintsMiddleware integration."""
-        # This test verifies that executor config format matches middleware expectations
-        # The integration is already tested in other tests; this validates config structure
-
-        # Simulate config that executor would create
         executor_config = {
             "configurable": {
                 "thread_id": "thread-123",
-                "soothe_step_tools": ["glob", "grep"],
-                "soothe_step_expected_output": "Config file list",
+                "soothe_step_subagent": "browser",
+                "soothe_step_expected_output": "Page summary",
             }
         }
 
-        # Now middleware should process this config correctly
         middleware = ExecutionHintsMiddleware()
         state = {"system_prompt": "You are Soothe agent."}
 
@@ -109,9 +93,8 @@ class TestLayer2Layer1Bridge:
         with patch("langgraph.config.get_config", return_value=executor_config):
             await middleware.abefore_agent(state, mock_runtime)
 
-        # Verify middleware injected hints correctly from executor config format
-        assert "Suggested tools: glob, grep" in state["system_prompt"]
-        assert "Expected output: Config file list" in state["system_prompt"]
+        assert "Suggested subagent: browser" in state["system_prompt"]
+        assert "Expected output: Page summary" in state["system_prompt"]
 
     @pytest.mark.asyncio
     async def test_advisory_nature_preserved(self):
@@ -122,7 +105,7 @@ class TestLayer2Layer1Bridge:
         config = {
             "configurable": {
                 "thread_id": "test",
-                "soothe_step_tools": ["deprecated_tool"],
+                "soothe_step_subagent": "research",
                 "soothe_step_expected_output": "Result",
             }
         }
@@ -131,11 +114,9 @@ class TestLayer2Layer1Bridge:
         with patch("langgraph.config.get_config", return_value=config):
             await middleware.abefore_agent(state, mock_runtime)
 
-        # Hints injected but LLM can decide
         enhanced_prompt = state["system_prompt"]
-        assert "Suggested tools: deprecated_tool" in enhanced_prompt
+        assert "Suggested subagent: research" in enhanced_prompt
         assert (
             "Consider using the suggested approach first, but decide based on what works best"
             in enhanced_prompt
         )
-        # LLM would see this and could choose a different tool

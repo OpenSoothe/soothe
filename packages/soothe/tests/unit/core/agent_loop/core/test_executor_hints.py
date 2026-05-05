@@ -12,37 +12,28 @@ class TestExecutorHints:
     """Test Executor passes Layer 2 hints to CoreAgent."""
 
     @pytest.mark.asyncio
-    async def test_executor_passes_tools_hint(self):
-        """Test Executor passes tools hint via config."""
-        # Create mock CoreAgent
+    async def test_executor_omits_legacy_tools_config_key(self):
+        """Executor does not set soothe_step_tools (IG-382)."""
         mock_agent = MagicMock()
         mock_agent.astream = AsyncMock(return_value=iter([]))
 
-        # Create executor
         executor = Executor(mock_agent)
 
-        # Create step with tools hint
         step = StepAction(
             id="step-1",
             description="Find config files",
-            tools=["glob", "grep"],
             expected_output="Config file list",
         )
 
-        # Execute step
         await executor._execute_step_collecting_events(step, "thread-123")
 
-        # Verify agent.astream was called with hints in config
         mock_agent.astream.assert_called_once()
         call_args = mock_agent.astream.call_args
-
-        assert "config" in call_args.kwargs
         config = call_args.kwargs["config"]
-        assert "configurable" in config
-
         configurable = config["configurable"]
+
         assert configurable["thread_id"] == "thread-123"
-        assert configurable["soothe_step_tools"] == ["glob", "grep"]
+        assert "soothe_step_tools" not in configurable
         assert configurable["soothe_step_expected_output"] == "Config file list"
 
     @pytest.mark.asyncio
@@ -66,6 +57,7 @@ class TestExecutorHints:
         configurable = call_args.kwargs["config"]["configurable"]
 
         assert configurable["soothe_step_subagent"] == "browser"
+        assert "soothe_step_tools" not in configurable
 
     @pytest.mark.asyncio
     async def test_executor_passes_expected_output(self):
@@ -90,7 +82,7 @@ class TestExecutorHints:
 
     @pytest.mark.asyncio
     async def test_executor_handles_missing_hints(self):
-        """Test Executor handles steps without hints."""
+        """Test Executor handles steps without optional hints."""
         mock_agent = MagicMock()
         mock_agent.astream = AsyncMock(return_value=iter([]))
 
@@ -101,15 +93,13 @@ class TestExecutorHints:
             description="Read file",
             expected_output="File contents",
         )
-        # tools and subagent are None
 
         await executor._execute_step_collecting_events(step, "thread-000")
 
         call_args = mock_agent.astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
 
-        # Should still pass the hints (as None values)
-        assert configurable["soothe_step_tools"] is None
+        assert "soothe_step_tools" not in configurable
         assert configurable["soothe_step_subagent"] is None
         assert configurable["soothe_step_expected_output"] == "File contents"
 
@@ -124,15 +114,13 @@ class TestExecutorHints:
         step = StepAction(
             id="step-1",
             description="Find files",
-            tools=["glob", "grep"],
+            subagent="explore",
             expected_output="File list",
         )
 
         await executor._execute_step_collecting_events(step, "thread-123")
 
-        # Check debug log contains hints
-        assert "tools=['glob', 'grep']" in caplog.text
-        assert "subagent=None" in caplog.text
+        assert "subagent=explore" in caplog.text
 
     @pytest.mark.asyncio
     async def test_executor_stream_thread_id_branches_langgraph_config(self) -> None:

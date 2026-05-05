@@ -72,7 +72,6 @@ class CoreAgent:
         config.configurable may include Layer 2 hints (advisory):
             - thread_id: Thread identifier for persistence
             - workspace: Thread-specific workspace path (RFC-103)
-            - soothe_step_tools: suggested tools for this step
             - soothe_step_subagent: suggested subagent for this step
             - soothe_step_expected_output: expected result description
 
@@ -181,7 +180,6 @@ class CoreAgent:
                 Layer 2 hints in config.configurable (advisory):
                 - thread_id: Thread identifier
                 - workspace: Thread-specific workspace path
-                - soothe_step_tools: suggested tools for this step
                 - soothe_step_subagent: suggested subagent
                 - soothe_step_expected_output: expected result
             stream_mode: Optional list of stream modes (e.g., ["messages", "updates", "custom"]).
@@ -212,8 +210,6 @@ class CoreAgent:
         )
 
         # Log execution hints if present
-        if hints.get("soothe_step_tools"):
-            logger.debug("[Exec] Hint: suggested tools=%s", hints["soothe_step_tools"])
         if hints.get("soothe_step_subagent"):
             logger.debug("[Exec] Hint: suggested subagent=%s", hints["soothe_step_subagent"])
 

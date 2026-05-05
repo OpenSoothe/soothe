@@ -137,7 +137,6 @@ Layer 2 passes advisory hints via `config.configurable`:
 
 | Hint | Purpose | Example |
 |------|---------|---------|
-| `soothe_step_tools` | Suggested tools | `["read_file", "grep"]` |
 | `soothe_step_subagent` | Suggested subagent | `"browser"` |
 | `soothe_step_expected_output` | Expected result | `"File contents matching pattern"` |
 
@@ -146,12 +145,20 @@ Layer 2 passes advisory hints via `config.configurable`:
 **Example**:
 ```python
 # Layer 2 decision
-decision = AgentDecision(steps=[StepAction(description="Find config files", tools=["glob", "grep"])])
+decision = AgentDecision(
+    steps=[StepAction(description="Find config files", subagent="explore", expected_output="Matching paths")]
+)
 
-# Executor passes hints
+# Executor passes hints (no per-step tool allowlist; CoreAgent keeps full tool surface)
 await core_agent.astream(
     input="Execute: Find config files",
-    config={"configurable": {"thread_id": "tid", "soothe_step_tools": ["glob", "grep"]}}
+    config={
+        "configurable": {
+            "thread_id": "tid",
+            "soothe_step_subagent": "explore",
+            "soothe_step_expected_output": "Matching paths",
+        }
+    },
 )
 ```
 

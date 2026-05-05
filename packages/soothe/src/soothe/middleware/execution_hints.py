@@ -18,13 +18,12 @@ class ExecutionHintsMiddleware(AgentMiddleware):
     """Process Layer 2 execution hints and inject into system prompt.
 
     Reads from config.configurable:
-        - soothe_step_tools: Optional suggested tools (list[str])
         - soothe_step_subagent: Optional suggested subagent (str)
         - soothe_step_expected_output: Expected result description (str)
 
     Injects into agent context:
         - Enhances system prompt with natural hint text
-        - Format: "Suggested tools: X, Y. Expected output: Z."
+        - Format: "Suggested subagent: X. Expected output: Y."
         - LLM sees hints and decides whether to use suggested approach
 
     Advisory Nature:
@@ -35,12 +34,12 @@ class ExecutionHintsMiddleware(AgentMiddleware):
     Example:
         config.configurable = {
             "thread_id": "thread-123",
-            "soothe_step_tools": ["glob", "grep"],
-            "soothe_step_expected_output": "Config file list"
+            "soothe_step_subagent": "explore",
+            "soothe_step_expected_output": "Matching paths under src/"
         }
 
         → System prompt enhanced:
-        "Execution hints: Suggested tools: glob, grep. Expected output: Config file list.
+        "Execution hints: Suggested subagent: explore. Expected output: Matching paths under src/.
          Consider using the suggested approach first, but decide based on what works best."
 
     Reference: RFC-0023 Layer 1 CoreAgent Runtime Architecture
@@ -102,16 +101,14 @@ class ExecutionHintsMiddleware(AgentMiddleware):
         if not isinstance(configurable, dict):
             return None
 
-        tools = configurable.get("soothe_step_tools")
         subagent = configurable.get("soothe_step_subagent")
         expected = configurable.get("soothe_step_expected_output")
 
         # Only return if at least one hint present
-        if not any([tools, subagent, expected]):
+        if not any([subagent, expected]):
             return None
 
         return {
-            "tools": tools,
             "subagent": subagent,
             "expected_output": expected,
         }
@@ -126,10 +123,6 @@ class ExecutionHintsMiddleware(AgentMiddleware):
             Formatted hint text for LLM.
         """
         parts = []
-
-        if hints.get("tools"):
-            tools_str = ", ".join(hints["tools"])
-            parts.append(f"Suggested tools: {tools_str}")
 
         if hints.get("subagent"):
             parts.append(f"Suggested subagent: {hints['subagent']}")

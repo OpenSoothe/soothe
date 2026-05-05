@@ -147,7 +147,7 @@ Controls parallel execution of plan steps, subagents, and tools. Steps declare d
 |------|------------|
 | Protocol | A Python `Protocol` or abstract base class defining an interface. NOT a network protocol. |
 | Orchestrator | The Soothe agent instance created by `create_soothe_agent()`. Wraps deepagents' agent with planning, policy, context, and durability. |
-| Plan / Step | A structured decomposition of a goal. Steps have execution hints (tool, subagent, remote) and statuses (pending, in_progress, completed, failed). |
+| Plan / Step | A structured decomposition of a goal. Steps have execution hints (e.g., subagent, expected output) and statuses (pending, in_progress, completed, failed). |
 | Context Ledger | The orchestrator's unbounded, append-only accumulation of `ContextEntry` items. Persisted via `DurabilityProtocol`. Distinct from conversation history. |
 | Context Projection | A bounded, purpose-scoped view of the context ledger, assembled by `ContextProtocol.project()` to fit within a token budget. |
 | Long-Term Memory | Cross-thread persistent knowledge managed by `MemoryProtocol`. Explicitly populated, semantically queryable. |

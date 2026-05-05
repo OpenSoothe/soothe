@@ -25,7 +25,6 @@ class StepAction(BaseModel):
     Attributes:
         id: Step identifier; after plan assembly use ``assign_plan_step_ids`` (IG-303: ``<PLANID>-<model-id>``).
         description: What this step does
-        tools: Tools to use (optional, executor hint)
         subagent: Subagent to invoke (optional, executor hint)
         expected_output: Expected result for evidence accumulation
         supportive_evidence: Which prior ledger facts justify this step (plan-generate; IG-381).
@@ -39,7 +38,6 @@ class StepAction(BaseModel):
         ...,
         description="Imperative step; parallel explore passes must name disjoint repo slices.",
     )
-    tools: list[str] | None = None
     subagent: str | None = Field(
         default=None,
         description='Optional; use "explore" for readonly workspace search via task tool.',
@@ -48,7 +46,7 @@ class StepAction(BaseModel):
     supportive_evidence: str = Field(
         default="",
         max_length=500,
-        description="Plan-generate only: cite execute-ledger evidence this step builds on, or state none yet.",
+        description="cite execute-ledger evidence this step builds on, or state none yet.",
     )
     dependencies: list[str] | None = None
 

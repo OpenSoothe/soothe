@@ -299,7 +299,6 @@ class ExploreCompletedEvent(SootheEvent):
 class StepAction(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     description: str
-    tools: list[str] | None = None
     subagents: list[str] | None = None  # NEW: list of 1 or N
     expected_output: str
     dependencies: list[str] | None = None

@@ -15,7 +15,6 @@ def _make_step() -> StepAction:
     return StepAction(
         id="s0",
         description="Call subagent once",
-        tools=[],
         subagent=None,
         expected_output="ok",
         dependencies=[],

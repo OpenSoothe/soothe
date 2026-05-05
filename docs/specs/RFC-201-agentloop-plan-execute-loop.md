@@ -230,8 +230,6 @@ class StepAction(BaseModel):
     """Single step action within AgentDecision."""
     description: str
     """Human-readable step description."""
-    tools: list[str] | None = None
-    """Tool suggestions for this step."""
     subagent: str | None = None
     """Subagent suggestion for this step."""
     expected_output: str
@@ -254,7 +252,9 @@ class AgentDecision(BaseModel):
 **Batch Execution Properties**:
 - LLM decides 1 or N steps (adaptive granularity)
 - Execution mode (parallel/sequential/dependency)
-- Hybrid flexibility (step-level execution hints)
+- Hybrid flexibility (step-level execution hints: subagent, expected output; no per-step tool allowlist in `StepAction`)
+
+**Legacy plan JSON**: A per-step `tools` array may still appear in older model output; the runtime maps known subagent names from that list onto `subagent` and does not pass ordinary tool names through `config.configurable` (IG-382).
 
 ### Adaptive Step Granularity
 
@@ -369,7 +369,7 @@ async def execute(decision: AgentDecision, state: LoopState):
 
 ### Layer 1 Integration
 
-**CoreAgent Config Injection**: Executor passes execution hints via `config.configurable` (thread_id, step tools, subagent hints, expected output).
+**CoreAgent Config Injection**: Executor passes execution hints via `config.configurable` (thread_id, subagent hint, expected output).
 
 **CoreAgent Responsibilities**:
 - Execute tools/subagents
@@ -380,7 +380,7 @@ async def execute(decision: AgentDecision, state: LoopState):
 
 **Layer 2 Controls**:
 - What to execute (AgentDecision.steps)
-- Execution suggestions (tools, subagent hints)
+- Execution suggestions (subagent and expected-output hints)
 - Timing and sequencing
 - Thread isolation (automatic via RFC-207)
 - Execution bounds (soft + hard cap)

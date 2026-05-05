@@ -931,17 +931,15 @@ class Executor:
 
         try:
             logger.debug(
-                "execute step: id=%s desc=%s hints: tools=%s subagent=%s",
+                "execute step: id=%s desc=%s hints: subagent=%s",
                 step.id,
                 preview_first(step.description, 100),
-                step.tools,
                 step.subagent,
             )
 
             cfg_thread = stream_thread_id or thread_id
             configurable: dict[str, Any] = {
                 "thread_id": cfg_thread,
-                "soothe_step_tools": step.tools,
                 "soothe_step_subagent": step.subagent,
                 "soothe_step_expected_output": step.expected_output,
             }
@@ -1024,10 +1022,9 @@ class Executor:
             primary_outcome["output_summary"] = create_output_summary(output)  # Truncated findings
 
             logger.info(
-                "Step %s completed successfully in %dms (hints: tools=%s, tool_calls: %d, subagent_cap_hit=%s)",
+                "Step %s completed successfully in %dms (tool_calls: %d, subagent_cap_hit=%s)",
                 step.id,
                 duration_ms,
-                step.tools or "none",
                 tool_call_count,
                 budget.hit_subagent_cap,
             )
@@ -1051,10 +1048,9 @@ class Executor:
         except Exception as e:
             duration_ms = int((time.perf_counter() - start) * 1000)
             logger.exception(
-                "Step %s failed after %dms [hints: tools=%s, subagent=%s]",
+                "Step %s failed after %dms [subagent=%s]",
                 step.id,
                 duration_ms,
-                step.tools,
                 step.subagent,
             )
 
