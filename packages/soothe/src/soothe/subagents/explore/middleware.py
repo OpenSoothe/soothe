@@ -78,13 +78,6 @@ class ExploreWireMiddleware(AgentMiddleware[ExploreAgentState, None]):
             logger,
         )
         updates["explore_wire_started"] = True
-        thread_ws = state.get("workspace") or self._resolver_workspace
-        if thread_ws != self._resolver_workspace:
-            logger.debug(
-                "Explore: thread workspace '%s' overrides build-time default '%s' (IG-344)",
-                thread_ws,
-                self._resolver_workspace,
-            )
         return updates
 
     async def abefore_agent(
