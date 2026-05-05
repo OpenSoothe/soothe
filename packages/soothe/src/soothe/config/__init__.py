@@ -45,20 +45,19 @@ from soothe.config.models import (
     SubagentConfig,
     ThreadLoggingConfig,
     ToolConfig,
-    ToolResultCacheConfig,
     ToolsConfig,
     VectorStoreProviderConfig,
     VectorStoreRouter,
     WebSearchConfig,
 )
-from soothe.config.prompts import (
+from soothe.config.settings import SootheConfig
+from soothe.config.templates import get_config_template_path
+from soothe.core.prompts import (
     _DEFAULT_SYSTEM_PROMPT,
     _MEDIUM_SYSTEM_PROMPT,
     _SIMPLE_SYSTEM_PROMPT,
     _TOOL_ORCHESTRATION_GUIDE,
 )
-from soothe.config.settings import SootheConfig
-from soothe.config.templates import get_config_template_path
 
 __all__ = [
     "DEFAULT_AGENT_LOOP_MAX_ITERATIONS",
@@ -101,7 +100,6 @@ __all__ = [
     "ThreadLoggingConfig",
     "ToolConfig",
     "ToolsConfig",
-    "ToolResultCacheConfig",
     "VectorStoreProviderConfig",
     "VectorStoreRouter",
     "WebSearchConfig",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from contextvars import Token
 from typing import TYPE_CHECKING, Annotated, Any, NotRequired
 
 from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest, ModelResponse
@@ -26,6 +27,37 @@ logger = logging.getLogger(__name__)
 
 # deepagents / Soothe main graph: subagents are invoked only via this tool name.
 _TASK_TOOL_NAME = "task"
+# Layer 2 ``ExecutionHintsMiddleware`` appends using this prefix (must stay in sync).
+_EXECUTION_HINTS_MARKER = "\n\nExecution hints:"
+_VALID_TASK_COMPLEXITY = frozenset({"chitchat", "medium", "complex"})
+
+
+def _configurable_step_subagent() -> str | None:
+    """Return AgentLoop per-step subagent hint from LangGraph RunnableConfig when set.
+
+    Executor passes ``soothe_step_subagent`` in ``config.configurable`` (from
+    ``StepAction.subagent``). This must drive the same task-only enforcement as
+    wire ``routing_hint=subagent`` (IG-386).
+
+    Returns:
+        Stripped subagent name, or None if unset/blank or config unavailable.
+    """
+    try:
+        from langgraph.config import get_config
+
+        lg_cfg = get_config()
+    except Exception:
+        return None
+    if not isinstance(lg_cfg, dict):
+        return None
+    conf = lg_cfg.get("configurable")
+    if not isinstance(conf, dict):
+        return None
+    raw = conf.get("soothe_step_subagent")
+    if not isinstance(raw, str):
+        return None
+    stripped = raw.strip()
+    return stripped or None
 
 
 def _last_message_is_human(messages: list[AnyMessage] | None) -> bool:
@@ -102,6 +134,26 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         self._config = config
         self._tool_trigger_registry = tool_trigger_registry
         self._tool_context_registry = tool_context_registry
+
+    @staticmethod
+    def _langfuse_system_hint_push(request: ModelRequest[ContextT]) -> Token | None:
+        """Push effective system prompt for Langfuse generation input (IG-385).
+
+        Returns:
+            ContextVar reset token from :func:`push_langfuse_system_prompt_hint`, or None.
+        """
+        from soothe.utils.observability.langfuse_system_hint import push_langfuse_system_prompt_hint
+
+        sm = request.system_message
+        if sm is None:
+            return None
+        try:
+            text = str(sm.text).strip()
+        except Exception:
+            text = ""
+        if not text and isinstance(sm.content, str):
+            text = sm.content.strip()
+        return push_langfuse_system_prompt_hint(text) if text else None
 
     def _build_environment_section(self) -> str:
         """Build <ENVIRONMENT> section (static, always present for medium/complex).
@@ -238,24 +290,26 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                 if tool_section:
                     sections.append(tool_section.strip())
 
-        # IG-268: Scenario-specific guidance (intent/goal-triggered)
+        # IG-268: Scenario-specific guidance (intent / synthesis-scenario triggered)
+        intent_type = (state.get("intent_type") or "").strip()
+        goal_type = ""
+        scen = (state.get("synthesis_scenario") or "").strip()
+        if scen == "code_architecture_design":
+            goal_type = "architecture_analysis"
+        elif scen == "research_synthesis":
+            goal_type = "research_synthesis"
+
         classification = state.get("routing_classification") or state.get("unified_classification")
-        if classification:
-            intent_type = ""
-            goal_type = ""
-
-            # Handle both Pydantic model and dict serialization
+        if not intent_type and classification:
             if isinstance(classification, dict):
-                intent_type = classification.get("intent_type", "")
-                # goal_type not in RoutingClassification, would need separate goal classification
+                intent_type = (classification.get("intent_type") or "").strip()
             else:
-                intent_type = getattr(classification, "intent_type", "")
+                intent_type = (getattr(classification, "intent_type", "") or "").strip()
 
-            # Build scenario section if applicable
-            if intent_type:
-                scenario_section = self._build_scenario_section(intent_type, goal_type)
-                if scenario_section:
-                    sections.append(scenario_section.strip())
+        if intent_type or goal_type:
+            scenario_section = self._build_scenario_section(intent_type, goal_type)
+            if scenario_section:
+                sections.append(scenario_section.strip())
 
         if not sections:
             return ""
@@ -266,7 +320,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
 
     def _get_base_prompt_core(self, complexity: str) -> str:
         """Behavioral system prompt for complexity (no volatile date line; RFC-104 cache order)."""
-        from soothe.config import (
+        from soothe.core.prompts import (
             _DEFAULT_SYSTEM_PROMPT,
             _MEDIUM_SYSTEM_PROMPT,
             _SIMPLE_SYSTEM_PROMPT,
@@ -534,7 +588,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Returns:
             Scenario guidance text, or None if no matching scenario.
         """
-        from soothe.config.prompts import (
+        from soothe.core.prompts.system_templates import (
             _ARCHITECTURE_ANALYSIS_GUIDE,
             _QUIZ_RESPONSE_GUIDE,
             _RESEARCH_SYNTHESIS_GUIDE,
@@ -583,6 +637,32 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             "</AGENT_LOOP_OUTPUT_CONTRACT>"
         )
 
+    @staticmethod
+    def _append_execution_hints_suffix(optimized_prompt: str, state: Any) -> str:
+        """Merge Layer 2 execution hints that were appended to ``state['system_prompt']``.
+
+        ``ExecutionHintsMiddleware`` runs before the model and mutates ``system_prompt``;
+        this middleware replaces ``ModelRequest.system_message``, so we copy the hint suffix
+        onto the optimized prompt to avoid dropping hints (IG-384).
+
+        Args:
+            optimized_prompt: Prompt from complexity/context optimization.
+            state: Graph state (mapping-like).
+
+        Returns:
+            Prompt with hint suffix preserved when present.
+        """
+        if not hasattr(state, "get"):
+            return optimized_prompt
+        raw = state.get("system_prompt")
+        if not isinstance(raw, str) or _EXECUTION_HINTS_MARKER not in raw:
+            return optimized_prompt
+        idx = raw.find(_EXECUTION_HINTS_MARKER)
+        suffix = raw[idx:]
+        if optimized_prompt.rstrip().endswith(suffix.rstrip()):
+            return optimized_prompt
+        return optimized_prompt + suffix
+
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
         """Replace system prompt based on LLM classification.
 
@@ -594,30 +674,44 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Returns:
             Modified request with optimized system prompt.
         """
-        # Performance optimizations always enabled by design - no config checks needed
         classification: RoutingClassification | dict | None = request.state.get(
             "routing_classification"
         ) or request.state.get("unified_classification")
-        if not classification:
-            return request
 
-        # Handle both Pydantic model and dict serialization
-        if isinstance(classification, dict):
-            complexity = classification.get("task_complexity")
-            routing_hint = classification.get("routing_hint")
-            preferred_subagent = classification.get("preferred_subagent")
-            is_plan_only = classification.get("is_plan_only", False)
+        complexity: str
+        routing_hint: str | None
+        preferred_subagent: str | None
+        is_plan_only: bool
+
+        if classification:
+            if isinstance(classification, dict):
+                complexity = classification.get("task_complexity") or "medium"
+                routing_hint = classification.get("routing_hint")
+                preferred_subagent = classification.get("preferred_subagent")
+                is_plan_only = classification.get("is_plan_only", False)
+            else:
+                complexity = classification.task_complexity
+                routing_hint = getattr(classification, "routing_hint", None)
+                preferred_subagent = getattr(classification, "preferred_subagent", None)
+                is_plan_only = getattr(classification, "is_plan_only", False)
+            logger.info(
+                "Optimizing prompt: complexity=%s, plan_only=%s",
+                complexity,
+                is_plan_only,
+            )
         else:
-            complexity = classification.task_complexity
-            routing_hint = getattr(classification, "routing_hint", None)
-            preferred_subagent = getattr(classification, "preferred_subagent", None)
-            is_plan_only = getattr(classification, "is_plan_only", False)
+            complexity = "medium"
+            routing_hint = None
+            preferred_subagent = None
+            is_plan_only = False
+            logger.debug(
+                "No routing_classification on state; using task_complexity=%s for system prompt",
+                complexity,
+            )
 
-        logger.info(
-            "Optimizing prompt: complexity=%s, plan_only=%s",
-            complexity,
-            is_plan_only,
-        )
+        if complexity not in _VALID_TASK_COMPLEXITY:
+            logger.debug("Normalizing invalid task_complexity %r to medium", complexity)
+            complexity = "medium"
 
         # Check for direct subagent routing hint (preferred_subagent + routing_hint='subagent')
         # IG-192: Inject explicit directive to use task tool when routing hint present
@@ -625,13 +719,29 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         msgs_for_hop = getattr(request, "messages", None) or []
         first_after_user = _last_message_is_human(msgs_for_hop)
         explicit_subagent = routing_hint == "subagent" and bool(preferred_subagent)
+        step_subagent = _configurable_step_subagent()
+        step_enforce = step_subagent is not None and first_after_user
+        wire_enforce = explicit_subagent and first_after_user
 
-        if explicit_subagent and first_after_user:
+        # Per-step hint wins over wire routing when both apply (IG-386).
+        if step_enforce:
+            directive = step_subagent
+            logger.info(
+                "AgentLoop step subagent hint (enforce): soothe_step_subagent=%s",
+                step_subagent,
+            )
+            request.state["_subagent_routing_directive"] = directive
+        elif wire_enforce:
+            directive = (
+                preferred_subagent.strip()
+                if isinstance(preferred_subagent, str)
+                else preferred_subagent
+            )
             logger.info(
                 "Explicit subagent routing (enforce): preferred_subagent=%s",
-                preferred_subagent,
+                directive,
             )
-            request.state["_subagent_routing_directive"] = preferred_subagent
+            request.state["_subagent_routing_directive"] = directive
         else:
             # Drop directive after the first model hop so follow-up synthesis can use normal tools.
             try:
@@ -654,25 +764,28 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                 "_subagent_routing_directive": request.state.get(
                     "_subagent_routing_directive"
                 ),  # IG-192 / IG-196
+                "intent_type": request.state.get("intent_type"),
+                "synthesis_scenario": request.state.get("synthesis_scenario"),
             }
 
         optimized_prompt = self._get_prompt_for_complexity(complexity, state_dict)
+        optimized_prompt = self._append_execution_hints_suffix(optimized_prompt, request.state)
 
         new_system_message = SystemMessage(content=optimized_prompt)
         overrides: dict[str, Any] = {"system_message": new_system_message}
 
-        if explicit_subagent and first_after_user:
+        if step_enforce or wire_enforce:
             tool_list = getattr(request, "tools", None) or []
             task_only = _filter_tools_to_task_only(tool_list)
             if task_only:
                 overrides["tools"] = task_only
                 logger.info(
-                    "Explicit subagent routing: model tools narrowed to '%s' only",
+                    "Subagent delegation enforcement: model tools narrowed to '%s' only",
                     _TASK_TOOL_NAME,
                 )
             else:
                 logger.warning(
-                    "Explicit subagent routing but '%s' tool not in request; leaving full tool set",
+                    "Subagent delegation enforcement but '%s' tool not in request; leaving full tool set",
                     _TASK_TOOL_NAME,
                 )
 
@@ -692,8 +805,16 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Returns:
             Model response from handler.
         """
+        from soothe.utils.observability.langfuse_system_hint import (
+            reset_langfuse_system_prompt_hint,
+        )
+
         modified_request = self.modify_request(request)
-        return handler(modified_request)
+        tok = self._langfuse_system_hint_push(modified_request)
+        try:
+            return handler(modified_request)
+        finally:
+            reset_langfuse_system_prompt_hint(tok)
 
     async def awrap_model_call(
         self,
@@ -709,5 +830,13 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Returns:
             Model response from handler.
         """
+        from soothe.utils.observability.langfuse_system_hint import (
+            reset_langfuse_system_prompt_hint,
+        )
+
         modified_request = self.modify_request(request)
-        return await handler(modified_request)
+        tok = self._langfuse_system_hint_push(modified_request)
+        try:
+            return await handler(modified_request)
+        finally:
+            reset_langfuse_system_prompt_hint(tok)

@@ -34,7 +34,6 @@ def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) ->
         - success_indicators: Tool-specific metrics
         - entities: Key resources found/affected
         - size_bytes: Result size
-        - file_ref: Optional cache reference for large results
     """
     outcome: dict[str, Any] = {
         "tool_call_id": tool_call_id,

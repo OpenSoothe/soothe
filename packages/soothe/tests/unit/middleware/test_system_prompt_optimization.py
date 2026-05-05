@@ -1,6 +1,7 @@
 """Tests for SystemPromptOptimizationMiddleware."""
 
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 from langchain.agents.middleware.types import ModelRequest
@@ -139,8 +140,8 @@ def test_complex_query_gets_full_prompt():
     assert len(modified.system_message.content) > 400
 
 
-def test_no_classification_uses_default_prompt():
-    """Requests without classification should use the default prompt."""
+def test_no_classification_uses_medium_optimized_prompt():
+    """Requests without classification still get optimized medium-tier system prompt (IG-384)."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
@@ -151,8 +152,31 @@ def test_no_classification_uses_default_prompt():
 
     modified = middleware.modify_request(request)
 
-    # Should return original request unchanged
-    assert modified.system_message.content == "original prompt"
+    assert modified.system_message.content != "original prompt"
+    assert "proactive AI assistant" in modified.system_message.content
+    assert "Today's date is" in modified.system_message.content
+
+
+def test_execution_hints_suffix_merged_into_optimized_prompt():
+    """Layer 2 execution hints appended to state must survive system message replacement."""
+    config = SootheConfig()
+    middleware = SystemPromptOptimizationMiddleware(config=config)
+    classification = RoutingClassification(task_complexity="medium")
+    hint_body = (
+        "Suggested subagent: explore. Expected output: paths under src/. "
+        "Consider using the suggested approach first, but decide based on what works best."
+    )
+    request = MockModelRequest(
+        state={
+            "routing_classification": classification,
+            "system_prompt": f"You are Soothe agent.\n\nExecution hints: {hint_body}",
+        },
+        system_message=SystemMessage(content="original prompt"),
+    )
+    modified = middleware.modify_request(request)
+    assert "Execution hints:" in modified.system_message.content
+    assert "Suggested subagent: explore" in modified.system_message.content
+    assert "Expected output: paths under src/" in modified.system_message.content
 
 
 @pytest.mark.skip(reason="optimize_system_prompts removed - always enabled")
@@ -319,3 +343,55 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
     modified = middleware.modify_request(request)
     assert len(modified.tools) == 2
     assert "SUBAGENT_ROUTING_DIRECTIVE" not in modified.system_message.content
+
+
+def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
+    """AgentLoop ``soothe_step_subagent`` narrows root tools to ``task`` on first hop (IG-386)."""
+    config = SootheConfig()
+    middleware = SystemPromptOptimizationMiddleware(config=config)
+    classification = RoutingClassification(
+        task_complexity="medium",
+        reasoning="test",
+    )
+    model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
+    tools = [SimpleNamespace(name="read_file"), SimpleNamespace(name="task")]
+    request = ModelRequest(
+        model=model,
+        messages=[HumanMessage(content="Execute: map src/")],
+        system_message=SystemMessage(content="orig"),
+        tools=tools,
+        state={"routing_classification": classification},
+    )
+    lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "explore"}}
+    with patch("langgraph.config.get_config", return_value=lg_config):
+        modified = middleware.modify_request(request)
+    assert len(modified.tools) == 1
+    assert getattr(modified.tools[0], "name", None) == "task"
+    assert "SUBAGENT_ROUTING_DIRECTIVE" in modified.system_message.content
+    assert "explore" in modified.system_message.content
+
+
+def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
+    """Per-step subagent hint wins over wire ``preferred_subagent`` for directive text."""
+    config = SootheConfig()
+    middleware = SystemPromptOptimizationMiddleware(config=config)
+    classification = RoutingClassification(
+        task_complexity="medium",
+        preferred_subagent="browser",
+        routing_hint="subagent",
+    )
+    model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
+    tools = [SimpleNamespace(name="search_web"), SimpleNamespace(name="task")]
+    request = ModelRequest(
+        model=model,
+        messages=[HumanMessage(content="step")],
+        system_message=SystemMessage(content="orig"),
+        tools=tools,
+        state={"routing_classification": classification},
+    )
+    lg_config = {"configurable": {"soothe_step_subagent": "explore"}}
+    with patch("langgraph.config.get_config", return_value=lg_config):
+        modified = middleware.modify_request(request)
+    content = modified.system_message.content
+    assert "subagent_type='explore'" in content
+    assert "subagent_type='browser'" not in content

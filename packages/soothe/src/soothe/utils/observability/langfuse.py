@@ -75,7 +75,7 @@ def _ensure_langfuse_client(soothe_config: SootheConfig) -> None:
 def _langfuse_callback_handler(soothe_config: SootheConfig) -> Any | None:
     lf = soothe_config.observability.langfuse
     try:
-        from langfuse.langchain import CallbackHandler
+        import langfuse.langchain  # noqa: F401 - optional extra soothe[langfuse]
     except ImportError:
         logger.warning(
             "observability.langfuse.enabled is true but langfuse is not installed; "
@@ -88,10 +88,14 @@ def _langfuse_callback_handler(soothe_config: SootheConfig) -> Any | None:
     cache_key = pub_resolved or "__env__"
     with _INIT_LOCK:
         if cache_key not in _HANDLERS:
+            from soothe.utils.observability.langfuse_callback_handler import (
+                SootheLangfuseCallbackHandler,
+            )
+
             if pub_resolved:
-                _HANDLERS[cache_key] = CallbackHandler(public_key=pub_resolved)
+                _HANDLERS[cache_key] = SootheLangfuseCallbackHandler(public_key=pub_resolved)
             else:
-                _HANDLERS[cache_key] = CallbackHandler()
+                _HANDLERS[cache_key] = SootheLangfuseCallbackHandler()
         return _HANDLERS[cache_key]
 
 

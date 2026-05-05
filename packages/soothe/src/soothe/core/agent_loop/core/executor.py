@@ -155,12 +155,24 @@ class Executor:
         return max(0, int(self._config.agentic.max_subagent_tasks_per_wave))
 
     @staticmethod
+    def _intent_type_for_prompt(state: LoopState) -> str | None:
+        """Intent primary label for CoreAgent prompt scenario blocks (IG-384)."""
+        intent = getattr(state, "intent", None)
+        if intent is not None and hasattr(intent, "intent_type"):
+            raw = getattr(intent, "intent_type", None)
+            if raw:
+                return str(raw)
+        return None
+
+    @staticmethod
     def _execute_graph_input(
         messages: list[Any],
         *,
         routing_classification: Any | None = None,
         workspace: str | None = None,
         git_status: dict[str, Any] | None = None,
+        intent_type: str | None = None,
+        synthesis_scenario: str | None = None,
     ) -> dict[str, Any]:
         """Build LangGraph input for execute waves (mirrors runner ``_stream_phase`` keys; IG-349, IG-383)."""
         out: dict[str, Any] = {"messages": messages}
@@ -170,6 +182,10 @@ class Executor:
             out["workspace"] = workspace
         if git_status is not None:
             out["git_status"] = git_status
+        if intent_type:
+            out["intent_type"] = intent_type
+        if synthesis_scenario:
+            out["synthesis_scenario"] = synthesis_scenario
         return out
 
     def _extract_token_usage(self, messages: list[BaseMessage]) -> dict[str, int]:
@@ -582,6 +598,7 @@ class Executor:
         """
         # Branched LangGraph thread_id for parallel checkpoint isolation; StepResult keeps logical thread_id.
         logical_tid = state.thread_id
+        itype = self._intent_type_for_prompt(state)
         tasks = [
             asyncio.create_task(
                 self._execute_step_collecting_events(
@@ -593,6 +610,7 @@ class Executor:
                     ),
                     routing_classification=getattr(state, "routing_classification", None),
                     git_status=state.git_status,
+                    intent_type=itype,
                 )
             )
             for step in steps
@@ -755,6 +773,7 @@ class Executor:
                     routing_classification=getattr(state, "routing_classification", None),
                     workspace=state.workspace,
                     git_status=state.git_status,
+                    intent_type=self._intent_type_for_prompt(state),
                 ),
                 config=graph_config,
                 stream_mode=["messages", "updates", "custom"],
@@ -903,6 +922,7 @@ class Executor:
         stream_thread_id: str | None = None,
         routing_classification: Any | None = None,
         git_status: dict[str, Any] | None = None,
+        intent_type: str | None = None,
     ) -> tuple[list[StreamEvent], StepResult, list[BaseMessage], str]:
         """Execute single step, collecting events for later yielding.
 
@@ -919,6 +939,7 @@ class Executor:
             stream_thread_id: Optional LangGraph ``thread_id`` for this stream (parallel isolation)
             routing_classification: Loop routing payload for middleware (IG-349, IG-383).
             git_status: Optional git snapshot for prompt XML (RFC-104).
+            intent_type: Optional intent label for scenario guidance (IG-384).
 
         Returns:
             Tuple of ``(events, StepResult, AI messages for IG-199, delegate_final_text)``.
@@ -979,6 +1000,7 @@ class Executor:
                     routing_classification=routing_classification,
                     workspace=workspace,
                     git_status=git_status,
+                    intent_type=intent_type,
                 ),
                 config=config,
                 stream_mode=["messages", "updates", "custom"],
@@ -1108,7 +1130,6 @@ class Executor:
         from soothe.core.agent_loop.analysis.metadata_generator import (
             generate_outcome_metadata,
         )
-        from soothe.core.agent_loop.context.result_cache import ToolResultCache
         from soothe.core.agent_loop.utils.stream_normalize import (
             extract_text_from_message_content,
             iter_messages_for_act_aggregation,
@@ -1122,10 +1143,7 @@ class Executor:
         delegate_task_final_parts: list[str] = []
         delegate_task_ids_seen: set[str] = set()
 
-        # RFC-211: Initialize cache and collect outcomes
-        cache = ToolResultCache(
-            budget.thread_id if budget and hasattr(budget, "thread_id") else "unknown"
-        )
+        # RFC-211: Collect per-tool outcome metadata (structured, no filesystem cache; IG-387)
         outcomes: list[dict] = []
 
         stream_chunk_count = 0  # Debug counter
@@ -1170,8 +1188,8 @@ class Executor:
                     content = msg.content
                     text_out = extract_text_from_message_content(content)
                     if text_out:
-                        # Truncate large tool outputs to prevent context window overflow
-                        # Full content is preserved in cache via cache.save() below
+                        # Truncate large tool outputs in aggregated stream text; full payloads
+                        # remain in CoreAgent graph state (and deepagents eviction when enabled).
                         max_tool_output_chars = 10_000
                         if len(text_out) > max_tool_output_chars:
                             truncated = preview(
@@ -1186,11 +1204,6 @@ class Executor:
 
                     outcome = generate_outcome_metadata(tool_name, content, tool_call_id)
 
-                    content_str = content if isinstance(content, str) else str(content)
-                    file_ref = cache.save(tool_call_id, content_str, outcome)
-                    if file_ref:
-                        outcome["file_ref"] = file_ref
-
                     outcomes.append(outcome)
 
                     if tool_name == "task" and text_out.strip():
@@ -1204,13 +1217,12 @@ class Executor:
                             delegate_task_final_parts.append(clipped)
 
                     logger.debug(
-                        "Tool #%d %s(%s) → %s, %dB%s",
+                        "Tool #%d %s(%s) → %s, %dB",
                         tool_call_count,
                         tool_name,
                         tool_call_id,
                         outcome.get("type", "unknown"),
                         outcome.get("size_bytes", 0),
-                        f", cached={file_ref}" if file_ref else "",
                     )
                 elif isinstance(msg, AIMessageChunk):
                     messages.append(msg)  # Collect chunks for assistant text extraction

@@ -69,15 +69,15 @@ class CoreAgent:
         :class:`~langchain_core.messages.HumanMessage` before invoking the
         compiled graph.
 
-        config.configurable may include Layer 2 hints (advisory):
+        config.configurable may include Layer 2 hints:
             - thread_id: Thread identifier for persistence
             - workspace: Thread-specific workspace path (RFC-103)
-            - soothe_step_subagent: suggested subagent for this step
-            - soothe_step_expected_output: expected result description
+            - soothe_step_subagent: when set, first model hop delegates via ``task`` only (IG-386)
+            - soothe_step_expected_output: expected result description (advisory text)
 
     Layer 2 Contract:
         Layer 2 (SootheRunner/AgentLoop) provides:
-        - Execution hints via config.configurable (advisory suggestions)
+        - Execution hints via config.configurable (subagent delegation enforcement + advisory text)
         - Classification state (for SystemPromptOptimization)
         - Thread/workspace management
         - Goal-driven orchestration
@@ -177,11 +177,11 @@ class CoreAgent:
             input_arg: User text (coerced to one HumanMessage in graph state) or a
                 LangGraph state dict (typically with a ``messages`` key).
             config: RunnableConfig with thread_id and optional Layer 2 hints.
-                Layer 2 hints in config.configurable (advisory):
+                Layer 2 hints in config.configurable:
                 - thread_id: Thread identifier
                 - workspace: Thread-specific workspace path
-                - soothe_step_subagent: suggested subagent
-                - soothe_step_expected_output: expected result
+                - soothe_step_subagent: enforce ``task``-only delegation on first hop when set (IG-386)
+                - soothe_step_expected_output: expected result (hint text)
             stream_mode: Optional list of stream modes (e.g., ["messages", "updates", "custom"]).
                 If None, uses LangGraph defaults.
             subgraphs: Whether to include subgraph events in stream (default: False).
