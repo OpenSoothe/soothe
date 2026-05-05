@@ -68,11 +68,8 @@ The chat models include **reasoning tokens** (thinking process) separate from ou
 
 ## Current Architecture
 
-**All LLM adaptation consolidated in `soothe.core.llm` module**:
-
-- `tracing.py`: LLMTracingWrapper for request/response logging
-- `wrappers.py`: Generic LimitedProviderModelWrapper for compatibility
-- Standard provider_type configuration (no special LMStudio backend)
+**LLM adaptation lives in `soothe.utils.llm`** (`wrappers.py` for limited providers).
+Use Langfuse (`observability.langfuse`) for LLM traces. Standard `provider_type` configuration applies (no special LMStudio backend).
 
 ---
 
@@ -94,22 +91,13 @@ The chat models include **reasoning tokens** (thinking process) separate from ou
     - text-embedding-nomic-embed-text-v1.5
 ```
 
-**Note**: LMStudio-specific backend (`lmstudio`) has been removed. All compatibility handling is now generic in `soothe.core.llm.wrappers`.
+**Note**: LMStudio-specific backend (`lmstudio`) has been removed. Compatibility handling is in `soothe.utils.llm.wrappers`.
 
-## Soothe's Core LLM Module
+## Soothe LLM utilities
 
-**Location**: `packages/soothe/src/soothe/core/llm/`
+**Location**: `packages/soothe/src/soothe/utils/llm/`
 
-All LLM adaptation consolidated in single module:
-
-### 1. LLMTracingWrapper (tracing.py)
-
-Request/response logging for direct model calls:
-
-- **Usage**: Classifier, consensus, criticality components
-- **Features**: Token tracking, duration logging, message type detection
-
-### 2. LimitedProviderModelWrapper (wrappers.py)
+### 1. LimitedProviderModelWrapper (wrappers.py)
 
 Generic compatibility wrapper:
 
@@ -117,7 +105,7 @@ Generic compatibility wrapper:
 - **Structured output**: Handles limited provider formats
 - **Transparent**: Delegates all BaseChatModel methods
 
-### 3. JsonSchemaModelWrapper (wrappers.py)
+### 2. JsonSchemaModelWrapper (wrappers.py)
 
 JSON response parsing:
 

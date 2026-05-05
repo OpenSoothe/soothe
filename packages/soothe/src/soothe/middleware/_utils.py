@@ -13,10 +13,9 @@ def create_llm_call_metadata(
 ) -> dict[str, Any]:
     """Create standardized metadata for LLM calls.
 
-    This metadata enriches debug logs for direct model calls (e.g.
-    ``LLMTracingWrapper``) and observability callbacks. All LLM invocation
-    sites should use this helper for consistent call context (purpose,
-    component, phase).
+    This metadata tags RunnableConfig for Langfuse and other observability
+    integrations. All LLM invocation sites should use this helper for
+    consistent call context (purpose, component, phase).
 
     Args:
         purpose: Call purpose (reason, plan, classify, reflect, consensus_vote, etc.)

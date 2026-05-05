@@ -178,7 +178,7 @@ print(f"Model type: {type(model).__name__}")
 
 - [LLM Compatibility Analysis](docs/lms_endpoint_compatibility_analysis.md)
 - [JSON Schema Empty Response Analysis](docs/lms_json_schema_empty_response_analysis.md)
-- [Core LLM Wrappers](packages/soothe/src/soothe/core/llm/wrappers.py)
+- [LLM Wrappers](packages/soothe/src/soothe/utils/llm/wrappers.py)
 
 ## Implementation Status
 
@@ -187,32 +187,9 @@ print(f"Model type: {type(model).__name__}")
 - ✅ Wrapper application in `SootheConfig.create_chat_model_for_spec()`
 - ✅ Environment propagation in `SootheConfig.propagate_env()`
 - ✅ Documentation in wrapper module docstrings
-- ✅ **LLMTracingWrapper.with_structured_output() delegation added** (critical fix)
 - ✅ All verification checks passed (1288 tests)
 
-## Critical Fix: LLMTracingWrapper Delegation
-
-**Issue Found**: Daemon startup failed with:
-```
-AttributeError: 'LLMTracingWrapper' object has no attribute 'with_structured_output'
-```
-
-**Root Cause**: When `IntentClassifier` applies `LLMTracingWrapper` for tracing, then calls `with_structured_output()`:
-```python
-# classifier.py
-traced_model = LLMTracingWrapper(model)  # ← Wraps model
-self._intent_model = traced_model.with_structured_output(IntentClassification)  # ← AttributeError
-```
-
-**Fix**: Added delegation method to `LLMTracingWrapper`:
-```python
-# tracing.py
-def with_structured_output(self, schema: Any, **kwargs: Any) -> Any:
-    """Delegate structured output to wrapped model."""
-    return self._model.with_structured_output(schema, **kwargs)
-```
-
-**Why Needed**: `IntentClassifier` wraps the base model with tracing before calling `with_structured_output()`. Without delegation, the wrapper would block the method call.
+**Historical note**: Older builds wrapped the classifier model in `LLMTracingWrapper` (removed). LLM observability is handled via Langfuse (`observability.langfuse`); `IntentClassifier` calls `with_structured_output()` on the base chat model directly.
 
 ## Critical Fix: AIMessage Structure
 
@@ -295,19 +272,16 @@ except Exception:
 **Issue**: Intent classification returns `None` with mlxserver provider
 **Root Causes**:
 1. Provider type mismatch (using `openai` instead of `limited_openai`)
-2. `LLMTracingWrapper` missing `with_structured_output()` delegation
-3. `JsonSchemaModelWrapper` checking `response.reasoning_content` as direct attribute (wrong - stored in `additional_kwargs`)
-4. `LimitedProviderModelWrapper` only handling `method="json_mode"` (wrong - must handle ALL methods)
+2. `JsonSchemaModelWrapper` checking `response.reasoning_content` as direct attribute (wrong - stored in `additional_kwargs`)
+3. `LimitedProviderModelWrapper` only handling `method="json_mode"` (wrong - must handle ALL methods)
 
 **Fixes Applied**:
 1. Implemented `limited_openai` provider type with automatic wrapper application
-2. Added `with_structured_output()` delegation to `LLMTracingWrapper`
-3. Fixed `JsonSchemaModelWrapper` to check `additional_kwargs["reasoning_content"]` correctly
-4. Fixed `LimitedProviderModelWrapper` to ALWAYS return `JsonSchemaModelWrapper` for ALL methods
+2. Fixed `JsonSchemaModelWrapper` to check `additional_kwargs["reasoning_content"]` correctly
+3. Fixed `LimitedProviderModelWrapper` to ALWAYS return `JsonSchemaModelWrapper` for ALL methods
 
 **Files Modified**:
 - `packages/soothe/src/soothe/config/models.py` - Provider type documentation
 - `packages/soothe/src/soothe/config/settings.py` - Wrapper application logic
-- `packages/soothe/src/soothe/core/llm/wrappers.py` - Fixed reasoning_content access AND method handling (critical fixes)
-- `packages/soothe/src/soothe/core/llm/tracing.py` - Added with_structured_output delegation
+- `packages/soothe/src/soothe/utils/llm/wrappers.py` - Fixed reasoning_content access AND method handling (critical fixes)
 - `config/config.dev.yml` - Changed provider_type to limited_openai

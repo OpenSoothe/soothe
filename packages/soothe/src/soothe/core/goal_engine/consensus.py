@@ -7,7 +7,7 @@ If not satisfied, Layer 3 can send the goal back with refined instructions.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 from soothe.utils.text_preview import preview, preview_first
 
@@ -28,7 +28,6 @@ async def evaluate_goal_completion(
     evidence_summary: str = "",
     success_criteria: list[str] | None = None,
     model: BaseChatModel | None = None,
-    config: Any | None = None,  # IG-143: Add config for tracing
 ) -> tuple[ConsensusDecision, str]:
     """RFC-204: Holistic evaluation of goal completion.
 
@@ -41,7 +40,6 @@ async def evaluate_goal_completion(
         evidence_summary: Accumulated evidence from execution.
         success_criteria: List of success criteria to check.
         model: LLM for evaluation. If None, uses heuristic fallback.
-        config: Optional SootheConfig for LLM tracing support.
 
     Returns:
         Tuple of (decision, reasoning).
@@ -50,13 +48,7 @@ async def evaluate_goal_completion(
     if model is None:
         return _heuristic_evaluation(response_text, evidence_summary, success_criteria)
 
-    # IG-143: Wrap model with tracing if enabled
     from soothe.middleware._utils import create_llm_call_metadata
-
-    if config and config.observability.llm_tracing_enabled:
-        from soothe.utils.llm import LLMTracingWrapper
-
-        model = LLMTracingWrapper(model)
 
     prompt = _build_consensus_prompt(
         goal_description, response_text, evidence_summary, success_criteria

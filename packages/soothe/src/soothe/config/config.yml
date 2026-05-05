@@ -124,8 +124,6 @@ execution:
 # Observability Configuration - Unified debugging and monitoring settings
 
 observability:
-  llm_tracing_enabled: false  # DEBUG logs for direct LLM calls (LLMTracingWrapper); use Langfuse for traces
-
   log_file_level: INFO  # Logging level for file output (DEBUG, INFO, WARNING, ERROR)
   log_file_path: null  # Log file path (empty = SOOTHE_HOME/logs/soothed.log)
   log_file_max_bytes: 5242880  # 5 MB - Maximum file size before rotation

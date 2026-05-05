@@ -81,7 +81,6 @@ execution:
   llm_call_timeout_adaptive: true
 
 observability:
-  llm_tracing_enabled: true
   log_file_level: DEBUG
   verbosity: normal
   console:
