@@ -452,8 +452,19 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
         self,
         user_input: str,
         state: Any,
+        *,
+        suppress_global_error_on_llm_timeout: bool = False,
     ) -> AsyncGenerator[StreamChunk]:
-        """Run the LangGraph stream with HITL interrupt loop."""
+        """Run the LangGraph stream with HITL interrupt loop.
+
+        Args:
+            user_input: User message content for this invocation.
+            state: Runner state (``RunnerState``); ``stream_error`` is set on failure.
+            suppress_global_error_on_llm_timeout: When True (plan DAG ``_execute_step``),
+                a per-call LLM ``TimeoutError`` still sets ``stream_error`` and fails the
+                step via ``PlanStepFailedEvent``, but does **not** emit a top-level
+                ``soothe.error.general`` chunk so the overall query is not presented as failed.
+        """
         await self._ensure_checkpointer_initialized()
 
         enriched_messages = self._build_enriched_input(
@@ -566,7 +577,12 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                     state.stream_error = str(exc)
                 from soothe.utils.error_format import emit_error_event
 
-                yield _custom(emit_error_event(exc))
+                _suppress_global = suppress_global_error_on_llm_timeout and isinstance(
+                    exc,
+                    TimeoutError,
+                )
+                if not _suppress_global:
+                    yield _custom(emit_error_event(exc))
 
             if not interrupt_occurred:
                 break

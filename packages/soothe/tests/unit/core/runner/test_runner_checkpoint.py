@@ -126,7 +126,7 @@ class TestStepObservationReuse:
 
         observed: dict[str, object] = {}
 
-        async def _fake_stream_phase(step_input: str, step_state: RunnerState):
+        async def _fake_stream_phase(step_input: str, step_state: RunnerState, **_kw: object):
             observed["step_input"] = step_input
             observed["context_projection"] = step_state.context_projection
             observed["recalled_memories"] = list(step_state.recalled_memories)
@@ -197,7 +197,7 @@ class TestAutonomousObservationReuse:
 
         observed: dict[str, object] = {}
 
-        async def _fake_stream_phase(step_input: str, step_state: RunnerState):
+        async def _fake_stream_phase(step_input: str, step_state: RunnerState, **_kw: object):
             observed["step_input"] = step_input
             observed["context_projection"] = step_state.context_projection
             observed["recalled_memories"] = list(step_state.recalled_memories)
