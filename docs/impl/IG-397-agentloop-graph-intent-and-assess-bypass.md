@@ -10,7 +10,6 @@ In Progress
 ## Goals
 - Move intent classification into AgentLoop graph entry so runner no longer owns pre-loop classification.
 - Apply the graph intent path for both agentic and autonomous AgentLoop execution paths.
-- Add assess-phase direct-execute bypass for trivial tasks so plan generation can be skipped.
 - Bridge graph intent classification with Langfuse metadata for unified observability.
 - Remove deprecated/backward compatibility helpers superseded by this cut-over.
 
@@ -26,7 +25,6 @@ In Progress
 - Graph entry node (`init_or_resume`) performs single-shot intent classification for each loop run.
 - Fast-path intents (`chitchat`, `quiz`) emit an `intent_fast_path` event and terminate the graph before planning/execution nodes.
 - Non-fast intents hydrate `LoopState.intent` and `LoopState.routing_classification` for downstream planner/executor use.
-- Assess phase can return a direct single-step instruction to bypass plan generation for trivial one-step tasks.
 
 ## Compatibility Decision (Cut Change)
 - Remove backward-compat alias/function paths that duplicate routing merge naming.
