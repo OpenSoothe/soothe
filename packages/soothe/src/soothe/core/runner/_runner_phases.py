@@ -464,7 +464,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
         stream_input: dict[str, Any] | Command = {"messages": enriched_messages}
         if state.intent_classification:
             # Middleware expects RoutingClassification format
-            stream_input["unified_classification"] = (
+            stream_input["routing_classification"] = (
                 state.intent_classification.to_routing_classification()
             )
             logger.debug(
@@ -749,7 +749,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                     recent_messages=[user_input],
                     available_capabilities=capabilities,
                     completed_steps=[],
-                    unified_classification=state.intent_classification.to_routing_classification()
+                    routing_classification=state.intent_classification.to_routing_classification()
                     if state.intent_classification
                     else None,
                     workspace=state.workspace,  # Pass workspace for planning context

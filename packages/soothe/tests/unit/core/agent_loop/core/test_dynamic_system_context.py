@@ -276,7 +276,6 @@ class TestComplexityMapping:
             "git_status": {
                 "branch": "main",
                 "main_branch": "main",
-                "status": "",
                 "recent_commits": "",
             },
             "thread_context": {"thread_id": "abc", "conversation_turns": 1},
@@ -322,8 +321,8 @@ class TestGitStatusHelper:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_git_directory_returns_status(self, tmp_path: Path) -> None:
-        """Git directory returns status dict."""
+    async def test_git_directory_returns_snapshot(self, tmp_path: Path) -> None:
+        """Git directory returns snapshot dict (no porcelain status; IG-383)."""
         import subprocess
 
         from soothe.core.workspace import get_git_status
@@ -344,5 +343,5 @@ class TestGitStatusHelper:
         assert result is not None
         assert "branch" in result
         assert "main_branch" in result
-        assert "status" in result
+        assert "status" not in result
         assert "recent_commits" in result

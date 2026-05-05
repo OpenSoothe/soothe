@@ -634,8 +634,8 @@ class AgenticLoopConfig(BaseModel):
             execution heuristics when the goal is assessed as done (IG-298).
         plan_prompt_ledger: Ledger projection caps for Plan-phase LLM prompts (IG-380).
 
-    Note: Performance optimizations (unified_classification, optimize_system_prompts, parallel_pre_stream)
-    are always enabled by design and not configurable.
+    Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
+    parallel_pre_stream) are always enabled by design and not configurable.
     """
 
     enabled: bool = Field(

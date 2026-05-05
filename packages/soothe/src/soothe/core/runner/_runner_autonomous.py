@@ -180,8 +180,8 @@ class AutonomousMixin(GoalDirectivesMixin):
                     yield chunk
                 return
 
-            # IG-296: unified_classification deprecated - intent_classification is authoritative
-            # No need to set unified_classification, backward compatibility property handles it
+            # IG-296: intent_classification is authoritative on runner state; AgentLoop uses
+            # routing_classification (RoutingClassification) when entering the loop.
         else:
             state.intent_classification = None
 

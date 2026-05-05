@@ -126,7 +126,7 @@ class AgentLoop:
         max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
         loop_id: str | None = None,  # IG-246: explicit loop_id parameter
         intent: Any | None = None,  # Intent classification
-        unified_classification: Any | None = None,  # IG-349: RoutingClassification
+        routing_classification: Any | None = None,  # IG-349, IG-383: RoutingClassification
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -143,6 +143,7 @@ class AgentLoop:
                 - thread_continuation: Adjust iteration behavior, reuse working memory
                 - new_goal: Normal goal execution flow
                 - chitchat: Should not reach here (handled in runner)
+            routing_classification: ``RoutingClassification`` for CoreAgent middleware (IG-383).
 
         Yields:
             Tuples of (event_type, event_data) for progress updates
@@ -231,7 +232,7 @@ class AgentLoop:
             iteration=iteration,  # Use recovered or initial iteration
             max_iterations=max_iterations,
             intent=intent,
-            unified_classification=unified_classification,
+            routing_classification=routing_classification,
             loop_messages=goal_record.loop_messages if goal_record else [],
         )
 
@@ -693,7 +694,7 @@ class AgentLoop:
             available_capabilities=available_tools + available_subagents,
             recent_messages=[],  # RFC-214: Now using loop_messages ledger directly
             completed_steps=completed_steps,
-            unified_classification=getattr(state, "unified_classification", None),
+            routing_classification=getattr(state, "routing_classification", None),
             workspace=state.workspace,
             git_status=state.git_status,
             thread_id=state.thread_id,
