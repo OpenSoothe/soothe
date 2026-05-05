@@ -325,7 +325,7 @@ class TestDomainScopedPrompts:
     """Tests for domain-scoped prompt guides."""
 
     def test_guides_exist(self) -> None:
-        from soothe.config.prompts import (
+        from soothe.core.prompts import (
             _DATA_GUIDE,
             _FILE_OPS_GUIDE,
             _RESEARCH_GUIDE,
@@ -341,7 +341,7 @@ class TestDomainScopedPrompts:
         assert "browser" in _SUBAGENT_GUIDE.lower()
 
     def test_orchestration_guide_has_all_domains(self) -> None:
-        from soothe.config.prompts import _TOOL_ORCHESTRATION_GUIDE
+        from soothe.core.prompts import _TOOL_ORCHESTRATION_GUIDE
 
         # Check for tool categories mentioned in the guide
         guide_lower = _TOOL_ORCHESTRATION_GUIDE.lower()
@@ -352,7 +352,7 @@ class TestDomainScopedPrompts:
         assert "research" in guide_lower
 
     def test_no_old_tool_names_in_guide(self) -> None:
-        from soothe.config.prompts import _TOOL_ORCHESTRATION_GUIDE
+        from soothe.core.prompts import _TOOL_ORCHESTRATION_GUIDE
 
         # Old names should not appear (they've been consolidated)
         # Note: wizsearch is a valid name, so we check for the old web_search pattern

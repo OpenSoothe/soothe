@@ -467,6 +467,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
             stream_input["routing_classification"] = (
                 state.intent_classification.to_routing_classification()
             )
+            stream_input["intent_type"] = state.intent_classification.intent_type
             logger.debug(
                 "Injected LLM classification into agent state: task_complexity=%s",
                 state.intent_classification.task_complexity,

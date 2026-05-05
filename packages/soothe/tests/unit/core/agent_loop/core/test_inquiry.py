@@ -343,7 +343,7 @@ class TestResearchSubagent:
 
 class TestPromptIntegration:
     def test_tool_orchestration_guide_mentions_research(self) -> None:
-        from soothe.config.prompts import _TOOL_ORCHESTRATION_GUIDE
+        from soothe.core.prompts import _TOOL_ORCHESTRATION_GUIDE
 
         assert "research" in _TOOL_ORCHESTRATION_GUIDE.lower()
         assert "domain" in _TOOL_ORCHESTRATION_GUIDE.lower()

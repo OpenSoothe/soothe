@@ -989,36 +989,12 @@ class RecoveryConfig(BaseModel):
     auto_resume_on_start: bool = False
 
 
-class ToolResultCacheConfig(BaseModel):
-    """Configuration for tool result caching (RFC-211).
-
-    Args:
-        enabled: Enable file system caching for large tool results.
-        size_threshold_bytes: Minimum size (bytes) to trigger caching.
-        cleanup_on_completion: Remove cache after goal completes.
-        cleanup_after_days: Remove old caches after N days.
-    """
-
-    enabled: bool = True
-    """Enable file system caching for large tool results."""
-
-    size_threshold_bytes: int = Field(default=50000, ge=1000)
-    """Minimum size (bytes) to trigger caching (default: 50KB)."""
-
-    cleanup_on_completion: bool = True
-    """Remove cache after goal completes."""
-
-    cleanup_after_days: int = Field(default=7, ge=1)
-    """Remove old caches after N days."""
-
-
 class ExecutionConfig(BaseModel):
     """Execution limits configuration.
 
     Args:
         concurrency: Concurrency limits for parallel execution.
         recovery: Failure recovery settings.
-        tool_result_cache: Tool result cache settings (RFC-211).
         llm_rpm_limit: Soft cap on LLM HTTP requests per minute (middleware sliding window).
         llm_concurrent_limit: Max concurrent in-flight LLM calls per thread.
         llm_call_timeout_seconds: Per-LLM-call timeout for rate-limit middleware (floor when adaptive).
@@ -1028,7 +1004,6 @@ class ExecutionConfig(BaseModel):
 
     concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
     recovery: RecoveryConfig = Field(default_factory=RecoveryConfig)
-    tool_result_cache: ToolResultCacheConfig = Field(default_factory=ToolResultCacheConfig)
 
     llm_rpm_limit: int = Field(default=120, ge=1, le=10_000)
     llm_concurrent_limit: int = Field(default=10, ge=1, le=500)

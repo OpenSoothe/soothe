@@ -1,4 +1,7 @@
-"""System prompt templates for Soothe agents."""
+"""System prompt templates for Soothe agents (CoreAgent defaults and tool guides).
+
+Moved from ``soothe.config.prompts`` (IG-384); imported by config package for re-exports.
+"""
 
 from __future__ import annotations
 
@@ -45,7 +48,7 @@ Quiz/factual questions:
 # ---------------------------------------------------------------------------
 
 _SHELL_GUIDE = """\
-Execution tools (consolidated):
+Execution tools:
 - run_command: Execute shell commands synchronously (returns output). Use for: CLI tools, scripts.
 - run_python: Execute Python code with session persistence. Variables persist across calls.
 - run_background: Run long commands in background (returns PID). Use for: training, servers.
@@ -53,7 +56,7 @@ Execution tools (consolidated):
 """
 
 _FILE_OPS_GUIDE = """\
-File operation tools (consolidated):
+File operation tools:
 - read_file: Read file contents (optional start_line, end_line for ranges).
 - write_file: Write to files (mode='overwrite' or 'append').
 - delete_file: Delete files (automatic backups created).

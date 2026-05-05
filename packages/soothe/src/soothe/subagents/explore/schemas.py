@@ -149,9 +149,9 @@ class ExploreSubagentConfig(BaseModel):
     thoroughness: str = "medium"
     max_iterations: dict[str, int] = Field(
         default_factory=lambda: {
-            "quick": 2,
-            "medium": 4,
-            "thorough": 6,
+            "quick": 30,
+            "medium": 50,
+            "thorough": 100,
         },
     )
     max_read_lines: int = 50
