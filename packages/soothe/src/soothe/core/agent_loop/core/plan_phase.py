@@ -93,10 +93,10 @@ class PlanPhase:
         successes = sum(1 for r in state.step_results if r.success)
         failures = sum(1 for r in state.step_results if not r.success)
         logger.info(
-            "[Plan] iter=%d done: status=%s progress=%.0f%% plan=%s (steps=%d ok=%d fail=%d)",
+            "[Plan] iter=%d done: status=%s progress=%s plan=%s (steps=%d ok=%d fail=%d)",
             state.iteration,
             result.status,
-            result.goal_progress * 100,
+            result.goal_progress,
             result.plan_action,
             len(state.step_results),
             successes,

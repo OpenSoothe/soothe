@@ -67,12 +67,13 @@ class GoalResult(BaseModel):
 
     Wraps PlanResult from AgentLoop for autonomous goal reflection.
 
+    IG-399: Descriptive goal_progress levels instead of numeric.
+
     Args:
         goal_id: Goal identifier
         status: Execution status (completed, failed, in_progress)
         evidence_summary: Accumulated evidence from AgentLoop execution
-        goal_progress: Progress percentage (0.0-1.0)
-        confidence: Model confidence in result (0.0-1.0)
+        goal_progress: Progress level (none | low | medium | high | complete)
         full_output: Final answer when status is completed
         iteration_count: Number of AgentLoop iterations used
         duration_ms: Total execution duration in milliseconds
@@ -81,8 +82,7 @@ class GoalResult(BaseModel):
     goal_id: str
     status: Literal["completed", "failed", "in_progress"]
     evidence_summary: str = ""
-    goal_progress: float = 0.0
-    confidence: float = 0.8
+    goal_progress: Literal["none", "low", "medium", "high", "complete"] = "none"  # IG-399
     full_output: str | None = None
     iteration_count: int = 0
     duration_ms: int = 0

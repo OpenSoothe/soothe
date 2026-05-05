@@ -444,8 +444,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                         goal_id=goal.id,
                         status="completed",
                         evidence_summary="Handled via intent fast path",
-                        goal_progress=1.0,
-                        confidence=1.0,
+                        goal_progress="complete",
                         full_output="",
                         iteration_count=0,
                     )
@@ -458,7 +457,6 @@ class AutonomousMixin(GoalDirectivesMixin):
                             status="completed" if plan_result.is_done() else "failed",
                             evidence_summary=plan_result.evidence_summary,
                             goal_progress=plan_result.goal_progress,
-                            confidence=plan_result.confidence,
                             full_output=plan_result.full_output,
                             iteration_count=event_data.get("iteration", 0),
                         )
