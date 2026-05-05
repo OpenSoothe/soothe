@@ -454,7 +454,6 @@ async def execute(self, decision, state):
             "thread_id": state.thread_id,
             "workspace": state.workspace,
             "soothe_goal_briefing": goal_briefing,  # None or markdown string
-            "soothe_step_tools": step.tools,
             "soothe_step_subagent": step.subagent,
             "soothe_step_expected_output": step.expected_output,
         }

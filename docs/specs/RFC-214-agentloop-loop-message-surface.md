@@ -135,7 +135,7 @@ The AgentLoop surface maintains four logical partitions:
 |-----------|----------|---------|
 | **Goal** | `goal_id`, `goal_text`, status, iteration counters, thread id(s) | Goal lifecycle tracking per RFC-216 |
 | **Plan** | Latest plan metadata: status, progress, confidence, reasoning, `next_action`, `plan_action`, structured `AgentDecision` | Current execution strategy |
-| **Steps** | Ordered `StepAction` metadata: `id`, `description`, hints (`tools`, `subagent`, `expected_output`, `dependencies`), lifecycle status | Execution queue state |
+| **Steps** | Ordered `StepAction` metadata: `id`, `description`, hints (`subagent`, `expected_output`, `supportive_evidence`, `dependencies`), lifecycle status | Execution queue state |
 | **Loop Ledger** | Ordered list of **adjacent Human-AI message pairs** (`LoopHumanMessage` / `LoopAIMessage`) | Orchestration-visible conversation history |
 
 **Loop Ledger Structure:**

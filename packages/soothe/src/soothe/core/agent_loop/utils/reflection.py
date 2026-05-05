@@ -361,23 +361,20 @@ def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
             else [str(d) for d in deps if d is not None]
         )
 
-        tools = step_data.get("tools") or []
-        if tools:
-            subagent_tools = [t for t in tools if t in known_subagents]
-            if subagent_tools:
-                if not step_data.get("subagent"):
-                    step_data["subagent"] = subagent_tools[0]
-                    logger.debug(
-                        "Normalized subagent '%s' from tools to subagent field", subagent_tools[0]
-                    )
-                remaining_tools = [t for t in tools if t not in known_subagents]
-                step_data["tools"] = remaining_tools or None
+        legacy_tools = step_data.get("tools") or []
+        if legacy_tools:
+            subagent_tools = [t for t in legacy_tools if t in known_subagents]
+            if subagent_tools and not step_data.get("subagent"):
+                step_data["subagent"] = subagent_tools[0]
+                logger.debug(
+                    "Normalized subagent '%s' from legacy tools list to subagent field",
+                    subagent_tools[0],
+                )
 
         steps.append(
             StepAction(
                 id=str(i + 1),
                 description=step_data.get("description", ""),
-                tools=step_data.get("tools"),
                 subagent=step_data.get("subagent"),
                 expected_output=step_data.get("expected_output", ""),
                 dependencies=deps,

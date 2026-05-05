@@ -82,7 +82,7 @@ def build_soothe_middleware_stack(
        Enabled via SOOTHE_LOG_LEVEL=DEBUG or config.observability.llm_tracing_enabled=True.
 
     5. **ExecutionHintsMiddleware** - Injects Layer 2 execution hints
-       (soothe_step_tools, soothe_step_subagent, soothe_step_expected_output)
+       (soothe_step_subagent, soothe_step_expected_output)
        into system prompt via abefore_agent hook. Runs before agent loop starts.
 
     6. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
