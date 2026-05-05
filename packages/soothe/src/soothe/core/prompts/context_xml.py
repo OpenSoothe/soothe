@@ -212,7 +212,7 @@ def build_shared_environment_workspace_prefix(
 def build_context_sections_for_complexity(
     *,
     config: SootheConfig,
-    complexity: Literal["chitchat", "medium", "complex"],
+    complexity: Literal["chitchat", "simple", "medium", "complex"],
     state: dict[str, Any],
     include_workspace_extras: bool = False,
 ) -> list[str]:

@@ -375,108 +375,27 @@ class AgenticMixin:
         # Load more messages for routing (IG-133)
         recent_for_thread = await self._load_recent_messages(tid, limit=16)  # Load more for routing
 
-        # IG-226: Intent classification (priority over routing)
-        intent_classification = None
         active_goal_id = None
         active_goal_description = None
 
-        if self._intent_classifier:
-            limit = _RECENT_MESSAGES_FOR_CLASSIFY_LIMIT
-            recent_for_classify = (
-                recent_for_thread[-limit:] if len(recent_for_thread) > limit else recent_for_thread
-            )
-
-            # Get active goal if available (for thread continuation)
-            if self._goal_engine:
-                try:
-                    # Find active goal in current thread
-                    goals = await self._goal_engine.list_goals(status="active")
-                    if goals:
-                        active_goal_id = goals[0].id
-                        active_goal_description = goals[0].description
-                except Exception:
-                    logger.debug(
-                        "Failed to get active goal for intent classification", exc_info=True
-                    )
-
-            # IG-226: Intent classification determines goal handling strategy
-            intent_classification = await self._intent_classifier.classify_intent(
-                user_input,
-                recent_messages=recent_for_classify,
-                active_goal_id=active_goal_id,
-                active_goal_description=active_goal_description,
-                thread_id=tid,
-            )
-
-            logger.info(
-                "[Intent] Classified as %s (reuse_goal=%s)",
-                intent_classification.intent_type,
-                intent_classification.reuse_current_goal,
-            )
-
-            # IG-271: Intent event removed, replaced with compact logging
-            logger.debug(
-                "Intent classified: %s (confidence: %.2f) - %s",
-                intent_classification.intent_type,
-                getattr(intent_classification, "confidence", 1.0),
-                user_input[:50],
-            )
-
-            # Handle chitchat intent
-            if intent_classification.intent_type == "chitchat":
-                logger.info("[Intent] Chitchat → direct response")
-                async for chunk in self._run_chitchat(user_input, tid, intent_classification):
-                    yield chunk
-                return
-
-            # Handle quiz intent (IG-250)
-            if intent_classification.intent_type == "quiz":
-                logger.info("[Intent] Quiz → direct LLM response")
-                async for chunk in self._run_quiz(user_input, tid, intent_classification):
-                    yield chunk
-                return
-
-            # Handle thread continuation intent
-            if intent_classification.intent_type == "thread_continuation":
-                if intent_classification.reuse_current_goal and active_goal_id:
-                    logger.info(
-                        "[Intent] Thread continuation → reusing goal %s: %s",
-                        active_goal_id,
-                        preview_first(active_goal_description or "", 50),
-                    )
-                    # Thread continuation with active goal: continue execution without new goal
-                    # AgentLoop will handle thread context continuation
-                else:
-                    logger.info(
-                        "[Intent] Thread continuation → no active goal, pure conversation flow"
-                    )
-                    # Thread continuation without goal: normal flow but skip goal creation
-                # Proceed to AgentLoop execution with intent context
-
-            # Handle new_goal intent (default)
-            elif intent_classification.intent_type == "new_goal":
-                logger.info(
-                    "[Intent] New goal → creating goal: %s",
-                    preview_first(intent_classification.goal_description or user_input, 50),
-                )
-                # Proceed to AgentLoop execution, goal creation handled by GoalEngine if autonomous mode
-                # For agentic loop, goal description is passed as-is
+        # Get active goal context if available (used by graph-entry classification)
+        if self._goal_engine:
+            try:
+                goals = await self._goal_engine.list_goals(status="active")
+                if goals:
+                    active_goal_id = goals[0].id
+                    active_goal_description = goals[0].description
+            except Exception:
+                logger.debug("Failed to get active goal for intent classification", exc_info=True)
 
         # Emit loop started event (Level 1)
-        # IG-287: Use friendly_message from intent classification if available
-        display_goal = (
-            intent_classification.friendly_message
-            if (intent_classification and intent_classification.friendly_message)
-            else preview_first(user_input, 100)
-        )
+        display_goal = preview_first(user_input, 100)
         yield _custom(
             AgenticLoopStartedEvent(
                 thread_id=tid,
                 goal=display_goal,
                 max_iterations=max_iterations,
-                friendly_message=intent_classification.friendly_message
-                if intent_classification
-                else None,
+                friendly_message=None,
             ).to_dict()
         )
 
@@ -505,10 +424,9 @@ class AgenticMixin:
             except Exception:
                 logger.debug("Git status collection failed for agentic loop", exc_info=True)
 
-        from soothe.core.runner.routing_merge import build_loop_routing_classification
-
-        loop_routing_classification = build_loop_routing_classification(
-            intent_classification, preferred_subagent
+        limit = _RECENT_MESSAGES_FOR_CLASSIFY_LIMIT
+        recent_for_classify = (
+            recent_for_thread[-limit:] if len(recent_for_thread) > limit else recent_for_thread
         )
 
         async for event_type, event_data in loop_agent.run_with_progress(
@@ -517,9 +435,38 @@ class AgenticMixin:
             workspace=workspace,
             git_status=git_status,
             max_iterations=max_iterations,
-            intent=intent_classification,  # IG-226: Pass intent classification to AgentLoop
-            routing_classification=loop_routing_classification,
+            intent_classifier=self._intent_classifier,
+            preferred_subagent=preferred_subagent,
+            recent_messages_for_intent=recent_for_classify,
+            active_goal_id_for_intent=active_goal_id,
+            active_goal_description_for_intent=active_goal_description,
         ):
+            if event_type == "intent_classified":
+                friendly = (
+                    event_data.get("friendly_message") if isinstance(event_data, dict) else None
+                )
+                if isinstance(friendly, str) and friendly.strip():
+                    display_goal = friendly.strip()
+                logger.info(
+                    "[Intent] Classified in graph as %s",
+                    event_data.get("intent_type") if isinstance(event_data, dict) else "unknown",
+                )
+
+            elif event_type == "intent_fast_path":
+                classification = (
+                    event_data.get("classification") if isinstance(event_data, dict) else None
+                )
+                intent_type = (
+                    event_data.get("intent_type") if isinstance(event_data, dict) else None
+                )
+                if intent_type == "quiz":
+                    async for chunk in self._run_quiz(user_input, tid, classification):
+                        yield chunk
+                else:
+                    async for chunk in self._run_chitchat(user_input, tid, classification):
+                        yield chunk
+                return
+
             if event_type == "iteration_started":
                 # Internal event - not shown to user
                 logger.debug("[Loop] Iteration %d started", event_data["iteration"])

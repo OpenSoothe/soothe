@@ -116,6 +116,20 @@ def test_medium_query_gets_medium_prompt():
     assert 300 < len(modified.system_message.content) < 950  # Medium + nested RFC-104 XML + date
 
 
+def test_simple_query_gets_compact_prompt() -> None:
+    """Simple task complexity should use compact system prompt tier."""
+    config = SootheConfig()
+    middleware = SystemPromptOptimizationMiddleware(config=config)
+    classification = RoutingClassification(task_complexity="simple")
+    request = MockModelRequest(
+        state={"routing_classification": classification},
+        system_message=SystemMessage(content="original prompt"),
+    )
+    modified = middleware.modify_request(request)
+    assert "helpful AI assistant" in modified.system_message.content
+    assert "Today's date is" in modified.system_message.content
+
+
 def test_complex_query_gets_full_prompt():
     """Complex queries (LLM-classified) should receive full system prompt."""
     config = SootheConfig()
@@ -259,7 +273,7 @@ def test_all_prompts_include_current_date():
     expected_date = now.strftime("%Y-%m-%d")
 
     # Test all complexity levels
-    for complexity in ["chitchat", "medium", "complex"]:
+    for complexity in ["chitchat", "simple", "medium", "complex"]:
         classification = RoutingClassification(
             task_complexity=complexity,
             reasoning="Test",

@@ -1,27 +1,17 @@
-"""Merge intent classification with wire ``preferred_subagent`` for AgentLoop (IG-349)."""
+"""Merge intent classification with explicit subagent routing hints."""
 
 from __future__ import annotations
 
 from typing import Any
 
+from .models import RoutingClassification
+
 
 def build_loop_routing_classification(
     intent: Any | None,
     preferred_subagent: str | None,
-) -> Any | None:
-    """Build ``RoutingClassification`` for ``LoopState.routing_classification`` (IG-383).
-
-    When ``intent`` is None (e.g. classifier disabled), still honors ``preferred_subagent``.
-
-    Args:
-        intent: ``IntentClassification`` or None.
-        preferred_subagent: Optional wire hint from slash routing.
-
-    Returns:
-        ``RoutingClassification`` or None when neither source applies.
-    """
-    from soothe.core.intention import RoutingClassification
-
+) -> RoutingClassification | None:
+    """Build routing classification consumed by AgentLoop Plan/Execute."""
     if intent is None:
         if preferred_subagent:
             return RoutingClassification(
@@ -45,14 +35,12 @@ def build_loop_routing_classification(
     return base
 
 
-# Back-compat name (IG-349 era)
-build_loop_unified_classification = build_loop_routing_classification
-
-
 def _intent_task_complexity_to_routing(tc: str) -> str:
-    """Map ``IntentClassification.task_complexity`` to ``RoutingClassification`` literals."""
+    """Map intent task complexity to routing complexity."""
     if tc == "chitchat":
         return "chitchat"
+    if tc == "simple":
+        return "simple"
     if tc == "complex":
         return "complex"
     return "medium"

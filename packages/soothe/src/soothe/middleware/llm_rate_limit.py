@@ -367,11 +367,6 @@ class LLMRateLimitMiddleware(AgentMiddleware):
 
                 # Make LLM call with timeout (adaptive for large prompts, IG-301)
                 eff_timeout = self._effective_call_timeout(request)
-                logger.debug(
-                    "LLM rate limiter: making request (thread_id=%s timeout=%ds)",
-                    thread_id,
-                    eff_timeout,
-                )
                 try:
                     response = await asyncio.wait_for(handler(request), timeout=eff_timeout)
                 except TimeoutError:
@@ -392,9 +387,6 @@ class LLMRateLimitMiddleware(AgentMiddleware):
                 await self._enforce_rpm_limit_global()
 
                 eff_timeout = self._effective_call_timeout(request)
-                logger.debug(
-                    "LLM rate limiter: making request (global mode timeout=%ds)", eff_timeout
-                )
                 try:
                     response = await asyncio.wait_for(handler(request), timeout=eff_timeout)
                 except TimeoutError:

@@ -19,6 +19,7 @@ Layer 2 single-goal execution **must** be implemented as a **compiled LangGraph 
 The Loop Graph orchestrates assess → optional bounded evidence gathering → plan generation → **evidence validation** → execute → persistence → goal completion. Each graph invocation is keyed **only** by **`loop_id`** for LangGraph checkpointing and configurable routing. **CoreAgent** (Layer 1) remains a separate **CompiledStateGraph** keyed by **`thread_id`**. These two checkpoint namespaces **must never** share the same LangGraph thread/checkpoint key.
 
 This RFC also mandates **evidence-bound plan steps**: every planned step references validated evidence identifiers before Execute proceeds.
+It also defines graph-entry **intent classification** so conversational fast paths and normal loop execution share one topology.
 
 ---
 
@@ -83,18 +84,20 @@ Files on disk remain aligned with existing layout: loop runtime under **`$SOOTHE
 
 ### Nodes (normative names)
 
-1. **`init_or_resume`** — Load or initialize loop checkpoint via `AgentLoopStateManager`; construct `LoopState`; handle thread-continuation bootstrap where applicable.
+1. **`init_or_resume`** — Load or initialize loop checkpoint via `AgentLoopStateManager`; construct `LoopState`; run single-shot intent classification for this loop entry; handle thread-continuation bootstrap where applicable.
 2. **`iteration_start`** — Iteration begin hooks; checkpoint anchors “start” (RFC-218).
-3. **`assess`** — RFC-604 `StatusAssessment` structured call only.
-4. **`route_assess`** — Conditional edge: `done` → goal completion branch; `continue` / `replan` → evidence path; terminal if max iterations exceeded.
-5. **`bounded_evidence_gather`** — Bounded tool-use phase (configurable max tool calls, policy allowlist). Appends **Evidence Ledger** entries with stable IDs. May be skipped only when normatively allowed (e.g. assessment says `done`, or bootstrap paths defined in implementation guide — **not** a generic silent skip).
-6. **`plan_generate`** — RFC-604 `PlanGeneration` → `PlanResult` fragment merged into loop contract.
-7. **`validate_evidence_bindings`** — Deterministic validation: each step’s evidence references resolve to ledger entries and/or completed prior step ids in scope. On failure: bounded repair loop back to `plan_generate` and/or `bounded_evidence_gather`.
-8. **`execute`** — Existing Executor-style execution (parallel / sequential / dependency); streams CoreAgent; records `StepResult`s.
-9. **`record_iteration`** — Persist iteration, anchors “end”, emit iteration-complete semantics.
-10. **`goal_completion`** — RFC-219 policy branch (skip / direct / synthesize / summary); finalize goal output.
+3. **`intent_fast_path`** — Terminal branch for intent `chitchat` / `quiz`; emits graph event payload for runner to execute direct response flow without entering planning nodes.
+4. **`assess`** — RFC-604 `StatusAssessment` structured call only.
+5. **`route_assess`** — Conditional edge: `done` → goal completion branch; `continue` / `replan` → evidence path; terminal if max iterations exceeded.
+6. **`bounded_evidence_gather`** — Bounded tool-use phase (configurable max tool calls, policy allowlist). Appends **Evidence Ledger** entries with stable IDs. May be skipped only when normatively allowed (e.g. assessment says `done`, or bootstrap paths defined in implementation guide — **not** a generic silent skip).
+7. **`plan_generate`** — RFC-604 `PlanGeneration` → `PlanResult` fragment merged into loop contract.
+8. **`validate_evidence_bindings`** — Deterministic validation: each step’s evidence references resolve to ledger entries and/or completed prior step ids in scope. On failure: bounded repair loop back to `plan_generate` and/or `bounded_evidence_gather`.
+9. **`execute`** — Existing Executor-style execution (parallel / sequential / dependency); streams CoreAgent; records `StepResult`s.
+10. **`record_iteration`** — Persist iteration, anchors “end”, emit iteration-complete semantics.
+11. **`goal_completion`** — RFC-219 policy branch (skip / direct / synthesize / summary); finalize goal output.
 
 Edges form a directed graph with back-edges only where validation and caps allow (no unbounded cycles).
+`init_or_resume` conditionally routes either to `intent_fast_path` or the normal iteration path.
 
 ---
 
@@ -135,6 +138,8 @@ Exact consolidation is specified in the Implementation Guide; this RFC requires 
 ## Streaming and Observability
 
 The runner **consumes** `compiled.astream` (and compatible modes) from the Loop Graph and maps stream chunks to existing progress contracts (`RFC-614`, event catalog). Execute-phase suppression rules (e.g. IG-304) **remain**; breaking changes to client payloads are allowed **only** if RFC-614 / event catalog updates ship in the same change batch.
+
+Intent classification executed in the graph entry node **must** attach Langfuse metadata consistent with loop tracing (`component=agent_loop.intent_classification`, `phase=agent_loop_graph`, `loop_id`, `thread_id`) so classifier spans are correlated with the same session trace as plan/execute nodes.
 
 ---
 

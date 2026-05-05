@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 _TASK_TOOL_NAME = "task"
 # Layer 2 ``ExecutionHintsMiddleware`` appends using this prefix (must stay in sync).
 _EXECUTION_HINTS_MARKER = "\n\nExecution hints:"
-_VALID_TASK_COMPLEXITY = frozenset({"chitchat", "medium", "complex"})
+_VALID_TASK_COMPLEXITY = frozenset({"chitchat", "simple", "medium", "complex"})
 
 
 def _configurable_step_subagent() -> str | None:
@@ -105,6 +105,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
     Uses task_complexity from RoutingClassification (determined by fast LLM)
     to select appropriate prompt verbosity:
     - chitchat: Minimal prompt for greetings and quick questions
+    - simple: Compact execution prompt for small tasks
     - medium: Standard prompt with guidelines
     - complex: Full prompt with all context
 
@@ -328,6 +329,8 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
 
         if complexity == "chitchat":
             return _SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
+        if complexity == "simple":
+            return _SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
         if complexity == "medium":
             return _MEDIUM_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
         if self._config.system_prompt:
@@ -354,7 +357,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         - Tool-specific fragments when tools invoked
 
         Args:
-            complexity: One of "chitchat", "medium", "complex".
+            complexity: One of "chitchat", "simple", "medium", "complex".
             state: Request state with context information (workspace, git_status, etc.).
 
         Returns:
