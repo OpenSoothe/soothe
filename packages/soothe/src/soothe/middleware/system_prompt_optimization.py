@@ -684,29 +684,20 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         complexity: str
         routing_hint: str | None
         preferred_subagent: str | None
-        is_plan_only: bool
 
         if classification:
             if isinstance(classification, dict):
                 complexity = classification.get("task_complexity") or "medium"
                 routing_hint = classification.get("routing_hint")
                 preferred_subagent = classification.get("preferred_subagent")
-                is_plan_only = classification.get("is_plan_only", False)
             else:
                 complexity = classification.task_complexity
                 routing_hint = getattr(classification, "routing_hint", None)
                 preferred_subagent = getattr(classification, "preferred_subagent", None)
-                is_plan_only = getattr(classification, "is_plan_only", False)
-            logger.info(
-                "Optimizing prompt: complexity=%s, plan_only=%s",
-                complexity,
-                is_plan_only,
-            )
         else:
             complexity = "medium"
             routing_hint = None
             preferred_subagent = None
-            is_plan_only = False
             logger.debug(
                 "No routing_classification on state; using task_complexity=%s for system prompt",
                 complexity,

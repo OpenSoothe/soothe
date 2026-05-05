@@ -61,7 +61,7 @@ class TestSootheConfig:
         cfg = SootheConfig()
         prompt = cfg.resolve_system_prompt()
         assert "Soothe" in prompt
-        assert "long-running" in prompt
+        assert "continuous" in prompt
         assert "around-the-clock" in prompt
 
     def test_resolve_system_prompt_custom_name(self) -> None:
