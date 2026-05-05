@@ -1,7 +1,7 @@
 """Tests for metrics section in Plan prompt.
 
 Note: RFC-207 removed wave metrics from Plan prompts.
-Wave metrics are now internal tracking only (logged by LLMTracingMiddleware).
+Wave metrics are now internal tracking only (not surfaced in Plan prompts).
 """
 
 import pytest

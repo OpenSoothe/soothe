@@ -36,6 +36,33 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Cap planner context: full history can exceed model limits; tail preserves recent tool results.
+_PLAN_SEARCH_RECENT_MESSAGES_MAX = 40
+
+
+def recent_messages_for_explore_plan(
+    messages: list[Any] | None,
+    *,
+    max_messages: int = _PLAN_SEARCH_RECENT_MESSAGES_MAX,
+) -> list[Any]:
+    """Return the last ``max_messages`` entries for explore planning context (IG-389).
+
+    The planner must see recent ``ToolMessage`` / ``AIMessage`` pairs so it does not
+    re-issue the same readonly calls each iteration.
+
+    Args:
+        messages: LangGraph ``messages`` channel value (may be empty).
+        max_messages: Maximum messages to include from the tail; non-positive → none.
+
+    Returns:
+        A new list containing the trailing slice (possibly empty).
+    """
+    if max_messages <= 0:
+        return []
+    if not messages:
+        return []
+    return list(messages)[-max_messages:]
+
 
 def _tool_call_name_args(tc: Any) -> tuple[str, Any]:
     """Extract tool name and args from a LangChain tool call object or dict."""
@@ -225,8 +252,10 @@ def build_explore_engine(
             findings_so_far=findings_so_far,
         )
 
-        # Call LLM with tools bound
-        response = model_with_tools.invoke([HumanMessage(content=prompt)])
+        # Include recent graph messages so the model sees prior tool outputs (IG-389).
+        recent = recent_messages_for_explore_plan(messages)
+        plan_turn = recent + [HumanMessage(content=prompt)]
+        response = model_with_tools.invoke(plan_turn)
 
         # If no tool calls, fallback to generic glob
         if not response.tool_calls:

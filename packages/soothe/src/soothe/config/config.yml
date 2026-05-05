@@ -124,8 +124,7 @@ execution:
 # Observability Configuration - Unified debugging and monitoring settings
 
 observability:
-  llm_tracing_enabled: false  # Enable LLM request/response tracing for debugging
-  llm_tracing_preview_length: 200  # Max chars for message previews in trace logs
+  llm_tracing_enabled: false  # DEBUG logs for direct LLM calls (LLMTracingWrapper); use Langfuse for traces
 
   log_file_level: INFO  # Logging level for file output (DEBUG, INFO, WARNING, ERROR)
   log_file_path: null  # Log file path (empty = SOOTHE_HOME/logs/soothed.log)
