@@ -252,7 +252,11 @@ class StepLoopMixin:
             step_state.observation_scope_key = getattr(state, "observation_scope_key", "")
 
             async with self._concurrency.acquire_llm_call():
-                async for chunk in self._stream_phase(step_input, step_state):
+                async for chunk in self._stream_phase(
+                    step_input,
+                    step_state,
+                    suppress_global_error_on_llm_timeout=True,
+                ):
                     yield chunk
 
             response_text = "".join(step_state.full_response)
@@ -260,7 +264,8 @@ class StepLoopMixin:
 
             if step_state.stream_error:
                 step.status = "failed"
-                step.result = f"Stream error: {step_state.stream_error}"
+                err_detail = (step_state.stream_error or "").strip() or "LLM call timed out"
+                step.result = f"Stream error: {err_detail}"
                 blocked = [
                     s.id
                     for s in (state.plan.steps if state.plan else [])
