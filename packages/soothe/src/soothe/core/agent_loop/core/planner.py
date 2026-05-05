@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -42,62 +43,6 @@ if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
-
-
-def _calculate_evidence_based_confidence(
-    state: LoopState,
-    plan_result: Any,
-) -> float:
-    """Calculate confidence from evidence, not just LLM self-assessment.
-
-    Formula:
-    confidence = (
-        llm_confidence * 0.5 +
-        success_rate * 0.3 +
-        evidence_volume_score * 0.3 +
-        iteration_efficiency * 0.4
-    ) / 1.5
-
-    Args:
-        state: Loop state with accumulated evidence
-        plan_result: Plan result with LLM confidence
-
-    Returns:
-        Float between 0.0 and 1.0
-    """
-    # LLM confidence (50% weight)
-    llm_confidence = plan_result.confidence or 0.5
-
-    # Success rate (30% weight)
-    if not state.step_results:
-        success_rate = 0.0
-    else:
-        successful = sum(1 for r in state.step_results if r.success)
-        success_rate = successful / len(state.step_results)
-
-    # Evidence volume (30% weight)
-    # 0 chars = 0.0, 2000+ chars = 1.0
-    # RFC-211: Use outcome metadata to get size
-    total_evidence_length = sum(
-        r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0 for r in state.step_results
-    )
-    evidence_volume_score = min(total_evidence_length / 2000.0, 1.0)
-
-    # Iteration efficiency (40% weight)
-    # Higher efficiency = reaching goal faster
-    iteration = state.iteration or 1
-    max_iterations = 8
-    iteration_efficiency = max(0.0, 1.0 - (iteration - 1) / max_iterations)
-
-    # Combined score
-    confidence = (
-        llm_confidence * 0.5
-        + success_rate * 0.3
-        + evidence_volume_score * 0.3
-        + iteration_efficiency * 0.4
-    ) / 1.5
-
-    return min(max(confidence, 0.0), 1.0)  # Clamp to [0, 1]
 
 
 def _plan_phase_chat_model(model: Any) -> Any:
@@ -162,12 +107,13 @@ def _detect_completion_fallback(
     total_evidence_chars = sum(
         r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0 for r in state.step_results
     )
-    if total_evidence_chars >= 10_000 and plan_result.goal_progress >= 0.8:
+    _prog = plan_result.goal_progress
+    if total_evidence_chars >= 10_000 and _prog in ("high", "complete"):
         completion_indicators.append("high_evidence_volume")
         logger.info(
-            "[Completion] high-evidence: %d chars prog=%.0f%%",
+            "[Completion] high-evidence: %d chars prog=%s",
             total_evidence_chars,
-            plan_result.goal_progress * 100,
+            _prog,
         )
 
     # 3. Diminishing returns (no evidence growth in last iteration)
@@ -197,12 +143,16 @@ def _detect_completion_fallback(
             for r in state.step_results
             if r.success and r.outcome
         )
-        if all_successful and has_substantial_output and plan_result.goal_progress >= 0.85:
+        if (
+            all_successful
+            and has_substantial_output
+            and plan_result.goal_progress in ("high", "complete")
+        ):
             completion_indicators.append("all_steps_successful")
             logger.info(
-                "[Completion] all-success: %d steps prog=%.0f%%",
+                "[Completion] all-success: %d steps prog=%s",
                 len(state.step_results),
-                plan_result.goal_progress * 100,
+                plan_result.goal_progress,
             )
 
     # Decision: force completion if ≥2 indicators OR action repetition
@@ -216,7 +166,7 @@ def _detect_completion_fallback(
         updated = plan_result.model_copy(
             update={
                 "status": "done",
-                "goal_progress": max(plan_result.goal_progress, 0.95),
+                "goal_progress": "complete",
                 "next_action": plan_result.next_action or "I've completed the task.",
             }
         )
@@ -382,17 +332,16 @@ class LLMPlanner:
         # IG-154: AgentLoop integration - use GoalResult when available
         if agentloop_result:
             logger.info(
-                "Using AgentLoop result for reflection (status=%s, progress=%.0f%%, confidence=%.0f%%)",
+                "Using AgentLoop result for reflection (status=%s, progress=%s)",
                 agentloop_result.status,
-                agentloop_result.goal_progress * 100,
-                agentloop_result.confidence * 100,
+                agentloop_result.goal_progress,
             )
 
             # Build assessment from AgentLoop evidence
             evidence_preview = (
                 agentloop_result.evidence_summary[:300] if agentloop_result.evidence_summary else ""
             )
-            assessment = f"AgentLoop achieved {agentloop_result.goal_progress:.0%} progress (confidence {agentloop_result.confidence:.0%}). "
+            assessment = f"AgentLoop achieved {agentloop_result.goal_progress} progress. "
 
             if agentloop_result.status == "completed":
                 assessment += f"Goal successfully completed. {evidence_preview}"
@@ -403,7 +352,8 @@ class LLMPlanner:
 
             # Determine if revision needed
             should_revise = agentloop_result.status == "failed" or (
-                agentloop_result.goal_progress < 0.7 and agentloop_result.confidence < 0.6
+                isinstance(agentloop_result.goal_progress, str)
+                and agentloop_result.goal_progress in ["none", "low"]
             )
 
             # Generate feedback
@@ -439,7 +389,7 @@ class LLMPlanner:
                 )
 
                 # Or decompose into smaller sub-goals
-                if agentloop_result.goal_progress < 0.3:
+                if agentloop_result.goal_progress in ("none", "low"):
                     directives.append(
                         GoalDirective(
                             action="decompose",
@@ -449,14 +399,17 @@ class LLMPlanner:
                         )
                     )
 
-            elif agentloop_result.status == "completed" and agentloop_result.goal_progress > 0.95:
+            elif agentloop_result.status == "completed" and agentloop_result.goal_progress in (
+                "high",
+                "complete",
+            ):
                 # Successfully completed: mark goal complete
                 directives.append(
                     GoalDirective(
                         action="complete",
                         goal_id=goal_context.current_goal_id if goal_context else None,
                         description="Goal completed successfully",
-                        reason="AgentLoop achieved >95% progress with high confidence",
+                        reason="AgentLoop achieved high/complete progress",
                     )
                 )
 
@@ -815,14 +768,15 @@ class LLMPlanner:
                 raise ValueError("StatusAssessment returned None")
 
             logger.debug(
-                "Assess: status=%s prog=%.0f%% conf=%.0f%%",
+                "Assess: status=%s prog=%s",
                 assessment.status,
-                assessment.goal_progress * 100,
-                assessment.confidence * 100,
+                assessment.goal_progress,
             )
 
             return assessment
 
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             logger.warning("[LLMPlanner] StatusAssessment failed: %s", str(e)[:200])
             # Fallback: return conservative assessment (minimal fields)
@@ -862,7 +816,7 @@ class LLMPlanner:
 
         # Add assessment context to plan generation prompt
         context_msg = SystemMessage(
-            content=f"Status: {assessment.status}, Progress: {assessment.goal_progress:.0%}"
+            content=f"Status: {assessment.status}, Progress: {assessment.goal_progress}"
         )
         plan_messages = messages + [context_msg]
 
@@ -891,6 +845,8 @@ class LLMPlanner:
 
             return plan_result
 
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             logger.warning("[LLMPlanner] PlanGeneration failed: %s", str(e)[:200])
             # Fallback: return default plan with LLM-like message
@@ -952,7 +908,6 @@ class LLMPlanner:
         return PlanResult(
             status=assessment.status,
             goal_progress=assessment.goal_progress,
-            confidence=assessment.confidence,
             assessment_reasoning="",
             plan_reasoning="",
             plan_action=plan_result.plan_action,
@@ -1000,7 +955,6 @@ class LLMPlanner:
                     }
                 )
 
-        result.confidence = _calculate_evidence_based_confidence(state, result)
         return _detect_completion_fallback(state, result, goal)
 
     async def assess_status(
@@ -1027,7 +981,7 @@ class LLMPlanner:
             if guard_enabled and state.iteration == 0 and len(state.step_results) == 0:
                 logger.warning("[Guard] Reject 'done' at iter=0 no execution")
                 assessment.status = "replan"
-                assessment.goal_progress = 0.0
+                assessment.goal_progress = "none"
         return assessment
 
     async def generate_from_assessment(
@@ -1057,7 +1011,6 @@ class LLMPlanner:
             return PlanResult(
                 status=assessment.status,
                 goal_progress=assessment.goal_progress,
-                confidence=assessment.confidence,
                 assessment_reasoning="",
                 plan_reasoning="",
                 plan_action="keep",
@@ -1080,7 +1033,6 @@ class LLMPlanner:
             result = PlanResult(
                 status=assessment.status,
                 goal_progress=assessment.goal_progress,
-                confidence=assessment.confidence,
                 assessment_reasoning="",
                 plan_reasoning="",
                 plan_action="new",
@@ -1179,7 +1131,7 @@ class LLMPlanner:
                     if guard_enabled and state.iteration == 0 and len(state.step_results) == 0:
                         logger.warning("[Guard] Reject 'done' at iter=0 no execution")
                         assessment.status = "replan"
-                        assessment.goal_progress = 0.0
+                        assessment.goal_progress = "none"  # IG-399
 
                 # Early completion: apply goal-completion policy (IG-298)
                 if assessment.status == "done":
@@ -1210,7 +1162,6 @@ class LLMPlanner:
                     result = PlanResult(
                         status=assessment.status,
                         goal_progress=assessment.goal_progress,
-                        confidence=assessment.confidence,
                         assessment_reasoning="",
                         plan_reasoning="",
                         plan_action="keep",
@@ -1239,7 +1190,6 @@ class LLMPlanner:
                         result = PlanResult(
                             status=assessment.status,
                             goal_progress=assessment.goal_progress,
-                            confidence=assessment.confidence,
                             assessment_reasoning="",
                             plan_reasoning="",
                             plan_action="new",
@@ -1280,11 +1230,10 @@ class LLMPlanner:
                         f" steps={len(result.decision.steps)} mode={result.decision.execution_mode}"
                     )
                 logger.debug(
-                    "Plan result: status=%s plan=%s prog=%.0f%% conf=%.0f%%%s",
+                    "Plan result: status=%s plan=%s prog=%s%s",
                     result.status,
                     result.plan_action,
-                    result.goal_progress * 100,
-                    result.confidence * 100,
+                    result.goal_progress,
                     decision_info,
                 )
                 prompt_chars = sum(
@@ -1367,7 +1316,6 @@ class LLMPlanner:
                                         result = PlanResult(
                                             status=assessment.status,
                                             goal_progress=assessment.goal_progress,
-                                            confidence=assessment.confidence,
                                             assessment_reasoning="",
                                             plan_reasoning="",
                                             plan_action="new",

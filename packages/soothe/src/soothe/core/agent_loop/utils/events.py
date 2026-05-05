@@ -14,8 +14,7 @@ class LoopAgentReasonEvent(ProtocolEvent):
 
     type: Literal["soothe.cognition.agent_loop.reasoned"] = "soothe.cognition.agent_loop.reasoned"
     status: str
-    progress: float
-    confidence: float
+    progress: str
     next_action: str
     assessment_reasoning: str = ""
     plan_reasoning: str = ""

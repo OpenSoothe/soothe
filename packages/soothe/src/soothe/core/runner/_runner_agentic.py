@@ -518,7 +518,6 @@ class AgenticMixin:
                         LoopAgentReasonEvent(
                             status=status,
                             progress=event_data["progress"],
-                            confidence=event_data["confidence"],
                             next_action=next_action,
                             assessment_reasoning=event_data.get("assessment_reasoning", ""),
                             plan_reasoning=event_data.get("plan_reasoning", ""),
@@ -609,7 +608,7 @@ class AgenticMixin:
                 )
 
                 logger.info(
-                    "[Runner] Agentic loop completed (status=%s, progress=%.0f%%)",
+                    "[Runner] Agentic loop completed (status=%s, progress=%s)",
                     final_result.status,
-                    final_result.goal_progress * 100,
+                    final_result.goal_progress,
                 )

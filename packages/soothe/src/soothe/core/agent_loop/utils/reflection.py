@@ -490,13 +490,31 @@ def parse_plan_response_text(response: str, goal: str, iteration: int = 0) -> An
     if plan_action == "keep":
         decision = None
 
+    # Normalize goal_progress: accept both legacy numeric (0.0-1.0) and new descriptive levels
+    _raw_gp = data.get("goal_progress", "none")
+    if isinstance(_raw_gp, (int, float)):
+        _v = float(_raw_gp)
+        if _v >= 0.9:
+            goal_progress: str = "complete"
+        elif _v >= 0.6:
+            goal_progress = "high"
+        elif _v >= 0.2:
+            goal_progress = "medium"
+        elif _v > 0:
+            goal_progress = "low"
+        else:
+            goal_progress = "none"
+    elif isinstance(_raw_gp, str) and _raw_gp in ("none", "low", "medium", "high", "complete"):
+        goal_progress = _raw_gp
+    else:
+        goal_progress = "none"
+
     try:
         return PlanResult(
             status=status,
             plan_action=plan_action,
             decision=decision,
-            goal_progress=float(data.get("goal_progress", 0.0)),
-            confidence=float(data.get("confidence", 0.8)),
+            goal_progress=goal_progress,
             next_action=next_action,
             evidence_summary=str(data.get("evidence_summary", "") or ""),
         )

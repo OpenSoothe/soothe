@@ -18,7 +18,6 @@ def test_agent_loop_graph_exposes_rfc220_named_nodes() -> None:
         "iteration_start",
         "bounded_evidence_gather",
         "plan_assess",
-        "plan_pre_generate",
         "plan_generate",
         "goal_completion",
         "resolve_decision",

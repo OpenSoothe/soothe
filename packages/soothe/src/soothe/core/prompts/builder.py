@@ -306,16 +306,6 @@ class PromptBuilder:
             parts.append("</PRIOR_CONVERSATION>\n")
 
         if plan_phase == "generate":
-            if context.pre_generate_evidence:
-                parts.append("\n<PRE_GENERATE_EVIDENCE>\n")
-                parts.append(
-                    "Bounded readonly evidence probe captured before this generate call "
-                    "(maximum three probes):\n"
-                )
-                for line in context.pre_generate_evidence:
-                    parts.append(f"- {line}\n")
-                parts.append("</PRE_GENERATE_EVIDENCE>\n")
-
             nxt = next_goal_local_step_id_start(state)
             if nxt > 1:
                 width = max(2, len(str(nxt + 1)))

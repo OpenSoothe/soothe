@@ -86,7 +86,7 @@ class MockLoopPlanner:
                     decision=_two_step_replan_decision(),
                     next_action="I'll switch to a tighter two-step plan.",
                     reasoning="replan",
-                    goal_progress=0.3,
+                    goal_progress="low",
                 )
             return PlanResult(
                 status="done",
