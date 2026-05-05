@@ -43,6 +43,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
     mock_ckpt.loop_messages = []  # RFC-214: Required list field for LoopState
 
     mock_sm = Mock()
+    mock_sm.loop_id = "loop-test"
     mock_sm.load = AsyncMock(return_value=None)
     mock_sm.initialize = AsyncMock(return_value=mock_ckpt)
     mock_sm.start_new_goal = Mock(return_value=mock_gr)
@@ -112,6 +113,7 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
     mock_ckpt.loop_messages = []  # RFC-214: Required list field for LoopState
 
     mock_sm = Mock()
+    mock_sm.loop_id = "loop-test"
     mock_sm.load = AsyncMock(return_value=None)
     mock_sm.initialize = AsyncMock(return_value=mock_ckpt)
     mock_sm.start_new_goal = Mock(return_value=mock_gr)
@@ -132,7 +134,7 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.core.agent_loop.core.agent_loop.determine_completion_action",
+            "soothe.core.agent_loop.graph.loop_iteration.determine_completion_action",
             return_value=("skip", "from plan full_output"),
         ),
     ):
@@ -180,6 +182,7 @@ async def test_completed_payload_skip_goal_completion_wire_duplicate_false_for_s
     mock_ckpt.loop_messages = []  # RFC-214: Required list field for LoopState
 
     mock_sm = Mock()
+    mock_sm.loop_id = "loop-test"
     mock_sm.load = AsyncMock(return_value=None)
     mock_sm.initialize = AsyncMock(return_value=mock_ckpt)
     mock_sm.start_new_goal = Mock(return_value=mock_gr)
@@ -200,11 +203,11 @@ async def test_completed_payload_skip_goal_completion_wire_duplicate_false_for_s
             return_value=mock_gcm,
         ),
         patch(
-            "soothe.core.agent_loop.core.agent_loop.determine_completion_action",
+            "soothe.core.agent_loop.graph.loop_iteration.determine_completion_action",
             return_value=("summary", None),
         ),
         patch(
-            "soothe.core.agent_loop.core.agent_loop.generate_user_fallback_summary",
+            "soothe.core.agent_loop.graph.loop_iteration.generate_user_fallback_summary",
             return_value="fallback summary",
         ),
     ):

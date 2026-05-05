@@ -706,6 +706,13 @@ class AgenticLoopConfig(BaseModel):
         description="Guard: Reject 'done' at iteration 0 with no execution (IG-053)",
     )
 
+    loop_orchestrator_evidence_validate: bool = Field(
+        default=True,
+        description=(
+            "When evidence_ledger is non-empty, require valid StepAction.evidence_refs (RFC-620)."
+        ),
+    )
+
     planning: PlanningConfig = Field(
         default_factory=PlanningConfig,
         description="Planning configuration",
