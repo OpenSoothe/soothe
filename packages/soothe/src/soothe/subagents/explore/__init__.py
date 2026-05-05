@@ -8,13 +8,13 @@ from typing import Any
 from soothe_sdk.plugin import plugin, subagent
 
 from .implementation import create_explore_subagent
-from .schemas import ExploreResult, ExploreState, ExploreSubagentConfig, MatchEntry
+from .schemas import ExploreAgentState, ExploreResult, ExploreSubagentConfig, MatchEntry
 
 __all__ = [
     # Schemas
+    "ExploreAgentState",
     "ExploreResult",
     "ExploreSubagentConfig",
-    "ExploreState",
     "MatchEntry",
     # Plugin
     "ExplorePlugin",

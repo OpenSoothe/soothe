@@ -1,7 +1,8 @@
-"""Explore subagent read-only filesystem tools (RFC-613).
+"""Explore subagent filesystem + shell tools (RFC-613).
 
-Uses ``SootheFilesystemMiddleware`` so explore shares the same built-in filesystem
-tool surface as the main agent, while exposing only a read-only subset.
+Uses ``SootheFilesystemMiddleware`` with a curated subset: filesystem reconnaissance
+tools plus ``execute`` for **read-only** shell commands only (enforced by prompts and
+operator policy, not a separate wrapper tool).
 
 IG-328: Backend uses callable pattern to resolve workspace from thread state at runtime,
 not from static resolver context.
@@ -70,11 +71,12 @@ def get_explore_tools(
     virtual_mode: bool | None = None,
     allow_paths_outside_workspace: bool | None = None,
 ) -> list[Any]:
-    """Get read-only filesystem tools for the explore subagent.
+    """Get explore tools: readonly filesystem surface plus ``execute`` for readonly shell.
 
-    Tools (all read-only, workspace-scoped via backend):
-    - glob, grep, ls, read_file: from deepagents (via middleware base)
-    - file_info: Soothe extension (metadata only)
+    Exposed tools (mutation tools from middleware are filtered out):
+    - glob, grep, ls, read_file: deepagents (via middleware base)
+    - file_info: Soothe (metadata)
+    - execute: deepagents shell (must be used only for read-only commands; see prompts)
 
     IG-328: Backend is callable so workspace resolves from thread state at runtime,
     not from static resolver workspace.
@@ -108,8 +110,8 @@ def get_explore_tools(
         workspace_root=root,  # Fallback for non-tool operations
     )
 
-    read_only_tool_names = ("glob", "grep", "ls", "read_file", "file_info")
+    explore_tool_names = ("glob", "grep", "ls", "read_file", "file_info", "execute")
     by_name = {t.name: t for t in middleware.tools}
-    tools = [by_name[name] for name in read_only_tool_names if name in by_name]
+    tools = [by_name[name] for name in explore_tool_names if name in by_name]
 
     return tools
