@@ -40,7 +40,7 @@ def build_explore_engine(
         allow_paths_outside_workspace=allow_paths_outside_workspace,
     )
     thoroughness = config.thoroughness
-    max_iterations = config.max_iterations.get(thoroughness, 50)
+    max_iterations = config.max_iterations.get(thoroughness, 24)
     max_matches = config.max_matches_returned
 
     middleware = build_explore_middleware_stack(

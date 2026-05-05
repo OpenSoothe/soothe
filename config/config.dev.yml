@@ -198,4 +198,15 @@ subagents:
     config:
       max_steps: 10
 
+  explore:
+    enabled: true
+    config:
+      thoroughness: "medium"
+      max_iterations:
+        quick: 12
+        medium: 24
+        thorough: 48
+      max_read_lines: 50
+      max_matches_returned: 5
+
 # Note: Logging configuration moved to observability section above

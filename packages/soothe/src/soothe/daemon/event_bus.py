@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 from soothe.core.events import EventPriority
@@ -15,6 +16,37 @@ if TYPE_CHECKING:
     from soothe.core.events import EventMeta
 
 logger = logging.getLogger(__name__)
+
+# IG-392: When consumer < producer, NORMAL/HIGH drops can happen at very high rate
+# (streaming + subagents). Per-drop WARNING spam obscures real issues and I/O. Throttle
+# to at most one WARNING per topic per interval. (Timeout is correlated, not causal:
+# the queue fills during long streams; timeout ends the wait.)
+_NORMAL_DROP_LOG_LAST: dict[str, float] = {}
+_HIGH_DROP_LOG_LAST: dict[str, float] = {}
+_DROP_LOG_INTERVAL_SEC = 5.0
+
+
+def _effective_queue_max(queue: asyncio.Queue[Any]) -> int:
+    """Bounded queue max size for capacity math (0 = unlimited → treat as large cap)."""
+    m = queue.maxsize
+    if m == 0:
+        return 10000  # match default client_session queue; heuristic for "unlimited"
+    return m
+
+
+def _throttle_log(
+    last_map: dict[str, float],
+    topic: str,
+    *,
+    interval: float,
+) -> bool:
+    """Return True if we should emit a log line for this topic (rate-limited)."""
+    now = time.monotonic()
+    prev = last_map.get(topic, 0.0)
+    if now - prev >= interval:
+        last_map[topic] = now
+        return True
+    return False
 
 
 class EventBus:
@@ -66,7 +98,7 @@ class EventBus:
         Implements priority-aware overflow strategy (IG-258 Phase 1):
         - CRITICAL events: Never dropped, block until space available
         - HIGH events: Rarely dropped, warn if dropped
-        - NORMAL events: Standard drop with warning
+        - NORMAL events: Drop when full; one throttled warning per topic per interval
         - LOW events: Silent drop when queue near capacity (80%)
 
         Args:
@@ -82,15 +114,44 @@ class EventBus:
             return
 
         # Send (event, event_meta) tuple to queues for filtering (RFC-0022)
-        dropped = 0
         for queue in queues:
             # IG-258 Phase 1: Priority-aware overflow strategy
             queue_size = queue.qsize()
-            queue_max = 10000  # Default maxsize from client_session.py
+            queue_max = _effective_queue_max(queue)
             near_capacity = queue_size > (queue_max * 0.8)  # 80% threshold
 
             # Get event priority from metadata
             priority = event_meta.priority if event_meta else EventPriority.NORMAL
+
+            # Fast drop when already at capacity (avoids exception per put on hot path)
+            if priority == EventPriority.NORMAL and queue_size >= queue_max:
+                if _throttle_log(
+                    _NORMAL_DROP_LOG_LAST,
+                    topic,
+                    interval=_DROP_LOG_INTERVAL_SEC,
+                ):
+                    logger.warning(
+                        "Queue full for topic %s, dropping NORMAL priority events "
+                        "(consumer slower than producer; suppressing similar logs %.0fs)",
+                        topic,
+                        _DROP_LOG_INTERVAL_SEC,
+                    )
+                continue
+            if priority == EventPriority.HIGH and queue_size >= queue_max:
+                if _throttle_log(
+                    _HIGH_DROP_LOG_LAST,
+                    topic,
+                    interval=_DROP_LOG_INTERVAL_SEC,
+                ):
+                    logger.error(
+                        "Dropped HIGH priority event — queue full (topic=%s, queue=%d/%d); "
+                        "suppressing repeat logs %.0fs",
+                        topic,
+                        queue_size,
+                        queue_max,
+                        _DROP_LOG_INTERVAL_SEC,
+                    )
+                continue
 
             try:
                 # LOW priority: Skip when queue near capacity
@@ -100,7 +161,6 @@ class EventBus:
                         queue_size,
                         queue_max,
                     )
-                    dropped += 1
                     continue
 
                 # Try non-blocking put first
@@ -113,22 +173,33 @@ class EventBus:
                         topic,
                     )
                     await queue.put((event, event_meta))
-                else:
-                    # Other priorities: Drop with appropriate logging
-                    dropped += 1
-                    if priority == EventPriority.HIGH:
+                elif priority == EventPriority.HIGH:
+                    if _throttle_log(
+                        _HIGH_DROP_LOG_LAST,
+                        topic,
+                        interval=_DROP_LOG_INTERVAL_SEC,
+                    ):
                         logger.error(
-                            "Dropped HIGH priority event due to queue overflow (topic=%s, queue=%d/%d)",
+                            "Dropped HIGH priority event due to queue overflow (topic=%s, queue=%d/%d); "
+                            "suppressing repeat logs %.0fs",
                             topic,
                             queue_size,
                             queue_max,
+                            _DROP_LOG_INTERVAL_SEC,
                         )
-                    elif priority == EventPriority.NORMAL:
+                elif priority == EventPriority.NORMAL:
+                    if _throttle_log(
+                        _NORMAL_DROP_LOG_LAST,
+                        topic,
+                        interval=_DROP_LOG_INTERVAL_SEC,
+                    ):
                         logger.warning(
-                            "Queue full for topic %s, dropping NORMAL priority event",
+                            "Queue full for topic %s, dropping NORMAL priority events "
+                            "(consumer backlog; suppressing similar logs %.0fs)",
                             topic,
+                            _DROP_LOG_INTERVAL_SEC,
                         )
-                    # LOW priority already handled above with debug log
+                # LOW priority: rare here (handled above); drop silently
 
     async def subscribe(self, topic: str, queue: asyncio.Queue[dict[str, Any]]) -> None:
         """Subscribe queue to receive events for topic with write lock (Phase 2).
