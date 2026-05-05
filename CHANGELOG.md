@@ -17,7 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - IG-300: per-loop daemon workspace under ``$SOOTHE_HOME/Workspace/<loop_id>/``; unified tool metadata helpers for policy path extraction; ``PolicyContext.workspace`` for stream-scoped filesystem checks
 
 ### Changed
-- IG-375: Removed first-party LangSmith tracing integration (CLI `/trace`, env bootstrap for LangSmith, doctor LangSmith check, `ls_integration` stream metadata); local ``observability.llm_tracing`` log middleware unchanged
+- IG-375: Removed first-party LangSmith tracing integration (CLI `/trace`, env bootstrap for LangSmith, doctor LangSmith check, `ls_integration` stream metadata); removed legacy local LLM log tracing (middleware + ``LLMTracingWrapper`` / ``observability.llm_tracing_enabled``) in favor of Langfuse
 - IG-303: AgentLoop plan step ids use ``<PLANID>-<model-step-id>`` (random 3-letter uppercase ``plan_id`` per new plan, ``LoopState.plan_id`` reused on ``plan_action=keep``); replaces per-step random 3-char ids while keeping IG-358 collision safety against prior ``step_results``
 - Migrated soothe-community to standalone project ([github.com/OpenSoothe/soothe-community](https://github.com/OpenSoothe/soothe-community))
 - Removed soothe-community from monorepo workspace

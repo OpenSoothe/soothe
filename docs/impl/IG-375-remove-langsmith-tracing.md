@@ -12,7 +12,7 @@ Remove first-party LangSmith integration: env propagation, project override, TUI
 ## Out of scope
 
 - LangChain may still honor user-set `LANGCHAIN_TRACING_V2` / vendor env vars; Soothe no longer documents or bridges them.
-- `observability.llm_tracing_*` (local log middleware) unchanged.
+- Follow-up: local ``llm_tracing_enabled`` / ``LLMTracingMiddleware`` / ``LLMTracingWrapper`` removed; use ``observability.langfuse`` for traces.
 
 ## Status
 
