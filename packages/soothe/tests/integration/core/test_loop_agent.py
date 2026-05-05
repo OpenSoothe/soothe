@@ -67,8 +67,7 @@ class MockLoopPlanner:
                 plan_action="keep",
                 next_action="I'm done and sharing the outcome.",
                 reasoning="Done",
-                goal_progress=1.0,
-                confidence=0.95,
+                goal_progress="complete",
             )
 
         if self.scenario == "replan":
@@ -93,8 +92,7 @@ class MockLoopPlanner:
                 status="done",
                 plan_action="keep",
                 next_action="I'm wrapping up after the revised plan.",
-                goal_progress=1.0,
-                confidence=0.9,
+                goal_progress="complete",
             )
 
         if self.scenario == "continue":
@@ -110,16 +108,14 @@ class MockLoopPlanner:
                 status="done",
                 plan_action="keep",
                 next_action="I'm done with the remaining work.",
-                goal_progress=1.0,
-                confidence=0.95,
+                goal_progress="complete",
             )
 
         return PlanResult(
             status="done",
             plan_action="keep",
             next_action="I'm done.",
-            goal_progress=1.0,
-            confidence=0.9,
+            goal_progress="complete",
         )
 
 
@@ -170,7 +166,7 @@ async def test_loop_agent_success() -> None:
     )
 
     assert result.status == "done"
-    assert result.goal_progress == 1.0
+    assert result.goal_progress == "complete"
     assert planner.plan_count == 2
 
 
@@ -242,8 +238,7 @@ async def test_loop_agent_max_iterations() -> None:
                     reasoning="more work",
                 ),
                 next_action="I'll take another step toward the goal.",
-                goal_progress=0.1,
-                confidence=0.5,
+                goal_progress="none",
             )
 
     planner = NeverDonePlanner()
@@ -298,8 +293,7 @@ async def test_loop_agent_parallel_execution() -> None:
                 status="done",
                 plan_action="keep",
                 next_action="I'm finished with the parallel work.",
-                goal_progress=1.0,
-                confidence=0.95,
+                goal_progress="complete",
             )
 
     planner = ParallelPlanner()

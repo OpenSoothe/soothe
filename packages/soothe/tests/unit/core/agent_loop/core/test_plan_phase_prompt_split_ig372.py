@@ -64,8 +64,7 @@ def test_assess_goal_progress_in_plan_context_user_message_ig376() -> None:
     state = LoopState(goal="read readme", thread_id="t1", iteration=2, max_iterations=8)
     state.previous_plan = PlanResult(
         status="continue",
-        confidence=0.85,
-        goal_progress=0.4,
+        goal_progress="low",
         plan_action="keep",
         decision=None,
         next_action="Open README and show first lines",

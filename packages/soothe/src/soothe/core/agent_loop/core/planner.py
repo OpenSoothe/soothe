@@ -828,8 +828,7 @@ class LLMPlanner:
             # Fallback: return conservative assessment (minimal fields)
             return StatusAssessment(
                 status="replan",
-                goal_progress=0.0,
-                confidence=0.5,
+                goal_progress="none",  # IG-399: descriptive level
                 require_goal_completion=False,  # Default: skip synthesis
             )
 

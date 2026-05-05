@@ -23,8 +23,7 @@ def sample_assessment() -> StatusAssessment:
     """Create sample Phase 1 assessment."""
     return StatusAssessment(
         status="continue",
-        goal_progress=0.36,
-        confidence=0.85,
+        goal_progress="low",
     )
 
 
@@ -87,7 +86,7 @@ def test_next_action_preserves_full_text(
         next_action=long_action,
     )
 
-    assessment = StatusAssessment(status="continue", goal_progress=0.5, confidence=0.8)
+    assessment = StatusAssessment(status="continue", goal_progress="medium")
 
     planner = LLMPlanner.__new__(LLMPlanner)
     result = planner._combine_results(assessment, plan_result)
@@ -126,8 +125,7 @@ def test_schema_max_length_updated() -> None:
     # Should accept without validation error (max_length=500)
     result = PlanResult(
         status="continue",
-        goal_progress=0.5,
-        confidence=0.8,
+        goal_progress="medium",
         plan_action="new",
         decision=decision,
         next_action=long_action,
@@ -142,15 +140,13 @@ def test_early_completion_preserves_action() -> None:
     """IG-264: Early completion (status=done) derives simple completion message."""
     assessment = StatusAssessment(
         status="done",
-        goal_progress=1.0,
-        confidence=0.95,
+        goal_progress="complete",
     )
 
     # IG-264: Early completion derives simple message (no LLM-generated fields)
     result = PlanResult(
         status=assessment.status,
         goal_progress=assessment.goal_progress,
-        confidence=assessment.confidence,
         assessment_reasoning="",  # IG-264: Empty
         plan_reasoning="",  # IG-264: Empty
         plan_action="keep",
