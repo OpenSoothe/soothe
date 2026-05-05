@@ -1,6 +1,6 @@
 # IG-396: RFC-220 Loop Graph topology, spec renumber, Langfuse bridge
 
-**Status**: In Progress  
+**Status**: Completed  
 **RFC**: [RFC-220](../specs/RFC-220-langgraph-agent-loop-orchestrator.md)  
 **Created**: 2026-05-05  
 
