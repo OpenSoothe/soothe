@@ -23,43 +23,6 @@ from soothe.utils import expand_path
 logger = logging.getLogger(__name__)
 
 
-def _get_effective_work_dir(fallback_work_dir: str) -> str:
-    """Get effective work directory, checking LangGraph config first (RFC-103).
-
-    Priority:
-    1. workspace from LangGraph configurable (passed through execution)
-    2. ContextVar (for same-async-context operations)
-    3. fallback_work_dir (daemon default)
-
-    Args:
-        fallback_work_dir: Fallback directory if no dynamic workspace set.
-
-    Returns:
-        Effective workspace directory path as string.
-    """
-    # Priority 1: Try to get workspace from LangGraph configurable
-    try:
-        from langgraph.config import get_config
-
-        config = get_config()
-        configurable = config.get("configurable", {})
-        workspace = configurable.get("workspace")
-        if workspace:
-            return str(workspace)
-    except Exception:  # noqa: S110
-        pass
-
-    # Priority 2: Try ContextVar
-    from soothe.core import FrameworkFilesystem
-
-    dynamic_workspace = FrameworkFilesystem.get_current_workspace()
-    if dynamic_workspace:
-        return str(dynamic_workspace)
-
-    # Priority 3: Use fallback
-    return fallback_work_dir
-
-
 @plugin(
     name="file_ops", version="2.0.0", description="File system operations", trust_level="built-in"
 )

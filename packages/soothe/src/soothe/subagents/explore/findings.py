@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.messages import ToolMessage
 from langchain.agents.middleware.types import ToolCallRequest
+from langchain_core.messages import ToolMessage
 
 _EXPLORE_TOOL_NAMES = frozenset({"glob", "grep", "ls", "read_file", "file_info"})
 
@@ -37,9 +37,7 @@ def extract_findings_from_tool_result(
     if not isinstance(args, dict):
         args = {}
 
-    result_data = (
-        tool_msg.artifact if tool_msg.artifact is not None else tool_msg.content
-    )
+    result_data = tool_msg.artifact if tool_msg.artifact is not None else tool_msg.content
 
     findings: list[dict[str, Any]] = []
 
@@ -48,9 +46,7 @@ def extract_findings_from_tool_result(
         if isinstance(result_data, list):
             paths = [str(p) for p in result_data[:20]]
         elif isinstance(result_data, str) and result_data.strip():
-            paths = [
-                p.strip() for p in result_data.strip().split("\n")[:20] if p.strip()
-            ]
+            paths = [p.strip() for p in result_data.strip().split("\n")[:20] if p.strip()]
         for path in paths:
             findings.append({"path": path, "snippet": None, "relevance": "unknown"})
 
@@ -74,11 +70,7 @@ def extract_findings_from_tool_result(
         if isinstance(result_data, list):
             entries = [str(e) for e in result_data[:20]]
         elif isinstance(result_data, str) and result_data.strip():
-            entries = [
-                e.strip()
-                for e in result_data.strip().split("\n")[:20]
-                if e.strip()
-            ]
+            entries = [e.strip() for e in result_data.strip().split("\n")[:20] if e.strip()]
         for path in entries:
             findings.append({"path": path, "snippet": None, "relevance": "unknown"})
 
@@ -89,9 +81,7 @@ def extract_findings_from_tool_result(
         elif result_data is not None:
             content_str = str(result_data)
         if content_str.strip():
-            last_path = str(
-                args.get("file_path", "") or args.get("path", "") or "unknown"
-            )
+            last_path = str(args.get("file_path", "") or args.get("path", "") or "unknown")
             findings.append(
                 {
                     "path": last_path,
