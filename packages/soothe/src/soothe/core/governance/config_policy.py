@@ -11,7 +11,7 @@ from soothe_sdk.tools.metadata import (
     is_policy_filesystem_tool,
 )
 
-from soothe.core.security.operation_security import WorkspaceToolOperationSecurity
+from soothe.core.governance.operation_security import WorkspaceToolOperationSecurity
 from soothe.protocols.operation_security import (
     OperationKind,
     OperationSecurityContext,
