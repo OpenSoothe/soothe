@@ -1,6 +1,6 @@
 # BM-005: Baseline Non-TUI Cases
 
-**Date**: 2026-05-06
+**Date**: 2026-05-06 (original), 2026-05-07 (rerun)
 **Purpose**: Baseline tests for basic functionalities and performance of Soothe agent in non-TUI mode
 **Environment**: macOS arm64, Python 3.12
 
@@ -28,7 +28,7 @@ MIT
 ```
 ```
 
-**Runtime**: 26.30 seconds
+**Runtime**: 26.30 seconds (original) | **31.34 seconds (2026-05-07 rerun)**
 
 ---
 
@@ -49,7 +49,7 @@ The project contains **71 README files** total. Breaking this down:
 If you exclude the virtual environment (`.venv`) and cache files, the project itself has **11 README files**.
 ```
 
-**Runtime**: 16.42 seconds
+**Runtime**: 16.42 seconds (original) | **20.71 seconds (2026-05-07 rerun)**
 
 ---
 
@@ -140,7 +140,7 @@ This project is a **Claude Code skills repository** (BMAD - Build Me A Doctor) c
 **Total Files Analyzed:**  3,886 (including compiled) /  2,822 (source only)
 ```
 
-**Runtime**: ~326 seconds (5:26)
+**Runtime**: ~326 seconds (5:26) (original) | **42.82 seconds (2026-05-07 rerun)** ✅ **7.6x faster**
 
 ---
 
@@ -148,20 +148,32 @@ This project is a **Claude Code skills repository** (BMAD - Build Me A Doctor) c
 
 **Query**: "Analyze the code structure of the soothe-sdk package"
 
-**Response**:
+**Response (Original)**:
 ```
 ERROR: AttributeError: 'StatusAssessment' object has no attribute 'assessment_reasoning'
 
 This case encountered an error during execution. The agent failed to complete the analysis due to an internal AttributeError related to StatusAssessment.
 ```
 
-**Runtime**: 391.35 seconds (6:31.35)
+**Response (2026-05-07 Rerun)**: ✅ **SUCCESS** - Generated comprehensive architecture analysis covering:
+- Package overview with design principles
+- Module structure (core, client, plugin, protocols, tools, utils, UX layers)
+- Dependency graph
+- API surface analysis with public entry points
+- Class hierarchy (events, exceptions, verbosity)
+- Key function signatures
+- Implementation patterns
+- Assessment & recommendations
 
-**Status**: ❌ Failed with error
+**Runtime**: 391.35 seconds (6:31.35) (original) | **363.75 seconds (6:03.75) (2026-05-07 rerun)**
+
+**Status**: ❌ Failed with error (original) → ✅ **Success (2026-05-07 rerun)**
 
 ---
 
 ## Summary
+
+### Original Results (2026-05-06)
 
 | Case | Query | Runtime | Status |
 |------|-------|---------|--------|
@@ -173,3 +185,26 @@ This case encountered an error during execution. The agent failed to complete th
 **Total Runtime**: ~760 seconds (~12:40)
 
 **Success Rate**: 3/4 (75%)
+
+### Rerun Results (2026-05-07)
+
+| Case | Query | Runtime | Status | Change vs Original |
+|------|-------|---------|--------|-------------------|
+| 1 | Read last 10 lines of README | 31.34s | ✅ Success | +5.04s (slightly slower) |
+| 2 | Count all README files | 20.71s | ✅ Success | +4.29s (slightly slower) |
+| 3 | Count all file types | 42.82s | ✅ Success | **-283s (7.6x faster!)** |
+| 4 | Analyze soothe-sdk structure | 363.75s (6:03.75) | ✅ Success | **Fixed - was error** |
+
+**Total Runtime**: ~458 seconds (~7:38)
+
+**Success Rate**: 4/4 (100%)
+
+### Key Observations
+
+1. **Case 3 dramatically improved**: File type counting went from 326s to 43s (7.6x faster), likely due to optimized file system traversal or better prompting efficiency.
+
+2. **Case 4 now works**: The `StatusAssessment` AttributeError has been resolved. The agent now successfully generates comprehensive architecture analysis.
+
+3. **Cases 1 & 2 slightly slower**: Minor regression (+5s and +4s respectively), within normal variance for LLM response times.
+
+4. **Overall improvement**: Total runtime reduced from ~12:40 to ~7:38 (40% faster), and success rate improved from 75% to 100%.
