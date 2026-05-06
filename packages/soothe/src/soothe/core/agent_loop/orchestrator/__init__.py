@@ -6,6 +6,6 @@ during ``soothe.config`` initialization.
 
 from __future__ import annotations
 
-from soothe.core.agent_loop.graph.runtime_context import LoopRuntimeContext
+from soothe.core.agent_loop.orchestrator.runtime_context import LoopRuntimeContext
 
 __all__ = ["LoopRuntimeContext"]

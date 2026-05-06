@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.core.agent_loop.core.executor import Executor
+from soothe.core.agent_loop.execution.executor import Executor
 from soothe.core.agent_loop.state.schemas import StepAction
 
 

@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from soothe.core.agent_loop.core.executor import Executor
+from soothe.core.agent_loop.execution.executor import Executor
 
 from ..runtime_context import LoopRuntimeContext
 

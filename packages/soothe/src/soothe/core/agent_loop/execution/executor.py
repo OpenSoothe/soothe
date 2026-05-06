@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 from soothe.core.agent_loop.analysis.metadata_generator import (
     PLANNER_OUTCOME_PREVIEW_CAP,
 )
-from soothe.core.agent_loop.core.act_wave_finalize import (
+from soothe.core.agent_loop.execution.act_wave_finalize import (
     DELEGATE_FINAL_WAVE_CAP,
     compute_act_wave_finalize,
     provenance_is_task_delegate,
@@ -220,7 +220,7 @@ class Executor:
     ) -> None:
         """Apply resolved Act-wave visible text to state (IG-199, IG-355, IG-357).
 
-        Resolution is centralized in :func:`~soothe.core.agent_loop.core.act_wave_finalize.compute_act_wave_finalize`.
+        Resolution is centralized in :func:`~soothe.core.agent_loop.execution.act_wave_finalize.compute_act_wave_finalize`.
         """
         root_text = (
             ""
@@ -1158,6 +1158,9 @@ class Executor:
         # RFC-211: Collect per-tool outcome metadata (structured, no filesystem cache; IG-387)
         outcomes: list[dict] = []
 
+        # Track tool call arguments from AI messages for logging
+        tool_call_args: dict[str, dict[str, Any]] = {}
+
         stream_chunk_count = 0  # Debug counter
 
         def _maybe_cap_subagent_tasks(msg: ToolMessage) -> bool:
@@ -1228,11 +1231,15 @@ class Executor:
                                 clipped = clipped[:_DELEGATE_FINAL_PER_TASK_CAP]
                             delegate_task_final_parts.append(clipped)
 
+                    # Format arguments for logging
+                    args = tool_call_args.get(tool_call_id or "")
+                    args_str = log_preview(str(args), chars=100) if args else ""
                     logger.debug(
-                        "Tool #%d %s(%s) → %s, %dB",
+                        "Tool #%d %s(%s) args=%s → %s, %dB",
                         tool_call_count,
                         tool_name,
                         tool_call_id,
+                        args_str,
                         outcome.get("type", "unknown"),
                         outcome.get("size_bytes", 0),
                     )
@@ -1241,12 +1248,31 @@ class Executor:
                     t = extract_text_from_message_content(msg.content)
                     if t:
                         chunks.append(t)
+                    # Extract tool call arguments from chunks
+                    for tc in getattr(msg, "tool_call_chunks", []):
+                        if isinstance(tc, dict) and "id" in tc:
+                            tc_id = tc["id"]
+                            args_str = tc.get("args", "")
+                            if args_str:
+                                try:
+                                    import json
+                                    tool_call_args[tc_id] = json.loads(args_str)
+                                except (json.JSONDecodeError, TypeError):
+                                    pass  # Args may be partial in streaming
+                    # Also check merged tool_calls
+                    for tc in getattr(msg, "tool_calls", []):
+                        if isinstance(tc, dict) and "id" in tc:
+                            tool_call_args[tc["id"]] = tc.get("args", {})
                 elif isinstance(msg, AIMessage):
                     messages.append(msg)
                     t = extract_text_from_message_content(msg.content)
                     if t:
                         chunks.append(t)
                         logger.debug("[AI Message] %s", log_preview(t, chars=150))
+                    # Extract tool call arguments
+                    for tc in getattr(msg, "tool_calls", []):
+                        if isinstance(tc, dict) and "id" in tc:
+                            tool_call_args[tc["id"]] = tc.get("args", {})
 
             for task_msg in iter_messages_for_delegate_task_scan(chunk):
                 text_out = extract_text_from_message_content(task_msg.content)

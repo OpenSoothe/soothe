@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.core.agent_loop.state.state_manager import AgentLoopStateManager
+from soothe.core.agent_loop.state.manager import AgentLoopStateManager
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def temp_state_manager():
         db_path = workspace / "test_loop_checkpoints.db"
 
         with patch(
-            "soothe.core.agent_loop.state.state_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+            "soothe.core.agent_loop.state.manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
             state_manager = AgentLoopStateManager(loop_id="test_loop_001", workspace=workspace)

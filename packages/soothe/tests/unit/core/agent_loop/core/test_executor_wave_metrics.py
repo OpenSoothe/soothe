@@ -3,7 +3,7 @@
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.core.agent_loop.core.executor import Executor
+from soothe.core.agent_loop.execution.executor import Executor
 from soothe.core.agent_loop.state.schemas import LoopState, StepResult
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.core.agent_loop.core.thread_continuation_bootstrap import (
+from soothe.core.agent_loop.engine.thread_continuation import (
     build_thread_continuation_bootstrap_plan,
     thread_continuation_plan_bootstrap_allowed,
 )

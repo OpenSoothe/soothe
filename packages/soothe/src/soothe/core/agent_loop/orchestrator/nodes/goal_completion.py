@@ -7,8 +7,8 @@ import time
 from typing import Any
 
 from soothe.core.agent_loop.analysis.synthesis import SynthesisGenerator
-from soothe.core.agent_loop.core.fallback_summary import generate_user_fallback_summary
-from soothe.core.agent_loop.core.plan_manager import CompletionStrategy
+from soothe.core.agent_loop.engine.fallback_summary import generate_user_fallback_summary
+from soothe.core.agent_loop.planning.manager import CompletionStrategy
 from soothe.core.agent_loop.utils.messages import last_ledger_ai_content
 from soothe.core.agent_loop.utils.stream_normalize import (
     GoalCompletionAccumState,

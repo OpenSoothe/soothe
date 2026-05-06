@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.core.agent_loop.core.plan_manager import (
+from soothe.core.agent_loop.planning.manager import (
     determine_goal_completion_needs,
 )
 from soothe.core.agent_loop.state.schemas import (
@@ -14,8 +14,8 @@ from soothe.core.agent_loop.state.schemas import (
     StepAction,
     StepResult,
 )
-from soothe.core.agent_loop.core.plan_dag import PlanDAG
-from soothe.core.agent_loop.core.plan_manager import (
+from soothe.core.agent_loop.planning.dag import PlanDAG
+from soothe.core.agent_loop.planning.manager import (
     PlanManager,
     CompletionStrategy,
 )
