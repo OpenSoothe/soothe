@@ -1,0 +1,6 @@
+[submodule "client/go"]
+	path = client/go
+	url = git@github.com:mirasoth/soothe-client-go.git
+[submodule "client/typescript"]
+	path = client/typescript
+	url = git@github.com:mirasoth/soothe-client-typescript.git
