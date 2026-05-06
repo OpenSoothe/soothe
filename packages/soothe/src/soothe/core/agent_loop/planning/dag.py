@@ -172,3 +172,25 @@ class PlanDAG:
 
     def get_remaining_step_ids(self) -> set[str]:
         return {cid for cid, n in self.nodes.items() if n.status == "pending"}
+
+    @property
+    def pending_step_ids(self) -> set[str]:
+        """Step IDs that are still pending (not yet executed)."""
+        return {cid for cid, n in self.nodes.items() if n.status == "pending"}
+
+    @property
+    def failed_step_ids(self) -> set[str]:
+        """Step IDs that have failed execution."""
+        return {cid for cid, n in self.nodes.items() if n.status == "failed"}
+
+    @property
+    def ready_step_ids(self) -> set[str]:
+        """Pending steps whose dependencies are all satisfied (ready to execute)."""
+        completed = self.get_completed_step_ids()
+        ready: set[str] = set()
+        for cid, node in self.nodes.items():
+            if node.status != "pending":
+                continue
+            if all(dep in completed for dep in node.dependencies):
+                ready.add(cid)
+        return ready

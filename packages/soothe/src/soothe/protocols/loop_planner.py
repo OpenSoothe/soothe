@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from soothe.core.agent_loop.state.schemas import LoopState, PlanResult, StatusAssessment
 from soothe.protocols.planner import PlanContext
@@ -22,6 +22,8 @@ class LoopPlannerProtocol(Protocol):
         goal: str,
         state: LoopState,
         context: PlanContext,
+        *,
+        plan_manager: Any = None,
     ) -> PlanResult:
         """Assess progress and decide the next executable plan fragment.
 
@@ -29,6 +31,7 @@ class LoopPlannerProtocol(Protocol):
             goal: Goal description.
             state: Current loop state (iteration, step results, prior plan, current decision).
             context: Capabilities, completed steps summary, workspace, etc.
+            plan_manager: Optional PlanManager for DAG-aware progressive planning.
 
         Returns:
             PlanResult with status, UX fields, and either ``plan_action='keep'`` or a new
@@ -51,6 +54,8 @@ class LoopPlannerProtocol(Protocol):
         state: LoopState,
         context: PlanContext,
         assessment: StatusAssessment,
+        *,
+        plan_manager: Any = None,
     ) -> PlanResult:
         """Generate or keep an execution plan after assess determines work remains."""
         ...
