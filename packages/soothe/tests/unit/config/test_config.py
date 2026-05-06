@@ -227,7 +227,7 @@ class TestModelRouter:
 
     def test_unknown_role_fallback(self) -> None:
         cfg = SootheConfig(router=ModelRouter(default="test:model"))
-        assert cfg.resolve_model("nonexistent") == "test:model"
+        assert cfg.resolve_model("nonexistent") == "test:model"  # type: ignore[arg-type]
 
     # Backend Inheritance Tests
     def test_resolve_backend_default_inheritance(self) -> None:

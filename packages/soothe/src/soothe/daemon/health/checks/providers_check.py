@@ -51,7 +51,7 @@ async def _check_provider(provider_name: str, config: SootheConfig | None) -> Ch
     # Try to create a chat model and make a test call
     try:
         # Create a minimal test model
-        model = config.create_chat_model(provider_name)
+        model = config.create_chat_model("default")
 
         # IG-143: Add metadata for tracing
         from soothe.middleware._utils import create_llm_call_metadata

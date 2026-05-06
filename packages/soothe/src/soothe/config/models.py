@@ -86,8 +86,20 @@ class VectorStoreProviderConfig(BaseModel):
     grpc_port: int = 50051
 
 
+ModelRole = Literal["default", "fast", "think", "image", "embedding"]
+"""Valid purpose-based model roles.
+
+- ``default``: Main orchestrator reasoning (CoreAgent, failure analysis, system context).
+- ``fast``: Cheap/fast operations (intent classification, routing, scenario classification,
+  explore subagent, memory extraction, document/audio tooling).
+- ``think``: Stronger reasoning (planning, consensus validation, backoff reasoning).
+- ``image``: Vision-capable model (image analysis, daemon vision preflight).
+- ``embedding``: Embedding model (MemU vector search, semantic memory).
+"""
+
+
 class ModelRouter(BaseModel):
-    """Maps purpose-based roles to ``provider_name:model_name`` strings.
+    """Maps :data:`ModelRole` values to ``provider_name:model_name`` strings.
 
     Unset roles fall back to ``default``.
 
