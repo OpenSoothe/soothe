@@ -11,8 +11,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.core.agent_loop.graph.builder import build_agent_loop_graph
-from soothe.core.agent_loop.graph.runtime_context import LoopRuntimeContext
+from soothe.core.agent_loop.orchestrator.builder import build_agent_loop_graph
+from soothe.core.agent_loop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.utils.observability.langfuse import (
     loop_graph_langfuse_run_display_name,
     merge_langfuse_runnable_config,

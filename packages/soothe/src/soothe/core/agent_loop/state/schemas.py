@@ -650,7 +650,7 @@ class LoopState(BaseModel):
         working_memory: Loop working-memory instance (RFC-203) when enabled.
         loop_messages: RFC-214: Unified message ledger with adjacent Human-AI pairs for all orchestration turns.
         last_execute_assistant_text: Resolved visible answer for the latest Execute wave — see
-            :mod:`soothe.core.agent_loop.core.act_wave_finalize` (IG-357).
+            :mod:`soothe.core.agent_loop.execution.act_wave_finalize` (IG-357).
         last_wave_answer_from_delegate_final: True when that text came from ``task`` tool returns
             (``task_tool_aggregate`` provenance), not root-graph assistant stream (IG-355).
         last_execute_wave_parallel_multi_step: True when the last wave ran multiple parallel steps (IG-199).

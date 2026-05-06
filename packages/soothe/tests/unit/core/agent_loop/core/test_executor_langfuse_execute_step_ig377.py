@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 from soothe.config import SootheConfig
 from soothe.config.models import LangfuseIntegrationConfig, ObservabilityConfig
-from soothe.core.agent_loop.core.executor import Executor
+from soothe.core.agent_loop.execution.executor import Executor
 from soothe.utils.observability import langfuse as langfuse_util
 
 

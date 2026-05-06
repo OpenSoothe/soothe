@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Literal
 
 from soothe.core.agent_loop.utils.messages import last_ledger_ai_content
 
-from .plan_dag import PlanDAG
+from .dag import PlanDAG
 
 if TYPE_CHECKING:
     from soothe.core.agent_loop.state.schemas import PlanResult, StepResult

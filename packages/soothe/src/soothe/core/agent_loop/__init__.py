@@ -1,7 +1,7 @@
 """AgentLoop - Plan-Execute execution (RFC-201, RFC-205)."""
 
 # Core orchestration
-from .core.agent_loop import AgentLoop
+from .engine.agent_loop import AgentLoop
 
 # State management
 from .state.schemas import (

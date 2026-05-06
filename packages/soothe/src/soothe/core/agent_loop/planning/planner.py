@@ -992,7 +992,7 @@ class LLMPlanner:
         assessment: Any,
     ) -> Any:
         """Generate plan after an existing assess result (split graph flow)."""
-        from soothe.core.agent_loop.core.plan_manager import (
+        from soothe.core.agent_loop.planning.manager import (
             determine_goal_completion_needs,
         )
         from soothe.core.agent_loop.state.schemas import PlanResult
@@ -1135,7 +1135,7 @@ class LLMPlanner:
 
                 # Early completion: apply goal-completion policy (IG-298)
                 if assessment.status == "done":
-                    from soothe.core.agent_loop.core.plan_manager import (
+                    from soothe.core.agent_loop.planning.manager import (
                         determine_goal_completion_needs,
                     )
 
