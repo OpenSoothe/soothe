@@ -45,8 +45,8 @@ async def test_done_preserves_planner_full_output() -> None:
 
 
 @pytest.mark.asyncio
-async def test_done_falls_back_to_step_evidence_when_full_output_empty() -> None:
-    """When done but full_output is empty, join successful step evidence strings."""
+async def test_done_does_not_populate_full_output_from_step_evidence() -> None:
+    """When done but full_output is empty, it remains empty — goal completion uses the ledger."""
     mock_lp = AsyncMock()
     mock_lp.plan = AsyncMock(
         return_value=PlanResult(
@@ -73,6 +73,5 @@ async def test_done_falls_back_to_step_evidence_when_full_output_empty() -> None
 
     out = await phase.plan(goal="g", state=state, context=ctx)
 
-    assert out.full_output is not None
-    assert "s1" in out.full_output
-    assert "read_file" in out.full_output
+    # full_output is no longer populated from step evidence; goal_completion uses the ledger
+    assert out.full_output is None

@@ -79,14 +79,8 @@ class PlanPhase:
                 update={"evidence_summary": _compact or f"{_ev[:400].rstrip()}…"},
             )
 
-        if result.is_done():
-            existing_full = (result.full_output or "").strip()
-            if not existing_full:
-                full_outputs = [
-                    r.to_evidence_string(truncate=False) for r in state.step_results if r.success
-                ]
-                if full_outputs:
-                    result = result.model_copy(update={"full_output": "\n\n".join(full_outputs)})
+        # full_output is now populated by goal_completion from the ledger,
+        # so we don't concatenate raw evidence strings here.
 
         state.add_action_to_history(result.next_action or "")
 

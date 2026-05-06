@@ -69,12 +69,12 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
         ]
 
     assert events
-    assert calls == 0, "final-report CoreAgent astream should not run when reusing Execute text"
+    assert calls == 0, "final-report CoreAgent astream should not run when reusing ledger text"
 
 
 @pytest.mark.asyncio
-async def test_done_skips_goal_completion_synthesis_when_direct_return_selected() -> None:
-    """Direct goal completion should bypass synthesis when planner recommends it."""
+async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected() -> None:
+    """Ledger-direct goal completion should bypass synthesis when planner recommends it."""
     calls = 0
 
     async def counting_astream(*args, **kwargs):  # noqa: ARG002
@@ -115,7 +115,11 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
         ),
         patch(
             "soothe.core.agent_loop.graph.nodes.goal_completion.determine_completion_action",
-            return_value=("skip", "from plan full_output"),
+            return_value="ledger_direct",
+        ),
+        patch(
+            "soothe.core.agent_loop.graph.nodes.goal_completion.last_ledger_ai_content",
+            return_value="from ledger",
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
@@ -136,15 +140,14 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
         ]
 
     assert events
-    assert calls == 0, "synthesis should not run when planner recommends direct return"
+    assert calls == 0, "synthesis should not run when planner recommends ledger direct"
     completed = [e for e in events if e[0] == "completed"]
     assert len(completed) == 1
-    assert completed[0][1]["skip_goal_completion_wire_duplicate"] is True
 
 
 @pytest.mark.asyncio
-async def test_completed_payload_skip_goal_completion_wire_duplicate_false_for_summary() -> None:
-    """Summary path may emit runner goal_completion chunk; do not set skip flag."""
+async def test_completed_payload_for_summary_path() -> None:
+    """Summary path may emit runner goal_completion chunk."""
     mock_core = Mock()
     mock_core.astream = AsyncMock()
 
@@ -177,7 +180,7 @@ async def test_completed_payload_skip_goal_completion_wire_duplicate_false_for_s
         ),
         patch(
             "soothe.core.agent_loop.graph.nodes.goal_completion.determine_completion_action",
-            return_value=("summary", None),
+            return_value="summary",
         ),
         patch(
             "soothe.core.agent_loop.graph.nodes.goal_completion.generate_user_fallback_summary",
@@ -203,4 +206,3 @@ async def test_completed_payload_skip_goal_completion_wire_duplicate_false_for_s
 
     completed = [e for e in events if e[0] == "completed"]
     assert len(completed) == 1
-    assert completed[0][1]["skip_goal_completion_wire_duplicate"] is False

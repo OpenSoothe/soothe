@@ -581,7 +581,7 @@ class ReportOutputConfig(BaseModel):
     synthesis_max_chars: int = Field(default=0, ge=0, le=50000)
 
 
-AgenticFinalResponseMode = Literal["adaptive", "always_synthesize", "always_last_execute"]
+AgenticFinalResponseMode = Literal["adaptive", "always_synthesize"]
 
 AgenticGoalCompletionMode = Literal["llm_only", "heuristic_only", "hybrid"]
 
@@ -665,9 +665,8 @@ class AgenticLoopConfig(BaseModel):
     final_response: AgenticFinalResponseMode = Field(
         default="adaptive",
         description=(
-            "On goal completion: adaptive uses heuristics to choose last Execute text vs "
-            "a final CoreAgent report; always_synthesize always runs the report; always_last_execute "
-            "skips the report when last Execute text exists"
+            "On goal completion: adaptive uses heuristics to choose ledger direct vs "
+            "a final CoreAgent report; always_synthesize always runs the report"
         ),
     )
 

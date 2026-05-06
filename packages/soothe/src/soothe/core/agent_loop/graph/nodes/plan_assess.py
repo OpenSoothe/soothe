@@ -58,6 +58,12 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
     ctx.scratch.plan_assessment = assessment
 
     if assessment.status == "done":
+        if state.has_remaining_steps():
+            logger.warning(
+                "[Plan] LLM returned status=done but %d step(s) remain; proceeding to goal completion (no new plan will be generated)",
+                len(state.current_decision.steps) - len(state.completed_step_ids),
+            )
+
         gc_mode = (
             agent_loop.config.agentic.goal_completion_mode
             if agent_loop.config is not None
@@ -78,6 +84,52 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             next_action="Goal achieved successfully",
             require_goal_completion=require_completion,
             full_output=state.last_execute_assistant_text,
+        )
+        plan_result = agent_loop.plan_phase.finalize_plan_result(
+            state=state,
+            context=context,
+            result=plan_result,
+        )
+        ctx.scratch.plan_result = plan_result
+        await ctx.emit(
+            "plan",
+            {
+                "iteration": state.iteration,
+                "status": plan_result.status,
+                "progress": plan_result.goal_progress,
+                "next_action": plan_result.next_action,
+                "assessment_reasoning": plan_result.assessment_reasoning,
+                "plan_reasoning": plan_result.plan_reasoning,
+                "plan_action": plan_result.plan_action,
+            },
+        )
+        return {"plan_route": PLAN_ROUTE_GOAL_DONE}
+
+    # goal_progress-based early routing: when progress is high or complete, go to goal completion
+    if assessment.goal_progress in ("high", "complete"):
+        logger.info(
+            "[Plan] goal_progress=%s routing to goal completion",
+            assessment.goal_progress,
+        )
+        gc_mode = (
+            agent_loop.config.agentic.goal_completion_mode
+            if agent_loop.config is not None
+            else "llm_only"
+        )
+        require_completion = determine_goal_completion_needs(
+            llm_decision=assessment.require_goal_completion,
+            state=state,
+            mode=gc_mode,
+        )
+        plan_result = PlanResult(
+            status=assessment.status,
+            goal_progress=assessment.goal_progress,
+            assessment_reasoning=assessment.assessment_reasoning or "",
+            plan_reasoning="",
+            plan_action="keep",
+            decision=None,
+            next_action="Goal progress sufficient for completion",
+            require_goal_completion=require_completion,
         )
         plan_result = agent_loop.plan_phase.finalize_plan_result(
             state=state,
