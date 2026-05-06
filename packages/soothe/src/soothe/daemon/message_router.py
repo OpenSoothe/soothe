@@ -446,7 +446,7 @@ class MessageRouter:
 
     async def _handle_thread_list(self, client_id: str, msg: dict[str, Any]) -> None:
         d = self._daemon
-        from soothe.core.thread import ThreadFilter
+        from soothe.protocols.durability import ThreadFilter
 
         filter_data = msg.get("filter")
         thread_filter = None
