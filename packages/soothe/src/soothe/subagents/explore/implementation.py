@@ -59,6 +59,7 @@ def create_explore_subagent(
         initial_workspace,
         allow_paths_outside_workspace=config.security.allow_paths_outside_workspace,
         synthesis_model=synthesis_model,
+        soothe_config=config,
     )
 
     return {

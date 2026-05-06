@@ -17,6 +17,7 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.types import Command, Overwrite
 
+from soothe.utils.similarity import calculate_relevance_score, rank_by_similarity
 from soothe.utils.subagent_emit import emit_subagent_wire_event
 
 from .events import ExploreCompletedEvent, ExploreStartedEvent
@@ -32,6 +33,8 @@ from .search_target import resolve_explore_search_target
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
+
+    from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
 
@@ -314,8 +317,10 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
 
         Performance optimization (May 2026):
         - Uses fast model for synthesis (3x faster than default model)
-        - Limits findings payload to 15 entries (reduced from 20)
+        - Limits findings payload to configurable max (default 15, reduced from 20)
         - Truncates snippets to 100 chars (same as before)
+        - Calculates relevance scores when semantic similarity enabled
+        - Ranks findings by relevance before synthesis
         - Logs synthesis timing for performance monitoring
         """
         start_time = time.perf_counter()
@@ -325,10 +330,30 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             current_iter,
         )
 
-        # Reduce payload size for faster synthesis (15 findings × 100 chars)
+        # Calculate relevance scores if semantic similarity enabled
+        if self._explore_config.enable_semantic_similarity:
+            for finding in findings:
+                finding["relevance"] = calculate_relevance_score(
+                    finding,
+                    search_target,
+                    enable_semantic=True,
+                )
+            logger.debug("Explore: calculated relevance scores for %d findings", len(findings))
+
+            # Rank findings by relevance (highest first)
+            findings = rank_by_similarity(
+                findings,
+                search_target,
+                content_key="snippet",
+                enable_semantic=True,
+            )
+            logger.debug("Explore: ranked findings by relevance")
+
+        # Reduce payload size for faster synthesis (configurable max_findings_for_synthesis)
+        max_findings = self._explore_config.max_findings_for_synthesis
         detail_lines = [
             f"- {f.get('path', 'unknown')}: {(f.get('snippet') or '')[:100] or '(no snippet)'}"
-            for f in findings[:15]  # Changed from 20 to 15
+            for f in findings[:max_findings]  # Configurable limit (default 15)
         ]
         findings_detail = "\n".join(detail_lines) if detail_lines else "No findings"
         prompt = SYNTHESIZE.format(
@@ -338,9 +363,10 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         )
 
         logger.debug(
-            "Explore: synthesis prompt size: %d chars (%d findings)",
+            "Explore: synthesis prompt size: %d chars (%d findings, max=%d)",
             len(prompt),
             len(detail_lines),
+            max_findings,
         )
 
         # Use fast model for structured output (optimization)
@@ -398,10 +424,30 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
                 current,
             )
 
-            # Reduce payload size for faster synthesis (15 findings × 100 chars)
+            # Calculate relevance scores if semantic similarity enabled
+            if self._explore_config.enable_semantic_similarity:
+                for finding in findings:
+                    finding["relevance"] = calculate_relevance_score(
+                        finding,
+                        search_target,
+                        enable_semantic=True,
+                    )
+                logger.debug("Explore: calculated relevance scores for %d findings", len(findings))
+
+                # Rank findings by relevance (highest first)
+                findings = rank_by_similarity(
+                    findings,
+                    search_target,
+                    content_key="snippet",
+                    enable_semantic=True,
+                )
+                logger.debug("Explore: ranked findings by relevance")
+
+            # Reduce payload size for faster synthesis (configurable max_findings_for_synthesis)
+            max_findings = self._explore_config.max_findings_for_synthesis
             detail_lines = [
                 f"- {f.get('path', 'unknown')}: {(f.get('snippet') or '')[:100] or '(no snippet)'}"
-                for f in findings[:15]  # Changed from 20 to 15
+                for f in findings[:max_findings]  # Configurable limit (default 15)
             ]
             findings_detail = "\n".join(detail_lines) if detail_lines else "No findings"
             prompt = SYNTHESIZE.format(
@@ -411,9 +457,10 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             )
 
             logger.debug(
-                "Explore: synthesis prompt size: %d chars (%d findings)",
+                "Explore: synthesis prompt size: %d chars (%d findings, max=%d)",
                 len(prompt),
                 len(detail_lines),
+                max_findings,
             )
 
             # Use fast model for structured output (optimization)
@@ -525,6 +572,7 @@ def build_explore_middleware_stack(
     max_iterations: int,
     max_matches: int,
     synthesis_model: BaseChatModel | None = None,
+    soothe_config: SootheConfig | None = None,
 ) -> list[AgentMiddleware[Any, None]]:
     """Ordered middleware list for ``create_agent`` (outermost first).
 
@@ -535,11 +583,44 @@ def build_explore_middleware_stack(
         max_iterations: Maximum model turns before synthesis.
         max_matches: Maximum matches to return in result.
         synthesis_model: Optional fast model for synthesis (defaults to model).
+        soothe_config: Optional SootheConfig for tool middleware (limits, retries).
 
     Returns:
-        Middleware stack with budget, findings, wire, and finalize middlewares.
+        Middleware stack with tool limits, retries, budget, findings, wire, and finalize.
     """
+    from soothe.middleware.tool_limits import (
+        build_tool_limit_middleware,
+        build_tool_retry_middleware,
+    )
+
+    # Build tool limit and retry middleware from config
+    tool_middlewares: list[AgentMiddleware[Any, None]] = []
+    if soothe_config is not None and soothe_config.execution is not None:
+        # Use explore-specific limits if set, otherwise use global config
+        exec_config = soothe_config.execution
+        thread_limit = (
+            explore_config.tool_call_limit_thread or exec_config.tool_call_limit.global_thread_limit
+        )
+        run_limit = (
+            explore_config.tool_call_limit_run or exec_config.tool_call_limit.global_run_limit
+        )
+
+        # Build a temporary config with explore-specific limits
+        from soothe.config.models import ExecutionConfig
+
+        explore_exec_config = ExecutionConfig(
+            tool_call_limit=exec_config.tool_call_limit.model_copy(
+                update={"global_thread_limit": thread_limit, "global_run_limit": run_limit}
+            ),
+            tool_retry=exec_config.tool_retry,
+        )
+        tool_middlewares.extend(build_tool_limit_middleware(explore_exec_config))
+        tool_middlewares.extend(build_tool_retry_middleware(explore_exec_config))
+
     return [
+        # Tool call limit and retry middleware (outermost - applied first)
+        *tool_middlewares,
+        # Explore-specific middlewares
         ExploreWireMiddleware(
             thoroughness=explore_config.thoroughness,
             resolver_workspace=resolver_workspace,

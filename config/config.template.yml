@@ -110,10 +110,25 @@ execution:
   llm_timeout_retry_multiplier: 2.0
   concurrency:
     max_parallel_goals: 1
-    max_parallel_steps: 16
-    max_parallel_subagents: 16
-    global_max_llm_calls: 9
+    max_parallel_steps: 2
+    max_parallel_subagents: 4
+    global_max_llm_calls: 5
     step_parallelism: dependency  # sequential | dependency | max
+  # Tool call limits (ToolCallLimitMiddleware)
+  tool_call_limit:
+    global_thread_limit: 20  # Max tool calls per thread
+    global_run_limit: 10     # Max tool calls per single invocation
+    tool_specific_limits:  # Tool-specific overrides for web search related tools
+      wizsearch_search: {thread_limit: 5, run_limit: 3}
+      wizsearch_crawl: {thread_limit: 5, run_limit: 3}
+      web_search: {thread_limit: 5, run_limit: 3}
+      fetch_url: {thread_limit: 5, run_limit: 3}
+      search: {thread_limit: 5, run_limit: 3}
+  # Tool retry config (ToolRetryMiddleware)
+  tool_retry:
+    max_retries: 3
+    backoff_factor: 2.0
+    initial_delay: 1.0
   recovery:
     progressive_checkpoints: true  # RFC-0010
     auto_resume_on_start: false

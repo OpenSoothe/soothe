@@ -14,6 +14,8 @@ from .tools import get_explore_tools
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
+    from soothe.config import SootheConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,6 +26,7 @@ def build_explore_engine(
     *,
     allow_paths_outside_workspace: bool = False,
     synthesis_model: BaseChatModel | None = None,
+    soothe_config: SootheConfig | None = None,
 ) -> Any:
     """Build the explore agent graph (``create_agent`` → ``CompiledStateGraph``).
 
@@ -33,6 +36,7 @@ def build_explore_engine(
         workspace: Search boundary (working directory / resolver default).
         allow_paths_outside_workspace: When False, sandbox tools to *workspace*.
         synthesis_model: Optional fast model for synthesis (defaults to model).
+        soothe_config: Optional SootheConfig for tool middleware (limits, retries).
 
     Returns:
         Compiled LangGraph runnable.
@@ -52,6 +56,7 @@ def build_explore_engine(
         max_iterations=max_iterations,
         max_matches=max_matches,
         synthesis_model=synthesis_model,
+        soothe_config=soothe_config,
     )
 
     graph = create_agent(
