@@ -8,7 +8,7 @@ from typing import Any
 
 from soothe.core.agent_loop.analysis.synthesis import SynthesisGenerator
 from soothe.core.agent_loop.core.fallback_summary import generate_user_fallback_summary
-from soothe.core.agent_loop.policies.goal_completion_policy import determine_completion_action
+from soothe.core.agent_loop.core.plan_manager import CompletionStrategy
 from soothe.core.agent_loop.utils.messages import last_ledger_ai_content
 from soothe.core.agent_loop.utils.stream_normalize import (
     GoalCompletionAccumState,
@@ -28,6 +28,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     state = ctx.loop_state
     state_manager = ctx.state_manager
     goal_record = ctx.goal_record
+    plan_manager = ctx.plan_manager
 
     plan_result = ctx.scratch.plan_result
     if plan_result is None:
@@ -59,7 +60,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         agent_loop.loop_planner._model, agent_loop.core_agent, agent_loop.config
     )
 
-    action = determine_completion_action(
+    action = plan_manager.determine_completion_strategy(
         state,
         plan_result,
         agent_loop.config.agentic.final_response,
@@ -67,10 +68,10 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
 
     final_output = None
 
-    if action == "ledger_direct":
+    if action == CompletionStrategy.LEDGER_DIRECT:
         final_output = last_ledger_ai_content(state)
         logger.info("Goal completion: action=ledger_direct chars=%d", len(final_output or ""))
-    elif action == "synthesize":
+    elif action == CompletionStrategy.SYNTHESIZE:
         logger.info("Goal completion: action=synthesis starting stream")
         accum = GoalCompletionAccumState()
         chunk_count = 0
@@ -93,7 +94,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         if not final_output:
             logger.warning("No synthesis text from CoreAgent, using fallback")
             final_output = generate_user_fallback_summary(state, plan_result)
-    elif action == "summary":
+    elif action == CompletionStrategy.SUMMARY:
         final_output = generate_user_fallback_summary(state, plan_result)
         logger.info("Goal completion: action=summary chars=%d", len(final_output or ""))
 
@@ -108,7 +109,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         "Goal completed: iterations=%d duration=%dms action=%s",
         state.iteration,
         state.total_duration_ms,
-        action,
+        action.value,
     )
     await ctx.emit(
         "completed",

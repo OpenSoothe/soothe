@@ -9,9 +9,6 @@ from soothe.core.agent_loop.core.thread_continuation_bootstrap import (
     build_thread_continuation_bootstrap_plan,
     thread_continuation_plan_bootstrap_allowed,
 )
-from soothe.core.agent_loop.policies.goal_completion_policy import (
-    determine_goal_completion_needs,
-)
 from soothe.core.agent_loop.state.schemas import PlanResult
 
 from ..runtime_context import LoopRuntimeContext
@@ -24,6 +21,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
     """Run assess phase and decide whether generation is needed."""
     agent_loop = ctx.agent_loop
     state = ctx.loop_state
+    plan_manager = ctx.plan_manager
     context = agent_loop._build_plan_context(state)
 
     if thread_continuation_plan_bootstrap_allowed(
@@ -36,6 +34,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         plan_result = build_thread_continuation_bootstrap_plan(state.goal)
         ctx.scratch.plan_result = plan_result
         ctx.scratch.plan_assessment = None
+        plan_manager.ingest_plan(plan_result, state.plan_id, state.iteration)
         await ctx.emit(
             "plan",
             {
@@ -69,7 +68,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             if agent_loop.config is not None
             else "llm_only"
         )
-        require_completion = determine_goal_completion_needs(
+        require_completion = plan_manager.determine_goal_completion_needs(
             llm_decision=assessment.require_goal_completion,
             state=state,
             mode=gc_mode,
@@ -91,6 +90,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             result=plan_result,
         )
         ctx.scratch.plan_result = plan_result
+        plan_manager.ingest_plan(plan_result, state.plan_id, state.iteration)
         await ctx.emit(
             "plan",
             {
@@ -116,7 +116,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             if agent_loop.config is not None
             else "llm_only"
         )
-        require_completion = determine_goal_completion_needs(
+        require_completion = plan_manager.determine_goal_completion_needs(
             llm_decision=assessment.require_goal_completion,
             state=state,
             mode=gc_mode,
@@ -137,6 +137,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             result=plan_result,
         )
         ctx.scratch.plan_result = plan_result
+        plan_manager.ingest_plan(plan_result, state.plan_id, state.iteration)
         await ctx.emit(
             "plan",
             {
