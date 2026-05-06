@@ -175,9 +175,7 @@ class PhasesMixin:
 
         # Fallback: spawn fast LLM call for quiz response
         # This should rarely happen if classification post-processing works correctly
-        logger.warning(
-            "Quiz classification missing piggybacked quiz_response, spawning LLM call"
-        )
+        logger.warning("Quiz classification missing piggybacked quiz_response, spawning LLM call")
 
         # Get fast model from intent classifier
         fast_model = (

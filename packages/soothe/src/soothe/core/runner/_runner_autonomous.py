@@ -212,9 +212,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                         )
                     else:
                         # No active goal, create new goal despite thread_continuation
-                        logger.info(
-                            "Thread continuation but no active goal, creating new goal"
-                        )
+                        logger.info("Thread continuation but no active goal, creating new goal")
                         goal = await self._goal_engine.create_goal(
                             intent.goal_description or user_input, priority=80
                         )
