@@ -9,6 +9,7 @@ from typing import Any
 from soothe.core.agent_loop.analysis.synthesis import SynthesisGenerator
 from soothe.core.agent_loop.core.fallback_summary import generate_user_fallback_summary
 from soothe.core.agent_loop.policies.goal_completion_policy import determine_completion_action
+from soothe.core.agent_loop.utils.messages import last_ledger_ai_content
 from soothe.core.agent_loop.utils.stream_normalize import (
     GoalCompletionAccumState,
     iter_messages_for_act_aggregation,
@@ -58,7 +59,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         agent_loop.loop_planner._model, agent_loop.core_agent, agent_loop.config
     )
 
-    action, precomputed_text = determine_completion_action(
+    action = determine_completion_action(
         state,
         plan_result,
         agent_loop.config.agentic.final_response,
@@ -66,9 +67,9 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
 
     final_output = None
 
-    if action == "skip" or action == "direct":
-        final_output = precomputed_text
-        logger.info("Goal completion: action=%s chars=%d", action, len(final_output or ""))
+    if action == "ledger_direct":
+        final_output = last_ledger_ai_content(state)
+        logger.info("Goal completion: action=ledger_direct chars=%d", len(final_output or ""))
     elif action == "synthesize":
         logger.info("Goal completion: action=synthesis starting stream")
         accum = GoalCompletionAccumState()
@@ -109,17 +110,11 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         state.total_duration_ms,
         action,
     )
-    skip_wire_dup = action in ("skip", "direct") and not getattr(
-        state,
-        "last_wave_answer_from_delegate_final",
-        False,
-    )
     await ctx.emit(
         "completed",
         {
             "result": updated_result,
             "step_results_count": len(state.step_results),
-            "skip_goal_completion_wire_duplicate": skip_wire_dup,
         },
     )
     out: dict[str, Any] = {"last_outcome": "completed"}
