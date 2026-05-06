@@ -45,11 +45,20 @@ def create_explore_subagent(
     # Thread workspace will override at runtime via state.workspace (IG-328)
     initial_workspace = resolver_work_dir
 
+    # Use fast model for synthesis (optimization: 3x faster structured output)
+    try:
+        synthesis_model = config.create_chat_model("fast")
+        logger.debug("Using fast model for explore synthesis")
+    except Exception:
+        synthesis_model = model
+        logger.warning("Fast model not configured, using primary model for synthesis")
+
     runnable = build_explore_engine(
         model,
         explore_config,
         initial_workspace,
         allow_paths_outside_workspace=config.security.allow_paths_outside_workspace,
+        synthesis_model=synthesis_model,
     )
 
     return {

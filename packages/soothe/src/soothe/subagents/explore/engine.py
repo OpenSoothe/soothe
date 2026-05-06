@@ -23,6 +23,7 @@ def build_explore_engine(
     workspace: str,
     *,
     allow_paths_outside_workspace: bool = False,
+    synthesis_model: BaseChatModel | None = None,
 ) -> Any:
     """Build the explore agent graph (``create_agent`` → ``CompiledStateGraph``).
 
@@ -31,6 +32,7 @@ def build_explore_engine(
         config: Explore configuration (thoroughness, iteration caps).
         workspace: Search boundary (working directory / resolver default).
         allow_paths_outside_workspace: When False, sandbox tools to *workspace*.
+        synthesis_model: Optional fast model for synthesis (defaults to model).
 
     Returns:
         Compiled LangGraph runnable.
@@ -49,6 +51,7 @@ def build_explore_engine(
         workspace,
         max_iterations=max_iterations,
         max_matches=max_matches,
+        synthesis_model=synthesis_model,
     )
 
     graph = create_agent(
