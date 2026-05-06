@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from soothe import SootheConfig
+from soothe.config.settings import SootheConfig
 from soothe.config import SOOTHE_HOME
 
 
