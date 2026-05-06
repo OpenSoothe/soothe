@@ -1,10 +1,8 @@
 """Normalize LangGraph ``astream`` chunks for AgentLoop Act and finalize paths.
 
-``CompiledStateGraph.astream`` can emit:
-- 3-tuples ``(namespace, mode, data)`` (subgraphs / deepagents),
-- 2-tuples ``(mode, data)`` (e.g. ``stream_mode`` without namespace),
-- dict updates with ``{"model": {"messages": [...]}}``,
-- legacy list-shaped ``data`` ``[message, metadata]``.
+``CompiledStateGraph.astream`` can emit 3-tuples ``(namespace, mode, data)``,
+2-tuples ``(mode, data)``, dict updates with ``{"model": {"messages": [...]}}``,
+or list-shaped ``data`` ``[message, metadata]``.
 
 This module provides a single place to extract :class:`~langchain_core.messages.BaseMessage`
 instances and plain text from message ``content`` fields.
@@ -111,7 +109,7 @@ def iter_messages_for_delegate_task_scan(chunk: Any) -> Iterator[ToolMessage]:
 def iter_messages_for_act_aggregation(chunk: Any) -> Iterator[BaseMessage]:
     """Yield messages from one ``astream`` chunk for Act-phase aggregation.
 
-    Mirrors legacy ``Executor._stream_and_collect`` rules:
+    Matches ``Executor._stream_and_collect`` stream selection:
     - Tuple path: only ``mode == \"messages\"`` with **empty** namespace (root graph).
     - Dict path: ``chunk[\"model\"][\"messages\"]`` when present.
 

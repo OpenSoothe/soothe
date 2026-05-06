@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 async def emit_max_iterations_terminal(ctx: LoopRuntimeContext) -> None:
-    """Emit failure completion after exhausting iterations (matches legacy AgentLoop)."""
+    """Emit failure completion after exhausting iterations."""
     state = ctx.loop_state
     goal_record = ctx.goal_record
     state_manager = ctx.state_manager

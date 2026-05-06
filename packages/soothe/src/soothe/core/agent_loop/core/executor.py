@@ -782,7 +782,7 @@ class Executor:
 
             tool_call_count = 0
             messages: list[BaseMessage] = []
-            output = ""  # Still collect for legacy compatibility
+            output = ""
             async for final_output, event, tc_count, msg_list, _ in self._stream_and_collect(
                 stream, budget=budget
             ):

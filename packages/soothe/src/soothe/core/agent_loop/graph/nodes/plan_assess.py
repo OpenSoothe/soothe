@@ -26,32 +26,6 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
     state = ctx.loop_state
     context = agent_loop._build_plan_context(state)
 
-    # Backward compatibility for tests/integrations that monkeypatch PlanPhase.plan directly.
-    one_shot_plan = agent_loop.plan_phase.plan
-    if getattr(one_shot_plan, "__self__", None) is None:
-        plan_result = await one_shot_plan(goal=state.goal, state=state, context=context)
-        plan_result = agent_loop.plan_phase.finalize_plan_result(
-            state=state,
-            context=context,
-            result=plan_result,
-        )
-        ctx.scratch.plan_result = plan_result
-        await ctx.emit(
-            "plan",
-            {
-                "iteration": state.iteration,
-                "status": plan_result.status,
-                "progress": plan_result.goal_progress,
-                "next_action": plan_result.next_action,
-                "assessment_reasoning": plan_result.assessment_reasoning,
-                "plan_reasoning": plan_result.plan_reasoning,
-                "plan_action": plan_result.plan_action,
-            },
-        )
-        if plan_result.is_done():
-            return {"plan_route": PLAN_ROUTE_GOAL_DONE}
-        return {"assess_route": "skip_generate"}
-
     if thread_continuation_plan_bootstrap_allowed(
         thread_continuation_mode=ctx.thread_continuation_mode,
         state=state,

@@ -150,7 +150,7 @@ class PlanPhase:
         state: LoopState,
         context: PlanContext,
     ) -> PlanResult:
-        """Backward-compatible one-shot plan call."""
+        """Single-call plan via the loop planner (RFC-604)."""
         self._prepare_state_evidence(state)
         self._log_plan_pre_llm(goal, state, context)
         logger.info(
