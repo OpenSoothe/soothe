@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from soothe.core.agent_loop.state.schemas import LoopState
 
 
-def last_ledger_ai_content(state: "LoopState") -> str:
+def last_ledger_ai_content(state: LoopState) -> str:
     """Return content of the last LoopAIMessage in the agentloop ledger.
 
     Used by goal completion when ``require_goal_completion=False`` to provide

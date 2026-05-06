@@ -10,8 +10,8 @@ from soothe.core.agent_loop.branching.anchor_manager import CheckpointAnchorMana
 from soothe.core.agent_loop.context.goal_context_manager import GoalContextManager
 from soothe.core.agent_loop.planning.manager import PlanManager
 from soothe.core.agent_loop.state.checkpoint import AgentLoopCheckpoint, GoalExecutionRecord
-from soothe.core.agent_loop.state.schemas import LoopState
 from soothe.core.agent_loop.state.manager import AgentLoopStateManager
+from soothe.core.agent_loop.state.schemas import LoopState
 
 from .phase_scratch import LoopPhaseScratch
 

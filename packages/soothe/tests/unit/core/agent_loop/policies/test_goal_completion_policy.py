@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from soothe.core.agent_loop.planning.dag import PlanDAG
 from soothe.core.agent_loop.planning.manager import (
+    CompletionStrategy,
+    PlanManager,
     determine_goal_completion_needs,
 )
 from soothe.core.agent_loop.state.schemas import (
@@ -13,11 +16,6 @@ from soothe.core.agent_loop.state.schemas import (
     PlanResult,
     StepAction,
     StepResult,
-)
-from soothe.core.agent_loop.planning.dag import PlanDAG
-from soothe.core.agent_loop.planning.manager import (
-    PlanManager,
-    CompletionStrategy,
 )
 
 
@@ -185,10 +183,19 @@ def test_heuristic_failed_steps_low_success_rate():
     )
     pm.ingest_plan(pr, "KFA", 0)
     # Mark outcomes: 1 success, 1 failure → success_rate=0.5 < 0.6 threshold
-    pm.record_step_outcomes([
-        StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
-        StepResult(step_id="S2", success=False, outcome={}, error="Error", duration_ms=100, thread_id="t1"),
-    ])
+    pm.record_step_outcomes(
+        [
+            StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
+            StepResult(
+                step_id="S2",
+                success=False,
+                outcome={},
+                error="Error",
+                duration_ms=100,
+                thread_id="t1",
+            ),
+        ]
+    )
 
     state = mock_loop_state()
     result = pm._heuristic_requires_goal_completion(state)
@@ -388,7 +395,10 @@ def test_strategy_always_synthesize():
     pm = PlanManager(goal="test")
     pr = PlanResult(status="done", goal_progress="complete", require_goal_completion=False)
     state = mock_loop_state()
-    assert pm.determine_completion_strategy(state, pr, "always_synthesize") == CompletionStrategy.SYNTHESIZE
+    assert (
+        pm.determine_completion_strategy(state, pr, "always_synthesize")
+        == CompletionStrategy.SYNTHESIZE
+    )
 
 
 def test_strategy_ledger_direct_simple():
@@ -399,13 +409,22 @@ def test_strategy_ledger_direct_simple():
         steps=[StepAction(id="01", description="Step 1")],
         execution_mode="sequential",
     )
-    pr = PlanResult(status="done", goal_progress="complete", plan_action="new", decision=d, require_goal_completion=False, next_action="")
+    pr = PlanResult(
+        status="done",
+        goal_progress="complete",
+        plan_action="new",
+        decision=d,
+        require_goal_completion=False,
+        next_action="",
+    )
     pm.ingest_plan(pr, "KFA", 0)
     outcome = StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t")
     pm.record_step_outcomes([outcome])
 
     state = mock_loop_state()
-    assert pm.determine_completion_strategy(state, pr, "adaptive") == CompletionStrategy.LEDGER_DIRECT
+    assert (
+        pm.determine_completion_strategy(state, pr, "adaptive") == CompletionStrategy.LEDGER_DIRECT
+    )
 
 
 def test_strategy_synthesize_multiple_plans():
@@ -415,7 +434,9 @@ def test_strategy_synthesize_multiple_plans():
         steps=[StepAction(id="01", description="Step 1")],
         execution_mode="sequential",
     )
-    pr1 = PlanResult(status="continue", goal_progress="low", plan_action="new", decision=d1, next_action="")
+    pr1 = PlanResult(
+        status="continue", goal_progress="low", plan_action="new", decision=d1, next_action=""
+    )
     pm.ingest_plan(pr1, "KFA", 0)
 
     d2 = AgentDecision(
@@ -423,7 +444,14 @@ def test_strategy_synthesize_multiple_plans():
         steps=[StepAction(id="02", description="Step 2")],
         execution_mode="sequential",
     )
-    pr2 = PlanResult(status="done", goal_progress="complete", plan_action="new", decision=d2, require_goal_completion=True, next_action="")
+    pr2 = PlanResult(
+        status="done",
+        goal_progress="complete",
+        plan_action="new",
+        decision=d2,
+        require_goal_completion=True,
+        next_action="",
+    )
     pm.ingest_plan(pr2, "XYZ", 1)
 
     state = mock_loop_state()
@@ -440,12 +468,23 @@ def test_strategy_synthesize_failed_steps():
         ],
         execution_mode="sequential",
     )
-    pr = PlanResult(status="done", goal_progress="complete", plan_action="new", decision=d, require_goal_completion=True, next_action="")
+    pr = PlanResult(
+        status="done",
+        goal_progress="complete",
+        plan_action="new",
+        decision=d,
+        require_goal_completion=True,
+        next_action="",
+    )
     pm.ingest_plan(pr, "KFA", 0)
-    pm.record_step_outcomes([
-        StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t"),
-        StepResult(step_id="02", success=False, outcome={}, error="err", duration_ms=10, thread_id="t"),
-    ])
+    pm.record_step_outcomes(
+        [
+            StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t"),
+            StepResult(
+                step_id="02", success=False, outcome={}, error="err", duration_ms=10, thread_id="t"
+            ),
+        ]
+    )
 
     state = mock_loop_state()
     assert pm.determine_completion_strategy(state, pr, "adaptive") == CompletionStrategy.SYNTHESIZE

@@ -12,7 +12,7 @@ from typing import Any
 
 from soothe_sdk.client.wire import messages_from_wire_dicts
 
-from soothe.core.runner._types import _generate_thread_id
+from soothe.core.runner._types import generate_thread_id
 from soothe.core.workspace import resolve_loop_daemon_workspace, validate_client_workspace
 from soothe.daemon.image_understanding import validate_and_normalize_image_attachments
 from soothe.logging import ThreadLogger
@@ -417,7 +417,7 @@ class MessageRouter:
         else:
             thread_workspace = d._daemon_workspace
 
-        draft_thread_id = _generate_thread_id()
+        draft_thread_id = generate_thread_id()
         d._thread_registry.ensure(draft_thread_id, is_draft=True)
         d._thread_registry.set_workspace(draft_thread_id, Path(thread_workspace))
         d._thread_registry.set_client_thread(client_id, draft_thread_id)

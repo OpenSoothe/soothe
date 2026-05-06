@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
 from soothe.core.agent_loop.utils.messages import last_ledger_ai_content
@@ -13,9 +13,7 @@ from soothe.core.agent_loop.utils.messages import last_ledger_ai_content
 from .dag import PlanDAG
 
 if TYPE_CHECKING:
-    from soothe.core.agent_loop.state.schemas import PlanResult, StepResult
-
-    from soothe.core.agent_loop.state.schemas import LoopState as LoopStateType
+    from soothe.core.agent_loop.state.schemas import LoopState, PlanResult, StepResult
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +95,7 @@ def _heuristic_requires_goal_completion_standalone(state: TYPE_CHECKING.Any) -> 
     return False
 
 
-class CompletionStrategy(str, Enum):
+class CompletionStrategy(StrEnum):
     LEDGER_DIRECT = "ledger_direct"
     SYNTHESIZE = "synthesize"
     SUMMARY = "summary"

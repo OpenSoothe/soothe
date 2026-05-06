@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from soothe.backends.persistence import AsyncPersistStore
-from soothe.core.runner._types import _generate_thread_id
+from soothe.core.runner._types import generate_thread_id
 from soothe.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
 
 
@@ -46,7 +46,7 @@ class BasePersistStoreDurability:
         """
         now = datetime.now(tz=UTC)
         info = ThreadInfo(
-            thread_id=thread_id or _generate_thread_id(),
+            thread_id=thread_id or generate_thread_id(),
             status="active",
             created_at=now,
             updated_at=now,

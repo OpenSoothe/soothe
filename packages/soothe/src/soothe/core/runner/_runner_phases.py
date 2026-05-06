@@ -650,7 +650,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
 
         from soothe.protocols.durability import ThreadMetadata
 
-        from ._types import _generate_thread_id
+        from ._types import generate_thread_id
 
         if complexity is None:
             complexity = (
@@ -685,7 +685,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
             logger.debug("Thread creation failed, using generated ID", exc_info=True)
 
         if not state.thread_id:
-            state.thread_id = requested_thread_id or _generate_thread_id()
+            state.thread_id = requested_thread_id or generate_thread_id()
 
         store = self._ensure_artifact_store(state)
         if store and not store.manifest.query:

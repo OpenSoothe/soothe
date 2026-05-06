@@ -11,15 +11,15 @@ from typing import TYPE_CHECKING, Any
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.agent_loop.branching.anchor_manager import CheckpointAnchorManager
 from soothe.core.agent_loop.context.goal_context_manager import GoalContextManager
+from soothe.core.agent_loop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.core.agent_loop.planning.manager import PlanManager
 from soothe.core.agent_loop.planning.phase import PlanPhase
-from soothe.core.agent_loop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.core.agent_loop.state.manager import AgentLoopStateManager
 from soothe.core.agent_loop.state.schemas import (
     AgentDecision,
     LoopState,
     PlanResult,
 )
-from soothe.core.agent_loop.state.manager import AgentLoopStateManager
 from soothe.core.agent_loop.state.working_memory import LoopWorkingMemory
 from soothe.core.agent_loop.utils.reflection import _default_agent_decision
 from soothe.protocols.planner import PlanContext, StepResult

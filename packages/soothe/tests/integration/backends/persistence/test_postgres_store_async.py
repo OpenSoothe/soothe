@@ -1,4 +1,4 @@
-"""Unit tests for PostgreSQLPersistStore async operations (IG-258 Phase 2)."""
+"""Integration tests for PostgreSQLPersistStore async operations (IG-258 Phase 2)."""
 
 import asyncio
 import os
@@ -7,7 +7,7 @@ import pytest
 
 
 class TestPostgreSQLPersistStoreAsync:
-    """Unit tests for PostgreSQLPersistStore async interface."""
+    """Integration tests for PostgreSQLPersistStore async interface."""
 
     @pytest.fixture
     async def postgres_store(self):
