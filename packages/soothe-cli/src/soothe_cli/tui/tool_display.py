@@ -12,7 +12,7 @@ from typing import Any
 
 from soothe_sdk.utils import get_all_path_arg_keys, get_tool_display_name, get_tool_meta
 
-from soothe_cli.shared.message_processing import (
+from soothe_cli.shared.tools.message_processing import (
     _normalize_tool_name_for_arg_map,
     extract_tool_args_dict,
     format_tool_call_args,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from soothe_cli.shared.tools._utils import normalize_tool_name, text_looks_like_error
 from soothe_cli.shared.tools.tool_formatters.base import BaseFormatter
 from soothe_cli.shared.tools.tool_output_formatter import ToolBrief
 
@@ -36,7 +37,7 @@ class WebFormatter(BaseFormatter):
             'Found 2 results'
         """
         # Normalize tool name
-        normalized = tool_name.lower().replace("-", "_").replace(" ", "_")
+        normalized = normalize_tool_name(tool_name)
 
         # Route to specific formatter (handle both legacy and wizsearch naming)
         if normalized in ("search_web", "wizsearch_search"):
@@ -64,7 +65,7 @@ class WebFormatter(BaseFormatter):
             'Found 2 results'
         """
         # Check for error
-        if "error" in result.lower() or "failed" in result.lower():
+        if text_looks_like_error(result):
             return ToolBrief(
                 icon="✗",
                 summary="Search failed",
@@ -114,7 +115,7 @@ class WebFormatter(BaseFormatter):
             '450 words'
         """
         # Check for error
-        if "error" in result.lower() or "failed" in result.lower():
+        if text_looks_like_error(result):
             return ToolBrief(
                 icon="✗",
                 summary="Crawl failed",

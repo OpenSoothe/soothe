@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from soothe_cli.shared.tools._utils import normalize_tool_name, text_looks_like_error
 from soothe_cli.shared.tools.tool_formatters.base import BaseFormatter
 from soothe_cli.shared.tools.tool_output_formatter import ToolBrief
 
@@ -38,7 +39,7 @@ class FileOpsFormatter(BaseFormatter):
             '✓ Read 12 B (2 lines)'
         """
         # Normalize tool name
-        normalized = tool_name.lower().replace("-", "_").replace(" ", "_")
+        normalized = normalize_tool_name(tool_name)
 
         # Route to specific formatter
         if normalized == "read_file":
@@ -159,7 +160,7 @@ class FileOpsFormatter(BaseFormatter):
             'Wrote 0 B'
         """
         # Check for error
-        if "error" in result.lower() or "failed" in result.lower():
+        if text_looks_like_error(result):
             return ToolBrief(
                 icon="✗",
                 summary="Write failed",
@@ -194,7 +195,7 @@ class FileOpsFormatter(BaseFormatter):
             'Deleted'
         """
         # Check for error
-        if "error" in result.lower() or "failed" in result.lower():
+        if text_looks_like_error(result):
             return ToolBrief(
                 icon="✗",
                 summary="Delete failed",
@@ -226,7 +227,7 @@ class FileOpsFormatter(BaseFormatter):
             'Found 3 items'
         """
         # Check for error
-        if "error" in result.lower() or "failed" in result.lower():
+        if text_looks_like_error(result):
             return ToolBrief(
                 icon="✗",
                 summary="List failed",
@@ -265,7 +266,7 @@ class FileOpsFormatter(BaseFormatter):
             'Found 2 matches'
         """
         # Check for error
-        if "error" in result.lower() or "failed" in result.lower():
+        if text_looks_like_error(result):
             return ToolBrief(
                 icon="✗",
                 summary="Search failed",
@@ -311,12 +312,14 @@ class FileOpsFormatter(BaseFormatter):
             >>> brief.summary
             'Found 2 files'
         """
-        # Check for error
-        if "error" in result.lower() or "failed" in result.lower():
+        # Check for actual error message (not file paths containing error-like words)
+        # Glob results are newline-separated paths; errors start with "Error:"
+        if result.startswith("Error:"):
+            error_msg = result[6:].strip()
             return ToolBrief(
                 icon="✗",
                 summary="Glob failed",
-                detail=self._truncate_text(result, 80),
+                detail=self._truncate_text(error_msg, 80),
                 metrics={"error": True},
             )
 

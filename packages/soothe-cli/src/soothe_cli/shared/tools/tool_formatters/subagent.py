@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from soothe_cli.shared.tools._utils import text_looks_like_error
 from soothe_cli.shared.tools.tool_formatters.base import BaseFormatter
 from soothe_cli.shared.tools.tool_output_formatter import ToolBrief
 
@@ -36,8 +37,7 @@ class SubagentFormatter(BaseFormatter):
         # Handle string results
         if isinstance(result, str):
             # Check for error indicators
-            error_indicators = ["error:", "failed:", "exception:", "traceback"]
-            is_error = any(indicator in result.lower() for indicator in error_indicators)
+            is_error = text_looks_like_error(result)
 
             if is_error:
                 # Extract first line of error

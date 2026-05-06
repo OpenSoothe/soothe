@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage
 
-from soothe_cli.shared.tool_call_resolution import (
+from soothe_cli.shared.tools.tool_call_resolution import (
     infer_tool_name_from_call_id,
     materialize_ai_blocks_with_resolved_tools,
 )

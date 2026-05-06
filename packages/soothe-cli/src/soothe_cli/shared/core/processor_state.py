@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from soothe_sdk.client.schemas import Plan
 
-    from soothe_cli.shared.events.stream_accumulator import StreamingTextAccumulator
+from soothe_cli.shared.events.stream_accumulator import StreamingTextAccumulator
 
 
 @dataclass
@@ -56,9 +56,7 @@ class ProcessorState:
 
     # Unified streaming text accumulator (RFC-614)
     streaming_accumulator: StreamingTextAccumulator = field(
-        default_factory=lambda: __import__(
-            "soothe_cli.shared.stream_accumulator", fromlist=["StreamingTextAccumulator"]
-        ).StreamingTextAccumulator()
+        default_factory=StreamingTextAccumulator
     )
     """Unified streaming text accumulator with namespace isolation."""
 

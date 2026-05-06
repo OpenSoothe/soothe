@@ -58,7 +58,7 @@ router:
 #   embedding: "mlxserver:nomic-embed"
 
 agentic:
-  max_iterations: 6
+  max_iterations: 5
   max_subagent_tasks_per_wave: 4
   final_response: adaptive
   goal_completion_mode: llm_only
