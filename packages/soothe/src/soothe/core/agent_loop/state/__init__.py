@@ -8,8 +8,6 @@ from .checkpoint import (
     WorkingMemoryState,
 )
 from .manager import AgentLoopStateManager
-from .persistence.directory_manager import PersistenceDirectoryManager
-from .persistence.manager import AgentLoopCheckpointPersistenceManager
 from .schemas import (
     AgentDecision,
     LoopState,
@@ -23,11 +21,9 @@ __all__ = [
     "ActWaveRecord",
     "AgentDecision",
     "AgentLoopCheckpoint",
-    "AgentLoopCheckpointPersistenceManager",
     "AgentLoopStateManager",
     "LoopState",
     "LoopWorkingMemory",
-    "PersistenceDirectoryManager",
     "PlanResult",
     "ReasonStepRecord",
     "StepAction",

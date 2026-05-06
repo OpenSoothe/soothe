@@ -6,8 +6,8 @@ from soothe.core.persistence import (
     READONLY_PROFILE,
     STANDARD_PROFILE,
     ConfigDrivenPolicy,
-    _extract_required_permission,
 )
+from soothe.core.persistence.config_policy import _extract_required_permission
 from soothe.protocols.policy import (
     ActionRequest,
     Permission,

@@ -8,7 +8,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 
-def _generate_thread_id() -> str:
+def generate_thread_id() -> str:
     """Generate a 12-char alphanumeric thread ID.
 
     Uses base36 encoding (0-9, a-z) for compact, human-readable IDs.

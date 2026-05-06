@@ -510,6 +510,35 @@ From RFC-000:
 
 ---
 
+## 🏗️ Module Organization Principles
+
+From IG-047 (Module Self-Containment) and ongoing `soothe.core` refactoring:
+
+### Structure by Functional Concern
+- **Group by what code does, not how it's implemented**. A `planning/` module is clearer than `core/` containing plan-related files mixed with unrelated ones.
+- **Each module should answer: "What functional concern do I own?"** If a directory can't be described in one sentence, it's too broad.
+- **Rename directories to reflect their function**. `graph/` → `orchestrator/`, `core/` → `engine/` + `planning/` + `execution/`.
+
+### Self-Containment: Public API vs Internal Details
+- **`__init__.py` exports only public APIs**. Underscore-prefixed names (`_internal_func`) are implementation details, not exports.
+- **Re-export from submodules only when it serves a clear consumer need**. Don't create god-namespaces that re-export 16+ names from 5 submodules.
+- **External code should import from the shallowest reasonable path**, but not at the cost of flattening all internal structure.
+- **Dead code belongs in no module**. If a file isn't imported anywhere, delete it. If a function is only used internally, don't export it.
+
+### Module Size and Scope
+- **Single-file directories are a smell**. A `policies/` directory with one file should be merged into a related module (e.g., `branching/`).
+- **Keep module depth reasonable**. 5-level import paths (`state.persistence.directory_manager`) are acceptable when encapsulated; re-export at package level for external consumers.
+- **Don't create premature abstractions**. Three similar lines of code is better than a speculative shared utility.
+
+### When Refactoring Modules
+1. **Map imports first** — know who depends on what before moving anything.
+2. **Keep public API stable** — `__init__.py` facade exports should not break.
+3. **Move files, then update imports** — do it in order to avoid broken states.
+4. **Run tests after each batch** — don't accumulate changes without verification.
+5. **Delete old paths only after new paths work** — use `git mv` to preserve history.
+
+---
+
 ## 📋 Interaction Rules
 
 ### MUST Rules
