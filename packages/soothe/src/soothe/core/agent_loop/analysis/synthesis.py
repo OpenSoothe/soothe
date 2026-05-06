@@ -68,14 +68,7 @@ def synthesis_checkpoint_thread_id(parent_thread_id: str) -> str:
 class SynthesisGenerator:
     """Generate synthesis reports from execution evidence (RFC-616, IG-300).
 
-    Two-phase synthesis system:
-    - Phase 1: ScenarioClassifier determines scenario + structure
-    - Phase 2: CoreAgent generates synthesis following scenario template
-
-    Removed legacy components (IG-300):
-    - Keyword-based goal_type classification
-    - Response length categorization
-    - Length-based guidance
+    Two-phase synthesis: scenario classification, then CoreAgent generation (IG-300).
     """
 
     def __init__(

@@ -11,6 +11,7 @@ from soothe.core.agent_loop import AgentLoop
 from soothe.core.agent_loop.state.schemas import (
     AgentDecision,
     PlanResult,
+    StatusAssessment,
     StepAction,
 )
 from soothe.protocols.planner import PlanContext
@@ -47,10 +48,147 @@ class MockLoopPlanner:
     def __init__(self, scenario: str = "success") -> None:
         self.scenario = scenario
         self.plan_count = 0
+        self._assess_count = 0
+        self._generate_count = 0
         # AgentLoop goal completion constructs ``SynthesisGenerator(loop_planner._model, ...)``.
         self._model = MagicMock()
 
+    async def assess_status(self, goal: str, state, context: PlanContext):
+        """Assess-only call for split graph flow."""
+        from soothe.core.agent_loop.state.schemas import StatusAssessment
+
+        self._assess_count += 1
+
+        if self.scenario == "success":
+            # First assess: need work, second assess: done
+            if self._assess_count == 1:
+                return StatusAssessment(
+                    status="continue",
+                    goal_progress="none",
+                    assessment_reasoning="Starting work",
+                    require_goal_completion=False,
+                )
+            return StatusAssessment(
+                status="done",
+                goal_progress="complete",
+                assessment_reasoning="All work complete",
+                require_goal_completion=True,
+            )
+
+        if self.scenario == "replan":
+            # Three iterations: continue -> replan -> done
+            if self._assess_count == 1:
+                return StatusAssessment(
+                    status="continue",
+                    goal_progress="none",
+                    assessment_reasoning="Starting first approach",
+                    require_goal_completion=False,
+                )
+            if self._assess_count == 2:
+                return StatusAssessment(
+                    status="replan",
+                    goal_progress="low",
+                    assessment_reasoning="First approach failed, need replan",
+                    require_goal_completion=False,
+                )
+            return StatusAssessment(
+                status="done",
+                goal_progress="complete",
+                assessment_reasoning="Revised plan succeeded",
+                require_goal_completion=True,
+            )
+
+        if self.scenario == "continue":
+            # Two iterations: continue -> done
+            if self._assess_count == 1:
+                return StatusAssessment(
+                    status="continue",
+                    goal_progress="none",
+                    assessment_reasoning="Starting work",
+                    require_goal_completion=False,
+                )
+            return StatusAssessment(
+                status="done",
+                goal_progress="complete",
+                assessment_reasoning="Work complete",
+                require_goal_completion=True,
+            )
+
+        return StatusAssessment(
+            status="done",
+            goal_progress="complete",
+            assessment_reasoning="Default done",
+            require_goal_completion=True,
+        )
+
+    async def generate_from_assessment(
+        self,
+        goal: str,
+        state,
+        context: PlanContext,
+        assessment,
+    ):
+        """Generate plan after assessment (split graph flow)."""
+        self._generate_count += 1
+
+        if assessment.status == "done":
+            return PlanResult(
+                status="done",
+                plan_action="keep",
+                next_action="Goal achieved",
+                goal_progress=assessment.goal_progress,
+            )
+
+        if self.scenario == "success":
+            if self._generate_count == 1:
+                return PlanResult(
+                    status="continue",
+                    plan_action="new",
+                    decision=_three_step_decision(),
+                    next_action="I'll run these three steps next.",
+                    reasoning="First pass",
+                )
+
+        if self.scenario == "replan":
+            if self._generate_count == 1:
+                return PlanResult(
+                    status="continue",
+                    plan_action="new",
+                    decision=_three_step_decision(),
+                    next_action="I'll start with this three-step approach.",
+                    reasoning="v1",
+                )
+            if self._generate_count == 2:
+                return PlanResult(
+                    status="replan",
+                    plan_action="new",
+                    decision=_two_step_replan_decision(),
+                    next_action="I'll switch to a tighter two-step plan.",
+                    reasoning="replan",
+                    goal_progress="low",
+                )
+
+        if self.scenario == "continue":
+            if self._generate_count == 1:
+                return PlanResult(
+                    status="continue",
+                    plan_action="new",
+                    decision=_three_step_decision(),
+                    next_action="I'll execute the first chunk of work now.",
+                    reasoning="start",
+                )
+
+        # Fallback
+        return PlanResult(
+            status="continue",
+            plan_action="new",
+            decision=_three_step_decision(),
+            next_action="Working on it",
+            reasoning="fallback",
+        )
+
     async def plan(self, goal: str, state, context: PlanContext) -> PlanResult:
+        """Legacy unified plan method (not used by split graph flow)."""
         self.plan_count += 1
 
         if self.scenario == "success":
@@ -124,6 +262,9 @@ class MockCoreAgent:
 
     def __init__(self) -> None:
         self.call_count = 0
+        # Mock graph attribute for iteration_start anchor capture
+        self.graph = MagicMock()
+        self.graph.checkpointer = None
 
     def astream(self, user_input: str, config: dict, **kwargs: Any):
         """Return an async iterator like ``CoreAgent.astream`` (not a coroutine)."""
@@ -145,6 +286,14 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
     cfg.agentic.working_memory.max_entry_chars_before_spill = 500
     cfg.execution.concurrency.max_parallel_steps = 1
     cfg.execution.concurrency.max_parallel_goals = 1
+    # Goal completion / synthesis config
+    cfg.agentic.reject_done_at_iteration_zero = False
+    cfg.agentic.goal_completion_mode = "llm_only"
+    cfg.agentic.report_output.synthesis_max_chars = 10000
+    cfg.agentic.report_output.synthesis_include_full_outputs = True
+    cfg.agentic.report_output.output_summary_max_chars = 1500
+    # Model attribute for SynthesisGenerator
+    cfg.agentic.synthesis_model = None  # Will use planner._model
     return cfg
 
 
@@ -167,7 +316,9 @@ async def test_loop_agent_success() -> None:
 
     assert result.status == "done"
     assert result.goal_progress == "complete"
-    assert planner.plan_count == 2
+    # Split graph flow uses assess_status + generate_from_assessment
+    assert planner._assess_count == 2  # Two iterations
+    assert planner._generate_count == 1  # Only first iteration generates plan
 
 
 @pytest.mark.asyncio
@@ -188,7 +339,9 @@ async def test_loop_agent_with_replan() -> None:
     )
 
     assert result.status == "done"
-    assert planner.plan_count == 3
+    # Replan scenario: 3 iterations (continue -> replan -> done)
+    assert planner._assess_count == 3
+    assert planner._generate_count == 2  # First two iterations generate plans
 
 
 @pytest.mark.asyncio
@@ -209,7 +362,9 @@ async def test_loop_agent_with_continue() -> None:
     )
 
     assert result.status == "done"
-    assert planner.plan_count == 2
+    # Continue scenario: 2 iterations
+    assert planner._assess_count == 2
+    assert planner._generate_count == 1
 
 
 @pytest.mark.asyncio
@@ -219,6 +374,40 @@ async def test_loop_agent_max_iterations() -> None:
     class NeverDonePlanner:
         def __init__(self) -> None:
             self.plan_count = 0
+            self._assess_count = 0
+            self._generate_count = 0
+
+        async def assess_status(self, goal, state, context):
+            """Assess-only: always needs more work."""
+            self._assess_count += 1
+            return StatusAssessment(
+                status="continue",
+                goal_progress="none",
+                assessment_reasoning="Always needs more work",
+                require_goal_completion=False,
+            )
+
+        async def generate_from_assessment(self, goal, state, context, assessment):
+            """Generate: always new steps."""
+            self._generate_count += 1
+            return PlanResult(
+                status="continue",
+                plan_action="new",
+                decision=AgentDecision(
+                    type="execute_steps",
+                    steps=[
+                        StepAction(
+                            id="s_x",
+                            description=goal,
+                            expected_output="more",
+                        )
+                    ],
+                    execution_mode="sequential",
+                    reasoning="more work",
+                ),
+                next_action="I'll take another step toward the goal.",
+                goal_progress="none",
+            )
 
         async def plan(self, goal, state, context):
             self.plan_count += 1
@@ -255,7 +444,9 @@ async def test_loop_agent_max_iterations() -> None:
         max_iterations=3,
     )
 
-    assert planner.plan_count == 3
+    # Should hit max iterations after 3 assess calls
+    assert planner._assess_count == 3
+    assert planner._generate_count == 3
     assert result.status == "continue"
 
 
@@ -266,7 +457,55 @@ async def test_loop_agent_parallel_execution() -> None:
     class ParallelPlanner:
         def __init__(self) -> None:
             self.plan_count = 0
+            self._assess_count = 0
+            self._generate_count = 0
             self._model = MagicMock()
+
+        async def assess_status(self, goal, state, context):
+            """Assess-only for parallel execution."""
+            self._assess_count += 1
+            if self._assess_count == 1:
+                return StatusAssessment(
+                    status="continue",
+                    goal_progress="none",
+                    assessment_reasoning="Starting parallel work",
+                    require_goal_completion=False,
+                )
+            return StatusAssessment(
+                status="done",
+                goal_progress="complete",
+                assessment_reasoning="Parallel work complete",
+                require_goal_completion=True,
+            )
+
+        async def generate_from_assessment(self, goal, state, context, assessment):
+            """Generate parallel steps."""
+            self._generate_count += 1
+            if self._generate_count == 1:
+                return PlanResult(
+                    status="continue",
+                    plan_action="new",
+                    decision=AgentDecision(
+                        type="execute_steps",
+                        steps=[
+                            StepAction(
+                                id=f"s{i}",
+                                description=f"Parallel step {i}",
+                                expected_output=f"Output {i}",
+                            )
+                            for i in range(3)
+                        ],
+                        execution_mode="parallel",
+                        reasoning="parallel batch",
+                    ),
+                    next_action="I'll run these three steps in parallel.",
+                )
+            return PlanResult(
+                status="done",
+                plan_action="keep",
+                next_action="I'm finished with the parallel work.",
+                goal_progress="complete",
+            )
 
         async def plan(self, goal, state, context):
             self.plan_count += 1
@@ -310,7 +549,7 @@ async def test_loop_agent_parallel_execution() -> None:
         max_iterations=8,
     )
 
-    # One CoreAgent stream per parallel step in the first Act wave; second iteration
-    # completes in Plan without an extra Execute call when completion skips synthesis.
-    assert core_agent.call_count == 3
+    # One CoreAgent stream per parallel step in first Execute wave (3 parallel steps)
+    # Plus one synthesis call in goal_completion phase = 4 total calls
+    assert core_agent.call_count == 4
     assert result.status == "done"

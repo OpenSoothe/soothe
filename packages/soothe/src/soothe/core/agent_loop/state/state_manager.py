@@ -91,7 +91,6 @@ class AgentLoopStateManager:
                 self.loop_id,
             )
         else:
-            # SQLite fallback (backward compatibility)
             self.db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
             logger.info(
                 "AgentLoop using SQLite backend (loop_checkpoints.db): loop_id=%s",

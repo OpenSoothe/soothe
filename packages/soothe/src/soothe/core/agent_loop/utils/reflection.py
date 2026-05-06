@@ -361,13 +361,13 @@ def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
             else [str(d) for d in deps if d is not None]
         )
 
-        legacy_tools = step_data.get("tools") or []
-        if legacy_tools:
-            subagent_tools = [t for t in legacy_tools if t in known_subagents]
+        step_tools = step_data.get("tools") or []
+        if step_tools:
+            subagent_tools = [t for t in step_tools if t in known_subagents]
             if subagent_tools and not step_data.get("subagent"):
                 step_data["subagent"] = subagent_tools[0]
                 logger.debug(
-                    "Normalized subagent '%s' from legacy tools list to subagent field",
+                    "Normalized subagent '%s' from tools field to subagent field",
                     subagent_tools[0],
                 )
 
@@ -451,12 +451,12 @@ def parse_plan_response_text(response: str, goal: str, iteration: int = 0) -> An
             next_action="I'll try again with a simpler plan.",
         )
 
-    # Legacy flat plan (steps at root, no plan fields)
+    # Flat plan JSON (steps at root, no status/plan_action)
     if "status" not in data and "steps" in data:
         try:
             decision = agent_decision_from_dict(data, goal)
         except Exception:
-            logger.exception("Failed to parse legacy plan shape")
+            logger.exception("Failed to parse flat plan shape")
             decision = _default_agent_decision(goal, iteration)
         return PlanResult(
             status="continue",
@@ -490,7 +490,7 @@ def parse_plan_response_text(response: str, goal: str, iteration: int = 0) -> An
     if plan_action == "keep":
         decision = None
 
-    # Normalize goal_progress: accept both legacy numeric (0.0-1.0) and new descriptive levels
+    # goal_progress: numeric 0.0-1.0 or descriptive level strings
     _raw_gp = data.get("goal_progress", "none")
     if isinstance(_raw_gp, (int, float)):
         _v = float(_raw_gp)

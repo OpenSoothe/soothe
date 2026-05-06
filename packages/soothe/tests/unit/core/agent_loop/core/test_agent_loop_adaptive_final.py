@@ -6,7 +6,7 @@ import pytest
 
 from soothe.config import SootheConfig
 from soothe.core.agent_loop import AgentLoop
-from soothe.core.agent_loop.state.schemas import PlanResult
+from soothe.core.agent_loop.state.schemas import StatusAssessment
 
 
 @pytest.mark.asyncio
@@ -22,18 +22,6 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
 
     mock_core = Mock()
     mock_core.astream = counting_astream
-
-    async def fake_plan(goal, state, context):  # noqa: ARG001
-        return PlanResult(
-            status="done",
-            evidence_summary="evidence body",
-            goal_progress="complete",
-            reasoning="",
-            next_action="done",
-            plan_action="new",
-            full_output="from plan full_output",
-            require_goal_completion=False,  # IG-299: Planner says skip synthesis
-        )
 
     mock_gr = Mock()
     mock_gr.loop_messages = []  # RFC-214: Required list field for LoopState
@@ -64,7 +52,13 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
-        loop.plan_phase.plan = fake_plan
+        loop.plan_phase.assess_status = AsyncMock(
+            return_value=StatusAssessment(
+                status="done",
+                goal_progress="complete",
+                require_goal_completion=False,
+            ),
+        )
 
         events = [
             evt
@@ -91,18 +85,6 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
 
     mock_core = Mock()
     mock_core.astream = counting_astream
-
-    async def fake_plan(goal, state, context):  # noqa: ARG001
-        return PlanResult(
-            status="done",
-            evidence_summary="evidence body",
-            goal_progress="complete",
-            reasoning="",
-            next_action="done",
-            plan_action="new",
-            full_output="from plan full_output",
-            require_goal_completion=False,  # IG-299: Planner says skip synthesis
-        )
 
     mock_gr = Mock()
     mock_gr.loop_messages = []  # RFC-214: Required list field for LoopState
@@ -137,7 +119,13 @@ async def test_done_skips_goal_completion_synthesis_when_direct_return_selected(
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
-        loop.plan_phase.plan = fake_plan
+        loop.plan_phase.assess_status = AsyncMock(
+            return_value=StatusAssessment(
+                status="done",
+                goal_progress="complete",
+                require_goal_completion=False,
+            ),
+        )
 
         events = [
             evt
@@ -159,18 +147,6 @@ async def test_completed_payload_skip_goal_completion_wire_duplicate_false_for_s
     """Summary path may emit runner goal_completion chunk; do not set skip flag."""
     mock_core = Mock()
     mock_core.astream = AsyncMock()
-
-    async def fake_plan(goal, state, context):  # noqa: ARG001
-        return PlanResult(
-            status="done",
-            evidence_summary="evidence body",
-            goal_progress="complete",
-            reasoning="",
-            next_action="done",
-            plan_action="new",
-            full_output="from plan full_output",
-            require_goal_completion=False,
-        )
 
     mock_gr = Mock()
     mock_gr.loop_messages = []  # RFC-214: Required list field for LoopState
@@ -209,7 +185,13 @@ async def test_completed_payload_skip_goal_completion_wire_duplicate_false_for_s
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
-        loop.plan_phase.plan = fake_plan
+        loop.plan_phase.assess_status = AsyncMock(
+            return_value=StatusAssessment(
+                status="done",
+                goal_progress="complete",
+                require_goal_completion=False,
+            ),
+        )
 
         events = [
             evt
