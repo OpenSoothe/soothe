@@ -18,6 +18,7 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
     state_manager = ctx.state_manager
     anchor_manager = ctx.anchor_manager
     goal_record = ctx.goal_record
+    plan_manager = ctx.plan_manager
 
     plan_result = ctx.scratch.plan_result
     decision = ctx.scratch.decision
@@ -31,6 +32,9 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
             {"error": "Record iteration without plan/decision", "step_id": ""},
         )
         return {"last_outcome": "fatal"}
+
+    # Record step outcomes in the plan DAG
+    plan_manager.record_step_outcomes(step_results)
 
     iteration_completed = state.iteration
     state.iteration += 1

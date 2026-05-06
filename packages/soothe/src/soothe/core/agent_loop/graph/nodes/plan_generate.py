@@ -12,6 +12,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     """Run generate phase from prior assess result and set route key."""
     agent_loop = ctx.agent_loop
     state = ctx.loop_state
+    plan_manager = ctx.plan_manager
     assessment = ctx.scratch.plan_assessment
     if assessment is None:
         await ctx.emit(
@@ -29,6 +30,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     )
 
     ctx.scratch.plan_result = plan_result
+    plan_manager.ingest_plan(plan_result, state.plan_id, state.iteration)
 
     await ctx.emit(
         "plan",

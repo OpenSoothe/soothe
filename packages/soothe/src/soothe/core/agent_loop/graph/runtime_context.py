@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.core.agent_loop.branching.anchor_manager import CheckpointAnchorManager
 from soothe.core.agent_loop.context.goal_context_manager import GoalContextManager
+from soothe.core.agent_loop.core.plan_manager import PlanManager
 from soothe.core.agent_loop.state.checkpoint import AgentLoopCheckpoint, GoalExecutionRecord
 from soothe.core.agent_loop.state.schemas import LoopState
 from soothe.core.agent_loop.state.state_manager import AgentLoopStateManager
@@ -29,6 +30,7 @@ class LoopRuntimeContext:
     state_manager: AgentLoopStateManager
     anchor_manager: CheckpointAnchorManager
     goal_context_manager: GoalContextManager
+    plan_manager: PlanManager
     checkpoint: AgentLoopCheckpoint
     goal_record: GoalExecutionRecord | None
     thread_continuation_mode: bool

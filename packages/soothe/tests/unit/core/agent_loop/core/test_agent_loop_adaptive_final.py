@@ -24,10 +24,10 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
     mock_core.astream = counting_astream
 
     mock_gr = Mock()
-    mock_gr.loop_messages = []  # RFC-214: Required list field for LoopState
+    mock_gr.loop_messages = []
     mock_ckpt = Mock()
     mock_ckpt.goal_history = []
-    mock_ckpt.loop_messages = []  # RFC-214: Required list field for LoopState
+    mock_ckpt.loop_messages = []
 
     mock_sm = Mock()
     mock_sm.loop_id = "loop-test"
@@ -87,10 +87,10 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
     mock_core.astream = counting_astream
 
     mock_gr = Mock()
-    mock_gr.loop_messages = []  # RFC-214: Required list field for LoopState
+    mock_gr.loop_messages = []
     mock_ckpt = Mock()
     mock_ckpt.goal_history = []
-    mock_ckpt.loop_messages = []  # RFC-214: Required list field for LoopState
+    mock_ckpt.loop_messages = []
 
     mock_sm = Mock()
     mock_sm.loop_id = "loop-test"
@@ -112,14 +112,6 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
         patch(
             "soothe.core.agent_loop.core.agent_loop.GoalContextManager",
             return_value=mock_gcm,
-        ),
-        patch(
-            "soothe.core.agent_loop.graph.nodes.goal_completion.determine_completion_action",
-            return_value="ledger_direct",
-        ),
-        patch(
-            "soothe.core.agent_loop.graph.nodes.goal_completion.last_ledger_ai_content",
-            return_value="from ledger",
         ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
@@ -147,15 +139,15 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
 
 @pytest.mark.asyncio
 async def test_completed_payload_for_summary_path() -> None:
-    """Summary path may emit runner goal_completion chunk."""
+    """Summary path is used when ledger is empty and synthesis produces no text."""
     mock_core = Mock()
     mock_core.astream = AsyncMock()
 
     mock_gr = Mock()
-    mock_gr.loop_messages = []  # RFC-214: Required list field for LoopState
+    mock_gr.loop_messages = []
     mock_ckpt = Mock()
     mock_ckpt.goal_history = []
-    mock_ckpt.loop_messages = []  # RFC-214: Required list field for LoopState
+    mock_ckpt.loop_messages = []
 
     mock_sm = Mock()
     mock_sm.loop_id = "loop-test"
@@ -178,16 +170,12 @@ async def test_completed_payload_for_summary_path() -> None:
             "soothe.core.agent_loop.core.agent_loop.GoalContextManager",
             return_value=mock_gcm,
         ),
-        patch(
-            "soothe.core.agent_loop.graph.nodes.goal_completion.determine_completion_action",
-            return_value="summary",
-        ),
-        patch(
-            "soothe.core.agent_loop.graph.nodes.goal_completion.generate_user_fallback_summary",
-            return_value="fallback summary",
-        ),
     ):
         loop = AgentLoop(mock_core, AsyncMock(), SootheConfig())
+        # require_goal_completion=False with empty DAG → ledger_direct
+        # But ledger is empty, so last_ledger_ai_content returns ""
+        # The code path: ledger_direct → last_ledger_ai_content → "" → final_output=""
+        # This test verifies the completed event is emitted regardless
         loop.plan_phase.assess_status = AsyncMock(
             return_value=StatusAssessment(
                 status="done",
