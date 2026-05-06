@@ -16,7 +16,7 @@
 - Split into multiple discovery steps only when scopes are genuinely disjoint.
 
 **First-wave constraint**:
-- Iteration 0 (first plan-generate call): produce AT MOST 2 steps. Validate direction before committing to broad execution.
+- Iteration 1 (first plan-generate call): produce AT MOST 2 steps. Validate direction before committing to broad execution.
 - Subsequent iterations: 1-3 steps per decision as normal.
 - Rationale: reduces wasted work from incorrect assumptions; catches wrong approaches early.
 

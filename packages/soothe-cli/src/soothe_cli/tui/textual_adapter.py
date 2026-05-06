@@ -56,13 +56,13 @@ from soothe_sdk.ux.task_namespace import (
 )
 
 from soothe_cli.cli.stream.display_line import DisplayLine
+from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
+from soothe_cli.shared.core.presentation_engine import PresentationEngine
 from soothe_cli.shared.events.essential_events import (
     LOOP_REASON_EVENT_TYPE,
     is_essential_progress_event_type,
 )
-from soothe_cli.shared.core.presentation_engine import PresentationEngine
 from soothe_cli.shared.rendering.renderer_base import RendererBase
-from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.shared.tools.message_processing import (
     accumulate_tool_call_chunks,
     extract_tool_args_dict,
