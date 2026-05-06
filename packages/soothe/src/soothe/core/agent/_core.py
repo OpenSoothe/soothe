@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.utils.text_preview import preview_full
+from soothe.utils.text_preview import log_preview
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -202,7 +202,7 @@ class CoreAgent:
         )
         hints = config.get("configurable", {}) if config else {}
 
-        input_preview = input_arg if isinstance(input_arg, str) else preview_full(str(input_arg))
+        input_preview = input_arg if isinstance(input_arg, str) else log_preview(str(input_arg), chars=150)
         logger.debug(
             "[Exec] Starting execution (thread=%s): %s",
             thread_id,
