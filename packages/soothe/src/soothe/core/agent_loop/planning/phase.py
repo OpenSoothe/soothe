@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from soothe.core.agent_loop.state.schemas import LoopState, PlanResult, StatusAssessment
 from soothe.utils.text_preview import log_preview
@@ -121,6 +121,8 @@ class PlanPhase:
         state: LoopState,
         context: PlanContext,
         assessment: StatusAssessment,
+        *,
+        plan_manager: Any = None,
     ) -> PlanResult:
         """Run plan-generate call after assess determined work remains."""
         self._prepare_state_evidence(state)
@@ -135,6 +137,7 @@ class PlanPhase:
             state=state,
             context=context,
             assessment=assessment,
+            plan_manager=plan_manager,
         )
         return self.finalize_plan_result(state=state, context=context, result=result)
 
@@ -143,6 +146,8 @@ class PlanPhase:
         goal: str,
         state: LoopState,
         context: PlanContext,
+        *,
+        plan_manager: Any = None,
     ) -> PlanResult:
         """Single-call plan via the loop planner (RFC-604)."""
         self._prepare_state_evidence(state)
@@ -153,5 +158,7 @@ class PlanPhase:
             len(state.action_history),
             len(state.step_results),
         )
-        result = await self._loop_planner.plan(goal=goal, state=state, context=context)
+        result = await self._loop_planner.plan(
+            goal=goal, state=state, context=context, plan_manager=plan_manager
+        )
         return self.finalize_plan_result(state=state, context=context, result=result)

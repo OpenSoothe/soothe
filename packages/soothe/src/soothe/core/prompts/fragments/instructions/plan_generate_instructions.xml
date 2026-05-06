@@ -6,6 +6,8 @@ Output MUST match the structured schema only: plan_action, type, steps, executio
 **plan_action**
 - "keep": Reuse the in-flight plan; omit type/steps/execution_mode unless explicitly revising.
 - "new": Supply a fresh decision payload with 1–3 steps (see EXECUTION_POLICIES above). Each step: imperative description, expected_output, optional subagent/dependencies.
+  - When iteration is 0: produce 1-2 steps maximum. Validate approach before expanding.
+  - When prior steps have failed: propose a *different approach*, do not re-describe the same failed step.
 
 **decision fields** (when plan_action="new")
 - type: "execute_steps" or "final" per goal state.

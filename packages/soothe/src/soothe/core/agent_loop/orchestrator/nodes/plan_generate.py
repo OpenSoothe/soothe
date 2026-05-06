@@ -27,6 +27,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
         state=state,
         context=context,
         assessment=assessment,
+        plan_manager=plan_manager,
     )
 
     ctx.scratch.plan_result = plan_result

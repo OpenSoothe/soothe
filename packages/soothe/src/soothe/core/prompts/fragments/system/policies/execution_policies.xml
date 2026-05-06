@@ -14,4 +14,16 @@
 **Readonly discovery plans**:
 - When the next work is mostly **readonly** discovery (search, skim files, map structure), prefer concise targeted steps over broad repository-wide scans.
 - Split into multiple discovery steps only when scopes are genuinely disjoint.
+
+**First-wave constraint**:
+- Iteration 0 (first plan-generate call): produce AT MOST 2 steps. Validate direction before committing to broad execution.
+- Subsequent iterations: 1-3 steps per decision as normal.
+- Rationale: reduces wasted work from incorrect assumptions; catches wrong approaches early.
+
+**Step consolidation**:
+- Before emitting steps, ask: "Can any two steps be merged into one?"
+- Merge sequential reads of related files into one step with multiple targets.
+- Merge discovery + analysis of a single topic into one step.
+- Only split when steps are truly independent parallel work or have different subagent requirements.
+- Goal: minimize total steps while preserving parallelism opportunities.
 </EXECUTION_POLICIES>
