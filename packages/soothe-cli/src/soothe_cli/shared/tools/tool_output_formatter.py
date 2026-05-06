@@ -12,6 +12,8 @@ from typing import Any
 
 from soothe_sdk.utils import get_tool_categories
 
+from soothe_cli.shared.tools._utils import normalize_tool_name
+
 logger = logging.getLogger(__name__)
 
 
@@ -82,8 +84,7 @@ def classify_tool(tool_name: str) -> str:
         >>> classify_tool("unknown_tool")
         'unknown'
     """
-    # Normalize tool name to snake_case (handle variations)
-    normalized = tool_name.lower().replace("-", "_").replace(" ", "_")
+    normalized = normalize_tool_name(tool_name)
 
     # Look up in category mapping
     return TOOL_CATEGORIES.get(normalized, "unknown")

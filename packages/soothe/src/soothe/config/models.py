@@ -1151,6 +1151,10 @@ class SecurityConfig(BaseModel):
         require_approval_for_file_types: File types that need user approval.
             Examples: [".env", ".pem", ".key"] - User will be prompted before access
 
+        sandbox: Enable sandboxed execution environment for command tools (run_command,
+            run_python, run_background). When False, these tools are filtered out.
+            Default: False
+
     Path Evaluation Order:
     1. Check denied_paths - if matched, deny immediately
     2. Check allowed_paths - if matched, allow
@@ -1158,6 +1162,11 @@ class SecurityConfig(BaseModel):
     4. Apply file type restrictions
     5. Default deny
     """
+
+    sandbox: bool = Field(
+        default=False,
+        description="Enable sandboxed execution for command tools (run_command, run_python, run_background). Default: False (tools filtered out when no sandbox backend is available)",
+    )
 
     allow_paths_outside_workspace: bool = False
     require_approval_for_outside_paths: bool = True

@@ -202,7 +202,9 @@ class CoreAgent:
         )
         hints = config.get("configurable", {}) if config else {}
 
-        input_preview = input_arg if isinstance(input_arg, str) else log_preview(str(input_arg), chars=150)
+        input_preview = (
+            input_arg if isinstance(input_arg, str) else log_preview(str(input_arg), chars=150)
+        )
         logger.debug(
             "[Exec] Starting execution (thread=%s): %s",
             thread_id,

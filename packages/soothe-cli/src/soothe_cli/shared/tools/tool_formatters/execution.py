@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from soothe_cli.shared.tools._utils import normalize_tool_name, text_looks_like_error
 from soothe_cli.shared.tools.tool_formatters.base import BaseFormatter
 from soothe_cli.shared.tools.tool_message_format import try_parse_run_python_result_envelope
 from soothe_cli.shared.tools.tool_output_formatter import ToolBrief
@@ -37,10 +38,11 @@ class ExecutionFormatter(BaseFormatter):
             '✓ Done'
         """
         # Normalize tool name
-        normalized = tool_name.lower().replace("-", "_").replace(" ", "_")
+        normalized = normalize_tool_name(tool_name)
 
         # Route to specific formatter
-        if normalized == "run_command":
+        # execute/shell/bash are aliases of run_command (per TOOL_REGISTRY)
+        if normalized in ("run_command", "execute", "shell", "bash"):
             return self._format_run_command(result)
         if normalized == "run_python":
             return self._format_run_python(result)
@@ -83,9 +85,7 @@ class ExecutionFormatter(BaseFormatter):
             )
 
         # Check for other error patterns
-        error_indicators = ["failed:", "exception:", "traceback", "command not found"]
-        result_lower = result.lower()
-        if any(indicator in result_lower for indicator in error_indicators):
+        if text_looks_like_error(result):
             # Extract first line as error message
             first_line = result.partition("\n")[0].strip()
             return ToolBrief(
@@ -170,13 +170,7 @@ class ExecutionFormatter(BaseFormatter):
 
         # Handle string result (fallback — not the standard run_python JSON envelope)
         if isinstance(result, str):
-            lowered = result.lower()
-            if (
-                "traceback" in lowered
-                or "exception:" in lowered
-                or "failed:" in lowered
-                or result.startswith("Error:")
-            ):
+            if text_looks_like_error(result) or result.startswith("Error:"):
                 return ToolBrief(
                     icon="✗",
                     summary="Execution failed",
@@ -240,7 +234,7 @@ class ExecutionFormatter(BaseFormatter):
 
         # Handle string result (fallback)
         if isinstance(result, str):
-            if "error" in result.lower() or "failed" in result.lower():
+            if text_looks_like_error(result):
                 return ToolBrief(
                     icon="✗",
                     summary="Start failed",
@@ -280,7 +274,7 @@ class ExecutionFormatter(BaseFormatter):
             'Terminated PID 12345'
         """
         # Check for error
-        if "error" in result.lower() or "failed" in result.lower() or "not found" in result.lower():
+        if text_looks_like_error(result) or "not found" in result.lower():
             return ToolBrief(
                 icon="✗",
                 summary="Termination failed",

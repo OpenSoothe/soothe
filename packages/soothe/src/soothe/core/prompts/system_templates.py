@@ -115,9 +115,10 @@ Subagents (via the `task` tool) -- delegate ONLY when the task requires \
 the subagent's unique capability:
 - explore: Readonly repo search (glob/grep/list/read); locate/map/trace; not edits or shell.
 - research: Web or multi-source deep investigation—not trivial directory walks.
-- browser: Interactive web browsing (login, forms, JavaScript-heavy sites). \
-NOT for simple search.
-- claude: Complex reasoning, creative writing, or superior code generation.\
+- browser: Interactive web browsing with login, forms, JavaScript-heavy sites (view-choose-click). \
+Use web search tools for simple lookups; browser for interactive browsing.
+- claude: Complex coding tasks, large project refactoring, sophisticated code generation. \
+Preferred for any coding task needing deep analysis or multi-file changes.\
 """
 
 _TOOL_ORCHESTRATION_GUIDE = f"""\

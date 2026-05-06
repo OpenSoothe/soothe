@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from soothe_cli.shared.tools._utils import normalize_tool_name, text_looks_like_error
 from soothe_cli.shared.tools.tool_formatters.base import BaseFormatter
 from soothe_cli.shared.tools.tool_output_formatter import ToolBrief
 
@@ -36,7 +37,7 @@ class GoalFormatter(BaseFormatter):
             '✓ Created goal g1'
         """
         # Normalize tool name
-        normalized = tool_name.lower().replace("-", "_").replace(" ", "_")
+        normalized = normalize_tool_name(tool_name)
 
         # Route to specific formatter
         if normalized == "create_goal":
@@ -100,7 +101,7 @@ class GoalFormatter(BaseFormatter):
 
         # Handle string result (fallback)
         if isinstance(result, str):
-            if "error" in result.lower() or "failed" in result.lower():
+            if text_looks_like_error(result):
                 return ToolBrief(
                     icon="✗",
                     summary="Create failed",
@@ -167,7 +168,7 @@ class GoalFormatter(BaseFormatter):
 
         # Handle string result (fallback)
         if isinstance(result, str):
-            if "error" in result.lower() or "failed" in result.lower():
+            if text_looks_like_error(result):
                 return ToolBrief(
                     icon="✗",
                     summary="List failed",
@@ -234,7 +235,7 @@ class GoalFormatter(BaseFormatter):
 
         # Handle string result (fallback)
         if isinstance(result, str):
-            if "error" in result.lower() or "failed" in result.lower():
+            if text_looks_like_error(result):
                 return ToolBrief(
                     icon="✗",
                     summary="Complete failed",
@@ -307,7 +308,7 @@ class GoalFormatter(BaseFormatter):
 
         # Handle string result (fallback)
         if isinstance(result, str):
-            if "error" in result.lower() or "failed" in result.lower():
+            if text_looks_like_error(result):
                 return ToolBrief(
                     icon="✗",
                     summary="Fail operation failed",

@@ -127,6 +127,12 @@ def resolve_tools(
         if getattr(tools_config, name, None) and getattr(tools_config, name).enabled
     ]
 
+    # Filter out execution tools when sandbox is disabled (IG-sandbox)
+    if config and hasattr(config, "security") and config.security:
+        if not config.security.sandbox:
+            enabled_tools = [name for name in enabled_tools if name != "execution"]
+            logger.debug("Sandbox disabled: execution tools filtered out")
+
     total_start = time.perf_counter()
 
     parallel = lazy and len(enabled_tools) > 1
@@ -308,6 +314,11 @@ def _resolve_single_tool_group_uncached(
 
     # Support individual tool names (map to consolidated group)
     if name in ("run_command", "run_background", "kill_process", "run_python"):
+        # Filter out if sandbox is disabled (IG-sandbox)
+        if config and hasattr(config, "security") and config.security:
+            if not config.security.sandbox:
+                logger.debug("Sandbox disabled: '%s' tool filtered out", name)
+                return []
         from soothe.toolkits.execution import ExecutionToolkit
 
         resolved_cwd = (

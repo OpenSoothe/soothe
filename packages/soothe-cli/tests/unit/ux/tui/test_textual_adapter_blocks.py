@@ -4,7 +4,7 @@ from unittest.mock import create_autospec
 
 from langchain_core.messages import AIMessage, AIMessageChunk
 
-from soothe_cli.shared.tool_call_resolution import materialize_ai_blocks_with_resolved_tools
+from soothe_cli.shared.tools.tool_call_resolution import materialize_ai_blocks_with_resolved_tools
 from soothe_cli.tui.textual_adapter import (
     _defer_first_tool_card_mount_until_final_stream_chunk,
     _defer_tool_card_for_empty_streaming_args,

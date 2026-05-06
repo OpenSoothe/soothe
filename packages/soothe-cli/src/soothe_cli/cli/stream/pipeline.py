@@ -30,13 +30,13 @@ from soothe_cli.cli.stream.formatter import (
     format_subagent_done,
     format_subagent_milestone,
 )
-from soothe_cli.shared.essential_events import (
+from soothe_cli.shared.events.essential_events import (
     LOOP_REASON_EVENT_TYPE,
     is_goal_start_event_type,
     is_step_complete_event_type,
     is_step_start_event_type,
 )
-from soothe_cli.shared.presentation_engine import PresentationEngine
+from soothe_cli.shared.core.presentation_engine import PresentationEngine
 
 logger = logging.getLogger(__name__)
 
