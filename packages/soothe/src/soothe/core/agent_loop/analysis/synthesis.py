@@ -21,7 +21,7 @@ import logging
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from soothe.core.agent_loop.analysis.scenario_classifier import (
     ScenarioClassification,
@@ -34,6 +34,7 @@ from soothe.core.agent_loop.utils.messages import (
 )
 from soothe.core.agent_loop.utils.stream_normalize import extract_text_from_message_content
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
+from soothe.utils.similarity import semantic_similarity
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -46,6 +47,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _DEFAULT_SYNTHESIS_EVIDENCE_MAX = 120_000
+_DEFAULT_LOOP_MESSAGE_MIN_SIMILARITY = 0.35
+_DEFAULT_LOOP_MESSAGE_MIN_AI_COUNT = 5
 
 _SYNTH_GC_MARKER = "__synth_gc__"
 
@@ -145,7 +148,7 @@ class SynthesisGenerator:
         instruction = self._build_synthesis_instruction(goal, classification)
         max_total = self._synthesis_max_chars()
         ledger_budget = max(0, max_total - len(instruction) - 256)
-        ledger_messages = self._ledger_messages_for_synthesis(state, ledger_budget)
+        ledger_messages = self._ledger_messages_for_synthesis(state, ledger_budget, goal=goal)
         messages = [
             *ledger_messages,
             self._synthesis_instruction_message(state, instruction),
@@ -219,16 +222,79 @@ class SynthesisGenerator:
             return copier(deep=True)
         return copy.deepcopy(msg)
 
+    def _filter_messages_by_goal_relevance(
+        self,
+        messages: list[BaseMessage],
+        goal: str,
+        *,
+        min_similarity: float = _DEFAULT_LOOP_MESSAGE_MIN_SIMILARITY,
+        min_ai_count: int = _DEFAULT_LOOP_MESSAGE_MIN_AI_COUNT,
+    ) -> list[BaseMessage]:
+        """Filter messages by relevance to the synthesis goal.
+
+        Only filters when there are >= min_ai_count AI messages to avoid overhead on small contexts.
+        Uses semantic_similarity only (no keyword fallback).
+        If filtering removes too many messages (< 2 remaining), synthesizes ALL messages.
+        """
+        # Only filter when >= min_ai_count AI messages
+        ai_message_count = sum(1 for m in messages if isinstance(m, AIMessage))
+        if ai_message_count < min_ai_count:
+            return messages
+
+        goal_text = (goal or "").strip()
+        if not goal_text:
+            return messages
+
+        # Score each message by semantic similarity to goal
+        scored_messages = []
+        for msg in messages:
+            content = extract_text_from_message_content(getattr(msg, "content", ""))
+            if not content or not content.strip():
+                scored_messages.append((0.0, msg))
+                continue
+
+            score = semantic_similarity(content, goal_text)
+            scored_messages.append((score, msg))
+
+        # Filter by threshold
+        filtered = [msg for score, msg in scored_messages if score >= min_similarity]
+
+        # Fallback: if filtering too aggressive, synthesize ALL messages
+        if len(filtered) < 2:
+            logger.debug(
+                "Filtering too aggressive: %d/%d retained, using all messages",
+                len(filtered),
+                len(messages),
+            )
+            return messages
+
+        removed = len(messages) - len(filtered)
+        if removed > 0:
+            logger.info(
+                "Filtered %d/%d messages below relevance threshold %.2f",
+                removed,
+                len(messages),
+                min_similarity,
+            )
+
+        return filtered
+
     def _ledger_messages_for_synthesis(
         self,
         state: LoopState,
         ledger_char_budget: int,
+        goal: str | None = None,
     ) -> list[BaseMessage]:
-        """Return bounded ledger copies, or a single Human fallback when the ledger is empty."""
+        """Return bounded ledger copies, optionally filtered by goal relevance."""
         budget = max(0, ledger_char_budget)
 
         if state.loop_messages:
             copies = [self._copy_message_for_synthesis(m) for m in state.loop_messages]
+
+            # Filter by goal relevance if goal provided
+            if goal:
+                copies = self._filter_messages_by_goal_relevance(copies, goal)
+
             return self._trim_messages_by_extracted_chars(copies, budget)
 
         evidence_parts = [
