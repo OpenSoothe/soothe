@@ -101,24 +101,12 @@ class ExploreFindingsMiddleware(AgentMiddleware[ExploreAgentState, None]):
         if isinstance(tm, ToolMessage):
             name = tm.name or name
         if not should_record_findings(str(name)):
-            logger.debug("[ExploreFindings] skip recording for tool=%s", name)
             return tm
         if not isinstance(tm, ToolMessage):
-            logger.debug(
-                "[ExploreFindings] result is Command, not ToolMessage: tool=%s type=%s",
-                name,
-                type(tm).__name__,
-            )
             return tm
         rows = extract_findings_from_tool_result(request, tm)
         if not rows:
-            logger.debug("[ExploreFindings] no rows extracted from tool=%s", name)
             return tm
-        logger.debug(
-            "[ExploreFindings] returning Command with findings: tool=%s rows=%d",
-            name,
-            len(rows),
-        )
         return Command(update={"messages": [tm], "findings": rows})
 
     def wrap_tool_call(
@@ -126,29 +114,13 @@ class ExploreFindingsMiddleware(AgentMiddleware[ExploreAgentState, None]):
         request: ToolCallRequest,
         handler: Callable[[ToolCallRequest], ToolMessage | Command[Any]],
     ) -> ToolMessage | Command[Any]:
-        tool_name = request.tool_call.get("name") if isinstance(request.tool_call, dict) else "?"
-        logger.debug("[ExploreFindings] wrap_tool_call START: tool=%s", tool_name)
         try:
-            tm = handler(request)
-            logger.debug(
-                "[ExploreFindings] wrap_tool_call END: tool=%s result_type=%s",
-                tool_name,
-                type(tm).__name__,
-            )
-            merged = self._merge_findings(request, tm)
-            logger.debug(
-                "[ExploreFindings] merge_findings DONE: tool=%s merged_type=%s",
-                tool_name,
-                type(merged).__name__,
-            )
-            return merged
+            return self._merge_findings(request, handler(request))
         except Exception as e:
-            logger.error(
-                "[ExploreFindings] wrap_tool_call ERROR: tool=%s error=%s",
-                tool_name,
-                e,
-                exc_info=True,
+            tool_name = (
+                request.tool_call.get("name") if isinstance(request.tool_call, dict) else "?"
             )
+            logger.error("[ExploreFindings] tool=%s error=%s", tool_name, e, exc_info=True)
             raise
 
     async def awrap_tool_call(
@@ -156,29 +128,13 @@ class ExploreFindingsMiddleware(AgentMiddleware[ExploreAgentState, None]):
         request: ToolCallRequest,
         handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]],
     ) -> ToolMessage | Command[Any]:
-        tool_name = request.tool_call.get("name") if isinstance(request.tool_call, dict) else "?"
-        logger.debug("[ExploreFindings] awrap_tool_call START: tool=%s", tool_name)
         try:
-            tm = await handler(request)
-            logger.debug(
-                "[ExploreFindings] awrap_tool_call END: tool=%s result_type=%s",
-                tool_name,
-                type(tm).__name__,
-            )
-            merged = self._merge_findings(request, tm)
-            logger.debug(
-                "[ExploreFindings] merge_findings DONE: tool=%s merged_type=%s",
-                tool_name,
-                type(merged).__name__,
-            )
-            return merged
+            return self._merge_findings(request, await handler(request))
         except Exception as e:
-            logger.error(
-                "[ExploreFindings] awrap_tool_call ERROR: tool=%s error=%s",
-                tool_name,
-                e,
-                exc_info=True,
+            tool_name = (
+                request.tool_call.get("name") if isinstance(request.tool_call, dict) else "?"
             )
+            logger.error("[ExploreFindings] tool=%s error=%s", tool_name, e, exc_info=True)
             raise
 
 

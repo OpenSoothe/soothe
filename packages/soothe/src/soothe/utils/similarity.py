@@ -23,33 +23,40 @@ if TYPE_CHECKING:
 _has_sentence_transformers = False
 _transformer_model = None
 _transformer_model_name = "all-MiniLM-L6-v2"
+_model_loading_attempted = False
 
 try:
     from sentence_transformers import SentenceTransformer
 
     _has_sentence_transformers = True
-    # Use a fast, lightweight model for similarity
-    # all-MiniLM-L6-v2: 80MB, fast inference, good quality
     logger.debug("sentence_transformers available, semantic similarity enabled")
 except ImportError:
     logger.debug("sentence_transformers not available, falling back to keyword similarity")
 
 
 def _get_transformer_model() -> SentenceTransformer | None:
-    """Lazy-load transformer model (cached globally)."""
-    global _transformer_model, _has_sentence_transformers
+    """Load transformer model (cached globally, loads on first call).
+
+    Uses synchronous loading to avoid async client closure issues.
+    The model is loaded on first actual use, not at import time.
+    """
+    global _transformer_model, _has_sentence_transformers, _model_loading_attempted
 
     if not _has_sentence_transformers:
         return None
 
-    if _transformer_model is None:
-        try:
-            _transformer_model = SentenceTransformer(_transformer_model_name)
-            logger.info("Loaded sentence_transformers model: %s", _transformer_model_name)
-        except Exception as e:
-            logger.warning("Failed to load sentence_transformers model: %s", e)
-            _has_sentence_transformers = False
-            return None
+    if _model_loading_attempted:
+        # Already tried loading, use cached result (may be None if failed)
+        return _transformer_model
+
+    _model_loading_attempted = True
+    try:
+        _transformer_model = SentenceTransformer(_transformer_model_name)
+        logger.info("Loaded sentence_transformers model: %s", _transformer_model_name)
+    except Exception as e:
+        logger.warning("Failed to load sentence_transformers model: %s", e)
+        _has_sentence_transformers = False
+        _transformer_model = None
 
     return _transformer_model
 
@@ -328,9 +335,9 @@ def rank_by_similarity(
 
 # Check availability at import time
 def is_semantic_similarity_available() -> bool:
-    """Check if semantic similarity is available (sentence_transformers installed).
+    """Check if semantic similarity is available (sentence_transformers installed and model loadable).
 
     Returns:
-        True if sentence_transformers is available.
+        True if sentence_transformers model is available and loadable.
     """
     return _has_sentence_transformers and _get_transformer_model() is not None
