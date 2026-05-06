@@ -184,7 +184,7 @@ Plans support hierarchical decomposition:
 ## Configuration
 
 ```yaml
-# Planning is configured on SootheConfig.agentic (see packages/soothe/src/soothe/config/config.yml).
+# Planning is configured on SootheConfig.agentic (see config/config.template.yml).
 # LLMPlanner / two-phase StatusAssessment + PlanGeneration (RFC-604, IG-372, IG-329):
 # packages/soothe/src/soothe/core/agent_loop/core/planner.py
 agentic:

@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-04-28
 **Dependencies**: RFC-201, RFC-603
-**Related**: IG-199, IG-295, IG-296, IG-355
+**Related**: IG-199, IG-295, IG-296, IG-355, IG-400
 
 ---
 
@@ -55,20 +55,85 @@ Extract goal completion logic into dedicated module hierarchy:
 ```
 packages/soothe/src/soothe/core/
 ├── agent_loop/
-│   ├── policies/goal_completion_policy.py
-│   ├── analysis/synthesis.py      # synthesis helper(s)
-│   ├── core/agent_loop.py         # invokes goal-completion flow
+│   ├── policies/goal_completion_policy.py   # DEPRECATED → migrated to PlanManager
+│   ├── core/plan_dag.py                     # Unified DAG of all planned steps
+│   ├── core/plan_manager.py                 # Plan orchestration + completion strategy
+│   ├── analysis/synthesis.py                # synthesis helper(s)
+│   ├── core/agent_loop.py                   # invokes goal-completion flow
 │   ├── core/plan_phase.py
 │   └── core/executor.py
-└── runner/                        # wires AgentLoop + streaming (e.g. _runner_agentic)
+└── runner/                                  # wires AgentLoop + streaming (e.g. _runner_agentic)
 ```
 *(Historical draft showed `cognition/agent_loop/completion/`; implementation lives under `core/` per IG consolidation.)*
+
+### PlanDAG: Unified Plan DAG
+
+`PlanDAG` (plan_dag.py) merges all steps from every plan (including replans) into a single DAG keyed by step ID.
+
+```python
+@dataclass
+class PlanDAG:
+    nodes: dict[str, PlanNode] = field(default_factory=dict)
+    _plan_ids: set[str] = field(default_factory=set)
+
+    def ingest_plan(self, plan_result: PlanResult, plan_id: str | None, iteration: int) -> None
+    def mark_completed(self, step_id: str, outcome: StepResult) -> None
+    def mark_failed(self, step_id: str, outcome: StepResult) -> None
+
+    @property def total_steps(self) -> int
+    @property def completed_steps(self) -> int
+    @property def failed_steps(self) -> int
+    @property def remaining_steps(self) -> int
+    @property def has_dag_dependencies(self) -> bool
+    @property def max_chain_depth(self) -> int   # BFS-based longest chain
+    @property def plan_count(self) -> int        # Number of distinct plans (replan detection)
+    @property def success_rate(self) -> float
+    @property def used_subagents(self) -> bool
+```
+
+### PlanManager: Plan Orchestration + Completion Strategy
+
+`PlanManager` (plan_manager.py) wraps `PlanDAG` and provides goal completion decision logic. It subsumes the functionality previously in `goal_completion_policy.py`.
+
+```python
+class CompletionStrategy(str, Enum):
+    LEDGER_DIRECT = "ledger_direct"    # Return ledger text directly
+    SYNTHESIZE = "synthesize"          # LLM synthesis required
+    SUMMARY = "summary"                # Fallback summary
+
+@dataclass
+class PlanManager:
+    goal: str
+    dag: PlanDAG = field(default_factory=PlanDAG)
+    plan_history: list[PlanResult] = field(default_factory=list)
+
+    def ingest_plan(self, plan_result: PlanResult, plan_id: str | None, iteration: int) -> None
+    def record_step_outcomes(self, step_results: list[StepResult]) -> None
+    def determine_goal_completion_needs(llm_decision, state, mode) -> bool
+    def determine_completion_strategy(state, plan_result, mode) -> CompletionStrategy
+```
+
+**Completion strategy decision flow** (`determine_completion_strategy`):
+1. Mode override: `always_synthesize` → `SYNTHESIZE`
+2. Planner says no synthesis + simple execution → `LEDGER_DIRECT`
+3. DAG complexity vetoes (replan, failures, subagents, deep chains) → `SYNTHESIZE`
+4. Ledger richness check (rich + overlaps with plan) → `LEDGER_DIRECT`
+5. Default → `SYNTHESIZE`
+
+**Heuristic checks** (`_heuristic_requires_goal_completion`):
+- `parallel_multi_step` wave execution
+- `subagent_cap` hit
+- Failed steps with low success rate (< 60%)
+- DAG dependencies ≥ 3 on current plan
+
+---
 
 ### Module Responsibilities
 
 | Module | Responsibility | Dependencies |
 |--------|----------------|--------------|
-| `GoalCompletionModule` | Orchestrate completion flow | All below + synthesis_policy |
+| `PlanManager` | Plan orchestration + completion strategy | PlanDAG, state schemas |
+| `PlanDAG` | Unified DAG of all planned steps | State schemas |
 | `ResponseCategorizer` | Determine length category, goal type | response_length_policy, synthesis (classification only) |
 | `SynthesisExecutor` | Execute LLM synthesis, accumulate stream | CoreAgent, stream_normalize |
 | `CompletionStrategies` | Implement planner_skip, direct, synthesis, summary | State, PlanResult |
@@ -76,18 +141,56 @@ packages/soothe/src/soothe/core/
 ### Clean Architecture Principles
 
 **Separation of Concerns** (RFC-001 §28):
-- **Policy Layer**: `agent_loop/policies/goal_completion_policy.py` and related config (`SootheConfig.agentic.final_response`)
+- **Policy Layer**: `agent_loop/core/plan_manager.py` (PlanManager, CompletionStrategy enum) and config (`SootheConfig.agentic.final_response`)
 - **Execution / synthesis**: `agent_loop/analysis/synthesis.py`, `agent_loop/core/agent_loop.py`, runner modules under `core/runner/`
+- **Plan DAG**: `agent_loop/core/plan_dag.py` (PlanDAG data structure)
 - *(Historical draft referenced `cognition/agent_loop/completion/*`; code now lives under `packages/soothe/src/soothe/core/`.)*
 
 **Dependency Rule** (Clean Architecture):
-- Orchestration → Strategies → Execution → CoreAgent
+- Orchestration → PlanManager → PlanDAG → State schemas
 - Classification → Policy (no execution dependencies)
 - Policy → State schemas (no execution dependencies)
 
 ---
 
 ## Module APIs
+
+### PlanManager (Plan Orchestration + Completion Strategy)
+
+```python
+class CompletionStrategy(str, Enum):
+    LEDGER_DIRECT = "ledger_direct"
+    SYNTHESIZE = "synthesize"
+    SUMMARY = "summary"
+
+@dataclass
+class PlanManager:
+    """Manages the DAG of all planned steps for a single goal across iterations."""
+
+    goal: str
+    dag: PlanDAG
+    plan_history: list[PlanResult]
+
+    def ingest_plan(self, plan_result: PlanResult, plan_id: str | None, iteration: int) -> None:
+        """Called from plan_assess / plan_generate after finalize_plan_result."""
+
+    def record_step_outcomes(self, step_results: list[StepResult]) -> None:
+        """Called from record_iteration after execute."""
+
+    def determine_goal_completion_needs(
+        self, llm_decision: bool, state: Any, mode: str = "llm_only",
+    ) -> bool:
+        """Decide whether goal-completion synthesis/reporting is required.
+
+        Modes: llm_only | heuristic_only | hybrid
+        """
+
+    def determine_completion_strategy(
+        self, state: LoopState, plan_result: PlanResult,
+        mode: FinalResponseMode = "adaptive",
+    ) -> CompletionStrategy:
+        """Determine goal completion strategy from the full DAG + history."""
+```
 
 ### GoalCompletionModule (Main Orchestrator)
 
@@ -242,103 +345,37 @@ class SynthesisExecutor:
         ...
 ```
 
-### CompletionStrategies (Strategy Pattern)
+### CompletionStrategies (Enum-Based Strategy)
+
+The completion strategy is now an enum (`CompletionStrategy`) resolved by `PlanManager.determine_completion_strategy()` rather than a protocol-based class hierarchy.
 
 ```python
-class CompletionStrategies:
-    """Strategy selection and execution for goal completion."""
-    
-    def select_strategy(
-        self,
-        state: LoopState,
-        plan_result: PlanResult,
-        category: ResponseLengthCategory,
-    ) -> CompletionStrategy:
-        """Select completion strategy based on policy decisions.
-        
-        Decision tree (simplified):
-        1. if not plan_result.require_goal_completion → PlannerSkipStrategy
-        2. if should_return_directly() → DirectReturnStrategy
-        3. if needs_synthesis() → SynthesisStrategy
-        4. else → SummaryStrategy
-        
-        Args:
-            state: Loop state
-            plan_result: Plan result
-            category: Response category
-            
-        Returns:
-            Selected strategy instance
-        """
-        mode = "adaptive"  # From config
-        
-        if not plan_result.require_goal_completion:
-            return PlannerSkipStrategy()
-        
-        if should_return_goal_completion_directly(state, plan_result, mode, response_length_category=category.value):
-            return DirectReturnStrategy()
-        
-        if needs_final_thread_synthesis(state, plan_result, mode):
-            return SynthesisStrategy()
-        
-        return SummaryStrategy()
+class CompletionStrategy(str, Enum):
+    LEDGER_DIRECT = "ledger_direct"     # Direct return from ledger
+    SYNTHESIZE = "synthesize"           # LLM synthesis required
+    SUMMARY = "summary"                 # Fallback summary
+```
 
+**Strategy selection** (in `PlanManager._dag_requires_synthesis`):
+- Replan detected (`plan_count >= 2`) → `SYNTHESIZE`
+- Failed steps → `SYNTHESIZE`
+- Subagents used → `SYNTHESIZE`
+- Deep chain (`max_chain_depth >= 3`) → `SYNTHESIZE`
+- Subagent cap hit → `SYNTHESIZE`
+- Parallel multi-step wave → `SYNTHESIZE`
+- Low success rate with failures → `SYNTHESIZE`
+- DAG dependencies on current plan → `SYNTHESIZE`
+- Simple execution → `LEDGER_DIRECT` (if ledger rich enough)
 
-class CompletionStrategy(Protocol):
-    """Protocol for completion strategy implementations."""
-    
-    async def execute(
-        self,
-        goal: str,
-        state: LoopState,
-        plan_result: PlanResult,
-        category: ResponseLengthCategory,
-    ) -> tuple[str, AsyncGenerator]:
-        """Execute strategy and return final output + stream chunks."""
-        ...
-
-
-class PlannerSkipStrategy(CompletionStrategy):
-    """Reuse Execute assistant text when planner says no synthesis needed."""
-    
-    async def execute(self, goal, state, plan_result, category):
-        reuse = (state.last_execute_assistant_text or "").strip()
-        return reuse, _empty_generator()
-
-
-class DirectReturnStrategy(CompletionStrategy):
-    """Direct return when Execute output is rich and aligned."""
-    
-    async def execute(self, goal, state, plan_result, category):
-        reuse = (state.last_execute_assistant_text or "").strip()
-        return reuse, _empty_generator()
-
-
-class SynthesisStrategy(CompletionStrategy):
-    """Execute LLM synthesis turn for comprehensive report."""
-    
-    def __init__(self, executor: SynthesisExecutor):
-        self.executor = executor
-    
-    async def execute(self, goal, state, plan_result, category):
-        final_text = await self.executor.execute_synthesis(goal, state, plan_result, category)
-        # Consume generator to get final text
-        # (Implementation detail: synthesis executor yields chunks, we collect final text)
-        ...
-
-
-class SummaryStrategy(CompletionStrategy):
-    """Fallback summary from plan_result or step counts."""
-    
-    async def execute(self, goal, state, plan_result, category):
-        if plan_result.full_output:
-            return plan_result.full_output, _empty_generator()
-        elif state.step_results:
-            successful = sum(1 for r in state.step_results if r.success)
-            total = len(state.step_results)
-            return f"Completed {successful}/{total} steps. {plan_result.next_action}", _empty_generator()
-        else:
-            return plan_result.next_action or "Goal achieved", _empty_generator()
+**Simple execution check** (`_is_simple_execution`):
+```python
+def _is_simple_execution(self) -> bool:
+    return (
+        self.dag.plan_count <= 1
+        and not self.dag.has_dag_dependencies
+        and self.dag.failed_steps == 0
+        and self.dag.total_steps <= 2
+    )
 ```
 
 ---
@@ -442,7 +479,7 @@ if should_use_adaptive_summary(state, plan_result):
 
 ## Migration Strategy
 
-**IG-297 Implementation Plan**:
+**IG-297 Implementation Plan** (original goal completion extraction):
 
 1. Create module structure (`completion/` directory)
 2. Extract ResponseCategorizer (lines 343-377 from agent_loop.py)
@@ -452,6 +489,17 @@ if should_use_adaptive_summary(state, plan_result):
 6. Simplify agent_loop.py (replace ~200 lines with module call)
 7. Add unit tests for each module
 8. Run verification suite
+
+**IG-400 Implementation Plan** (PlanManager/PlanDAG architecture):
+
+1. Create `plan_dag.py` with PlanDAG dataclass (nodes keyed by step.id)
+2. Create `plan_manager.py` with PlanManager dataclass + CompletionStrategy enum
+3. Move `determine_goal_completion_needs` from `goal_completion_policy.py` into PlanManager
+4. Migrate heuristic checks into PlanManager methods
+5. Delete `goal_completion_policy.py` (functionality fully migrated)
+6. Update imports in `policies/__init__.py` and graph nodes
+7. Align tests with step.id-based keys (not composite IDs)
+8. Verify all 300+ tests pass
 
 **Preservation Guarantees**:
 - ✅ IG-295 fix preserved (planner recommendation honored)

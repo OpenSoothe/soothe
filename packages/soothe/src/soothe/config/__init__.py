@@ -51,7 +51,6 @@ from soothe.config.models import (
     WebSearchConfig,
 )
 from soothe.config.settings import SootheConfig
-from soothe.config.templates import get_config_template_path
 from soothe.core.prompts import (
     _DEFAULT_SYSTEM_PROMPT,
     _MEDIUM_SYSTEM_PROMPT,
@@ -105,5 +104,4 @@ __all__ = [
     "WebSearchConfig",
     "_resolve_env",
     "_resolve_provider_env",
-    "get_config_template_path",
 ]

@@ -1,5 +1,5 @@
 # Development Configuration - Essential dev settings only
-# Inherits defaults from src/soothe/config/config.yml
+# Inherits defaults from config/config.template.yml
 #
 # workspace_dir defaults to $SOOTHE_HOME/Workspace (IG-327). Set workspace_dir here to
 # pin a project directory for local dev.
@@ -59,7 +59,7 @@ router:
 
 agentic:
   max_iterations: 6
-  max_subagent_tasks_per_wave: 16
+  max_subagent_tasks_per_wave: 4
   final_response: adaptive
   goal_completion_mode: llm_only
   output_streaming: true
@@ -73,8 +73,8 @@ agentic:
 execution:
   concurrency:
     # IG-380: lower parallel execute-step fan-out locally (template remains 16)
-    max_parallel_steps: 8
-    max_parallel_subagents: 16
+    max_parallel_steps: 2
+    max_parallel_subagents: 4
   llm_rpm_limit: 120
   llm_concurrent_limit: 10
   llm_call_timeout_seconds: 120

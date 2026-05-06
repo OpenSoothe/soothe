@@ -1149,7 +1149,7 @@ Translation scenario (contamination risk):
 **System Configuration**:
 - `config/config.yml`: Template configuration
 - `config/config.dev.yml`: Development defaults
-- `packages/soothe/src/soothe/config/config.yml` and `config/config.dev.yml`: configuration and `${ENV}` placeholders
+- `config/config.template.yml` and `config/config.dev.yml`: configuration and `${ENV}` placeholders
 
 **Protocol Settings**:
 - `protocols.context.enabled`: Context protocol activation

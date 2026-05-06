@@ -10,7 +10,7 @@ Use compact `%(asctime)s` via `ShortLevelFormatter.formatTime`: `YYYYMMDDTHHMMSS
 
 - `soothe_sdk.utils.logging`: `ShortLevelFormatter`, default format strings
 - `soothe.logging.setup`: file + console formatters
-- Config defaults: `ConsoleLoggingConfig`, `packages/soothe/src/soothe/config/config.yml`
+- Config defaults: `ConsoleLoggingConfig`, `config/config.template.yml`
 
 ## Status
 

@@ -103,7 +103,7 @@ packages/soothe/src/soothe/core/agent_loop/graph/
 ### 8. Configuration
 
 - [ ] Add keys under `SootheConfig` / `agentic` (exact paths in PR): evidence caps, allowlist, repair bounds.
-- [ ] Update `packages/soothe/src/soothe/config/config.yml` **and** `config/config.dev.yml` in lockstep.
+- [ ] Update `config/config.template.yml` **and** `config/config.dev.yml` in lockstep.
 
 ### 9. Tests
 
