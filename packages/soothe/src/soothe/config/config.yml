@@ -65,7 +65,7 @@ agentic:
   max_iterations: 10
   max_subagent_tasks_per_wave: 16  # 0 = unlimited
   agent_loop_output_contract_enabled: true
-  final_response: adaptive  # adaptive | always_synthesize | always_last_execute
+  final_response: adaptive  # adaptive | always_synthesize
   goal_completion_mode: llm_only  # llm_only | heuristic_only | hybrid
   prior_conversation_limit: 10
 

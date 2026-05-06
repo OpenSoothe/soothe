@@ -5,16 +5,15 @@ Consolidated from synthesis_policy.py and strategy selection (IG-299).
 
 Decision flow:
 1. Goal completion needs: LLM and/or heuristics per ``mode`` (``determine_goal_completion_needs``)
-2. Completion action: skip/direct/synthesis/summary (``determine_completion_action``)
+2. Completion action: ledger_direct/synthesis/summary (``determine_completion_action``)
 
 Decision modes (``determine_goal_completion_needs`` ``mode``):
 - llm_only: Trust LLM decision completely (no heuristic fallback; default)
 - heuristic_only: Ignore LLM, use execution metrics only
 - hybrid: LLM primary, heuristic fallback when LLM returns false
 
-``state.last_execute_assistant_text`` is resolved per wave by
-:mod:`soothe.core.agent_loop.core.act_wave_finalize` from root assistant stream text and/or
-ordered ``task`` tool return bodies (IG-355, IG-357).
+``state.loop_messages`` (RFC-214 ledger) is the source for the final response when
+``require_goal_completion=False`` — the last ``LoopAIMessage`` content is returned.
 
 Heuristic categories (execution-focused, IG-298):
 - Wave execution: Parallel multi-step, subagent cap
@@ -35,7 +34,7 @@ if TYPE_CHECKING:
 
     from soothe.core.agent_loop.state.schemas import LoopState, PlanResult
 
-    FinalResponseMode = Literal["adaptive", "always_synthesize", "always_last_execute"]
+    FinalResponseMode = Literal["adaptive", "always_synthesize"]
 
 logger = logging.getLogger(__name__)
 
@@ -151,81 +150,74 @@ def determine_completion_action(
     state: LoopState,
     plan_result: PlanResult,
     mode: FinalResponseMode = "adaptive",
-) -> tuple[str, str | None]:
-    """Single entry point for completion decision and action (IG-300).
+) -> str:
+    """Single entry point for completion action (IG-300).
 
-    Consolidates strategy selection from synthesis_policy and completion_strategies.
-    Returns action and optional precomputed text for direct/skip branches.
+    Returns action in {"ledger_direct", "synthesize", "summary"}.
 
     Args:
         state: Loop state with execution history.
         plan_result: Plan result with planner's hybrid decision.
-        mode: Final-response mode (adaptive, always_synthesize, always_last_execute).
+        mode: Final-response mode (adaptive, always_synthesize).
 
     Returns:
-        (action, precomputed_text) where action in {"skip", "direct", "synthesize", "summary"}
-        and precomputed_text is reuse text for skip/direct, None for synthesize/summary.
+        Action string: "ledger_direct", "synthesize", or "summary".
     """
     # 1. Mode overrides
     if mode == "always_synthesize":
-        return "synthesize", None
+        return "synthesize"
 
-    if mode == "always_last_execute":
-        assistant = (state.last_execute_assistant_text or "").strip()
-        return ("direct", assistant) if assistant else ("summary", None)
-
-    # 2. Planner skip: trust hybrid decision (IG-298)
+    # 2. Planner says no synthesis needed: use ledger directly
     if not plan_result.require_goal_completion:
-        reuse = (state.last_execute_assistant_text or "").strip()
-        return "skip", reuse
+        return "ledger_direct"
 
-    # 3. Wave execution vetoes
+    # 3. Wave execution vetoes: complex execution needs synthesis
     if state.last_execute_wave_parallel_multi_step:
-        return "synthesize", None
+        return "synthesize"
 
     if state.last_wave_hit_subagent_cap:
-        return "synthesize", None
+        return "synthesize"
 
-    # 4. Direct return check: richness + overlap
-    assistant = (state.last_execute_assistant_text or "").strip()
-    if not assistant:
-        return "synthesize", None
+    # 4. Check if ledger has rich assistant content that can be used directly
+    from soothe.core.agent_loop.utils.messages import last_ledger_ai_content
 
-    if _can_return_directly(assistant, plan_result):
-        return "direct", assistant
+    ledger_text = last_ledger_ai_content(state)
+    if not ledger_text:
+        return "synthesize"
+
+    if _can_return_directly_from_ledger(ledger_text, plan_result):
+        return "ledger_direct"
 
     # 5. Synthesis needed per planner + execution complexity
-    return "synthesize", None
+    return "synthesize"
 
 
-def _can_return_directly(
-    assistant_text: str,
+def _can_return_directly_from_ledger(
+    ledger_text: str,
     plan_result: PlanResult,
 ) -> bool:
-    """Check richness (structure) + overlap with planner output (IG-300).
+    """Check richness + overlap with planner output for ledger direct return (IG-300).
 
     Args:
-        assistant_text: Execute assistant output.
+        ledger_text: Last AI message content from the ledger.
         plan_result: Plan result with full_output for overlap check.
 
     Returns:
         True if output is rich enough and aligned with planner.
     """
-    # Richness check (IG-300: simplified, no length category)
-    if not _is_rich_enough(assistant_text):
+    if not _is_rich_enough(ledger_text):
         return False
 
-    # Overlap check (avoid unrelated chatter)
-    return _overlaps_with_plan_output(assistant_text, plan_result)
+    return _overlaps_with_plan_output(ledger_text, plan_result)
 
 
-def _is_rich_enough(assistant_text: str) -> bool:
+def _is_rich_enough(text: str) -> bool:
     """Heuristic guard for rich, user-facing completion content (IG-300).
 
     Simplified from IG-273: checks for structured payloads or sufficient content.
     No word count thresholds - judges from structure alone.
     """
-    text = assistant_text.strip()
+    text = text.strip()
     if not text:
         return False
 
@@ -241,19 +233,19 @@ def _is_rich_enough(assistant_text: str) -> bool:
     return len(text) >= 100
 
 
-def _overlaps_with_plan_output(assistant_text: str, plan_result: PlanResult) -> bool:
-    """Return True when Execute text appears to reflect the planner's full_output (IG-299).
+def _overlaps_with_plan_output(ledger_text: str, plan_result: PlanResult) -> bool:
+    """Return True when ledger text appears to reflect the planner's full_output (IG-299).
 
     Used only as an adaptive-mode veto signal: if the planner captured a distinct
-    full_output and the Execute assistant text shares no common substring with it,
-    we assume Execute did not actually answer the goal and require synthesis.
+    full_output and the ledger text shares no common substring with it,
+    we assume the ledger did not actually answer the goal and require synthesis.
     """
     plan_out = (plan_result.full_output or "").strip()
     if not plan_out:
         # No planner reference available; do not veto on this signal.
         return True
 
-    assistant_lower = assistant_text.lower()
+    ledger_lower = ledger_text.lower()
     # Sample the first chunk of plan output for a lightweight overlap probe.
     probe = plan_out[:160].lower()
     if not probe.strip():
@@ -264,6 +256,6 @@ def _overlaps_with_plan_output(assistant_text: str, plan_result: PlanResult) -> 
     if not tokens:
         return True
 
-    hits = sum(1 for t in tokens if t in assistant_lower)
+    hits = sum(1 for t in tokens if t in ledger_lower)
     # Require at least 25% token overlap to accept direct return.
     return hits * 4 >= len(tokens)

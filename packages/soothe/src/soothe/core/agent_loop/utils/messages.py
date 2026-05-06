@@ -2,11 +2,35 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from pydantic import Field
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES as ASSISTANT_OUTPUT_PHASES
+
+if TYPE_CHECKING:
+    from soothe.core.agent_loop.state.schemas import LoopState
+
+
+def last_ledger_ai_content(state: "LoopState") -> str:
+    """Return content of the last LoopAIMessage in the agentloop ledger.
+
+    Used by goal completion when ``require_goal_completion=False`` to provide
+    the user with the most recent execute assistant response from the ledger,
+    replacing the deprecated ``last_execute_assistant_text`` path.
+
+    Args:
+        state: LoopState with populated ``loop_messages``.
+
+    Returns:
+        Stripped content of the last AI message, or empty string if none found.
+    """
+    for msg in reversed(state.loop_messages):
+        if isinstance(msg, LoopAIMessage) and msg.content:
+            text = msg.content.strip()
+            if text:
+                return text
+    return ""
 
 
 def loop_message_assistant_output_phase(msg: Any) -> str | None:
