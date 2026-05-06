@@ -144,6 +144,8 @@ class ExploreSubagentConfig(BaseModel):
         max_history_messages_for_model: Keep only recent N message turns in model request.
         max_tool_output_chars_per_turn: Truncate oversized tool outputs before sending back to model.
         early_stop_no_new_findings_turns: Force synthesis if N consecutive turns produce zero net-new findings.
+        max_findings_for_synthesis: Max findings sent to synthesis model (default 15, configurable).
+        enable_semantic_similarity: Use semantic similarity for relevance scoring (requires sentence_transformers).
     """
 
     thoroughness: str = "medium"
@@ -166,3 +168,17 @@ class ExploreSubagentConfig(BaseModel):
 
     early_stop_no_new_findings_turns: int = 2
     """Force synthesis if N consecutive turns produce zero net-new findings."""
+
+    # Performance optimization: configurable findings limit for synthesis
+    max_findings_for_synthesis: int = 20
+    """Max findings sent to synthesis (reduced payload for faster model processing)."""
+
+    enable_semantic_similarity: bool = True
+    """Enable semantic similarity for relevance scoring (requires sentence_transformers optional dependency)."""
+
+    # Tool call limit overrides for explore subagent
+    tool_call_limit_thread: int | None = None
+    """Override global thread tool call limit for explore. None uses ExecutionConfig default."""
+
+    tool_call_limit_run: int | None = None
+    """Override global run tool call limit for explore. None uses ExecutionConfig default."""

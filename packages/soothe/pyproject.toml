@@ -92,6 +92,10 @@ claude = [
 github = [
     "pygithub>=2.0.0",
 ]
+# Semantic similarity (optional - for relevance scoring)
+semantic = [
+    "sentence-transformers>=2.2.0",
+]
 dashscope = [
     "dashscope>=1.20.0",
 ]
@@ -116,7 +120,7 @@ langfuse = [
     "langfuse>=3.0.0,<4.0.0",
 ]
 all = [
-    "soothe[research,websearch,tabular,document,media,video,claude,github,dashscope,postgres,cli,langfuse]",
+    "soothe[research,websearch,tabular,document,media,video,claude,github,dashscope,postgres,cli,langfuse,semantic]",
 ]
 
 [project.scripts]

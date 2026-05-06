@@ -84,6 +84,21 @@ execution:
   llm_retry_on_timeout: true
   llm_max_timeout_retries: 2
   llm_timeout_retry_multiplier: 2.0
+  # Tool call limits (ToolCallLimitMiddleware)
+  tool_call_limit:
+    global_thread_limit: 20
+    global_run_limit: 10
+    tool_specific_limits:
+      wizsearch_search: {thread_limit: 5, run_limit: 3}
+      wizsearch_crawl: {thread_limit: 5, run_limit: 3}
+      web_search: {thread_limit: 5, run_limit: 3}
+      fetch_url: {thread_limit: 5, run_limit: 3}
+      search: {thread_limit: 5, run_limit: 3}
+  # Tool retry config (ToolRetryMiddleware)
+  tool_retry:
+    max_retries: 3
+    backoff_factor: 2.0
+    initial_delay: 1.0
 
 observability:
   log_file_level: DEBUG
