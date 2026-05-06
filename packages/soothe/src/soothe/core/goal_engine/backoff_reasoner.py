@@ -83,7 +83,7 @@ class GoalBackoffReasoner:
         Args:
             config: SootheConfig with model provider settings
         """
-        self._model: BaseChatModel = config.create_chat_model("reason")
+        self._model: BaseChatModel = config.create_chat_model("think")
         self._prompt_template: str = BACKOFF_REASONING_PROMPT
 
     async def reason_backoff(
