@@ -58,18 +58,17 @@ router:
 #   embedding: "mlxserver:nomic-embed"
 
 agentic:
-  max_iterations: 6  # IG-399: interactive architecture analysis cap
+  max_iterations: 6
   max_subagent_tasks_per_wave: 16
   final_response: adaptive
   goal_completion_mode: llm_only
-  output_streaming: true  # Default streaming for AgentLoop responses (true=stream, false=batch)
-  reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution
-  loop_orchestrator_evidence_validate: true  # RFC-220: enforce evidence_refs when ledger non-empty
-  # IG-399: tighten plan prompt caps (from IG-380)
+  output_streaming: true
+  reject_done_at_iteration_zero: false
+  loop_orchestrator_evidence_validate: true
   plan_prompt_ledger:
-    plan_ledger_max_messages: 40       # IG-399: -50% from 80
-    plan_ledger_max_total_chars: 60000 # IG-399: -50% from 120000
-    plan_ledger_max_message_chars: 8000 # IG-399: -67% from 24000
+    plan_ledger_max_messages: 40
+    plan_ledger_max_total_chars: 60000
+    plan_ledger_max_message_chars: 8000
 
 execution:
   concurrency:

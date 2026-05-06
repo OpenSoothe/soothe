@@ -59,20 +59,19 @@ autonomous:
   max_goal_depth: 5          # RFC-0007 §5.6
   enable_dynamic_goals: true # RFC-0007 §5.4
 
-# Agentic Loop Configuration (RFC-201)
+# Agentic loop (RFC-201, RFC-220)
 
 agentic:
-  max_iterations: 10  # Default: 10, max: 50
-  max_subagent_tasks_per_wave: 16  # Cap task completions per Execute wave (0 = unlimited)
-  agent_loop_output_contract_enabled: true  # CoreAgent omits tool output during Execute phase
-  final_response: adaptive  # adaptive | always_synthesize | always_last_execute (IG-199)
-  # When planner marks goal done: llm_only | heuristic_only | hybrid (IG-298; default llm_only)
-  goal_completion_mode: llm_only
-  prior_conversation_limit: 10  # Prior messages for Plan prompts (isolated threads)
+  max_iterations: 10
+  max_subagent_tasks_per_wave: 16  # 0 = unlimited
+  agent_loop_output_contract_enabled: true
+  final_response: adaptive  # adaptive | always_synthesize | always_last_execute
+  goal_completion_mode: llm_only  # llm_only | heuristic_only | hybrid
+  prior_conversation_limit: 10
 
   goal_context:
-    plan_limit: 10  # Previous goals for Plan phase (range: 1-50)
-    execute_limit: 10  # Previous goals for Execute briefing (thread switch)
+    plan_limit: 10
+    execute_limit: 10
     enabled: true
 
   working_memory:
@@ -80,31 +79,24 @@ agentic:
     max_inline_chars: 2000
     max_entry_chars_before_spill: 4000
 
-  context_window_limit: 200000  # Claude models default (IG-151)
+  context_window_limit: 200000
 
-  output_streaming: true  # Default streaming for AgentLoop responses (true=stream chunks, false=batch final only)
+  output_streaming: true
 
-  # Performance guard - only user-facing control (performance optimizations always enabled by design)
-  reject_done_at_iteration_zero: false  # Guard: Reject 'done' at iteration 0 with no execution
-  loop_orchestrator_evidence_validate: true  # RFC-220: enforce evidence_refs when ledger non-empty
+  reject_done_at_iteration_zero: false
+  loop_orchestrator_evidence_validate: true
 
   report_output:
     display_threshold: 20000
     preview_chars: 500
-    synthesis_max_chars: 0  # 0 = unlimited LLM-synthesized goal reports
+    synthesis_max_chars: 0  # 0 = unlimited
 
-  # Plan-phase ledger projection for plan-assess / plan-generate (IG-380). All zeros = full ledger.
-  plan_prompt_ledger:
+  plan_prompt_ledger:  # IG-380 caps for plan prompts; 0 = no cap
     plan_ledger_max_messages: 0
     plan_ledger_max_total_chars: 0
     plan_ledger_max_message_chars: 0
 
-# Output Streaming Configuration (simplified RFC-614)
-
-# Single boolean in agentic section controls streaming behavior
-# See agentic.output_streaming field below
-
-# Execution Limits - Concurrency and resource limits (0 = unlimited)
+# Execution limits (0 = unlimited)
 
 execution:
   llm_rpm_limit: 120

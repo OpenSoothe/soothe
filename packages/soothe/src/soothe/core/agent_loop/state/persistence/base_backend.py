@@ -16,7 +16,7 @@ class AgentLoopPersistenceBackend(ABC):
     """Abstract backend for AgentLoop persistence operations.
 
     Defines contract for backend-agnostic operations supporting both PostgreSQL and SQLite.
-    All method signatures mirror AgentLoopCheckpointPersistenceManager methods for gradual migration.
+    Mirrors ``AgentLoopCheckpointPersistenceManager`` persistence operations.
     """
 
     # Core loop operations

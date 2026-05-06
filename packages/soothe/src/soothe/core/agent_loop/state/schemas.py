@@ -266,7 +266,7 @@ def trailing_numeric_suffix_from_step_id(step_id: str) -> int | None:
     use the last run of digits (``step_004`` → 4). Returns None when no digits found.
 
     Args:
-        step_id: Scoped or legacy step identifier.
+        step_id: Step identifier (may include scope prefix).
 
     Returns:
         Parsed non-negative integer, or None when not applicable.
