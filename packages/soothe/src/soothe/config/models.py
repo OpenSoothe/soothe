@@ -990,6 +990,9 @@ class ExecutionConfig(BaseModel):
         llm_call_timeout_seconds: Per-LLM-call timeout for rate-limit middleware (floor when adaptive).
         llm_call_timeout_adaptive: Scale timeout up from the floor based on estimated prompt size.
         llm_call_timeout_max_seconds: Upper bound for adaptive per-call timeout.
+        llm_retry_on_timeout: Enable retry with timeout escalation (IG-295).
+        llm_max_timeout_retries: Max retry attempts after timeout (IG-295).
+        llm_timeout_retry_multiplier: Timeout multiplier on retry (IG-295).
     """
 
     concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
@@ -1000,6 +1003,11 @@ class ExecutionConfig(BaseModel):
     llm_call_timeout_seconds: int = Field(default=120, ge=5, le=3600)
     llm_call_timeout_adaptive: bool = True
     llm_call_timeout_max_seconds: int = Field(default=900, ge=60, le=3600)
+
+    # IG-295: Retry with timeout escalation
+    llm_retry_on_timeout: bool = True
+    llm_max_timeout_retries: int = Field(default=2, ge=0, le=5)
+    llm_timeout_retry_multiplier: float = Field(default=2.0, ge=1.0, le=5.0)
 
 
 class AutopilotConfig(BaseModel):

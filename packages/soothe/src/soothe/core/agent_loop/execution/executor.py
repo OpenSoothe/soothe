@@ -1532,6 +1532,8 @@ class Executor:
         Parses common error types (especially OpenAI API errors) to extract
         actionable information for the judge to understand failures.
 
+        IG-295: Enhanced timeout errors include retry metadata for planner revision.
+
         Args:
             exc: The exception that occurred
             fallback: Fallback message if no specific info found
@@ -1539,6 +1541,19 @@ class Executor:
         Returns:
             Meaningful error message string
         """
+        from soothe.middleware.llm_rate_limit import EnhancedTimeoutError
+
+        # IG-295: Enhanced timeout error with metadata
+        if isinstance(exc, EnhancedTimeoutError):
+            parts = [
+                f"Request timed out after {exc.retries} retries",
+                f"({exc.timeout_seconds}s timeout)",
+            ]
+            if exc.prompt_chars > 50000:
+                parts.append(f"- large prompt ({exc.prompt_chars:,} chars)")
+
+            return " ".join(parts)
+
         error_str = str(exc)
 
         # Check for OpenAIBadRequestError with context length issues
@@ -1553,7 +1568,7 @@ class Executor:
         if "401" in error_str or "403" in error_str or "permission" in error_str.lower():
             return "Permission/authentication error"
 
-        # Check for timeout
+        # Check for timeout (generic TimeoutError)
         if "timeout" in error_str.lower():
             return "Request timed out"
 
@@ -1582,6 +1597,9 @@ class Executor:
         - HTTP 413 (request too large)
         - OpenAI error code "invalid_parameter_error"
 
+        Retryable errors (IG-295):
+        - EnhancedTimeoutError (timeout with retries exhausted at middleware)
+
         Args:
             exc: The exception to classify
 
@@ -1589,6 +1607,13 @@ class Executor:
             "fatal" for non-retryable errors, "execution" for retryable errors
         """
         from langchain_core.exceptions import ContextOverflowError
+        from soothe.middleware.llm_rate_limit import EnhancedTimeoutError
+
+        # Enhanced timeout error (IG-295) - retries exhausted at middleware
+        if isinstance(exc, EnhancedTimeoutError):
+            # Classified as "execution" (retryable) but retries already attempted
+            # Planner can still revise plan based on timeout metadata
+            return "execution"
 
         # LangChain dedicated context limit exception
         if isinstance(exc, ContextOverflowError):
