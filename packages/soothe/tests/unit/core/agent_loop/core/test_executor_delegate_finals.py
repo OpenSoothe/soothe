@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import ToolMessage
 
-from soothe.core.agent_loop.core.executor import Executor
+from soothe.core.agent_loop.execution.executor import Executor
 
 
 @pytest.mark.asyncio

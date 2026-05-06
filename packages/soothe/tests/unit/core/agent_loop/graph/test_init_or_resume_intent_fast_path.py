@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from soothe.core.agent_loop.graph.nodes.init_or_resume import node_init_or_resume
+from soothe.core.agent_loop.orchestrator.nodes.init_or_resume import node_init_or_resume
 from soothe.core.intention import IntentClassification
 
 

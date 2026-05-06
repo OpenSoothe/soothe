@@ -84,7 +84,7 @@ async def test_agentloop_delegation_basic():
 @pytest.mark.asyncio
 async def test_planner_reflect_with_agentloop_result():
     """Test planner.reflect() handles agentloop_result parameter."""
-    from soothe.core.agent_loop.core.planner import LLMPlanner
+    from soothe.core.agent_loop.planning.planner import LLMPlanner
     from soothe.protocols.planner import GoalContext
 
     # Mock model
@@ -131,7 +131,7 @@ async def test_planner_reflect_with_agentloop_result():
 @pytest.mark.asyncio
 async def test_planner_reflect_with_failed_agentloop_result():
     """Test planner generates recovery directives for failed AgentLoop result."""
-    from soothe.core.agent_loop.core.planner import LLMPlanner
+    from soothe.core.agent_loop.planning.planner import LLMPlanner
     from soothe.protocols.planner import GoalContext
 
     mock_model = Mock()
@@ -176,7 +176,7 @@ async def test_planner_reflect_with_failed_agentloop_result():
 @pytest.mark.asyncio
 async def test_planner_reflect_without_agentloop_result():
     """Test planner falls back to heuristic reflection without agentloop_result."""
-    from soothe.core.agent_loop.core.planner import LLMPlanner
+    from soothe.core.agent_loop.planning.planner import LLMPlanner
     from soothe.protocols.planner import Plan, PlanStep
 
     mock_model = Mock()

@@ -43,11 +43,11 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
 
     with (
         patch(
-            "soothe.core.agent_loop.core.agent_loop.AgentLoopStateManager",
+            "soothe.core.agent_loop.state.manager.AgentLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.agent_loop.core.agent_loop.GoalContextManager",
+            "soothe.core.agent_loop.context.goal_context_manager.GoalContextManager",
             return_value=mock_gcm,
         ),
     ):
@@ -106,11 +106,11 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
 
     with (
         patch(
-            "soothe.core.agent_loop.core.agent_loop.AgentLoopStateManager",
+            "soothe.core.agent_loop.state.manager.AgentLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.agent_loop.core.agent_loop.GoalContextManager",
+            "soothe.core.agent_loop.context.goal_context_manager.GoalContextManager",
             return_value=mock_gcm,
         ),
     ):
@@ -163,11 +163,11 @@ async def test_completed_payload_for_summary_path() -> None:
 
     with (
         patch(
-            "soothe.core.agent_loop.core.agent_loop.AgentLoopStateManager",
+            "soothe.core.agent_loop.state.manager.AgentLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.agent_loop.core.agent_loop.GoalContextManager",
+            "soothe.core.agent_loop.context.goal_context_manager.GoalContextManager",
             return_value=mock_gcm,
         ),
     ):

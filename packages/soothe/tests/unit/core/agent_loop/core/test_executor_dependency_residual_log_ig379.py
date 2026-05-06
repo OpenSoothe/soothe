@@ -6,7 +6,7 @@ import logging
 
 import pytest
 
-from soothe.core.agent_loop.core.executor import _log_dependency_execution_residual
+from soothe.core.agent_loop.execution.executor import _log_dependency_execution_residual
 from soothe.core.agent_loop.state.schemas import AgentDecision, StepAction
 
 

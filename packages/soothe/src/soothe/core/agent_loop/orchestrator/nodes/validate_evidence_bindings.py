@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.core.agent_loop.graph.evidence import validate_plan_evidence
+from soothe.core.agent_loop.orchestrator.evidence import validate_plan_evidence
 
 from ..runtime_context import LoopRuntimeContext
 

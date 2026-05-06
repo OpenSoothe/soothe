@@ -14,7 +14,7 @@ from .schemas import (
     StepAction,
     StepResult,
 )
-from .state_manager import AgentLoopStateManager
+from .manager import AgentLoopStateManager
 from .working_memory import LoopWorkingMemory
 
 __all__ = [
