@@ -37,7 +37,7 @@ from pydantic import BaseModel, Field
 from soothe_sdk.plugin import plugin
 
 from soothe.config.constants import DEFAULT_EXECUTE_TIMEOUT
-from soothe.core.security.operation_security import WorkspaceToolOperationSecurity
+from soothe.core.governance.operation_security import WorkspaceToolOperationSecurity
 from soothe.protocols.operation_security import OperationSecurityContext, OperationSecurityRequest
 from soothe.utils import expand_path
 

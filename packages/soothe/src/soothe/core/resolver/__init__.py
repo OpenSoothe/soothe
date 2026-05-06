@@ -125,6 +125,6 @@ def resolve_policy(config: SootheConfig) -> PolicyProtocol | None:
     Returns:
         A PolicyProtocol instance.
     """
-    from soothe.core.persistence import ConfigDrivenPolicy
+    from soothe.core.governance import ConfigDrivenPolicy
 
     return ConfigDrivenPolicy(config=config)

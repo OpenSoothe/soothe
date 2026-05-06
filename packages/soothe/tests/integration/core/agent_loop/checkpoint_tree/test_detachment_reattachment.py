@@ -23,12 +23,12 @@ from soothe.core.agent_loop.state.persistence.directory_manager import (
 from soothe.core.agent_loop.state.persistence.manager import (
     AgentLoopCheckpointPersistenceManager,
 )
-from soothe.core.event_replay import reconstruct_event_stream
 from soothe.core.events import (
     BRANCH_CREATED,
     ITERATION_COMPLETED,
     ITERATION_STARTED,
 )
+from soothe.core.events.replay import reconstruct_event_stream
 
 
 @contextmanager

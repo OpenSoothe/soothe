@@ -3,7 +3,6 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import pytest
 from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -191,52 +190,6 @@ def test_execution_hints_suffix_merged_into_optimized_prompt():
     assert "Execution hints:" in modified.system_message.content
     assert "Suggested subagent: explore" in modified.system_message.content
     assert "Expected output: paths under src/" in modified.system_message.content
-
-
-@pytest.mark.skip(reason="optimize_system_prompts removed - always enabled")
-def test_optimization_disabled_uses_default_prompt():
-    """When optimization is disabled, should use default prompt."""
-    config = SootheConfig()
-    # optimize_system_prompts removed - always enabled
-    middleware = SystemPromptOptimizationMiddleware(config=config)
-
-    classification = RoutingClassification(
-        task_complexity="chitchat",
-        reasoning="Greeting",
-    )
-
-    request = MockModelRequest(
-        state={"routing_classification": classification},
-        system_message=SystemMessage(content="original prompt"),
-    )
-
-    modified = middleware.modify_request(request)
-
-    # Should return original request (optimization disabled)
-    assert modified.system_message.content == "original prompt"
-
-
-@pytest.mark.skip(reason="performance_enabled removed - always enabled")
-def test_performance_disabled_uses_default_prompt():
-    """When performance is disabled, should use default prompt."""
-    config = SootheConfig()
-    # performance_enabled removed - always enabled
-    middleware = SystemPromptOptimizationMiddleware(config=config)
-
-    classification = RoutingClassification(
-        task_complexity="chitchat",
-        reasoning="Greeting",
-    )
-
-    request = MockModelRequest(
-        state={"routing_classification": classification},
-        system_message=SystemMessage(content="original prompt"),
-    )
-
-    modified = middleware.modify_request(request)
-
-    # Should return original request (performance disabled)
-    assert modified.system_message.content == "original prompt"
 
 
 def test_custom_system_prompt_for_complex_queries():

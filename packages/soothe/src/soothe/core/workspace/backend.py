@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from deepagents.backends.filesystem import FilesystemBackend
 
 if TYPE_CHECKING:
-    from deepagents.backends.protocol import BackendProtocol
+    pass
 
 # Global cache for workspace backends (shared across all instances)
 _backend_cache: dict[str, NormalizedPathBackend] = {}
@@ -405,29 +405,3 @@ class WorkspaceAwareBackend:
     async def amkdir(self, path: str, recursive: bool = False) -> str:  # noqa: FBT001, FBT002
         """Async create directory."""
         return await self._get_backend().amkdir(path, recursive)
-
-    def _resolve_path(self, path: str) -> Path:
-        """Resolve path relative to current workspace."""
-        return self._get_backend()._resolve_path(path)
-
-
-def create_workspace_aware_backend(
-    default_root_dir: Path,
-    virtual_mode: bool = False,  # noqa: FBT001, FBT002
-    max_file_size_mb: int = 10,
-) -> BackendProtocol:
-    """Create a workspace-aware filesystem backend.
-
-    Args:
-        default_root_dir: Default workspace when no ContextVar is set.
-        virtual_mode: Whether to sandbox paths to workspace.
-        max_file_size_mb: Maximum file size in MB.
-
-    Returns:
-        A backend that resolves workspace from ContextVar.
-    """
-    return WorkspaceAwareBackend(
-        default_root_dir=default_root_dir,
-        virtual_mode=virtual_mode,
-        max_file_size_mb=max_file_size_mb,
-    )
