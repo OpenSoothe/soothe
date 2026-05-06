@@ -1256,6 +1256,7 @@ class Executor:
                             if args_str:
                                 try:
                                     import json
+
                                     tool_call_args[tc_id] = json.loads(args_str)
                                 except (json.JSONDecodeError, TypeError):
                                     pass  # Args may be partial in streaming
@@ -1607,6 +1608,7 @@ class Executor:
             "fatal" for non-retryable errors, "execution" for retryable errors
         """
         from langchain_core.exceptions import ContextOverflowError
+
         from soothe.middleware.llm_rate_limit import EnhancedTimeoutError
 
         # Enhanced timeout error (IG-295) - retries exhausted at middleware

@@ -19,6 +19,25 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass
+class DagPlanningContext:
+    """Structured DAG summary for LLM planning (IG-400 interleaving)."""
+
+    pending_step_ids: set[str] = field(default_factory=set)
+    failed_step_ids: set[str] = field(default_factory=set)
+    ready_step_ids: set[str] = field(default_factory=set)
+    chain_depth: int = 0
+    success_rate: float = 1.0
+    replan_count: int = 0
+    total_steps: int = 0
+    completed_steps: int = 0
+
+    @property
+    def has_prior_state(self) -> bool:
+        return self.total_steps > 0
+
+
 # Execution complexity thresholds
 _DAG_DEPENDENCY_THRESHOLD = 3
 _LOW_SUCCESS_RATE_THRESHOLD = 0.6
@@ -113,6 +132,19 @@ class PlanManager:
                 self.dag.mark_completed(r.step_id, r)
             else:
                 self.dag.mark_failed(r.step_id, r)
+
+    def get_planning_context(self) -> DagPlanningContext:
+        """Return structured DAG summary for LLM planning."""
+        return DagPlanningContext(
+            pending_step_ids=self.dag.pending_step_ids,
+            failed_step_ids=self.dag.failed_step_ids,
+            ready_step_ids=self.dag.ready_step_ids,
+            chain_depth=self.dag.max_chain_depth,
+            success_rate=self.dag.success_rate,
+            replan_count=self.dag.plan_count - 1,
+            total_steps=self.dag.total_steps,
+            completed_steps=self.dag.completed_steps,
+        )
 
     def determine_goal_completion_needs(
         self,

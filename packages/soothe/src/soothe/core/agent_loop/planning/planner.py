@@ -931,6 +931,19 @@ class LLMPlanner:
             and result.decision is not None
             and result.decision.steps
         ):
+            # Enforce max 2 steps on first wave (safety net if LLM ignores prompt)
+            if state.iteration == 0 and len(result.decision.steps) > 2:
+                logger.warning(
+                    "[PlanGen] Truncated first-wave steps from %d to 2 (iteration 0 constraint)",
+                    len(result.decision.steps),
+                )
+                truncated = result.decision.steps[:2]
+                result = result.model_copy(
+                    update={
+                        "decision": result.decision.model_copy(update={"steps": truncated}),
+                    }
+                )
+
             result = result.model_copy(
                 update={
                     "decision": renumber_decision_local_step_ids_for_goal_continuation(
@@ -990,6 +1003,8 @@ class LLMPlanner:
         state: LoopState,
         context: PlanContext,
         assessment: Any,
+        *,
+        plan_manager: Any = None,
     ) -> Any:
         """Generate plan after an existing assess result (split graph flow)."""
         from soothe.core.agent_loop.planning.manager import (
@@ -1057,8 +1072,17 @@ class LLMPlanner:
                 goal=goal,
             )
 
+        # Build DAG context for progressive planning (IG-400)
+        dag_context = None
+        if plan_manager is not None:
+            dag_ctx = plan_manager.get_planning_context()
+            if dag_ctx.has_prior_state:
+                from soothe.core.prompts.builder import _format_dag_context
+
+                dag_context = _format_dag_context(dag_ctx)
+
         generate_messages = self._prompt_builder.build_plan_messages(
-            goal, state, context, plan_phase="generate"
+            goal, state, context, plan_phase="generate", dag_context=dag_context
         )
         plan_result = await self._generate_plan(
             generate_messages,
@@ -1080,6 +1104,8 @@ class LLMPlanner:
         goal: str,
         state: LoopState,
         context: PlanContext,
+        *,
+        plan_manager: Any = None,
     ) -> Any:
         """Plan execution using two-call architecture (RFC-604).
 
@@ -1208,8 +1234,17 @@ class LLMPlanner:
                             require_goal_completion=assessment.require_goal_completion,
                         )
                     else:
+                        # Build DAG context for progressive planning (IG-400)
+                        dag_context = None
+                        if plan_manager is not None:
+                            dag_ctx = plan_manager.get_planning_context()
+                            if dag_ctx.has_prior_state:
+                                from soothe.core.prompts.builder import _format_dag_context
+
+                                dag_context = _format_dag_context(dag_ctx)
+
                         generate_messages = self._prompt_builder.build_plan_messages(
-                            goal, state, context, plan_phase="generate"
+                            goal, state, context, plan_phase="generate", dag_context=dag_context
                         )
                         messages_for_retry = generate_messages
                         t_plan = time.perf_counter()

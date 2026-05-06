@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import BaseMessage, SystemMessage
 
@@ -18,6 +18,33 @@ if TYPE_CHECKING:
     from soothe.protocols.planner import PlanContext
 
 PlanPromptPhase = Literal["assess", "generate"]
+
+
+def _format_dag_context(dag_ctx: Any) -> str:
+    """Format DagPlanningContext as XML block for prompt injection."""
+    if not dag_ctx or not dag_ctx.has_prior_state:
+        return ""
+    lines = ["<PLAN_DAG_CONTEXT>"]
+    lines.append(f"- Total steps planned: {dag_ctx.total_steps}")
+    lines.append(f"- Completed: {dag_ctx.completed_steps}")
+    if dag_ctx.failed_step_ids:
+        lines.append(
+            f"- Failed: {len(dag_ctx.failed_step_ids)} (IDs: {', '.join(sorted(dag_ctx.failed_step_ids))})"
+        )
+    if dag_ctx.ready_step_ids:
+        lines.append(f"- Ready to execute: {', '.join(sorted(dag_ctx.ready_step_ids))}")
+    elif dag_ctx.pending_step_ids:
+        lines.append(f"- Pending: {', '.join(sorted(dag_ctx.pending_step_ids))}")
+    lines.append(f"- Dependency chain depth: {dag_ctx.chain_depth}")
+    lines.append(f"- Success rate: {dag_ctx.success_rate:.0%}")
+    if dag_ctx.replan_count > 0:
+        lines.append(f"- Replans: {dag_ctx.replan_count}")
+    if dag_ctx.failed_step_ids:
+        lines.append(
+            "- NOTE: Prior steps failed — propose a DIFFERENT approach, do not retry the same failed steps."
+        )
+    lines.append("</PLAN_DAG_CONTEXT>")
+    return "\n".join(lines)
 
 
 class PromptBuilder:
@@ -48,6 +75,7 @@ class PromptBuilder:
         context: PlanContext,
         *,
         plan_phase: PlanPromptPhase = "assess",
+        dag_context: str | None = None,
     ) -> list[BaseMessage]:
         """Build SystemMessage + plan context + ledger for Plan phase (RFC-207, RFC-214).
 
@@ -58,7 +86,7 @@ class PromptBuilder:
           are set; persisted ``loop_messages`` are never modified.
         - LoopHumanMessage: ``<GOAL_PROGRESS>`` (goal + execute iteration) for both ``assess`` and
           ``generate``, plus optional ``<PRIOR_CONVERSATION>`` when ``recent_messages`` is set
-          (IG-371: no WM block on this human).
+          (IG-371: no WM block on this human), and optional ``<PLAN_DAG_CONTEXT>`` for generate phase.
 
         Ledger precedes the plan-context human so ``plan-assess`` / ``plan-generate`` see execute
         evidence as prior turns, then goal/iteration context in the following user message.
@@ -69,6 +97,7 @@ class PromptBuilder:
             context: Planning context with workspace, capabilities
             plan_phase: ``assess`` = instructions aligned to ``StatusAssessment``; ``generate`` =
                 execution policies + instructions aligned to ``PlanGeneration`` only (IG-372, IG-329).
+            dag_context: Optional XML-formatted DAG context for progressive planning (generate phase).
 
         Returns:
             Messages to send to the plan LLM: system, ledger copies, then optional plan-context human.
@@ -81,7 +110,7 @@ class PromptBuilder:
             plan_phase=plan_phase,
         )
         human_content = self._build_plan_context_human_text(
-            goal, state, context, plan_phase=plan_phase
+            goal, state, context, plan_phase=plan_phase, dag_context=dag_context
         )
 
         out: list[BaseMessage] = [SystemMessage(content=system_content)]
@@ -270,6 +299,7 @@ class PromptBuilder:
         context: PlanContext,
         *,
         plan_phase: PlanPromptPhase = "assess",
+        dag_context: str | None = None,
     ) -> str:
         """Construct plan-context human text without ledger (RFC-214).
 
@@ -286,6 +316,7 @@ class PromptBuilder:
             state: Current loop state with optional plan snapshot
             context: Planning context (prior thread XML, etc.)
             plan_phase: When ``generate`` and prior steps exist, append a local step-id hint (IG-388).
+            dag_context: Optional XML-formatted DAG context for progressive planning.
 
         Returns:
             Formatted prompt string for the plan-context ``LoopHumanMessage``.
@@ -318,5 +349,9 @@ class PromptBuilder:
                     f"(e.g. {ex_a}, {ex_b}, …), not 01/02 again.\n"
                     "</PLAN_STEP_ID_HINT>\n"
                 )
+
+            # Inject progressive DAG context when available
+            if dag_context:
+                parts.append(f"\n{dag_context}\n")
 
         return "\n".join(parts)

@@ -102,7 +102,9 @@ class EnhancedTimeoutError(TimeoutError):
         thread_id: Thread where timeout occurred.
 
     Example:
-        >>> exc = EnhancedTimeoutError(timeout_seconds=480, retries=2, prompt_chars=96000, thread_id="thread-1")
+        >>> exc = EnhancedTimeoutError(
+        ...     timeout_seconds=480, retries=2, prompt_chars=96000, thread_id="thread-1"
+        ... )
         >>> str(exc)
         "LLM call timed out after 2 retries (480s final timeout) - large prompt (96,000 chars)"
     """
@@ -385,7 +387,7 @@ class LLMRateLimitMiddleware(AgentMiddleware):
             Escalated timeout in seconds, capped at max_seconds.
         """
         # Escalate base timeout on retry (IG-295)
-        escalated_base = int(base_timeout * (self._timeout_retry_multiplier ** attempt))
+        escalated_base = int(base_timeout * (self._timeout_retry_multiplier**attempt))
 
         # Apply adaptive scaling on escalated base (IG-301)
         est = estimate_model_request_prompt_chars(request)
