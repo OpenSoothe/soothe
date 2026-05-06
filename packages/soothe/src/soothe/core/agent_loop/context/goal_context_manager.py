@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from soothe.config.models import GoalContextConfig
-    from soothe.core.agent_loop.state.state_manager import AgentLoopStateManager
+    from soothe.core.agent_loop.state.manager import AgentLoopStateManager
 
 logger = logging.getLogger(__name__)
 

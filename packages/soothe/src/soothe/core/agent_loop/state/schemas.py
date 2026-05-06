@@ -460,6 +460,7 @@ class StatusAssessment(BaseModel):
     Attributes:
         status: Whether to finish, continue current plan, or replan.
         goal_progress: Descriptive progress level (none | low | medium | high | complete).
+        assessment_reasoning: Brief justification for the status decision.
         require_goal_completion: Whether an extra goal completion LLM call is needed.
             When False, the last AIMessage from execution can be used as goal completion.
             Only relevant when status="done".
@@ -468,6 +469,8 @@ class StatusAssessment(BaseModel):
     status: Literal["continue", "replan", "done"]
     goal_progress: Literal["none", "low", "medium", "high", "complete"] = "none"
     """Descriptive progress level - easier for LLMs to estimate accurately (IG-399)."""
+    assessment_reasoning: str = ""
+    """Brief status justification."""
     require_goal_completion: bool = Field(default=False)
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
 

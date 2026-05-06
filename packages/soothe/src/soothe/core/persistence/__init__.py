@@ -37,7 +37,6 @@ from .config_policy import (
     READONLY_PROFILE,
     STANDARD_PROFILE,
     ConfigDrivenPolicy,
-    _extract_required_permission,  # Internal helper exported for tests
 )
 
 __all__ = [
@@ -51,6 +50,4 @@ __all__ = [
     "READONLY_PROFILE",
     "PRIVILEGED_PROFILE",
     "DEFAULT_PROFILES",
-    # Internal helpers (exported for tests)
-    "_extract_required_permission",
 ]
