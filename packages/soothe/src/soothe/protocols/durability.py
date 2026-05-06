@@ -53,17 +53,36 @@ class ThreadInfo(BaseModel):
 class ThreadFilter(BaseModel):
     """Filter criteria for listing threads.
 
+    Supports both protocol-level filtering (durability backend) and
+    manager-level in-memory filtering (ThreadContextManager).
+
+    Protocol-level fields (used by durability backend):
+        status, tags, created_after, created_before
+
+    Manager-level fields (used by ThreadContextManager in-memory):
+        labels, priority, category, updated_after, updated_before
+
     Args:
         status: Filter by status.
         tags: Filter by tags (items must have all specified tags).
+        labels: Filter by user-defined labels.
+        priority: Filter by priority level.
+        category: Filter by category.
         created_after: Filter by creation time lower bound.
         created_before: Filter by creation time upper bound.
+        updated_after: Filter by update time lower bound.
+        updated_before: Filter by update time upper bound.
     """
 
-    status: Literal["active", "suspended", "archived"] | None = None
+    status: Literal["active", "suspended", "archived", "idle", "running", "error"] | None = None
     tags: list[str] | None = None
+    labels: list[str] | None = None
+    priority: Literal["low", "normal", "high"] | None = None
+    category: str | None = None
     created_after: datetime | None = None
     created_before: datetime | None = None
+    updated_after: datetime | None = None
+    updated_before: datetime | None = None
 
 
 @runtime_checkable

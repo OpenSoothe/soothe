@@ -205,7 +205,7 @@ class HttpRestTransport(TransportServer):
 
             from datetime import datetime
 
-            from soothe.core.thread import ThreadFilter
+            from soothe.protocols.durability import ThreadFilter
 
             thread_filter = None
             if any(

@@ -7,6 +7,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+# Re-export canonical ThreadFilter from protocols.durability for backward compat
+from soothe.protocols.durability import ThreadFilter
+
+__all__ = ["ThreadFilter"]
+
 
 class ThreadStats(BaseModel):
     """Thread execution statistics (calculated on demand)."""
@@ -43,25 +48,6 @@ class EnhancedThreadInfo(BaseModel):
     stats: ThreadStats = Field(default_factory=ThreadStats)
     execution_context: ExecutionContext | None = None
     last_human_message: str | None = None
-
-
-class ThreadFilter(BaseModel):
-    """Thread filtering criteria.
-
-    Note: This is a duplicate of soothe.protocols.durability.ThreadFilter.
-    Prefer importing from protocols.durability for canonical usage.
-    This model exists for compatibility with existing daemon imports.
-    """
-
-    status: Literal["idle", "running", "suspended", "archived", "error"] | None = None
-    tags: list[str] | None = None
-    labels: list[str] | None = None
-    priority: Literal["low", "normal", "high"] | None = None
-    category: str | None = None
-    created_after: datetime | None = None
-    created_before: datetime | None = None
-    updated_after: datetime | None = None
-    updated_before: datetime | None = None
 
 
 class ThreadMessage(BaseModel):
