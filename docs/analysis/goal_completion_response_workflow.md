@@ -79,7 +79,7 @@ if len(completion_indicators) >= 2 or "action_repetition" in completion_indicato
 
 ### Stage 2: Response Length Determination (IG-268)
 
-**Location**: Length / scenario logic lives under `packages/soothe/src/soothe/core/agent_loop/analysis/` (e.g. scenario classification) and `packages/soothe/src/soothe/core/agent_loop/policies/goal_completion_policy.py` for completion actions. Older standalone `response_length_policy.py` references in this doc are **historical**.
+**Location**: Length / scenario logic lives under `packages/soothe/src/soothe/core/agent_loop/analysis/` (e.g. scenario classification). Older standalone `response_length_policy.py` references in this doc are **historical**. Completion strategy is now determined by `PlanManager.determine_completion_strategy()` in `core/plan_manager.py` (IG-400).
 
 Before generating any response, the system uses configuration (`SootheConfig.agentic.final_response`) and policies to choose synthesis vs direct execute vs summary.
 
@@ -140,81 +140,59 @@ def calculate_evidence_metrics(step_results: list) -> tuple[int, int]:
 
 ---
 
-### Stage 3: Adaptive Response Generation (IG-199)
+### Stage 3: Adaptive Response Generation (IG-199, IG-400)
 
 **Location**: `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py` (goal completion branch after `plan_result.is_done()`)
 
-Once `plan_result.is_done()` returns true, the system chooses one of three generation branches based on evidence patterns and configuration.
+Once `plan_result.is_done()` returns true, the system uses `PlanManager.determine_completion_strategy()` to choose one of three branches: `LEDGER_DIRECT`, `SYNTHESIZE`, or `SUMMARY`.
 
 #### Decision Tree
 
 ```mermaid
 graph TD
-    A[plan_result.is_done] --> B{Check Mode}
-    B -->|always_synthesize| C[Run Synthesis]
-    B -->|always_last_execute| D{Execute Text Exists?}
-    D -->|Yes| E[Return Execute Text]
-    D -->|No| F[User-Friendly Summary]
-    B -->|adaptive| G{Check Wave Vetoes}
-    G -->|parallel_multi_step OR subagent_cap| C
-    G -->|No Vetoes| H{Evidence Requires Synthesis?}
-    H -->|No| I{Execute Text Rich?}
-    I -->|Yes| J{Overlaps with Plan Output?}
-    J -->|Yes| E
-    J -->|No| C
-    I -->|No| C
-    H -->|Yes| K{Execute Text Rich + Overlaps?}
-    K -->|Yes| E
-    K -->|No| C
-    C --> L{Synthesis Success?}
-    L -->|Yes| M[Return Synthesis]
-    L -->|No| F
+    A[plan_result.is_done] --> B{PlanManager.determine_completion_strategy}
+    B -->|always_synthesize mode| C[SYNTHESIZE: Run Synthesis]
+    B -->|planner says no + simple| D[LEDGER_DIRECT: Return Execute Text]
+    B -->|DAG complexity veto| C
+    B -->|ledger rich + overlaps| E[LEDGER_DIRECT]
+    B -->|default| C
+    C --> F{Synthesis Success?}
+    F -->|Yes| G[Return Synthesis]
+    F -->|No| H[SUMMARY: Fallback]
+    D --> I[Return Execute Text]
+    E --> I
 ```
 
-#### Branch 1: Direct Execute Response
+#### PlanManager Completion Strategy
 
-**Condition**: `should_return_goal_completion_directly()` returns `True` (`final_response_policy.py:110-171`)
+The `PlanManager` (IG-400) determines completion strategy from the full PlanDAG state:
 
-**Returns**: Last Execute-phase assistant text directly to user
+**Strategy: LEDGER_DIRECT** — Return last Execute-phase assistant text directly.
 
-**Eligibility Criteria** (adaptive mode):
+**Eligibility** (all must be true):
+1. Not `always_synthesize` mode
+2. Planner says no synthesis needed (`require_goal_completion=False`)
+3. Simple execution: single plan, no DAG dependencies, no failures, ≤2 steps
+4. Ledger text exists and passes richness check
+5. Ledger text overlaps with planner's `full_output`
 
-1. **Configuration**: Not `always_synthesize` mode
-2. **Wave Vetoes**: No parallel multi-step execution, no subagent cap hit
-3. **Richness Check**: Execute text passes word count floor OR structured content
-   ```python
-   min_words = response_length_category.min_words  # IG-268 category
-   if word_count(execute_text) >= min_words:
-       return True  # Rich enough
-   
-   # Structural fallback (IG-273)
-   if "```" in execute_text:  # Code blocks
-       return True
-   if len(non_empty_lines) >= 6:  # Multi-line payload
-       return True
-   ```
-4. **Overlap Check**: Execute text shares content with planner's `full_output`
-   ```python
-   # Sample first 160 chars of planner output
-   probe = plan_output[:160].lower()
-   tokens = [t for t in split(r"\W+", probe) if len(t) >= 4]
-   
-   # Require ≥25% token overlap
-   hits = sum(1 for t in tokens if t in execute_text.lower())
-   return hits * 4 >= len(tokens)
-   ```
+**Strategy: SYNTHESIZE** — LLM synthesis required.
 
-**Implementation** (`agent_loop.py:405-411`):
-```python
-if direct_goal_completion:
-    reuse = (state.last_execute_assistant_text or "").strip()
-    final_output = reuse
-    logger.info("Goal completion: branch=direct_execute assistant_chars=%d", len(reuse))
-```
+**Triggers** (any one):
+- `always_synthesize` mode (config override)
+- Replan detected (`plan_count >= 2`)
+- Failed steps in DAG
+- Subagents used
+- Deep dependency chain (`max_chain_depth >= 3`)
+- Subagent cap hit
+- Parallel multi-step wave execution
+- Low success rate (<60%) with failed steps
+- DAG dependencies ≥ 3 on current plan
+- Missing ledger text
 
 #### Branch 2: Goal Completion Synthesis
 
-**Condition**: `needs_final_thread_synthesis()` returns `True` (`final_response_policy.py:77-108`)
+**Triggered by**: `PlanManager.determine_completion_strategy()` returns `SYNTHESIZE`
 
 **Triggers**:
 - `always_synthesize` mode (config override)
@@ -530,6 +508,8 @@ agentic:
 | Class | Location | Purpose |
 |-------|----------|---------|
 | `AgentLoop` | `packages/soothe/src/soothe/core/agent_loop/core/agent_loop.py` | Plan–Execute orchestration |
+| `PlanManager` | `packages/soothe/src/soothe/core/agent_loop/core/plan_manager.py` | Plan orchestration + completion strategy (IG-400) |
+| `PlanDAG` | `packages/soothe/src/soothe/core/agent_loop/core/plan_dag.py` | Unified DAG of all planned steps (IG-400) |
 | `LLMPlanner` | `packages/soothe/src/soothe/core/agent_loop/core/planner.py` | Two-call Plan architecture (RFC-604) |
 | `PlanResult` | `packages/soothe/src/soothe/core/agent_loop/state/schemas.py` | Plan phase output |
 | `StatusAssessment` | `packages/soothe/src/soothe/core/agent_loop/state/schemas.py` | Lightweight status check |
@@ -541,8 +521,10 @@ agentic:
 
 | Function | Location | Purpose |
 |----------|----------|---------|
-| `determine_completion_action()` | `packages/soothe/src/soothe/core/agent_loop/policies/goal_completion_policy.py` | Choose skip / direct / synthesis / summary |
-| `determine_goal_completion_needs()` | `goal_completion_policy.py` | `require_goal_completion` vs config mode |
+| `PlanManager.determine_completion_strategy()` | `packages/soothe/src/soothe/core/agent_loop/core/plan_manager.py` | Choose LEDGER_DIRECT / SYNTHESIZE / SUMMARY |
+| `PlanManager.determine_goal_completion_needs()` | `plan_manager.py` | `require_goal_completion` vs config mode |
+| `determine_goal_completion_needs()` (standalone) | `plan_manager.py` | Used by planner.py without PlanManager |
+| `PlanDAG.ingest_plan()` | `packages/soothe/src/soothe/core/agent_loop/core/plan_dag.py` | Merge plan steps into unified DAG |
 | `generate_user_fallback_summary()` | `packages/soothe/src/soothe/core/agent_loop/core/fallback_summary.py` | User-safe summary when synthesis unavailable |
 | `SynthesisGenerator` (class) | `packages/soothe/src/soothe/core/agent_loop/analysis/synthesis.py` | Optional synthesis stream for goal completion |
 | `evaluate_goal_completion()` | `packages/soothe/src/soothe/core/goal_engine/consensus.py` | Consensus validation |
@@ -556,8 +538,8 @@ agentic:
 
 | Test Type | Location |
 |-----------|----------|
+| **PlanDAG / PlanManager** | `packages/soothe/tests/unit/core/agent_loop/policies/test_goal_completion_policy.py` |
 | **Plan phase / planner** | `packages/soothe/tests/unit/core/agent_loop/core/` (`test_plan_phase_*.py`, etc.) |
-| **Goal completion policy** | `packages/soothe/tests/unit/core/agent_loop/policies/test_goal_completion_policy.py` |
 | **Adaptive final response** | `packages/soothe/tests/unit/core/agent_loop/core/test_agent_loop_adaptive_final.py` |
 | **GoalEngine** | `packages/soothe/tests/unit/core/goal_engine/` |
 | **AgentLoop integration** | `packages/soothe/tests/integration/core/agent_loop/` |
@@ -599,6 +581,7 @@ Runs:
 - **IG-199**: Adaptive Final Response Policy
 - **IG-268**: Response Length Intelligence System
 - **IG-273**: Structural Richness Check for Direct Execute
+- **IG-400**: PlanManager/PlanDAG Goal Completion Architecture
 
 ### Related Documentation
 
