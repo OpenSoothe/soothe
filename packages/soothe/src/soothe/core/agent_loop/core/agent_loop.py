@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.agent_loop.branching.anchor_manager import CheckpointAnchorManager
 from soothe.core.agent_loop.context.goal_context_manager import GoalContextManager
+from soothe.core.agent_loop.core.plan_manager import PlanManager
 from soothe.core.agent_loop.core.plan_phase import PlanPhase
 from soothe.core.agent_loop.graph.runtime_context import LoopRuntimeContext
 from soothe.core.agent_loop.state.schemas import (
@@ -254,11 +255,14 @@ class AgentLoop:
         async def emit(event_type: str, event_data: Any) -> None:
             await queue.put((event_type, event_data))
 
+        plan_manager = PlanManager(goal=goal)
+
         ctx = LoopRuntimeContext(
             agent_loop=self,
             state_manager=state_manager,
             anchor_manager=anchor_manager,
             goal_context_manager=goal_context_manager,
+            plan_manager=plan_manager,
             checkpoint=checkpoint,
             goal_record=goal_record,
             thread_continuation_mode=thread_continuation_mode,
