@@ -19,13 +19,13 @@ from soothe.core.agent_loop.utils.messages import (
     loop_assistant_messages_chunk,
     loop_message_assistant_output_phase,
 )
-from soothe.core.intention import build_loop_routing_classification
 from soothe.core.events import (
     AgenticLoopCompletedEvent,
     AgenticLoopStartedEvent,
     AgenticStepCompletedEvent,
     AgenticStepStartedEvent,
 )
+from soothe.core.intention import build_loop_routing_classification
 from soothe.core.runner._runner_shared import StreamChunk, _custom
 from soothe.utils.text_preview import preview, preview_first
 
