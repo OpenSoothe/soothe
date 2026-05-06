@@ -30,7 +30,7 @@ from textual.style import Style as TStyle
 from textual.theme import Theme
 from textual.widgets import Static
 
-from soothe_cli.shared.tool_card_payload import extract_tool_result_card_payload
+from soothe_cli.shared.tools.tool_card_payload import extract_tool_result_card_payload
 from soothe_cli.tui import theme
 from soothe_cli.tui._cli_context import CLIContext
 from soothe_cli.tui._session_stats import (
@@ -2657,11 +2657,11 @@ class SootheApp(App):
         Args:
             command: The slash command (including /)
         """
-        from soothe_cli.shared.command_router import (
+        from soothe_cli.shared.commands.command_router import (
             parse_slash_command,
             validate_command,
         )
-        from soothe_cli.shared.slash_commands import COMMANDS as _RFC404_COMMANDS
+        from soothe_cli.shared.commands.slash_commands import COMMANDS as _RFC404_COMMANDS
 
         # RFC-404 daemon *routing* commands (/browser, /claude, /research, /plan):
         # send the full line as a normal user turn so ``parse_subagent_from_input``
@@ -3221,7 +3221,7 @@ class SootheApp(App):
         """
         from langchain_core.messages import AIMessage, ToolMessage
 
-        from soothe_cli.shared.message_processing import (
+        from soothe_cli.shared.tools.message_processing import (
             extract_tool_args_dict,
             normalize_tool_calls_list,
         )
@@ -3899,7 +3899,7 @@ class SootheApp(App):
         from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
         from soothe_cli.cli.stream.pipeline import StreamDisplayPipeline
-        from soothe_cli.shared.message_processing import extract_tool_args_dict
+        from soothe_cli.shared.tools.message_processing import extract_tool_args_dict
 
         progress_pipeline = StreamDisplayPipeline()
         tool_cards: dict[str, ToolCallMessage] = {}

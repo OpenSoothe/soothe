@@ -148,7 +148,7 @@ class AutonomousMixin(GoalDirectivesMixin):
             )
 
             logger.info(
-                "[IG-226] Autonomous mode: intent_type=%s reuse_goal=%s - %s",
+                "Autonomous mode: intent_type=%s reuse_goal=%s - %s",
                 intent_classification.intent_type,
                 intent_classification.reuse_current_goal,
                 user_input[:50],
@@ -204,7 +204,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                     if active_goals:
                         goal = active_goals[0]
                         logger.info(
-                            "[IG-226] Thread continuation: reusing active goal %s",
+                            "Thread continuation: reusing active goal %s",
                             goal.id,
                         )
                         logger.debug(
@@ -213,14 +213,14 @@ class AutonomousMixin(GoalDirectivesMixin):
                     else:
                         # No active goal, create new goal despite thread_continuation
                         logger.info(
-                            "[IG-226] Thread continuation but no active goal, creating new goal"
+                            "Thread continuation but no active goal, creating new goal"
                         )
                         goal = await self._goal_engine.create_goal(
                             intent.goal_description or user_input, priority=80
                         )
                 else:
                     # Thread continuation without goal reuse - skip goal creation
-                    logger.info("[IG-226] Thread continuation without goal, skipping goal creation")
+                    logger.info("Thread continuation without goal, skipping goal creation")
                     # Proceed without goal lifecycle management
                     # AgentLoop will handle thread context continuation
 
@@ -228,7 +228,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                 # New goal: create goal via GoalEngine
                 goal_description = intent.goal_description or user_input
                 goal = await self._goal_engine.create_goal(goal_description, priority=80)
-                logger.info("[IG-226] New goal: created goal %s", goal.id)
+                logger.info("New goal: created goal %s", goal.id)
         else:
             # No intent classification (disabled or fallback): create goal as before
             goal = await self._goal_engine.create_goal(user_input, priority=80)

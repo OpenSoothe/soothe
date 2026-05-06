@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe_cli.shared.command_router import handle_routing_command
-from soothe_cli.shared.subagent_routing import parse_subagent_from_input
+from soothe_cli.shared.commands.command_router import handle_routing_command
+from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
 
 
 @pytest.mark.parametrize(

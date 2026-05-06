@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from soothe_cli.shared.tools._utils import normalize_tool_name, text_looks_like_error
 from soothe_cli.shared.tools.tool_formatters.base import BaseFormatter
 from soothe_cli.shared.tools.tool_output_formatter import ToolBrief
 
@@ -36,7 +37,7 @@ class MediaFormatter(BaseFormatter):
             '✓ Transcribed 45.2s (en)'
         """
         # Normalize tool name
-        normalized = tool_name.lower().replace("-", "_").replace(" ", "_")
+        normalized = normalize_tool_name(tool_name)
 
         # Route to specific formatter
         if normalized == "transcribe_audio":
@@ -104,7 +105,7 @@ class MediaFormatter(BaseFormatter):
 
         # Handle string result (fallback)
         if isinstance(result, str):
-            if "error" in result.lower() or "failed" in result.lower():
+            if text_looks_like_error(result):
                 return ToolBrief(
                     icon="✗",
                     summary="Transcription failed",
@@ -182,7 +183,7 @@ class MediaFormatter(BaseFormatter):
 
         # Handle string result (fallback)
         if isinstance(result, str):
-            if "error" in result.lower() or "failed" in result.lower():
+            if text_looks_like_error(result):
                 return ToolBrief(
                     icon="✗",
                     summary="Video info failed",
@@ -267,7 +268,7 @@ class MediaFormatter(BaseFormatter):
 
         # Handle string result (fallback)
         if isinstance(result, str):
-            if "error" in result.lower() or "failed" in result.lower():
+            if text_looks_like_error(result):
                 return ToolBrief(
                     icon="✗",
                     summary="Image analysis failed",

@@ -169,17 +169,23 @@ class PhasesMixin:
                 phase="quiz",
                 thread_id=thread_id,
             )
-            logger.debug("[IG-250] Quiz completed (piggybacked) for query: %s", user_input[:50])
+            logger.debug("Quiz completed (piggybacked) for query: %s", user_input[:50])
             await self._save_quiz_to_state(user_input, piggybacked, thread_id)
             return
 
         # Fallback: spawn fast LLM call for quiz response
         # This should rarely happen if classification post-processing works correctly
         logger.warning(
-            "[IG-250] Quiz classification missing piggybacked quiz_response, spawning LLM call"
+            "Quiz classification missing piggybacked quiz_response, spawning LLM call"
         )
 
-        if not hasattr(self, "_fast_model") or not self._fast_model:
+        # Get fast model from intent classifier
+        fast_model = (
+            getattr(self._intent_classifier, "_fast_model", None)
+            if self._intent_classifier
+            else None
+        )
+        if not fast_model:
             # No fast model available, use placeholder
             fallback_response = f"I'll answer that question: {user_input}"
             yield loop_assistant_messages_chunk(
@@ -187,7 +193,7 @@ class PhasesMixin:
                 phase="quiz",
                 thread_id=thread_id,
             )
-            logger.debug("[IG-250] Quiz completed (no model fallback): %s", user_input[:50])
+            logger.debug("Quiz completed (no model fallback): %s", user_input[:50])
             return
 
         # Spawn fast LLM call
@@ -198,7 +204,7 @@ Question: {user_input}
 Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
 
         try:
-            response = await self._fast_model.ainvoke(quiz_prompt)
+            response = await fast_model.ainvoke(quiz_prompt)
             answer = response.content if hasattr(response, "content") else str(response)
 
             yield loop_assistant_messages_chunk(
@@ -206,10 +212,10 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                 phase="quiz",
                 thread_id=thread_id,
             )
-            logger.debug("[IG-250] Quiz completed (LLM fallback): %s", user_input[:50])
+            logger.debug("Quiz completed (LLM fallback): %s", user_input[:50])
             await self._save_quiz_to_state(user_input, answer, thread_id)
         except Exception:
-            logger.exception("[IG-250] Quiz LLM call failed")
+            logger.exception("Quiz LLM call failed")
             fallback_response = "I couldn't answer that question. Please try again."
             yield loop_assistant_messages_chunk(
                 content=fallback_response,
@@ -228,7 +234,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
         # Similar to _save_chitchat_to_state - save interaction to thread
         # This is optional and can be implemented based on thread persistence needs
         logger.debug(
-            "[IG-250] Quiz interaction saved to thread %s: %s -> %s",
+            "Quiz interaction saved to thread %s: %s -> %s",
             thread_id,
             query[:30],
             response[:30],

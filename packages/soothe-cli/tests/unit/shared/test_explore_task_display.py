@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe_cli.shared.explore_task_display import format_explore_task_json_blob_for_display
+from soothe_cli.shared.events.explore_task_display import format_explore_task_json_blob_for_display
 
 
 def test_formats_explore_result_summary() -> None:

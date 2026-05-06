@@ -18,8 +18,8 @@ from textual.events import Click
 from textual.reactive import var
 from textual.widgets import Static
 
-from soothe_cli.shared.presentation_engine import PresentationEngine
-from soothe_cli.shared.tool_call_resolution import infer_tool_name_from_call_id
+from soothe_cli.shared.core.presentation_engine import PresentationEngine
+from soothe_cli.shared.tools.tool_call_resolution import infer_tool_name_from_call_id
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import (
     MODE_DISPLAY_GLYPHS,

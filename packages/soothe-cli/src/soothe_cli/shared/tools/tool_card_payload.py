@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from soothe_cli.shared.tools._utils import text_looks_like_error
 from soothe_cli.shared.tools.tool_call_resolution import infer_tool_name_from_call_id
 from soothe_cli.shared.tools.tool_message_format import (
     format_tool_message_content,
@@ -38,8 +39,7 @@ def infer_tool_output_suggests_error(output_display: str, _tool_name: str = "") 
 
     if not output_display:
         return False
-    lowered = output_display.lower()
-    return any(indicator in lowered for indicator in ("error", "failed", "exception", "traceback"))
+    return text_looks_like_error(output_display)
 
 
 @dataclass(frozen=True, slots=True)

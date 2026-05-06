@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from soothe_cli.cli.stream.pipeline import StreamDisplayPipeline
-from soothe_cli.shared.essential_events import LOOP_REASON_EVENT_TYPE
+from soothe_cli.shared.events.essential_events import LOOP_REASON_EVENT_TYPE
 from soothe_cli.tui.textual_adapter import _format_progress_event_lines_for_tui
 
 

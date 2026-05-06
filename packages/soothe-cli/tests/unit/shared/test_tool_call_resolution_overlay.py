@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from langchain_core.messages import AIMessageChunk
 
-from soothe_cli.shared.tool_call_resolution import build_streaming_args_overlay
+from soothe_cli.shared.tools.tool_call_resolution import build_streaming_args_overlay
 
 
 @pytest.fixture

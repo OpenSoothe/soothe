@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from soothe_cli.shared.tool_card_payload import extract_tool_result_card_payload
+from soothe_cli.shared.tools.tool_card_payload import extract_tool_result_card_payload
 
 
 def test_extract_from_tool_message_success() -> None:

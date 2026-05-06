@@ -56,21 +56,21 @@ from soothe_sdk.ux.task_namespace import (
 )
 
 from soothe_cli.cli.stream.display_line import DisplayLine
-from soothe_cli.shared.essential_events import (
+from soothe_cli.shared.events.essential_events import (
     LOOP_REASON_EVENT_TYPE,
     is_essential_progress_event_type,
 )
-from soothe_cli.shared.message_processing import (
+from soothe_cli.shared.core.presentation_engine import PresentationEngine
+from soothe_cli.shared.rendering.renderer_base import RendererBase
+from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
+from soothe_cli.shared.tools.message_processing import (
     accumulate_tool_call_chunks,
     extract_tool_args_dict,
     format_tool_call_args,
 )
-from soothe_cli.shared.presentation_engine import PresentationEngine
-from soothe_cli.shared.renderer_base import RendererBase
-from soothe_cli.shared.subagent_routing import parse_subagent_from_input
-from soothe_cli.shared.tool_call_resolution import build_streaming_args_overlay
-from soothe_cli.shared.tool_card_payload import extract_tool_result_card_payload
-from soothe_cli.shared.tool_card_visibility import (
+from soothe_cli.shared.tools.tool_call_resolution import build_streaming_args_overlay
+from soothe_cli.shared.tools.tool_card_payload import extract_tool_result_card_payload
+from soothe_cli.shared.tools.tool_card_visibility import (
     should_elide_completed_tool_call_message,
     should_elide_stream_tool_card_mount,
     should_elide_tool_card_no_info,
@@ -307,7 +307,7 @@ def _raw_tool_content_for_presentation(message: Any) -> str:
     """Serialize tool message body for ``PresentationEngine.format_tool_result_status_line``."""
     from langchain_core.messages import ToolMessage
 
-    from soothe_cli.shared.tool_message_format import format_tool_message_content
+    from soothe_cli.shared.tools.tool_message_format import format_tool_message_content
 
     if isinstance(message, ToolMessage):
         return format_tool_message_content(getattr(message, "content", ""))
@@ -661,7 +661,9 @@ def _tui_effective_ai_blocks(
     """
     from langchain_core.messages import AIMessage, AIMessageChunk
 
-    from soothe_cli.shared.tool_call_resolution import materialize_ai_blocks_with_resolved_tools
+    from soothe_cli.shared.tools.tool_call_resolution import (
+        materialize_ai_blocks_with_resolved_tools,
+    )
 
     message = _coerce_ai_message_for_blocks(message)
     if not isinstance(message, (AIMessage, AIMessageChunk)):
@@ -2331,7 +2333,9 @@ async def _flush_assistant_text_ns(
     If no message exists yet, creates one with the full content.
     """
     from soothe_cli.cli.stream.task_scope import format_task_scope_prefix
-    from soothe_cli.shared.explore_task_display import format_explore_task_json_blob_for_display
+    from soothe_cli.shared.events.explore_task_display import (
+        format_explore_task_json_blob_for_display,
+    )
 
     repaired_text = RendererBase.repair_concatenated_output(text)
     repaired_text = format_explore_task_json_blob_for_display(repaired_text)

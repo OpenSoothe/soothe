@@ -19,6 +19,7 @@ from soothe.core.agent_loop.utils.messages import (
     loop_assistant_messages_chunk,
     loop_message_assistant_output_phase,
 )
+from soothe.core.intention import build_loop_routing_classification
 from soothe.core.events import (
     AgenticLoopCompletedEvent,
     AgenticLoopStartedEvent,
@@ -375,6 +376,12 @@ class AgenticMixin:
         # Load more messages for routing (IG-133)
         recent_for_thread = await self._load_recent_messages(tid, limit=16)  # Load more for routing
 
+        # Truncate for intent classification (used early and in graph)
+        limit = _RECENT_MESSAGES_FOR_CLASSIFY_LIMIT
+        recent_for_classify = (
+            recent_for_thread[-limit:] if len(recent_for_thread) > limit else recent_for_thread
+        )
+
         active_goal_id = None
         active_goal_description = None
 
@@ -387,6 +394,39 @@ class AgenticMixin:
                     active_goal_description = goals[0].description
             except Exception:
                 logger.debug("Failed to get active goal for intent classification", exc_info=True)
+
+        # Early intent classification for chitchat/quiz short-circuit (matches autonomous mode)
+        intent_classification = None
+        if self._intent_classifier:
+            intent_classification = await self._intent_classifier.classify_intent(
+                user_input,
+                recent_messages=recent_for_classify,
+                active_goal_id=active_goal_id,
+                active_goal_description=active_goal_description,
+                thread_id=tid,
+            )
+
+            logger.info(
+                "[Agentic] intent_type=%s - %s",
+                intent_classification.intent_type,
+                user_input[:50],
+            )
+
+            # Fast path: skip AgentLoop entirely for chitchat
+            if intent_classification.intent_type == "chitchat":
+                async for chunk in self._run_chitchat(
+                    user_input, tid, classification=intent_classification
+                ):
+                    yield chunk
+                return
+
+            # Fast path: skip AgentLoop entirely for quiz
+            if intent_classification.intent_type == "quiz":
+                async for chunk in self._run_quiz(
+                    user_input, tid, classification=intent_classification
+                ):
+                    yield chunk
+                return
 
         # Emit loop started event (Level 1)
         display_goal = preview_first(user_input, 100)
@@ -424,9 +464,9 @@ class AgenticMixin:
             except Exception:
                 logger.debug("Git status collection failed for agentic loop", exc_info=True)
 
-        limit = _RECENT_MESSAGES_FOR_CLASSIFY_LIMIT
-        recent_for_classify = (
-            recent_for_thread[-limit:] if len(recent_for_thread) > limit else recent_for_thread
+        # Build routing classification from pre-computed intent (avoids redundant classification in graph)
+        routing_classification = build_loop_routing_classification(
+            intent_classification, preferred_subagent
         )
 
         async for event_type, event_data in loop_agent.run_with_progress(
@@ -435,6 +475,8 @@ class AgenticMixin:
             workspace=workspace,
             git_status=git_status,
             max_iterations=max_iterations,
+            intent=intent_classification,
+            routing_classification=routing_classification,
             intent_classifier=self._intent_classifier,
             preferred_subagent=preferred_subagent,
             recent_messages_for_intent=recent_for_classify,

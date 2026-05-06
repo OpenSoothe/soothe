@@ -330,6 +330,11 @@ memory: []
 # Security Configuration - Filesystem access control and security policies
 
 security:
+  # Enable sandboxed execution for command tools (execute, run_command, run_python, run_background).
+  # When false, these tools are filtered out to avoid "SandboxBackendProtocol" errors.
+  # Default: false
+  sandbox: false
+
   allow_paths_outside_workspace: false
   require_approval_for_outside_paths: true
 

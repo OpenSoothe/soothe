@@ -156,6 +156,14 @@ class AgentBuilder:
             config=self._config,
         )
         all_tools: list[BaseTool | Callable | dict[str, Any]] = list(config_tools)
+
+        # Filter out deepagents' execute tool when sandbox is disabled (IG-sandbox)
+        # The execute tool requires SandboxBackendProtocol which raises:
+        # "Execution not available. This agent's backend does not support command execution"
+        if not self._config.security.sandbox:
+            all_tools = [t for t in all_tools if getattr(t, "name", None) != "execute"]
+            logger.debug("Sandbox disabled: deepagents execute tool filtered out")
+
         if tools:
             all_tools.extend(tools)
         tools_ms = (time.perf_counter() - tools_start) * 1000

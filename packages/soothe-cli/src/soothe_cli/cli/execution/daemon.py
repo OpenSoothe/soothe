@@ -20,8 +20,8 @@ from soothe_sdk.client import (
 
 from soothe_cli.cli.execution.headless_renderer import HeadlessCliRenderer
 from soothe_cli.shared import EventProcessor
-from soothe_cli.shared.presentation_engine import PresentationEngine
-from soothe_cli.shared.subagent_routing import parse_subagent_from_input
+from soothe_cli.shared.core.presentation_engine import PresentationEngine
+from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
 
 logger = logging.getLogger(__name__)
 
