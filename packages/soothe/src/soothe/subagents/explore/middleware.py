@@ -19,7 +19,7 @@ from langgraph.types import Command, Overwrite
 
 from soothe.utils.subagent_emit import emit_subagent_wire_event
 
-from .events import ExploreCompletedEvent, ExploreMilestoneEvent, ExploreStartedEvent
+from .events import ExploreCompletedEvent, ExploreStartedEvent
 from .findings import extract_findings_from_tool_result, should_record_findings
 from .prompts import EXPLORE_AGENT_SYSTEM, SYNTHESIZE
 from .schemas import (
@@ -34,11 +34,6 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
 logger = logging.getLogger(__name__)
-
-# Emit milestone logs when the planner proposes filesystem or execute tool calls.
-_EXPLORE_MILESTONE_TOOL_NAMES = frozenset(
-    {"glob", "grep", "ls", "read_file", "file_info", "execute"},
-)
 
 
 class ExploreWireMiddleware(AgentMiddleware[ExploreAgentState, None]):
@@ -103,12 +98,24 @@ class ExploreFindingsMiddleware(AgentMiddleware[ExploreAgentState, None]):
         if isinstance(tm, ToolMessage):
             name = tm.name or name
         if not should_record_findings(str(name)):
+            logger.debug("[ExploreFindings] skip recording for tool=%s", name)
             return tm
         if not isinstance(tm, ToolMessage):
+            logger.debug(
+                "[ExploreFindings] result is Command, not ToolMessage: tool=%s type=%s",
+                name,
+                type(tm).__name__,
+            )
             return tm
         rows = extract_findings_from_tool_result(request, tm)
         if not rows:
+            logger.debug("[ExploreFindings] no rows extracted from tool=%s", name)
             return tm
+        logger.debug(
+            "[ExploreFindings] returning Command with findings: tool=%s rows=%d",
+            name,
+            len(rows),
+        )
         return Command(update={"messages": [tm], "findings": rows})
 
     def wrap_tool_call(
@@ -116,16 +123,60 @@ class ExploreFindingsMiddleware(AgentMiddleware[ExploreAgentState, None]):
         request: ToolCallRequest,
         handler: Callable[[ToolCallRequest], ToolMessage | Command[Any]],
     ) -> ToolMessage | Command[Any]:
-        tm = handler(request)
-        return self._merge_findings(request, tm)
+        tool_name = request.tool_call.get("name") if isinstance(request.tool_call, dict) else "?"
+        logger.debug("[ExploreFindings] wrap_tool_call START: tool=%s", tool_name)
+        try:
+            tm = handler(request)
+            logger.debug(
+                "[ExploreFindings] wrap_tool_call END: tool=%s result_type=%s",
+                tool_name,
+                type(tm).__name__,
+            )
+            merged = self._merge_findings(request, tm)
+            logger.debug(
+                "[ExploreFindings] merge_findings DONE: tool=%s merged_type=%s",
+                tool_name,
+                type(merged).__name__,
+            )
+            return merged
+        except Exception as e:
+            logger.error(
+                "[ExploreFindings] wrap_tool_call ERROR: tool=%s error=%s",
+                tool_name,
+                e,
+                exc_info=True,
+            )
+            raise
 
     async def awrap_tool_call(
         self,
         request: ToolCallRequest,
         handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]],
     ) -> ToolMessage | Command[Any]:
-        tm = await handler(request)
-        return self._merge_findings(request, tm)
+        tool_name = request.tool_call.get("name") if isinstance(request.tool_call, dict) else "?"
+        logger.debug("[ExploreFindings] awrap_tool_call START: tool=%s", tool_name)
+        try:
+            tm = await handler(request)
+            logger.debug(
+                "[ExploreFindings] awrap_tool_call END: tool=%s result_type=%s",
+                tool_name,
+                type(tm).__name__,
+            )
+            merged = self._merge_findings(request, tm)
+            logger.debug(
+                "[ExploreFindings] merge_findings DONE: tool=%s merged_type=%s",
+                tool_name,
+                type(merged).__name__,
+            )
+            return merged
+        except Exception as e:
+            logger.error(
+                "[ExploreFindings] awrap_tool_call ERROR: tool=%s error=%s",
+                tool_name,
+                e,
+                exc_info=True,
+            )
+            raise
 
 
 class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
@@ -153,29 +204,8 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         state: ExploreAgentState,
         runtime: Any,
     ) -> dict[str, Any] | None:
-        messages = state.get("messages") or []
-        if not messages:
-            return None
-        last = messages[-1]
-        if not isinstance(last, AIMessage) or not last.tool_calls:
-            return None
-        names = {str(tc.get("name") or "") for tc in last.tool_calls}
-        if not names & _EXPLORE_MILESTONE_TOOL_NAMES:
-            return None
-        planned_summary = _format_planned_tools(last.tool_calls)
-        logger.info(
-            "Explore: planned %d tools — %s",
-            len(last.tool_calls),
-            planned_summary,
-        )
-        emit_subagent_wire_event(
-            ExploreMilestoneEvent(
-                decision="continue",
-                findings_count=len(state.get("findings") or []),
-                iterations_used=state.get("explore_model_invocations", 0),
-            ).to_dict(),
-            logger,
-        )
+        # REMOVED: Milestone event logging (per user request)
+        # This middleware no longer emits subagent.explore.milestone events
         return None
 
     async def aafter_model(
@@ -183,7 +213,7 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         state: ExploreAgentState,
         runtime: Any,
     ) -> dict[str, Any] | None:
-        """Delegate to sync hook so async agent runs emit milestone parity."""
+        """Delegate to sync hook (no milestone events)."""
         return self.after_model(state, runtime)
 
     def wrap_model_call(
@@ -433,47 +463,6 @@ class ExploreFinalizeMiddleware(AgentMiddleware[ExploreAgentState, None]):
     ) -> dict[str, Any] | None:
         """Delegate to sync hook so ``ainvoke`` collapses delegate markdown like ``invoke``."""
         return self.after_agent(state, runtime)
-
-
-def _format_planned_tools(tool_calls: list[Any]) -> str:
-    snippets: list[str] = []
-    for i, tc in enumerate(tool_calls, start=1):
-        if isinstance(tc, dict):
-            name = str(tc.get("name") or "?")
-            args = tc.get("args")
-        else:
-            name = str(getattr(tc, "name", None) or "?")
-            args = getattr(tc, "args", None)
-        arg_str = _summarize_tool_args(args)
-        snippets.append(f"{i}.{name}({arg_str})" if arg_str else f"{i}.{name}")
-    return " | ".join(snippets)
-
-
-def _summarize_tool_args(
-    args: Any,
-    *,
-    value_max: int = 160,
-    total_max: int = 480,
-) -> str:
-    if args is None:
-        return ""
-    if isinstance(args, str):
-        s = args.strip()
-        return (s[: value_max - 3] + "...") if len(s) > value_max else s
-    if not isinstance(args, dict):
-        s = str(args)
-        return (s[: total_max - 3] + "...") if len(s) > total_max else s
-    parts: list[str] = []
-    for key in sorted(args.keys()):
-        val = args[key]
-        vs = val if isinstance(val, str) else repr(val)
-        if len(vs) > value_max:
-            vs = vs[: value_max - 3] + "..."
-        parts.append(f"{key}={vs}")
-    out = ", ".join(parts)
-    if len(out) > total_max:
-        return out[: total_max - 3] + "..."
-    return out
 
 
 def build_explore_middleware_stack(

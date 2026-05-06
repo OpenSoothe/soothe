@@ -21,6 +21,7 @@ from soothe.config.models import (
     GlobalHistoryConfig,
     MCPServerConfig,
     ModelProviderConfig,
+    ModelRole,
     ModelRouter,
     ObservabilityConfig,
     PersistenceConfig,
@@ -512,14 +513,14 @@ class SootheConfig(BaseSettings):
 
     # --- Model resolution ---
 
-    def resolve_model(self, role: str = "default") -> str:
+    def resolve_model(self, role: ModelRole = "default") -> str:
         """Resolve a model string for a given role.
 
         Looks up the role in the router. Falls back to ``default`` if the
         role has no explicit mapping.
 
         Args:
-            role: Purpose role (default, think, image, embedding, fast).
+            role: Purpose role — one of the :data:`~soothe.config.models.ModelRole` values.
 
         Returns:
             A ``provider_name:model_name`` string.
@@ -632,7 +633,7 @@ class SootheConfig(BaseSettings):
             return actual_provider_type, kwargs
         return provider_type, kwargs
 
-    def create_chat_model(self, role: str = "default") -> BaseChatModel:
+    def create_chat_model(self, role: ModelRole = "default") -> BaseChatModel:
         """Create a ``BaseChatModel`` for a given role with caching.
 
         Resolves the role to a ``provider:model`` pair, looks up the
@@ -644,7 +645,7 @@ class SootheConfig(BaseSettings):
         is wrapped to force ``json_mode`` for structured output.
 
         Args:
-            role: Purpose role (default, think, fast, image).
+            role: Purpose role — one of the :data:`~soothe.config.models.ModelRole` values.
 
         Returns:
             A configured ``BaseChatModel`` instance, possibly wrapped for provider compatibility.
