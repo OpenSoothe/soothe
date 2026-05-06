@@ -134,11 +134,16 @@ def build_soothe_middleware_stack(
     # This prevents thread hanging by blocking only LLM calls, not entire threads
     # IG-053: Add timeout to prevent semaphore monopolization
     # IG-258 Phase 2: Thread-local rate limiting (parameter name change)
+    # IG-295: Retry with timeout escalation
     rpm = config.execution.llm_rpm_limit
     concurrent = config.execution.llm_concurrent_limit
     timeout = config.execution.llm_call_timeout_seconds
     timeout_max = config.execution.llm_call_timeout_max_seconds
     timeout_adaptive = config.execution.llm_call_timeout_adaptive
+    retry_on_timeout = config.execution.llm_retry_on_timeout
+    max_timeout_retries = config.execution.llm_max_timeout_retries
+    timeout_retry_multiplier = config.execution.llm_timeout_retry_multiplier
+
     stack.append(
         LLMRateLimitMiddleware(
             requests_per_minute=rpm,
@@ -147,16 +152,22 @@ def build_soothe_middleware_stack(
             call_timeout_max_seconds=timeout_max,
             call_timeout_adaptive=timeout_adaptive,
             thread_local=True,  # IG-258 Phase 2: Enable thread-local budgets
+            retry_on_timeout=retry_on_timeout,  # IG-295
+            max_timeout_retries=max_timeout_retries,  # IG-295
+            timeout_retry_multiplier=timeout_retry_multiplier,  # IG-295
         )
     )
     logger.info(
         "[Middleware] LLM rate limiting enabled (thread-local): rpm=%d, concurrent=%d, "
-        "timeout_floor=%ds timeout_cap=%ds adaptive=%s",
+        "timeout_floor=%ds timeout_cap=%ds adaptive=%s retry=%s max_retries=%d multiplier=%.1f",
         rpm,
         concurrent,
         timeout,
         timeout_max,
         timeout_adaptive,
+        retry_on_timeout,
+        max_timeout_retries,
+        timeout_retry_multiplier,
     )
 
     # 4. Execution hints (Layer 2 → Layer 1 integration)

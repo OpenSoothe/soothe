@@ -104,6 +104,10 @@ execution:
   llm_call_timeout_seconds: 120
   llm_call_timeout_max_seconds: 240  # IG-399: fail fast on pathological long calls
   llm_call_timeout_adaptive: true
+  # IG-295: Retry with timeout escalation (graceful degradation)
+  llm_retry_on_timeout: true
+  llm_max_timeout_retries: 2
+  llm_timeout_retry_multiplier: 2.0
   concurrency:
     max_parallel_goals: 1
     max_parallel_steps: 16
