@@ -991,12 +991,53 @@ class RecoveryConfig(BaseModel):
     auto_resume_on_start: bool = False
 
 
+class ToolCallLimitConfig(BaseModel):
+    """Tool call limit configuration for ToolCallLimitMiddleware.
+
+    Args:
+        global_thread_limit: Maximum tool calls allowed per thread across all tools.
+        global_run_limit: Maximum tool calls allowed per single agent invocation.
+        tool_specific_limits: Tool-specific limit overrides (tool_name -> limits).
+    """
+
+    global_thread_limit: int = Field(
+        default=20, ge=1, description="Global thread-level tool call limit"
+    )
+    global_run_limit: int = Field(default=10, ge=1, description="Global run-level tool call limit")
+    tool_specific_limits: dict[str, dict[str, int]] = Field(
+        default_factory=lambda: {
+            "wizsearch_search": {"thread_limit": 5, "run_limit": 3},
+            "wizsearch_crawl": {"thread_limit": 5, "run_limit": 3},
+            "web_search": {"thread_limit": 5, "run_limit": 3},
+            "fetch_url": {"thread_limit": 5, "run_limit": 3},
+            "search": {"thread_limit": 5, "run_limit": 3},
+        },
+        description="Tool-specific limit overrides",
+    )
+
+
+class ToolRetryConfig(BaseModel):
+    """Tool retry configuration for ToolRetryMiddleware.
+
+    Args:
+        max_retries: Maximum number of retry attempts after initial failure.
+        backoff_factor: Exponential backoff multiplier.
+        initial_delay: Initial delay in seconds before first retry.
+    """
+
+    max_retries: int = Field(default=3, ge=0, description="Max retry attempts")
+    backoff_factor: float = Field(default=2.0, ge=0, description="Backoff multiplier")
+    initial_delay: float = Field(default=1.0, ge=0, description="Initial delay in seconds")
+
+
 class ExecutionConfig(BaseModel):
     """Execution limits configuration.
 
     Args:
         concurrency: Concurrency limits for parallel execution.
         recovery: Failure recovery settings.
+        tool_call_limit: Tool call limit configuration (ToolCallLimitMiddleware).
+        tool_retry: Tool retry configuration (ToolRetryMiddleware).
         llm_rpm_limit: Soft cap on LLM HTTP requests per minute (middleware sliding window).
         llm_concurrent_limit: Max concurrent in-flight LLM calls per thread.
         llm_call_timeout_seconds: Per-LLM-call timeout for rate-limit middleware (floor when adaptive).
@@ -1009,6 +1050,8 @@ class ExecutionConfig(BaseModel):
 
     concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
     recovery: RecoveryConfig = Field(default_factory=RecoveryConfig)
+    tool_call_limit: ToolCallLimitConfig = Field(default_factory=ToolCallLimitConfig)
+    tool_retry: ToolRetryConfig = Field(default_factory=ToolRetryConfig)
 
     llm_rpm_limit: int = Field(default=120, ge=1, le=10_000)
     llm_concurrent_limit: int = Field(default=10, ge=1, le=500)
