@@ -3,7 +3,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from soothe.core.persistence.config_policy import ConfigDrivenPolicy, _extract_required_permission
+from soothe.core.governance.config_policy import ConfigDrivenPolicy, _extract_required_permission
 from soothe.protocols.policy import (
     ActionRequest,
     Permission,

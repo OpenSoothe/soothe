@@ -258,4 +258,20 @@ __all__ = [
     "make_subagent_tool_started",
     "make_subagent_tool_completed",
     "make_subagent_tool_failed",
+    # Event replay (RFC-411)
+    "reconstruct_event_stream",
+    "enrich_events_with_coreagent_details",
 ]
+
+
+# Lazy imports for replay submodule to avoid circular dependencies
+def __getattr__(name: str) -> object:
+    if name == "reconstruct_event_stream":
+        from soothe.core.events.replay import reconstruct_event_stream
+
+        return reconstruct_event_stream
+    if name == "enrich_events_with_coreagent_details":
+        from soothe.core.events.replay import enrich_events_with_coreagent_details
+
+        return enrich_events_with_coreagent_details
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
