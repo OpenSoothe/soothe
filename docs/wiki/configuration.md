@@ -34,7 +34,7 @@ Create a YAML configuration file for complete control:
 
 ```bash
 # Use default config location
-soothe --config config/config.yml
+soothe --config config/config.template.yml
 
 # Use custom config
 soothe --config my-config.yml

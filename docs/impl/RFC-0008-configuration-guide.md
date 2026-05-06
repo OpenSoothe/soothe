@@ -14,7 +14,7 @@
 ## Configuration
 
 ### Location
-**File**: `src/soothe/config/config.yml`
+**File**: `config/config.template.yml`
 
 ### Settings
 
@@ -216,7 +216,7 @@ soothe -p "What is 2+2?"
 
 ### Files Modified
 
-1. `src/soothe/config/config.yml` - Added agentic config section
+1. `config/config.template.yml` - Added agentic config section
 2. `src/soothe/config/models.py` - Added `use_judge_engine` field
 3. `src/soothe/core/event_catalog.py` - Event registration
 4. `src/soothe/cognition/agent_loop/core/events.py` - Event self-registration

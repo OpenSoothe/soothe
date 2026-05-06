@@ -261,7 +261,9 @@ class PlanManager:
             total = self.dag.completed_steps + failed_count
             success_rate = self.dag.completed_steps / total if total > 0 else 0.0
             if success_rate < _LOW_SUCCESS_RATE_THRESHOLD:
-                logger.info("PlanManager: low success rate (%.0f%%) → synthesize", success_rate * 100)
+                logger.info(
+                    "PlanManager: low success rate (%.0f%%) → synthesize", success_rate * 100
+                )
                 return True
 
         # Heuristic: DAG dependencies on current plan

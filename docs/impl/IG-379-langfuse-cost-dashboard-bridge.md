@@ -8,7 +8,7 @@ Make Soothe LLM runs easy to attribute and price in Langfuse’s **Cost Dashboar
 
 - `observability.langfuse.tags` (optional string list) and `observability.langfuse.user_id` (optional string, supports `${ENV}`) on `LangfuseIntegrationConfig`.
 - `merge_langfuse_runnable_config` sets `langfuse_tags` / `langfuse_user_id` metadata when absent (LangChain `CallbackHandler` reads these for trace attributes).
-- Template [`packages/soothe/src/soothe/config/config.yml`](packages/soothe/src/soothe/config/config.yml) and dev defaults [`config/config.dev.yml`](config/config.dev.yml).
+- Template [`config/config.template.yml`](config/config.template.yml) and dev defaults [`config/config.dev.yml`](config/config.dev.yml).
 - This guide: Cost Dashboard checklist, custom **model** `match_pattern` examples for Soothe / LangChain model ids, manual verification steps.
 
 ## Cost Dashboard checklist

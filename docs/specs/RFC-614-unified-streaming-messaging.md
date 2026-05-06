@@ -254,7 +254,7 @@ CLI/TUI `EventProcessor` paths use these helpers to treat **`mode="messages"`** 
 **Files Modified**:
 1. `packages/soothe/src/soothe/config/models.py` - Add `OutputStreamingConfig` model
 2. `packages/soothe/src/soothe/config/settings.py` - Add `output_streaming` field to `SootheConfig`
-3. `packages/soothe/src/soothe/config/config.yml` - Add streaming section
+3. `config/config.template.yml` - Add streaming section
 4. `config/config.dev.yml` - Add streaming defaults (synchronized)
 5. `packages/soothe-cli/src/soothe_cli/config/cli_config.py` - Add override fields
 6. `packages/soothe-cli/src/soothe_cli/cli/main.py` - Add CLI flags

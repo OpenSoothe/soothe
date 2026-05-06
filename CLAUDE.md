@@ -22,7 +22,7 @@
 **Minor changes** (small bugfixes, single-file edits, trivial config or doc tweaks): **Do not** create a verbose IG. Use a clear commit message and PR description instead. Only add a `docs/impl/` file if the team needs a numbered traceability stub—and then keep it **minimal** (a short goal, files touched, done)—not a full template or boilerplate narrative.
 
 ### 2. MUST Keep Config Files Synchronized
-**When updating `packages/soothe/src/soothe/config/config.yml` (template)**, you MUST also update `config/config.dev.yml` (dev defaults):
+**When updating `config/config.template.yml` (template)**, you MUST also update `config/config.dev.yml` (dev defaults):
 - Both files must have matching structure
 - Dev config should have sensible defaults for local development
 - This ensures developers see the latest configuration options
@@ -382,7 +382,7 @@ Use single backticks for inline code in docstrings (not Sphinx double backticks)
 
 | File | Purpose |
 |------|---------|
-| [packages/soothe/src/soothe/config/config.yml](packages/soothe/src/soothe/config/config.yml) | Full YAML template (`${ENV}` for secrets) |
+| [config/config.template.yml](config/config.template.yml) | Full YAML template (`${ENV}` for secrets) |
 | [config/config.dev.yml](config/config.dev.yml) | Local development defaults |
 | [config/config.minimal.yml](config/config.minimal.yml) | Minimal end-user YAML example |
 | [docs/user_guide.md](docs/user_guide.md) | End-user guide |

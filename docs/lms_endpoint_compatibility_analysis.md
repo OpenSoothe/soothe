@@ -170,7 +170,7 @@ To verify the fix works:
 - **Core LLM Module**: `packages/soothe/src/soothe/core/llm/` (consolidated)
 - **Config Models**: `packages/soothe/src/soothe/config/models.py`
 - **Settings Application**: `packages/soothe/src/soothe/config/settings.py`
-- **Config Template**: `packages/soothe/src/soothe/config/config.yml`
+- **Config Template**: `config/config.template.yml`
 
 ---
 
