@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from textual.app import App, ScreenStackError
 from textual.binding import Binding, BindingType
-from textual.containers import Container, VerticalScroll
+from textual.containers import Container, Vertical, VerticalScroll
 from textual.content import Content
 from textual.css.query import NoMatches
 from textual.message import Message
@@ -780,15 +780,16 @@ class SootheApp(App):
         # Main chat area with scrollable messages
         # VerticalScroll tracks user scroll intent for better auto-scroll behavior
         with VerticalScroll(id="chat"):
-            yield WelcomeBanner(
-                thread_id=self._lc_loop_id,
-                mcp_tool_count=self._mcp_tool_count,
-                connecting=self._connecting,
-                resuming=self._resume_thread_intent is not None,
-                local_server=self._server_kwargs is not None,
-                id="welcome-banner",
-            )
-            yield Container(id="messages")
+            with Vertical(id="chat-body"):
+                yield WelcomeBanner(
+                    thread_id=self._lc_loop_id,
+                    mcp_tool_count=self._mcp_tool_count,
+                    connecting=self._connecting,
+                    resuming=self._resume_thread_intent is not None,
+                    local_server=self._server_kwargs is not None,
+                    id="welcome-banner",
+                )
+                yield Container(id="messages")
         with Container(id="bottom-app-container"):
             yield Container(id="thinking-status")
             yield ChatInput(
