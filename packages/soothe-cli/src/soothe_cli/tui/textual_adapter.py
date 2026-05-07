@@ -1258,7 +1258,16 @@ async def execute_task_textual(
                             # ``ToolCallMessage`` applies the same id→name inference as cards.
                             tname = tool_card.tool_name or "tool"
                             output_str = tool_card.output_display
-                            if should_elide_tool_card_no_info(
+                            # IG-404: Suppress orphan cards for subagent tools — only
+                            # main-agent orphans should produce standalone cards.
+                            if not is_main_agent:
+                                logger.debug(
+                                    "Tool result orphan suppressed (subagent): "
+                                    "tool_call_id=%s name=%s",
+                                    tool_id,
+                                    tname,
+                                )
+                            elif should_elide_tool_card_no_info(
                                 tool_name=tname,
                                 args={},
                                 formatted_output=output_str,
@@ -1455,6 +1464,22 @@ async def execute_task_textual(
                             )
                             pending_text_by_namespace[ns_key] = ""
                             assistant_message_by_namespace.pop(ns_key, None)
+
+                        # IG-404: Suppress duplicate when existing message already
+                        # holds the same content (streamed goal_completion followed
+                        # by non-chunk full AIMessage with identical text).
+                        if existing_msg is not None:
+                            existing_content = (getattr(existing_msg, "_content", "") or "").strip()
+                            if existing_content and (
+                                output_normalized == existing_content
+                                or output_normalized in existing_content
+                                or existing_content in output_normalized
+                            ):
+                                if adapter._set_active_message:
+                                    adapter._set_active_message(None)
+                                if adapter._set_spinner:
+                                    await adapter._set_spinner(None)
+                                continue
 
                         if not existing_msg or output_normalized != pending_normalized:
                             output_widget = AssistantMessage(
@@ -1688,7 +1713,12 @@ async def execute_task_textual(
                                 existing_tool = adapter._current_tool_messages.get(
                                     lookup_id
                                 ) or adapter._tool_display_by_call_id.get(lookup_id)
-                            if lookup_id and args_meaningful and existing_tool is not None and not (is_main_agent and buffer_name == "task"):
+                            if (
+                                lookup_id
+                                and args_meaningful
+                                and existing_tool is not None
+                                and not (is_main_agent and buffer_name == "task")
+                            ):
                                 if isinstance(existing_tool, ToolCallMessage):
                                     existing_tool.refresh_tool_args(parsed_args)
                                 elif isinstance(existing_tool, CognitionStepMessage):
@@ -1858,21 +1888,33 @@ async def execute_task_textual(
                                             ns_key,
                                         )
                                     else:
-                                        tool_msg = ToolCallMessage(
-                                            buffer_name,
-                                            parsed_args,
-                                            tool_call_id=lookup_id,
-                                        )
-                                        logger.debug(
-                                            "Tool call card mounted: name=%s tool_call_id=%s "
-                                            "namespace=%s",
-                                            buffer_name,
-                                            lookup_id,
-                                            ns_key,
-                                        )
-                                        await adapter._mount_message(tool_msg)
-                                        adapter._current_tool_messages[lookup_id] = tool_msg
-                                        adapter._tool_display_by_call_id[lookup_id] = tool_msg
+                                        # IG-404: Suppress standalone card for subagent tools
+                                        # with no resolvable parent — these should only appear
+                                        # as rows inside task/step cards.
+                                        if not is_main_agent:
+                                            logger.debug(
+                                                "Subagent tool card suppressed (no parent): "
+                                                "name=%s tool_call_id=%s namespace=%s",
+                                                buffer_name,
+                                                lookup_id,
+                                                ns_key,
+                                            )
+                                        else:
+                                            tool_msg = ToolCallMessage(
+                                                buffer_name,
+                                                parsed_args,
+                                                tool_call_id=lookup_id,
+                                            )
+                                            logger.debug(
+                                                "Tool call card mounted: name=%s tool_call_id=%s "
+                                                "namespace=%s",
+                                                buffer_name,
+                                                lookup_id,
+                                                ns_key,
+                                            )
+                                            await adapter._mount_message(tool_msg)
+                                            adapter._current_tool_messages[lookup_id] = tool_msg
+                                            adapter._tool_display_by_call_id[lookup_id] = tool_msg
                                 else:
                                     logger.debug(
                                         "Tool call block not shown as card (tool UI off): "
@@ -1991,9 +2033,17 @@ async def execute_task_textual(
                                         raw_args=buf.get("raw_args", ""),
                                     )
                                     adapter._tool_to_step[tcid_str] = step_widget
-                                    adapter._tool_display_by_call_id[tcid_str] = step_widget
+                                    # IG-404: Preserve existing ToolCallMessage (task card) so
+                                    # subagent tools can still resolve their parent via this id.
+                                    existing_display = adapter._tool_display_by_call_id.get(
+                                        tcid_str
+                                    )
+                                    if not isinstance(existing_display, ToolCallMessage):
+                                        adapter._tool_display_by_call_id[tcid_str] = step_widget
                                 # Keep only tools that arrived after this flush (for subsequent steps).
-                                adapter._pending_main_tools = adapter._pending_main_tools[pending_count:]
+                                adapter._pending_main_tools = adapter._pending_main_tools[
+                                    pending_count:
+                                ]
 
                                 continue
 
