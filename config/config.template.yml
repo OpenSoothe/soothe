@@ -114,10 +114,10 @@ execution:
     max_parallel_subagents: 4
     global_max_llm_calls: 5
     step_parallelism: dependency  # sequential | dependency | max
-  # Tool call limits (ToolCallLimitMiddleware)
+  # Tool call limits (ToolCallLimitMiddleware; explore subagent batches many fs tools per turn)
   tool_call_limit:
-    global_thread_limit: 20  # Max tool calls per thread
-    global_run_limit: 10     # Max tool calls per single invocation
+    global_thread_limit: 150  # Cap across a thread (explore + multi-turn search)
+    global_run_limit: 56     # Cap per single agent invocation (parallel glob/ls waves)
     tool_specific_limits:  # Tool-specific overrides for web search related tools
       wizsearch_search: {thread_limit: 5, run_limit: 3}
       wizsearch_crawl: {thread_limit: 5, run_limit: 3}
@@ -245,6 +245,8 @@ subagents:
       max_history_messages_for_model: 8  # Keep only recent N message turns
       max_tool_output_chars_per_turn: 2000  # Truncate oversized tool outputs
       early_stop_no_new_findings_turns: 2  # Force synthesis when findings stall
+      # Explore uses execution.tool_call_limit (ToolCallLimitMiddleware). Optional overrides:
+      # tool_call_limit_run, tool_call_limit_thread (see ExploreSubagentConfig).
 
 # =============================================================================
 # Tools Configuration

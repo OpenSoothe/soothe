@@ -84,10 +84,10 @@ execution:
   llm_retry_on_timeout: true
   llm_max_timeout_retries: 2
   llm_timeout_retry_multiplier: 2.0
-  # Tool call limits (ToolCallLimitMiddleware)
+  # Tool call limits (ToolCallLimitMiddleware; higher for local monorepos / explore batching)
   tool_call_limit:
-    global_thread_limit: 100
-    global_run_limit: 30
+    global_thread_limit: 220
+    global_run_limit: 80
     tool_specific_limits:
       wizsearch_search: {thread_limit: 5, run_limit: 3}
       wizsearch_crawl: {thread_limit: 5, run_limit: 3}

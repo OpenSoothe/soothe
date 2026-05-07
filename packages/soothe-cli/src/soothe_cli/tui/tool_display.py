@@ -389,6 +389,7 @@ def format_tool_call_row(
     duration_ms: int = 0,
     running_spinner: str | None = None,
     running_elapsed_secs: float | None = None,
+    branch_glyph: str | None = None,
 ) -> Content:
     """One-line tool row: CLI-style invocation, arrow, status/result (IG-402).
 
@@ -403,6 +404,9 @@ def format_tool_call_row(
         duration_ms: Elapsed ms for successful/error completion (from UI timer).
         running_spinner: Current spinner frame when ``phase == "running"``.
         running_elapsed_secs: Elapsed seconds while running (wall clock).
+        branch_glyph: When set (e.g. step card / goal-tree parity), replaces ``tool_prefix`` on the
+            LHS with this glyph plus the stripped command — ``circle_empty`` while pending/running,
+            ``circle_filled`` when finished. Suppresses the Braille spinner while running.
 
     Returns:
         Styled ``Content`` for a single row.
@@ -413,6 +417,16 @@ def format_tool_call_row(
     lhs_plain = format_tool_cli_style_command(tool_name, tool_args)
     tool_prefix = get_glyphs().tool_prefix
 
+    if branch_glyph is not None:
+        rest = (
+            lhs_plain[len(tool_prefix) :].lstrip()
+            if lhs_plain.startswith(tool_prefix)
+            else lhs_plain
+        )
+        lhs = f"{branch_glyph} {rest}"
+    else:
+        lhs = lhs_plain
+
     def _cmd_with_spinner(spinner: str) -> str:
         if lhs_plain.startswith(tool_prefix):
             rest = lhs_plain[len(tool_prefix) :].lstrip()
@@ -422,9 +436,16 @@ def format_tool_call_row(
     arrow = " → "
 
     if phase == "pending":
-        return Content.assemble(lhs_plain, Content.styled(f"{arrow}…", "dim"))
+        return Content.assemble(lhs, Content.styled(f"{arrow}…", "dim"))
 
     if phase == "running":
+        if branch_glyph is not None:
+            if running_elapsed_secs is not None and running_elapsed_secs >= 0:
+                dur = format_duration(float(running_elapsed_secs))
+                tail = f"{arrow}running ({dur})"
+            else:
+                tail = f"{arrow}running"
+            return Content.assemble(lhs, Content.styled(tail, "dim"))
         spin = running_spinner or get_glyphs().spinner_frames[0]
         cmd = _cmd_with_spinner(spin)
         if running_elapsed_secs is not None and running_elapsed_secs >= 0:
@@ -435,10 +456,10 @@ def format_tool_call_row(
         return Content.assemble(cmd, Content.styled(tail, "dim"))
 
     if phase == "rejected":
-        return Content.assemble(lhs_plain, Content.styled(f"{arrow}rejected", "italic"))
+        return Content.assemble(lhs, Content.styled(f"{arrow}rejected", "italic"))
 
     if phase == "skipped":
-        return Content.assemble(lhs_plain, Content.styled(f"{arrow}skipped", "dim"))
+        return Content.assemble(lhs, Content.styled(f"{arrow}skipped", "dim"))
 
     from soothe_cli.shared.core.presentation_engine import PresentationEngine
 
@@ -450,4 +471,4 @@ def format_tool_call_row(
         is_error=is_error,
         duration_ms=duration_ms,
     )
-    return Content.assemble(lhs_plain, Content.styled(arrow, "dim"), rhs)
+    return Content.assemble(lhs, Content.styled(arrow, "dim"), rhs)

@@ -38,3 +38,38 @@ def test_format_tool_call_row_smoke() -> None:
 
     c = format_tool_call_row("grep", {"pattern": "TODO"}, phase="pending")
     assert "grep" in c.plain.lower() or "Grep" in c.plain
+
+
+def test_format_tool_call_row_branch_glyph_hollow_running_no_braille_spinner() -> None:
+    """Step-card parity: running uses ○ only, not Braille frames."""
+    from soothe_cli.tui.config import get_glyphs
+    from soothe_cli.tui.tool_display import format_tool_call_row
+
+    g = get_glyphs()
+    c = format_tool_call_row(
+        "grep",
+        {"pattern": "x"},
+        phase="running",
+        branch_glyph=g.circle_empty,
+        running_elapsed_secs=1.0,
+    )
+    plain = c.plain
+    assert g.circle_empty in plain
+    for frame in g.spinner_frames:
+        assert frame not in plain
+
+
+def test_format_tool_call_row_branch_glyph_filled_on_success() -> None:
+    from soothe_cli.tui.config import get_glyphs
+    from soothe_cli.tui.tool_display import format_tool_call_row
+
+    g = get_glyphs()
+    c = format_tool_call_row(
+        "grep",
+        {"pattern": "x"},
+        phase="success",
+        output="ok",
+        duration_ms=10,
+        branch_glyph=g.circle_filled,
+    )
+    assert g.circle_filled in c.plain

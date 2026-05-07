@@ -1001,9 +1001,9 @@ class ToolCallLimitConfig(BaseModel):
     """
 
     global_thread_limit: int = Field(
-        default=20, ge=1, description="Global thread-level tool call limit"
+        default=150, ge=1, description="Global thread-level tool call limit"
     )
-    global_run_limit: int = Field(default=10, ge=1, description="Global run-level tool call limit")
+    global_run_limit: int = Field(default=56, ge=1, description="Global run-level tool call limit")
     tool_specific_limits: dict[str, dict[str, int]] = Field(
         default_factory=lambda: {
             "wizsearch_search": {"thread_limit": 5, "run_limit": 3},
