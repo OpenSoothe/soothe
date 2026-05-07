@@ -69,7 +69,7 @@ def _assemble_card_header(widget: object, label_part: str, body_part: str) -> Co
 
     Args:
         widget: Mounted widget (or any object accepted by ``get_theme_colors``).
-        label_part: Left segment (e.g. ``⎿ Goal · ``).
+        label_part: Left segment (e.g. ``⎿ 📍 · ``).
         body_part: Right segment (goal text, args, etc.).
 
     Returns:
@@ -1003,7 +1003,13 @@ class ToolCallMessage(Vertical):
             except Exception:  # noqa: BLE001
                 colors = theme.DARK_COLORS
             return Content.styled(full, colors.muted)
-        return _assemble_card_header(self, full[:idx], full[idx:])
+        label = full[:idx]
+        body = full[idx:]
+        if _normalize_tool_name_for_arg_map(self._tool_name) == "task":
+            tp = get_glyphs().tool_prefix
+            if label.startswith(tp) and label[len(tp) :].strip() == "Task":
+                label = f"{tp} ❇️"
+        return _assemble_card_header(self, label, body)
 
     def compose(self) -> ComposeResult:
         """Compose the tool call message layout.
@@ -2289,7 +2295,7 @@ class CognitionStepMessage(Vertical):
         prefix = get_glyphs().tool_prefix
         return _assemble_card_header(
             self,
-            f"{prefix} Step · ",
+            f"{prefix} 🚀 · ",
             f"{self._description}{self._stats_title_suffix()}",
         )
 
@@ -2957,7 +2963,7 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
         body = self._next_action
         if self._plan_action in ("keep", "new"):
             body = f"{body} · {self._plan_action}"
-        return _assemble_card_header(self, f"{prefix} Plan · ", body)
+        return _assemble_card_header(self, f"{prefix} 💭 · ", body)
 
     def compose(self) -> ComposeResult:
         yield Static(self._plan_header_content(), classes="cognition-plan-header")
@@ -3010,7 +3016,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
     """Two-level Goal → steps tree; one aggregate block updates in place.
 
     Title line matches ``CognitionStepMessage`` / ``CognitionPlanReasonMessage``:
-    ``{prefix} Goal · …`` with optional ``· iter<=N`` when ``max_iterations`` is set.
+    ``{prefix} 📍 · …`` with optional ``· iter<=N`` when ``max_iterations`` is set.
     """
 
     can_select = True
@@ -3084,7 +3090,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         body = g
         if self._max_iterations > 1:
             body = f"{body} · iter<={self._max_iterations}"
-        return _assemble_card_header(self, f"{prefix} Goal · ", body)
+        return _assemble_card_header(self, f"{prefix} 📍 · ", body)
 
     def _goal_footer_styled_content(self) -> Content:
         """Footer content for loop finished / interrupted (parity with step/tool status lines)."""

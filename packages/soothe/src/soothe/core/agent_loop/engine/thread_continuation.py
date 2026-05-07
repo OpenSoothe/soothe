@@ -7,17 +7,14 @@ first plan for this run, skip the initial planner LLM and inject a single-step
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+from soothe.core.agent_loop.state.checkpoint import AgentLoopCheckpoint, GoalExecutionRecord
 from soothe.core.agent_loop.state.schemas import (
     AgentDecision,
     LoopState,
     PlanResult,
     StepAction,
 )
-
-if TYPE_CHECKING:
-    from soothe.core.agent_loop.state.checkpoint import GoalExecutionRecord
+from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def thread_continuation_plan_bootstrap_allowed(
@@ -56,6 +53,55 @@ def thread_continuation_plan_bootstrap_allowed(
             return False
 
     return True
+
+
+def seed_thread_continuation_ledger_from_prior_goal(
+    checkpoint: AgentLoopCheckpoint,
+    new_goal: GoalExecutionRecord,
+    thread_id: str,
+) -> None:
+    """Copy prior goal context into a new goal's ledger for same-loop follow-ups.
+
+    When ``loop_id`` is stable per conversation thread, the new goal starts with an
+    empty ``loop_messages`` list while Execute prompts still reference the RFC-214
+    ledger. Reuse the previous completed goal's ledger, or fall back to
+    ``goal_completion`` text when the ledger was not persisted.
+
+    Args:
+        checkpoint: Loaded checkpoint whose ``goal_history`` ends with ``new_goal``.
+        new_goal: The goal record just appended for this user turn (last in history).
+        thread_id: Active conversation thread id for message metadata.
+    """
+    history = checkpoint.goal_history
+    if len(history) < 2:
+        return
+    prev = history[-2]
+    if prev.status != "completed":
+        return
+    if prev.loop_messages:
+        new_goal.loop_messages.extend(m.model_copy(deep=True) for m in prev.loop_messages)
+        return
+    completion = (prev.goal_completion or "").strip()
+    if not completion:
+        return
+    gtext = prev.goal_text or "Previous request"
+    new_goal.loop_messages.extend(
+        [
+            LoopHumanMessage(
+                content=gtext,
+                thread_id=thread_id,
+                iteration=0,
+                goal_summary=gtext[:200] if gtext else None,
+                phase=None,
+            ),
+            LoopAIMessage(
+                content=completion,
+                thread_id=thread_id,
+                iteration=0,
+                phase=None,
+            ),
+        ]
+    )
 
 
 def build_thread_continuation_bootstrap_plan(_goal: str) -> PlanResult:

@@ -356,6 +356,7 @@ class AgenticMixin:
         async for event_type, event_data in loop_agent.run_with_progress(
             goal=user_input,
             thread_id=tid,
+            loop_id=tid,
             workspace=workspace,
             git_status=git_status,
             max_iterations=max_iterations,
