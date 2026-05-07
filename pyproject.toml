@@ -23,3 +23,8 @@ default = true
 soothe-sdk = { workspace = true }
 soothe-cli = { workspace = true }
 soothe = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
