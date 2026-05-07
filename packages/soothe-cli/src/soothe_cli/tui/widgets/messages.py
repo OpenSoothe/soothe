@@ -762,6 +762,11 @@ class AssistantMessage(Vertical):
         self._expanded = not self._expanded
         self._refresh_body_visibility()
 
+    def set_body_expanded(self, expanded: bool) -> None:
+        """Force expanded or collapsed body (e.g. goal-completion cards default to expanded)."""
+        self._expanded = expanded
+        self._refresh_body_visibility()
+
     def on_click(self, event: Click) -> None:
         """Toggle collapse for long messages; otherwise show timestamp toast."""
         event.stop()

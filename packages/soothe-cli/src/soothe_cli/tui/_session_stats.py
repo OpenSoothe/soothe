@@ -9,10 +9,13 @@ config, no widget imports) so that `app.py` can import `SessionStats` and
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
 
-SpinnerStatus = Literal["Thinking", "Offloading"] | None
-"""Valid spinner display states, or `None` to hide."""
+SpinnerStatus = str | None
+"""Spinner line label, or `None` to hide.
+
+Common values include ``Thinking``, ``Offloading``, ``Writing`` (assistant streaming),
+``Tools`` (tool execution), and ``Synthesizing`` (goal-completion stream).
+"""
 
 
 @dataclass

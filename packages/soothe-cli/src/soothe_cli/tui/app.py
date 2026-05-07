@@ -1965,9 +1965,12 @@ class SootheApp(App):
 
         if self._loading_widget is None:
             # Create new
-            self._loading_widget = LoadingWidget(status)
+            turn_mono = self._inflight_turn_start if self._agent_running else None
+            self._loading_widget = LoadingWidget(status, turn_start_mono=turn_mono)
             await thinking_status.mount(self._loading_widget)
         else:
+            if self._agent_running:
+                self._loading_widget.set_turn_start_mono(self._inflight_turn_start)
             # Update existing
             self._loading_widget.set_status(status)
         # NOTE: Don't call anchor() here - it would re-anchor and drag user back

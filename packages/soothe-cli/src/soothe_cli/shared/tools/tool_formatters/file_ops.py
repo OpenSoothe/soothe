@@ -47,7 +47,9 @@ class FileOpsFormatter(BaseFormatter):
         if normalized == "write_file":
             return self._format_write_file(result)
         if normalized == "edit_file":
-            return self._format_file_mutation(result, success_summary="Edited file", failure_summary="Edit failed")
+            return self._format_file_mutation(
+                result, success_summary="Edited file", failure_summary="Edit failed"
+            )
         if normalized == "edit_file_lines":
             return self._format_file_mutation(
                 result, success_summary="Updated file", failure_summary="Line edit failed"
@@ -199,7 +201,9 @@ class FileOpsFormatter(BaseFormatter):
             >>> brief.summary
             'Wrote file'
         """
-        return self._format_file_mutation(result, success_summary="Wrote file", failure_summary="Write failed")
+        return self._format_file_mutation(
+            result, success_summary="Wrote file", failure_summary="Write failed"
+        )
 
     def _format_delete_file(self, result: str) -> ToolBrief:
         """Format delete_file result.

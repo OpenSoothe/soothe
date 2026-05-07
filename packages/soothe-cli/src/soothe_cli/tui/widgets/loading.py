@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from time import time
+from time import monotonic
 from typing import TYPE_CHECKING
 
 from textual.containers import Horizontal
@@ -53,7 +53,9 @@ class Spinner:
 class LoadingWidget(Static):
     """Animated loading indicator with status text and elapsed time.
 
-    Displays: <spinner> Thinking... (3s, esc to interrupt)
+    Displays: <spinner> Thinking...  (12s · esc to interrupt)
+
+    The elapsed value updates at most once per second so the line does not flicker.
     """
 
     DEFAULT_CSS = """
@@ -85,22 +87,25 @@ class LoadingWidget(Static):
     }
     """
 
-    def __init__(self, status: str = "Thinking") -> None:
+    def __init__(self, status: str = "Thinking", *, turn_start_mono: float | None = None) -> None:
         """Initialize loading widget.
 
         Args:
-            status: Initial status text to display
+            status: Initial status text to display.
+            turn_start_monotonic: Start of the current query/turn (``time.monotonic()``). When
+                omitted, the first mount time is used so elapsed still advances monotonically.
         """
         super().__init__()
         self._status = status
         self._spinner = Spinner()
-        self._start_time: float | None = None
+        self._turn_start_mono: float | None = turn_start_mono
         self._spinner_widget: Static | None = None
         self._status_widget: Static | None = None
         self._hint_widget: Static | None = None
         self._animation_timer: Timer | None = None
         self._paused = False
-        self._paused_elapsed: int = 0
+        self._paused_total_elapsed: int = 0
+        self._last_hint_elapsed_int: int = -1
 
     def compose(self) -> ComposeResult:
         """Compose the loading widget layout.
@@ -112,15 +117,26 @@ class LoadingWidget(Static):
             self._spinner_widget = Static(self._spinner.current_frame(), classes="loading-spinner")
             yield self._spinner_widget
 
-            self._status_widget = Static(f" {self._status}... ", classes="loading-status")
+            self._status_widget = Static(
+                self._format_status_line(self._status), classes="loading-status"
+            )
             yield self._status_widget
 
-            self._hint_widget = Static("(0s, esc to interrupt)", classes="loading-hint")
+            self._hint_widget = Static(self._format_hint_line(0.0), classes="loading-hint")
             yield self._hint_widget
+
+    @staticmethod
+    def _format_status_line(status: str) -> str:
+        return f" {status}... "
+
+    def _format_hint_line(self, elapsed_secs: float) -> str:
+        return f"({format_duration(elapsed_secs)} · esc to interrupt)"
 
     def on_mount(self) -> None:
         """Start animation on mount."""
-        self._start_time = time()
+        now = monotonic()
+        if self._turn_start_mono is None:
+            self._turn_start_mono = now
         self._animation_timer = self.set_interval(0.1, self._update_animation)
 
     def on_unmount(self) -> None:
@@ -151,9 +167,13 @@ class LoadingWidget(Static):
             frame = self._spinner.next_frame()
             self._spinner_widget.update(frame)
 
-        if self._hint_widget and self._start_time is not None:
-            elapsed = int(time() - self._start_time)
-            self._hint_widget.update(f"({format_duration(elapsed)}, esc to interrupt)")
+        if self._hint_widget and self._turn_start_mono is not None:
+            now = monotonic()
+            total_s = now - self._turn_start_mono
+            elapsed_int = int(total_s)
+            if elapsed_int != self._last_hint_elapsed_int:
+                self._last_hint_elapsed_int = elapsed_int
+                self._hint_widget.update(self._format_hint_line(float(elapsed_int)))
 
     def set_status(self, status: str) -> None:
         """Update the status text.
@@ -163,7 +183,12 @@ class LoadingWidget(Static):
         """
         self._status = status
         if self._status_widget:
-            self._status_widget.update(f" {self._status}... ")
+            self._status_widget.update(self._format_status_line(status))
+
+    def set_turn_start_mono(self, turn_start: float) -> None:
+        """Anchor total elapsed time to the start of the user query (if not already set)."""
+        if self._turn_start_mono is None:
+            self._turn_start_mono = turn_start
 
     def pause(self, status: str = "Awaiting decision") -> None:
         """Pause the animation and update status.
@@ -172,13 +197,16 @@ class LoadingWidget(Static):
             status: Status to show while paused
         """
         self._paused = True
-        if self._start_time is not None:
-            self._paused_elapsed = int(time() - self._start_time)
+        now = monotonic()
+        if self._turn_start_mono is not None:
+            self._paused_total_elapsed = int(now - self._turn_start_mono)
         self._status = status
         if self._status_widget:
-            self._status_widget.update(f" {status}... ")
+            self._status_widget.update(self._format_status_line(status))
         if self._hint_widget:
-            self._hint_widget.update(f"(paused at {format_duration(self._paused_elapsed)})")
+            self._hint_widget.update(
+                f"(paused at {format_duration(float(self._paused_total_elapsed))} · esc to interrupt)"
+            )
         if self._spinner_widget:
             self._spinner_widget.update(Content.styled(get_glyphs().pause, "dim"))
 
@@ -186,8 +214,13 @@ class LoadingWidget(Static):
         """Resume the animation."""
         self._paused = False
         self._status = "Thinking"
+        now = monotonic()
         if self._status_widget:
-            self._status_widget.update(f" {self._status}... ")
+            self._status_widget.update(self._format_status_line(self._status))
+        if self._hint_widget and self._turn_start_mono is not None:
+            elapsed_int = int(now - self._turn_start_mono)
+            self._last_hint_elapsed_int = elapsed_int
+            self._hint_widget.update(self._format_hint_line(float(elapsed_int)))
 
     def stop(self) -> None:
         """Stop the animation (widget will be removed by caller)."""
