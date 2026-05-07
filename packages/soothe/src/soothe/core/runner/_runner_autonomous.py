@@ -413,6 +413,7 @@ class AutonomousMixin(GoalDirectivesMixin):
             async for event_type, event_data in agent_loop.run_with_progress(
                 goal=goal.description,
                 thread_id=thread_id,
+                loop_id=thread_id,
                 workspace=getattr(parent_state, "workspace", None),
                 git_status=getattr(parent_state, "git_status", None),
                 max_iterations=DEFAULT_AGENT_LOOP_MAX_ITERATIONS,  # AgentLoop iteration budget

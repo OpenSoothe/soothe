@@ -895,7 +895,9 @@ class AgentLoopStateManager:
             len(state.loop_messages),
         )
 
-        # RFC-214: Ledger already contains Plan and Execute turns (no separate recording needed)
+        # RFC-214: Persist ledger snapshots. ``LoopState`` may hold a distinct list from
+        # Pydantic construction or graph merges; keep ``goal_history`` aligned for reload.
+        target_goal.loop_messages = [m.model_copy(deep=True) for m in state.loop_messages]
 
         # Record working memory state
         if working_memory is not None:

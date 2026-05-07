@@ -4,11 +4,17 @@ from datetime import UTC, datetime
 
 from soothe.core.agent_loop.engine.thread_continuation import (
     build_thread_continuation_bootstrap_plan,
+    seed_thread_continuation_ledger_from_prior_goal,
     thread_continuation_plan_bootstrap_allowed,
 )
-from soothe.core.agent_loop.state.checkpoint import GoalExecutionRecord
+from soothe.core.agent_loop.state.checkpoint import (
+    AgentLoopCheckpoint,
+    GoalExecutionRecord,
+    ThreadHealthMetrics,
+    WorkingMemoryState,
+)
 from soothe.core.agent_loop.state.schemas import LoopState, StepResult
-from soothe.core.agent_loop.utils.messages import LoopHumanMessage
+from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def _goal_record(
@@ -142,3 +148,73 @@ def test_build_bootstrap_plan_shape() -> None:
     assert pr.decision.type == "execute_steps"
     assert len(pr.decision.steps) == 1
     assert pr.decision.execution_mode == "sequential"
+
+
+def _minimal_checkpoint(*, goals: list[GoalExecutionRecord]) -> AgentLoopCheckpoint:
+    now = datetime.now(UTC)
+    return AgentLoopCheckpoint(
+        loop_id="loop-x",
+        thread_ids=["tid"],
+        current_thread_id="tid",
+        status="ready_for_next_goal",
+        goal_history=list(goals),
+        current_goal_index=-1,
+        working_memory_state=WorkingMemoryState(entries=[], spill_files=[]),
+        thread_health_metrics=ThreadHealthMetrics(thread_id="tid", last_updated=now),
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def test_seed_continuation_copies_prior_ledger() -> None:
+    now = datetime.now(UTC)
+    prev = GoalExecutionRecord(
+        goal_id="g0",
+        goal_text="count files",
+        thread_id="tid",
+        status="completed",
+        loop_messages=[
+            LoopHumanMessage(content="h", thread_id="tid", phase="execute_step"),
+            LoopAIMessage(content="found 3", thread_id="tid", phase="execute_wave"),
+        ],
+        started_at=now,
+        completed_at=now,
+    )
+    new_g = GoalExecutionRecord(
+        goal_id="g1",
+        goal_text="translate",
+        thread_id="tid",
+        loop_messages=[],
+        started_at=now,
+    )
+    ckpt = _minimal_checkpoint(goals=[prev, new_g])
+    seed_thread_continuation_ledger_from_prior_goal(ckpt, new_g, "tid")
+    assert len(new_g.loop_messages) == 2
+    assert new_g.loop_messages[0].content == "h"
+    assert new_g.loop_messages[1].content == "found 3"
+    assert new_g.loop_messages[0] is not prev.loop_messages[0]
+
+
+def test_seed_continuation_falls_back_to_goal_completion() -> None:
+    now = datetime.now(UTC)
+    prev = GoalExecutionRecord(
+        goal_id="g0",
+        goal_text="count files",
+        thread_id="tid",
+        status="completed",
+        loop_messages=[],
+        goal_completion="There are 3 README files.",
+        started_at=now,
+        completed_at=now,
+    )
+    new_g = GoalExecutionRecord(
+        goal_id="g1",
+        goal_text="translate",
+        thread_id="tid",
+        loop_messages=[],
+        started_at=now,
+    )
+    ckpt = _minimal_checkpoint(goals=[prev, new_g])
+    seed_thread_continuation_ledger_from_prior_goal(ckpt, new_g, "tid")
+    assert len(new_g.loop_messages) == 2
+    assert "README" in new_g.loop_messages[1].content
