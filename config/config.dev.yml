@@ -44,7 +44,7 @@ providers:
       - nomic-embed
 
 router:
-  default: "coding-plan:kimi-k2.5"
+  default: "coding-plan:glm-5"
   fast: "coding-plan:kimi-k2.5"
   think: "coding-plan:glm-5"
   image: "coding-plan:qwen3.5-plus"
@@ -125,6 +125,7 @@ observability:
 
 daemon:
   max_concurrent_threads: 100
+  cancel_grace_seconds: 30             # IG-398: /cancel await before slow-unwind warning
   max_input_queue_size: 1000         # Maximum pending input messages (0 = unlimited)
   max_concurrent_dispatches: 50      # Maximum concurrent message handlers
   event_size_stats_enabled: true     # IG-403: periodic EventBus size distribution logs

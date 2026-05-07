@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import suppress
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,8 +32,38 @@ class _FakeRunner:
         return None
 
     async def astream(self, _text: str, **_kwargs: Any):  # type: ignore[override]
+        # Brief sleep so run_query's asyncio.sleep(0) yield does not return after the
+        # stream has already completed (would leave _current_query_task cleared).
+        await asyncio.sleep(0.05)
         raise asyncio.CancelledError
         yield  # pragma: no cover
+
+
+class _SlowCancelRunner(_FakeRunner):
+    """Simulates subagent unwind: cancellation delivers after a delay (IG-398)."""
+
+    def __init__(self, unwind_delay: float = 0.05) -> None:
+        super().__init__()
+        self.unwind_delay = unwind_delay
+
+    async def astream(self, _text: str, **_kwargs: Any):  # type: ignore[override]
+        try:
+            await asyncio.sleep(10000.0)
+            yield ("", "messages", ())  # pragma: no cover
+        except asyncio.CancelledError:
+            await asyncio.sleep(self.unwind_delay)
+            raise
+
+
+class _DelegatingThreadExecutor:
+    """Routes multithreaded ``execute_thread`` to ``runner.astream``."""
+
+    def __init__(self, runner: _SlowCancelRunner) -> None:
+        self._runner = runner
+
+    async def execute_thread(self, thread_id: str, text: str, **kwargs: Any):
+        async for chunk in self._runner.astream(text, thread_id=thread_id, **kwargs):
+            yield chunk
 
 
 class _FakeThreadRegistry:
@@ -68,7 +99,11 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
             log_assistant_response=lambda _text: None,
         ),
         _config=SimpleNamespace(
-            daemon=SimpleNamespace(max_query_duration_minutes=0, max_concurrent_threads=100),
+            daemon=SimpleNamespace(
+                max_query_duration_minutes=0,
+                max_concurrent_threads=100,
+                cancel_grace_seconds=30,
+            ),
             logging=SimpleNamespace(
                 thread_logging=SimpleNamespace(retention_days=7, max_size_mb=10)
             ),
@@ -92,6 +127,7 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
 
     task = daemon._current_query_task
     assert task is not None
+    task.cancel()
     with suppress(asyncio.CancelledError):
         await task
 
@@ -104,3 +140,160 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
         and str(msg["data"].get("error", "")).startswith("Query cancelled")
     ]
     assert custom_errors == []
+
+
+def _daemon_factory(
+    *,
+    runner: Any,
+    broadcasts: list[dict[str, Any]],
+    multithreaded: bool = False,
+    cancel_grace_seconds: int = 30,
+) -> SimpleNamespace:
+    async def _broadcast(msg: dict[str, Any]) -> None:
+        broadcasts.append(msg)
+
+    return SimpleNamespace(
+        _thread_executor=_DelegatingThreadExecutor(runner) if multithreaded else None,
+        _runner=runner,
+        _thread_registry=_FakeThreadRegistry(),
+        _daemon_workspace=Path.cwd(),
+        _thread_logger=SimpleNamespace(
+            _thread_id="thread-1",
+            log_user_input=lambda _text: None,
+            log_assistant_response=lambda _text: None,
+        ),
+        _config=SimpleNamespace(
+            daemon=SimpleNamespace(
+                max_query_duration_minutes=0,
+                max_concurrent_threads=100,
+                cancel_grace_seconds=cancel_grace_seconds,
+            ),
+            logging=SimpleNamespace(
+                thread_logging=SimpleNamespace(retention_days=7, max_size_mb=10)
+            ),
+            workspace_dir=".",
+        ),
+        _global_history=None,
+        _active_threads={},
+        _query_running=False,
+        _current_query_task=None,
+        _pending_interrupt_responses={},
+        _broadcast=_broadcast,
+        _session_manager=SimpleNamespace(
+            claim_thread_ownership=lambda *_args, **_kwargs: None,
+            release_thread_ownership=lambda *_args, **_kwargs: None,
+            subscribe_thread=lambda *_args, **_kwargs: True,
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_cancel_does_not_emit_legacy_success_or_early_idle() -> None:
+    """cancel_current_query must not broadcast legacy success or forge idle (IG-398)."""
+    broadcasts: list[dict[str, Any]] = []
+    runner = _SlowCancelRunner(unwind_delay=0.02)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=60)
+    engine = QueryEngine(daemon)
+
+    await engine.run_query("hello")
+    task = daemon._current_query_task
+    assert task is not None
+
+    await engine.cancel_current_query()
+
+    contents = [
+        str(m.get("content", "")) for m in broadcasts if m.get("type") == "command_response"
+    ]
+    assert any("Cancellation requested" in c for c in contents)
+    assert not any("Query cancelled successfully" in c for c in contents)
+
+    with suppress(asyncio.CancelledError):
+        await task
+
+
+@pytest.mark.asyncio
+async def test_cancel_waits_for_slow_unwind_before_idle() -> None:
+    """Idle status must come from _run_stream finally, after cancel unwind completes."""
+    broadcasts: list[dict[str, Any]] = []
+    runner = _SlowCancelRunner(unwind_delay=0.06)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=60)
+    engine = QueryEngine(daemon)
+
+    await engine.run_query("slow cancel")
+    await engine.cancel_current_query()
+
+    idle_after_cancel = [
+        i
+        for i, m in enumerate(broadcasts)
+        if m.get("type") == "status"
+        and m.get("state") == "idle"
+        and m.get("thread_id") == "thread-1"
+    ]
+    cmd_ix = next(
+        i
+        for i, m in enumerate(broadcasts)
+        if m.get("type") == "command_response"
+        and "Cancellation requested" in str(m.get("content", ""))
+    )
+    assert idle_after_cancel, "expected idle from stream finally"
+    assert min(idle_after_cancel) > cmd_ix, "idle must not precede cancel acknowledgement"
+
+
+@pytest.mark.asyncio
+async def test_cancel_grace_timeout_keeps_task_then_drains(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Grace shorter than unwind: cancel returns while unwinding; task kept until finally."""
+    broadcasts: list[dict[str, Any]] = []
+    # Unwind longer than cancel_grace_seconds (min 1s per DaemonConfig) triggers warning path.
+    runner = _SlowCancelRunner(unwind_delay=2.0)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=1)
+    engine = QueryEngine(daemon)
+
+    await engine.run_query("blocking unwind")
+    task = daemon._current_query_task
+    assert task is not None
+
+    caplog.set_level(logging.WARNING, logger="soothe.daemon.query_engine")
+
+    await engine.cancel_current_query()
+
+    warn_msgs = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("still unwinding" in m for m in warn_msgs)
+
+    assert daemon._current_query_task is task
+    assert not task.done()
+
+    await asyncio.sleep(2.5)
+    with suppress(asyncio.CancelledError):
+        await task
+    assert task.done()
+
+
+@pytest.mark.asyncio
+async def test_cancel_multithreaded_path_matches_single_thread() -> None:
+    """Multithreaded run_query uses same cancel bookkeeping rules."""
+    broadcasts: list[dict[str, Any]] = []
+    runner = _SlowCancelRunner(unwind_delay=0.04)
+    daemon = _daemon_factory(
+        runner=runner,
+        broadcasts=broadcasts,
+        multithreaded=True,
+        cancel_grace_seconds=60,
+    )
+    engine = QueryEngine(daemon)
+
+    await engine.run_query("mt slow cancel")
+    task = daemon._current_query_task
+    assert task is not None
+
+    await engine.cancel_current_query()
+
+    contents = [
+        str(m.get("content", "")) for m in broadcasts if m.get("type") == "command_response"
+    ]
+    assert any("Cancellation requested" in c for c in contents)
+    assert not any("Query cancelled successfully" in c for c in contents)
+
+    with suppress(asyncio.CancelledError):
+        await task

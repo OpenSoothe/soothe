@@ -8,7 +8,6 @@ handlers).
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
@@ -401,6 +400,9 @@ class QueryEngine:
             task = asyncio.create_task(_run_stream())
             d._current_query_task = task
             d._active_threads[thread_id] = task
+            # Yield once so _run_stream begins before run_query returns; otherwise /cancel
+            # can run before the coroutine starts and skip finally cleanup.
+            await asyncio.sleep(0)
             # IG-054: DO NOT await task - let it run in background
             # This allows the input loop to process concurrent queries
             # The task's internal finally block handles cleanup
@@ -644,6 +646,8 @@ class QueryEngine:
             task = asyncio.create_task(_run_stream())
             d._current_query_task = task
             d._active_threads[thread_id] = task
+            # Yield once so _run_stream begins before run_query returns (see single-thread path).
+            await asyncio.sleep(0)
             # IG-054: DO NOT await task - let it run in background
             # This allows the input loop to process concurrent queries
             # The task's internal finally block handles cleanup
@@ -660,68 +664,75 @@ class QueryEngine:
                 await d._session_manager.release_thread_ownership(client_id)
             raise
 
-    async def cancel_current_query(self) -> None:
-        """Cancel the currently running query if any."""
+    async def _await_cancel_after_signal(self, task: asyncio.Task, label: str) -> None:
+        """Await task cancellation without forging daemon state (IG-398).
+
+        Uses ``asyncio.shield`` so ``wait_for`` timeout does not cancel the query task;
+        slow subagent unwind continues until ``_run_stream`` finally clears bookkeeping.
+
+        Args:
+            task: The asyncio task running ``_run_stream``.
+            label: Thread id or ``current`` for logs.
+        """
         d = self._daemon
-        active_thread_tasks = bool(
-            d._active_threads
-            and any(t is not None and not t.done() for t in d._active_threads.values())
-        )
-        has_current_task = bool(d._current_query_task and not d._current_query_task.done())
-        # Rely on concrete tasks, not only _query_running (avoids races / stale flags).
-        if not active_thread_tasks and not has_current_task:
+        grace = float(getattr(d._config.daemon, "cancel_grace_seconds", 30))
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=grace)
+        except TimeoutError:
+            logger.warning(
+                "Query task %s still unwinding after %.1fs; awaiting completion in background",
+                label,
+                grace,
+            )
+            asyncio.create_task(self._drain_cancelled_task(task, label))
+        except asyncio.CancelledError:
+            pass
+
+    async def _drain_cancelled_task(self, task: asyncio.Task, label: str) -> None:
+        """Await a cancelled query task until ``_run_stream`` finally completes."""
+        try:
+            await task
+        except asyncio.CancelledError:
+            logger.debug("Background cancel drain finished for %s", label)
+        except Exception:
+            logger.debug(
+                "Background cancel drain for %s completed with exception",
+                label,
+                exc_info=True,
+            )
+
+    async def cancel_current_query(self) -> None:
+        """Cancel the currently running query if any.
+
+        Signals cancellation and awaits unwind up to ``daemon.cancel_grace_seconds``.
+        Does not mutate ``_active_threads``, ``_current_query_task``, or broadcast
+        ``idle`` — those are owned by ``_run_stream`` finally blocks (IG-398).
+        """
+        d = self._daemon
+        tasks_to_cancel: list[tuple[str, asyncio.Task]] = []
+        seen: set[int] = set()
+        for tid, t in list(d._active_threads.items()):
+            if t is not None and not t.done() and id(t) not in seen:
+                tasks_to_cancel.append((str(tid), t))
+                seen.add(id(t))
+        ct = d._current_query_task
+        if ct is not None and not ct.done() and id(ct) not in seen:
+            tasks_to_cancel.append(("current", ct))
+
+        if not tasks_to_cancel:
             return
 
-        cancelled_any = False
+        await d._broadcast(
+            {
+                "type": "command_response",
+                "content": "[yellow]Cancellation requested.[/yellow]",
+            }
+        )
 
-        if d._active_threads:
-            thread_ids = list(d._active_threads.keys())
-            for tid in thread_ids:
-                task = d._active_threads.pop(tid, None)
-                if task and not task.done():
-                    task.cancel()
-                    logger.info("Cancelling thread %s (multithreaded mode)", tid)
-                    try:
-                        # IG-157: Wait for task to actually stop
-                        await asyncio.wait_for(task, timeout=2.0)
-                    except (TimeoutError, asyncio.CancelledError):
-                        logger.warning("Thread %s did not stop cleanly within 2s", tid)
-                    cancelled_any = True
-                    d._runner.set_current_thread_id(None)
-
-            if cancelled_any:
-                d._query_running = False
-                d._current_query_task = None
-
-        if not cancelled_any and d._current_query_task and not d._current_query_task.done():
-            logger.info("Cancelling current query task (single-threaded mode)")
-            d._current_query_task.cancel()
-            try:
-                # IG-157: Wait for task to actually stop with timeout
-                await asyncio.wait_for(d._current_query_task, timeout=2.0)
-            except (TimeoutError, asyncio.CancelledError):
-                logger.warning("Query task did not stop cleanly within 2s")
-
-            d._query_running = False
-            d._current_query_task = None
-
-            d._runner.set_current_thread_id(None)
-            cancelled_any = True
-
-        if cancelled_any:
-            await d._broadcast(
-                {
-                    "type": "command_response",
-                    "content": "[green]Query cancelled successfully.[/green]",
-                }
-            )
-            # IG-157: Broadcast idle status immediately after cancel
-            final_thread_id = d._runner.current_thread_id or ""
-            # Only broadcast if we have a valid thread_id
-            if final_thread_id:
-                await d._broadcast(
-                    {"type": "status", "state": "idle", "thread_id": final_thread_id}
-                )
+        for label, task in tasks_to_cancel:
+            logger.info("Cancelling query task %s", label)
+            task.cancel()
+            await self._await_cancel_after_signal(task, label)
 
     async def cancel_thread(self, thread_id: str) -> None:
         """Cancel a specific thread's execution."""
@@ -735,37 +746,19 @@ class QueryEngine:
 
     async def _cancel_thread_locked(self, thread_id: str) -> None:
         d = self._daemon
-        if thread_id in d._active_threads:
-            task = d._active_threads.pop(thread_id, None)
-            if task and not task.done():
-                task.cancel()
-                logger.info("Cancelled thread %s", thread_id)
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
-            d._runner.set_current_thread_id(None)
-            d._query_running = False
-            d._current_query_task = None
-            await d._broadcast(
-                {
-                    "type": "status",
-                    "state": "idle",
-                    "thread_id": thread_id,
-                    "cancelled": True,
-                }
-            )
+        task = d._active_threads.get(thread_id)
+        if task is not None and not task.done():
+            logger.info("Cancelled thread %s", thread_id)
+            task.cancel()
+            await self._await_cancel_after_signal(task, thread_id)
             return
 
         if d._current_query_task and not d._current_query_task.done():
             current_thread = d._runner.current_thread_id if d._runner else None
             if current_thread == thread_id:
-                d._current_query_task.cancel()
                 logger.info("Cancelled thread %s (legacy single-threaded mode)", thread_id)
-                with contextlib.suppress(asyncio.CancelledError):
-                    await d._current_query_task
-                d._runner.set_current_thread_id(None)
-                d._query_running = False
-                d._current_query_task = None
-                await d._broadcast({"type": "status", "state": "idle", "thread_id": thread_id})
+                d._current_query_task.cancel()
+                await self._await_cancel_after_signal(d._current_query_task, thread_id)
                 return
 
         logger.debug("Thread %s not found or already complete", thread_id)
