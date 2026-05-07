@@ -64,6 +64,7 @@ from soothe_cli.shared.events.essential_events import (
 )
 from soothe_cli.shared.rendering.renderer_base import RendererBase
 from soothe_cli.shared.tools.message_processing import (
+    _normalize_tool_name_for_arg_map,
     accumulate_tool_call_chunks,
     extract_tool_args_dict,
     format_tool_call_args,
@@ -316,7 +317,8 @@ def _raw_tool_content_for_presentation(message: Any) -> str:
     return ""
 
 
-def _try_register_explore_inner_tool_pending(
+def _try_register_task_scoped_inner_tool_pending(
+    adapter: TextualUIAdapter,
     *,
     lookup_id: str | None,
     buffer_name: str | None,
@@ -326,25 +328,27 @@ def _try_register_explore_inner_tool_pending(
     namespace_task_bindings: dict[tuple[str, ...], tuple[str, str]],
     show_tool_ui: bool,
     presentation: PresentationEngine,
-    pending_lines: dict[str, str],
-    start_times: dict[str, float],
 ) -> None:
-    """Record pending CLI-style invocation line for explore Task-scoped inner tools (IG-342)."""
+    """Record pending invocation line for Task subgraph tools (no standalone card)."""
     if not lookup_id or not buffer_name or is_main_agent:
         return
     if buffer_name == "task":
         return
     ts_r = resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
-    if not ts_r or ts_r[1] != "explore":
+    if not ts_r or not ts_r[0]:
+        return
+    if adapter._tool_display_by_call_id.get(ts_r[0]) is None:
         return
     if not show_tool_ui or not presentation.tier_visible(VerbosityTier.NORMAL):
         return
-    pending_lines[str(lookup_id)] = _format_task_scoped_tool_invocation_line(
-        ts_r,
-        buffer_name,
-        parsed_args,
+    adapter._task_inner_tool_pending_lines[str(lookup_id)] = (
+        _format_task_scoped_tool_invocation_line(
+            ts_r,
+            buffer_name,
+            parsed_args,
+        )
     )
-    start_times[str(lookup_id)] = time.time()
+    adapter._task_inner_tool_start_times[str(lookup_id)] = time.time()
 
 
 class TextualUIAdapter:
@@ -408,15 +412,29 @@ class TextualUIAdapter:
         self._current_tool_messages: dict[str, ToolCallMessage] = {}
         """Map of tool call IDs to widgets still awaiting a ``ToolMessage`` (in-flight)."""
 
-        self._tool_display_by_call_id: dict[str, ToolCallMessage] = {}
-        """Stable tool_call_id → card for header refresh after ``ToolMessage`` (popped from
-        ``_current_tool_messages``). Cleared with the same lifecycle as in-flight tools."""
+        self._tool_display_by_call_id: dict[str, ToolCallMessage | CognitionStepMessage] = {}
+        """Stable tool_call_id → tool card or step card (``task`` on step aggregates here).
+
+        Used for subagent activity lines and inner-tool result routing (IG-402). Cleared with
+        the same lifecycle as in-flight tools."""
 
         self._current_step_messages: dict[str, CognitionStepMessage] = {}
         """Map of agent-loop act step IDs to step card widgets."""
 
         self._goal_tree_by_namespace: dict[tuple[Any, ...], CognitionGoalTreeMessage] = {}
         """Live Goal→steps tree card per stream namespace (agentic Layer 2)."""
+
+        self._step_by_namespace: dict[tuple[Any, ...], CognitionStepMessage] = {}
+        """Active step card per stream namespace (main-agent tool aggregation, IG-402)."""
+
+        self._tool_to_step: dict[str, CognitionStepMessage] = {}
+        """tool_call_id → step card while awaiting a matching ``ToolMessage`` (IG-402)."""
+
+        self._task_inner_tool_pending_lines: dict[str, str] = {}
+        """tool_call_id → invocation line for task subgraph tools awaiting ``ToolMessage``."""
+
+        self._task_inner_tool_start_times: dict[str, float] = {}
+        """Wall time when the pending inner-tool line was recorded (for duration in status)."""
 
         # Token display callbacks (set by the app after construction)
         self._on_tokens_update: _TokensUpdateCallback | None = None
@@ -442,6 +460,13 @@ class TextualUIAdapter:
         self._current_tool_messages.clear()
         self._tool_display_by_call_id.clear()
 
+        for tcid, step_w in list(self._tool_to_step.items()):
+            step_w.set_tool_error(tcid, error, duration_ms=0)
+        self._tool_to_step.clear()
+        self._step_by_namespace.clear()
+        self._task_inner_tool_pending_lines.clear()
+        self._task_inner_tool_start_times.clear()
+
         # Clear active streaming message to avoid stale "active" state in the store.
         if self._set_active_message:
             self._set_active_message(None)
@@ -454,17 +479,41 @@ class TextualUIAdapter:
         for tree in list(self._goal_tree_by_namespace.values()):
             tree.set_interrupted(message)
         self._goal_tree_by_namespace.clear()
+        self._tool_to_step.clear()
+        self._step_by_namespace.clear()
+        self._task_inner_tool_pending_lines.clear()
+        self._task_inner_tool_start_times.clear()
+
+
+def _adapter_has_pending_tools(adapter: TextualUIAdapter) -> bool:
+    """True while any tool is awaiting a ``ToolMessage`` (cards, step rows, or task-inner lines)."""
+    if adapter._current_tool_messages or adapter._tool_to_step:
+        return True
+    return bool(adapter._task_inner_tool_pending_lines)
+
+
+def _hitl_start_step_tool_rows(adapter: TextualUIAdapter) -> None:
+    """Mark step-aggregated tool rows running after HITL approval (IG-402)."""
+    for tcid, stw in list(adapter._tool_to_step.items()):
+        stw.set_tool_running(tcid)
+
+
+def _hitl_reject_step_tool_rows(adapter: TextualUIAdapter) -> None:
+    """Mark step-aggregated tool rows rejected and drop pending bindings (IG-402)."""
+    for tcid, stw in list(adapter._tool_to_step.items()):
+        stw.set_tool_rejected(tcid)
+    adapter._tool_to_step.clear()
 
 
 def _build_interrupted_ai_message(
     pending_text_by_namespace: dict[tuple, str],
-    current_tool_messages: dict[str, Any],
+    adapter: TextualUIAdapter,
 ) -> AIMessage | None:
     """Build an AIMessage capturing interrupted state (text + tool calls).
 
     Args:
         pending_text_by_namespace: Dict of accumulated text by namespace
-        current_tool_messages: Dict of tool_id -> ToolCallMessage widget
+        adapter: UI adapter with pending tool cards and step rows (IG-402).
 
     Returns:
         AIMessage with accumulated content and tool calls, or None if empty.
@@ -474,9 +523,9 @@ def _build_interrupted_ai_message(
     main_ns_key = ()
     accumulated_text = pending_text_by_namespace.get(main_ns_key, "").strip()
 
-    # Reconstruct tool_calls from displayed tool messages
-    tool_calls = []
-    for tool_id, tool_widget in list(current_tool_messages.items()):
+    tool_calls: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for tool_id, tool_widget in list(adapter._current_tool_messages.items()):
         tool_calls.append(
             {
                 "id": tool_id,
@@ -484,6 +533,14 @@ def _build_interrupted_ai_message(
                 "args": tool_widget._args,
             }
         )
+        seen_ids.add(str(tool_id))
+
+    for step_w in dict.fromkeys(adapter._tool_to_step.values()):
+        for row in step_w.iter_open_tool_calls_for_interrupt():
+            rid = str(row.get("id", ""))
+            if rid and rid not in seen_ids:
+                tool_calls.append(row)
+                seen_ids.add(rid)
 
     if not accumulated_text and not tool_calls:
         return None
@@ -800,8 +857,6 @@ async def execute_task_textual(
     logger.debug("TUI turn: fixed normal UX show_tool_ui=%s", show_tool_ui)
     progress_pipeline = StreamDisplayPipeline()
     presentation = PresentationEngine()
-    explore_scoped_tool_pending_lines: dict[str, str] = {}
-    explore_scoped_tool_start_times: dict[str, float] = {}
 
     # Parse file mentions and inject content if any — defer blocking I/O
     prompt_text, mentioned_files = await asyncio.to_thread(parse_file_mentions, user_input)
@@ -873,6 +928,8 @@ async def execute_task_textual(
         adapter._on_tokens_hide()
 
     file_op_tracker = FileOpTracker(assistant_id=assistant_id)
+    adapter._task_inner_tool_pending_lines.clear()
+    adapter._task_inner_tool_start_times.clear()
     displayed_tool_ids: set[str] = set()
     tool_call_buffers: dict[str | int, dict] = {}
     # Streaming tool-call args (``tool_call_chunks``) — mirrors EventProcessor / IG-053
@@ -1051,7 +1108,7 @@ async def execute_task_textual(
                                 "Failed to mount summarization notification",
                                 exc_info=True,
                             )
-                        if adapter._set_spinner and not adapter._current_tool_messages:
+                        if adapter._set_spinner and not _adapter_has_pending_tools(adapter):
                             await adapter._set_spinner("Thinking")
 
                     if isinstance(message, HumanMessage):
@@ -1093,11 +1150,35 @@ async def execute_task_textual(
 
                         # Update tool call status with output (unified ToolMessage / wire dict)
                         sid = str(tool_id) if tool_id else ""
+                        output_str = tool_card.output_display
+                        handled_step = False
+                        if sid:
+                            step_w = adapter._tool_to_step.pop(sid, None)
+                            if step_w is not None:
+                                handled_step = True
+                                dur_ms = step_w.row_duration_ms_since_started(sid)
+                                logger.debug(
+                                    "Tool result matched step row: tool_call_id=%s error=%s",
+                                    sid,
+                                    tool_card.is_error,
+                                )
+                                if not tool_card.is_error:
+                                    step_w.set_tool_success(sid, output_str, duration_ms=dur_ms)
+                                else:
+                                    step_w.set_tool_error(
+                                        sid, output_str or "Error", duration_ms=dur_ms
+                                    )
+                                    await dispatch_hook(
+                                        "tool.error",
+                                        {"tool_names": [tool_card.tool_name or "tool"]},
+                                    )
+
+                        handled_card = False
                         if sid and sid in adapter._current_tool_messages:
+                            handled_card = True
                             # Pop before widget calls so the dict drains even
                             # if set_success/set_error raises.
                             tool_msg = adapter._current_tool_messages.pop(sid)
-                            output_str = tool_card.output_display
                             logger.debug(
                                 "Tool result matched pending card: tool_call_id=%s name=%s error=%s",
                                 sid,
@@ -1106,7 +1187,11 @@ async def execute_task_textual(
                             )
                             if not tool_card.is_error:
                                 tool_msg.set_success(output_str)
-                                if should_elide_completed_tool_call_message(
+                                # Standalone ``task`` card: keep until subgraph completes so
+                                # activity lines have a parent (when not using step aggregation).
+                                if _normalize_tool_name_for_arg_map(
+                                    tool_msg._tool_name
+                                ) != "task" and should_elide_completed_tool_call_message(
                                     tool_msg, output_str, is_error=False
                                 ):
                                     adapter._tool_display_by_call_id.pop(sid, None)
@@ -1117,34 +1202,39 @@ async def execute_task_textual(
                                     "tool.error",
                                     {"tool_names": [tool_msg._tool_name]},
                                 )
-                            ts_ap = resolve_task_scope_for_namespace(
-                                namespace_task_bindings, ns_key
-                            )
-                            if (
-                                ts_ap
-                                and ts_ap[1] == "explore"
-                                and ts_ap[0]
-                                and show_tool_ui
-                                and presentation.tier_visible(VerbosityTier.NORMAL)
-                            ):
-                                pending_ln = explore_scoped_tool_pending_lines.pop(sid, None)
-                                start_tm = explore_scoped_tool_start_times.pop(sid, None)
-                                parent_explore = adapter._tool_display_by_call_id.get(ts_ap[0])
-                                if pending_ln and parent_explore is not None:
-                                    duration_ms = (
-                                        int((time.time() - start_tm) * 1000) if start_tm else 0
-                                    )
-                                    raw_body = _raw_tool_content_for_presentation(message)
-                                    status_ln = presentation.format_tool_result_status_line(
-                                        tool_msg._tool_name,
-                                        raw_body,
-                                        is_error=tool_card.is_error,
-                                        duration_ms=duration_ms,
-                                    )
-                                    parent_explore.append_subagent_activity(
-                                        f"{pending_ln} -> {status_ln}"
-                                    )
-                        elif tool_id and show_tool_ui:
+
+                        handled_task_inner = False
+                        if sid and show_tool_ui and presentation.tier_visible(VerbosityTier.NORMAL):
+                            pending_ln = adapter._task_inner_tool_pending_lines.pop(sid, None)
+                            start_tm = adapter._task_inner_tool_start_times.pop(sid, None)
+                            if pending_ln:
+                                ts_ap = resolve_task_scope_for_namespace(
+                                    namespace_task_bindings, ns_key
+                                )
+                                if ts_ap and ts_ap[0]:
+                                    parent_task = adapter._tool_display_by_call_id.get(ts_ap[0])
+                                    if parent_task is not None:
+                                        duration_ms = (
+                                            int((time.time() - start_tm) * 1000) if start_tm else 0
+                                        )
+                                        raw_body = _raw_tool_content_for_presentation(message)
+                                        tname = tool_card.tool_name or "tool"
+                                        status_ln = presentation.format_tool_result_status_line(
+                                            tname,
+                                            raw_body,
+                                            is_error=tool_card.is_error,
+                                            duration_ms=duration_ms,
+                                        )
+                                        parent_task.append_subagent_activity(
+                                            f"{pending_ln} -> {status_ln}"
+                                        )
+                                        handled_task_inner = True
+
+                        if (
+                            tool_id
+                            and show_tool_ui
+                            and not (handled_step or handled_card or handled_task_inner)
+                        ):
                             # Orphan result: no prior AIMessage tool card (daemon wire
                             # shape, streaming chunks, or missing tool_call blocks).
                             # ``extract_tool_result_card_payload`` normalizes name + id;
@@ -1184,37 +1274,11 @@ async def execute_task_textual(
                                         "tool.error",
                                         {"tool_names": [orphan._tool_name]},
                                     )
-                                ts_or = resolve_task_scope_for_namespace(
-                                    namespace_task_bindings, ns_key
-                                )
-                                if (
-                                    ts_or
-                                    and ts_or[1] == "explore"
-                                    and ts_or[0]
-                                    and show_tool_ui
-                                    and presentation.tier_visible(VerbosityTier.NORMAL)
-                                ):
-                                    o_sid = str(tool_id)
-                                    op = explore_scoped_tool_pending_lines.pop(o_sid, None)
-                                    o_start = explore_scoped_tool_start_times.pop(o_sid, None)
-                                    parent_or = adapter._tool_display_by_call_id.get(ts_or[0])
-                                    if op and parent_or is not None:
-                                        o_dur = (
-                                            int((time.time() - o_start) * 1000) if o_start else 0
-                                        )
-                                        o_raw = _raw_tool_content_for_presentation(message)
-                                        o_st = presentation.format_tool_result_status_line(
-                                            tname,
-                                            o_raw,
-                                            is_error=tool_card.is_error,
-                                            duration_ms=o_dur,
-                                        )
-                                        parent_or.append_subagent_activity(f"{op} -> {o_st}")
 
                         # Reshow spinner only when all in-flight tools have
                         # completed (avoids premature "Thinking..." when
                         # parallel tool calls are active).
-                        if adapter._set_spinner and not adapter._current_tool_messages:
+                        if adapter._set_spinner and not _adapter_has_pending_tools(adapter):
                             await adapter._set_spinner("Thinking")
 
                         # Show file operation results - always show diffs in chat
@@ -1549,11 +1613,28 @@ async def execute_task_textual(
 
                             existing_tool = None
                             if lookup_id:
+                                step_agg = adapter._step_by_namespace.get(ns_key)
+                                if (
+                                    step_agg is not None
+                                    and is_main_agent
+                                    and step_agg.has_tool_call_row(lookup_id)
+                                ):
+                                    step_agg.update_tool_args(lookup_id, parsed_args)
+                                    logger.debug(
+                                        "Tool call args refreshed on step card: id=%s name=%s",
+                                        lookup_id,
+                                        buffer_name,
+                                    )
+                                    tool_call_buffers.pop(buffer_key, None)
+                                    continue
                                 existing_tool = adapter._current_tool_messages.get(
                                     lookup_id
                                 ) or adapter._tool_display_by_call_id.get(lookup_id)
                             if lookup_id and args_meaningful and existing_tool is not None:
-                                existing_tool.refresh_tool_args(parsed_args)
+                                if isinstance(existing_tool, ToolCallMessage):
+                                    existing_tool.refresh_tool_args(parsed_args)
+                                elif isinstance(existing_tool, CognitionStepMessage):
+                                    existing_tool.update_tool_args(str(lookup_id), parsed_args)
                                 logger.debug(
                                     "Tool call args refreshed on existing card: id=%s name=%s",
                                     lookup_id,
@@ -1580,7 +1661,8 @@ async def execute_task_textual(
                                     ),
                                 ):
                                     displayed_tool_ids.add(lookup_id)
-                                    _try_register_explore_inner_tool_pending(
+                                    _try_register_task_scoped_inner_tool_pending(
+                                        adapter,
                                         lookup_id=str(lookup_id),
                                         buffer_name=buffer_name,
                                         parsed_args=parsed_args,
@@ -1589,8 +1671,6 @@ async def execute_task_textual(
                                         namespace_task_bindings=namespace_task_bindings,
                                         show_tool_ui=show_tool_ui,
                                         presentation=presentation,
-                                        pending_lines=explore_scoped_tool_pending_lines,
-                                        start_times=explore_scoped_tool_start_times,
                                     )
                                     logger.debug(
                                         "Tool call card skipped (IG-300 terminal empty args): "
@@ -1602,7 +1682,8 @@ async def execute_task_textual(
                                     tool_call_buffers.pop(buffer_key, None)
                                     continue
                                 displayed_tool_ids.add(lookup_id)
-                                _try_register_explore_inner_tool_pending(
+                                _try_register_task_scoped_inner_tool_pending(
+                                    adapter,
                                     lookup_id=str(lookup_id),
                                     buffer_name=buffer_name,
                                     parsed_args=parsed_args,
@@ -1611,8 +1692,6 @@ async def execute_task_textual(
                                     namespace_task_bindings=namespace_task_bindings,
                                     show_tool_ui=show_tool_ui,
                                     presentation=presentation,
-                                    pending_lines=explore_scoped_tool_pending_lines,
-                                    start_times=explore_scoped_tool_start_times,
                                 )
                                 if (
                                     is_main_agent
@@ -1627,6 +1706,27 @@ async def execute_task_textual(
                                         is_main=True,
                                     )
                                     task_spawn_recorded.add(str(lookup_id))
+                                ts_inner = resolve_task_scope_for_namespace(
+                                    namespace_task_bindings, ns_key
+                                )
+                                parent_for_inner = (
+                                    adapter._tool_display_by_call_id.get(ts_inner[0])
+                                    if ts_inner and ts_inner[0]
+                                    else None
+                                )
+                                if (
+                                    show_tool_ui
+                                    and (not is_main_agent)
+                                    and parent_for_inner is not None
+                                    and (buffer_name or "") != "task"
+                                ):
+                                    file_op_tracker.start_operation(
+                                        buffer_name, parsed_args, buffer_id
+                                    )
+                                    if adapter._set_spinner:
+                                        await adapter._set_spinner(None)
+                                    tool_call_buffers.pop(buffer_key, None)
+                                    continue
                                 if show_tool_ui:
                                     file_op_tracker.start_operation(
                                         buffer_name, parsed_args, buffer_id
@@ -1636,22 +1736,42 @@ async def execute_task_textual(
                                     if adapter._set_spinner:
                                         await adapter._set_spinner(None)
 
-                                    # Mount tool call message
-                                    tool_msg = ToolCallMessage(
-                                        buffer_name,
-                                        parsed_args,
-                                        tool_call_id=lookup_id,
-                                    )
-                                    logger.debug(
-                                        "Tool call card mounted: name=%s tool_call_id=%s "
-                                        "namespace=%s",
-                                        buffer_name,
-                                        lookup_id,
-                                        ns_key,
-                                    )
-                                    await adapter._mount_message(tool_msg)
-                                    adapter._current_tool_messages[lookup_id] = tool_msg
-                                    adapter._tool_display_by_call_id[lookup_id] = tool_msg
+                                    active_step = adapter._step_by_namespace.get(ns_key)
+                                    use_step_aggregator = is_main_agent and active_step is not None
+                                    if use_step_aggregator:
+                                        active_step.add_tool_call(
+                                            lookup_id,
+                                            buffer_name or "tool",
+                                            parsed_args,
+                                        )
+                                        adapter._tool_to_step[lookup_id] = active_step
+                                        logger.debug(
+                                            "Tool call row on step card: name=%s "
+                                            "tool_call_id=%s namespace=%s",
+                                            buffer_name,
+                                            lookup_id,
+                                            ns_key,
+                                        )
+                                        if buffer_name == "task":
+                                            adapter._tool_display_by_call_id[str(lookup_id)] = (
+                                                active_step
+                                            )
+                                    else:
+                                        tool_msg = ToolCallMessage(
+                                            buffer_name,
+                                            parsed_args,
+                                            tool_call_id=lookup_id,
+                                        )
+                                        logger.debug(
+                                            "Tool call card mounted: name=%s tool_call_id=%s "
+                                            "namespace=%s",
+                                            buffer_name,
+                                            lookup_id,
+                                            ns_key,
+                                        )
+                                        await adapter._mount_message(tool_msg)
+                                        adapter._current_tool_messages[lookup_id] = tool_msg
+                                        adapter._tool_display_by_call_id[lookup_id] = tool_msg
                                 else:
                                     logger.debug(
                                         "Tool call block not shown as card (tool UI off): "
@@ -1722,7 +1842,9 @@ async def execute_task_textual(
                             if tr is not None:
                                 tr.set_loop_finished(
                                     status=str(data.get("status", "")),
-                                    goal_progress=float(data.get("goal_progress", 0.0)),
+                                    goal_progress=str(
+                                        data.get("goal_progress", "none")
+                                    ),  # IG-399: descriptive level
                                     completion_summary=str(data.get("completion_summary", "")),
                                     total_steps=int(data.get("total_steps", 0)),
                                 )
@@ -1746,7 +1868,6 @@ async def execute_task_textual(
                                 goal_tree = adapter._goal_tree_by_namespace.get(ns_key)
                                 if goal_tree is not None:
                                     goal_tree.add_step_running(step_id, description or "(step)")
-                                    continue
                                 step_widget = CognitionStepMessage(
                                     step_id=step_id,
                                     description=description or "(step)",
@@ -1755,6 +1876,7 @@ async def execute_task_textual(
                                 await adapter._mount_message(step_widget)
                                 step_widget.set_running()
                                 adapter._current_step_messages[step_id] = step_widget
+                                adapter._step_by_namespace[ns_key] = step_widget
                                 continue
 
                         if event_type == AGENT_LOOP_STEP_COMPLETED:
@@ -1788,16 +1910,25 @@ async def execute_task_textual(
                                         tool_call_count,
                                         summary,
                                     )
-                                    continue
                                 widget = adapter._current_step_messages.pop(step_id, None)
                                 if widget is not None:
+                                    if adapter._step_by_namespace.get(ns_key) is widget:
+                                        adapter._step_by_namespace.pop(ns_key, None)
+                                    stale_tool_ids = [
+                                        k for k, sw in adapter._tool_to_step.items() if sw is widget
+                                    ]
+                                    for k in stale_tool_ids:
+                                        adapter._tool_to_step.pop(k, None)
+                                    for k, parent in list(adapter._tool_display_by_call_id.items()):
+                                        if parent is widget:
+                                            adapter._tool_display_by_call_id.pop(k, None)
                                     widget.set_complete(
                                         success,
                                         duration_ms,
                                         tool_call_count,
                                         summary,
                                     )
-                                else:
+                                elif goal_tree is None:
                                     ev = dict(data)
                                     ev["namespace"] = list(ns_key)
                                     for line in progress_pipeline.process(ev):
@@ -1902,7 +2033,7 @@ async def execute_task_textual(
                         "Failed to mount summarization notification",
                         exc_info=True,
                     )
-                if adapter._set_spinner and not adapter._current_tool_messages:
+                if adapter._set_spinner and not _adapter_has_pending_tools(adapter):
                     await adapter._set_spinner("Thinking")
 
             # Flush any remaining text from all namespaces
@@ -1984,6 +2115,12 @@ async def execute_task_textual(
                                     tool_msg = adapter._current_tool_messages[tc_sid]
                                     tool_msg.set_success("User answered")
                                     adapter._current_tool_messages.pop(tc_sid, None)
+                                if tc_sid:
+                                    st_w = adapter._tool_to_step.pop(tc_sid, None)
+                                    if st_w is not None:
+                                        st_w.set_tool_success(
+                                            tc_sid, "User answered", duration_ms=0
+                                        )
                             else:
                                 logger.error(
                                     "ask_user answered payload had non-list answers: %s",
@@ -2031,6 +2168,7 @@ async def execute_task_textual(
                         resume_payload[interrupt_id] = {"decisions": decisions}
                         for tool_msg in list(adapter._current_tool_messages.values()):
                             tool_msg.set_running()
+                        _hitl_start_step_tool_rows(adapter)
                     else:
                         # Batch approval - one dialog for all parallel tool calls
                         await dispatch_hook(
@@ -2053,6 +2191,7 @@ async def execute_task_textual(
                                 tool_msgs = list(adapter._current_tool_messages.values())
                                 for tool_msg in tool_msgs:
                                     tool_msg.set_running()
+                                _hitl_start_step_tool_rows(adapter)
                                 for action_request in action_requests:
                                     tool_name = action_request.get("name")
                                     if tool_name in {
@@ -2070,6 +2209,7 @@ async def execute_task_textual(
                                 tool_msgs = list(adapter._current_tool_messages.values())
                                 for tool_msg in tool_msgs:
                                     tool_msg.set_running()
+                                _hitl_start_step_tool_rows(adapter)
                                 for action_request in action_requests:
                                     tool_name = action_request.get("name")
                                     if tool_name in {
@@ -2082,6 +2222,7 @@ async def execute_task_textual(
 
                             elif decision_type == "reject":
                                 decisions = [RejectDecision(type="reject") for _ in action_requests]
+                                _hitl_reject_step_tool_rows(adapter)
                                 tool_msgs = list(adapter._current_tool_messages.values())
                                 for tool_msg in tool_msgs:
                                     tool_msg.set_rejected()
@@ -2094,6 +2235,7 @@ async def execute_task_textual(
                                     decision_type,
                                 )
                                 decisions = [RejectDecision(type="reject") for _ in action_requests]
+                                _hitl_reject_step_tool_rows(adapter)
                                 for tool_msg in list(adapter._current_tool_messages.values()):
                                     tool_msg.set_rejected()
                                 adapter._current_tool_messages.clear()
@@ -2105,6 +2247,7 @@ async def execute_task_textual(
                                 type(decision).__name__,
                             )
                             decisions = [RejectDecision(type="reject") for _ in action_requests]
+                            _hitl_reject_step_tool_rows(adapter)
                             for tool_msg in list(adapter._current_tool_messages.values()):
                                 tool_msg.set_rejected()
                             adapter._current_tool_messages.clear()
@@ -2198,10 +2341,7 @@ async def _handle_interrupt_cleanup(
 
     await adapter._mount_message(AppMessage("Interrupted by user"))
 
-    interrupted_msg = _build_interrupted_ai_message(
-        pending_text_by_namespace,
-        adapter._current_tool_messages,
-    )
+    interrupted_msg = _build_interrupted_ai_message(pending_text_by_namespace, adapter)
 
     # Save accumulated state before marking tools as rejected (best-effort).
     # State update failures shouldn't prevent cleanup.
@@ -2226,6 +2366,8 @@ async def _handle_interrupt_cleanup(
     for step_msg in list(adapter._current_step_messages.values()):
         step_msg.set_interrupted("Interrupted by user")
     adapter._current_step_messages.clear()
+    adapter._tool_to_step.clear()
+    adapter._step_by_namespace.clear()
 
     for gt in list(adapter._goal_tree_by_namespace.values()):
         gt.set_interrupted("Interrupted by user")
@@ -2345,7 +2487,7 @@ async def _flush_assistant_text_ns(
     ts_card = None
     if namespace_task_bindings is not None and ns_key:
         ts_card = resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
-    if ts_card and ts_card[1] == "explore" and ts_card[0]:
+    if ts_card and ts_card[0]:
         parent_tool = adapter._tool_display_by_call_id.get(ts_card[0])
         if parent_tool is not None:
             line = f"⚙ {format_task_scope_prefix(ts_card[0], ts_card[1])} {repaired_text.strip()}"

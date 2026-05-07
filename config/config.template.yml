@@ -193,6 +193,10 @@ daemon:
   max_concurrent_threads: 100  # RFC-402
   max_input_queue_size: 1000  # IG-258: Prevents unbounded memory growth
   max_concurrent_dispatches: 50  # IG-258: Prevents task explosion
+  # IG-403: EventBus JSON wire-size distribution (streaming histogram; constant memory)
+  event_size_stats_enabled: false
+  event_size_stats_interval_seconds: 60
+  event_size_stats_idle_pause_seconds: 120
 
 # Subagents - Enabled by default (set enabled: false to disable)
 

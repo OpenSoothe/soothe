@@ -14,6 +14,7 @@ from soothe.core.events import EventPriority
 
 if TYPE_CHECKING:
     from soothe.core.events import EventMeta
+    from soothe.daemon.event_size_stats import EventSizeDistributionCollector
 
 logger = logging.getLogger(__name__)
 
@@ -75,12 +76,21 @@ class EventBus:
         {'type': 'event', 'data': 'hello'}
     """
 
-    def __init__(self) -> None:
-        """Initialize the event bus with lock-free publish (Phase 2)."""
+    def __init__(
+        self,
+        *,
+        event_size_stats: EventSizeDistributionCollector | None = None,
+    ) -> None:
+        """Initialize the event bus with lock-free publish (Phase 2).
+
+        Args:
+            event_size_stats: Optional collector for streaming wire-size stats (IG-403).
+        """
         # Regular dict (atomic read, no lock needed)
         self._subscribers: dict[str, set[asyncio.Queue[dict[str, Any]]]] = {}
         # Write lock only for subscribe/unsubscribe (IG-258 Phase 2)
         self._write_lock = asyncio.Lock()
+        self._event_size_stats = event_size_stats
 
     async def publish(
         self,
@@ -106,6 +116,9 @@ class EventBus:
             event: Event dictionary to broadcast
             event_meta: Optional EventMeta for filtering (RFC-0022) and priority (IG-258)
         """
+        if self._event_size_stats is not None:
+            self._event_size_stats.record_event_dict(event)
+
         # NO LOCK! Direct dict read (atomic in Python) - IG-258 Phase 2
         queues = self._subscribers.get(topic, set()).copy()
 
