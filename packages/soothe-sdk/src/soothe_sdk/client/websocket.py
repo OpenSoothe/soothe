@@ -17,6 +17,11 @@ from soothe_sdk.core.types import VerbosityLevel
 
 logger = logging.getLogger(__name__)
 
+# Align with soothe.config.daemon_config.WebSocketConfig.max_frame_size (default 10 MiB).
+# The websockets library defaults max_size to 1 MiB, which closes the connection (1009)
+# when the daemon streams larger JSON events to the client.
+_DEFAULT_MAX_FRAME_SIZE = 10 * 1024 * 1024
+
 
 class WebSocketClient:
     """WebSocket client for communicating with Soothe daemon.
@@ -25,16 +30,26 @@ class WebSocketClient:
     streaming event access and bidirectional message passing.
 
     Args:
-        url: WebSocket URL (e.g., "ws://localhost:8765").
+        url: WebSocket URL (e.g., ``ws://localhost:8765``).
+        max_frame_size: Maximum incoming WebSocket message size in bytes. Should be
+            at least the daemon's ``transport.websocket.max_frame_size`` when that
+            is customized.
     """
 
-    def __init__(self, url: str = "ws://localhost:8765") -> None:
+    def __init__(
+        self,
+        url: str = "ws://localhost:8765",
+        *,
+        max_frame_size: int = _DEFAULT_MAX_FRAME_SIZE,
+    ) -> None:
         """Initialize WebSocket client.
 
         Args:
             url: WebSocket URL.
+            max_frame_size: Max size for frames received from the daemon.
         """
         self._url = url
+        self._max_frame_size = max_frame_size
         self._ws: websockets.asyncio.client.ClientConnection | None = None
         self._connected = False
         self._pending_events: deque[dict[str, Any]] = deque()
@@ -51,6 +66,7 @@ class WebSocketClient:
                 self._url,
                 ping_interval=None,  # Disable client-side ping/pong
                 ping_timeout=None,  # Use daemon heartbeats instead
+                max_size=self._max_frame_size,
             )
             self._connected = True
 

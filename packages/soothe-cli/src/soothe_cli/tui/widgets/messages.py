@@ -11,6 +11,7 @@ from pathlib import Path
 from time import time
 from typing import TYPE_CHECKING, Any
 
+from soothe_sdk.utils import get_tool_display_name
 from textual import on
 from textual.containers import Vertical
 from textual.content import Content
@@ -19,6 +20,7 @@ from textual.reactive import var
 from textual.widgets import Static
 
 from soothe_cli.shared.core.presentation_engine import PresentationEngine
+from soothe_cli.shared.tools.message_processing import _normalize_tool_name_for_arg_map
 from soothe_cli.shared.tools.tool_call_resolution import infer_tool_name_from_call_id
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import (
@@ -40,7 +42,7 @@ from soothe_cli.tui.preview_limits import (
     TOOL_CARD_PREVIEW_TODO_ITEMS,
     TOOL_CARD_PREVIEW_WEB_DICT_KEYS,
 )
-from soothe_cli.tui.tool_display import format_tool_cli_style_command
+from soothe_cli.tui.tool_display import format_tool_call_row, format_tool_cli_style_command
 from soothe_cli.tui.widgets._links import open_style_link
 from soothe_cli.tui.widgets.diff import compose_diff_lines
 
@@ -51,6 +53,12 @@ if TYPE_CHECKING:
     from textual.widgets._markdown import MarkdownStream
 
 logger = logging.getLogger(__name__)
+
+_STEP_TOOL_PREVIEW_ROWS = 3
+"""Collapsed step-card tool list shows this many rows (IG-402)."""
+
+_MAX_STEP_STAT_TOOL_KINDS = 4
+"""Max distinct tool display names in the step header before ``+N more``."""
 
 
 def _show_timestamp_toast(widget: Static | Vertical) -> None:
@@ -1866,8 +1874,25 @@ class DiffMessage(_TimestampClickMixin, Static):
             self.styles.border = ("ascii", colors.primary)
 
 
-class CognitionStepMessage(_TimestampClickMixin, Vertical):
-    """Single card for an agent-loop act step: running, then completion (like ToolCallMessage)."""
+@dataclass
+class _StepToolRow:
+    """One tool invocation row on the step card (IG-402)."""
+
+    tool_call_id: str
+    tool_name: str
+    args: dict[str, Any]
+    phase: str  # pending | running | success | error | rejected | skipped
+    output: str = ""
+    duration_ms: int = 0
+    started_at: float | None = None
+
+
+class CognitionStepMessage(Vertical):
+    """Agent-loop act step card: aggregates main-agent tool calls (IG-402).
+
+    Header shows per-tool counts; body lists one CLI-style row per call. Click
+    toggles expansion when there are more than ``_STEP_TOOL_PREVIEW_ROWS`` rows.
+    """
 
     can_select = True
 
@@ -1892,6 +1917,27 @@ class CognitionStepMessage(_TimestampClickMixin, Vertical):
 
     CognitionStepMessage .step-status.pending {
         color: $warning;
+    }
+
+    CognitionStepMessage .step-tools {
+        margin-left: 3;
+        margin-top: 0;
+        height: auto;
+        color: $text;
+    }
+
+    CognitionStepMessage .step-tools-hint {
+        margin-left: 3;
+        color: $text-muted;
+        background: transparent;
+        height: auto;
+    }
+
+    CognitionStepMessage .step-subagent-notes {
+        margin-left: 3;
+        margin-top: 0;
+        color: $text-muted;
+        height: auto;
     }
 
     CognitionStepMessage .step-detail {
@@ -1923,6 +1969,9 @@ class CognitionStepMessage(_TimestampClickMixin, Vertical):
         self._start_time: float | None = None
         self._animation_timer: Timer | None = None
         self._status_widget: Static | None = None
+        self._header_widget: Static | None = None
+        self._tools_widget: Static | None = None
+        self._tools_hint_widget: Static | None = None
         self._detail_widget: Static | None = None
         self._deferred_complete: tuple[bool, int, int, str] | None = None
         self._deferred_running: bool = False
@@ -1932,19 +1981,42 @@ class CognitionStepMessage(_TimestampClickMixin, Vertical):
         self._last_summary: str = ""
         self._interrupt_message: str | None = None
         self._deferred_interrupted: str | None = None
+        self._rows: list[_StepToolRow] = []
+        self._row_index: dict[str, _StepToolRow] = {}
+        self._stats_order: list[str] = []
+        self._stats_counts: dict[str, int] = {}
+        self._tools_body_collapsed: bool = False
+        self._subagent_notes: list[str] = []
 
     def compose(self) -> ComposeResult:
         prefix = get_glyphs().tool_prefix
         header = f"{prefix} Step · {self._description}"
-        yield Static(header, markup=False, classes="step-header")
+        yield Static(header, markup=False, classes="step-header", id="step-cognition-header")
         yield Static("", classes="step-status", id="step-cognition-status")
+        yield Static("", classes="step-tools", id="step-cognition-tools", markup=False)
+        yield Static("", classes="step-tools-hint", id="step-cognition-tools-hint", markup=False)
+        yield Static(
+            "",
+            markup=False,
+            classes="step-subagent-notes",
+            id="step-cognition-subagent-notes",
+        )
         yield Static("", classes="step-detail", id="step-cognition-detail")
 
     def on_mount(self) -> None:
+        self._header_widget = self.query_one("#step-cognition-header", Static)
         self._status_widget = self.query_one("#step-cognition-status", Static)
+        self._tools_widget = self.query_one("#step-cognition-tools", Static)
+        self._tools_hint_widget = self.query_one("#step-cognition-tools-hint", Static)
         self._detail_widget = self.query_one("#step-cognition-detail", Static)
+        notes = self.query_one("#step-cognition-subagent-notes", Static)
+        notes.display = False
         self._status_widget.display = False
+        self._tools_widget.display = False
+        self._tools_hint_widget.display = False
         self._detail_widget.display = False
+        self._refresh_header_title()
+        self._refresh_tools_display()
         if self._deferred_interrupted is not None:
             msg = self._deferred_interrupted
             self._deferred_interrupted = None
@@ -1957,12 +2029,266 @@ class CognitionStepMessage(_TimestampClickMixin, Vertical):
             self._deferred_running = False
             self.set_running()
 
+    def on_click(self, event: Click) -> None:  # noqa: ARG002
+        """Toggle tool list collapse or show timestamp when there are no tools."""
+        event.stop()
+        if self._rows and len(self._rows) > _STEP_TOOL_PREVIEW_ROWS:
+            self._tools_body_collapsed = not self._tools_body_collapsed
+            self._refresh_tools_display()
+        else:
+            _show_timestamp_toast(self)
+
+    def append_subagent_activity(self, line: str) -> None:
+        """Append one metadata line (task subgraph tools, wire events, same as tool card)."""
+        text = (line or "").strip()
+        if not text:
+            return
+        self._subagent_notes.append(text)
+        try:
+            w = self.query_one("#step-cognition-subagent-notes", Static)
+        except Exception:  # noqa: BLE001
+            return
+        w.update("\n".join(self._subagent_notes))
+        w.display = True
+
+    def _bump_stat(self, tool_name: str) -> None:
+        key = get_tool_display_name(_normalize_tool_name_for_arg_map(tool_name or ""))
+        if key not in self._stats_counts:
+            self._stats_order.append(key)
+            self._stats_counts[key] = 0
+        self._stats_counts[key] += 1
+
+    def _stats_title_suffix(self) -> str:
+        if not self._stats_order:
+            return ""
+        parts: list[str] = []
+        for name in self._stats_order[:_MAX_STEP_STAT_TOOL_KINDS]:
+            parts.append(f"{name}({self._stats_counts.get(name, 0)})")
+        text = ", ".join(parts)
+        extra = len(self._stats_order) - _MAX_STEP_STAT_TOOL_KINDS
+        if extra > 0:
+            text += f" +{extra} more"
+        return f" · {text}"
+
+    def _refresh_header_title(self) -> None:
+        if self._header_widget is None:
+            return
+        prefix = get_glyphs().tool_prefix
+        self._header_widget.update(
+            f"{prefix} Step · {self._description}{self._stats_title_suffix()}"
+        )
+
+    def _row_to_content(self, row: _StepToolRow) -> Content:
+        phase = row.phase
+        elapsed: float | None = None
+        if phase == "running" and row.started_at is not None:
+            elapsed = max(0.0, time() - row.started_at)
+        spin = None
+        if phase == "running":
+            frames = get_glyphs().spinner_frames
+            spin = frames[self._spinner_position % len(frames)]
+        return format_tool_call_row(
+            row.tool_name,
+            row.args,
+            phase=phase,
+            output=row.output,
+            duration_ms=row.duration_ms,
+            running_spinner=spin,
+            running_elapsed_secs=elapsed,
+        )
+
+    def _refresh_tools_display(self) -> None:
+        if self._tools_widget is None or self._tools_hint_widget is None:
+            return
+        if not self._rows:
+            self._tools_widget.display = False
+            self._tools_hint_widget.display = False
+            return
+        self._tools_widget.display = True
+        show_all = len(self._rows) <= _STEP_TOOL_PREVIEW_ROWS or not self._tools_body_collapsed
+        visible = self._rows if show_all else self._rows[:_STEP_TOOL_PREVIEW_ROWS]
+        lines = [self._row_to_content(r) for r in visible]
+        self._tools_widget.update(Content("\n").join(lines))
+        remaining = len(self._rows) - len(visible)
+        if remaining > 0:
+            ellipsis = get_glyphs().ellipsis
+            self._tools_hint_widget.update(
+                Content.styled(
+                    f"{ellipsis} {remaining} more tool call(s) — click to expand",
+                    "dim",
+                )
+            )
+            self._tools_hint_widget.display = not show_all
+        elif len(self._rows) > _STEP_TOOL_PREVIEW_ROWS and show_all:
+            self._tools_hint_widget.update(
+                Content.styled(f"{get_glyphs().ellipsis} click to collapse", "dim italic")
+            )
+            self._tools_hint_widget.display = True
+        else:
+            self._tools_hint_widget.display = False
+
+    def add_tool_call(self, tool_call_id: str, tool_name: str, args: dict[str, Any]) -> None:
+        """Register a new tool row (pending)."""
+        tcid = str(tool_call_id).strip()
+        if not tcid:
+            return
+        if tcid in self._row_index:
+            self.update_tool_args(tcid, args)
+            return
+        row = _StepToolRow(
+            tool_call_id=tcid,
+            tool_name=(tool_name or "tool").strip() or "tool",
+            args=dict(args or {}),
+            phase="pending",
+        )
+        self._rows.append(row)
+        self._row_index[tcid] = row
+        self._bump_stat(row.tool_name)
+        self._refresh_header_title()
+        self._refresh_tools_display()
+
+    def has_tool_call_row(self, tool_call_id: str) -> bool:
+        """Return True if this step card already tracks ``tool_call_id``."""
+        return str(tool_call_id) in self._row_index
+
+    def row_duration_ms_since_started(self, tool_call_id: str) -> int:
+        """Elapsed ms since this row entered running state (for result lines)."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None or row.started_at is None:
+            return 0
+        return int((time() - row.started_at) * 1000)
+
+    def update_tool_args(self, tool_call_id: str, args: dict[str, Any]) -> None:
+        """Refresh kwargs when streaming fills in arguments."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None:
+            return
+        row.args = dict(args or {})
+        self._refresh_tools_display()
+
+    def set_tool_running(self, tool_call_id: str) -> None:
+        """Mark a tool row as executing (after approval)."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None or row.phase not in ("pending", "running"):
+            return
+        row.phase = "running"
+        row.started_at = time()
+        self._refresh_tools_display()
+
+    def set_tool_success(self, tool_call_id: str, result: str, *, duration_ms: int = 0) -> None:
+        """Finalize a tool row as success."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None:
+            return
+        row.phase = "success"
+        row.output = _strip_success_exit_line(result)
+        row.duration_ms = duration_ms
+        row.started_at = None
+        self._refresh_tools_display()
+
+    def set_tool_error(self, tool_call_id: str, error: str, *, duration_ms: int = 0) -> None:
+        """Finalize a tool row as error."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None:
+            return
+        row.phase = "error"
+        row.output = error
+        row.duration_ms = duration_ms
+        row.started_at = None
+        self._refresh_tools_display()
+
+    def set_tool_rejected(self, tool_call_id: str) -> None:
+        """Mark a tool row as rejected (HITL)."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None:
+            return
+        row.phase = "rejected"
+        row.started_at = None
+        self._refresh_tools_display()
+
+    def set_tool_skipped(self, tool_call_id: str) -> None:
+        """Mark a tool row skipped (batch reject / incomplete)."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None:
+            return
+        row.phase = "skipped"
+        row.started_at = None
+        self._refresh_tools_display()
+
+    def mark_unfinished_tools_skipped(self) -> None:
+        """Mark pending/running rows skipped when the step ends without results."""
+        for row in self._rows:
+            if row.phase in ("pending", "running"):
+                row.phase = "skipped"
+                row.started_at = None
+        self._refresh_tools_display()
+
+    def iter_open_tool_calls_for_interrupt(self) -> list[dict[str, Any]]:
+        """Tool call dicts for interrupted AIMessage state (non-task rows only)."""
+        out: list[dict[str, Any]] = []
+        for row in self._rows:
+            if row.phase in ("pending", "running"):
+                out.append(
+                    {
+                        "id": row.tool_call_id,
+                        "name": row.tool_name,
+                        "args": dict(row.args),
+                    }
+                )
+        return out
+
+    def snapshot_tool_rows(self) -> list[dict[str, Any]]:
+        """Serialize tool rows for ``MessageData`` (IG-402)."""
+        return [
+            {
+                "id": r.tool_call_id,
+                "name": r.tool_name,
+                "args": dict(r.args),
+                "phase": r.phase,
+                "output": r.output,
+                "duration_ms": r.duration_ms,
+                "started_at": r.started_at,
+            }
+            for r in self._rows
+        ]
+
+    def apply_tool_rows_snapshot(self, rows: list[dict[str, Any]]) -> None:
+        """Restore tool rows from :meth:`snapshot_tool_rows` output."""
+        self._rows = []
+        self._row_index = {}
+        self._stats_order = []
+        self._stats_counts = {}
+        for raw in rows or []:
+            tcid = str(raw.get("id", "")).strip()
+            if not tcid:
+                continue
+            name = str(raw.get("name", "tool") or "tool")
+            args = raw.get("args")
+            if not isinstance(args, dict):
+                args = {}
+            phase = str(raw.get("phase", "pending"))
+            row = _StepToolRow(
+                tool_call_id=tcid,
+                tool_name=name,
+                args=dict(args),
+                phase=phase,
+                output=str(raw.get("output", "") or ""),
+                duration_ms=int(raw.get("duration_ms", 0) or 0),
+                started_at=raw.get("started_at"),
+            )
+            self._rows.append(row)
+            self._row_index[tcid] = row
+            self._bump_stat(name)
+        self._refresh_header_title()
+        self._refresh_tools_display()
+
     def set_running(self) -> None:
         """Show animated running state (call after mount)."""
         if self._status == "running":
             return
         self._status = "running"
         self._start_time = time()
+        self._tools_body_collapsed = False
         if self._status_widget:
             self._status_widget.add_class("pending")
             self._status_widget.display = True
@@ -1983,9 +2309,11 @@ class CognitionStepMessage(_TimestampClickMixin, Vertical):
         elapsed = ""
         if self._start_time is not None:
             elapsed_secs = int(time() - self._start_time)
-            elapsed = f" ({format_duration(elapsed_secs)})"
+            elapsed = f" ({format_duration(float(elapsed_secs))})"
         colors = theme.get_theme_colors(self)
         self._status_widget.update(Content.styled(f"{frame} Running...{elapsed}", colors.warning))
+        if any(r.phase == "running" for r in self._rows):
+            self._refresh_tools_display()
 
     def set_complete(
         self,
@@ -2005,7 +2333,9 @@ class CognitionStepMessage(_TimestampClickMixin, Vertical):
             self._deferred_complete = (success, duration_ms, tool_call_count, summary)
             return
 
-        colors = theme.get_theme_colors(self)
+        self.mark_unfinished_tools_skipped()
+        self._tools_body_collapsed = True
+        self._refresh_tools_display()
 
         duration_s = duration_ms / 1000.0
         dur_str = f"{duration_s:.1f}s"
@@ -2023,6 +2353,7 @@ class CognitionStepMessage(_TimestampClickMixin, Vertical):
             return
 
         err_text = summary.strip() or "Step failed"
+        colors = theme.get_theme_colors(self)
         if self._status_widget:
             self._status_widget.remove_class("pending")
             self._status_widget.add_class("error")
@@ -2037,7 +2368,15 @@ class CognitionStepMessage(_TimestampClickMixin, Vertical):
         self._stop_animation()
         self._status = "error"
         self._interrupt_message = message
-        colors = theme.get_theme_colors(self)
+        for row in self._rows:
+            if row.phase in ("pending", "running"):
+                row.phase = "skipped"
+                row.started_at = None
+        self._refresh_tools_display()
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001  # Unmounted widget (tests / no Textual app)
+            colors = theme.DARK_COLORS
         if self._status_widget:
             self._status_widget.remove_class("pending")
             self._status_widget.add_class("error")
