@@ -813,6 +813,7 @@ class Executor:
                 step_messages,
                 step_outcomes,
                 steps,
+                duration_ms=duration_ms,
                 subagent_task_completions=budget.subagent_task_completions,
                 hit_subagent_cap=budget.hit_subagent_cap,
                 tool_call_count=tool_call_count,
@@ -855,6 +856,10 @@ class Executor:
             step_messages_err = self._build_batch_human_messages(steps, state)
             from soothe.core.agent_loop.state.schemas import StepResult
 
+            n_err = len(steps)
+            eb, er = divmod(max(duration_ms, 0), n_err) if n_err else (0, 0)
+            err_durations = [eb + (1 if j < er else 0) for j in range(n_err)]
+
             step_results = []
             for i, step in enumerate(steps):
                 # Append Human-AI error pair
@@ -866,7 +871,7 @@ class Executor:
                     step_id=step.id,
                     success=False,
                     outcome={"type": "error", "error": error_msg},
-                    duration_ms=duration_ms,
+                    duration_ms=err_durations[i],
                     thread_id=state.thread_id,
                     error=error_msg,
                 )
@@ -1134,8 +1139,9 @@ class Executor:
         Yields:
             Tuple of ``(output, event, tool_call_count, messages, delegate_final_text)``:
             - When event is not None: immediate display chunk (delegate_final_text empty).
-            - At end: combined_output, tool_call_count, root AIMessages list, and joined
-              ``task`` tool bodies (ordered, capped)—empty string when no ``task`` tools ran.
+            - At end: combined_output, ``tool_call_count`` (root graph plus namespaced
+              subgraph ``ToolMessage`` totals), root AIMessages list, and joined ``task``
+              tool bodies (ordered, capped)—empty string when no ``task`` tools ran.
         """
         from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
@@ -1146,11 +1152,13 @@ class Executor:
             extract_text_from_message_content,
             iter_messages_for_act_aggregation,
             iter_messages_for_delegate_task_scan,
+            iter_namespaced_tool_messages,
             join_text_fragments,
         )
 
         chunks: list[str] = []
         tool_call_count = 0
+        subgraph_tool_call_count = 0
         messages: list[BaseMessage] = []  # IG-151: Collect messages for token extraction
         delegate_task_final_parts: list[str] = []
         delegate_task_ids_seen: set[str] = set()
@@ -1275,6 +1283,20 @@ class Executor:
                         if isinstance(tc, dict) and "id" in tc:
                             tool_call_args[tc["id"]] = tc.get("args", {})
 
+            for ns_tuple, tm in iter_namespaced_tool_messages(chunk):
+                subgraph_tool_call_count += 1
+                body_preview = log_preview(
+                    extract_text_from_message_content(getattr(tm, "content", "")),
+                    chars=160,
+                )
+                logger.info(
+                    "[SubagentTool] ns=%s name=%s id=%s preview=%s",
+                    "/".join(ns_tuple) if ns_tuple else "()",
+                    getattr(tm, "name", "") or "unknown",
+                    getattr(tm, "tool_call_id", "") or "",
+                    body_preview,
+                )
+
             for task_msg in iter_messages_for_delegate_task_scan(chunk):
                 text_out = extract_text_from_message_content(task_msg.content)
                 if not text_out.strip():
@@ -1308,8 +1330,9 @@ class Executor:
             if len(delegate_final_text) > DELEGATE_FINAL_WAVE_CAP:
                 delegate_final_text = delegate_final_text[:DELEGATE_FINAL_WAVE_CAP]
 
+        total_tool_calls = tool_call_count + subgraph_tool_call_count
         # Final yield with combined output and tool call count
-        yield join_text_fragments(chunks), None, tool_call_count, messages, delegate_final_text
+        yield join_text_fragments(chunks), None, total_tool_calls, messages, delegate_final_text
 
     def _build_batch_human_messages(
         self,
@@ -1451,6 +1474,7 @@ class Executor:
         step_outcomes: dict[str, LoopAIMessage],
         steps: list,
         *,
+        duration_ms: int,
         subagent_task_completions: int = 0,
         hit_subagent_cap: bool = False,
         tool_call_count: int = 0,
@@ -1468,6 +1492,8 @@ class Executor:
             step_messages: Human inputs (one per step)
             step_outcomes: AI outcomes (one per step)
             steps: Step metadata
+            duration_ms: Wall time for the whole wave; split across steps so sums match
+                goal duration aggregation.
             subagent_task_completions: Count of completed ``task`` tool returns this wave (IG-130).
             hit_subagent_cap: True when the wave stopped early due to subagent cap.
             tool_call_count: Total tool messages observed this wave (first step carries count).
@@ -1480,6 +1506,10 @@ class Executor:
         # Validate pairing
         assert len(step_messages) == len(steps)
         assert set(step_outcomes.keys()) == {s.id for s in steps}
+
+        n = len(steps)
+        base, rem = divmod(max(duration_ms, 0), n) if n else (0, 0)
+        step_durations = [base + (1 if j < rem else 0) for j in range(n)]
 
         # Append N adjacent pairs to ledger
         for i, step in enumerate(steps):
@@ -1504,7 +1534,7 @@ class Executor:
                     "type": "generic",
                     "output_summary": ai_msg.content[:300] if ai_msg.content else "",
                 },
-                duration_ms=0,  # Will be aggregated separately
+                duration_ms=step_durations[idx],
                 thread_id=state.thread_id,
                 tool_call_count=tool_call_count if idx == 0 else 0,
                 subagent_task_completions=subagent_task_completions if idx == 0 else 0,

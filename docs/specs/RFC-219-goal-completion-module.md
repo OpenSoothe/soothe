@@ -14,7 +14,7 @@
 
 This RFC defines a modular architecture for AgentLoop goal completion logic, extracting the complex decision tree from monolithic orchestration code into a dedicated GoalCompletionModule with clear separation of concerns. The module encapsulates all decisions and execution logic for producing user-visible goal completion responses, making AgentLoop orchestration simpler, testable, and extensible.
 
-**Wire parity (IG-355):** When completion policy selects `skip` or `direct` because `require_goal_completion` is false, the runner normally avoids replaying `phase=goal_completion`. If the user-visible answer came only from **`task`** delegate return text (not root-graph AIMessages), AgentLoop marks the completion event so the runner **does** emit one loop-tagged replay—otherwise headless clients would print nothing.
+**Runner wire:** The `goal_completion` node sets **`skip_goal_completion_wire_duplicate`** on the `completed` payload when streamed **`synthesize`** already delivered `phase=goal_completion` on **`messages`**. The agentic runner emits **`loop_assistant_messages_chunk(..., phase="goal_completion")`** when the flag is **false** — including **`ledger_direct`**, because headless mode suppresses execute-phase lines and needs this replay for stdout (RFC-500 / IG-343). TUI routing for loop-tagged AI is defined in **RFC-500**.
 
 ---
 

@@ -17,7 +17,7 @@ def test_cognition_goal_tree_message_store_round_trip() -> None:
     w.complete_step("s1", True, 1200, 2, "OK")
     w.set_loop_finished(
         status="done",
-        goal_progress=1.0,
+        goal_progress="complete",
         completion_summary="All good",
         total_steps=1,
     )
@@ -30,8 +30,10 @@ def test_cognition_goal_tree_message_store_round_trip() -> None:
     assert len(snap["steps"]) == 1
     assert snap["steps"][0]["id"] == "s1"
     assert snap["footer_visible"] is True
+    assert snap.get("footer_tone") == "success"
 
     restored = md.to_widget()
     assert isinstance(restored, CognitionGoalTreeMessage)
     assert restored._goal_text == "Ship the feature"
     assert "s1" in restored._steps
+    assert restored._footer_tone == "success"
