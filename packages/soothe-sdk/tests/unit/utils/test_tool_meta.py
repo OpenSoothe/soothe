@@ -380,17 +380,19 @@ class TestPolicyFilesystemMetadata:
         assert is_policy_filesystem_tool("fs_custom")
 
     def test_extract_path_prefers_registered_keys(self) -> None:
-        p = extract_filesystem_path_for_policy(
-            "read_file", {"file_path": "/a/b", "path": "/c/d"}
-        )
+        p = extract_filesystem_path_for_policy("read_file", {"file_path": "/a/b", "path": "/c/d"})
         assert p == "/a/b"
 
     def test_extract_path_grep_optional(self) -> None:
         assert extract_filesystem_path_for_policy("grep", {"pattern": "foo"}) is None
-        assert extract_filesystem_path_for_policy("grep", {"pattern": "x", "path": "/tmp"}) == "/tmp"
+        assert (
+            extract_filesystem_path_for_policy("grep", {"pattern": "x", "path": "/tmp"}) == "/tmp"
+        )
 
     def test_extract_path_glob_defaults_virtual_root(self) -> None:
         """IG-366: pattern-only glob uses virtual ``/`` for workspace containment."""
         assert extract_filesystem_path_for_policy("glob", {"pattern": "**/README*"}) == "/"
-        assert extract_filesystem_path_for_policy("glob", {"pattern": "x", "path": "/pkg"}) == "/pkg"
+        assert (
+            extract_filesystem_path_for_policy("glob", {"pattern": "x", "path": "/pkg"}) == "/pkg"
+        )
         assert extract_filesystem_path_for_policy("glob", {"pattern": "x", "path": ""}) == "/"
