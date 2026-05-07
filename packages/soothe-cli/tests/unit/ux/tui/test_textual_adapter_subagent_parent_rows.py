@@ -49,7 +49,7 @@ async def test_mount_subagent_inner_tool_row_resolves_parent_task_card() -> None
     assert task_card.has_tool_call_row("inner-grep-1")
     assert adapter._tool_to_step["inner-grep-1"] is task_card
     assert adapter._tool_display_by_call_id["inner-grep-1"] is task_card
-    adapter._set_spinner.assert_awaited_once_with(None)
+    adapter._set_spinner.assert_awaited_once_with("Tools")
 
 
 @pytest.mark.asyncio
