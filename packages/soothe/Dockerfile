@@ -33,7 +33,7 @@ COPY packages ./packages
 COPY scripts/warmup_semantic.py ./scripts/warmup_semantic.py
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --all-extras --no-dev --frozen \
+    uv sync --all-extras --no-dev \
     && uv pip install playwright \
     && .venv/bin/python -m playwright install chromium
 

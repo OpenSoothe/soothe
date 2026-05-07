@@ -82,7 +82,6 @@ class EventProcessor:
         self,
         renderer: RendererProtocol,
         *,
-        final_output_mode: str = "streaming",
         presentation_engine: PresentationEngine | None = None,
         tui_debug: bool = False,
         headless_output: bool = False,
@@ -98,9 +97,6 @@ class EventProcessor:
         """
         self._renderer = renderer
         self._headless_output = headless_output
-        self._final_output_mode = (
-            final_output_mode if final_output_mode in {"streaming", "batch"} else "streaming"
-        )
         self._tui_debug = tui_debug
 
         rebind = getattr(renderer, "_rebind_presentation", None)
@@ -1103,12 +1099,10 @@ class EventProcessor:
             Dict with enabled, mode, and synthesis_streaming fields.
         """
         # Use defaults - streaming is enabled by default per RFC-614
-        # final_output_mode controls batch/streaming display mode
+        # Always use streaming mode
         config = {
             "enabled": True,
-            "mode": self._final_output_mode
-            if self._final_output_mode in {"streaming", "batch"}
-            else "streaming",
+            "mode": "streaming",
             "synthesis_streaming": True,
         }
 

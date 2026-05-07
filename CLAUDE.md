@@ -384,7 +384,6 @@ Use single backticks for inline code in docstrings (not Sphinx double backticks)
 |------|---------|
 | [config/config.template.yml](config/config.template.yml) | Full YAML template (`${ENV}` for secrets) |
 | [config/config.dev.yml](config/config.dev.yml) | Local development defaults |
-| [config/config.minimal.yml](config/config.minimal.yml) | Minimal end-user YAML example |
 | [docs/user_guide.md](docs/user_guide.md) | End-user guide |
 
 ---
