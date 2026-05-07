@@ -91,7 +91,7 @@ agentic:
     preview_chars: 500
     synthesis_max_chars: 0  # 0 = unlimited
 
-  plan_prompt_ledger:  # IG-380 caps for plan prompts; 0 = no cap
+  plan_prompt_ledger:  # Caps for plan prompts; 0 = no cap
     plan_ledger_max_messages: 0
     plan_ledger_max_total_chars: 0
     plan_ledger_max_message_chars: 0
@@ -102,9 +102,9 @@ execution:
   llm_rpm_limit: 120
   llm_concurrent_limit: 10
   llm_call_timeout_seconds: 120
-  llm_call_timeout_max_seconds: 240  # IG-399: fail fast on pathological long calls
+  llm_call_timeout_max_seconds: 240  # Fail fast on pathological long calls
   llm_call_timeout_adaptive: true
-  # IG-295: Retry with timeout escalation (graceful degradation)
+  # Retry with timeout escalation (graceful degradation)
   llm_retry_on_timeout: true
   llm_max_timeout_retries: 2
   llm_timeout_retry_multiplier: 2.0
@@ -191,11 +191,10 @@ daemon:
       cors_origins: ["http://localhost:*", "http://127.0.0.1:*"]
 
   max_concurrent_threads: 100  # RFC-402
-  # IG-398: await window after task.cancel() before slow-unwind warning (subagent unwind can exceed 2s)
   cancel_grace_seconds: 30
-  max_input_queue_size: 1000  # IG-258: Prevents unbounded memory growth
-  max_concurrent_dispatches: 50  # IG-258: Prevents task explosion
-  # IG-403: EventBus JSON wire-size distribution (streaming histogram; constant memory)
+  max_input_queue_size: 1000
+  max_concurrent_dispatches: 50
+  # EventBus JSON wire-size distribution (streaming histogram; constant memory)
   event_size_stats_enabled: false
   event_size_stats_interval_seconds: 60
   event_size_stats_idle_pause_seconds: 120
@@ -236,14 +235,13 @@ subagents:
     # Explore subagent for targeted filesystem search (RFC-613)
     # Uses LLM-orchestrated iterative search with configurable thoroughness
     config:
-      thoroughness: "medium"  # IG-399: quick (6), medium (10), thorough (16) model-turn cap
+      thoroughness: "medium"  # quick (6), medium (10), thorough (16) model-turn cap
       max_iterations:
-        quick: 6      # IG-399: -50% from 12
-        medium: 10    # IG-399: -58% from 24
-        thorough: 16  # IG-399: -67% from 48
+        quick: 6
+        medium: 10
+        thorough: 16
       max_read_lines: 50  # Max lines per read_file call
       max_matches_returned: 5  # Max matches in final result
-      # IG-399: context growth capping
       max_history_messages_for_model: 8  # Keep only recent N message turns
       max_tool_output_chars_per_turn: 2000  # Truncate oversized tool outputs
       early_stop_no_new_findings_turns: 2  # Force synthesis when findings stall
@@ -289,7 +287,7 @@ tools:
   video:
     enabled: false   # Video analysis (Google Gemini)
 
-  # LangChain Community RequestsToolkit (GET/POST/PATCH/PUT/DELETE) (IG-339)
+  # LangChain Community RequestsToolkit (GET/POST/PATCH/PUT/DELETE)
   http_requests:
     enabled: true
     allow_dangerous_requests: true

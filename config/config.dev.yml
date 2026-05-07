@@ -72,15 +72,14 @@ agentic:
 
 execution:
   concurrency:
-    # IG-380: lower parallel execute-step fan-out locally (template remains 16)
     max_parallel_steps: 2
     max_parallel_subagents: 4
   llm_rpm_limit: 120
   llm_concurrent_limit: 10
   llm_call_timeout_seconds: 120
-  llm_call_timeout_max_seconds: 240  # IG-399: fail fast on pathological long calls
+  llm_call_timeout_max_seconds: 240
   llm_call_timeout_adaptive: true
-  # IG-295: Retry with timeout escalation (graceful degradation)
+  # Retry with timeout escalation (graceful degradation)
   llm_retry_on_timeout: true
   llm_max_timeout_retries: 2
   llm_timeout_retry_multiplier: 2.0
@@ -125,10 +124,10 @@ observability:
 
 daemon:
   max_concurrent_threads: 100
-  cancel_grace_seconds: 30             # IG-398: /cancel await before slow-unwind warning
+  cancel_grace_seconds: 30           # /cancel await before slow-unwind warning
   max_input_queue_size: 1000         # Maximum pending input messages (0 = unlimited)
   max_concurrent_dispatches: 50      # Maximum concurrent message handlers
-  event_size_stats_enabled: true     # IG-403: periodic EventBus size distribution logs
+  event_size_stats_enabled: true     # Periodic EventBus size distribution logs
   transports:
     websocket:
       enabled: true
