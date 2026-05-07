@@ -49,6 +49,7 @@ from soothe_sdk.client.wire import envelope_langchain_message_dict
 from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.utils import get_tool_display_name
+from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
 from soothe_sdk.ux.task_namespace import (
     enqueue_task_spawn,
     maybe_bind_namespace,
@@ -392,7 +393,7 @@ async def _mount_subagent_inner_tool_row_if_resolved(
         return False
     file_op_tracker.start_operation(buffer_name, parsed_args, buffer_id)
     if adapter._set_spinner:
-        await adapter._set_spinner(None)
+        await adapter._set_spinner("Tools")
     raw = ""
     pend = pending_tool_calls_lc.get(str(lookup_id))
     if isinstance(pend, dict):
@@ -813,6 +814,7 @@ async def _finalize_goal_completion_stream(
     if extra_text and extra_text not in getattr(stream_msg, "_content", ""):
         await stream_msg.append_content(extra_text)
     await stream_msg.stop_stream()
+    stream_msg.set_body_expanded(True)
     if adapter._sync_message_content and stream_msg.id:
         adapter._sync_message_content(stream_msg.id, stream_msg._content)
     goal_completion_stream_by_namespace.pop(ns_key, None)
@@ -820,7 +822,7 @@ async def _finalize_goal_completion_stream(
     if adapter._set_active_message:
         adapter._set_active_message(None)
     if adapter._set_spinner:
-        await adapter._set_spinner(None)
+        await adapter._set_spinner("Thinking")
 
 
 def _tui_main_assistant_body_for_dedupe(raw: str) -> str:
@@ -1556,7 +1558,7 @@ async def execute_task_textual(
 
                             if stream_msg is None:
                                 if adapter._set_spinner:
-                                    await adapter._set_spinner(None)
+                                    await adapter._set_spinner("Synthesizing")
                                 msg_id = f"asst-{uuid.uuid4().hex[:8]}"
                                 if adapter._set_active_message:
                                     adapter._set_active_message(msg_id)
@@ -1591,7 +1593,7 @@ async def execute_task_textual(
                             if adapter._set_active_message:
                                 adapter._set_active_message(None)
                             if adapter._set_spinner:
-                                await adapter._set_spinner(None)
+                                await adapter._set_spinner("Thinking")
                             continue
 
                         if (
@@ -1606,7 +1608,7 @@ async def execute_task_textual(
                             if adapter._set_active_message:
                                 adapter._set_active_message(None)
                             if adapter._set_spinner:
-                                await adapter._set_spinner(None)
+                                await adapter._set_spinner("Thinking")
                             continue
 
                         if pending_text:
@@ -1626,6 +1628,7 @@ async def execute_task_textual(
                         )
                         await adapter._mount_message(output_widget)
                         await output_widget.write_initial_content()
+                        output_widget.set_body_expanded(True)
                         if adapter._sync_message_content and output_widget.id:
                             adapter._sync_message_content(
                                 output_widget.id,
@@ -1636,7 +1639,7 @@ async def execute_task_textual(
                         if adapter._set_active_message:
                             adapter._set_active_message(None)
                         if adapter._set_spinner:
-                            await adapter._set_spinner(None)
+                            await adapter._set_spinner("Thinking")
                         continue
 
                     for block in blocks:
@@ -1681,7 +1684,20 @@ async def execute_task_textual(
                                 step_w = adapter._step_by_namespace.get(ns_key)
                                 if step_w is not None:
                                     step_w.append_execute_assistant_delta(text)
-                                    continue
+                                # Never mount standalone assistant cards for execute-step prose
+                                # (aggregated on the step card when present).
+                                continue
+
+                            # Main graph: skip standalone AssistantMessage cards for
+                            # intermediate AIMessage streams (execute_wave, unphased, etc.).
+                            # ``goal_completion`` is handled above. Other RFC-614 user-output
+                            # phases (chitchat, quiz, autonomous_goal) still use cards.
+                            if (
+                                is_main_agent
+                                and assistant_output_phase(message)
+                                not in LOOP_ASSISTANT_OUTPUT_PHASES
+                            ):
+                                continue
 
                             # Track accumulated text for reference
                             pending_text = pending_text_by_namespace.get(ns_key, "")
@@ -1691,9 +1707,8 @@ async def execute_task_textual(
                             # Get or create assistant message for this namespace
                             current_msg = assistant_message_by_namespace.get(ns_key)
                             if current_msg is None:
-                                # Hide spinner when assistant starts responding
                                 if adapter._set_spinner:
-                                    await adapter._set_spinner(None)
+                                    await adapter._set_spinner("Writing")
                                 msg_id = f"asst-{uuid.uuid4().hex[:8]}"
                                 # Mark active BEFORE mounting so pruning
                                 # (triggered by mount) won't remove it
@@ -1982,9 +1997,8 @@ async def execute_task_textual(
                                         buffer_name, parsed_args, buffer_id
                                     )
 
-                                    # Hide spinner before showing tool call
                                     if adapter._set_spinner:
-                                        await adapter._set_spinner(None)
+                                        await adapter._set_spinner("Tools")
 
                                     active_step = adapter._step_by_namespace.get(ns_key)
                                     use_step_aggregator = is_main_agent and active_step is not None
