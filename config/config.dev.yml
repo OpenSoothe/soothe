@@ -169,6 +169,31 @@ tools:
     verify_ssl: true
 
 # =============================================================================
+# Subagent Configuration
+# =============================================================================
+subagents:
+  browser:
+    enabled: false
+    config:
+      max_steps: 10
+
+  explore:
+    enabled: true
+    # Model uses router fast role (coding-plan:kimi-k2.5)
+    config:
+      thoroughness: "medium"
+      max_iterations:
+        quick: 6      # IG-399: -50% from 12
+        medium: 10    # IG-399: -58% from 24
+        thorough: 16  # IG-399: -67% from 48
+      max_read_lines: 50
+      max_matches_returned: 5
+      # IG-399: context growth capping
+      max_history_messages_for_model: 8  # Keep only recent N message turns
+      max_tool_output_chars_per_turn: 2000  # Truncate oversized tool outputs
+      early_stop_no_new_findings_turns: 2  # Force synthesis when findings stall
+
+# =============================================================================
 # Protocol Backends
 # =============================================================================
 protocols:
@@ -213,27 +238,3 @@ vector_stores:
 
 vector_store_router:
   default: pgvector_dev:soothe_default
-
-subagents:
-  browser:
-    enabled: false
-    config:
-      max_steps: 10
-
-  explore:
-    enabled: true
-    # Model uses router fast role (coding-plan:kimi-k2.5)
-    config:
-      thoroughness: "medium"
-      max_iterations:
-        quick: 6      # IG-399: -50% from 12
-        medium: 10    # IG-399: -58% from 24
-        thorough: 16  # IG-399: -67% from 48
-      max_read_lines: 50
-      max_matches_returned: 5
-      # IG-399: context growth capping
-      max_history_messages_for_model: 8  # Keep only recent N message turns
-      max_tool_output_chars_per_turn: 2000  # Truncate oversized tool outputs
-      early_stop_no_new_findings_turns: 2  # Force synthesis when findings stall
-
-# Note: Logging configuration moved to observability section above
