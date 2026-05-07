@@ -12,11 +12,10 @@ from pydantic_settings import BaseSettings
 from soothe.config.daemon_config import DaemonConfig
 from soothe.config.env import _resolve_env, _resolve_provider_env, default_soothe_workspace_dir
 from soothe.config.models import (
-    AgenticLoopConfig,
+    AgentLoopConfig,
     AutonomousConfig,
     AutopilotConfig,
     ConsoleLoggingConfig,
-    ExecutionConfig,
     FilesystemMiddlewareConfig,
     GlobalHistoryConfig,
     MCPServerConfig,
@@ -94,7 +93,7 @@ class SootheConfigLoggingView:
 
     @property
     def report_output(self) -> ReportOutputConfig:
-        return self._cfg.agentic.report_output
+        return self._cfg.agent_loop.report_output
 
     @property
     def level(self) -> str:
@@ -158,7 +157,7 @@ class SootheConfig(BaseSettings):
     @model_validator(mode="before")
     @classmethod
     def _merge_top_level_logging_yaml(cls, data: Any) -> Any:
-        """Fold top-level ``logging:`` YAML into ``observability`` and ``agentic``."""
+        """Fold top-level ``logging:`` YAML into ``observability`` and ``agent_loop.report_output``."""
         if not isinstance(data, dict):
             return data
         logging_block = data.pop("logging", None)
@@ -186,9 +185,11 @@ class SootheConfig(BaseSettings):
         data["observability"] = obs
         ro = logging_block.get("report_output")
         if isinstance(ro, dict):
-            agentic = dict(data.get("agentic") or {})
-            agentic["report_output"] = {**(agentic.get("report_output") or {}), **ro}
-            data["agentic"] = agentic
+            agent_loop = dict(data.get("agent_loop") or {})
+            prev_ro = agent_loop.get("report_output")
+            merged_ro = {**(prev_ro if isinstance(prev_ro, dict) else {}), **ro}
+            agent_loop["report_output"] = merged_ro
+            data["agent_loop"] = agent_loop
         return data
 
     @model_validator(mode="after")
@@ -277,11 +278,8 @@ class SootheConfig(BaseSettings):
     autonomous: AutonomousConfig = Field(default_factory=AutonomousConfig)
     """Autonomous operation configuration."""
 
-    agentic: AgenticLoopConfig = Field(default_factory=AgenticLoopConfig)
-    """Agentic loop configuration (RFC-0008)."""
-
-    execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
-    """Execution limits configuration."""
+    agent_loop: AgentLoopConfig = Field(default_factory=AgentLoopConfig)
+    """Unified agent loop configuration (IG-407: merges agentic + execution)."""
 
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     """Unified observability configuration for debugging and monitoring."""
@@ -315,7 +313,7 @@ class SootheConfig(BaseSettings):
 
     @property
     def logging(self) -> SootheConfigLoggingView:
-        """Maps CLI-style logging fields to ``observability`` and ``agentic.report_output``."""
+        """Maps CLI-style logging fields to ``observability`` and ``agent_loop.report_output``."""
         return SootheConfigLoggingView(self)
 
     # --- Persistence helpers ---

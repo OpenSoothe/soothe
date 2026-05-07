@@ -26,7 +26,7 @@ def validate_plan_evidence(
     Returns:
         True if valid or validation disabled / ledger empty.
     """
-    if not getattr(config.agentic, "loop_orchestrator_evidence_validate", True):
+    if not getattr(config.agent_loop, "loop_orchestrator_evidence_validate", True):
         return True
     if not state.evidence_ledger:
         return True

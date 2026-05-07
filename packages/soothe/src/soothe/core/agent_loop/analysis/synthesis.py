@@ -209,7 +209,7 @@ class SynthesisGenerator:
         """Return max total extracted text for ledger + instruction (IG-317)."""
         max_chars = _DEFAULT_SYNTHESIS_EVIDENCE_MAX
         if self._soothe_config is not None:
-            cap = self._soothe_config.agentic.report_output.synthesis_max_chars
+            cap = self._soothe_config.agent_loop.report_output.synthesis_max_chars
             if cap > 0:
                 max_chars = cap
         return max_chars

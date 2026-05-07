@@ -105,7 +105,6 @@ class CLIConfig:
         transports = daemon_section.get("transports", {})
         websocket = transports.get("websocket", {})
         websocket_legacy = data.get("websocket", {})
-        ui_section = data.get("ui", {})
 
         raw_level = data.get("logging_level")
         if raw_level is not None and not isinstance(raw_level, str):

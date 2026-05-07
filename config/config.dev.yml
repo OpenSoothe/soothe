@@ -50,14 +50,7 @@ router:
   image: "coding-plan:qwen3.5-plus"
   embedding: "dashscope:multimodal-embedding-v1"
 
-# router:
-#   default: "mlxserver:glm-4.7-flash"
-#   fast: "mlxserver:glm-4.7-flash"
-#   think: "mlxserver:glm-4.7-flash"
-#   image: "mlxserver:glm-4.6v-flash"
-#   embedding: "mlxserver:nomic-embed"
-
-agentic:
+agent_loop:
   max_iterations: 5
   max_subagent_tasks_per_wave: 4
   final_response: adaptive
@@ -70,34 +63,38 @@ agentic:
     plan_ledger_max_total_chars: 60000
     plan_ledger_max_message_chars: 8000
 
-execution:
-  concurrency:
-    max_parallel_steps: 2
+  limits:
+    max_parallel_steps: 2      # IG-380: lower parallel fan-out locally
     max_parallel_subagents: 4
-  llm_rpm_limit: 120
-  llm_concurrent_limit: 10
-  llm_call_timeout_seconds: 120
-  llm_call_timeout_max_seconds: 240
-  llm_call_timeout_adaptive: true
-  # Retry with timeout escalation (graceful degradation)
-  llm_retry_on_timeout: true
-  llm_max_timeout_retries: 2
-  llm_timeout_retry_multiplier: 2.0
-  # Tool call limits (ToolCallLimitMiddleware; higher for local monorepos / explore batching)
-  tool_call_limit:
-    global_thread_limit: 220
-    global_run_limit: 80
-    tool_specific_limits:
-      wizsearch_search: {thread_limit: 5, run_limit: 3}
-      wizsearch_crawl: {thread_limit: 5, run_limit: 3}
-      web_search: {thread_limit: 5, run_limit: 3}
-      fetch_url: {thread_limit: 5, run_limit: 3}
-      search: {thread_limit: 5, run_limit: 3}
-  # Tool retry config (ToolRetryMiddleware)
-  tool_retry:
-    max_retries: 3
-    backoff_factor: 2.0
-    initial_delay: 1.0
+    max_parallel_goals: 1
+    global_max_llm_calls: 5
+    step_parallelism: dependency
+
+    llm_rpm_limit: 120
+    llm_concurrent_limit: 10
+    llm_call_timeout_seconds: 120
+    llm_call_timeout_max_seconds: 240
+    llm_call_timeout_adaptive: true
+    # Retry with timeout escalation (graceful degradation)
+    llm_retry_on_timeout: true
+    llm_max_timeout_retries: 2
+    llm_timeout_retry_multiplier: 2.0
+
+    # Tool call limits (ToolCallLimitMiddleware; higher for local monorepos / explore batching)
+    tool_call_limit:
+      global_thread_limit: 220
+      global_run_limit: 80
+      tool_specific_limits:
+        wizsearch_search: {thread_limit: 5, run_limit: 3}
+        wizsearch_crawl: {thread_limit: 5, run_limit: 3}
+        web_search: {thread_limit: 5, run_limit: 3}
+        fetch_url: {thread_limit: 5, run_limit: 3}
+        search: {thread_limit: 5, run_limit: 3}
+    # Tool retry config (ToolRetryMiddleware)
+    tool_retry:
+      max_retries: 3
+      backoff_factor: 2.0
+      initial_delay: 1.0
 
 observability:
   log_file_level: DEBUG

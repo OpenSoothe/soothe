@@ -722,7 +722,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                 logger.debug("Policy check failed", exc_info=True)
 
         skip_memory_for_simple = getattr(
-            self._config.agentic, "skip_memory_recall_for_simple", True
+            self._config.agent_loop, "skip_memory_recall_for_simple", True
         )
         should_run_memory = (not skip_memory_for_simple) or complexity in (
             "medium",

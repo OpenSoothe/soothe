@@ -282,20 +282,21 @@ class MockCoreAgent:
 def _make_config(max_iterations: int = 8) -> MagicMock:
     cfg = MagicMock()
     cfg.subagents = {}
-    cfg.agentic.max_iterations = max_iterations
-    cfg.agentic.context_window_limit = 128000
-    cfg.agentic.working_memory.max_inline_chars = 4000
-    cfg.agentic.working_memory.max_entry_chars_before_spill = 500
-    cfg.execution.concurrency.max_parallel_steps = 1
-    cfg.execution.concurrency.max_parallel_goals = 1
+    al = cfg.agent_loop
+    al.max_iterations = max_iterations
+    al.context_window_limit = 128000
+    al.working_memory.max_inline_chars = 4000
+    al.working_memory.max_entry_chars_before_spill = 500
+    al.limits.max_parallel_steps = 1
+    al.limits.max_parallel_goals = 1
     # Goal completion / synthesis config
-    cfg.agentic.reject_done_at_iteration_zero = False
-    cfg.agentic.goal_completion_mode = "llm_only"
-    cfg.agentic.report_output.synthesis_max_chars = 10000
-    cfg.agentic.report_output.synthesis_include_full_outputs = True
-    cfg.agentic.report_output.output_summary_max_chars = 1500
+    al.reject_done_at_iteration_zero = False
+    al.goal_completion_mode = "llm_only"
+    al.report_output.synthesis_max_chars = 10000
+    al.report_output.synthesis_include_full_outputs = True
+    al.report_output.output_summary_max_chars = 1500
     # Model attribute for SynthesisGenerator
-    cfg.agentic.synthesis_model = None  # Will use planner._model
+    al.synthesis_model = None  # Will use planner._model
     return cfg
 
 

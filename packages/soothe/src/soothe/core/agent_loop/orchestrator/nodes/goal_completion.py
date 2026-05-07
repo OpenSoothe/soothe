@@ -113,7 +113,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     action = plan_manager.determine_completion_strategy(
         state,
         plan_result,
-        agent_loop.config.agentic.final_response,
+        agent_loop.config.agent_loop.final_response,
     )
 
     final_output = None

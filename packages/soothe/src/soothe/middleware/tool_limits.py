@@ -7,18 +7,18 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentMiddleware
 
-    from soothe.config.models import ExecutionConfig
+    from soothe.config.models import InfrastructureLimitsConfig
 
 
 def build_tool_limit_middleware(
-    config: ExecutionConfig,
+    config: InfrastructureLimitsConfig,
 ) -> list[AgentMiddleware[Any, Any]]:
     """Build tool call limit middleware from config.
 
     Creates a global middleware and per-tool middlewares for tools with specific limits.
 
     Args:
-        config: ExecutionConfig with tool_call_limit settings.
+        config: InfrastructureLimitsConfig with tool_call_limit settings.
 
     Returns:
         List of ToolCallLimitMiddleware instances.
@@ -52,12 +52,12 @@ def build_tool_limit_middleware(
 
 
 def build_tool_retry_middleware(
-    config: ExecutionConfig,
+    config: InfrastructureLimitsConfig,
 ) -> list[AgentMiddleware[Any, Any]]:
     """Build tool retry middleware from config.
 
     Args:
-        config: ExecutionConfig with tool_retry settings.
+        config: InfrastructureLimitsConfig with tool_retry settings.
 
     Returns:
         List containing a single ToolRetryMiddleware instance.

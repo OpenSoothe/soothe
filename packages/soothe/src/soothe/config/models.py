@@ -6,8 +6,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from soothe.protocols.concurrency import ConcurrencyPolicy
-
 
 class UIConfig(BaseModel):
     """Configuration for UI preferences.
@@ -625,12 +623,129 @@ class PlanPromptLedgerConfig(BaseModel):
     )
 
 
-class AgenticLoopConfig(BaseModel):
-    """Configuration for agentic loop execution mode (RFC-201).
+class RecoveryConfig(BaseModel):
+    """Failure recovery configuration (RFC-0010).
 
     Args:
-        enabled: Enable agentic loop mode.
-        max_iterations: Maximum agentic loop iterations.
+        progressive_checkpoints: Save checkpoint after each step/goal.
+        auto_resume_on_start: Auto-resume incomplete threads on daemon start.
+    """
+
+    progressive_checkpoints: bool = True
+    auto_resume_on_start: bool = False
+
+
+class ToolCallLimitConfig(BaseModel):
+    """Tool call limit configuration for ToolCallLimitMiddleware.
+
+    Args:
+        global_thread_limit: Maximum tool calls allowed per thread across all tools.
+        global_run_limit: Maximum tool calls allowed per single agent invocation.
+        tool_specific_limits: Tool-specific limit overrides (tool_name -> limits).
+    """
+
+    global_thread_limit: int = Field(
+        default=150, ge=1, description="Global thread-level tool call limit"
+    )
+    global_run_limit: int = Field(default=56, ge=1, description="Global run-level tool call limit")
+    tool_specific_limits: dict[str, dict[str, int]] = Field(
+        default_factory=lambda: {
+            "wizsearch_search": {"thread_limit": 5, "run_limit": 3},
+            "wizsearch_crawl": {"thread_limit": 5, "run_limit": 3},
+            "web_search": {"thread_limit": 5, "run_limit": 3},
+            "fetch_url": {"thread_limit": 5, "run_limit": 3},
+            "search": {"thread_limit": 5, "run_limit": 3},
+        },
+        description="Tool-specific limit overrides",
+    )
+
+
+class ToolRetryConfig(BaseModel):
+    """Tool retry configuration for ToolRetryMiddleware.
+
+    Args:
+        max_retries: Maximum number of retry attempts after initial failure.
+        backoff_factor: Exponential backoff multiplier.
+        initial_delay: Initial delay in seconds before first retry.
+    """
+
+    max_retries: int = Field(default=3, ge=0, description="Max retry attempts")
+    backoff_factor: float = Field(default=2.0, ge=0, description="Backoff multiplier")
+    initial_delay: float = Field(default=1.0, ge=0, description="Initial delay in seconds")
+
+
+class InfrastructureLimitsConfig(BaseModel):
+    """Infrastructure limits configuration (IG-407: unified agent_loop.limits).
+
+    Consolidates execution limits and concurrency controls into flat structure.
+    ConcurrencyPolicy fields are flattened directly into this config (no nested concurrency).
+
+    Args:
+        max_parallel_goals: Maximum goals running simultaneously (autonomous mode).
+        max_parallel_steps: Maximum plan steps running simultaneously.
+        max_parallel_subagents: Maximum subagents running simultaneously.
+        global_max_llm_calls: Cross-level circuit breaker for concurrent LLM calls.
+        step_parallelism: Scheduling strategy for plan steps (sequential/dependency/max).
+        llm_rpm_limit: Soft cap on LLM HTTP requests per minute.
+        llm_concurrent_limit: Max concurrent in-flight LLM calls per thread.
+        llm_call_timeout_seconds: Per-LLM-call timeout floor.
+        llm_call_timeout_adaptive: Scale timeout based on prompt size.
+        llm_call_timeout_max_seconds: Upper bound for adaptive timeout.
+        llm_retry_on_timeout: Enable retry with timeout escalation (IG-295).
+        llm_max_timeout_retries: Max retry attempts after timeout (IG-295).
+        llm_timeout_retry_multiplier: Timeout multiplier on retry (IG-295).
+        recovery: Failure recovery settings.
+        tool_call_limit: Tool call limit configuration.
+        tool_retry: Tool retry configuration.
+    """
+
+    # Concurrency controls (flattened from ConcurrencyPolicy)
+    max_parallel_goals: int = Field(
+        default=1, ge=0, description="Maximum parallel goals (0=unlimited)"
+    )
+    max_parallel_steps: int = Field(
+        default=2, ge=0, description="Maximum parallel steps (0=unlimited)"
+    )
+    max_parallel_subagents: int = Field(
+        default=4, ge=0, description="Maximum parallel subagents (0=unlimited)"
+    )
+    global_max_llm_calls: int = Field(
+        default=5, ge=0, description="Global LLM call cap (0=unlimited)"
+    )
+    step_parallelism: Literal["sequential", "dependency", "max"] = Field(
+        default="dependency", description="Step scheduling strategy"
+    )
+
+    # Rate limiting
+    llm_rpm_limit: int = Field(default=120, ge=1, le=10_000)
+    llm_concurrent_limit: int = Field(default=10, ge=1, le=500)
+
+    # Timeout controls
+    llm_call_timeout_seconds: int = Field(default=120, ge=5, le=3600)
+    llm_call_timeout_adaptive: bool = True
+    llm_call_timeout_max_seconds: int = Field(default=900, ge=60, le=3600)
+
+    # IG-295: Retry with timeout escalation
+    llm_retry_on_timeout: bool = True
+    llm_max_timeout_retries: int = Field(default=2, ge=0, le=5)
+    llm_timeout_retry_multiplier: float = Field(default=2.0, ge=1.0, le=5.0)
+
+    # Tool limits
+    recovery: RecoveryConfig = Field(default_factory=RecoveryConfig)
+    tool_call_limit: ToolCallLimitConfig = Field(default_factory=ToolCallLimitConfig)
+    tool_retry: ToolRetryConfig = Field(default_factory=ToolRetryConfig)
+
+
+class AgentLoopConfig(BaseModel):
+    """Configuration for agent loop execution mode (RFC-201, IG-407: unified config).
+
+    Unified configuration consolidating agentic behavior fields and infrastructure limits.
+    Behavior fields are placed directly under agent_loop.* for easy access (max 2 levels nesting).
+    Infrastructure limits are grouped in dedicated agent_loop.limits.* subsection.
+
+    Args:
+        enabled: Enable agent loop mode.
+        max_iterations: Maximum agent loop iterations.
         max_subagent_tasks_per_wave: Cap ``task`` tool completions per Act wave (0 = unlimited).
         agent_loop_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
         final_response: Whether to always synthesize a final CoreAgent report, reuse last Execute
@@ -645,6 +760,7 @@ class AgenticLoopConfig(BaseModel):
         goal_completion_mode: How planner completion (`require_goal_completion`) combines with
             execution heuristics when the goal is assessed as done (IG-298).
         plan_prompt_ledger: Ledger projection caps for Plan-phase LLM prompts (IG-380).
+        limits: Infrastructure limits configuration (rate limiting, concurrency, timeouts, tool limits).
 
     Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
     parallel_pre_stream) are always enabled by design and not configurable.
@@ -652,12 +768,12 @@ class AgenticLoopConfig(BaseModel):
 
     enabled: bool = Field(
         default=True,
-        description="Enable agentic loop mode",
+        description="Enable agent loop mode",
     )
 
     max_iterations: int = Field(
         default=10,
-        description="Maximum agentic loop iterations",
+        description="Maximum agent loop iterations",
         ge=1,
         le=50,
     )
@@ -752,6 +868,12 @@ class AgenticLoopConfig(BaseModel):
     plan_prompt_ledger: PlanPromptLedgerConfig = Field(
         default_factory=PlanPromptLedgerConfig,
         description="Plan-phase ledger projection limits (IG-380); zeros = full ledger passthrough",
+    )
+
+    # IG-407: Infrastructure limits subsection
+    limits: InfrastructureLimitsConfig = Field(
+        default_factory=InfrastructureLimitsConfig,
+        description="Infrastructure limits (rate limiting, concurrency, timeouts, tool limits)",
     )
 
 
@@ -977,92 +1099,6 @@ class ObservabilityConfig(BaseModel):
         default_factory=LangfuseIntegrationConfig,
         description="Langfuse tracing (install optional extra soothe[langfuse])",
     )
-
-
-class RecoveryConfig(BaseModel):
-    """Failure recovery configuration (RFC-0010).
-
-    Args:
-        progressive_checkpoints: Save checkpoint after each step/goal.
-        auto_resume_on_start: Auto-resume incomplete threads on daemon start.
-    """
-
-    progressive_checkpoints: bool = True
-    auto_resume_on_start: bool = False
-
-
-class ToolCallLimitConfig(BaseModel):
-    """Tool call limit configuration for ToolCallLimitMiddleware.
-
-    Args:
-        global_thread_limit: Maximum tool calls allowed per thread across all tools.
-        global_run_limit: Maximum tool calls allowed per single agent invocation.
-        tool_specific_limits: Tool-specific limit overrides (tool_name -> limits).
-    """
-
-    global_thread_limit: int = Field(
-        default=150, ge=1, description="Global thread-level tool call limit"
-    )
-    global_run_limit: int = Field(default=56, ge=1, description="Global run-level tool call limit")
-    tool_specific_limits: dict[str, dict[str, int]] = Field(
-        default_factory=lambda: {
-            "wizsearch_search": {"thread_limit": 5, "run_limit": 3},
-            "wizsearch_crawl": {"thread_limit": 5, "run_limit": 3},
-            "web_search": {"thread_limit": 5, "run_limit": 3},
-            "fetch_url": {"thread_limit": 5, "run_limit": 3},
-            "search": {"thread_limit": 5, "run_limit": 3},
-        },
-        description="Tool-specific limit overrides",
-    )
-
-
-class ToolRetryConfig(BaseModel):
-    """Tool retry configuration for ToolRetryMiddleware.
-
-    Args:
-        max_retries: Maximum number of retry attempts after initial failure.
-        backoff_factor: Exponential backoff multiplier.
-        initial_delay: Initial delay in seconds before first retry.
-    """
-
-    max_retries: int = Field(default=3, ge=0, description="Max retry attempts")
-    backoff_factor: float = Field(default=2.0, ge=0, description="Backoff multiplier")
-    initial_delay: float = Field(default=1.0, ge=0, description="Initial delay in seconds")
-
-
-class ExecutionConfig(BaseModel):
-    """Execution limits configuration.
-
-    Args:
-        concurrency: Concurrency limits for parallel execution.
-        recovery: Failure recovery settings.
-        tool_call_limit: Tool call limit configuration (ToolCallLimitMiddleware).
-        tool_retry: Tool retry configuration (ToolRetryMiddleware).
-        llm_rpm_limit: Soft cap on LLM HTTP requests per minute (middleware sliding window).
-        llm_concurrent_limit: Max concurrent in-flight LLM calls per thread.
-        llm_call_timeout_seconds: Per-LLM-call timeout for rate-limit middleware (floor when adaptive).
-        llm_call_timeout_adaptive: Scale timeout up from the floor based on estimated prompt size.
-        llm_call_timeout_max_seconds: Upper bound for adaptive per-call timeout.
-        llm_retry_on_timeout: Enable retry with timeout escalation (IG-295).
-        llm_max_timeout_retries: Max retry attempts after timeout (IG-295).
-        llm_timeout_retry_multiplier: Timeout multiplier on retry (IG-295).
-    """
-
-    concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
-    recovery: RecoveryConfig = Field(default_factory=RecoveryConfig)
-    tool_call_limit: ToolCallLimitConfig = Field(default_factory=ToolCallLimitConfig)
-    tool_retry: ToolRetryConfig = Field(default_factory=ToolRetryConfig)
-
-    llm_rpm_limit: int = Field(default=120, ge=1, le=10_000)
-    llm_concurrent_limit: int = Field(default=10, ge=1, le=500)
-    llm_call_timeout_seconds: int = Field(default=120, ge=5, le=3600)
-    llm_call_timeout_adaptive: bool = True
-    llm_call_timeout_max_seconds: int = Field(default=900, ge=60, le=3600)
-
-    # IG-295: Retry with timeout escalation
-    llm_retry_on_timeout: bool = True
-    llm_max_timeout_retries: int = Field(default=2, ge=0, le=5)
-    llm_timeout_retry_multiplier: float = Field(default=2.0, ge=1.0, le=5.0)
 
 
 class AutopilotConfig(BaseModel):
