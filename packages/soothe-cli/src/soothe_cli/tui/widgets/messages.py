@@ -874,7 +874,7 @@ class ToolCallMessage(Vertical):
     }
 
     ToolCallMessage .tool-result-summary {
-        margin-left: 3;
+        margin-left: 0;
         height: auto;
     }
 
