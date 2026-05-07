@@ -47,7 +47,6 @@ async def run_headless_via_daemon(
 
     ws_url = websocket_url_from_config(cfg)
     client = WebSocketClient(url=ws_url)
-    final_output_mode = getattr(cfg, "final_output_mode", "streaming")
 
     try:
         await connect_websocket_with_retries(client)
@@ -85,7 +84,6 @@ async def run_headless_via_daemon(
         renderer = HeadlessCliRenderer()
         processor = EventProcessor(
             renderer,
-            final_output_mode=final_output_mode,
             presentation_engine=presentation,
             headless_output=True,
         )
