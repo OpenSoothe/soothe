@@ -113,7 +113,9 @@ def main() -> int:
     else:
         print("\nSemantic similarity unavailable.")
         print("Explore subagent will fallback to keyword matching.")
-        return 1
+        # Exit 0 to allow Docker builds to succeed even when semantic extras not installed
+        # The functionality is optional - keyword matching fallback is acceptable
+        return 0
 
 
 if __name__ == "__main__":
