@@ -27,8 +27,6 @@ class CLIConfig:
     # logging_level: DEBUG/INFO/… for ~/.soothe/logs/soothe-cli.log; None = default INFO.
     logging_level: str | None = None
 
-    final_output_mode: str = "streaming"
-
     # Output streaming overrides (RFC-614)
     output_streaming_enabled: bool | None = None
     """Override daemon streaming enabled setting."""
@@ -113,20 +111,10 @@ class CLIConfig:
         if raw_level is not None and not isinstance(raw_level, str):
             raw_level = None
 
-        raw_final_output_mode = data.get("final_output_mode")
-        if raw_final_output_mode is None and isinstance(ui_section, dict):
-            raw_final_output_mode = ui_section.get("final_output_mode")
-        if not isinstance(raw_final_output_mode, str):
-            raw_final_output_mode = "streaming"
-        final_output_mode = raw_final_output_mode.strip().lower()
-        if final_output_mode not in {"streaming", "batch"}:
-            final_output_mode = "streaming"
-
         return cls(
             daemon_host=websocket.get("host", websocket_legacy.get("host", "127.0.0.1")),
             daemon_port=websocket.get("port", websocket_legacy.get("port", 8765)),
             logging_level=raw_level,
-            final_output_mode=final_output_mode,
             soothe_home=Path(data.get("home", str(Path.home() / ".soothe"))),
         )
 

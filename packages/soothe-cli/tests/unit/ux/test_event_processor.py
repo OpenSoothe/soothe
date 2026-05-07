@@ -318,7 +318,7 @@ class TestEventProcessorOutputEventRouting:
     def test_batch_mode_emits_goal_completion_final_message(self) -> None:
         """Batch mode should render final goal completion from ``LoopAIMessage``-shaped dict."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, final_output_mode="batch")
+        processor = EventProcessor(renderer)
 
         processor.process_event(
             _stream_messages_event(
@@ -340,7 +340,7 @@ class TestEventProcessorOutputEventRouting:
     def test_batch_mode_suppresses_goal_completion_chunks(self) -> None:
         """Batch mode should ignore goal-completion stream chunks."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, final_output_mode="batch")
+        processor = EventProcessor(renderer)
 
         processor.process_event(
             _stream_messages_event(
@@ -359,7 +359,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_mode_accepts_goal_completion_chunk(self) -> None:
         """Goal-completion chunks route to assistant text in streaming mode."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, final_output_mode="streaming")
+        processor = EventProcessor(renderer)
 
         processor.process_event(
             _stream_messages_event(
@@ -378,7 +378,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_mode_completed_event_stays_progress_only(self) -> None:
         """Completed event remains progress-only in streaming mode."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, final_output_mode="streaming")
+        processor = EventProcessor(renderer)
 
         completion_event = {
             "type": "event",
@@ -401,7 +401,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_goal_completion_preserves_markdown_chunk_boundaries(self) -> None:
         """Streaming markdown chunks should preserve whitespace/newlines exactly."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, final_output_mode="streaming")
+        processor = EventProcessor(renderer)
 
         chunk_1 = "# README Files Count Report\n\n## 1. Executive Summary\n\nThis report "
         chunk_2 = "documents the comprehensive count.\n\n## 2. Methodology\n"
@@ -437,7 +437,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_goal_completion_preserves_boundaries_when_is_chunk_false(self) -> None:
         """Non-chunk ``ai`` payloads still stream as incremental text for goal completion."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, final_output_mode="streaming")
+        processor = EventProcessor(renderer)
 
         tid = {"thread_id": "tid", "phase": "goal_completion"}
         processor.process_event(
@@ -461,7 +461,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_goal_completion_keeps_raw_cross_chunk_heading_boundaries(self) -> None:
         """Streaming should preserve raw heading chunk boundaries without repair."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, final_output_mode="streaming")
+        processor = EventProcessor(renderer)
 
         tid = {"thread_id": "tid", "phase": "goal_completion"}
         for content in (
@@ -487,7 +487,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_goal_completion_keeps_raw_heading_and_bold_boundaries(self) -> None:
         """Streaming should preserve raw chunk boundaries for heading/body and bold/body."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, final_output_mode="streaming")
+        processor = EventProcessor(renderer)
 
         tid = {"thread_id": "tid", "phase": "goal_completion"}
         chunks = [

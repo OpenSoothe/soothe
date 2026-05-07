@@ -103,8 +103,8 @@ pip install -U 'soothe[all]'
 # Create config directory
 mkdir -p ~/.soothe/config
 
-# Copy minimal config template
-cp config/config.minimal.yml ~/.soothe/config/config.yml
+# Copy config template
+cp config/config.template.yml ~/.soothe/config/config.yml
 
 # Set your API key
 export OPENAI_API_KEY="sk-..."
@@ -115,7 +115,7 @@ export OPENAI_API_KEY="sk-..."
 vim ~/.soothe/config/config.yml
 ```
 
-The minimal config contains just essentials: provider settings and model router. All other settings use sensible defaults.
+The config template contains all available settings with examples. For minimal setup, configure your provider and router, and leave other settings at their defaults.
 
 **2. Run Soothe**:
 
