@@ -1126,6 +1126,8 @@ class ToolCallMessage(Vertical):
         text = (line or "").strip()
         if not text:
             return
+        if len(text) > 70:
+            text = text[:67] + "..."
         self._subagent_notes.append(text)
         self._activity.append(text)
         self._refresh_activity_display()
@@ -2590,8 +2592,9 @@ class CognitionStepMessage(Vertical):
                 self._status_widget.remove_class("pending")
                 self._status_widget.display = False
             detail = f"Done · {dur_str}{tool_part}"
-            if summary.strip() and summary.strip() not in ("Done",):
-                detail = f"{detail}\n{summary.strip()}"
+            s = summary.strip()
+            if s and s not in ("Done", "Failed") and not s.lower().startswith("done"):
+                detail = f"{detail}\n{s}"
             self._detail_widget.update(Content.styled(detail, "dim"))
             self._detail_widget.display = True
             return
