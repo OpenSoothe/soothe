@@ -337,7 +337,12 @@ def _try_register_task_scoped_inner_tool_pending(
     ts_r = resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
     if not ts_r or not ts_r[0]:
         return
-    if adapter._tool_display_by_call_id.get(ts_r[0]) is None:
+    parent = adapter._tool_display_by_call_id.get(ts_r[0])
+    if parent is None:
+        return
+    # IG-403: Skip text-based pending line when parent has tool row infrastructure
+    # (tool rows render the invocation directly — text fallback would duplicate it).
+    if isinstance(parent, ToolCallMessage):
         return
     if not show_tool_ui or not presentation.tier_visible(VerbosityTier.NORMAL):
         return
@@ -427,14 +432,23 @@ class TextualUIAdapter:
         self._step_by_namespace: dict[tuple[Any, ...], CognitionStepMessage] = {}
         """Active step card per stream namespace (main-agent tool aggregation, IG-402)."""
 
-        self._tool_to_step: dict[str, CognitionStepMessage] = {}
-        """tool_call_id → step card while awaiting a matching ``ToolMessage`` (IG-402)."""
+        self._tool_to_step: dict[str, ToolCallMessage | CognitionStepMessage] = {}
+        """tool_call_id → parent card (step or task) while awaiting a matching ``ToolMessage``."""
 
         self._task_inner_tool_pending_lines: dict[str, str] = {}
         """tool_call_id → invocation line for task subgraph tools awaiting ``ToolMessage``."""
 
         self._task_inner_tool_start_times: dict[str, float] = {}
         """Wall time when the pending inner-tool line was recorded (for duration in status)."""
+
+        self._pending_main_tools: list[tuple[str, dict[str, Any]]] = []
+        """IG-402: Ordered buffer of tool calls on main namespace awaiting step_started.
+
+        Each entry is ``(tool_call_id, {name, args, raw_args})``. Insertion order
+        is preserved so that when ``AGENT_LOOP_STEP_STARTED`` fires, only tools
+        buffered **before** that event are flushed into the step card (not tools
+        that arrive later for subsequent steps).
+        """
 
         # Token display callbacks (set by the app after construction)
         self._on_tokens_update: _TokensUpdateCallback | None = None
@@ -466,6 +480,7 @@ class TextualUIAdapter:
         self._step_by_namespace.clear()
         self._task_inner_tool_pending_lines.clear()
         self._task_inner_tool_start_times.clear()
+        self._pending_main_tools.clear()
 
         # Clear active streaming message to avoid stale "active" state in the store.
         if self._set_active_message:
@@ -483,6 +498,7 @@ class TextualUIAdapter:
         self._step_by_namespace.clear()
         self._task_inner_tool_pending_lines.clear()
         self._task_inner_tool_start_times.clear()
+        self._pending_main_tools.clear()
 
 
 def _adapter_has_pending_tools(adapter: TextualUIAdapter) -> bool:
@@ -536,11 +552,12 @@ def _build_interrupted_ai_message(
         seen_ids.add(str(tool_id))
 
     for step_w in dict.fromkeys(adapter._tool_to_step.values()):
-        for row in step_w.iter_open_tool_calls_for_interrupt():
-            rid = str(row.get("id", ""))
-            if rid and rid not in seen_ids:
-                tool_calls.append(row)
-                seen_ids.add(rid)
+        if hasattr(step_w, "iter_open_tool_calls_for_interrupt"):
+            for row in step_w.iter_open_tool_calls_for_interrupt():
+                rid = str(row.get("id", ""))
+                if rid and rid not in seen_ids:
+                    tool_calls.append(row)
+                    seen_ids.add(rid)
 
     if not accumulated_text and not tool_calls:
         return None
@@ -1726,6 +1743,30 @@ async def execute_task_textual(
                                     if adapter._set_spinner:
                                         await adapter._set_spinner(None)
                                     tool_call_buffers.pop(buffer_key, None)
+
+                                    # Add tool row to parent Task card
+                                    raw = ""
+                                    pend = pending_tool_calls_lc.get(str(lookup_id))
+                                    if isinstance(pend, dict):
+                                        raw = str(pend.get("args_str", ""))
+                                    parent_for_inner.add_tool_call(
+                                        lookup_id,
+                                        buffer_name or "tool",
+                                        parsed_args,
+                                        raw_args=raw,
+                                    )
+                                    adapter._tool_to_step[lookup_id] = parent_for_inner
+                                    adapter._tool_display_by_call_id[str(lookup_id)] = (
+                                        parent_for_inner
+                                    )
+
+                                    logger.debug(
+                                        "Subagent tool row on parent: name=%s "
+                                        "tool_call_id=%s parent=%s",
+                                        buffer_name,
+                                        lookup_id,
+                                        type(parent_for_inner).__name__,
+                                    )
                                     continue
                                 if show_tool_ui:
                                     file_op_tracker.start_operation(
@@ -1739,10 +1780,17 @@ async def execute_task_textual(
                                     active_step = adapter._step_by_namespace.get(ns_key)
                                     use_step_aggregator = is_main_agent and active_step is not None
                                     if use_step_aggregator:
+                                        # IG-402: Pass _raw from streaming accumulator so
+                                        # format_tool_call_args can use its regex fallback.
+                                        raw = ""
+                                        pend = pending_tool_calls_lc.get(str(lookup_id))
+                                        if isinstance(pend, dict):
+                                            raw = str(pend.get("args_str", ""))
                                         active_step.add_tool_call(
                                             lookup_id,
                                             buffer_name or "tool",
                                             parsed_args,
+                                            raw_args=raw,
                                         )
                                         adapter._tool_to_step[lookup_id] = active_step
                                         logger.debug(
@@ -1753,9 +1801,74 @@ async def execute_task_textual(
                                             ns_key,
                                         )
                                         if buffer_name == "task":
-                                            adapter._tool_display_by_call_id[str(lookup_id)] = (
-                                                active_step
+                                            # IG-403: mount a ToolCallMessage as subagent card
+                                            # so inner tools (Glob, ShellExecute) can be rows
+                                            # inside it. Register it as the parent in
+                                            # _tool_display_by_call_id (not the step card).
+                                            task_card = ToolCallMessage(
+                                                buffer_name,
+                                                parsed_args,
+                                                tool_call_id=lookup_id,
                                             )
+                                            await adapter._mount_message(task_card)
+                                            task_card.set_running()
+                                            adapter._current_tool_messages[lookup_id] = task_card
+                                            adapter._tool_display_by_call_id[str(lookup_id)] = (
+                                                task_card
+                                            )
+                                            logger.debug(
+                                                "Task subagent card mounted (step path): "
+                                                "tool_call_id=%s",
+                                                lookup_id,
+                                            )
+                                    elif is_main_agent:
+                                        # IG-402: No step card yet — buffer this tool so it can
+                                        # be retroactively attached when step_started arrives.
+                                        raw = ""
+                                        pend = pending_tool_calls_lc.get(str(lookup_id))
+                                        if isinstance(pend, dict):
+                                            raw = str(pend.get("args_str", ""))
+                                        if buffer_name == "task":
+                                            # IG-403: mount a ToolCallMessage for the task tool
+                                            # immediately so subagent tools can resolve a parent.
+                                            task_card = ToolCallMessage(
+                                                buffer_name,
+                                                parsed_args,
+                                                tool_call_id=lookup_id,
+                                            )
+                                            await adapter._mount_message(task_card)
+                                            task_card.set_running()
+                                            adapter._current_tool_messages[lookup_id] = task_card
+                                            adapter._tool_display_by_call_id[str(lookup_id)] = (
+                                                task_card
+                                            )
+                                            logger.debug(
+                                                "Task subagent card mounted (pending path): "
+                                                "tool_call_id=%s",
+                                                lookup_id,
+                                            )
+                                        adapter._pending_main_tools.append(
+                                            (
+                                                str(lookup_id),
+                                                {
+                                                    "name": buffer_name or "tool",
+                                                    "args": dict(parsed_args),
+                                                    "raw_args": raw,
+                                                },
+                                            )
+                                        )
+                                        if buffer_name != "task":
+                                            # Pending marker for non-task tools: subagent
+                                            # resolution sees this and knows the parent exists
+                                            # but hasn't been flushed yet.
+                                            adapter._tool_display_by_call_id[str(lookup_id)] = None
+                                        logger.debug(
+                                            "Tool call buffered for step aggregation: name=%s "
+                                            "tool_call_id=%s namespace=%s",
+                                            buffer_name,
+                                            lookup_id,
+                                            ns_key,
+                                        )
                                     else:
                                         tool_msg = ToolCallMessage(
                                             buffer_name,
@@ -1877,6 +1990,23 @@ async def execute_task_textual(
                                 step_widget.set_running()
                                 adapter._current_step_messages[step_id] = step_widget
                                 adapter._step_by_namespace[ns_key] = step_widget
+
+                                # IG-402: Flush buffered main-namespace tools into the step card.
+                                # Only flush tools that were buffered *before* this step_started
+                                # event (preserve ordering so subsequent steps don't get mixed in).
+                                pending_count = len(adapter._pending_main_tools)
+                                for tcid_str, buf in adapter._pending_main_tools:
+                                    step_widget.add_tool_call(
+                                        tcid_str,
+                                        buf["name"],
+                                        buf["args"],
+                                        raw_args=buf.get("raw_args", ""),
+                                    )
+                                    adapter._tool_to_step[tcid_str] = step_widget
+                                    adapter._tool_display_by_call_id[tcid_str] = step_widget
+                                # Keep only tools that arrived after this flush (for subsequent steps).
+                                adapter._pending_main_tools = adapter._pending_main_tools[pending_count:]
+
                                 continue
 
                         if event_type == AGENT_LOOP_STEP_COMPLETED:
@@ -2053,6 +2183,19 @@ async def execute_task_textual(
                 goal_completion_stream_by_namespace.pop(ns_key, None)
             pending_text_by_namespace.clear()
             assistant_message_by_namespace.clear()
+
+            # IG-402: Flush any buffered main-namespace tools as standalone cards
+            # (edge case: stream ended without a step_started event).
+            for tcid_str, buf in adapter._pending_main_tools:
+                tool_msg = ToolCallMessage(
+                    buf["name"],
+                    buf["args"],
+                    tool_call_id=tcid_str,
+                )
+                await adapter._mount_message(tool_msg)
+                adapter._current_tool_messages[tcid_str] = tool_msg
+                adapter._tool_display_by_call_id[tcid_str] = tool_msg
+            adapter._pending_main_tools.clear()
 
             # Handle HITL after stream completes
             if interrupt_occurred:
@@ -2368,6 +2511,7 @@ async def _handle_interrupt_cleanup(
     adapter._current_step_messages.clear()
     adapter._tool_to_step.clear()
     adapter._step_by_namespace.clear()
+    adapter._pending_main_tools.clear()
 
     for gt in list(adapter._goal_tree_by_namespace.values()):
         gt.set_interrupted("Interrupted by user")

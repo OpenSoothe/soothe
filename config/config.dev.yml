@@ -86,8 +86,8 @@ execution:
   llm_timeout_retry_multiplier: 2.0
   # Tool call limits (ToolCallLimitMiddleware)
   tool_call_limit:
-    global_thread_limit: 20
-    global_run_limit: 10
+    global_thread_limit: 100
+    global_run_limit: 30
     tool_specific_limits:
       wizsearch_search: {thread_limit: 5, run_limit: 3}
       wizsearch_crawl: {thread_limit: 5, run_limit: 3}

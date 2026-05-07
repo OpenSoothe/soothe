@@ -904,6 +904,20 @@ class ToolCallMessage(Vertical):
         background: transparent;
     }
 
+    ToolCallMessage .tool-rows {
+        margin-left: 3;
+        margin-top: 0;
+        height: auto;
+        color: $text;
+    }
+
+    ToolCallMessage .tool-rows-hint {
+        margin-left: 3;
+        color: $text-muted;
+        background: transparent;
+        height: auto;
+    }
+
     ToolCallMessage:hover {
         border-left: wide $tool-hover;
     }
@@ -942,7 +956,7 @@ class ToolCallMessage(Vertical):
             tn = "tool"
         self._tool_name = tn
         self._args = args or {}
-        self._subagent_notes: list[str] = []
+        self._subagent_notes: list[str] = []  # kept for append_subagent_activity API compat
         self._status = "pending"  # Waiting for approval or auto-approve
         self._output: str = ""
         self._expanded: bool = False
@@ -960,16 +974,26 @@ class ToolCallMessage(Vertical):
         self._deferred_status: str | None = None
         self._deferred_output: str | None = None
         self._deferred_expanded: bool = False
+        # Unified activity list: interleaved text lines and tool rows (IG-403).
+        # Each entry is either a plain str (text line) or _StepToolRow (tool row).
+        self._activity: list[str | _StepToolRow] = []
+        self._row_index: dict[str, _StepToolRow] = {}
+        self._activity_widget: Static | None = None
+        self._tools_body_collapsed: bool = False
+        # Legacy compat aliases — _rows still needed by callers that iterate rows
+        self._rows: list[_StepToolRow] = []  # kept in sync with _activity tool rows
 
     def compose(self) -> ComposeResult:
         """Compose the tool call message layout.
 
         Yields:
-            Widgets for header, CLI-style result line, status, and collapsible output.
+            Widgets for header, interleaved activity (tool rows + text lines),
+            result summary, status, and collapsible output.
         """
         tool_label = format_tool_cli_style_command(self._tool_name, self._args)
         yield Static(tool_label, markup=False, classes="tool-header")
-        yield Static("", markup=False, classes="tool-subagent-notes", id="subagent-notes")
+        # Unified activity widget: interleaves text lines and tool rows (IG-403)
+        yield Static("", classes="tool-rows", id="activity", markup=False)
         yield Static("", classes="tool-result-summary", id="tool-result-summary")
         # Status — running spinner while executing; unused when result summary shows
         yield Static("", classes="tool-status", id="status")
@@ -984,11 +1008,12 @@ class ToolCallMessage(Vertical):
 
         self._status_widget = self.query_one("#status", Static)
         self._result_summary_widget = self.query_one("#tool-result-summary", Static)
-        notes = self.query_one("#subagent-notes", Static)
-        notes.display = False
         self._preview_widget = self.query_one("#output-preview", Static)
         self._hint_widget = self.query_one("#output-hint", Static)
         self._full_widget = self.query_one("#output-full", Static)
+        # Unified activity widget (interleaved tool rows + text lines)
+        self._activity_widget = self.query_one("#activity", Static)
+        self._activity_widget.display = False
         # Hide everything initially - status only shown when running or on error/reject
         self._status_widget.display = False
         self._result_summary_widget.display = False
@@ -1102,12 +1127,204 @@ class ToolCallMessage(Vertical):
         if not text:
             return
         self._subagent_notes.append(text)
-        try:
-            w = self.query_one("#subagent-notes", Static)
-        except Exception:  # noqa: BLE001
+        self._activity.append(text)
+        self._refresh_activity_display()
+
+    def _row_to_content(self, row: _StepToolRow) -> Content:
+        """Format a single tool row using the shared formatter."""
+        phase = row.phase
+        elapsed: float | None = None
+        if phase == "running" and row.started_at is not None:
+            elapsed = max(0.0, time() - row.started_at)
+        spin = None
+        if phase == "running":
+            frames = get_glyphs().spinner_frames
+            spin = frames[self._spinner_position % len(frames)]
+        return format_tool_call_row(
+            row.tool_name,
+            row.args,
+            phase=phase,
+            output=row.output,
+            duration_ms=row.duration_ms,
+            running_spinner=spin,
+            running_elapsed_secs=elapsed,
+        )
+
+    def _refresh_tools_display(self) -> None:
+        """Alias for _refresh_activity_display (kept for compat)."""
+        self._refresh_activity_display()
+
+    def _refresh_activity_display(self) -> None:
+        """Update the unified activity widget with interleaved text lines and tool rows."""
+        if self._activity_widget is None:
             return
-        w.update("\n".join(self._subagent_notes))
-        w.display = True
+        if not self._activity:
+            self._activity_widget.display = False
+            return
+        self._activity_widget.display = True
+        parts: list[Content] = []
+        for entry in self._activity:
+            if isinstance(entry, str):
+                parts.append(Content.styled(entry, "dim"))
+            else:
+                parts.append(self._row_to_content(entry))
+        self._activity_widget.update(Content("\n").join(parts))
+
+    def add_tool_call(
+        self,
+        tool_call_id: str,
+        tool_name: str,
+        args: dict[str, Any],
+        *,
+        raw_args: str = "",
+    ) -> None:
+        """Register a new tool row (pending).
+
+        Args:
+            tool_call_id: Unique tool call identifier.
+            tool_name: Tool name for display.
+            args: Parsed tool arguments.
+            raw_args: Raw JSON args string from streaming (for regex fallback
+                in ``format_tool_call_args`` when ``args`` is empty/partial).
+        """
+        tcid = str(tool_call_id).strip()
+        if not tcid:
+            return
+        if tcid in self._row_index:
+            self.update_tool_args(tcid, args)
+            return
+        row_args: dict[str, Any] = dict(args or {})
+        if raw_args:
+            row_args["_raw"] = raw_args
+        row = _StepToolRow(
+            tool_call_id=tcid,
+            tool_name=(tool_name or "tool").strip() or "tool",
+            args=row_args,
+            phase="pending",
+        )
+        self._rows.append(row)
+        self._activity.append(row)
+        self._row_index[tcid] = row
+        self._refresh_activity_display()
+
+    def has_tool_call_row(self, tool_call_id: str) -> bool:
+        """Return True if this card already tracks ``tool_call_id``."""
+        return str(tool_call_id) in self._row_index
+
+    def row_duration_ms_since_started(self, tool_call_id: str) -> int:
+        """Elapsed ms since this row entered running state."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None or row.started_at is None:
+            return 0
+        return int((time() - row.started_at) * 1000)
+
+    def update_tool_args(self, tool_call_id: str, args: dict[str, Any]) -> None:
+        """Refresh kwargs when streaming fills in arguments."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None:
+            return
+        row.args = dict(args or {})
+        self._refresh_tools_display()
+
+    def set_tool_running(self, tool_call_id: str) -> None:
+        """Mark a tool row as executing (after approval)."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None or row.phase not in ("pending", "running"):
+            return
+        row.phase = "running"
+        row.started_at = time()
+        self._refresh_tools_display()
+
+    def set_tool_success(self, tool_call_id: str, result: str, *, duration_ms: int = 0) -> None:
+        """Finalize a tool row as success."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None:
+            return
+        row.phase = "success"
+        row.output = _strip_success_exit_line(result)
+        row.duration_ms = duration_ms
+        row.started_at = None
+        self._refresh_tools_display()
+
+    def set_tool_error(self, tool_call_id: str, error: str, *, duration_ms: int = 0) -> None:
+        """Finalize a tool row as error."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None:
+            return
+        row.phase = "error"
+        row.output = error
+        row.duration_ms = duration_ms
+        row.started_at = None
+        self._refresh_tools_display()
+
+    def set_tool_rejected(self, tool_call_id: str) -> None:
+        """Mark a tool row as rejected (HITL)."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None:
+            return
+        row.phase = "rejected"
+        row.started_at = None
+        self._refresh_tools_display()
+
+    def set_tool_skipped(self, tool_call_id: str) -> None:
+        """Mark a tool row skipped."""
+        row = self._row_index.get(str(tool_call_id))
+        if row is None:
+            return
+        row.phase = "skipped"
+        row.started_at = None
+        self._refresh_tools_display()
+
+    def mark_unfinished_tools_skipped(self) -> None:
+        """Mark pending/running rows skipped when the parent ends without results."""
+        for row in self._rows:
+            if row.phase in ("pending", "running"):
+                row.phase = "skipped"
+                row.started_at = None
+        self._refresh_tools_display()
+
+    def snapshot_tool_rows(self) -> list[dict[str, Any]]:
+        """Serialize tool rows for ``MessageData``."""
+        return [
+            {
+                "id": r.tool_call_id,
+                "name": r.tool_name,
+                "args": dict(r.args),
+                "phase": r.phase,
+                "output": r.output,
+                "duration_ms": r.duration_ms,
+                "started_at": r.started_at,
+            }
+            for r in self._rows
+        ]
+
+    def apply_tool_rows_snapshot(self, raw_rows: list[dict[str, Any]]) -> None:
+        """Restore tool rows from :meth:`snapshot_tool_rows` output."""
+        self._rows = []
+        self._row_index = {}
+        self._activity = [e for e in self._activity if isinstance(e, str)]  # keep text lines
+        for raw in raw_rows or []:
+            tcid = str(raw.get("id", "")).strip()
+            if not tcid:
+                continue
+            name = str(raw.get("name", "tool") or "tool")
+            args = raw.get("args")
+            if not isinstance(args, dict):
+                args = {}
+            phase = str(raw.get("phase", "pending"))
+            row = _StepToolRow(
+                tool_call_id=tcid,
+                tool_name=name,
+                args=dict(args),
+                phase=phase,
+                output=str(raw.get("output", "") or ""),
+                duration_ms=int(raw.get("duration_ms", 0) or 0),
+                started_at=raw.get("started_at"),
+            )
+            self._rows.append(row)
+            self._activity.append(row)
+            self._row_index[tcid] = row
+        self._refresh_activity_display()
 
     def set_running(self) -> None:
         """Mark the tool as running (approved and executing).
@@ -1143,6 +1360,9 @@ class ToolCallMessage(Vertical):
 
         text = f"{frame} Running...{elapsed}"
         self._status_widget.update(Content.styled(text, theme.get_theme_colors(self).warning))
+        # Also refresh tool rows to update running spinners
+        if self._rows:
+            self._refresh_tools_display()
 
     def _stop_animation(self) -> None:
         """Stop the running animation."""
@@ -1255,8 +1475,14 @@ class ToolCallMessage(Vertical):
         self._update_output_display()
 
     def on_click(self, event: Click) -> None:
-        """Toggle output expansion, or show timestamp if no output."""
+        """Toggle tool row collapse, output expansion, or show timestamp."""
         event.stop()  # Prevent click from bubbling up and scrolling
+        # Priority 1: Toggle tool row collapse if there are enough activity items
+        if self._activity and len(self._activity) > _STEP_TOOL_PREVIEW_ROWS:
+            self._tools_body_collapsed = not self._tools_body_collapsed
+            self._refresh_activity_display()
+            return
+        # Priority 2: Toggle output expansion
         out = (self._output or "").strip()
         if out or self._status == "success":
             self.toggle_output()
@@ -2127,18 +2353,36 @@ class CognitionStepMessage(Vertical):
         else:
             self._tools_hint_widget.display = False
 
-    def add_tool_call(self, tool_call_id: str, tool_name: str, args: dict[str, Any]) -> None:
-        """Register a new tool row (pending)."""
+    def add_tool_call(
+        self,
+        tool_call_id: str,
+        tool_name: str,
+        args: dict[str, Any],
+        *,
+        raw_args: str = "",
+    ) -> None:
+        """Register a new tool row (pending).
+
+        Args:
+            tool_call_id: Unique tool call identifier.
+            tool_name: Tool name for display.
+            args: Parsed tool arguments.
+            raw_args: Raw JSON args string from streaming (for regex fallback
+                in ``format_tool_call_args`` when ``args`` is empty/partial).
+        """
         tcid = str(tool_call_id).strip()
         if not tcid:
             return
         if tcid in self._row_index:
             self.update_tool_args(tcid, args)
             return
+        row_args: dict[str, Any] = dict(args or {})
+        if raw_args:
+            row_args["_raw"] = raw_args
         row = _StepToolRow(
             tool_call_id=tcid,
             tool_name=(tool_name or "tool").strip() or "tool",
-            args=dict(args or {}),
+            args=row_args,
             phase="pending",
         )
         self._rows.append(row)

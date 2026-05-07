@@ -449,6 +449,9 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
             # Convert and abbreviate path arguments
             if _is_path_arg_name(key_arg):
                 value = _display_path_value(value)
+            elif internal == "task" and key_arg in ("description", "prompt"):
+                # Show full description/prompt for task tool — do not truncate
+                pass
             elif len(value) > max_value_length:
                 # Truncate non-path long values
                 value = value[: max_value_length - 3] + "..."

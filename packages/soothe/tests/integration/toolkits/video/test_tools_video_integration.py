@@ -49,10 +49,15 @@ class TestVideoToolIntegration:
                 mock_response = MagicMock()
                 mock_response.text = "This is a test video analysis result."
                 mock_model.generate_content.return_value = mock_response
-                mock_client.models.get.return_value = mock_model
+                # Code uses client.get_model(), not client.models.get()
+                mock_client.get_model.return_value = mock_model
 
                 # Mock genai.Client constructor
                 mock_genai.Client.return_value = mock_client
+
+                # Mock HttpOptions
+                mock_http_options = MagicMock()
+                mock_genai.types.HttpOptions = MagicMock(return_value=mock_http_options)
 
                 # Run tool
                 result = tool._run(str(file_path))
@@ -63,7 +68,7 @@ class TestVideoToolIntegration:
 
                 # Verify workflow
                 mock_client.files.upload.assert_called_once()
-                mock_client.files.get.assert_called()
+                # files.get only called when video is in PROCESSING state (not ACTIVE)
                 mock_model.generate_content.assert_called_once()
 
                 # Verify cleanup

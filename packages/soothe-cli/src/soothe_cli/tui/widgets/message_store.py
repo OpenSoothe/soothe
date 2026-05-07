@@ -32,6 +32,7 @@ _UPDATABLE_FIELDS: frozenset[str] = frozenset(
         "tool_status",
         "tool_output",
         "tool_expanded",
+        "tool_rows_json",
         "skill_expanded",
         "is_streaming",
         "height_hint",
@@ -108,6 +109,9 @@ class MessageData:
 
     tool_expanded: bool = False
     """Whether the tool output section is expanded in the UI."""
+
+    tool_rows_json: str | None = None
+    """JSON list of tool rows from ``ToolCallMessage.snapshot_tool_rows()`` (IG-403)."""
 
     # ---
 
@@ -250,6 +254,16 @@ class MessageData:
                 widget._deferred_status = self.tool_status
                 widget._deferred_output = self.tool_output
                 widget._deferred_expanded = self.tool_expanded
+                if self.tool_rows_json:
+                    try:
+                        raw_rows = json.loads(self.tool_rows_json)
+                        if isinstance(raw_rows, list) and raw_rows:
+                            widget.apply_tool_rows_snapshot(raw_rows)
+                    except json.JSONDecodeError:
+                        logger.warning(
+                            "Invalid tool_rows_json for %s",
+                            self.id,
+                        )
                 return widget
 
             case MessageType.SKILL:
@@ -469,6 +483,7 @@ class MessageData:
                 tool_status=tool_status,
                 tool_output=widget._output,
                 tool_expanded=widget._expanded,
+                tool_rows_json=json.dumps(widget.snapshot_tool_rows()) if widget._rows else None,
             )
 
         if isinstance(widget, ErrorMessage):
@@ -529,7 +544,7 @@ class MessageStore:
             Provides enough buffer to avoid visible loading pauses.
     """
 
-    WINDOW_SIZE: int = 50
+    WINDOW_SIZE: int = 200
     HYDRATE_BUFFER: int = 15
 
     def __init__(self) -> None:

@@ -127,6 +127,8 @@ class MockLoopPlanner:
         state,
         context: PlanContext,
         assessment,
+        *,
+        plan_manager: Any = None,
     ):
         """Generate plan after assessment (split graph flow)."""
         self._generate_count += 1
@@ -387,7 +389,7 @@ async def test_loop_agent_max_iterations() -> None:
                 require_goal_completion=False,
             )
 
-        async def generate_from_assessment(self, goal, state, context, assessment):
+        async def generate_from_assessment(self, goal, state, context, assessment, *, plan_manager: Any = None):
             """Generate: always new steps."""
             self._generate_count += 1
             return PlanResult(
@@ -478,7 +480,7 @@ async def test_loop_agent_parallel_execution() -> None:
                 require_goal_completion=True,
             )
 
-        async def generate_from_assessment(self, goal, state, context, assessment):
+        async def generate_from_assessment(self, goal, state, context, assessment, *, plan_manager: Any = None):
             """Generate parallel steps."""
             self._generate_count += 1
             if self._generate_count == 1:

@@ -67,7 +67,7 @@ class ExploreWireMiddleware(AgentMiddleware[ExploreAgentState, None]):
             updates["search_target"] = search_target
         if state.get("explore_wire_started"):
             return updates or None
-        logger.info("Explore: searching for '%s'", search_target[:80])
+        logger.info("Explore: searching for '%s'", search_target)
         emit_subagent_wire_event(
             ExploreStartedEvent(
                 search_target=search_target,
