@@ -177,11 +177,11 @@ class PostgreSQLPersistStore:
             # PostgreSQL JSONB column returns already-parsed Python objects (list/dict)
             # not JSON strings, so we can return directly
             data = row[0]
-            if isinstance(data, (str, bytes, bytearray)):
-                # Fallback for JSON strings (shouldn't happen with JSONB but be defensive)
+            if isinstance(data, (bytes, bytearray)):
+                # Defensive: JSONB should not return bytes; if it does, decode as JSON text.
                 try:
-                    return json.loads(data)
-                except (json.JSONDecodeError, TypeError) as e:
+                    return json.loads(data.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError, TypeError) as e:
                     logger.warning(
                         "Failed to decode PostgreSQL value for key %s: %s (value type: %s)",
                         key,
@@ -189,7 +189,8 @@ class PostgreSQLPersistStore:
                         type(data).__name__,
                     )
                     return None
-            # Data is already a Python object (list/dict/None/etc.)
+            # JSONB values are already Python objects (including ``str`` scalars from JSON
+            # strings). Do not ``json.loads`` plain ``str`` — it breaks values like ``second``.
             return data
 
     async def delete(self, key: str) -> None:

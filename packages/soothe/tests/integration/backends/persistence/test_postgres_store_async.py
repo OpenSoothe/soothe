@@ -2,32 +2,45 @@
 
 import asyncio
 import os
+import uuid
 
 import pytest
+import pytest_asyncio
+
+# Default matches docker-compose ``soothe-pgvector`` (host port 6432) and
+# ``config/init-db.sql`` (``soothe_metadata`` and other app DBs — not ``soothe_test``).
+_DEFAULT_TEST_POSTGRES_DSN = "postgresql://postgres:postgres@127.0.0.1:6432/soothe_metadata"
+
+
+def _dsn_with_connect_timeout(dsn: str, seconds: int = 2) -> str:
+    """Append connect_timeout without breaking DSNs that already have query parameters."""
+    if "connect_timeout" in dsn:
+        return dsn
+    sep = "&" if "?" in dsn else "?"
+    return f"{dsn}{sep}connect_timeout={seconds}"
 
 
 class TestPostgreSQLPersistStoreAsync:
     """Integration tests for PostgreSQLPersistStore async interface."""
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def postgres_store(self):
-        """Create PostgreSQL store instance for testing."""
+        """Create PostgreSQL store instance for testing.
+
+        Uses ``pytest_asyncio.fixture`` so the async pool is bound to the same event
+        loop as the tests (see ``test_vector_store_integration``).
+        Each test gets a fresh namespace to avoid cross-test and parallel pollution.
+        """
         # Skip if psycopg_pool not installed
         pytest.importorskip("psycopg_pool")
 
         from soothe.backends.persistence.postgres_store import PostgreSQLPersistStore
 
-        # Use test database DSN from environment or default
-        dsn = os.getenv(
-            "SOOTHE_TEST_POSTGRES_DSN",
-            "postgresql://postgres:postgres@localhost:5432/soothe_test",
-        )
+        dsn = os.getenv("SOOTHE_TEST_POSTGRES_DSN", _DEFAULT_TEST_POSTGRES_DSN)
+        timeout_dsn = _dsn_with_connect_timeout(dsn)
+        namespace = f"test_async_{uuid.uuid4().hex}"
 
-        # Create store with timeout parameter in DSN
-        # Add connect_timeout=2 to fail fast if database unavailable
-        timeout_dsn = dsn if "connect_timeout" in dsn else f"{dsn}?connect_timeout=2"
-
-        store = PostgreSQLPersistStore(dsn=timeout_dsn, namespace="test_async")
+        store = PostgreSQLPersistStore(dsn=timeout_dsn, namespace=namespace)
 
         # Try to initialize connection pool to verify database is available
         try:
@@ -167,16 +180,11 @@ class TestPostgreSQLPersistStoreAsync:
 
         from soothe.backends.persistence.postgres_store import PostgreSQLPersistStore
 
-        dsn = os.getenv(
-            "SOOTHE_TEST_POSTGRES_DSN",
-            "postgresql://postgres:postgres@localhost:5432/soothe_test",
-        )
-
-        # Add timeout to DSN for faster failure detection
-        timeout_dsn = dsn if "connect_timeout" in dsn else f"{dsn}?connect_timeout=2"
-
-        store_a = PostgreSQLPersistStore(dsn=timeout_dsn, namespace="ns_a")
-        store_b = PostgreSQLPersistStore(dsn=timeout_dsn, namespace="ns_b")
+        dsn = os.getenv("SOOTHE_TEST_POSTGRES_DSN", _DEFAULT_TEST_POSTGRES_DSN)
+        timeout_dsn = _dsn_with_connect_timeout(dsn)
+        suffix = uuid.uuid4().hex[:8]
+        store_a = PostgreSQLPersistStore(dsn=timeout_dsn, namespace=f"ns_a_{suffix}")
+        store_b = PostgreSQLPersistStore(dsn=timeout_dsn, namespace=f"ns_b_{suffix}")
 
         try:
             # Test connection with timeout
@@ -218,16 +226,13 @@ class TestPostgreSQLPersistStoreAsync:
 
         from soothe.backends.persistence.postgres_store import PostgreSQLPersistStore
 
-        dsn = os.getenv(
-            "SOOTHE_TEST_POSTGRES_DSN",
-            "postgresql://postgres:postgres@localhost:5432/soothe_test",
-        )
-
-        # Add timeout to DSN for faster failure detection
-        timeout_dsn = dsn if "connect_timeout" in dsn else f"{dsn}?connect_timeout=2"
+        dsn = os.getenv("SOOTHE_TEST_POSTGRES_DSN", _DEFAULT_TEST_POSTGRES_DSN)
+        timeout_dsn = _dsn_with_connect_timeout(dsn)
 
         # Custom pool size
-        store = PostgreSQLPersistStore(dsn=timeout_dsn, namespace="test_pool", pool_size=5)
+        store = PostgreSQLPersistStore(
+            dsn=timeout_dsn, namespace=f"test_pool_{uuid.uuid4().hex[:8]}", pool_size=5
+        )
 
         try:
             # Pool should not be initialized yet (lazy)
