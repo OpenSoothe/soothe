@@ -236,9 +236,9 @@ class TestComplexityMapping:
         config.assistant_name = "Soothe"
         config.resolve_model.return_value = "claude-opus-4-6"
         config.system_prompt = None
-        config.agentic.performance_enabled = True
-        config.agentic.optimize_system_prompts = True
-        config.agentic.unified_classification = True
+        config.agent_loop.performance_enabled = True
+        config.agent_loop.optimize_system_prompts = True
+        config.agent_loop.unified_classification = True
         return SystemPromptOptimizationMiddleware(config)
 
     def test_chitchat_no_sections(self, middleware: SystemPromptOptimizationMiddleware) -> None:

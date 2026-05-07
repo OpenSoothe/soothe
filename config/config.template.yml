@@ -59,16 +59,26 @@ autonomous:
   max_goal_depth: 5          # RFC-0007 §5.6
   enable_dynamic_goals: true # RFC-0007 §5.4
 
-# Agentic loop (RFC-201, RFC-220)
+# Agent Loop Configuration (IG-407: unified config for RFC-201, RFC-220)
+# Behavior fields directly under agent_loop.* (max 2 levels nesting)
+# Infrastructure limits grouped in agent_loop.limits.* subsection
 
-agentic:
-  max_iterations: 10
-  max_subagent_tasks_per_wave: 16  # 0 = unlimited
+agent_loop:
+  # === BEHAVIOR FIELDS (Layer 2: Algorithmic Control) ===
+  max_iterations: 10                      # Plan→Execute loop iterations
+  max_subagent_tasks_per_wave: 16         # Task cap per Execute wave (0 = unlimited)
   agent_loop_output_contract_enabled: true
-  final_response: adaptive  # adaptive | always_synthesize
-  goal_completion_mode: llm_only  # llm_only | heuristic_only | hybrid
+  final_response: adaptive                # adaptive | always_synthesize
+  goal_completion_mode: llm_only          # llm_only | heuristic_only | hybrid
   prior_conversation_limit: 10
+  context_window_limit: 200000
 
+  output_streaming: true
+
+  reject_done_at_iteration_zero: false
+  loop_orchestrator_evidence_validate: true
+
+  # Nested configs (unchanged structure)
   goal_context:
     plan_limit: 10
     execute_limit: 10
@@ -78,13 +88,6 @@ agentic:
     enabled: false
     max_inline_chars: 2000
     max_entry_chars_before_spill: 4000
-
-  context_window_limit: 200000
-
-  output_streaming: true
-
-  reject_done_at_iteration_zero: false
-  loop_orchestrator_evidence_validate: true
 
   report_output:
     display_threshold: 20000
@@ -96,42 +99,48 @@ agentic:
     plan_ledger_max_total_chars: 0
     plan_ledger_max_message_chars: 0
 
-# Execution limits (0 = unlimited)
-
-execution:
-  llm_rpm_limit: 120
-  llm_concurrent_limit: 10
-  llm_call_timeout_seconds: 120
-  llm_call_timeout_max_seconds: 240  # Fail fast on pathological long calls
-  llm_call_timeout_adaptive: true
-  # Retry with timeout escalation (graceful degradation)
-  llm_retry_on_timeout: true
-  llm_max_timeout_retries: 2
-  llm_timeout_retry_multiplier: 2.0
-  concurrency:
-    max_parallel_goals: 1
-    max_parallel_steps: 2
-    max_parallel_subagents: 4
-    global_max_llm_calls: 5
+  # === INFRASTRUCTURE LIMITS (Layer 1: Runtime Constraints) ===
+  limits:
+    # Concurrency controls (0 = unlimited)
+    max_parallel_goals: 1         # Autonomous goal parallelism
+    max_parallel_steps: 2         # Step parallelism
+    max_parallel_subagents: 4     # Subagent task parallelism
+    global_max_llm_calls: 5       # Global LLM call cap
     step_parallelism: dependency  # sequential | dependency | max
-  # Tool call limits (ToolCallLimitMiddleware; explore subagent batches many fs tools per turn)
-  tool_call_limit:
-    global_thread_limit: 150  # Cap across a thread (explore + multi-turn search)
-    global_run_limit: 56     # Cap per single agent invocation (parallel glob/ls waves)
-    tool_specific_limits:  # Tool-specific overrides for web search related tools
-      wizsearch_search: {thread_limit: 5, run_limit: 3}
-      wizsearch_crawl: {thread_limit: 5, run_limit: 3}
-      web_search: {thread_limit: 5, run_limit: 3}
-      fetch_url: {thread_limit: 5, run_limit: 3}
-      search: {thread_limit: 5, run_limit: 3}
-  # Tool retry config (ToolRetryMiddleware)
-  tool_retry:
-    max_retries: 3
-    backoff_factor: 2.0
-    initial_delay: 1.0
-  recovery:
-    progressive_checkpoints: true  # RFC-0010
-    auto_resume_on_start: false
+
+    # Rate limiting
+    llm_rpm_limit: 120
+    llm_concurrent_limit: 10
+
+    # Timeout controls
+    llm_call_timeout_seconds: 120
+    llm_call_timeout_max_seconds: 240  # Fail fast on pathological long calls
+    llm_call_timeout_adaptive: true
+    llm_retry_on_timeout: true          # Retry with timeout escalation
+    llm_max_timeout_retries: 2
+    llm_timeout_retry_multiplier: 2.0
+
+    # Tool call limits (ToolCallLimitMiddleware; explore batches many fs tools)
+    tool_call_limit:
+      global_thread_limit: 150  # Cap across a thread (explore + multi-turn search)
+      global_run_limit: 56      # Cap per single agent invocation (parallel glob/ls)
+      tool_specific_limits:     # Tool-specific overrides for web search tools
+        wizsearch_search: {thread_limit: 5, run_limit: 3}
+        wizsearch_crawl: {thread_limit: 5, run_limit: 3}
+        web_search: {thread_limit: 5, run_limit: 3}
+        fetch_url: {thread_limit: 5, run_limit: 3}
+        search: {thread_limit: 5, run_limit: 3}
+
+    # Tool retry config (ToolRetryMiddleware)
+    tool_retry:
+      max_retries: 3
+      backoff_factor: 2.0
+      initial_delay: 1.0
+
+    # Recovery settings
+    recovery:
+      progressive_checkpoints: true  # RFC-0010
+      auto_resume_on_start: false
 
 # Observability Configuration - Unified debugging and monitoring settings
 
@@ -275,7 +284,6 @@ tools:
     enabled: true       # wizsearch_search, wizsearch_crawl
     default_engines:
       - tavily          # Requires TAVILY_API_KEY (tavily-only default)
-    crawler: wizsearch    # Or jina, requires JINA_API_KEY
     max_results_per_engine: 10
     timeout: 30
 
@@ -406,12 +414,10 @@ persistence:
 # Supports multiple providers: sqlite_vec (default), pgvector (production), weaviate
 
 vector_stores:
-  # SQLite with sqlite-vec extension (default, development and production-ready)
+  # SQLite with sqlite-vec extension (default). Paths/dimensions use backend defaults unless
+  # extended in VectorStoreProviderConfig / settings wiring.
   - name: sqlite_vec_default
     provider_type: sqlite_vec
-    db_path: ""  # Optional: Empty uses $SOOTHE_DATA_DIR/vector.db
-    vector_size: 1536  # Embedding dimension (adjust for your model)
-    distance: cosine  # Distance metric: cosine, l2, or ip (inner product)
 
   # PostgreSQL with pgvector extension (alternative for high-scale production)
   # - name: pgvector_default
@@ -429,7 +435,3 @@ vector_stores:
 
 vector_store_router:
   default: sqlite_vec_default:soothe_default  # Format: "provider_name:collection_name"
-
-# Logging Configuration - File and console logging settings
-
-# Note: All logging and observability settings are now unified in the 'observability' section above

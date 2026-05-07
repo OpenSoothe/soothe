@@ -64,8 +64,8 @@ class FrameworkFilesystem:
         virtual_mode = not config.security.allow_paths_outside_workspace
 
         max_file_size_mb = 10
-        if hasattr(config, "execution") and hasattr(config.execution, "max_file_size_mb"):
-            max_file_size_mb = config.execution.max_file_size_mb
+        if hasattr(config, "agent_loop") and hasattr(config.agent_loop.limits, "max_file_size_mb"):
+            max_file_size_mb = config.agent_loop.limits.max_file_size_mb
 
         # Use workspace-aware backend that reads from ContextVar (RFC-103)
         cls._instance = WorkspaceAwareBackend(

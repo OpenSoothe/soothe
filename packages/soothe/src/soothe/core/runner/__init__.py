@@ -87,6 +87,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             resolve_goal_engine,
         )
         from soothe.core.scheduling import ConcurrencyController
+        from soothe.protocols.concurrency import ConcurrencyPolicy
 
         init_start = time.perf_counter()
 
@@ -162,7 +163,16 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         self._artifact_store: Any | None = (
             None  # Last-known store for CLI/debug; authoritative copy is on RunnerState
         )
-        self._concurrency = ConcurrencyController(self._config.execution.concurrency)
+        _lim = self._config.agent_loop.limits
+        self._concurrency = ConcurrencyController(
+            ConcurrencyPolicy(
+                max_parallel_goals=_lim.max_parallel_goals,
+                max_parallel_steps=_lim.max_parallel_steps,
+                max_parallel_subagents=_lim.max_parallel_subagents,
+                global_max_llm_calls=_lim.global_max_llm_calls,
+                step_parallelism=_lim.step_parallelism,
+            )
+        )
         self._context_restore_lock = asyncio.Lock()
         self._interrupt_resolver: Any | None = None
 
@@ -542,7 +552,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
                 user_input,
                 thread_id=thread_id,
                 workspace=effective_workspace,
-                max_iterations=max_iterations or self._config.agentic.max_iterations,
+                max_iterations=max_iterations or self._config.agent_loop.max_iterations,
                 preferred_subagent=preferred_subagent,
             ):
                 yield chunk

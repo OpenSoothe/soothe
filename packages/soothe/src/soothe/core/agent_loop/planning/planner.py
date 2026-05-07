@@ -990,7 +990,7 @@ class LLMPlanner:
         if assessment.status == "done":
             guard_enabled = False
             if self._config is not None:
-                guard_enabled = self._config.agentic.reject_done_at_iteration_zero
+                guard_enabled = self._config.agent_loop.reject_done_at_iteration_zero
             if guard_enabled and state.iteration == 0 and len(state.step_results) == 0:
                 logger.warning("[Guard] Reject 'done' at iter=0 no execution")
                 assessment.status = "replan"
@@ -1014,7 +1014,7 @@ class LLMPlanner:
 
         if assessment.status == "done":
             gc_mode = (
-                self._config.agentic.goal_completion_mode
+                self._config.agent_loop.goal_completion_mode
                 if self._config is not None
                 else "llm_only"
             )
@@ -1152,7 +1152,7 @@ class LLMPlanner:
                 if assessment.status == "done":
                     guard_enabled = False
                     if self._config is not None:
-                        guard_enabled = self._config.agentic.reject_done_at_iteration_zero
+                        guard_enabled = self._config.agent_loop.reject_done_at_iteration_zero
 
                     if guard_enabled and state.iteration == 0 and len(state.step_results) == 0:
                         logger.warning("[Guard] Reject 'done' at iter=0 no execution")
@@ -1166,7 +1166,7 @@ class LLMPlanner:
                     )
 
                     gc_mode = (
-                        self._config.agentic.goal_completion_mode
+                        self._config.agent_loop.goal_completion_mode
                         if self._config is not None
                         else "llm_only"
                     )

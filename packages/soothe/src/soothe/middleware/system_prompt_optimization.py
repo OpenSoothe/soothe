@@ -628,7 +628,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Returns:
             XML section string, or None if contract is disabled.
         """
-        if config is None or not config.agentic.agent_loop_output_contract_enabled:
+        if config is None or not config.agent_loop.agent_loop_output_contract_enabled:
             return None
 
         return (

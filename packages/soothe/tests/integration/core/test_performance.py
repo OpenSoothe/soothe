@@ -71,11 +71,11 @@ async def test_conditional_context_projection(test_config: SootheConfig, require
 @pytest.mark.asyncio
 async def test_parallel_execution(test_config: SootheConfig, requires_llm_api):
     """Execution concurrency limits remain configurable."""
-    test_config.execution.concurrency.max_parallel_steps = 2
+    test_config.agent_loop.limits.max_parallel_steps = 2
     runner = SootheRunner(test_config)
 
     try:
-        assert test_config.execution.concurrency.max_parallel_steps == 2
+        assert test_config.agent_loop.limits.max_parallel_steps == 2
 
     finally:
         await runner.cleanup()
@@ -85,21 +85,21 @@ async def test_parallel_execution(test_config: SootheConfig, requires_llm_api):
 async def test_feature_flags(requires_llm_api):
     """Agentic final-response mode remains a supported toggle."""
     config1 = SootheConfig()
-    config1.agentic.final_response = "always_synthesize"
+    config1.agent_loop.final_response = "always_synthesize"
     runner1 = SootheRunner(config1)
 
     try:
-        assert config1.agentic.final_response == "always_synthesize"
+        assert config1.agent_loop.final_response == "always_synthesize"
 
     finally:
         await runner1.cleanup()
 
     config2 = SootheConfig()
-    config2.agentic.final_response = "adaptive"
+    config2.agent_loop.final_response = "adaptive"
     runner2 = SootheRunner(config2)
 
     try:
-        assert config2.agentic.final_response == "adaptive"
+        assert config2.agent_loop.final_response == "adaptive"
 
     finally:
         await runner2.cleanup()

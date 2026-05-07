@@ -152,7 +152,7 @@ class Executor:
         """Configured cap on root-level ``task`` tool completions (0 = unlimited)."""
         if self._config is None:
             return 0
-        return max(0, int(self._config.agentic.max_subagent_tasks_per_wave))
+        return max(0, int(self._config.agent_loop.max_subagent_tasks_per_wave))
 
     @staticmethod
     def _intent_type_for_prompt(state: LoopState) -> str | None:
@@ -337,7 +337,7 @@ class Executor:
 
         # Use configurable context limit (IG-151)
         if self._config is not None:
-            context_limit = self._config.agentic.context_window_limit
+            context_limit = self._config.agent_loop.context_window_limit
             state.context_percentage_consumed = min(1.0, state.total_tokens_used / context_limit)
 
     async def execute(

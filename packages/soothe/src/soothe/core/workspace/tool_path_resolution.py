@@ -58,6 +58,6 @@ def filesystem_virtual_mode_from_soothe_config(config: SootheConfig) -> bool:
 def max_file_size_mb_for_filesystem_backend(config: SootheConfig) -> int:
     """Return max file size (MB) for filesystem backends, mirroring FrameworkFilesystem."""
     max_file_size_mb = 10
-    if hasattr(config, "execution") and hasattr(config.execution, "max_file_size_mb"):
-        max_file_size_mb = int(config.execution.max_file_size_mb)
+    if hasattr(config, "agent_loop") and hasattr(config.agent_loop.limits, "max_file_size_mb"):
+        max_file_size_mb = int(config.agent_loop.limits.max_file_size_mb)
     return max_file_size_mb
