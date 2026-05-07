@@ -957,6 +957,10 @@ async def execute_task_textual(
     pending_text_by_namespace: dict[tuple, str] = {}
     assistant_message_by_namespace: dict[tuple, Any] = {}
     goal_completion_stream_by_namespace: dict[tuple, AssistantMessage] = {}
+    # Accumulates streaming goal_completion chunks from subagent namespaces so they
+    # are NOT mounted as standalone AssistantMessages — only routed to the parent
+    # Task card's set_result_preview when the final non-chunk message arrives.
+    gc_pending_by_subagent_ns: dict[tuple, str] = {}
     # IG-334 Task tool FIFO binding (parity with ``EventProcessor`` / SDK helpers)
     task_spawn_queue: deque[tuple[str, str]] = deque()
     namespace_task_bindings: dict[tuple[str, ...], tuple[str, str]] = {}
@@ -1378,6 +1382,43 @@ async def execute_task_textual(
                         is_gc_chunk = isinstance(message, AIMessageChunk)
                         if text_gc == "" and is_gc_chunk:
                             continue
+
+                        # Subagent goal_completion (non-root namespace): route the
+                        # final result as a preview into the parent Task card instead
+                        # of creating a duplicate standalone AssistantMessage.
+                        # Only the main agent's goal_completion (ns_key == ()) is
+                        # displayed as a standalone card.
+                        #
+                        # IMPORTANT: This guard must cover BOTH streaming chunks AND
+                        # the final non-chunk message. Previously only `not is_gc_chunk`
+                        # was blocked here, so streaming chunks escaped and created a
+                        # standalone AssistantMessage that duplicated the result_preview.
+                        if ns_key:
+                            if is_gc_chunk:
+                                # Accumulate streaming content — do NOT mount a widget.
+                                gc_pending_by_subagent_ns[ns_key] = (
+                                    gc_pending_by_subagent_ns.get(ns_key, "") + text_gc
+                                )
+                                continue
+
+                            # Final non-chunk message: flush accumulated chunks + this
+                            # content into the parent Task card's result preview.
+                            accumulated = gc_pending_by_subagent_ns.pop(ns_key, "")
+                            text_to_preview = (accumulated + text_gc).strip() or text_gc.strip()
+                            _gc_task_scope = resolve_task_scope_for_namespace(
+                                namespace_task_bindings, ns_key
+                            )
+                            if _gc_task_scope is not None:
+                                tcid = _gc_task_scope[0]
+                                parent_card = adapter._tool_display_by_call_id.get(tcid)
+                                if parent_card is not None and hasattr(
+                                    parent_card, "set_result_preview"
+                                ):
+                                    parent_card.set_result_preview(text_to_preview)
+                            pending_text_by_namespace.pop(ns_key, None)
+                            assistant_message_by_namespace.pop(ns_key, None)
+                            continue
+
                         output_text = text_gc
                         if final_output_mode != "streaming" and is_gc_chunk:
                             continue
@@ -2211,6 +2252,7 @@ async def execute_task_textual(
                 goal_completion_stream_by_namespace.pop(ns_key, None)
             pending_text_by_namespace.clear()
             assistant_message_by_namespace.clear()
+            gc_pending_by_subagent_ns.clear()
 
             # IG-402: Flush any buffered main-namespace tools as standalone cards
             # (edge case: stream ended without a step_started event).

@@ -76,8 +76,14 @@ def _save_raw_results(query: str, result: object) -> None:
     """Persist the full search result JSON to the current thread's run dir.
 
     Writes to ``$SOOTHE_HOME/data/threads/{thread_id}/search_results/{ts}_{slug}.json``.
+    In virtual mode (IG-405), writes to ``/.soothe/data/threads/{thread_id}/search_results/``.
     Fails silently if no run directory is active.
     """
+    from soothe.core import FrameworkFilesystem
+    from soothe.core.workspace import (
+        get_virtual_home,
+        get_virtual_mode,
+    )
     from soothe.utils.runtime import current_run_dir
 
     run_dir = current_run_dir.get()
@@ -85,9 +91,6 @@ def _save_raw_results(query: str, result: object) -> None:
         return
 
     try:
-        search_dir = run_dir / "search_results"
-        search_dir.mkdir(parents=True, exist_ok=True)
-
         slug = preview_first(re.sub(r"[^\w]+", "_", query), 60).strip("_")
         ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         filename = f"{ts}_{slug}.json"
@@ -99,9 +102,30 @@ def _save_raw_results(query: str, result: object) -> None:
             "response_time": getattr(result, "response_time", None),
             "metadata": getattr(result, "metadata", None),
         }
-        (search_dir / filename).write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        content = json.dumps(payload, ensure_ascii=False, indent=2)
+
+        # IG-405: Use backend when virtual mode
+        if get_virtual_mode():
+            backend = FrameworkFilesystem.get()
+            if backend is not None:
+                # Compute virtual path for search results
+                virtual_home = get_virtual_home()
+                search_rel = run_dir.relative_to(virtual_home) / "search_results"
+                virtual_dir = f"/.soothe/{search_rel.as_posix()}"
+                virtual_file = f"{virtual_dir}/{filename}"
+
+                try:
+                    backend.mkdir(virtual_dir, recursive=True)
+                    backend.write(virtual_file, content)
+                    logger.debug("Raw search results saved (virtual): %s", filename)
+                    return
+                except Exception:
+                    logger.debug("Backend write failed, falling back to direct", exc_info=True)
+
+        # Non-virtual mode or fallback: direct Path operations
+        search_dir = run_dir / "search_results"
+        search_dir.mkdir(parents=True, exist_ok=True)
+        (search_dir / filename).write_text(content, encoding="utf-8")
         logger.debug("Raw search results saved: %s", filename)
     except Exception:
         logger.debug("Failed to save raw search results", exc_info=True)
