@@ -127,6 +127,7 @@ daemon:
   max_concurrent_threads: 100
   max_input_queue_size: 1000         # Maximum pending input messages (0 = unlimited)
   max_concurrent_dispatches: 50      # Maximum concurrent message handlers
+  event_size_stats_enabled: true     # IG-403: periodic EventBus size distribution logs
   transports:
     websocket:
       enabled: true

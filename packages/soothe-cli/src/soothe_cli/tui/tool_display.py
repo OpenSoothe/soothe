@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from soothe_sdk.utils import get_all_path_arg_keys, get_tool_display_name, get_tool_meta
+from textual.content import Content
 
 from soothe_cli.shared.tools.message_processing import (
     _normalize_tool_name_for_arg_map,
@@ -18,6 +19,7 @@ from soothe_cli.shared.tools.message_processing import (
     format_tool_call_args,
 )
 from soothe_cli.tui.config import MAX_ARG_LENGTH, get_glyphs
+from soothe_cli.tui.formatting import format_duration
 from soothe_cli.tui.unicode_security import strip_dangerous_unicode
 
 _HIDDEN_CHAR_MARKER = " [hidden chars removed]"
@@ -376,3 +378,76 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
     if not args_str:
         return f"{prefix} {pascal_name}(…)"
     return f"{prefix} {pascal_name}({args_str})"
+
+
+def format_tool_call_row(
+    tool_name: str,
+    tool_args: dict[str, Any] | None,
+    *,
+    phase: str,
+    output: str = "",
+    duration_ms: int = 0,
+    running_spinner: str | None = None,
+    running_elapsed_secs: float | None = None,
+) -> Content:
+    """One-line tool row: CLI-style invocation, arrow, status/result (IG-402).
+
+    Reuses ``format_tool_cli_style_command`` and ``PresentationEngine.format_tool_result_status_line``
+    for parity with ``ToolCallMessage`` / subagent cards.
+
+    Args:
+        tool_name: Raw tool name from the model or wire.
+        tool_args: Parsed arguments (may include ``_raw`` / ``raw_args_str``).
+        phase: Row lifecycle phase.
+        output: Raw tool output or error text (for terminal phases).
+        duration_ms: Elapsed ms for successful/error completion (from UI timer).
+        running_spinner: Current spinner frame when ``phase == "running"``.
+        running_elapsed_secs: Elapsed seconds while running (wall clock).
+
+    Returns:
+        Styled ``Content`` for a single row.
+    """
+    if phase not in ("pending", "running", "success", "error", "rejected", "skipped"):
+        phase = "pending"
+
+    lhs_plain = format_tool_cli_style_command(tool_name, tool_args)
+    tool_prefix = get_glyphs().tool_prefix
+
+    def _cmd_with_spinner(spinner: str) -> str:
+        if lhs_plain.startswith(tool_prefix):
+            rest = lhs_plain[len(tool_prefix) :].lstrip()
+            return f"{spinner} {rest}"
+        return f"{spinner} {lhs_plain}"
+
+    arrow = " → "
+
+    if phase == "pending":
+        return Content.assemble(lhs_plain, Content.styled(f"{arrow}…", "dim"))
+
+    if phase == "running":
+        spin = running_spinner or get_glyphs().spinner_frames[0]
+        cmd = _cmd_with_spinner(spin)
+        if running_elapsed_secs is not None and running_elapsed_secs >= 0:
+            dur = format_duration(float(running_elapsed_secs))
+            tail = f"{arrow}running ({dur})"
+        else:
+            tail = f"{arrow}running"
+        return Content.assemble(cmd, Content.styled(tail, "dim"))
+
+    if phase == "rejected":
+        return Content.assemble(lhs_plain, Content.styled(f"{arrow}rejected", "italic"))
+
+    if phase == "skipped":
+        return Content.assemble(lhs_plain, Content.styled(f"{arrow}skipped", "dim"))
+
+    from soothe_cli.shared.core.presentation_engine import PresentationEngine
+
+    presentation = PresentationEngine()
+    is_error = phase == "error"
+    rhs = presentation.format_tool_result_status_line(
+        tool_name,
+        output,
+        is_error=is_error,
+        duration_ms=duration_ms,
+    )
+    return Content.assemble(lhs_plain, Content.styled(arrow, "dim"), rhs)

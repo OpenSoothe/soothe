@@ -35,6 +35,7 @@ _UPDATABLE_FIELDS: frozenset[str] = frozenset(
         "skill_expanded",
         "is_streaming",
         "height_hint",
+        "step_tool_calls_json",
     }
 )
 
@@ -152,6 +153,9 @@ class MessageData:
 
     step_summary: str | None = None
     """Result or error summary text (STEP_PROGRESS only)."""
+
+    step_tool_calls_json: str | None = None
+    """JSON list of tool rows from ``CognitionStepMessage.snapshot_tool_rows()`` (IG-402)."""
 
     cognition_plan_next_action: str | None = None
     """User-facing next step (COGNITION_PLAN only)."""
@@ -282,6 +286,16 @@ class MessageData:
                     description=self.step_progress_description or "",
                     id=self.id,
                 )
+                if self.step_tool_calls_json:
+                    try:
+                        raw_rows = json.loads(self.step_tool_calls_json)
+                        if isinstance(raw_rows, list) and raw_rows:
+                            w.apply_tool_rows_snapshot(raw_rows)
+                    except json.JSONDecodeError:
+                        logger.warning(
+                            "Invalid step_tool_calls_json for %s",
+                            self.id,
+                        )
                 phase = self.step_progress_phase or "pending"
                 if phase == "running":
                     w._deferred_running = True
@@ -403,6 +417,7 @@ class MessageData:
                 step_summary=(
                     widget._interrupt_message if widget._interrupt_message else widget._last_summary
                 ),
+                step_tool_calls_json=json.dumps(widget.snapshot_tool_rows()),
             )
 
         if isinstance(widget, SkillMessage):

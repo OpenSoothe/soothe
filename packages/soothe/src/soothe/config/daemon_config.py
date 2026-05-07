@@ -115,3 +115,18 @@ class DaemonConfig(BaseModel):
     max_concurrent_dispatches: int = Field(
         default=50, ge=1, description="Maximum concurrent message handlers"
     )
+    # EventBus wire-size distribution (IG-403): streaming histogram, constant memory
+    event_size_stats_enabled: bool = Field(
+        default=False,
+        description="Log EventBus JSON wire-size distribution on an interval when enabled",
+    )
+    event_size_stats_interval_seconds: int = Field(
+        default=60,
+        ge=5,
+        description="Seconds between distribution log lines (when not idle)",
+    )
+    event_size_stats_idle_pause_seconds: int = Field(
+        default=120,
+        ge=30,
+        description="Suppress stats logs after this many seconds without any published events",
+    )

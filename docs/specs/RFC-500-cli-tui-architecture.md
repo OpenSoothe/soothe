@@ -80,6 +80,8 @@ LangGraph `(namespace, mode, data)` 3-tuple:
 
 For detailed rendering (two-level tool call trees, special tool behaviors, plan visualization), see **IG-053: CLI/TUI Event Progress Clarity**. Rendering is implementation-level, documented in IGs.
 
+When the agent loop emits `soothe.cognition.agent_loop.step.started` / `step.completed` for the **main** stream (and no goal-tree aggregate card is active), the TUI folds main-agent tool calls into a single **step card** (`CognitionStepMessage`): the header summarizes counts by tool display name (e.g. `Grep(2), List(4)`), and each invocation is one CLI-style row (`format_tool_cli_style_command` → result status). The `task` tool still mounts the existing subagent tool card for internal activity; a matching `task` row appears on the step card with the same row format. See **IG-402**.
+
 ### Three-Phase Execution
 
 **Phase 1: Protocol Pre-processing**

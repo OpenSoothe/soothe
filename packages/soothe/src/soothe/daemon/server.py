@@ -19,6 +19,7 @@ from soothe.core import resolve_daemon_workspace
 from soothe.daemon._handlers import DaemonHandlersMixin
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
+from soothe.daemon.event_size_stats import EventSizeDistributionCollector
 from soothe.daemon.message_router import MessageRouter
 from soothe.daemon.paths import pid_path
 from soothe.daemon.query_engine import QueryEngine
@@ -116,6 +117,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._inactivity_check_task: asyncio.Task[None] | None = None
         self._input_loop_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
+        self._event_size_stats_task: asyncio.Task[None] | None = None
         # Message dispatch concurrency control (IG-258)
         self._dispatch_semaphore: asyncio.Semaphore = asyncio.Semaphore(
             self._config.daemon.max_concurrent_dispatches
@@ -126,7 +128,10 @@ class SootheDaemon(DaemonHandlersMixin):
         # Transport manager for multi-transport support (RFC-0013)
         self._transport_manager: TransportManager | None = None
         # Event bus architecture (RFC-0013, IG-047)
-        self._event_bus: EventBus = EventBus()
+        self._event_size_stats: EventSizeDistributionCollector | None = None
+        if self._config.daemon.event_size_stats_enabled:
+            self._event_size_stats = EventSizeDistributionCollector()
+        self._event_bus: EventBus = EventBus(event_size_stats=self._event_size_stats)
         self._session_manager: ClientSessionManager = ClientSessionManager(
             self._event_bus,
             cancel_callback=self._cancel_thread,  # RFC-0013: auto-cancel on disconnect
@@ -234,6 +239,8 @@ class SootheDaemon(DaemonHandlersMixin):
             self._queue_monitoring_task: asyncio.Task[None] = asyncio.create_task(
                 self._periodic_queue_monitoring()
             )
+            if self._event_size_stats is not None:
+                self._event_size_stats_task = asyncio.create_task(self._periodic_event_size_stats())
 
             # Detect incomplete threads from previous daemon run (RFC-0010)
             await self._detect_incomplete_threads()
@@ -513,6 +520,24 @@ class SootheDaemon(DaemonHandlersMixin):
             except Exception:
                 logger.warning("Periodic inactivity check failed", exc_info=True)
 
+    async def _periodic_event_size_stats(self) -> None:
+        """Log EventBus wire-size distribution on a fixed interval (IG-403).
+
+        Stops emitting while no events have been published for
+        ``event_size_stats_idle_pause_seconds`` (window is discarded without logging).
+        """
+        stats = self._event_size_stats
+        if stats is None:
+            return
+        interval = float(self._config.daemon.event_size_stats_interval_seconds)
+        idle_pause = float(self._config.daemon.event_size_stats_idle_pause_seconds)
+        while self._running:
+            await asyncio.sleep(interval)
+            try:
+                stats.emit_log_if_active(idle_pause_seconds=idle_pause, log_fn=logger.info)
+            except Exception:
+                logger.debug("event_size_stats periodic tick failed", exc_info=True)
+
     async def _periodic_queue_monitoring(self) -> None:
         """Monitor queue depths and log warnings when near capacity (IG-258)."""
         while self._running:
@@ -682,6 +707,12 @@ class SootheDaemon(DaemonHandlersMixin):
             self._queue_monitoring_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._queue_monitoring_task
+
+        if self._event_size_stats_task and not self._event_size_stats_task.done():
+            self._event_size_stats_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._event_size_stats_task
+            self._event_size_stats_task = None
 
         # Cancel any running query task
         if self._current_query_task and not self._current_query_task.done():

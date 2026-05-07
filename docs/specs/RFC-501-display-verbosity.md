@@ -231,6 +231,8 @@ class EventMeta:
 {assistant_final_response}
 ```
 
+For the Textual TUI, when a **step card** is shown for the main agent (see RFC-500 Event Rendering / IG-402), tool traffic for that step is **not** a separate card per tool: the step card header includes the same kind of summary as `[2 tools]` but broken down by tool kind (e.g. `Grep(2), List(4)`), and the body lists one line per tool call (invocation → result). Subagent internals still use the existing `task` tool card.
+
 ---
 
 ## 8. Implementation Patterns
