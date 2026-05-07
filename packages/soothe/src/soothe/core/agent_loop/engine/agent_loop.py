@@ -112,6 +112,7 @@ class AgentLoop:
         recent_messages_for_intent: list[Any] | None = None,
         active_goal_id_for_intent: str | None = None,
         active_goal_description_for_intent: str | None = None,
+        shared_pool: Any | None = None,  # IG-406: SharedPostgreSQLPool for high-concurrency
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -125,6 +126,7 @@ class AgentLoop:
             max_iterations: Maximum loop iterations (default: 8)
             loop_id: Optional loop_id (None → auto-generate UUID)
             intent: IntentClassification from unified classifier (IG-226). Determines goal handling:
+            shared_pool: SharedPostgreSQLPool for high-concurrency (IG-406).
                 - thread_continuation: Adjust iteration behavior, reuse working memory
                 - new_goal: Normal goal execution flow
                 - chitchat: Should not reach here (handled in runner)
@@ -134,8 +136,12 @@ class AgentLoop:
             Tuples of (event_type, event_data) for progress updates
         """
         # Initialize AgentLoop state manager (RFC-205, IG-246: loop_id parameter, IG-055: config)
+        # IG-406: Pass shared_pool for high-concurrency support
         state_manager = AgentLoopStateManager(
-            loop_id, Path(workspace) if workspace else None, config=self.config
+            loop_id,
+            Path(workspace) if workspace else None,
+            config=self.config,
+            shared_pool=shared_pool,
         )
 
         # Initialize checkpoint anchor manager for execution synchronization (IG-055: pass config)
@@ -303,6 +309,9 @@ class AgentLoop:
                     await pump_task
             else:
                 await pump_task
+            # IG-404: Close backend pools to prevent connection exhaustion
+            await state_manager.close()
+            await anchor_manager.close()
 
     def _resolve_decision(
         self,

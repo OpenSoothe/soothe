@@ -5,6 +5,7 @@ RFC-216: Multi-thread spanning with loop_id as primary key.
 RFC-215: Unified global SQLite persistence backend (loop_checkpoints.db).
 IG-055: PostgreSQL backend support using soothe_checkpoints database.
 IG-258 Phase 2: Connection pooling to eliminate database lock contention.
+IG-406: Shared pool for high-concurrency (200+ threads) support.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessag
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
+    from soothe.core.agent_loop.state.persistence.shared_pool import SharedPostgreSQLPool
     from soothe.core.agent_loop.state.schemas import (
         AgentDecision,
         LoopState,
@@ -60,17 +62,20 @@ class AgentLoopStateManager:
         workspace: Path | None = None,
         reader_pool_size: int = 5,
         config: SootheConfig | None = None,
+        shared_pool: SharedPostgreSQLPool | None = None,
     ) -> None:  # noqa: ARG002
         """Initialize with loop_id (primary key), not thread_id.
 
         IG-055: Configuration-driven backend selection.
         IG-258 Phase 2: Instance-level connection pool.
+        IG-406: Shared pool for high-concurrency support.
 
         Args:
             loop_id: Loop identifier (UUID or existing). None generates new UUID.
             workspace: Optional workspace path (not used for checkpoint storage)
             reader_pool_size: Number of reader connections for concurrent reads (Phase 2).
             config: SootheConfig for backend selection (PostgreSQL vs SQLite).
+            shared_pool: SharedPostgreSQLPool for high-concurrency (IG-406).
         """
         self.loop_id = loop_id or str(uuid.uuid4())
         self.run_dir = PersistenceDirectoryManager.get_loop_directory(
@@ -82,14 +87,21 @@ class AgentLoopStateManager:
         self._backend_type = "sqlite"  # Default
         self._postgres_backend = None
         self._postgres_dsn = None
+        self._shared_pool = shared_pool  # IG-406: Shared pool reference
 
         if config and config.persistence.default_backend == "postgresql":
             self._backend_type = "postgresql"
             self._postgres_dsn = config.resolve_postgres_dsn_for_database("checkpoints")
-            logger.info(
-                "AgentLoop using PostgreSQL backend (soothe_checkpoints database): loop_id=%s",
-                self.loop_id,
-            )
+            if shared_pool:
+                logger.info(
+                    "AgentLoop using shared PostgreSQL pool: loop_id=%s",
+                    self.loop_id,
+                )
+            else:
+                logger.info(
+                    "AgentLoop using PostgreSQL backend (soothe_checkpoints database): loop_id=%s",
+                    self.loop_id,
+                )
         else:
             self.db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
             logger.info(
@@ -107,21 +119,46 @@ class AgentLoopStateManager:
     async def _ensure_backend_initialized(self) -> None:
         """Lazy backend initialization (IG-055: PostgreSQL or SQLite).
 
+        IG-406: Uses shared pool when provided for high-concurrency support.
         Ensures appropriate backend is ready for operations.
         """
         if self._backend_type == "postgresql":
             if self._postgres_backend is None:
-                from soothe.core.agent_loop.state.persistence.postgres_backend import (
-                    PostgreSQLPersistenceBackend,
-                )
+                # IG-406: Use shared pool if provided (high-concurrency mode)
+                if self._shared_pool is not None:
+                    from soothe.core.agent_loop.state.persistence.postgres_backend import (
+                        PostgreSQLPersistenceBackend,
+                    )
 
-                async with self._init_lock:
-                    if self._postgres_backend is None:
-                        self._postgres_backend = PostgreSQLPersistenceBackend(
-                            dsn=self._postgres_dsn, pool_size=self._reader_pool_size
-                        )
-                        # Schema initialization happens in backend
-                        logger.info("AgentLoop PostgreSQL backend ready: loop_id=%s", self.loop_id)
+                    async with self._init_lock:
+                        if self._postgres_backend is None:
+                            # Create lightweight backend wrapper using shared pool
+                            pool = self._shared_pool.get_pool()
+                            if pool is not None:
+                                self._postgres_backend = PostgreSQLPersistenceBackend(
+                                    dsn=self._postgres_dsn,
+                                    pool_size=0,  # pool_size=0: use provided pool
+                                )
+                                self._postgres_backend._pool = pool  # Use shared pool directly
+                                logger.info(
+                                    "AgentLoop PostgreSQL backend ready (shared pool): loop_id=%s",
+                                    self.loop_id,
+                                )
+                else:
+                    # IG-055: Create dedicated pool (single-threaded/low-concurrency mode)
+                    from soothe.core.agent_loop.state.persistence.postgres_backend import (
+                        PostgreSQLPersistenceBackend,
+                    )
+
+                    async with self._init_lock:
+                        if self._postgres_backend is None:
+                            self._postgres_backend = PostgreSQLPersistenceBackend(
+                                dsn=self._postgres_dsn, pool_size=self._reader_pool_size
+                            )
+                            # Schema initialization happens in backend
+                            logger.info(
+                                "AgentLoop PostgreSQL backend ready: loop_id=%s", self.loop_id
+                            )
         else:
             # SQLite backend initialization
             if self._writer_conn is None:
@@ -893,6 +930,45 @@ class AgentLoopStateManager:
         await self.save(self._checkpoint)
 
         logger.info("Finalized loop %s (status: %s)", self.loop_id, status)
+
+    async def close(self) -> None:
+        """Close backend connection pools (IG-404, IG-406).
+
+        IG-404: Prevent pool exhaustion in concurrent execution.
+        IG-406: Shared pools are closed at daemon level, not per-AgentLoop.
+
+        Must be called after AgentLoop completes to release database connections.
+        For shared pool mode, only clears references (pool closed at daemon shutdown).
+        """
+        # Close PostgreSQL backend pool (only if owned, not shared)
+        if self._postgres_backend is not None:
+            await self._postgres_backend.close()
+            self._postgres_backend = None
+            # IG-406: Clear shared pool reference but don't close it
+            self._shared_pool = None
+            logger.debug("Released PostgreSQL backend for loop %s", self.loop_id)
+
+        # Close SQLite connections (always owned by this manager)
+        if self._writer_conn is not None:
+            await asyncio.to_thread(self._close_writer_sync)
+            logger.debug("Closed SQLite writer connection for loop %s", self.loop_id)
+
+        # Close reader pool connections
+        if self._reader_pool:
+            await asyncio.to_thread(self._close_reader_pool_sync)
+            logger.debug("Closed SQLite reader pool for loop %s", self.loop_id)
+
+    def _close_writer_sync(self) -> None:
+        """Sync close of writer connection."""
+        if self._writer_conn:
+            self._writer_conn.close()
+            self._writer_conn = None
+
+    def _close_reader_pool_sync(self) -> None:
+        """Sync close of reader pool connections."""
+        for conn in self._reader_pool:
+            conn.close()
+        self._reader_pool.clear()
 
     def _serialize_working_memory(self, working_memory: LoopWorkingMemory) -> WorkingMemoryState:
         """Serialize working memory state."""

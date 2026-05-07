@@ -133,5 +133,13 @@ class CheckpointAnchorManager:
             execution_summary.get("status") if execution_summary else "unknown",
         )
 
+    async def close(self) -> None:
+        """Close persistence manager backend pools (IG-404: prevent pool exhaustion).
+
+        Must be called when anchor manager is no longer needed to release database connections.
+        """
+        await self.persistence_manager.close()
+        logger.debug("Closed anchor manager persistence pool for loop %s", self.loop_id)
+
 
 __all__ = ["CheckpointAnchorManager"]
