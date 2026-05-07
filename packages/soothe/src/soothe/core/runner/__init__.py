@@ -166,6 +166,10 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         self._context_restore_lock = asyncio.Lock()
         self._interrupt_resolver: Any | None = None
 
+        # IG-406: Shared PostgreSQL pool for AgentLoop state persistence
+        # Initialized lazily in async context for high-concurrency support
+        self._agentloop_shared_pool: Any = None  # SharedPostgreSQLPool | None
+
         total_ms = (time.perf_counter() - init_start) * 1000
         logger.info("SootheRunner initialized in %.1fms", total_ms)
 
@@ -231,6 +235,26 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             initial_message=initial_message,
             metadata=metadata,
         )
+
+    async def get_agentloop_shared_pool(self) -> Any:
+        """Get or initialize the shared PostgreSQL pool for AgentLoop state.
+
+        IG-406: Singleton pool for high-concurrency (200+ threads) support.
+        Pool is shared across all AgentLoopStateManager instances.
+
+        Returns:
+            SharedPostgreSQLPool instance if PostgreSQL configured, None for SQLite.
+        """
+        if self._agentloop_shared_pool is not None:
+            return self._agentloop_shared_pool
+
+        if self._config.persistence.default_backend != "postgresql":
+            return None
+
+        from soothe.core.agent_loop.state.persistence.shared_pool import SharedPostgreSQLPool
+
+        self._agentloop_shared_pool = await SharedPostgreSQLPool.get_shared_instance(self._config)
+        return self._agentloop_shared_pool
 
     async def list_persisted_threads(
         self,
@@ -326,6 +350,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         """Clean up resources during shutdown.
 
         Stops background indexer tasks and closes connection pools.
+        IG-406: Closes shared AgentLoop PostgreSQL pool at daemon shutdown.
         """
         if self._checkpointer_pool is not None:
             try:
@@ -342,6 +367,19 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
                 # SQLite checkpointer manages its own connection via AsyncSqliteSaver
             except Exception:
                 logger.debug("Failed to close checkpointer pool", exc_info=True)
+
+        # IG-406: Close shared AgentLoop PostgreSQL pool
+        if self._agentloop_shared_pool is not None:
+            try:
+                from soothe.core.agent_loop.state.persistence.shared_pool import (
+                    SharedPostgreSQLPool,
+                )
+
+                await SharedPostgreSQLPool.close_shared_instance()
+                self._agentloop_shared_pool = None
+                logger.info("Closed shared AgentLoop PostgreSQL pool")
+            except Exception:
+                logger.debug("Failed to close shared AgentLoop pool", exc_info=True)
 
         await self._close_attached_store(self._memory)
 

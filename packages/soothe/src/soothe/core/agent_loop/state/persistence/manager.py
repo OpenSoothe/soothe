@@ -468,5 +468,15 @@ class AgentLoopCheckpointPersistenceManager:
             md_path,
         )
 
+    async def close(self) -> None:
+        """Close backend connection pools (IG-404: prevent pool exhaustion).
+
+        Must be called when manager is no longer needed to release database connections.
+        Critical for concurrent execution where multiple managers may exist.
+        """
+        if hasattr(self._backend, "close"):
+            await self._backend.close()
+            logger.debug("Closed persistence backend pool")
+
 
 __all__ = ["AgentLoopCheckpointPersistenceManager"]
