@@ -2,6 +2,8 @@
 
 Manages ``$SOOTHE_HOME/data/threads/{thread_id}/`` with hierarchical goal/step
 layout, atomic checkpoint writes, and a manifest tracking all artifacts.
+
+IG-405: Uses virtual home when virtual_mode=True for workspace isolation.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.core import FrameworkFilesystem
+from soothe.core.workspace import get_virtual_home, get_virtual_mode
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +105,8 @@ class RunArtifactStore:
     ) -> None:
         """Initialize the artifact store for a run.
 
+        IG-405: Uses virtual home when virtual_mode=True.
+
         Args:
             thread_id: Thread identifier for this run.
             config: Soothe configuration (optional).
@@ -109,11 +114,30 @@ class RunArtifactStore:
         """
         self._thread_id = thread_id
         self._config = config
+
+        # IG-405: Use virtual home when virtual mode is active
+        # Virtual home is /.soothe under workspace when virtual_mode=True
+        if get_virtual_mode():
+            home_path = get_virtual_home()
+        else:
+            home_path = Path(soothe_home).expanduser()
+
         # Use new isolated directory structure (RFC-215): data/threads/{thread_id}
-        self._run_dir = Path(soothe_home).expanduser() / "data" / "threads" / thread_id
+        self._run_dir = home_path / "data" / "threads" / thread_id
         self._file_lock = _lock_for_run_dir(self._run_dir)
 
-        self._run_dir.mkdir(parents=True, exist_ok=True)
+        # Create run directory using backend when virtual mode
+        if get_virtual_mode():
+            try:
+                backend = FrameworkFilesystem.get()
+                if backend is not None:
+                    virtual_rel = f"/.soothe/data/threads/{thread_id}"
+                    backend.mkdir(virtual_rel, recursive=True)
+            except Exception:
+                # Fallback to direct mkdir
+                self._run_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            self._run_dir.mkdir(parents=True, exist_ok=True)
 
         # Reset FrameworkFilesystem to avoid test pollution (IG-181)
         # Tests may initialize FrameworkFilesystem with a different workspace,

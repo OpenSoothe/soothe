@@ -17,7 +17,10 @@ from soothe.utils.runtime import (
 
 def test_get_subagent_runtime_dir() -> None:
     """Test getting subagent runtime directory."""
-    with tempfile.TemporaryDirectory() as tmpdir, patch("soothe.utils.runtime.SOOTHE_HOME", tmpdir):
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        patch("soothe.core.workspace.get_virtual_home", return_value=Path(tmpdir)),
+    ):
         runtime_dir = get_subagent_runtime_dir("browser")
         assert runtime_dir == Path(tmpdir) / "agents" / "browser"
         assert runtime_dir.exists()
@@ -26,7 +29,10 @@ def test_get_subagent_runtime_dir() -> None:
 
 def test_get_browser_runtime_dir() -> None:
     """Test getting browser runtime directory."""
-    with tempfile.TemporaryDirectory() as tmpdir, patch("soothe.utils.runtime.SOOTHE_HOME", tmpdir):
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        patch("soothe.core.workspace.get_virtual_home", return_value=Path(tmpdir)),
+    ):
         runtime_dir = get_browser_runtime_dir()
         assert runtime_dir == Path(tmpdir) / "agents" / "browser"
         assert runtime_dir.exists()
@@ -34,7 +40,10 @@ def test_get_browser_runtime_dir() -> None:
 
 def test_get_browser_downloads_dir() -> None:
     """Test getting browser downloads directory."""
-    with tempfile.TemporaryDirectory() as tmpdir, patch("soothe.utils.runtime.SOOTHE_HOME", tmpdir):
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        patch("soothe.core.workspace.get_virtual_home", return_value=Path(tmpdir)),
+    ):
         downloads_dir = get_browser_downloads_dir()
         assert downloads_dir == Path(tmpdir) / "agents" / "browser" / "downloads"
         assert downloads_dir.exists()
@@ -42,7 +51,10 @@ def test_get_browser_downloads_dir() -> None:
 
 def test_get_browser_user_data_dir() -> None:
     """Test getting browser user data directory."""
-    with tempfile.TemporaryDirectory() as tmpdir, patch("soothe.utils.runtime.SOOTHE_HOME", tmpdir):
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        patch("soothe.core.workspace.get_virtual_home", return_value=Path(tmpdir)),
+    ):
         user_data_dir = get_browser_user_data_dir()
         assert user_data_dir == Path(tmpdir) / "agents" / "browser" / "profiles" / "default"
         assert user_data_dir.exists()
@@ -55,7 +67,10 @@ def test_get_browser_user_data_dir() -> None:
 
 def test_get_browser_extensions_dir() -> None:
     """Test getting browser extensions directory."""
-    with tempfile.TemporaryDirectory() as tmpdir, patch("soothe.utils.runtime.SOOTHE_HOME", tmpdir):
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        patch("soothe.core.workspace.get_virtual_home", return_value=Path(tmpdir)),
+    ):
         extensions_dir = get_browser_extensions_dir()
         assert extensions_dir == Path(tmpdir) / "agents" / "browser" / "extensions"
         assert extensions_dir.exists()
@@ -63,7 +78,10 @@ def test_get_browser_extensions_dir() -> None:
 
 def test_cleanup_browser_temp_files() -> None:
     """Test cleaning up temporary browser files."""
-    with tempfile.TemporaryDirectory() as tmpdir, patch("soothe.utils.runtime.SOOTHE_HOME", tmpdir):
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        patch("soothe.core.workspace.get_virtual_home", return_value=Path(tmpdir)),
+    ):
         # Create temp directories with UUID-like suffixes
         downloads_dir = get_browser_downloads_dir()
         temp_download = downloads_dir / "browser-use-downloads-abc12345"
@@ -129,7 +147,10 @@ def test_browser_config_integration() -> None:
 
 def test_runtime_directory_structure() -> None:
     """Test that the complete directory structure is created."""
-    with tempfile.TemporaryDirectory() as tmpdir, patch("soothe.utils.runtime.SOOTHE_HOME", tmpdir):
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        patch("soothe.core.workspace.get_virtual_home", return_value=Path(tmpdir)),
+    ):
         # Get all directories
         runtime_dir = get_browser_runtime_dir()
         downloads_dir = get_browser_downloads_dir()
@@ -150,7 +171,10 @@ def test_runtime_directory_structure() -> None:
 
 def test_cleanup_specific_session() -> None:
     """Test cleaning up a specific session by ID."""
-    with tempfile.TemporaryDirectory() as tmpdir, patch("soothe.utils.runtime.SOOTHE_HOME", tmpdir):
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        patch("soothe.core.workspace.get_virtual_home", return_value=Path(tmpdir)),
+    ):
         # Create test directories
         downloads_dir = get_browser_downloads_dir()
         session_dir = downloads_dir / "session-abc123"

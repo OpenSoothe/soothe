@@ -2,6 +2,8 @@
 
 Ported from noesium's document_toolkit.py.
 Uses PyMuPDF for PDF parsing with optional Chunkr API support.
+
+IG-405: Uses backend_ops for virtual mode file operations.
 """
 
 from __future__ import annotations
@@ -12,6 +14,13 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from soothe.toolkits._internal.backend_ops import (
+    backend_file_exists,
+    backend_file_stat,
+    backend_mkdir,
+    backend_read_file,
+    backend_write_file,
+)
 from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
@@ -20,13 +29,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _get_cache_path(document_path: str, cache_dir: str = "") -> Path | None:
-    """Get cache file path for parsed document."""
+def _get_cache_path(document_path: str, cache_dir: str = "", config: Any = None) -> Path | None:
+    """Get cache file path for parsed document (IG-405: virtual-aware)."""
     if not cache_dir:
         return None
 
     cache = Path(cache_dir)
-    cache.mkdir(parents=True, exist_ok=True)
+    backend_mkdir(cache, config=config)
     md5 = hashlib.md5(document_path.encode()).hexdigest()
     return cache / f"{md5}.txt"
 
@@ -215,10 +224,12 @@ def document_qa(
     Parses PDF, Office documents, and text files.
     Supports PyMuPDF (default) for fast extraction.
 
+    IG-405: Uses backend file operations for cache when virtual mode.
+
     Args:
         document_path: Path or URL to document.
         question: Optional question about document. If None, returns summary.
-        config: Optional SootheConfig for model creation.
+        config: Optional SootheConfig for model creation and virtual mode.
         parser: Parser to use (default: pymupdf).
         text_limit: Max characters to extract.
         cache_dir: Optional cache directory for parsed documents.
@@ -226,11 +237,11 @@ def document_qa(
     Returns:
         Summary or answer to question.
     """
-    # Check cache
-    cache_path = _get_cache_path(document_path, cache_dir)
-    if cache_path and cache_path.exists():
+    # Check cache (IG-405: pass config for virtual-aware path)
+    cache_path = _get_cache_path(document_path, cache_dir, config=config)
+    if cache_path and backend_file_exists(cache_path, config=config):
         logger.info("Using cached document: %s", document_path)
-        text = cache_path.read_text()
+        text = backend_read_file(cache_path, config=config)
     else:
         # Download if URL
         local_path = document_path
@@ -243,9 +254,9 @@ def document_qa(
         try:
             text = _parse_document(local_path)
 
-            # Cache parsed text
+            # Cache parsed text (IG-405: use backend write)
             if cache_path:
-                cache_path.write_text(text)
+                backend_write_file(cache_path, text, config=config)
 
         except ImportError as e:
             return f"Error: {e}"
@@ -288,33 +299,37 @@ def extract_text(document_path: str, text_limit: int = 100000) -> str:
         return text
 
 
-def get_document_info(document_path: str) -> dict[str, Any]:
+def get_document_info(document_path: str, config: Any = None) -> dict[str, Any]:
     """Get metadata about a document.
+
+    IG-405: Uses backend file operations when virtual mode.
 
     Args:
         document_path: Path to document.
+        config: Optional SootheConfig for virtual mode detection.
 
     Returns:
         Dict with metadata including file size, format, page count (for PDF), etc.
     """
     path = Path(document_path)
 
-    if not path.exists():
+    if not backend_file_exists(path, config=config):
         return {"error": f"Document not found: {document_path}"}
 
-    if not path.is_file():
+    # IG-405: Use backend for stat when virtual mode
+    stat_info = backend_file_stat(path, config=config)
+    if not stat_info.get("is_file", True):
         return {"error": f"Not a file: {document_path}"}
 
-    stat = path.stat()
     suffix = path.suffix.lower()
 
     info = {
         "path": str(path),
         "name": path.name,
         "format": suffix,
-        "size_bytes": stat.st_size,
-        "size_kb": round(stat.st_size / 1024, 2),
-        "modified": stat.st_mtime,
+        "size_bytes": stat_info["size_bytes"],
+        "size_kb": round(stat_info["size_bytes"] / 1024, 2),
+        "modified": stat_info["mtime"],
     }
 
     # PDF-specific info

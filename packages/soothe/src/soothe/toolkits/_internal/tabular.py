@@ -2,6 +2,8 @@
 
 Ported from noesium's tabular_data toolkit. langchain has `create_csv_agent`
 but no direct equivalent for column inspection or data quality validation.
+
+IG-405: Uses backend_ops for virtual mode file operations.
 """
 
 from __future__ import annotations
@@ -9,18 +11,26 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from soothe.toolkits._internal.backend_ops import (
+    backend_file_exists,
+    backend_file_stat,
+)
+
 _MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 _MAX_SAMPLE_DISPLAY_LENGTH = 50
 _HIGH_MISSING_THRESHOLD_PCT = 50
 
 
-def _load_dataframe(file_path: str) -> Any:
+def _load_dataframe(file_path: str, config: Any = None) -> Any:
     """Load a tabular file into a pandas DataFrame.
 
     Supports CSV, TSV, Excel (.xlsx/.xls), JSON, and Parquet.
 
+    IG-405: Uses backend file operations for existence/size checks.
+
     Args:
         file_path: Path to the data file.
+        config: Optional SootheConfig for virtual mode detection.
 
     Returns:
         pandas DataFrame.
@@ -32,11 +42,14 @@ def _load_dataframe(file_path: str) -> Any:
     import pandas as pd
 
     path = Path(file_path)
-    if not path.exists():
+
+    # IG-405: Use backend for existence/size check
+    if not backend_file_exists(path, config=config):
         msg = f"File not found: {file_path}"
         raise FileNotFoundError(msg)
 
-    if path.stat().st_size > _MAX_FILE_SIZE:
+    stat_info = backend_file_stat(path, config=config)
+    if stat_info["size_bytes"] > _MAX_FILE_SIZE:
         msg = f"File exceeds {_MAX_FILE_SIZE // (1024 * 1024)}MB limit"
         raise ValueError(msg)
 
