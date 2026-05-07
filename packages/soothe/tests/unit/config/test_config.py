@@ -76,6 +76,16 @@ class TestSootheConfig:
         assert result.startswith("Custom prompt here")
         assert "Today's date is" in result
 
+    def test_system_prompt_includes_claude_agents_md_instruction(self) -> None:
+        """Test that system prompt includes instruction to read CLAUDE.md and AGENTS.md."""
+        cfg = SootheConfig()
+        prompt = cfg.resolve_system_prompt()
+
+        # Check for the instruction about respecting these files
+        assert "CLAUDE.md" in prompt
+        assert "AGENTS.md" in prompt
+        assert "read and respect" in prompt or "respect their instructions" in prompt
+
     def test_planner_routing_default(self) -> None:
         cfg = SootheConfig()
         assert cfg.protocols.planner.routing == "auto"

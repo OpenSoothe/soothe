@@ -30,11 +30,15 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock VERSION ./
 COPY packages ./packages
+COPY scripts/warmup_semantic.py ./scripts/warmup_semantic.py
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --all-extras --no-dev --frozen \
     && uv pip install playwright \
     && .venv/bin/python -m playwright install chromium
+
+# Warmup semantic similarity model to avoid latency on first use
+RUN .venv/bin/python scripts/warmup_semantic.py
 
 # ---- Runtime: minimal image with .venv + browsers ----
 FROM registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm

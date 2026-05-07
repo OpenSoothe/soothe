@@ -1,6 +1,8 @@
 name: Build Docker Image
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       push_image:
@@ -45,13 +47,15 @@ jobs:
           tags: |
             type=raw,value=latest
             type=sha,prefix=
+            type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: packages/soothe/Dockerfile
-          push: ${{ github.event.inputs.push_image == 'true' }}
+          push: ${{ github.event_name == 'release' || github.event.inputs.push_image == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
