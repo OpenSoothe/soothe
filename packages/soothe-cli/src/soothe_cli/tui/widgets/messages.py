@@ -61,6 +61,30 @@ _MAX_STEP_STAT_TOOL_KINDS = 4
 """Max distinct tool display names in the step header before ``+N more``."""
 
 
+def _assemble_card_header(widget: object, label_part: str, body_part: str) -> Content:
+    """Build a card title: cognition-colored label plus muted body (no bold).
+
+    Used for Goal, Plan, Step, and tool (including Task) headers so hierarchy
+    comes from color, not weight.
+
+    Args:
+        widget: Mounted widget (or any object accepted by ``get_theme_colors``).
+        label_part: Left segment (e.g. ``⎿ Goal · ``).
+        body_part: Right segment (goal text, args, etc.).
+
+    Returns:
+        Assembled ``Content`` for a ``Static`` header.
+    """
+    try:
+        colors = theme.get_theme_colors(widget)
+    except Exception:  # noqa: BLE001
+        colors = theme.DARK_COLORS
+    return Content.assemble(
+        Content.styled(label_part, colors.cognition),
+        Content.styled(body_part, colors.muted),
+    )
+
+
 def _show_timestamp_toast(widget: Static | Vertical) -> None:
     """Show a toast with the message's creation timestamp.
 
@@ -830,7 +854,6 @@ class ToolCallMessage(Vertical):
         height: auto;
         margin: 0;
         color: $text-muted;
-        text-style: bold;
     }
 
     ToolCallMessage .tool-subagent-notes {
@@ -970,6 +993,18 @@ class ToolCallMessage(Vertical):
         # Legacy compat aliases — _rows still needed by callers that iterate rows
         self._rows: list[_StepToolRow] = []  # kept in sync with _activity tool rows
 
+    def _tool_header_content(self) -> Content:
+        """One-line tool title: tool name in cognition, parentheses block muted."""
+        full = format_tool_cli_style_command(self._tool_name, self._args)
+        idx = full.find("(")
+        if idx == -1:
+            try:
+                colors = theme.get_theme_colors(self)
+            except Exception:  # noqa: BLE001
+                colors = theme.DARK_COLORS
+            return Content.styled(full, colors.muted)
+        return _assemble_card_header(self, full[:idx], full[idx:])
+
     def compose(self) -> ComposeResult:
         """Compose the tool call message layout.
 
@@ -977,8 +1012,7 @@ class ToolCallMessage(Vertical):
             Widgets for header, interleaved activity (tool rows + text lines),
             result summary, status, and collapsible output.
         """
-        tool_label = format_tool_cli_style_command(self._tool_name, self._args)
-        yield Static(Content.styled(tool_label, "bold dim"), markup=False, classes="tool-header")
+        yield Static(self._tool_header_content(), markup=False, classes="tool-header")
         # Unified activity widget: interleaves text lines and tool rows (IG-403)
         yield Static("", classes="tool-rows", id="activity", markup=False)
         yield Static("", classes="tool-result-summary", id="tool-result-summary")
@@ -1107,9 +1141,7 @@ class ToolCallMessage(Vertical):
         except Exception:  # noqa: BLE001  # Widget tree not ready or query miss
             return
         # Textual ``Static.update`` accepts only the new content (no ``markup=`` kwarg).
-        header.update(
-            Content.styled(format_tool_cli_style_command(self._tool_name, self._args), "bold dim")
-        )
+        header.update(self._tool_header_content())
 
     def append_subagent_activity(self, line: str) -> None:
         """Append one metadata line for curated ``soothe.subagent.*`` progress (IG-339)."""
@@ -2166,7 +2198,6 @@ class CognitionStepMessage(Vertical):
         height: auto;
         margin: 0;
         color: $text-muted;
-        text-style: bold;
     }
 
     CognitionStepMessage .step-status {
@@ -2254,11 +2285,17 @@ class CognitionStepMessage(Vertical):
         """Prose accumulated from ``execute_step`` for this step when it completed."""
         return self._last_completed_execute_prose
 
-    def compose(self) -> ComposeResult:
+    def _step_header_content(self) -> Content:
         prefix = get_glyphs().tool_prefix
-        header_line = f"{prefix} Step · {self._description}"
+        return _assemble_card_header(
+            self,
+            f"{prefix} Step · ",
+            f"{self._description}{self._stats_title_suffix()}",
+        )
+
+    def compose(self) -> ComposeResult:
         yield Static(
-            Content.styled(header_line, "bold dim"),
+            self._step_header_content(),
             classes="step-header",
             id="step-cognition-header",
         )
@@ -2379,9 +2416,7 @@ class CognitionStepMessage(Vertical):
     def _refresh_header_title(self) -> None:
         if self._header_widget is None:
             return
-        prefix = get_glyphs().tool_prefix
-        line = f"{prefix} Step · {self._description}{self._stats_title_suffix()}"
-        self._header_widget.update(Content.styled(line, "bold dim"))
+        self._header_widget.update(self._step_header_content())
 
     def _step_goal_tree_gutter(self) -> str:
         """Left column matching :meth:`CognitionGoalTreeMessage._indent_prefix`."""
@@ -2874,7 +2909,6 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
         height: auto;
         margin: 0;
         color: $text-muted;
-        text-style: bold;
     }
 
     CognitionPlanReasonMessage .plan-section-line {
@@ -2918,12 +2952,15 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
         self._assessment_reasoning = assessment_reasoning.strip()
         self._plan_reasoning = plan_reasoning.strip()
 
-    def compose(self) -> ComposeResult:
+    def _plan_header_content(self) -> Content:
         prefix = get_glyphs().tool_prefix
-        header_line = f"{prefix} Plan · {self._next_action}"
+        body = self._next_action
         if self._plan_action in ("keep", "new"):
-            header_line = f"{header_line} · {self._plan_action}"
-        yield Static(Content.styled(header_line, "bold dim"), classes="cognition-plan-header")
+            body = f"{body} · {self._plan_action}"
+        return _assemble_card_header(self, f"{prefix} Plan · ", body)
+
+    def compose(self) -> ComposeResult:
+        yield Static(self._plan_header_content(), classes="cognition-plan-header")
 
     def on_mount(self) -> None:
         """Use ASCII border variant when configured."""
@@ -2991,7 +3028,6 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         height: auto;
         margin: 0;
         color: $text-muted;
-        text-style: bold;
     }
 
     CognitionGoalTreeMessage .cognition-goal-tree-steps {
@@ -3045,10 +3081,10 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
     def _goal_header_content(self) -> Content:
         prefix = get_glyphs().tool_prefix
         g = self._clip(self._goal_text, _MAX_GOAL_HEADER)
-        line = f"{prefix} Goal · {g}"
+        body = g
         if self._max_iterations > 1:
-            line = f"{line} · iter<={self._max_iterations}"
-        return Content.styled(line, "bold dim")
+            body = f"{body} · iter<={self._max_iterations}"
+        return _assemble_card_header(self, f"{prefix} Goal · ", body)
 
     def _goal_footer_styled_content(self) -> Content:
         """Footer content for loop finished / interrupted (parity with step/tool status lines)."""

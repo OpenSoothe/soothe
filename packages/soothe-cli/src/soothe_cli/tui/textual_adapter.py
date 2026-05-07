@@ -813,8 +813,10 @@ async def _finalize_goal_completion_stream(
     """Stop the goal_completion ``AssistantMessage`` stream and record it under ``ns_key``."""
     if extra_text and extra_text not in getattr(stream_msg, "_content", ""):
         await stream_msg.append_content(extra_text)
-    await stream_msg.stop_stream()
+    # Expand before ending the stream so the first post-stream layout is full
+    # markdown (avoids a collapsed preview flash for long synthesis text).
     stream_msg.set_body_expanded(True)
+    await stream_msg.stop_stream()
     if adapter._sync_message_content and stream_msg.id:
         adapter._sync_message_content(stream_msg.id, stream_msg._content)
     goal_completion_stream_by_namespace.pop(ns_key, None)
@@ -2369,10 +2371,14 @@ async def execute_task_textual(
                         namespace_task_bindings=namespace_task_bindings,
                     )
             for ns_key, stream_msg in list(goal_completion_stream_by_namespace.items()):
-                await stream_msg.stop_stream()
-                if adapter._sync_message_content and stream_msg.id:
-                    adapter._sync_message_content(stream_msg.id, stream_msg._content)
-                goal_completion_stream_by_namespace.pop(ns_key, None)
+                await _finalize_goal_completion_stream(
+                    adapter,
+                    stream_msg,
+                    ns_key=ns_key,
+                    goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+                    assistant_message_by_namespace=assistant_message_by_namespace,
+                    extra_text="",
+                )
             pending_text_by_namespace.clear()
             assistant_message_by_namespace.clear()
             task_loop_assistant_by_tcid.clear()
