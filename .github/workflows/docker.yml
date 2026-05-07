@@ -56,7 +56,10 @@ jobs:
           context: .
           file: packages/soothe/Dockerfile
           push: ${{ github.event_name == 'release' || github.event.inputs.push_image == 'true' }}
+          load: ${{ github.event_name != 'release' && github.event.inputs.push_image != 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
