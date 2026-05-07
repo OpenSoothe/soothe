@@ -838,12 +838,13 @@ class ToolCallMessage(Vertical):
         padding: 0 1;
         margin: 0 0 1 0;
         background: transparent;
-        border-left: wide $tool;
+        border-left: wide $cognition;
     }
 
     ToolCallMessage .tool-header {
         height: auto;
-        color: $tool;
+        margin: 0;
+        color: $text-muted;
         text-style: bold;
     }
 
@@ -855,6 +856,7 @@ class ToolCallMessage(Vertical):
 
     ToolCallMessage .tool-status {
         margin-left: 3;
+        margin-top: 0;
     }
 
     ToolCallMessage .tool-status.pending {
@@ -874,7 +876,7 @@ class ToolCallMessage(Vertical):
     }
 
     ToolCallMessage .tool-result-summary {
-        margin-left: 0;
+        margin-left: 3;
         height: auto;
     }
 
@@ -887,19 +889,19 @@ class ToolCallMessage(Vertical):
     }
 
     ToolCallMessage .tool-output {
-        margin-left: 0;
+        margin-left: 3;
         margin-top: 0;
         padding: 0;
         height: auto;
     }
 
     ToolCallMessage .tool-output-preview {
-        margin-left: 0;
+        margin-left: 3;
         margin-top: 0;
     }
 
     ToolCallMessage .tool-output-hint {
-        margin-left: 0;
+        margin-left: 3;
         color: $text-muted;
         background: transparent;
     }
@@ -908,7 +910,7 @@ class ToolCallMessage(Vertical):
         margin-left: 3;
         margin-top: 0;
         height: auto;
-        color: $text;
+        color: $text-muted;
     }
 
     ToolCallMessage .tool-rows-hint {
@@ -919,10 +921,10 @@ class ToolCallMessage(Vertical):
     }
 
     ToolCallMessage:hover {
-        border-left: wide $tool-hover;
+        border-left: wide $cognition-hover;
     }
     """
-    """Left border tracks tool lifecycle; hover brightens for interactivity."""
+    """Left border uses cognition tokens (parity with Goal/Plan); hover brightens."""
 
     # Max lines/chars to show in preview mode (see ``preview_limits``)
     _PREVIEW_LINES = TOOL_CARD_PREVIEW_LINES
@@ -991,7 +993,7 @@ class ToolCallMessage(Vertical):
             result summary, status, and collapsible output.
         """
         tool_label = format_tool_cli_style_command(self._tool_name, self._args)
-        yield Static(tool_label, markup=False, classes="tool-header")
+        yield Static(Content.styled(tool_label, "bold dim"), markup=False, classes="tool-header")
         # Unified activity widget: interleaves text lines and tool rows (IG-403)
         yield Static("", classes="tool-rows", id="activity", markup=False)
         yield Static("", classes="tool-result-summary", id="tool-result-summary")
@@ -1119,7 +1121,9 @@ class ToolCallMessage(Vertical):
         except Exception:  # noqa: BLE001  # Widget tree not ready or query miss
             return
         # Textual ``Static.update`` accepts only the new content (no ``markup=`` kwarg).
-        header.update(format_tool_cli_style_command(self._tool_name, self._args))
+        header.update(
+            Content.styled(format_tool_cli_style_command(self._tool_name, self._args), "bold dim")
+        )
 
     def append_subagent_activity(self, line: str) -> None:
         """Append one metadata line for curated ``soothe.subagent.*`` progress (IG-339)."""
@@ -2149,6 +2153,9 @@ class CognitionStepMessage(Vertical):
 
     Header shows per-tool counts; body lists one CLI-style row per call. Click
     toggles expansion when there are more than ``_STEP_TOOL_PREVIEW_ROWS`` rows.
+
+    Tool rows and detail prose use the same ``⎿ ○`` / ``⎿ ✓`` gutter as
+    :class:`CognitionGoalTreeMessage` step lines.
     """
 
     can_select = True
@@ -2164,7 +2171,8 @@ class CognitionStepMessage(Vertical):
 
     CognitionStepMessage .step-header {
         height: auto;
-        color: $cognition;
+        margin: 0;
+        color: $text-muted;
         text-style: bold;
     }
 
@@ -2177,21 +2185,21 @@ class CognitionStepMessage(Vertical):
     }
 
     CognitionStepMessage .step-tools {
-        margin-left: 3;
+        margin-left: 0;
         margin-top: 0;
         height: auto;
-        color: $text;
+        color: $text-muted;
     }
 
     CognitionStepMessage .step-tools-hint {
-        margin-left: 3;
+        margin-left: 0;
         color: $text-muted;
         background: transparent;
         height: auto;
     }
 
     CognitionStepMessage .step-subagent-notes {
-        margin-left: 3;
+        margin-left: 0;
         margin-top: 0;
         color: $text-muted;
         height: auto;
@@ -2244,11 +2252,23 @@ class CognitionStepMessage(Vertical):
         self._stats_counts: dict[str, int] = {}
         self._tools_body_collapsed: bool = False
         self._subagent_notes: list[str] = []
+        self._execute_assistant_buffer: str = ""
+        self._last_completed_execute_prose: str = ""
+        """Execute-step prose frozen when ``set_complete`` runs (TUI dedupe vs goal_completion)."""
+
+    @property
+    def last_completed_execute_prose(self) -> str:
+        """Prose accumulated from ``execute_step`` for this step when it completed."""
+        return self._last_completed_execute_prose
 
     def compose(self) -> ComposeResult:
         prefix = get_glyphs().tool_prefix
-        header = f"{prefix} Step · {self._description}"
-        yield Static(header, markup=False, classes="step-header", id="step-cognition-header")
+        header_line = f"{prefix} Step · {self._description}"
+        yield Static(
+            Content.styled(header_line, "bold dim"),
+            classes="step-header",
+            id="step-cognition-header",
+        )
         yield Static("", classes="step-tools", id="step-cognition-tools", markup=False)
         yield Static("", classes="step-tools-hint", id="step-cognition-tools-hint", markup=False)
         yield Static("", classes="step-status", id="step-cognition-status")
@@ -2261,6 +2281,9 @@ class CognitionStepMessage(Vertical):
         yield Static("", classes="step-detail", id="step-cognition-detail")
 
     def on_mount(self) -> None:
+        if is_ascii_mode():
+            colors = theme.get_theme_colors(self)
+            self.styles.border = ("ascii", colors.primary)
         self._header_widget = self.query_one("#step-cognition-header", Static)
         self._status_widget = self.query_one("#step-cognition-status", Static)
         self._tools_widget = self.query_one("#step-cognition-tools", Static)
@@ -2274,6 +2297,8 @@ class CognitionStepMessage(Vertical):
         self._detail_widget.display = False
         self._refresh_header_title()
         self._refresh_tools_display()
+        if self._execute_assistant_buffer.strip() and self._status == "running":
+            self._refresh_execute_assistant_running_display()
         if self._deferred_interrupted is not None:
             msg = self._deferred_interrupted
             self._deferred_interrupted = None
@@ -2295,6 +2320,37 @@ class CognitionStepMessage(Vertical):
         else:
             _show_timestamp_toast(self)
 
+    def append_execute_assistant_delta(self, delta: str) -> None:
+        """Accumulate per-step LoopAIMessage (``phase=execute_step``) prose into this card."""
+        if not delta:
+            return
+        self._execute_assistant_buffer += delta
+        if self._status == "running":
+            self._refresh_execute_assistant_running_display()
+
+    def _refresh_execute_assistant_running_display(self) -> None:
+        body = self._execute_assistant_buffer.strip()
+        if not body or self._detail_widget is None:
+            return
+        self._detail_widget.update(self._step_branched_execute_body(body, muted=True))
+        self._detail_widget.display = True
+
+    def _step_subagent_notes_content(self) -> Content:
+        """All subagent activity lines with goal-tree gutters."""
+        g = get_glyphs()
+        gutter = f"{g.output_prefix} {g.circle_empty} "
+        parts: list[object] = []
+        first = True
+        for note in self._subagent_notes:
+            t = (note or "").strip()
+            if not t:
+                continue
+            if not first:
+                parts.append("\n")
+            first = False
+            parts.append(Content.styled(f"{gutter}{t}", "dim"))
+        return Content.assemble(*parts) if parts else Content("")
+
     def append_subagent_activity(self, line: str) -> None:
         """Append one metadata line (task subgraph tools, wire events, same as tool card)."""
         text = (line or "").strip()
@@ -2305,7 +2361,7 @@ class CognitionStepMessage(Vertical):
             w = self.query_one("#step-cognition-subagent-notes", Static)
         except Exception:  # noqa: BLE001
             return
-        w.update("\n".join(self._subagent_notes))
+        w.update(self._step_subagent_notes_content())
         w.display = True
 
     def _bump_stat(self, tool_name: str) -> None:
@@ -2331,9 +2387,21 @@ class CognitionStepMessage(Vertical):
         if self._header_widget is None:
             return
         prefix = get_glyphs().tool_prefix
-        self._header_widget.update(
-            f"{prefix} Step · {self._description}{self._stats_title_suffix()}"
-        )
+        line = f"{prefix} Step · {self._description}{self._stats_title_suffix()}"
+        self._header_widget.update(Content.styled(line, "bold dim"))
+
+    def _step_goal_tree_gutter(self) -> str:
+        """Left column matching :meth:`CognitionGoalTreeMessage._indent_prefix`."""
+        return f"{get_glyphs().output_prefix} "
+
+    def _step_tool_row_leading_mark(self, phase: str) -> str:
+        """Phase glyph before the CLI tool segment (goal-tree hollow bullet for in-flight)."""
+        g = get_glyphs()
+        if phase in ("pending", "running", "skipped"):
+            return f"{g.circle_empty} "
+        if phase == "rejected":
+            return f"{g.error} "
+        return ""
 
     def _row_to_content(self, row: _StepToolRow) -> Content:
         phase = row.phase
@@ -2344,7 +2412,7 @@ class CognitionStepMessage(Vertical):
         if phase == "running":
             frames = get_glyphs().spinner_frames
             spin = frames[self._spinner_position % len(frames)]
-        return format_tool_call_row(
+        inner = format_tool_call_row(
             row.tool_name,
             row.args,
             phase=phase,
@@ -2353,6 +2421,82 @@ class CognitionStepMessage(Vertical):
             running_spinner=spin,
             running_elapsed_secs=elapsed,
         )
+        gutter = self._step_goal_tree_gutter()
+        mark = self._step_tool_row_leading_mark(phase)
+        if not mark:
+            return Content.assemble(Content.styled(gutter, "dim"), inner)
+        return Content.assemble(Content.styled(f"{gutter}{mark}", "dim"), inner)
+
+    def _step_branched_execute_body(self, body: str, *, muted: bool = True) -> Content:
+        """Streamed execute-phase prose: tree gutter per line."""
+        g = get_glyphs()
+        gutter = f"{g.output_prefix} {g.circle_empty} "
+        text = (body or "").rstrip()
+        if not text:
+            return Content("")
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
+        style = colors.muted if muted else colors.success
+        parts: list[object] = []
+        for i, ln in enumerate(text.splitlines()):
+            if i:
+                parts.append("\n")
+            parts.append(Content.styled(f"{gutter}{ln}", style))
+        return Content.assemble(*parts)
+
+    def _step_branched_completion_detail(
+        self,
+        *,
+        success: bool,
+        status_line_body: str,
+        prose: str,
+    ) -> Content:
+        """Completed step detail: first line ``⎿ ✓|✗ status``; prose lines ``⎿ ○ …``."""
+        g = get_glyphs()
+        gutter = self._step_goal_tree_gutter()
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
+        icon = g.checkmark if success else g.error
+        tone = colors.success if success else colors.error
+        parts: list[object] = [
+            Content.styled(f"{gutter}{icon} {status_line_body}", tone),
+        ]
+        prose = (prose or "").strip()
+        if prose:
+            sub = f"{g.output_prefix} {g.circle_empty} "
+            parts.append("\n")
+            for i, ln in enumerate(prose.splitlines()):
+                if i:
+                    parts.append("\n")
+                parts.append(Content.styled(f"{sub}{ln}", tone))
+        return Content.assemble(*parts)
+
+    def _step_branched_error_detail(self, err_text: str) -> Content:
+        """Multiline error body: first line ``⎿ ✗ …``; continuations ``⎿ ○ …``."""
+        g = get_glyphs()
+        gutter = self._step_goal_tree_gutter()
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
+        raw = (err_text or "").strip()
+        if not raw:
+            return Content("")
+        lines = raw.splitlines()
+        parts: list[object] = []
+        for i, ln in enumerate(lines):
+            if i:
+                parts.append("\n")
+            if i == 0:
+                parts.append(Content.styled(f"{gutter}{g.error} {ln}", colors.error))
+            else:
+                sub = f"{g.output_prefix} {g.circle_empty} "
+                parts.append(Content.styled(f"{sub}{ln}", colors.error))
+        return Content.assemble(*parts)
 
     def _refresh_tools_display(self) -> None:
         if self._tools_widget is None or self._tools_hint_widget is None:
@@ -2369,16 +2513,22 @@ class CognitionStepMessage(Vertical):
         remaining = len(self._rows) - len(visible)
         if remaining > 0:
             ellipsis = get_glyphs().ellipsis
+            hint = f"{ellipsis} {remaining} more tool call(s) — click to expand"
             self._tools_hint_widget.update(
-                Content.styled(
-                    f"{ellipsis} {remaining} more tool call(s) — click to expand",
-                    "dim",
+                Content.assemble(
+                    Content.styled(self._step_goal_tree_gutter(), "dim"),
+                    Content.styled(f"{get_glyphs().circle_empty} {hint}", "dim"),
                 )
             )
             self._tools_hint_widget.display = not show_all
         elif len(self._rows) > _STEP_TOOL_PREVIEW_ROWS and show_all:
+            g = get_glyphs()
+            hint = f"{g.ellipsis} click to collapse"
             self._tools_hint_widget.update(
-                Content.styled(f"{get_glyphs().ellipsis} click to collapse", "dim italic")
+                Content.assemble(
+                    Content.styled(self._step_goal_tree_gutter(), "dim"),
+                    Content.styled(f"{g.circle_empty} {hint}", "dim italic"),
+                )
             )
             self._tools_hint_widget.display = True
         else:
@@ -2615,14 +2765,22 @@ class CognitionStepMessage(Vertical):
         dur_str = f"{duration_ms}ms"
         tool_part = f" · {tool_call_count} tools" if tool_call_count > 0 else ""
 
+        prose = self._execute_assistant_buffer.strip()
+        self._last_completed_execute_prose = prose
+        self._execute_assistant_buffer = ""
+
         if success:
             if self._status_widget:
                 self._status_widget.remove_class("pending")
                 self._status_widget.display = False
-            colors = theme.get_theme_colors(self)
-            checkmark = get_glyphs().checkmark
-            detail = f"{checkmark} Completed ({dur_str}){tool_part}"
-            self._detail_widget.update(Content.styled(detail, colors.success))
+            status_body = f"Completed ({dur_str}){tool_part}"
+            self._detail_widget.update(
+                self._step_branched_completion_detail(
+                    success=True,
+                    status_line_body=status_body,
+                    prose=prose,
+                )
+            )
             self._detail_widget.display = True
             return
 
@@ -2634,7 +2792,9 @@ class CognitionStepMessage(Vertical):
             icon = get_glyphs().error
             self._status_widget.update(Content.styled(f"{icon} Failed · {dur_str}", colors.error))
             self._status_widget.display = True
-        self._detail_widget.update(Content(err_text))
+        if prose:
+            err_text = f"{err_text}\n\n{prose}"
+        self._detail_widget.update(self._step_branched_error_detail(err_text))
         self._detail_widget.display = True
 
     def set_result_preview(self, text: str) -> None:
@@ -2650,23 +2810,35 @@ class CognitionStepMessage(Vertical):
             preview += f"\n{ellipsis} {remaining} more lines"
         if self._detail_widget is None:
             return
-        # Build combined detail: status line + preview
-        parts: list[str] = []
+        g = get_glyphs()
+        gutter = self._step_goal_tree_gutter()
+        sub = f"{g.output_prefix} {g.circle_empty} "
+        assembled: list[object] = []
         if self._last_success is not None:
             dur_str = f"{self._last_duration_ms}ms"
             tool_part = (
                 f" · {self._last_tool_call_count} tools" if self._last_tool_call_count > 0 else ""
             )
-            checkmark = get_glyphs().checkmark
-            parts.append(f"{checkmark} Completed ({dur_str}){tool_part}")
-        parts.append(preview)
-        self._detail_widget.update(Content.styled("\n".join(parts), "dim"))
+            status_body = f"Completed ({dur_str}){tool_part}"
+            assembled.append(
+                Content.styled(f"{gutter}{g.checkmark} {status_body}", "dim"),
+            )
+            assembled.append("\n")
+        first_pv = True
+        for ln in preview.splitlines():
+            if not first_pv:
+                assembled.append("\n")
+            first_pv = False
+            assembled.append(Content.styled(f"{sub}{ln}", "dim"))
+        self._detail_widget.update(Content.assemble(*assembled))
         self._detail_widget.display = True
 
     def set_interrupted(self, message: str) -> None:
         """Mark step as aborted (stream error / cancel) while still running."""
         self._stop_animation()
         self._status = "error"
+        self._execute_assistant_buffer = ""
+        self._last_completed_execute_prose = ""
         self._interrupt_message = message
         for row in self._rows:
             if row.phase in ("pending", "running"):
@@ -2687,7 +2859,10 @@ class CognitionStepMessage(Vertical):
 
 
 class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
-    """Single card for plan assessment, plan reasoning, and next action (keep/new)."""
+    """Single card for plan assessment, plan reasoning, and next action (keep/new).
+
+    Header uses the same ``Label · detail`` pattern as ``CognitionStepMessage`` (middle dot).
+    """
 
     can_select = True
 
@@ -2750,10 +2925,10 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
 
     def compose(self) -> ComposeResult:
         prefix = get_glyphs().tool_prefix
-        badge = f" [{self._plan_action}]" if self._plan_action in ("keep", "new") else ""
-        args = f"{self._next_action}{badge}"
-        header = f"{prefix} Plan({args})"
-        yield Static(Content.styled(header, "bold dim"), classes="cognition-plan-header")
+        header_line = f"{prefix} Plan · {self._next_action}"
+        if self._plan_action in ("keep", "new"):
+            header_line = f"{header_line} · {self._plan_action}"
+        yield Static(Content.styled(header_line, "bold dim"), classes="cognition-plan-header")
 
     def on_mount(self) -> None:
         """Use ASCII border variant when configured."""
@@ -2800,7 +2975,11 @@ class _StepLineState:
 
 
 class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
-    """Two-level Goal → steps tree; one aggregate block updates in place."""
+    """Two-level Goal → steps tree; one aggregate block updates in place.
+
+    Title line matches ``CognitionStepMessage`` / ``CognitionPlanReasonMessage``:
+    ``{prefix} Goal · …`` with optional ``· iter<=N`` when ``max_iterations`` is set.
+    """
 
     can_select = True
 
@@ -2858,6 +3037,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         self._steps: dict[str, _StepLineState] = {}
         self._footer_plain: str = ""
         self._footer_visible: bool = False
+        self._footer_tone: str = "muted"  # success | error | muted (step/tool completion parity)
         self._steps_static: Static | None = None
 
     @staticmethod
@@ -2870,11 +3050,27 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
     def _goal_header_content(self) -> Content:
         prefix = get_glyphs().tool_prefix
         g = self._clip(self._goal_text, _MAX_GOAL_HEADER)
-        args = g
+        line = f"{prefix} Goal · {g}"
         if self._max_iterations > 1:
-            args += f", iter<={self._max_iterations}"
-        line = f"{prefix} Goal({args})"
+            line = f"{line} · iter<={self._max_iterations}"
         return Content.styled(line, "bold dim")
+
+    def _goal_footer_styled_content(self) -> Content:
+        """Footer content for loop finished / interrupted (parity with step/tool status lines)."""
+        if not self._footer_visible or not self._footer_plain:
+            return Content("")
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
+        plain = self._footer_plain
+        if self._footer_tone == "success":
+            mark = get_glyphs().checkmark
+            return Content.styled(f"{mark} {plain}", colors.success)
+        if self._footer_tone == "error":
+            mark = get_glyphs().error
+            return Content.styled(f"{mark} {plain}", colors.error)
+        return Content.styled(plain, "dim")
 
     def _indent_prefix(self) -> str:
         g = get_glyphs()
@@ -2899,13 +3095,31 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
     def _refresh_steps_display(self) -> None:
         if self._steps_static is None:
             return
-        lines = [
-            self._format_step_line(self._steps[sid])
-            for sid in self._step_order
-            if sid in self._steps
-        ]
-        text = "\n".join(lines)
-        self._steps_static.update(Content.styled(text, "dim") if text else Content(""))
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
+        line_contents: list[Content] = []
+        for sid in self._step_order:
+            st = self._steps.get(sid)
+            if st is None:
+                continue
+            line = self._format_step_line(st)
+            if st.phase == "done" and st.success:
+                line_contents.append(Content.styled(line, colors.success))
+            elif st.phase == "error" or (st.phase == "done" and not st.success):
+                line_contents.append(Content.styled(line, colors.error))
+            else:
+                line_contents.append(Content.styled(line, "dim"))
+        if not line_contents:
+            self._steps_static.update(Content(""))
+            return
+        parts: list[object] = []
+        for i, c in enumerate(line_contents):
+            if i:
+                parts.append("\n")
+            parts.append(c)
+        self._steps_static.update(Content.assemble(*parts))
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -2934,7 +3148,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         try:
             ft = self.query_one("#cognition-goal-tree-footer", Static)
             if self._footer_visible and self._footer_plain:
-                ft.update(Content.styled(self._footer_plain, "dim"))
+                ft.update(self._goal_footer_styled_content())
                 ft.display = True
             else:
                 ft.display = False
@@ -2966,6 +3180,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
             "steps": steps_out,
             "footer_visible": self._footer_visible,
             "footer_text": self._footer_plain,
+            "footer_tone": self._footer_tone,
         }
 
     def _apply_snapshot(self, snap: dict[str, Any]) -> None:
@@ -2974,6 +3189,8 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         self._max_iterations = int(snap.get("max_iterations", self._max_iterations))
         self._footer_plain = str(snap.get("footer_text", ""))
         self._footer_visible = bool(snap.get("footer_visible", False))
+        tone = str(snap.get("footer_tone", "muted") or "muted")
+        self._footer_tone = tone if tone in ("success", "error", "muted") else "muted"
         self._step_order = []
         self._steps.clear()
         for row in snap.get("steps", []) or []:
@@ -3044,7 +3261,8 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
             "high": "80%",
             "complete": "100%",
         }
-        pct_display = progress_map.get(goal_progress, "0%")
+        gp_key = str(goal_progress or "").strip().lower()
+        pct_display = progress_map.get(gp_key, "0%")
         parts: list[str] = [str(status or "done"), pct_display]
         if total_steps:
             parts.append(f"{total_steps} step(s)")
@@ -3053,9 +3271,16 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
             parts.append(self._clip(cs, 100))
         self._footer_plain = " · ".join(parts)
         self._footer_visible = True
+        status_l = str(status or "").strip().lower()
+        if status_l == "done":
+            self._footer_tone = "success"
+        elif status_l in ("failed", "error", "fatal"):
+            self._footer_tone = "error"
+        else:
+            self._footer_tone = "muted"
         try:
             footer = self.query_one("#cognition-goal-tree-footer", Static)
-            footer.update(Content.styled(self._footer_plain, "dim"))
+            footer.update(self._goal_footer_styled_content())
             footer.display = True
         except Exception:
             pass
@@ -3073,9 +3298,10 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         self._refresh_steps_display()
         self._footer_plain = self._clip(msg, 120)
         self._footer_visible = True
+        self._footer_tone = "error"
         try:
             footer = self.query_one("#cognition-goal-tree-footer", Static)
-            footer.update(Content.styled(self._footer_plain, "dim"))
+            footer.update(self._goal_footer_styled_content())
             footer.display = True
         except Exception:
             pass

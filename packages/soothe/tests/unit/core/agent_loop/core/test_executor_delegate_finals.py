@@ -31,8 +31,9 @@ async def test_stream_and_collect_namespaced_task_chunk_populates_delegate_final
 
     executor = Executor(mock_agent)
     rows = [r async for r in executor._stream_and_collect(fake_stream(), budget=None)]
-    _evt, _ev, _tc, _msgs, delegate_final = rows[-1]
+    _evt, _ev, tc_total, _msgs, delegate_final = rows[-1]
     assert delegate_final.strip() == "Namespaced explore answer."
+    assert tc_total == 1  # namespaced ``task`` ToolMessage counts toward wave tool total
 
 
 @pytest.mark.asyncio

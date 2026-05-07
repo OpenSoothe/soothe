@@ -14,6 +14,7 @@ from soothe.config import SootheConfig
 
 # Import and apply deepagents patches
 from soothe.core.agent._patch import *  # noqa: F403
+from soothe.core.agent.execute_tool_filter import without_execute_tool_when_sandbox_disabled
 from soothe.core.resolver import (
     resolve_memory,
     resolve_planner,
@@ -156,16 +157,16 @@ class AgentBuilder:
             config=self._config,
         )
         all_tools: list[BaseTool | Callable | dict[str, Any]] = list(config_tools)
-
-        # Filter out deepagents' execute tool when sandbox is disabled (IG-sandbox)
-        # The execute tool requires SandboxBackendProtocol which raises:
-        # "Execution not available. This agent's backend does not support command execution"
-        if not self._config.security.sandbox:
-            all_tools = [t for t in all_tools if getattr(t, "name", None) != "execute"]
-            logger.debug("Sandbox disabled: deepagents execute tool filtered out")
-
         if tools:
             all_tools.extend(tools)
+
+        # Filter out deepagents' execute tool when sandbox is disabled (IG-sandbox)
+        before = len(all_tools)
+        all_tools = without_execute_tool_when_sandbox_disabled(
+            all_tools, security_sandbox_enabled=self._config.security.sandbox
+        )
+        if len(all_tools) < before:
+            logger.debug("Sandbox disabled: deepagents execute tool filtered out")
         tools_ms = (time.perf_counter() - tools_start) * 1000
         logger.info("[Init] Tools resolved: %d tools (%.1fms)", len(all_tools), tools_ms)
 

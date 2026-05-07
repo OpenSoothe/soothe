@@ -484,7 +484,7 @@ Layer 2 does not own backoff policy. It produces high-fidelity execution evidenc
 | `mode="messages"` + loop-tagged AI + `phase="goal_completion"` (and related phases) | Streaming / final user-visible answer text (IG-317; not `soothe.output.*`) |
 | `soothe.cognition.agent_loop.completed` | Loop completed lifecycle event |
 
-**Contract note**: Message-mode tool telemetry chunks remain visible during execute; plain execute-phase assistant prose is daemon-suppressed. User-visible completion prose is forwarded on the **messages** wire with **`phase`**, not as separate `soothe.output.goal_completion.*` custom event types.
+**Contract note**: Message-mode tool telemetry chunks remain visible during execute; plain execute-phase assistant prose is daemon-suppressed for stdout. User-visible completion prose is forwarded on the **messages** wire with **`phase`**, not as separate `soothe.output.goal_completion.*` custom event types. **RFC-500** defines how the Textual TUI maps loop-tagged AI (`execute_step` → step card, subagent scope → task card, `goal_completion` → `AssistantMessage`).
 
 ---
 

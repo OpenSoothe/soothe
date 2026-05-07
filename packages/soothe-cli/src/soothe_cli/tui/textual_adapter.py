@@ -432,6 +432,22 @@ class TextualUIAdapter:
         self._step_by_namespace: dict[tuple[Any, ...], CognitionStepMessage] = {}
         """Active step card per stream namespace (main-agent tool aggregation, IG-402)."""
 
+        self._last_completed_main_step_execute_prose: str = ""
+        """Execute-phase prose frozen when the main-namespace step completes.
+
+        Used to suppress a duplicate standalone ``goal_completion`` assistant card when
+        the runner replays the same body for headless (``ledger_direct``); the TUI
+        already shows that text on the step card.
+        """
+
+        self._last_main_flushed_assistant_prose: str = ""
+        """Body last written to a main-namespace ``AssistantMessage`` via flush.
+
+        After ``chunk_position == last`` the adapter pops ``assistant_message_by_namespace``,
+        so ``goal_completion`` cannot use ``existing_msg`` to detect an already-mounted
+        execute card; this field preserves the final text for dedupe (``execute_wave`` path).
+        """
+
         self._tool_to_step: dict[str, ToolCallMessage | CognitionStepMessage] = {}
         """tool_call_id → parent card (step or task) while awaiting a matching ``ToolMessage``."""
 
@@ -481,6 +497,8 @@ class TextualUIAdapter:
         self._task_inner_tool_pending_lines.clear()
         self._task_inner_tool_start_times.clear()
         self._pending_main_tools.clear()
+        self._last_completed_main_step_execute_prose = ""
+        self._last_main_flushed_assistant_prose = ""
 
         # Clear active streaming message to avoid stale "active" state in the store.
         if self._set_active_message:
@@ -499,6 +517,8 @@ class TextualUIAdapter:
         self._task_inner_tool_pending_lines.clear()
         self._task_inner_tool_start_times.clear()
         self._pending_main_tools.clear()
+        self._last_completed_main_step_execute_prose = ""
+        self._last_main_flushed_assistant_prose = ""
 
 
 def _adapter_has_pending_tools(adapter: TextualUIAdapter) -> bool:
@@ -722,6 +742,72 @@ def _assistant_message_terminal_for_empty_tool_arg_mount(message: Any) -> bool:
     return False
 
 
+async def _finalize_goal_completion_stream(
+    adapter: TextualUIAdapter,
+    stream_msg: AssistantMessage,
+    *,
+    ns_key: tuple[Any, ...],
+    goal_completion_stream_by_namespace: dict[tuple[Any, ...], AssistantMessage],
+    assistant_message_by_namespace: dict[tuple[Any, ...], Any],
+    extra_text: str,
+) -> None:
+    """Stop the goal_completion ``AssistantMessage`` stream and record it under ``ns_key``."""
+    if extra_text and extra_text not in getattr(stream_msg, "_content", ""):
+        await stream_msg.append_content(extra_text)
+    await stream_msg.stop_stream()
+    if adapter._sync_message_content and stream_msg.id:
+        adapter._sync_message_content(stream_msg.id, stream_msg._content)
+    goal_completion_stream_by_namespace.pop(ns_key, None)
+    assistant_message_by_namespace[ns_key] = stream_msg
+    if adapter._set_active_message:
+        adapter._set_active_message(None)
+    if adapter._set_spinner:
+        await adapter._set_spinner(None)
+
+
+def _tui_main_assistant_body_for_dedupe(raw: str) -> str:
+    """Normalize assistant text the same way as :func:`_flush_assistant_text_ns` input."""
+    from soothe_cli.shared.events.explore_task_display import (
+        format_explore_task_json_blob_for_display,
+    )
+
+    return format_explore_task_json_blob_for_display(
+        RendererBase.repair_concatenated_output(raw or "")
+    ).strip()
+
+
+def _tui_goal_completion_matches_prior_main_visible_answer(
+    adapter: TextualUIAdapter,
+    *,
+    ns_key: tuple[Any, ...],
+    output_text: str,
+    pending_execute_text: str = "",
+) -> bool:
+    """Return True when ``goal_completion`` duplicates an already-shown main answer.
+
+    Covers (1) ``execute_step`` prose on ``CognitionStepMessage``, (2) prose last flushed to a
+    standalone ``AssistantMessage``, and (3) prose still in ``pending_text_by_namespace`` that
+    was already streamed into an ``AssistantMessage`` via ``append_content`` but not yet
+    flushed (``goal_completion`` can arrive before ``chunk_position == last`` or end-of-turn
+    flush — common for direct daemon runs; ``/explore`` often interleaves flushes differently).
+    """
+    if ns_key != ():
+        return False
+    body = _tui_main_assistant_body_for_dedupe(output_text)
+    if not body:
+        return False
+    step_prior = _tui_main_assistant_body_for_dedupe(
+        adapter._last_completed_main_step_execute_prose
+    )
+    if step_prior and body == step_prior:
+        return True
+    flush_prior = _tui_main_assistant_body_for_dedupe(adapter._last_main_flushed_assistant_prose)
+    if flush_prior and body == flush_prior:
+        return True
+    pending_prior = _tui_main_assistant_body_for_dedupe(pending_execute_text)
+    return bool(pending_prior) and body == pending_prior
+
+
 def _tui_effective_ai_blocks(
     message: Any,
     *,
@@ -860,16 +946,9 @@ async def execute_task_textual(
     from pydantic import ValidationError
 
     from soothe_cli.cli.stream import StreamDisplayPipeline
-    from soothe_cli.shared.config_loader import load_config
 
     hitl_request_adapter = _get_hitl_request_adapter(HITLRequest)
     ask_user_adapter = _get_ask_user_adapter()
-    cli_cfg = load_config()
-    final_output_mode = (
-        cli_cfg.final_output_mode
-        if cli_cfg.final_output_mode in {"streaming", "batch"}
-        else "streaming"
-    )
     show_tool_ui = True
     logger.debug("TUI turn: fixed normal UX show_tool_ui=%s", show_tool_ui)
     progress_pipeline = StreamDisplayPipeline()
@@ -957,10 +1036,7 @@ async def execute_task_textual(
     pending_text_by_namespace: dict[tuple, str] = {}
     assistant_message_by_namespace: dict[tuple, Any] = {}
     goal_completion_stream_by_namespace: dict[tuple, AssistantMessage] = {}
-    # Accumulates streaming goal_completion chunks from subagent namespaces so they
-    # are NOT mounted as standalone AssistantMessages — only routed to the parent
-    # Task card's set_result_preview when the final non-chunk message arrives.
-    gc_pending_by_subagent_ns: dict[tuple, str] = {}
+    task_loop_assistant_by_tcid: dict[str, str] = {}
     # IG-334 Task tool FIFO binding (parity with ``EventProcessor`` / SDK helpers)
     task_spawn_queue: deque[tuple[str, str]] = deque()
     namespace_task_bindings: dict[tuple[str, ...], tuple[str, str]] = {}
@@ -1370,7 +1446,7 @@ async def execute_task_textual(
                     if not blocks:
                         continue
 
-                    # IG-317: goal completion uses ``messages`` + ``phase`` (dedicated stream card).
+                    # ``phase=goal_completion`` → standalone ``AssistantMessage`` (all namespaces).
                     if getattr(message, "phase", None) == "goal_completion":
                         from langchain_core.messages import AIMessageChunk
 
@@ -1383,45 +1459,7 @@ async def execute_task_textual(
                         if text_gc == "" and is_gc_chunk:
                             continue
 
-                        # Subagent goal_completion (non-root namespace): route the
-                        # final result as a preview into the parent Task card instead
-                        # of creating a duplicate standalone AssistantMessage.
-                        # Only the main agent's goal_completion (ns_key == ()) is
-                        # displayed as a standalone card.
-                        #
-                        # IMPORTANT: This guard must cover BOTH streaming chunks AND
-                        # the final non-chunk message. Previously only `not is_gc_chunk`
-                        # was blocked here, so streaming chunks escaped and created a
-                        # standalone AssistantMessage that duplicated the result_preview.
-                        if ns_key:
-                            if is_gc_chunk:
-                                # Accumulate streaming content — do NOT mount a widget.
-                                gc_pending_by_subagent_ns[ns_key] = (
-                                    gc_pending_by_subagent_ns.get(ns_key, "") + text_gc
-                                )
-                                continue
-
-                            # Final non-chunk message: flush accumulated chunks + this
-                            # content into the parent Task card's result preview.
-                            accumulated = gc_pending_by_subagent_ns.pop(ns_key, "")
-                            text_to_preview = (accumulated + text_gc).strip() or text_gc.strip()
-                            _gc_task_scope = resolve_task_scope_for_namespace(
-                                namespace_task_bindings, ns_key
-                            )
-                            if _gc_task_scope is not None:
-                                tcid = _gc_task_scope[0]
-                                parent_card = adapter._tool_display_by_call_id.get(tcid)
-                                if parent_card is not None and hasattr(
-                                    parent_card, "set_result_preview"
-                                ):
-                                    parent_card.set_result_preview(text_to_preview)
-                            pending_text_by_namespace.pop(ns_key, None)
-                            assistant_message_by_namespace.pop(ns_key, None)
-                            continue
-
                         output_text = text_gc
-                        if final_output_mode != "streaming" and is_gc_chunk:
-                            continue
                         pending_text = pending_text_by_namespace.get(ns_key, "")
                         existing_msg = assistant_message_by_namespace.get(ns_key)
                         stream_msg = goal_completion_stream_by_namespace.get(ns_key)
@@ -1450,45 +1488,44 @@ async def execute_task_textual(
                                 goal_completion_stream_by_namespace[ns_key] = stream_msg
 
                             await stream_msg.append_content(output_text)
+                            if getattr(message, "chunk_position", None) == "last":
+                                await _finalize_goal_completion_stream(
+                                    adapter,
+                                    stream_msg,
+                                    ns_key=ns_key,
+                                    goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+                                    assistant_message_by_namespace=assistant_message_by_namespace,
+                                    extra_text="",
+                                )
                             continue
 
                         if stream_msg is not None:
-                            if (
-                                isinstance(message, AIMessageChunk)
-                                and output_text
-                                and output_text not in stream_msg._content
-                            ):
-                                await stream_msg.append_content(output_text)
-                            await stream_msg.stop_stream()
-                            if adapter._sync_message_content and stream_msg.id:
-                                adapter._sync_message_content(stream_msg.id, stream_msg._content)
-                            goal_completion_stream_by_namespace.pop(ns_key, None)
-                            # Store in assistant_message_by_namespace so subsequent
-                            # non-streaming duplicates of the same content are suppressed.
-                            assistant_message_by_namespace[ns_key] = stream_msg
+                            await _finalize_goal_completion_stream(
+                                adapter,
+                                stream_msg,
+                                ns_key=ns_key,
+                                goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+                                assistant_message_by_namespace=assistant_message_by_namespace,
+                                extra_text=output_text,
+                            )
+                            continue
+
+                        if existing_msg is not None:
                             if adapter._set_active_message:
                                 adapter._set_active_message(None)
                             if adapter._set_spinner:
                                 await adapter._set_spinner(None)
                             continue
 
-                        pending_normalized = pending_text.strip()
-                        output_normalized = output_text.strip()
-
-                        should_reuse = pending_normalized and (
-                            pending_normalized == output_normalized
-                            or output_normalized in pending_normalized
-                        )
-
-                        if should_reuse and existing_msg:
-                            await _flush_assistant_text_ns(
+                        if (
+                            not is_gc_chunk
+                            and _tui_goal_completion_matches_prior_main_visible_answer(
                                 adapter,
-                                pending_text,
-                                ns_key,
-                                assistant_message_by_namespace,
-                                namespace_task_bindings=namespace_task_bindings,
+                                ns_key=ns_key,
+                                output_text=output_text,
+                                pending_execute_text=pending_text,
                             )
-                            pending_text_by_namespace[ns_key] = ""
+                        ):
                             if adapter._set_active_message:
                                 adapter._set_active_message(None)
                             if adapter._set_spinner:
@@ -1506,36 +1543,18 @@ async def execute_task_textual(
                             pending_text_by_namespace[ns_key] = ""
                             assistant_message_by_namespace.pop(ns_key, None)
 
-                        # IG-404: Suppress duplicate when existing message already
-                        # holds the same content (streamed goal_completion followed
-                        # by non-chunk full AIMessage with identical text).
-                        if existing_msg is not None:
-                            existing_content = (getattr(existing_msg, "_content", "") or "").strip()
-                            if existing_content and (
-                                output_normalized == existing_content
-                                or output_normalized in existing_content
-                                or existing_content in output_normalized
-                            ):
-                                if adapter._set_active_message:
-                                    adapter._set_active_message(None)
-                                if adapter._set_spinner:
-                                    await adapter._set_spinner(None)
-                                continue
-
-                        if not existing_msg or output_normalized != pending_normalized:
-                            output_widget = AssistantMessage(
+                        output_widget = AssistantMessage(
+                            RendererBase.repair_concatenated_output(output_text),
+                            id=f"asst-{uuid.uuid4().hex[:8]}",
+                        )
+                        await adapter._mount_message(output_widget)
+                        await output_widget.write_initial_content()
+                        if adapter._sync_message_content and output_widget.id:
+                            adapter._sync_message_content(
+                                output_widget.id,
                                 RendererBase.repair_concatenated_output(output_text),
-                                id=f"asst-{uuid.uuid4().hex[:8]}",
                             )
-                            await adapter._mount_message(output_widget)
-                            await output_widget.write_initial_content()
-                            if adapter._sync_message_content and output_widget.id:
-                                adapter._sync_message_content(
-                                    output_widget.id,
-                                    RendererBase.repair_concatenated_output(output_text),
-                                )
-                            # Store so subsequent duplicates are suppressed by dedup above.
-                            assistant_message_by_namespace[ns_key] = output_widget
+                        assistant_message_by_namespace[ns_key] = output_widget
 
                         if adapter._set_active_message:
                             adapter._set_active_message(None)
@@ -1554,16 +1573,38 @@ async def execute_task_textual(
                                 if ns_key
                                 else None
                             )
-                            # Suppress all intermediate AI text from subagent tasks.
-                            # Only goal_completion (handled above) surfaces the final
-                            # result to the user.
+                            phase_loop = getattr(message, "phase", None)
+                            text = block.get("text", "") or ""
                             if task_scope_txt is not None:
+                                if (
+                                    phase_loop
+                                    in (
+                                        "execute_step",
+                                        "execute_wave",
+                                    )
+                                    and text.strip()
+                                ):
+                                    tcid = str(task_scope_txt[0] or "").strip()
+                                    if tcid:
+                                        parent_tool = adapter._tool_display_by_call_id.get(tcid)
+                                        if parent_tool is not None and hasattr(
+                                            parent_tool, "set_result_preview"
+                                        ):
+                                            prev = task_loop_assistant_by_tcid.get(tcid, "")
+                                            task_loop_assistant_by_tcid[tcid] = prev + text
+                                            parent_tool.set_result_preview(
+                                                task_loop_assistant_by_tcid[tcid]
+                                            )
                                 continue
                             if suppress_subgraph_assistant_text:
                                 continue
-                            text = block.get("text", "")
                             if not text:
                                 continue
+                            if phase_loop == "execute_step" and is_main_agent and text.strip():
+                                step_w = adapter._step_by_namespace.get(ns_key)
+                                if step_w is not None:
+                                    step_w.append_execute_assistant_delta(text)
+                                    continue
 
                             # Track accumulated text for reference
                             pending_text = pending_text_by_namespace.get(ns_key, "")
@@ -1991,6 +2032,9 @@ async def execute_task_textual(
                         if event_type == AGENT_LOOP_GOAL_STARTED:
                             goal = str(data.get("goal", "")).strip()
                             max_it = int(data.get("max_iterations", 0))
+                            if not ns_key:
+                                adapter._last_completed_main_step_execute_prose = ""
+                                adapter._last_main_flushed_assistant_prose = ""
                             pending_text = pending_text_by_namespace.get(ns_key, "")
                             if pending_text:
                                 await _flush_assistant_text_ns(
@@ -2127,6 +2171,10 @@ async def execute_task_textual(
                                         tool_call_count,
                                         summary,
                                     )
+                                    if not ns_key:
+                                        adapter._last_completed_main_step_execute_prose = (
+                                            widget.last_completed_execute_prose
+                                        )
                                 elif goal_tree is None:
                                     ev = dict(data)
                                     ev["namespace"] = list(ns_key)
@@ -2252,7 +2300,7 @@ async def execute_task_textual(
                 goal_completion_stream_by_namespace.pop(ns_key, None)
             pending_text_by_namespace.clear()
             assistant_message_by_namespace.clear()
-            gc_pending_by_subagent_ns.clear()
+            task_loop_assistant_by_tcid.clear()
 
             # IG-402: Flush any buffered main-namespace tools as standalone cards
             # (edge case: stream ended without a step_started event).
@@ -2532,7 +2580,8 @@ async def _handle_interrupt_cleanup(
         agent: The LangGraph agent.
         config: Runnable config with loop_id mapped to thread_id in configurable.
         daemon_session: Optional daemon-backed session. When provided, sends
-            detach message before disconnect so thread continues running.
+            ``/cancel`` so the in-flight daemon query stops (matches Ctrl+C / Esc
+            interrupt semantics; use ``detach`` only from explicit quit flows).
         pending_text_by_namespace: Accumulated text per namespace.
         captured_input_tokens: Input tokens captured before interrupt.
         captured_output_tokens: Output tokens captured before interrupt.
@@ -2558,7 +2607,7 @@ async def _handle_interrupt_cleanup(
 
     # Save accumulated state before marking tools as rejected (best-effort).
     # State update failures shouldn't prevent cleanup.
-    # Use shorter timeout (2s) during interrupt cleanup to avoid blocking detachment.
+    # Use shorter timeout (2s) during interrupt cleanup to avoid blocking cancel.
     try:
         if interrupted_msg:
             await agent.aupdate_state(config, {"messages": [interrupted_msg]}, timeout=2.0)
@@ -2586,6 +2635,8 @@ async def _handle_interrupt_cleanup(
     for gt in list(adapter._goal_tree_by_namespace.values()):
         gt.set_interrupted("Interrupted by user")
     adapter._goal_tree_by_namespace.clear()
+    adapter._last_completed_main_step_execute_prose = ""
+    adapter._last_main_flushed_assistant_prose = ""
 
     # Keep the token count marked stale whenever interrupted state was captured,
     # including tool-only turns after assistant text was already flushed.
@@ -2602,15 +2653,17 @@ async def _handle_interrupt_cleanup(
         approximate=approximate,
     )
 
-    # IG-228: Send detach message to daemon before disconnect (RFC-0013)
-    # This signals the daemon to let the thread continue running in background
-    # instead of cancelling it as an unexpected disconnect.
+    # Daemon-backed TUI: ensure the server-side query is cancelled, not detached.
+    # Detach is reserved for explicit quit (Ctrl+D); interrupt cleanup must not
+    # override a user cancel with a detach signal.
     if daemon_session is not None:
         try:
-            await daemon_session.detach()
-            logger.info("Sent detach message to daemon - thread will continue running")
+            await daemon_session.cancel_remote_query()
+            logger.info("Sent cancel to daemon during interrupt cleanup")
         except Exception:
-            logger.warning("Failed to send detach message during interrupt cleanup", exc_info=True)
+            logger.warning(
+                "Failed to send cancel to daemon during interrupt cleanup", exc_info=True
+            )
 
 
 async def _persist_context_tokens(
@@ -2735,6 +2788,11 @@ async def _flush_assistant_text_ns(
     # widget's final content back into the store so re-hydration works.
     if adapter._sync_message_content and current_msg.id:
         adapter._sync_message_content(current_msg.id, current_msg._content)
+
+    if not ns_key:
+        adapter._last_main_flushed_assistant_prose = _tui_main_assistant_body_for_dedupe(
+            getattr(current_msg, "_content", "") or ""
+        )
 
     # Clear active message since streaming is done
     if adapter._set_active_message:

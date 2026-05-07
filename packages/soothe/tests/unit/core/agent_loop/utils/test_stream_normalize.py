@@ -10,6 +10,7 @@ from soothe.core.agent_loop.utils.stream_normalize import (
     extract_text_from_message_content,
     iter_messages_for_act_aggregation,
     iter_messages_for_delegate_task_scan,
+    iter_namespaced_tool_messages,
     join_text_fragments,
     parse_tuple_stream_chunk,
     resolve_goal_completion_text,
@@ -64,6 +65,21 @@ def test_iter_messages_skips_subgraph_namespace() -> None:
     msg = AIMessage(content="x")
     chunk = (("sub",), "messages", (msg, {}))
     assert list(iter_messages_for_act_aggregation(chunk)) == []
+
+
+def test_iter_namespaced_tool_messages_yields_subgraph_tools() -> None:
+    tm = ToolMessage(content="hits", tool_call_id="g1", name="glob")
+    chunk = (("tools:abc",), "messages", (tm, {}))
+    out = list(iter_namespaced_tool_messages(chunk))
+    assert len(out) == 1
+    assert out[0][0] == ("tools:abc",)
+    assert out[0][1] is tm
+
+
+def test_iter_namespaced_tool_messages_skips_root() -> None:
+    tm = ToolMessage(content="root", tool_call_id="r1", name="ls")
+    chunk = ((), "messages", (tm, {}))
+    assert list(iter_namespaced_tool_messages(chunk)) == []
 
 
 def test_iter_messages_delegate_scan_finds_namespaced_task_tool() -> None:

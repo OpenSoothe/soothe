@@ -82,6 +82,31 @@ def _walk_stream_messages_payload_for_base_messages(obj: Any) -> Iterator[BaseMe
             yield from _walk_stream_messages_payload_for_base_messages(item)
 
 
+def iter_namespaced_tool_messages(chunk: Any) -> Iterator[tuple[tuple[str, ...], ToolMessage]]:
+    """Yield ``(namespace, ToolMessage)`` from subgraph ``messages`` stream chunks.
+
+    Root graph chunks (empty namespace) are ignored; use
+    :func:`iter_messages_for_act_aggregation` for those. Used for audit logging and
+    tool totals that include subagent / compiled-subgraph tool results.
+
+    Args:
+        chunk: Raw ``astream`` chunk from ``CoreAgent.astream`` / ``CompiledStateGraph.astream``.
+
+    Yields:
+        Pairs of normalized namespace tuple and :class:`~langchain_core.messages.ToolMessage`.
+    """
+    parsed = parse_tuple_stream_chunk(chunk)
+    if parsed is None:
+        return
+    namespace, mode, data = parsed
+    if mode != "messages" or not namespace:
+        return
+    ns_tuple = tuple(str(x) for x in namespace)
+    for msg in _walk_stream_messages_payload_for_base_messages(data):
+        if isinstance(msg, ToolMessage):
+            yield (ns_tuple, msg)
+
+
 def iter_messages_for_delegate_task_scan(chunk: Any) -> Iterator[ToolMessage]:
     """Yield ``task`` tool messages from **namespaced** ``messages`` stream chunks only.
 
@@ -185,6 +210,7 @@ __all__ = [
     "GoalCompletionAccumState",
     "extract_text_from_message_content",
     "iter_messages_for_act_aggregation",
+    "iter_namespaced_tool_messages",
     "join_text_fragments",
     "parse_tuple_stream_chunk",
     "resolve_goal_completion_text",
