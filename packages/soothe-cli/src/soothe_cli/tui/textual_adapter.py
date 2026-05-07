@@ -1413,6 +1413,9 @@ async def execute_task_textual(
                             if adapter._sync_message_content and stream_msg.id:
                                 adapter._sync_message_content(stream_msg.id, stream_msg._content)
                             goal_completion_stream_by_namespace.pop(ns_key, None)
+                            # Store in assistant_message_by_namespace so subsequent
+                            # non-streaming duplicates of the same content are suppressed.
+                            assistant_message_by_namespace[ns_key] = stream_msg
                             if adapter._set_active_message:
                                 adapter._set_active_message(None)
                             if adapter._set_spinner:
@@ -1615,6 +1618,44 @@ async def execute_task_textual(
                                 assistant_message_by_namespace.pop(ns_key, None)
 
                             args_meaningful = bool(parsed_args)
+
+                            # IG-403: Early task registration — enqueue spawn and mount task card
+                            # as soon as we have an id and args, before defer/elide guards.
+                            # This ensures namespace_task_bindings is populated so subagent tools
+                            # that arrive concurrently can resolve their parent card.
+                            if (
+                                lookup_id
+                                and is_main_agent
+                                and buffer_name == "task"
+                                and args_meaningful
+                                and lookup_id not in task_spawn_recorded
+                            ):
+                                enqueue_task_spawn(
+                                    task_spawn_queue,
+                                    tool_name="task",
+                                    args=parsed_args,
+                                    tool_call_id=str(lookup_id),
+                                    is_main=True,
+                                )
+                                task_spawn_recorded.add(str(lookup_id))
+                                # Mount ToolCallMessage task card immediately so subagent tools
+                                # can resolve it as their parent via _tool_display_by_call_id.
+                                if lookup_id not in adapter._current_tool_messages:
+                                    task_card = ToolCallMessage(
+                                        buffer_name,
+                                        parsed_args,
+                                        tool_call_id=lookup_id,
+                                    )
+                                    await adapter._mount_message(task_card)
+                                    task_card.set_running()
+                                    adapter._current_tool_messages[lookup_id] = task_card
+                                    adapter._tool_display_by_call_id[str(lookup_id)] = task_card
+                                    logger.debug(
+                                        "Task subagent card mounted early (pre-defer): "
+                                        "tool_call_id=%s",
+                                        lookup_id,
+                                    )
+
                             if not args_meaningful and _defer_tool_card_for_empty_streaming_args(
                                 message
                             ):
@@ -1647,7 +1688,7 @@ async def execute_task_textual(
                                 existing_tool = adapter._current_tool_messages.get(
                                     lookup_id
                                 ) or adapter._tool_display_by_call_id.get(lookup_id)
-                            if lookup_id and args_meaningful and existing_tool is not None:
+                            if lookup_id and args_meaningful and existing_tool is not None and not (is_main_agent and buffer_name == "task"):
                                 if isinstance(existing_tool, ToolCallMessage):
                                     existing_tool.refresh_tool_args(parsed_args)
                                 elif isinstance(existing_tool, CognitionStepMessage):
@@ -1710,19 +1751,6 @@ async def execute_task_textual(
                                     show_tool_ui=show_tool_ui,
                                     presentation=presentation,
                                 )
-                                if (
-                                    is_main_agent
-                                    and buffer_name == "task"
-                                    and lookup_id not in task_spawn_recorded
-                                ):
-                                    enqueue_task_spawn(
-                                        task_spawn_queue,
-                                        tool_name="task",
-                                        args=parsed_args,
-                                        tool_call_id=str(lookup_id),
-                                        is_main=True,
-                                    )
-                                    task_spawn_recorded.add(str(lookup_id))
                                 ts_inner = resolve_task_scope_for_namespace(
                                     namespace_task_bindings, ns_key
                                 )
@@ -1800,27 +1828,6 @@ async def execute_task_textual(
                                             lookup_id,
                                             ns_key,
                                         )
-                                        if buffer_name == "task":
-                                            # IG-403: mount a ToolCallMessage as subagent card
-                                            # so inner tools (Glob, ShellExecute) can be rows
-                                            # inside it. Register it as the parent in
-                                            # _tool_display_by_call_id (not the step card).
-                                            task_card = ToolCallMessage(
-                                                buffer_name,
-                                                parsed_args,
-                                                tool_call_id=lookup_id,
-                                            )
-                                            await adapter._mount_message(task_card)
-                                            task_card.set_running()
-                                            adapter._current_tool_messages[lookup_id] = task_card
-                                            adapter._tool_display_by_call_id[str(lookup_id)] = (
-                                                task_card
-                                            )
-                                            logger.debug(
-                                                "Task subagent card mounted (step path): "
-                                                "tool_call_id=%s",
-                                                lookup_id,
-                                            )
                                     elif is_main_agent:
                                         # IG-402: No step card yet — buffer this tool so it can
                                         # be retroactively attached when step_started arrives.
@@ -1828,25 +1835,6 @@ async def execute_task_textual(
                                         pend = pending_tool_calls_lc.get(str(lookup_id))
                                         if isinstance(pend, dict):
                                             raw = str(pend.get("args_str", ""))
-                                        if buffer_name == "task":
-                                            # IG-403: mount a ToolCallMessage for the task tool
-                                            # immediately so subagent tools can resolve a parent.
-                                            task_card = ToolCallMessage(
-                                                buffer_name,
-                                                parsed_args,
-                                                tool_call_id=lookup_id,
-                                            )
-                                            await adapter._mount_message(task_card)
-                                            task_card.set_running()
-                                            adapter._current_tool_messages[lookup_id] = task_card
-                                            adapter._tool_display_by_call_id[str(lookup_id)] = (
-                                                task_card
-                                            )
-                                            logger.debug(
-                                                "Task subagent card mounted (pending path): "
-                                                "tool_call_id=%s",
-                                                lookup_id,
-                                            )
                                         adapter._pending_main_tools.append(
                                             (
                                                 str(lookup_id),
