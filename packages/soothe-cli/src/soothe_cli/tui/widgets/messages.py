@@ -587,7 +587,7 @@ class SkillMessage(Vertical):
 
 
 class AssistantMessage(Vertical):
-    """Assistant reply card: ``⏺`` header (same glyph as tool rows) and markdown body.
+    """Assistant reply card: markdown body only (no title row).
 
     Long bodies show the first few source lines collapsed (like ``ToolCallMessage``);
     click the card or use Ctrl+O (after skills) to expand or collapse. While the
@@ -607,12 +607,6 @@ class AssistantMessage(Vertical):
         margin: 0 0 1 0;
         background: transparent;
         border-left: wide $tool;
-    }
-
-    AssistantMessage .assistant-header {
-        height: auto;
-        color: $tool;
-        text-style: bold;
     }
 
     AssistantMessage Markdown {
@@ -637,36 +631,25 @@ class AssistantMessage(Vertical):
     }
     """
 
-    def __init__(
-        self,
-        content: str = "",
-        *,
-        role_label: str | None = None,
-        **kwargs: Any,
-    ) -> None:
+    def __init__(self, content: str = "", **kwargs: Any) -> None:
         """Initialize an assistant message.
 
         Args:
             content: Initial markdown content.
-            role_label: Short label after the tool-style glyph (default ``Assistant``).
             **kwargs: Additional arguments passed to parent.
         """
         super().__init__(**kwargs)
-        label = (role_label or "Assistant").strip()
-        self._role_label = label or "Assistant"
         self._content = content
         self._markdown: Markdown | None = None
         self._stream: MarkdownStream | None = None
         self._expanded: bool = False
-        self._header_widget: Static | None = None
         self._preview_widget: Static | None = None
         self._hint_widget: Static | None = None
 
     def compose(self) -> ComposeResult:  # noqa: PLR6301  # Textual widget method convention
-        """Compose header, markdown body, plain preview, and expand hint."""
+        """Compose markdown body, plain preview, and expand hint."""
         from textual.widgets import Markdown
 
-        yield Static("", markup=False, classes="assistant-header", id="assistant-header")
         yield Markdown("", id="assistant-md")
         yield Static("", markup=False, classes="assistant-preview", id="assistant-preview")
         yield Static("", markup=False, classes="assistant-hint", id="assistant-hint")
@@ -679,12 +662,9 @@ class AssistantMessage(Vertical):
             self.add_class("-ascii")
 
         self._markdown = self.query_one("#assistant-md", Markdown)
-        self._header_widget = self.query_one("#assistant-header", Static)
         self._preview_widget = self.query_one("#assistant-preview", Static)
         self._hint_widget = self.query_one("#assistant-hint", Static)
 
-        prefix = get_glyphs().tool_prefix
-        self._header_widget.update(f"{prefix} {self._role_label}")
         self._preview_widget.display = False
         self._hint_widget.display = False
         self._refresh_body_visibility()
@@ -849,22 +829,22 @@ class ToolCallMessage(Vertical):
     }
 
     ToolCallMessage .tool-subagent-notes {
-        margin-left: 3;
+        margin-left: 0;
         color: $text-muted;
         height: auto;
     }
 
     ToolCallMessage .tool-status {
-        margin-left: 3;
+        margin-left: 0;
         margin-top: 0;
     }
 
     ToolCallMessage .tool-status.pending {
-        color: $warning;
+        color: $cognition;
     }
 
     ToolCallMessage .tool-status.success {
-        color: $success;
+        color: $cognition;
     }
 
     ToolCallMessage .tool-status.error {
@@ -876,12 +856,12 @@ class ToolCallMessage(Vertical):
     }
 
     ToolCallMessage .tool-result-summary {
-        margin-left: 3;
+        margin-left: 0;
         height: auto;
     }
 
     ToolCallMessage .tool-result-summary.success {
-        color: $success;
+        color: $cognition;
     }
 
     ToolCallMessage .tool-result-summary.error {
@@ -889,32 +869,32 @@ class ToolCallMessage(Vertical):
     }
 
     ToolCallMessage .tool-output {
-        margin-left: 3;
+        margin-left: 0;
         margin-top: 0;
         padding: 0;
         height: auto;
     }
 
     ToolCallMessage .tool-output-preview {
-        margin-left: 3;
+        margin-left: 0;
         margin-top: 0;
     }
 
     ToolCallMessage .tool-output-hint {
-        margin-left: 3;
+        margin-left: 0;
         color: $text-muted;
         background: transparent;
     }
 
     ToolCallMessage .tool-rows {
-        margin-left: 3;
+        margin-left: 0;
         margin-top: 0;
         height: auto;
         color: $text-muted;
     }
 
     ToolCallMessage .tool-rows-hint {
-        margin-left: 3;
+        margin-left: 0;
         color: $text-muted;
         background: transparent;
         height: auto;
@@ -1100,8 +1080,9 @@ class ToolCallMessage(Vertical):
                 if self._status_widget:
                     self._status_widget.add_class("pending")
                     frame = get_glyphs().spinner_frames[0]
+                    gutter = f"{get_glyphs().output_prefix} "
                     self._status_widget.update(
-                        Content.styled(f"{frame} Running...", colors.warning)
+                        Content.styled(f"{gutter}{frame} Running...", colors.cognition)
                     )
                     self._status_widget.display = True
             case _:
@@ -1146,7 +1127,7 @@ class ToolCallMessage(Vertical):
         if phase == "running":
             frames = get_glyphs().spinner_frames
             spin = frames[self._spinner_position % len(frames)]
-        return format_tool_call_row(
+        inner = format_tool_call_row(
             row.tool_name,
             row.args,
             phase=phase,
@@ -1155,6 +1136,8 @@ class ToolCallMessage(Vertical):
             running_spinner=spin,
             running_elapsed_secs=elapsed,
         )
+        gutter = f"{get_glyphs().output_prefix} "
+        return Content.assemble(Content.styled(gutter, "dim"), inner)
 
     def _refresh_tools_display(self) -> None:
         """Alias for _refresh_activity_display (kept for compat)."""
@@ -1364,8 +1347,10 @@ class ToolCallMessage(Vertical):
             elapsed_secs = int(time() - self._start_time)
             elapsed = f" ({format_duration(elapsed_secs)})"
 
-        text = f"{frame} Running...{elapsed}"
-        self._status_widget.update(Content.styled(text, theme.get_theme_colors(self).warning))
+        colors = theme.get_theme_colors(self)
+        gutter = f"{get_glyphs().output_prefix} "
+        line = f"{gutter}{frame} Running...{elapsed}"
+        self._status_widget.update(Content.styled(line, colors.cognition))
         # Also refresh tool rows to update running spinners
         if self._rows:
             self._refresh_tools_display()
@@ -2154,8 +2139,11 @@ class CognitionStepMessage(Vertical):
     Header shows per-tool counts; body lists one CLI-style row per call. Click
     toggles expansion when there are more than ``_STEP_TOOL_PREVIEW_ROWS`` rows.
 
-    Tool rows and detail prose use the same ``⎿ ○`` / ``⎿ ✓`` gutter as
-    :class:`CognitionGoalTreeMessage` step lines.
+    Tool rows use the goal-tree gutter (``⎿``) plus the same hollow/filled circle
+    convention as the goal step list: ``circle_empty`` while pending/running,
+    ``circle_filled`` when the call finishes (replaces ``tool_prefix`` / spinner in
+    :func:`soothe_cli.tui.tool_display.format_tool_call_row`). Prose / notes keep
+    ``⎿ ○`` continuation lines.
     """
 
     can_select = True
@@ -2177,11 +2165,11 @@ class CognitionStepMessage(Vertical):
     }
 
     CognitionStepMessage .step-status {
-        margin-left: 3;
+        margin-left: 0;
     }
 
     CognitionStepMessage .step-status.pending {
-        color: $warning;
+        color: $cognition;
     }
 
     CognitionStepMessage .step-tools {
@@ -2394,15 +2382,6 @@ class CognitionStepMessage(Vertical):
         """Left column matching :meth:`CognitionGoalTreeMessage._indent_prefix`."""
         return f"{get_glyphs().output_prefix} "
 
-    def _step_tool_row_leading_mark(self, phase: str) -> str:
-        """Phase glyph before the CLI tool segment (goal-tree hollow bullet for in-flight)."""
-        g = get_glyphs()
-        if phase in ("pending", "running", "skipped"):
-            return f"{g.circle_empty} "
-        if phase == "rejected":
-            return f"{g.error} "
-        return ""
-
     def _row_to_content(self, row: _StepToolRow) -> Content:
         phase = row.phase
         elapsed: float | None = None
@@ -2412,6 +2391,11 @@ class CognitionStepMessage(Vertical):
         if phase == "running":
             frames = get_glyphs().spinner_frames
             spin = frames[self._spinner_position % len(frames)]
+        g = get_glyphs()
+        if phase in ("pending", "running"):
+            branch = g.circle_empty
+        else:
+            branch = g.circle_filled
         inner = format_tool_call_row(
             row.tool_name,
             row.args,
@@ -2420,12 +2404,10 @@ class CognitionStepMessage(Vertical):
             duration_ms=row.duration_ms,
             running_spinner=spin,
             running_elapsed_secs=elapsed,
+            branch_glyph=branch,
         )
         gutter = self._step_goal_tree_gutter()
-        mark = self._step_tool_row_leading_mark(phase)
-        if not mark:
-            return Content.assemble(Content.styled(gutter, "dim"), inner)
-        return Content.assemble(Content.styled(f"{gutter}{mark}", "dim"), inner)
+        return Content.assemble(Content.styled(gutter, "dim"), inner)
 
     def _step_branched_execute_body(self, body: str, *, muted: bool = True) -> Content:
         """Streamed execute-phase prose: tree gutter per line."""
@@ -2461,18 +2443,20 @@ class CognitionStepMessage(Vertical):
         except Exception:  # noqa: BLE001
             colors = theme.DARK_COLORS
         icon = g.checkmark if success else g.error
-        tone = colors.success if success else colors.error
+        # Match running step line and tool activity: cognition accent, not semantic green.
+        tone = colors.cognition if success else colors.error
         parts: list[object] = [
             Content.styled(f"{gutter}{icon} {status_line_body}", tone),
         ]
         prose = (prose or "").strip()
         if prose:
             sub = f"{g.output_prefix} {g.circle_empty} "
+            prose_style = colors.muted if success else tone
             parts.append("\n")
             for i, ln in enumerate(prose.splitlines()):
                 if i:
                     parts.append("\n")
-                parts.append(Content.styled(f"{sub}{ln}", tone))
+                parts.append(Content.styled(f"{sub}{ln}", prose_style))
         return Content.assemble(*parts)
 
     def _step_branched_error_detail(self, err_text: str) -> Content:
@@ -2517,7 +2501,7 @@ class CognitionStepMessage(Vertical):
             self._tools_hint_widget.update(
                 Content.assemble(
                     Content.styled(self._step_goal_tree_gutter(), "dim"),
-                    Content.styled(f"{get_glyphs().circle_empty} {hint}", "dim"),
+                    Content.styled(hint, "dim"),
                 )
             )
             self._tools_hint_widget.display = not show_all
@@ -2527,7 +2511,7 @@ class CognitionStepMessage(Vertical):
             self._tools_hint_widget.update(
                 Content.assemble(
                     Content.styled(self._step_goal_tree_gutter(), "dim"),
-                    Content.styled(f"{g.circle_empty} {hint}", "dim italic"),
+                    Content.styled(hint, "dim italic"),
                 )
             )
             self._tools_hint_widget.display = True
@@ -2736,7 +2720,9 @@ class CognitionStepMessage(Vertical):
             elapsed_secs = int(time() - self._start_time)
             elapsed = f" ({format_duration(float(elapsed_secs))})"
         colors = theme.get_theme_colors(self)
-        self._status_widget.update(Content.styled(f"{frame} Running...{elapsed}", colors.warning))
+        gutter = f"{get_glyphs().output_prefix} "
+        line = f"{gutter}{frame} Running...{elapsed}"
+        self._status_widget.update(Content.styled(line, colors.cognition))
         if any(r.phase == "running" for r in self._rows):
             self._refresh_tools_display()
 
@@ -2820,8 +2806,12 @@ class CognitionStepMessage(Vertical):
                 f" · {self._last_tool_call_count} tools" if self._last_tool_call_count > 0 else ""
             )
             status_body = f"Completed ({dur_str}){tool_part}"
+            try:
+                pv_colors = theme.get_theme_colors(self)
+            except Exception:  # noqa: BLE001
+                pv_colors = theme.DARK_COLORS
             assembled.append(
-                Content.styled(f"{gutter}{g.checkmark} {status_body}", "dim"),
+                Content.styled(f"{gutter}{g.checkmark} {status_body}", pv_colors.cognition),
             )
             assembled.append("\n")
         first_pv = True
@@ -3066,7 +3056,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         plain = self._footer_plain
         if self._footer_tone == "success":
             mark = get_glyphs().checkmark
-            return Content.styled(f"{mark} {plain}", colors.success)
+            return Content.styled(f"{mark} {plain}", colors.cognition)
         if self._footer_tone == "error":
             mark = get_glyphs().error
             return Content.styled(f"{mark} {plain}", colors.error)
@@ -3106,7 +3096,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
                 continue
             line = self._format_step_line(st)
             if st.phase == "done" and st.success:
-                line_contents.append(Content.styled(line, colors.success))
+                line_contents.append(Content.styled(line, colors.cognition))
             elif st.phase == "error" or (st.phase == "done" and not st.success):
                 line_contents.append(Content.styled(line, colors.error))
             else:
