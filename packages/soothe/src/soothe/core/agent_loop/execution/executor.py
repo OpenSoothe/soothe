@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import logging
+import re
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -36,6 +38,51 @@ if TYPE_CHECKING:
     from soothe.core.agent_loop.context.goal_context_manager import GoalContextManager
 
 logger = logging.getLogger(__name__)
+
+
+def _collect_related_exceptions(exc: BaseException) -> list[BaseException]:
+    """Collect this exception plus chained ``__cause__`` / ``__context__`` (deduplicated)."""
+    out: list[BaseException] = []
+    seen: set[int] = set()
+
+    def visit(e: BaseException | None) -> None:
+        if e is None or id(e) in seen:
+            return
+        seen.add(id(e))
+        out.append(e)
+        visit(e.__cause__)
+        ctx = getattr(e, "__context__", None)
+        if ctx is not None and ctx is not e.__cause__:
+            visit(ctx)
+
+    visit(exc)
+    return out
+
+
+def _is_expected_connection_refusal(exc: BaseException) -> bool:
+    """True when failure is connection refused (local service down / wrong port)."""
+    for e in _collect_related_exceptions(exc):
+        if isinstance(e, ConnectionRefusedError):
+            return True
+        if isinstance(e, OSError) and getattr(e, "errno", None) == errno.ECONNREFUSED:
+            return True
+    return False
+
+
+def _format_connection_refusal_message(exc: BaseException) -> str:
+    """Short, actionable message for connection-refused chains (e.g. aiohttp → OSError)."""
+    combined = " ".join(str(e) for e in _collect_related_exceptions(exc))
+    m = re.search(r"Connect call failed\s*\(\s*'([^']+)'\s*,\s*(\d+)", combined)
+    if m:
+        host, port = m.group(1), m.group(2)
+        return (
+            f"Connection refused to {host}:{port} — nothing is listening there. "
+            "Start the service or correct the host/port."
+        )
+    return (
+        "Connection refused — the target service is not accepting connections. "
+        "Verify it is running and that the host and port are correct."
+    )
 
 
 def _log_dependency_execution_residual(
@@ -836,7 +883,13 @@ class Executor:
             raise
         except Exception as e:
             duration_ms = int((time.perf_counter() - start) * 1000)
-            logger.exception("Sequential execution failed")
+            if _is_expected_connection_refusal(e):
+                logger.warning(
+                    "Sequential execution failed: %s",
+                    _format_connection_refusal_message(e),
+                )
+            else:
+                logger.exception("Sequential execution failed")
 
             error_msg = self._extract_error_message(e, "Sequential execution failed")
             self._classify_error_severity(e)
@@ -1086,12 +1139,21 @@ class Executor:
             raise
         except Exception as e:
             duration_ms = int((time.perf_counter() - start) * 1000)
-            logger.exception(
-                "Step %s failed after %dms [subagent=%s]",
-                step.id,
-                duration_ms,
-                step.subagent,
-            )
+            if _is_expected_connection_refusal(e):
+                logger.warning(
+                    "Step %s failed after %dms [subagent=%s]: %s",
+                    step.id,
+                    duration_ms,
+                    step.subagent,
+                    _format_connection_refusal_message(e),
+                )
+            else:
+                logger.exception(
+                    "Step %s failed after %dms [subagent=%s]",
+                    step.id,
+                    duration_ms,
+                    step.subagent,
+                )
 
             error_msg = self._extract_error_message(e, "Step execution failed")
 
@@ -1573,6 +1635,9 @@ class Executor:
             Meaningful error message string
         """
         from soothe.middleware.llm_rate_limit import EnhancedTimeoutError
+
+        if _is_expected_connection_refusal(exc):
+            return _format_connection_refusal_message(exc)
 
         # IG-295: Enhanced timeout error with metadata
         if isinstance(exc, EnhancedTimeoutError):

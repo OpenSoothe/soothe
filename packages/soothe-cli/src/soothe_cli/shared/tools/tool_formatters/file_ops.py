@@ -13,8 +13,8 @@ from soothe_cli.shared.tools.tool_output_formatter import ToolBrief
 class FileOpsFormatter(BaseFormatter):
     """Formatter for file operation tools.
 
-    Handles: read_file, write_file, delete_file, list_files, search_files, glob,
-    grep, ls, file_info
+    Handles: read_file, write_file, edit_file, delete_file, list_files, search_files,
+    glob, grep, ls, file_info, edit_file_lines, insert_lines, delete_lines, apply_diff
 
     Provides semantic summaries with size, line count, and item count metrics.
     """
@@ -46,6 +46,24 @@ class FileOpsFormatter(BaseFormatter):
             return self._format_read_file(result)
         if normalized == "write_file":
             return self._format_write_file(result)
+        if normalized == "edit_file":
+            return self._format_file_mutation(result, success_summary="Edited file", failure_summary="Edit failed")
+        if normalized == "edit_file_lines":
+            return self._format_file_mutation(
+                result, success_summary="Updated file", failure_summary="Line edit failed"
+            )
+        if normalized == "insert_lines":
+            return self._format_file_mutation(
+                result, success_summary="Inserted lines", failure_summary="Insert failed"
+            )
+        if normalized == "delete_lines":
+            return self._format_file_mutation(
+                result, success_summary="Deleted lines", failure_summary="Delete lines failed"
+            )
+        if normalized == "apply_diff":
+            return self._format_file_mutation(
+                result, success_summary="Applied patch", failure_summary="Patch failed"
+            )
         if normalized == "delete_file":
             return self._format_delete_file(result)
         if normalized in ("list_files", "ls"):
@@ -143,6 +161,28 @@ class FileOpsFormatter(BaseFormatter):
             metrics={"size_bytes": size_bytes, "lines": lines},
         )
 
+    def _format_file_mutation(
+        self,
+        result: str,
+        *,
+        success_summary: str,
+        failure_summary: str,
+    ) -> ToolBrief:
+        """Format success/error for tools that mutate file content (write, edit, patch, …)."""
+        if text_looks_like_error(result):
+            return ToolBrief(
+                icon="✗",
+                summary=failure_summary,
+                detail=self._truncate_text(result, 80),
+                metrics={"error": True},
+            )
+        return ToolBrief(
+            icon="✓",
+            summary=success_summary,
+            detail=None,
+            metrics={},
+        )
+
     def _format_write_file(self, result: str) -> ToolBrief:
         """Format write_file result.
 
@@ -157,26 +197,9 @@ class FileOpsFormatter(BaseFormatter):
         Example:
             >>> brief = formatter._format_write_file("Successfully wrote to file")
             >>> brief.summary
-            'Wrote 0 B'
+            'Wrote file'
         """
-        # Check for error
-        if text_looks_like_error(result):
-            return ToolBrief(
-                icon="✗",
-                summary="Write failed",
-                detail=self._truncate_text(result, 80),
-                metrics={"error": True},
-            )
-
-        # Try to extract size from result (if available)
-        # Common patterns: "Wrote X bytes", "Successfully wrote X"
-        # For now, show simple success
-        return ToolBrief(
-            icon="✓",
-            summary="Wrote file",
-            detail=None,
-            metrics={},
-        )
+        return self._format_file_mutation(result, success_summary="Wrote file", failure_summary="Write failed")
 
     def _format_delete_file(self, result: str) -> ToolBrief:
         """Format delete_file result.
