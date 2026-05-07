@@ -135,14 +135,15 @@ def build_soothe_middleware_stack(
     # IG-053: Add timeout to prevent semaphore monopolization
     # IG-258 Phase 2: Thread-local rate limiting (parameter name change)
     # IG-295: Retry with timeout escalation
-    rpm = config.execution.llm_rpm_limit
-    concurrent = config.execution.llm_concurrent_limit
-    timeout = config.execution.llm_call_timeout_seconds
-    timeout_max = config.execution.llm_call_timeout_max_seconds
-    timeout_adaptive = config.execution.llm_call_timeout_adaptive
-    retry_on_timeout = config.execution.llm_retry_on_timeout
-    max_timeout_retries = config.execution.llm_max_timeout_retries
-    timeout_retry_multiplier = config.execution.llm_timeout_retry_multiplier
+    # IG-407: Unified agent_loop.limits config paths
+    rpm = config.agent_loop.limits.llm_rpm_limit
+    concurrent = config.agent_loop.limits.llm_concurrent_limit
+    timeout = config.agent_loop.limits.llm_call_timeout_seconds
+    timeout_max = config.agent_loop.limits.llm_call_timeout_max_seconds
+    timeout_adaptive = config.agent_loop.limits.llm_call_timeout_adaptive
+    retry_on_timeout = config.agent_loop.limits.llm_retry_on_timeout
+    max_timeout_retries = config.agent_loop.limits.llm_max_timeout_retries
+    timeout_retry_multiplier = config.agent_loop.limits.llm_timeout_retry_multiplier
 
     stack.append(
         LLMRateLimitMiddleware(

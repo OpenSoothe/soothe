@@ -162,7 +162,7 @@ class AgentLoop:
         # RFC-217: Create GoalContextManager for goal-level context injection
         from soothe.config.models import GoalContextConfig
 
-        goal_context_config = getattr(self.config.agentic, "goal_context", GoalContextConfig())
+        goal_context_config = getattr(self.config.agent_loop, "goal_context", GoalContextConfig())
         goal_context_manager = GoalContextManager(state_manager, goal_context_config)
 
         # Try to recover from checkpoint (RFC-216: loop-scoped)
@@ -232,7 +232,7 @@ class AgentLoop:
             state.thread_continuation = True  # Add flag to LoopState if it exists
             logger.debug("[AgentLoop] Thread continuation flag set for working memory enhancement")
 
-        wm_cfg = self.config.agentic.working_memory
+        wm_cfg = self.config.agent_loop.working_memory
         if wm_cfg.enabled:
             state.working_memory = LoopWorkingMemory(
                 thread_id=thread_id,
