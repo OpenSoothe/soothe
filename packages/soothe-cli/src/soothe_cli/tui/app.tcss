@@ -16,14 +16,24 @@ Screen {
 /* Chat area - main scrollable messages area */
 #chat {
     height: 1fr;
-    padding: 1 2;
+    padding: 0 2;
     background: $background;
+}
+
+/* Fills at least the scroll viewport; bottom-aligns welcome + messages when the
+   thread is short so dead space sits above the banner instead of above the input. */
+#chat-body {
+    width: 1fr;
+    min-height: 100%;
+    height: auto;
+    layout: vertical;
+    align-vertical: bottom;
 }
 
 /* Welcome banner */
 #welcome-banner {
     height: auto;
-    margin-bottom: 1;
+    margin-bottom: 0;
 }
 
 /* Messages area — uses undocumented "stream" layout (Textual ≥5.2.0) for
@@ -36,14 +46,14 @@ Screen {
 /* Bottom app container - holds ChatInput (now inside scroll) */
 #bottom-app-container {
     height: auto;
-    margin-top: 1;
+    margin-top: 0;
     padding: 0 1;
 }
 
 /* Sticky thinking row directly above input box */
 #thinking-status {
     height: auto;
-    min-height: 1;
+    min-height: 0;
     margin-bottom: 0;
 }
 
