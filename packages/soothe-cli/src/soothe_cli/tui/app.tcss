@@ -175,7 +175,7 @@ QueuedUserMessage.-ascii {
 }
 
 ToolCallMessage.-ascii {
-    border-left: ascii $panel;
+    border-left: ascii $primary;
 }
 
 ToolCallMessage.-ascii:hover {

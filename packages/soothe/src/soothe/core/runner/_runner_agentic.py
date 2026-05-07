@@ -6,12 +6,8 @@ Implements Plan → Execute loop using AgentLoop (RFC-201).
 from __future__ import annotations
 
 import logging
-import uuid
-from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe.config import SootheConfig
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.agent_loop import AgentLoop
 from soothe.core.agent_loop.utils.events import LoopAgentReasonEvent
@@ -27,7 +23,7 @@ from soothe.core.events import (
 )
 from soothe.core.intention import build_loop_routing_classification
 from soothe.core.runner._runner_shared import StreamChunk, _custom
-from soothe.utils.text_preview import preview, preview_first
+from soothe.utils.text_preview import preview_first
 
 # Default limit of recent messages to inspect for query classification
 _RECENT_MESSAGES_FOR_CLASSIFY_LIMIT = 6
@@ -39,121 +35,6 @@ logger = logging.getLogger(__name__)
 
 _AGENTIC_FINAL_STDOUT_CAP = 50_000
 _DEFAULT_GOAL_ACHIEVED_MESSAGE = "Goal achieved successfully"
-# Full normalized body at or below this length is printed without truncation (IG-123, IG-128).
-# Long goal-completion bodies (translations, research) often exceed 8k; keep a high
-# ceiling and spool beyond it (IG-273: renamed from "report" terminology).
-_AGENTIC_GOAL_COMPLETION_FULL_DISPLAY_MAX = 50_000
-# When spooling to disk, keep the on-screen preview strictly below the threshold above.
-_AGENTIC_GOAL_COMPLETION_PREVIEW_MAX = 48_000
-
-
-def _strip_leading_python_list_reprs(text: str, *, max_strips: int = 24) -> str:
-    """Remove repeated ``[...]`` prefixes (common tool list dumps) from the start."""
-    t = text
-    for _ in range(max_strips):
-        if not t.startswith("[") or "]" not in t:
-            break
-        t = t[t.index("]") + 1 :].lstrip()
-    return t.strip()
-
-
-def _normalize_agentic_body(full_output: str | None) -> str | None:
-    """Return user-facing body text from raw ``full_output``, or None if only list noise."""
-    body = (full_output or "").strip()
-    if not body:
-        return None
-    t = _strip_leading_python_list_reprs(body)
-    return t or None
-
-
-def _resolve_agentic_report_run_dir(
-    *, thread_id: str, workspace: str, config: SootheConfig
-) -> Path:
-    """Run root aligned with ``RunArtifactStore`` (RFC-0010 / IG-123).
-
-    Uses new isolated directory structure (RFC-215).
-    """
-    from soothe.config import SOOTHE_HOME
-    from soothe.core.agent_loop.state.persistence.directory_manager import (
-        PersistenceDirectoryManager,
-    )
-
-    _ = workspace, config, SOOTHE_HOME  # Spool location is always under SOOTHE_HOME (IG-124).
-    return PersistenceDirectoryManager.get_thread_directory(thread_id)
-
-
-def _spool_agentic_overflow_goal_completion(body: str, *, run_dir: Path) -> Path | None:
-    """Write full goal completion body to a unique file under ``run_dir``; return path or None on failure."""
-    try:
-        run_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-        unique = uuid.uuid4().hex[:10]
-        out = run_dir / f"goal_completion_{stamp}_{unique}.md"
-        out.write_text(body, encoding="utf-8")
-        return out.resolve()
-    except OSError:
-        logger.exception("Failed to spool agentic goal completion to %s", run_dir)
-        return None
-
-
-def _agentic_final_stdout_text(
-    *,
-    next_action: str,
-    full_output: str | None,
-    thread_id: str,
-    workspace: str | None,
-    config: SootheConfig | None,
-) -> str | None:
-    """Build final stdout for headless CLI after an agentic loop (IG-123, IG-300).
-
-    Prefers normalized ``full_output`` (goal completion body) when present. Long bodies
-    are truncated on stdout and spooled to the thread run directory.
-
-    IG-300: Simplified from IG-268 - single default cap (no response length category).
-    """
-    body = _normalize_agentic_body(full_output)
-    if body:
-        display_cap = _AGENTIC_GOAL_COMPLETION_FULL_DISPLAY_MAX  # Default: 50000
-
-        if len(body) <= display_cap:
-            return body
-
-        # Preview size for truncated responses
-        preview_cap = _AGENTIC_GOAL_COMPLETION_PREVIEW_MAX  # Default: 48000
-
-        preview_text = preview(body, mode="chars", first=preview_cap, marker="").rstrip()
-        tid = thread_id.strip()
-        run_dir_hint: Path | None = None
-        if workspace and config and tid:
-            run_dir_hint = _resolve_agentic_report_run_dir(
-                thread_id=tid,
-                workspace=workspace,
-                config=config,
-            )
-        saved: Path | None = None
-        if run_dir_hint is not None:
-            saved = _spool_agentic_overflow_goal_completion(body, run_dir=run_dir_hint)
-        if saved is not None:
-            return f"{preview_text}...\n\nGoal completion saved to: {saved}"
-        if run_dir_hint is not None:
-            pattern = f"{run_dir_hint.as_posix()}/goal_completion_*.md"
-        elif tid:
-            from soothe.config import SOOTHE_HOME
-
-            pattern = f"{Path(SOOTHE_HOME).expanduser().resolve().as_posix()}/data/threads/{tid}/goal_completion_*.md"
-        else:
-            pattern = "data/threads/<thread_id>/goal_completion_*.md"
-        return (
-            f"{preview_text}...\n\nGoal completion file: {pattern}\n"
-            f"(file not written; exceeds {_AGENTIC_GOAL_COMPLETION_FULL_DISPLAY_MAX} characters — see logs)"
-        )
-
-    summary = (next_action or "").strip()
-    if summary:
-        cap = _AGENTIC_FINAL_STDOUT_CAP
-        return summary[:cap] if len(summary) > cap else summary
-    return None
-
 
 _AGENTIC_STEP_DESC_UI_MAX = 220
 
@@ -593,11 +474,6 @@ class AgenticMixin:
                     n_act_steps = 0
                     skip_goal_completion_wire_duplicate = False
 
-                # Do not re-yield full_output as AIMessage: Executor already streamed the same
-                # AI + tool content via messages mode; replaying it duplicates stdout (IG-119).
-                # When max_iterations>1, headless CLI suppresses main assistant stdout (multi_step);
-                # attach a one-shot final line/block so the user still sees the outcome (IG-119 follow-up).
-
                 evidence = (final_result.evidence_summary or "")[:500]
                 completion_summary = (final_result.next_action or "").strip()
                 if not completion_summary:
@@ -608,30 +484,11 @@ class AgenticMixin:
                     )
                 completion_summary = completion_summary[:240]
                 final_stdout: str | None = None
-                if final_result.status == "done":
-                    if not skip_goal_completion_wire_duplicate:
-                        # IG-355: emit one phased replay when the answer was not already on the root
-                        # ``messages`` stream (e.g. delegate finals)—including single-iteration runs.
-                        raw = (final_result.full_output or "").strip()
-                        if raw:
-                            cap = _AGENTIC_FINAL_STDOUT_CAP
-                            final_stdout = raw[:cap] if len(raw) > cap else raw
-                    elif max_iterations > 1:
-                        # IG-119 follow-up: multi-step mode headless suppression attach-outcome path.
-                        text = _agentic_final_stdout_text(
-                            next_action=final_result.next_action,
-                            full_output=final_result.full_output,
-                            thread_id=tid,
-                            workspace=workspace,
-                            config=self._config,
-                        )
-                        if text is None:
-                            ev = (final_result.evidence_summary or "").strip()
-                            if ev:
-                                cap = _AGENTIC_FINAL_STDOUT_CAP
-                                text = ev[:cap] if len(ev) > cap else ev
-                        if text:
-                            final_stdout = text
+                if final_result.status == "done" and not skip_goal_completion_wire_duplicate:
+                    raw = (final_result.full_output or "").strip()
+                    if raw:
+                        cap = _AGENTIC_FINAL_STDOUT_CAP
+                        final_stdout = raw[:cap] if len(raw) > cap else raw
 
                 if final_stdout:
                     yield loop_assistant_messages_chunk(

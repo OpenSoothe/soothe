@@ -22,7 +22,7 @@ from soothe.utils.subagent_emit import emit_subagent_wire_event
 
 from .events import ExploreCompletedEvent, ExploreStartedEvent
 from .findings import extract_findings_from_tool_result, should_record_findings
-from .prompts import EXPLORE_AGENT_SYSTEM, SYNTHESIZE
+from .prompts import SYNTHESIZE, format_explore_agent_system
 from .schemas import (
     ExploreAgentState,
     ExploreResult,
@@ -151,6 +151,8 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         max_iterations: int,
         max_matches: int,
         synthesis_model: BaseChatModel | None = None,
+        *,
+        include_execute: bool = True,
     ) -> None:
         super().__init__()
         self._model = model
@@ -160,6 +162,7 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         self._max_matches = max_matches
         # Use separate fast model for synthesis if provided
         self._synthesis_model = synthesis_model or model
+        self._include_execute = include_execute
 
     def after_model(
         self,
@@ -242,13 +245,14 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             )
             return self._synthesize_findings(findings, search_target, current)
 
-        body = EXPLORE_AGENT_SYSTEM.format(
+        body = format_explore_agent_system(
             search_target=search_target,
             workspace=thread_ws,
             thoroughness=self._explore_config.thoroughness,
             max_iterations=self._max_iterations,
             max_read_lines=self._explore_config.max_read_lines,
             findings_so_far=findings_so_far,
+            include_execute=self._include_execute,
         )
         req = request.override(messages=messages, system_message=SystemMessage(content=body))
         response = handler(req)
@@ -446,13 +450,14 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
                 ),
             )
 
-        body = EXPLORE_AGENT_SYSTEM.format(
+        body = format_explore_agent_system(
             search_target=search_target,
             workspace=thread_ws,
             thoroughness=self._explore_config.thoroughness,
             max_iterations=self._max_iterations,
             max_read_lines=self._explore_config.max_read_lines,
             findings_so_far=findings_so_far,
+            include_execute=self._include_execute,
         )
         req = request.override(system_message=SystemMessage(content=body))
         response = await handler(req)
@@ -529,6 +534,7 @@ def build_explore_middleware_stack(
     max_matches: int,
     synthesis_model: BaseChatModel | None = None,
     soothe_config: SootheConfig | None = None,
+    include_execute: bool = True,
 ) -> list[AgentMiddleware[Any, None]]:
     """Ordered middleware list for ``create_agent`` (outermost first).
 
@@ -540,6 +546,7 @@ def build_explore_middleware_stack(
         max_matches: Maximum matches to return in result.
         synthesis_model: Optional fast model for synthesis (defaults to model).
         soothe_config: Optional SootheConfig for tool middleware (limits, retries).
+        include_execute: When False, prompts match a tool surface without shell (``security.sandbox``).
 
     Returns:
         Middleware stack with tool limits, retries, budget, findings, wire, and finalize.
@@ -589,6 +596,7 @@ def build_explore_middleware_stack(
             max_iterations=max_iterations,
             max_matches=max_matches,
             synthesis_model=synthesis_model,
+            include_execute=include_execute,
         ),
         ExploreFinalizeMiddleware(
             thoroughness=explore_config.thoroughness,

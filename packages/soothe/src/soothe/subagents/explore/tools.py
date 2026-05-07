@@ -70,13 +70,14 @@ def get_explore_tools(
     *,
     virtual_mode: bool | None = None,
     allow_paths_outside_workspace: bool | None = None,
+    include_execute: bool = True,
 ) -> list[Any]:
-    """Get explore tools: readonly filesystem surface plus ``execute`` for readonly shell.
+    """Get explore tools: readonly filesystem surface; optional ``execute`` shell tool.
 
     Exposed tools (mutation tools from middleware are filtered out):
     - glob, grep, ls, read_file: deepagents (via middleware base)
     - file_info: Soothe (metadata)
-    - execute: deepagents shell (must be used only for read-only commands; see prompts)
+    - execute: deepagents shell, only when ``include_execute`` (``security.sandbox``)
 
     IG-328: Backend is callable so workspace resolves from thread state at runtime,
     not from static resolver workspace.
@@ -86,6 +87,7 @@ def get_explore_tools(
         virtual_mode: When set, forces FilesystemBackend ``virtual_mode``.
         allow_paths_outside_workspace: When ``virtual_mode`` is omitted, sets
             ``virtual_mode`` to ``not allow_paths_outside_workspace``.
+        include_execute: When False, omit shell tool (matches disabled ``security.sandbox``).
 
     Returns:
         Ordered list of langchain tool instances.
@@ -110,7 +112,14 @@ def get_explore_tools(
         workspace_root=root,  # Fallback for non-tool operations
     )
 
-    explore_tool_names = ("glob", "grep", "ls", "read_file", "file_info", "execute")
+    explore_tool_names: tuple[str, ...] = (
+        "glob",
+        "grep",
+        "ls",
+        "read_file",
+        "file_info",
+        *(() if not include_execute else ("execute",)),
+    )
     by_name = {t.name: t for t in middleware.tools}
     tools = [by_name[name] for name in explore_tool_names if name in by_name]
 

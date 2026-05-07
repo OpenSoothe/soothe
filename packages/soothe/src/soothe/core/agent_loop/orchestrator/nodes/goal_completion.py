@@ -9,7 +9,12 @@ from typing import Any
 from soothe.core.agent_loop.analysis.synthesis import SynthesisGenerator
 from soothe.core.agent_loop.engine.fallback_summary import generate_user_fallback_summary
 from soothe.core.agent_loop.planning.manager import CompletionStrategy
-from soothe.core.agent_loop.utils.messages import last_ledger_ai_content
+from soothe.core.agent_loop.state.schemas import LoopState
+from soothe.core.agent_loop.utils.messages import (
+    LoopAIMessage,
+    LoopHumanMessage,
+    last_ledger_ai_content,
+)
 from soothe.core.agent_loop.utils.stream_normalize import (
     GoalCompletionAccumState,
     iter_messages_for_act_aggregation,
@@ -20,6 +25,51 @@ from soothe.core.agent_loop.utils.stream_normalize import (
 from ..runtime_context import LoopRuntimeContext
 
 logger = logging.getLogger(__name__)
+
+_GOAL_COMPLETION_LEDGER_HUMAN = (
+    "Goal completion: produce the final user-facing response summarizing the goal outcome."
+)
+
+
+def _append_goal_completion_ledger_pair(
+    *,
+    state: LoopState,
+    iteration_completed: int,
+    action: CompletionStrategy,
+    final_output: str | None,
+) -> None:
+    """Append RFC-214 Human–AI pair for synthesized or fallback final text (not ledger-direct).
+
+    ``LEDGER_DIRECT`` already surfaces the last execute assistant turn; duplicating it here
+    would bloat the ledger and the next synthesis prompt.
+
+    Args:
+        state: Loop state whose ``loop_messages`` list is extended.
+        iteration_completed: Iteration index that just finished (before ``state.iteration`` bump).
+        action: Completion strategy used for this goal.
+        final_output: Final user-visible text (may be empty).
+    """
+    text = (final_output or "").strip()
+    if not text or action == CompletionStrategy.LEDGER_DIRECT:
+        return
+    state.loop_messages.append(
+        LoopHumanMessage(
+            content=_GOAL_COMPLETION_LEDGER_HUMAN,
+            thread_id=state.thread_id,
+            iteration=iteration_completed,
+            goal_summary=(state.goal[:200] if state.goal else None),
+            workspace=state.workspace,
+            phase="goal_completion",
+        )
+    )
+    state.loop_messages.append(
+        LoopAIMessage(
+            content=text,
+            thread_id=state.thread_id,
+            iteration=iteration_completed,
+            phase="goal_completion",
+        )
+    )
 
 
 async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
@@ -67,6 +117,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     )
 
     final_output = None
+    used_synthesis_fallback = False
 
     if action == CompletionStrategy.LEDGER_DIRECT:
         final_output = last_ledger_ai_content(state)
@@ -92,11 +143,18 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         )
 
         if not final_output:
-            logger.warning("No synthesis text from CoreAgent, using fallback")
+            used_synthesis_fallback = True
             final_output = generate_user_fallback_summary(state, plan_result)
     elif action == CompletionStrategy.SUMMARY:
         final_output = generate_user_fallback_summary(state, plan_result)
         logger.info("Goal completion: action=summary chars=%d", len(final_output or ""))
+
+    _append_goal_completion_ledger_pair(
+        state=state,
+        iteration_completed=iteration_completed,
+        action=action,
+        final_output=final_output,
+    )
 
     updated_result = plan_result.model_copy(
         update={
@@ -111,11 +169,19 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         state.total_duration_ms,
         action.value,
     )
+    # Runner ``loop_assistant_messages_chunk`` replay: skip when synthesis already
+    # streamed ``phase=goal_completion`` on ``messages`` (``stream_event``). Do not
+    # skip for ``ledger_direct`` — headless CLI suppresses execute-phase prose (IG-343)
+    # and relies on this replay for the user-visible answer (RFC-614 / RFC-500).
+    skip_goal_completion_wire_duplicate = (
+        action == CompletionStrategy.SYNTHESIZE and not used_synthesis_fallback
+    )
     await ctx.emit(
         "completed",
         {
             "result": updated_result,
             "step_results_count": len(state.step_results),
+            "skip_goal_completion_wire_duplicate": skip_goal_completion_wire_duplicate,
         },
     )
     out: dict[str, Any] = {"last_outcome": "completed"}

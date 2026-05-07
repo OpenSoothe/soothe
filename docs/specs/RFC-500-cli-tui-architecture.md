@@ -59,11 +59,22 @@ LangGraph `(namespace, mode, data)` 3-tuple:
 
 **Naming**: `soothe.<component>.<action>`. Subagent: `soothe.<subagent>.<action>`, Protocol: `soothe.<protocol>.<action>`.
 
-**AgentLoop output contract note** (IG-304, IG-317, RFC-614, IG-355):
-- Execute-phase assistant prose is daemon-suppressed for user-facing output.
+**AgentLoop output contract note** (IG-304, IG-317, RFC-614):
+- Execute-phase assistant prose is daemon-suppressed for user-facing **stdout**; the TUI still receives `messages` tuples for routing.
 - Live execute observability is carried by tool telemetry (`ToolMessage` + AI tool-call metadata).
 - Final user-facing answer text (goal completion, chitchat, quiz, autonomous summaries) is emitted on the **`messages`** stream as loop-tagged AI message chunks with a **`phase`** field (for example `goal_completion`), not as `soothe.output.goal_completion.*` custom events.
-- **Headless** (`--no-tui`): stdout shows loop-tagged assistant text only (`HeadlessCliRenderer`); answers produced only via **`task`** delegation are surfaced through goal-completion replay when needed (IG-355). Slash routes such as `/claude` set `preferred_subagent` as a planner hint (IG-349); they do not bypass the streaming contract.
+
+**Textual TUI — `LoopAIMessage` rendering (canonical)**  
+| Source | `phase` / origin | TUI surface |
+|--------|------------------|-------------|
+| Main-agent step execute | `execute_step` (root namespace, active step card) | `CognitionStepMessage` body (step result), not a standalone assistant card |
+| Subagent / `task` subgraph | `execute_step`, `execute_wave`, or other non–goal-completion loop AI under a task scope | Parent **`task`** `ToolCallMessage` (subagent result preview / activity), not a standalone assistant card |
+| Goal completion / synthesis | `goal_completion` | **`AssistantMessage`** card only (all LangGraph namespaces) |
+
+**Runner replay (`loop_assistant_messages_chunk`)**  
+After `completed`, the runner emits **one** phased `goal_completion` chunk when `skip_goal_completion_wire_duplicate=False`. AgentLoop sets the flag **true** only after a **successful streamed `synthesize`** (body already arrived on `messages` via `stream_event`). It stays **false** for **`ledger_direct`** and **`summary`** so **headless** stdout still receives an answer: execute-phase prose is suppressed there (IG-343), and without this replay there would be no `goal_completion` line to print.
+
+**Headless** (`--no-tui`): stdout shows loop-tagged assistant text only (`HeadlessCliRenderer`), following the same `messages` + `phase` contract. Slash routes such as `/claude` set `preferred_subagent` as a planner hint (IG-349); they do not bypass the streaming contract.
 
 ### Protocol Custom Events
 

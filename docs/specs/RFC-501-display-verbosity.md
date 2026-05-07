@@ -312,7 +312,7 @@ if should_show(VerbosityTier.DETAILED, self._verbosity):
 | Other deepagents / non-curated subgraph noise | ✗ | ✗ | ✓ | ✓ |
 | Thinking/heartbeats | ✗ | ✗ | ✗ | ✓ |
 
-**Headless note (IG-355 / RFC-614):** the non-TUI client prints **loop-tagged** assistant lines on stdout; unphased namespaced subgraph assistant prose is not shown. User-visible answers that only exist in a delegate run are promoted from **`task`** tool returns and may appear as a **`phase=goal_completion`** replay—this is orthogonal to VerbosityTier rows above (which govern rich TUI/daemon event routing).
+**Headless note (RFC-614 / RFC-500):** the non-TUI client prints **loop-tagged** assistant lines on stdout; unphased namespaced subgraph assistant prose is not shown; main-graph execute narration is suppressed (IG-343). The runner still emits **`phase=goal_completion`** after `completed` for **`ledger_direct`** / **`summary`** so stdout receives the goal result; `skip_goal_completion_wire_duplicate` applies only after streamed **synthesize**. VerbosityTier rows above govern **custom** event routing, not this `messages` contract.
 
 ---
 
