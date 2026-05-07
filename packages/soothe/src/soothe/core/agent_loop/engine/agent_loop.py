@@ -11,6 +11,9 @@ from typing import TYPE_CHECKING, Any
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.agent_loop.branching.anchor_manager import CheckpointAnchorManager
 from soothe.core.agent_loop.context.goal_context_manager import GoalContextManager
+from soothe.core.agent_loop.engine.thread_continuation import (
+    seed_thread_continuation_ledger_from_prior_goal,
+)
 from soothe.core.agent_loop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.core.agent_loop.planning.manager import PlanManager
 from soothe.core.agent_loop.planning.phase import PlanPhase
@@ -165,14 +168,18 @@ class AgentLoop:
         goal_context_config = getattr(self.config.agent_loop, "goal_context", GoalContextConfig())
         goal_context_manager = GoalContextManager(state_manager, goal_context_config)
 
-        # Try to recover from checkpoint (RFC-216: loop-scoped)
+        # Try to recover from checkpoint (RFC-216: loop-scoped).
+        # Use explicit ``loop_id`` from the runner (conversation ``thread_id``) so the
+        # same TUI/daemon thread reuses one AgentLoop checkpoint across user turns.
         checkpoint = await state_manager.load()
         # IG-325: valid resume of a running checkpoint (structural plan-bootstrap guard)
         recovery_valid_resume = False
+        goal_record = None
+        iteration = 0
+
         if checkpoint and checkpoint.status == "running":
-            # Get current goal iteration (RFC-216: per-goal tracking)
             current_goal_index = checkpoint.current_goal_index
-            if current_goal_index >= 0 and current_goal_index < len(checkpoint.goal_history):
+            if 0 <= current_goal_index < len(checkpoint.goal_history):
                 goal_record = checkpoint.goal_history[current_goal_index]
                 iteration = goal_record.iteration
                 recovery_valid_resume = True
@@ -182,28 +189,50 @@ class AgentLoop:
                     goal_record.goal_id,
                 )
             else:
-                # No active goal in recovered checkpoint - invalid state
-                # Treat as new checkpoint instead of failing
                 logger.warning(
-                    "Checkpoint has invalid goal index %d (history length: %d), initializing fresh state",
+                    "Checkpoint has invalid goal index %d (history length: %d), re-initializing",
                     current_goal_index,
                     len(checkpoint.goal_history),
                 )
                 checkpoint = await state_manager.initialize(thread_id, max_iterations)
+                goal_record = state_manager.start_new_goal(goal, max_iterations)
+                checkpoint.goal_history.append(goal_record)
+                checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
+                checkpoint.status = "running"
+                await state_manager.save(checkpoint)
                 iteration = 0
-                goal_record = None
                 recovery_valid_resume = False
 
-            # RFC-214: Ledger is already populated in goal_record.loop_messages
-            # No need to derive plan conversation separately
-        else:
-            # Initialize new checkpoint (RFC-216: pass thread_id, not goal)
-            checkpoint = await state_manager.initialize(thread_id, max_iterations)
-            iteration = 0  # New goal starts at iteration 0
-            # Create new goal_record for this goal execution
+        elif checkpoint and checkpoint.status == "ready_for_next_goal":
+            checkpoint.current_thread_id = thread_id
+            if thread_id not in checkpoint.thread_ids:
+                checkpoint.thread_ids.append(thread_id)
             goal_record = state_manager.start_new_goal(goal, max_iterations)
-            checkpoint.goal_history.append(goal_record)  # Append FIRST
-            checkpoint.current_goal_index = len(checkpoint.goal_history) - 1  # Compute index AFTER
+            checkpoint.goal_history.append(goal_record)
+            checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
+            checkpoint.status = "running"
+            if thread_continuation_mode:
+                seed_thread_continuation_ledger_from_prior_goal(checkpoint, goal_record, thread_id)
+            await state_manager.save(checkpoint)
+            iteration = 0
+            logger.debug(
+                "continued loop %s: new goal id=%s idx=%d",
+                state_manager.loop_id,
+                goal_record.goal_id,
+                checkpoint.current_goal_index,
+            )
+
+        else:
+            if checkpoint is not None:
+                logger.info(
+                    "Starting fresh AgentLoop checkpoint (prior status=%s loop_id=%s)",
+                    checkpoint.status,
+                    state_manager.loop_id,
+                )
+            checkpoint = await state_manager.initialize(thread_id, max_iterations)
+            goal_record = state_manager.start_new_goal(goal, max_iterations)
+            checkpoint.goal_history.append(goal_record)
+            checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
             checkpoint.status = "running"
 
             logger.debug(
