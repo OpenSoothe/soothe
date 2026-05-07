@@ -1493,6 +1493,8 @@ async def execute_task_textual(
                                     output_widget.id,
                                     RendererBase.repair_concatenated_output(output_text),
                                 )
+                            # Store so subsequent duplicates are suppressed by dedup above.
+                            assistant_message_by_namespace[ns_key] = output_widget
 
                         if adapter._set_active_message:
                             adapter._set_active_message(None)
@@ -1511,27 +1513,15 @@ async def execute_task_textual(
                                 if ns_key
                                 else None
                             )
-                            explore_via_task = (
-                                task_scope_txt is not None and task_scope_txt[1] == "explore"
-                            )
-                            compact_subagent_task = task_scope_txt is not None and task_scope_txt[
-                                1
-                            ] in {"claude", "browser", "research"}
-                            if suppress_subgraph_assistant_text and not explore_via_task:
+                            # Suppress all intermediate AI text from subagent tasks.
+                            # Only goal_completion (handled above) surfaces the final
+                            # result to the user.
+                            if task_scope_txt is not None:
+                                continue
+                            if suppress_subgraph_assistant_text:
                                 continue
                             text = block.get("text", "")
                             if not text:
-                                continue
-
-                            if explore_via_task:
-                                pending_text = pending_text_by_namespace.get(ns_key, "")
-                                pending_text += text
-                                pending_text_by_namespace[ns_key] = pending_text
-                                # IG-311: raw JSON streams off-thread; show summary on flush only.
-                                continue
-
-                            if compact_subagent_task:
-                                # IG-344: wire milestones + completion line carry UX; drop raw prose.
                                 continue
 
                             # Track accumulated text for reference
@@ -2675,6 +2665,9 @@ async def _flush_assistant_text_ns(
             line = f"⚙ {format_task_scope_prefix(ts_card[0], ts_card[1])} {repaired_text.strip()}"
             parent_tool.append_subagent_activity(line)
             return
+        # Suppress standalone AssistantMessage for all subagent tasks —
+        # only goal_completion surfaces the final result.
+        return
 
     current_msg = assistant_message_by_namespace.get(ns_key)
     if current_msg is None:

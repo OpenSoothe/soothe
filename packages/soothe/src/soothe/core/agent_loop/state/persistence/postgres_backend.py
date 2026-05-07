@@ -3,6 +3,8 @@
 Backend-agnostic implementation supporting full AgentLoop persistence operations.
 Uses shared soothe_checkpoints database with 4 tables: agentloop_checkpoints,
 checkpoint_anchors, failed_branches, goal_records.
+
+IG-406: Supports shared pool for high-concurrency (200+ threads) support.
 """
 
 from __future__ import annotations
@@ -29,28 +31,41 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
 
     Backend-agnostic implementation using shared soothe_checkpoints database
     with separate tables for checkpoints, anchors, branches, and goals.
+
+    IG-406: Supports shared pool mode for high-concurrency scenarios.
     """
 
     def __init__(self, dsn: str, pool_size: int = 10) -> None:
         """Initialize PostgreSQL backend with DSN and pool configuration.
 
+        IG-406: pool_size=0 indicates externally provided (shared) pool.
+
         Args:
             dsn: PostgreSQL DSN for soothe_checkpoints database.
-            pool_size: Connection pool size (default: 10).
+            pool_size: Connection pool size (default: 10). Use 0 for shared pool mode.
         """
         self.dsn = dsn
         self.pool_size = pool_size
         self._pool: AsyncConnectionPool | None = None
         self._init_lock = asyncio.Lock()
+        self._owns_pool = True  # IG-406: Track pool ownership for close() decision
 
     async def _ensure_pool(self) -> AsyncConnectionPool:
         """Lazy connection pool initialization with schema setup.
+
+        IG-406: If pool is already set (shared mode), skip creation.
 
         Returns:
             Active AsyncConnectionPool instance.
         """
         if self._pool is not None:
             return self._pool
+
+        # IG-406: pool_size=0 means pool will be set externally (shared pool mode)
+        if self.pool_size == 0:
+            logger.debug("PostgreSQL backend in shared pool mode (awaiting external pool)")
+            # Wait for pool to be set externally - raise error if not set
+            raise RuntimeError("PostgreSQL backend in shared pool mode but pool not set")
 
         async with self._init_lock:
             if self._pool is not None:
@@ -73,6 +88,7 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
             await self._initialize_schema(pool)
 
             self._pool = pool
+            self._owns_pool = True
             logger.info(
                 "AgentLoop PostgreSQL backend initialized (soothe_checkpoints database, table=agentloop_checkpoints, pool=%d)",
                 self.pool_size,
@@ -360,9 +376,15 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                 return results
 
     async def close(self) -> None:
-        """Close connection pool."""
-        if self._pool:
+        """Close connection pool.
+
+        IG-406: Only closes pool if this backend owns it (not shared).
+        Shared pools are closed at daemon shutdown level.
+        """
+        if self._pool and self._owns_pool:
             await self._pool.close()
+            self._pool = None
+            logger.debug("Closed PostgreSQL backend pool (owned)")
             self._pool = None
             logger.info("AgentLoop PostgreSQL backend closed")
 

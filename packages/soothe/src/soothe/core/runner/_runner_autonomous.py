@@ -396,6 +396,9 @@ class AutonomousMixin(GoalDirectivesMixin):
                 config=self._config,
             )
 
+            # IG-406: Get shared PostgreSQL pool for high-concurrency support
+            shared_pool = await self.get_agentloop_shared_pool()
+
             # RFC-214: Prior conversation is now in loop_messages ledger, not separate excerpts
             await self._ensure_checkpointer_initialized()
 
@@ -419,6 +422,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                 recent_messages_for_intent=recent_for_classify,
                 active_goal_id_for_intent=goal.id,
                 active_goal_description_for_intent=goal.description,
+                shared_pool=shared_pool,  # IG-406: Shared pool for high-concurrency
             ):
                 # Propagate AgentLoop events to autonomous stream
                 if event_type == "intent_fast_path":

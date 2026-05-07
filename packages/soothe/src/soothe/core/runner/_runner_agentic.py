@@ -451,6 +451,9 @@ class AgenticMixin:
             config=self._config,
         )
 
+        # IG-406: Get shared PostgreSQL pool for high-concurrency support
+        shared_pool = await self.get_agentloop_shared_pool()
+
         git_status = None
         if workspace:
             from pathlib import Path
@@ -482,6 +485,7 @@ class AgenticMixin:
             recent_messages_for_intent=recent_for_classify,
             active_goal_id_for_intent=active_goal_id,
             active_goal_description_for_intent=active_goal_description,
+            shared_pool=shared_pool,  # IG-406: Shared pool for high-concurrency
         ):
             if event_type == "intent_classified":
                 friendly = (

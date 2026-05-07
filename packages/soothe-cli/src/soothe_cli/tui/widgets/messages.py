@@ -1468,6 +1468,35 @@ class ToolCallMessage(Vertical):
             self._status_widget.update(Content.styled("- Skipped", "dim"))
             self._status_widget.display = True
 
+    def set_result_preview(self, text: str) -> None:
+        """Show a 3-line preview of the goal_completion result in the card."""
+        if not text.strip():
+            return
+        lines = text.strip().splitlines()
+        preview_lines = lines[:3]
+        preview = "\n".join(preview_lines)
+        remaining = len(lines) - 3
+        if not self._preview_widget or not self._hint_widget:
+            # Widget not mounted yet — store as output for deferred display
+            self._output = text
+            self._expanded = False
+            return
+        self._output = text
+        self._expanded = False
+        self._preview_widget.update(Content.styled(preview, "dim"))
+        self._preview_widget.display = True
+        if remaining > 0:
+            ellipsis = get_glyphs().ellipsis
+            self._hint_widget.update(
+                Content.styled(
+                    f"{ellipsis} {remaining} more lines — click or Ctrl+O to expand",
+                    "dim",
+                )
+            )
+            self._hint_widget.display = True
+        else:
+            self._hint_widget.display = False
+
     def toggle_output(self) -> None:
         """Toggle between preview and full output display."""
         out = (self._output or "").strip()
@@ -2220,9 +2249,9 @@ class CognitionStepMessage(Vertical):
         prefix = get_glyphs().tool_prefix
         header = f"{prefix} Step · {self._description}"
         yield Static(header, markup=False, classes="step-header", id="step-cognition-header")
-        yield Static("", classes="step-status", id="step-cognition-status")
         yield Static("", classes="step-tools", id="step-cognition-tools", markup=False)
         yield Static("", classes="step-tools-hint", id="step-cognition-tools-hint", markup=False)
+        yield Static("", classes="step-status", id="step-cognition-status")
         yield Static(
             "",
             markup=False,
@@ -2583,19 +2612,17 @@ class CognitionStepMessage(Vertical):
         self._tools_body_collapsed = True
         self._refresh_tools_display()
 
-        duration_s = duration_ms / 1000.0
-        dur_str = f"{duration_s:.1f}s"
+        dur_str = f"{duration_ms}ms"
         tool_part = f" · {tool_call_count} tools" if tool_call_count > 0 else ""
 
         if success:
             if self._status_widget:
                 self._status_widget.remove_class("pending")
                 self._status_widget.display = False
-            detail = f"Done · {dur_str}{tool_part}"
-            s = summary.strip()
-            if s and s not in ("Done", "Failed") and not s.lower().startswith("done"):
-                detail = f"{detail}\n{s}"
-            self._detail_widget.update(Content.styled(detail, "dim"))
+            colors = theme.get_theme_colors(self)
+            checkmark = get_glyphs().checkmark
+            detail = f"{checkmark} Completed ({dur_str}){tool_part}"
+            self._detail_widget.update(Content.styled(detail, colors.success))
             self._detail_widget.display = True
             return
 
@@ -2608,6 +2635,32 @@ class CognitionStepMessage(Vertical):
             self._status_widget.update(Content.styled(f"{icon} Failed · {dur_str}", colors.error))
             self._status_widget.display = True
         self._detail_widget.update(Content(err_text))
+        self._detail_widget.display = True
+
+    def set_result_preview(self, text: str) -> None:
+        """Show a 3-line preview of the goal_completion result in the detail area."""
+        if not text.strip():
+            return
+        lines = text.strip().splitlines()
+        preview_lines = lines[:3]
+        preview = "\n".join(preview_lines)
+        remaining = len(lines) - 3
+        if remaining > 0:
+            ellipsis = get_glyphs().ellipsis
+            preview += f"\n{ellipsis} {remaining} more lines"
+        if self._detail_widget is None:
+            return
+        # Build combined detail: status line + preview
+        parts: list[str] = []
+        if self._last_success is not None:
+            dur_str = f"{self._last_duration_ms}ms"
+            tool_part = (
+                f" · {self._last_tool_call_count} tools" if self._last_tool_call_count > 0 else ""
+            )
+            checkmark = get_glyphs().checkmark
+            parts.append(f"{checkmark} Completed ({dur_str}){tool_part}")
+        parts.append(preview)
+        self._detail_widget.update(Content.styled("\n".join(parts), "dim"))
         self._detail_widget.display = True
 
     def set_interrupted(self, message: str) -> None:
