@@ -28,7 +28,7 @@ WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY pyproject.toml uv.lock VERSION ./
+COPY pyproject.toml VERSION ./
 COPY packages ./packages
 COPY scripts/warmup_semantic.py ./scripts/warmup_semantic.py
 
