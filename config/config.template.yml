@@ -191,6 +191,8 @@ daemon:
       cors_origins: ["http://localhost:*", "http://127.0.0.1:*"]
 
   max_concurrent_threads: 100  # RFC-402
+  # IG-398: await window after task.cancel() before slow-unwind warning (subagent unwind can exceed 2s)
+  cancel_grace_seconds: 30
   max_input_queue_size: 1000  # IG-258: Prevents unbounded memory growth
   max_concurrent_dispatches: 50  # IG-258: Prevents task explosion
   # IG-403: EventBus JSON wire-size distribution (streaming histogram; constant memory)
