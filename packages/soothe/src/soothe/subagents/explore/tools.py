@@ -1,8 +1,8 @@
 """Explore subagent filesystem + shell tools (RFC-613).
 
 Uses ``SootheFilesystemMiddleware`` with a curated subset: filesystem reconnaissance
-tools plus ``execute`` for **read-only** shell commands only (enforced by prompts and
-operator policy, not a separate wrapper tool).
+tools plus ``run_command`` from Soothe's execution toolkit for **read-only** shell
+commands (enforced by prompts and operator policy).
 
 IG-328: Backend uses callable pattern to resolve workspace from thread state at runtime,
 not from static resolver context.
@@ -17,6 +17,7 @@ from typing import Any
 from deepagents.backends.filesystem import FilesystemBackend
 
 from soothe.middleware.filesystem import SootheFilesystemMiddleware
+from soothe.toolkits.execution import RunCommandShellTool
 
 logger = logging.getLogger(__name__)
 
@@ -70,14 +71,13 @@ def get_explore_tools(
     *,
     virtual_mode: bool | None = None,
     allow_paths_outside_workspace: bool | None = None,
-    include_execute: bool = True,
 ) -> list[Any]:
-    """Get explore tools: readonly filesystem surface; optional ``execute`` shell tool.
+    """Get explore tools: readonly filesystem surface + ``run_command`` shell tool.
 
     Exposed tools (mutation tools from middleware are filtered out):
     - glob, grep, ls, read_file: deepagents (via middleware base)
     - file_info: Soothe (metadata)
-    - execute: deepagents shell, only when ``include_execute`` (``security.sandbox``)
+    - run_command: Soothe shell tool with operation security and workspace-aware cwd
 
     IG-328: Backend is callable so workspace resolves from thread state at runtime,
     not from static resolver workspace.
@@ -87,7 +87,6 @@ def get_explore_tools(
         virtual_mode: When set, forces FilesystemBackend ``virtual_mode``.
         allow_paths_outside_workspace: When ``virtual_mode`` is omitted, sets
             ``virtual_mode`` to ``not allow_paths_outside_workspace``.
-        include_execute: When False, omit shell tool (matches disabled ``security.sandbox``).
 
     Returns:
         Ordered list of langchain tool instances.
@@ -112,15 +111,21 @@ def get_explore_tools(
         workspace_root=root,  # Fallback for non-tool operations
     )
 
-    explore_tool_names: tuple[str, ...] = (
+    filesystem_tool_names: tuple[str, ...] = (
         "glob",
         "grep",
         "ls",
         "read_file",
         "file_info",
-        *(() if not include_execute else ("execute",)),
     )
     by_name = {t.name: t for t in middleware.tools}
-    tools = [by_name[name] for name in explore_tool_names if name in by_name]
+    tools = [by_name[name] for name in filesystem_tool_names if name in by_name]
+
+    # Add run_command from Soothe execution toolkit (operation security, workspace-aware cwd)
+    tools.append(
+        RunCommandShellTool(
+            workspace_root=root,
+        )
+    )
 
     return tools
