@@ -585,7 +585,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Injects targeted guidance based on intent classification and goal type.
 
         Args:
-            intent_type: Intent classification (chitchat/quiz/thread_continuation/new_goal).
+            intent_type: Intent classification (chitchat/quiz/continue_thread/new_goal).
             goal_type: Goal type classification (architecture_analysis/research_synthesis/etc).
 
         Returns:
@@ -602,8 +602,8 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         if intent_type == "quiz":
             return _QUIZ_RESPONSE_GUIDE
 
-        # Thread continuation: build on prior context
-        if intent_type == "thread_continuation":
+        # Continue-thread: build on prior context
+        if intent_type == "continue_thread":
             return _THREAD_CONTINUATION_GUIDE
 
         # Architecture analysis: structured layers + components

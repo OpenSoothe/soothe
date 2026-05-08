@@ -29,7 +29,7 @@ async def node_validate_evidence_bindings(
         return {"last_outcome": "fatal"}
 
     if not validate_plan_evidence(agent_loop.config, state, decision):
-        logger.error("[Plan] Evidence validation failed for planned steps (RFC-220)")
+        logger.error("[Plan] Evidence validation failed for planned steps")
         await ctx.emit(
             "fatal_error",
             {

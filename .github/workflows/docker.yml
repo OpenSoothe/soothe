@@ -29,6 +29,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -50,13 +53,13 @@ jobs:
             type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
             type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
 
-      - name: Build and push
+      - name: Build and push (multi-platform)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: packages/soothe/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name == 'release' || github.event.inputs.push_image == 'true' }}
-          load: ${{ github.event_name != 'release' && github.event.inputs.push_image != 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

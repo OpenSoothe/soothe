@@ -715,6 +715,10 @@ class InfrastructureLimitsConfig(BaseModel):
     step_parallelism: Literal["sequential", "dependency", "max"] = Field(
         default="dependency", description="Step scheduling strategy"
     )
+    # IG-XXX: Tool-level concurrency limit
+    max_parallel_tools: int = Field(
+        default=5, ge=0, description="Maximum concurrent tool calls per thread (0=unlimited)"
+    )
 
     # Rate limiting
     llm_rpm_limit: int = Field(default=120, ge=1, le=10_000)

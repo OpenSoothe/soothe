@@ -66,7 +66,7 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     meta = dict(out.get("metadata") or {})
     meta.setdefault("loop_id", loop_id)
     meta.setdefault("soothe_component", "agent_loop_graph")
-    meta.setdefault("soothe_rfc", "RFC-220")
+    meta.setdefault("soothe_component_version", "agent-loop-v2")
     tags = list(meta.get("langfuse_tags") or [])
     for label in ("goal_execution_loop", "agent-loop-graph"):
         if label not in tags:

@@ -124,7 +124,7 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
             logger.debug(
                 "[Task Tool] subagent_type='%s' description='%s' directive='%s'",
                 subagent_type,
-                description[:100],
+                description[:60],
                 runtime.state.get("_subagent_routing_directive", "none"),
             )
             subagent = subagent_graphs[subagent_type]

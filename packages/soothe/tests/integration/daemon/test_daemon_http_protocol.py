@@ -138,7 +138,7 @@ async def test_http_transport_system_lifecycle(tmp_path: Path) -> None:
 
             version = await client.get("/api/v1/version")
             assert version.status_code == 200
-            assert version.json()["protocol"] == "RFC-0013"
+            assert version.json()["protocol"] == "soothe-rest-v1"
     finally:
         await transport.stop()
 

@@ -2,7 +2,7 @@
 
 IG-226: Unified intent classification system with three-tier classification:
 - chitchat: Direct response (no goal)
-- thread_continuation: Reuse current thread/goal
+- continue_thread: Reuse current thread/goal
 - new_goal: Create goal via GoalEngine
 
 This module provides:

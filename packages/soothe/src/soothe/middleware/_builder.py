@@ -68,29 +68,30 @@ def build_soothe_middleware_stack(
        other middleware processes them. Uses PolicyProtocol.check() on every
        tool/subagent call.
 
-    2. **SystemPromptOptimizationMiddleware** - Modifies prompts BEFORE the
+    2. **ToolConcurrencyMiddleware** - Limits concurrent tool calls per thread
+       via semaphore. LangChain's ToolNode uses asyncio.gather without limits;
+       this middleware bounds parallelism to prevent resource exhaustion.
+
+    3. **SystemPromptOptimizationMiddleware** - Modifies prompts BEFORE the
        LLM call. Requires ``routing_classification`` state injected by AgentLoop / runner
        runner during pre-stream phase. Only enabled when performance features
        are fully configured.
 
-    3. **LLMRateLimitMiddleware** - Rate limits LLM API calls at model level,
+    4. **LLMRateLimitMiddleware** - Rate limits LLM API calls at model level,
        not thread level. Uses sliding window for RPM and semaphore for concurrent
        requests. Solves thread hanging issues from thread-level blocking.
 
-    4. **ExecutionHintsMiddleware** - Injects Layer 2 execution hints
+    5. **ExecutionHintsMiddleware** - Injects Layer 2 execution hints
        (soothe_step_subagent, soothe_step_expected_output)
        into system prompt via abefore_agent hook. Runs before agent loop starts.
 
-    5. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
+    6. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
        abefore_agent/aafter_agent hooks. Must be set before tools run to
        enable thread-aware filesystem operations.
 
-    6. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
+    7. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
        for the current asyncio Task (daemon per-turn ``input``), replaces the
        chat model for that stream via ``ModelRequest.override``.
-
-    Note: Tool parallelism is handled by langchain's built-in asyncio.gather
-    in ToolNode. No explicit ParallelToolsMiddleware needed.
 
     Args:
         config: SootheConfig with performance settings.
@@ -104,6 +105,7 @@ def build_soothe_middleware_stack(
     from .per_turn_model import PerTurnModelMiddleware
     from .policy import SoothePolicyMiddleware
     from .system_prompt_optimization import SystemPromptOptimizationMiddleware
+    from .tool_concurrency import ToolConcurrencyMiddleware
     from .workspace_context import WorkspaceContextMiddleware
 
     stack: list[AgentMiddleware] = []
@@ -118,7 +120,15 @@ def build_soothe_middleware_stack(
         )
         logger.debug("[Middleware] Policy enforcement enabled")
 
-    # 2. System prompt optimization (requires routing_classification from AgentLoop / runner)
+    # 2. Tool concurrency limit (bounds parallel tool calls per thread)
+    stack.append(ToolConcurrencyMiddleware())
+    max_parallel_tools = config.agent_loop.limits.max_parallel_tools
+    logger.info(
+        "[Middleware] Tool concurrency enabled: max_parallel_tools=%d",
+        max_parallel_tools,
+    )
+
+    # 3. System prompt optimization (requires routing_classification from AgentLoop / runner)
     trigger_registry, context_registry = _build_tool_registries(config)
 
     stack.append(
@@ -130,12 +140,8 @@ def build_soothe_middleware_stack(
     )
     logger.info("[Middleware] System prompt optimization enabled")
 
-    # 3. LLM rate limiting (throttles API calls, not threads)
+    # 4. LLM rate limiting (throttles API calls, not threads)
     # This prevents thread hanging by blocking only LLM calls, not entire threads
-    # IG-053: Add timeout to prevent semaphore monopolization
-    # IG-258 Phase 2: Thread-local rate limiting (parameter name change)
-    # IG-295: Retry with timeout escalation
-    # IG-407: Unified agent_loop.limits config paths
     rpm = config.agent_loop.limits.llm_rpm_limit
     concurrent = config.agent_loop.limits.llm_concurrent_limit
     timeout = config.agent_loop.limits.llm_call_timeout_seconds
@@ -148,14 +154,14 @@ def build_soothe_middleware_stack(
     stack.append(
         LLMRateLimitMiddleware(
             requests_per_minute=rpm,
-            max_concurrent_requests_per_thread=concurrent,  # IG-258 Phase 2
+            max_concurrent_requests_per_thread=concurrent,
             call_timeout_seconds=timeout,
             call_timeout_max_seconds=timeout_max,
             call_timeout_adaptive=timeout_adaptive,
-            thread_local=True,  # IG-258 Phase 2: Enable thread-local budgets
-            retry_on_timeout=retry_on_timeout,  # IG-295
-            max_timeout_retries=max_timeout_retries,  # IG-295
-            timeout_retry_multiplier=timeout_retry_multiplier,  # IG-295
+            thread_local=True,
+            retry_on_timeout=retry_on_timeout,
+            max_timeout_retries=max_timeout_retries,
+            timeout_retry_multiplier=timeout_retry_multiplier,
         )
     )
     logger.info(
@@ -171,15 +177,15 @@ def build_soothe_middleware_stack(
         timeout_retry_multiplier,
     )
 
-    # 4. Execution hints (Layer 2 → Layer 1 integration)
+    # 5. Execution hints (Layer 2 → Layer 1 integration)
     stack.append(ExecutionHintsMiddleware())
     logger.debug("[Middleware] Execution hints enabled")
 
-    # 5. Workspace context (thread-aware filesystem)
+    # 6. Workspace context (thread-aware filesystem)
     stack.append(WorkspaceContextMiddleware())
     logger.debug("[Middleware] Workspace context enabled")
 
-    # 6. Per-turn model override (daemon / stream context) — innermost around the LLM
+    # 7. Per-turn model override (daemon / stream context) — innermost around the LLM
     stack.append(PerTurnModelMiddleware(config))
     logger.debug("[Middleware] Per-turn model override enabled")
 
