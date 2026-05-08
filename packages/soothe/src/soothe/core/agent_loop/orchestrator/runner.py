@@ -3,7 +3,7 @@
 Langfuse (IG-367, IG-396): outer ``ainvoke`` receives the LangChain callback handler so the
 Loop Graph run nests planner / CoreAgent spans under one trace; ``langfuse_session_id`` is the
 conversation ``thread_id``; Runnable ``configurable.thread_id`` stays ``loop_id`` for checkpoint
-routing. Metadata adds ``soothe_component``, ``soothe_rfc``, and dashboard tags for AgentLoop.
+routing. Metadata adds ``soothe_component`` and dashboard tags for AgentLoop.
 """
 
 from __future__ import annotations

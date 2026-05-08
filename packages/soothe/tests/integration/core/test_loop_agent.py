@@ -284,11 +284,14 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
     cfg.subagents = {}
     al = cfg.agent_loop
     al.max_iterations = max_iterations
+    al.max_subagent_tasks_per_wave = 16
     al.context_window_limit = 128000
     al.working_memory.max_inline_chars = 4000
     al.working_memory.max_entry_chars_before_spill = 500
     al.limits.max_parallel_steps = 1
     al.limits.max_parallel_goals = 1
+    al.limits.max_parallel_tools = 5
+    al.limits.max_parallel_subagents = 4
     # Goal completion / synthesis config
     al.reject_done_at_iteration_zero = False
     al.goal_completion_mode = "llm_only"
@@ -297,6 +300,10 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
     al.report_output.output_summary_max_chars = 1500
     # Model attribute for SynthesisGenerator
     al.synthesis_model = None  # Will use planner._model
+    # Router / observability
+    cfg.router.fast = None
+    cfg.observability.langfuse.trace_name = None
+    cfg.observability.langfuse.enabled = False
     return cfg
 
 
