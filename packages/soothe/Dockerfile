@@ -7,6 +7,10 @@
 #     -e OPENAI_API_KEY=... \
 #     -v soothe-data:/var/lib/soothe \
 #     soothed
+#
+# Layer strategy: dependency specs are copied before source code so that
+# the expensive pip/playwright layers are only rebuilt when pyproject.toml
+# or uv.lock change, not on every source commit.
 
 # ---- Builder: install Python deps + Playwright browsers ----
 FROM registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm AS builder
@@ -28,15 +32,38 @@ WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY pyproject.toml VERSION ./
+# ── Dependency resolution (cached unless pyproject.toml / uv.lock / VERSION change) ──
+# Copy only dependency specification files — source code comes later.
+COPY pyproject.toml uv.lock VERSION ./
+COPY packages/soothe/pyproject.toml packages/soothe/README.md packages/soothe/
+COPY packages/soothe-sdk/pyproject.toml packages/soothe-sdk/README.md packages/soothe-sdk/
+COPY packages/soothe-cli/pyproject.toml packages/soothe-cli/README.md packages/soothe-cli/
+
+# Minimal source stubs so hatchling can build workspace packages.
+RUN mkdir -p packages/soothe/src/soothe \
+    && : > packages/soothe/src/soothe/__init__.py \
+    && mkdir -p packages/soothe-sdk/src/soothe_sdk \
+    && : > packages/soothe-sdk/src/soothe_sdk/__init__.py \
+    && mkdir -p packages/soothe-cli/src/soothe_cli \
+    && : > packages/soothe-cli/src/soothe_cli/__init__.py
+
+# Install all Python deps + Playwright browser (EXPENSIVE — cached by dep changes only)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev \
+    && uv pip install 'soothe[all]' playwright \
+    && .venv/bin/python -m playwright install chromium
+
+# ── Source code (invalidated on any source change) ──────────────────
+# Overwrites the stubs; workspace packages rebuilt quickly because all
+# third-party deps are already in .venv.
 COPY packages ./packages
 COPY scripts/warmup_semantic.py ./scripts/warmup_semantic.py
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev \
-    && uv pip install 'soothe[all]' \
-    && uv pip install playwright \
-    && .venv/bin/python -m playwright install chromium
+    uv pip install --force-reinstall --no-deps \
+        ./packages/soothe-sdk \
+        ./packages/soothe-cli \
+        './packages/soothe[all]'
 
 # Warmup semantic similarity model to avoid latency on first use
 RUN .venv/bin/python scripts/warmup_semantic.py
