@@ -9,15 +9,13 @@ from pydantic import BaseModel
 
 
 def generate_thread_id() -> str:
-    """Generate a 12-char alphanumeric thread ID.
+    """Generate a UUID7 thread ID for time-ordered identifiers.
 
-    Uses base36 encoding (0-9, a-z) for compact, human-readable IDs.
+    Uses uuid7 for consistent ID format across loop_id and thread_id.
     """
-    import secrets
+    from uuid_utils import uuid7
 
-    # Generate 12 random characters from base36 alphabet
-    alphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
-    return "".join(secrets.choice(alphabet) for _ in range(12))
+    return str(uuid7())
 
 
 class IterationRecord(BaseModel):

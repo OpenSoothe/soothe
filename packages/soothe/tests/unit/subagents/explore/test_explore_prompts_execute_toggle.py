@@ -29,3 +29,16 @@ def test_format_explore_agent_system_includes_read_only_rules() -> None:
     )
     assert "read-only" in body
     assert "Forbidden command classes" in body
+
+
+def test_format_explore_agent_system_prefers_native_tools_before_run_command() -> None:
+    body = format_explore_agent_system(
+        search_target="foo",
+        workspace="/ws",
+        thoroughness="quick",
+        max_iterations=5,
+        max_read_lines=100,
+        findings_so_far="",
+    )
+    assert "Preferred tool order before `run_command`" in body
+    assert "do not use `run_command` for file reads (`cat`, `head`, `tail`)" in body

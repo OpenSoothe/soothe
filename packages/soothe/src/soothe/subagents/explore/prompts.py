@@ -10,7 +10,7 @@ Tools you may call: glob, grep, ls, read_file, file_info (metadata), run_command
 
 {mandatory_rules}
 
-Tactics: honor any subtree or symbol named in the target first → widen (glob/ls) → grep → read_file to confirm; use **`run_command`** sparingly for git or quick read-only shell checks when tools above are insufficient.
+Tactics: honor any subtree or symbol named in the target first → widen (glob/ls) → grep → read_file to confirm. Treat **`run_command`** as fallback for read-only shell checks only when native tools cannot express the query efficiently.
 
 Archetypes: find file→glob; trace behavior→grep then read; find definition→grep defs; recent changes→`git` read-only via `run_command` if appropriate.
 
@@ -25,8 +25,10 @@ _RULES_WITH_SHELL = """## Mandatory rules — every tool call MUST be read-only 
 1. **Filesystem tools (`glob`, `grep`, `ls`, `read_file`, `file_info`)**: use only to **list, search, and read** existing content. Never invoke them in a way that creates, overwrites, deletes, or renames files (they are not write tools, but you must not combine them with other steps that cause mutation).
 2. **`run_command` (shell)**: allowed **only** for commands that are strictly read-only and non-mutating for the workspace and host. You MUST NOT run installers, package managers that write lockfiles or site-packages, file writers, permission changes, process spawns that modify disk, or network fetches that write files.
 3. **Forbidden command classes (examples, not exhaustive)**: `rm`, `mv`, `cp`, `mkdir`, `touch`, `chmod`, `chown`, `>`, `tee` writing paths, `npm install`, `pnpm install`, `yarn`, `pip install`, `cargo build`, `docker`/`kubectl`/`helm` when they apply writes, `curl`/`wget` with `-o` to files, `git checkout`, `git reset`, `git commit`, `git push`, `git apply`, editors (`vim`, `nano`), `patch` applying patches.
-4. **Allowed `run_command` patterns (examples)**: `git status`, `git diff`, `git log -n …`, `git grep …`, `rg`/`grep` when only printing matches, `find … -print`, `stat`, `file`, `ls`, `head`/`tail`/`cat` reading existing files, read-only metadata queries. Prefer filesystem tools when they suffice.
-5. If a desired action would mutate state or violate these rules, **do not call tools that way**; note the limitation in `coverage_gaps` and finish with structured output."""
+4. **Preferred tool order before `run_command`**: (a) path discovery → `glob`/`ls`; (b) content search → `grep`; (c) content verification → `read_file`; (d) metadata checks → `file_info`. Use `run_command` only after checking whether one of these tools already covers the need.
+5. **Allowed `run_command` patterns (examples)**: `git status`, `git diff`, `git log -n …`, `git grep …`, `rg`/`grep` when only printing matches, `find … -print`, `stat`, `file`, `ls`, read-only metadata queries.
+6. **Avoid shell for work already covered by native tools**: do not use `run_command` for file reads (`cat`, `head`, `tail`) when `read_file` can read the target directly, and do not use shell directory scans when `glob`/`ls` are sufficient.
+7. If a desired action would mutate state or violate these rules, **do not call tools that way**; note the limitation in `coverage_gaps` and finish with structured output."""
 
 
 def format_explore_agent_system(

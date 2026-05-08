@@ -227,6 +227,14 @@ class _MessagesMixin:
         for msg_data in to_prune:
             try:
                 widget = messages_container.query_one(f"#{msg_data.id}")
+                # Capture measured row height before pruning so hydration can
+                # restore scroll position with less jump.
+                widget_height = getattr(getattr(widget, "size", None), "height", 0)
+                if isinstance(widget_height, int) and widget_height > 0:
+                    self._message_store.update_message(
+                        msg_data.id,
+                        height_hint=widget_height,
+                    )
                 await widget.remove()
                 pruned_ids.append(msg_data.id)
             except NoMatches:
@@ -780,7 +788,14 @@ class _MessagesMixin:
         """Copy selection to clipboard on mouse release."""
         from soothe_cli.tui.widgets.clipboard import copy_selection_to_clipboard
 
-        copy_selection_to_clipboard(self)
+        # Only primary-button mouse up participates in text selection copy.
+        if event.button != 1:
+            return
+
+        copy_selection_to_clipboard(
+            self,
+            candidate_widgets=(event.widget, self.focused),
+        )
 
     # =========================================================================
     # Model Switching
