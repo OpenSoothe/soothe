@@ -83,6 +83,55 @@ async def _rpc(
         await client.close()
 
 
+def _resolve_continue_loop_id(ws_url: str, loop_id: str | None) -> str:
+    """Resolve target loop ID for `loop continue`.
+
+    If `loop_id` is omitted, chooses the most recent loop, preferring active
+    statuses such as `running` and `detached`.
+    """
+    if loop_id:
+        return loop_id
+
+    response = asyncio.run(
+        _rpc(
+            ws_url,
+            "send_loop_list",
+            {"filter_dict": None, "limit": 20},
+            "loop_list_response",
+        )
+    )
+    if "error" in response:
+        typer.echo(f"Error: {response['error']}", err=True)
+        sys.exit(1)
+
+    loops = response.get("loops", [])
+    if not loops:
+        typer.echo(
+            "Error: No loops found. Start one first with `soothe loop new`.",
+            err=True,
+        )
+        sys.exit(1)
+
+    preferred_statuses = {"running", "detached"}
+    selected = next(
+        (loop for loop in loops if loop.get("status") in preferred_statuses),
+        loops[0],
+    )
+    selected_loop_id = str(selected.get("loop_id", "")).strip()
+    if not selected_loop_id:
+        typer.echo(
+            "Error: Unable to resolve loop ID from loop list response.",
+            err=True,
+        )
+        sys.exit(1)
+
+    console.print(
+        "[info]No LOOP_ID provided; using most recent loop: "
+        f"{selected_loop_id} ({selected.get('status', 'unknown')})[/info]"
+    )
+    return selected_loop_id
+
+
 @loop_app.command("list")
 def list_loops(
     status: Annotated[
@@ -632,7 +681,7 @@ def render_dot_tree(tree: dict[str, Any]) -> None:
 
 @loop_app.command("continue")
 def continue_loop(
-    loop_id: Annotated[str, typer.Argument(help="Loop identifier to continue")],
+    loop_id: Annotated[str | None, typer.Argument(help="Loop identifier to continue")] = None,
     prompt: Annotated[
         str | None,
         typer.Option("--prompt", "-p", help="Optional prompt to send after continuing."),
@@ -643,69 +692,28 @@ def continue_loop(
     Replaces: soothe thread continue <thread_id>
 
     Behavior:
-    - Load loop checkpoint by loop_id
-    - Attach TUI to loop (subscribe to loop events)
-    - Execute optional prompt on current thread (internal)
-    - Display loop status
+    - Resolve target loop (explicit `LOOP_ID` or most-recent loop)
+    - Launch TUI on that loop
+    - Optionally submit initial prompt in the resumed session
 
     Example:
+        soothe loop continue
         soothe loop continue loop_abc123
         soothe loop continue loop_abc123 --prompt "translate to chinese"
     """
     config = load_config()
     ws_url = websocket_url_from_config(config)
     _require_daemon(ws_url)
+    resolved_loop_id = _resolve_continue_loop_id(ws_url, loop_id)
+    from soothe_cli.cli.commands.run_cmd import run_impl
 
-    # Subscribe to loop
-    response = asyncio.run(
-        _rpc(
-            ws_url,
-            "send_loop_subscribe",
-            {"loop_id": loop_id},
-            "loop_subscribe_response",
-        )
+    run_impl(
+        prompt=prompt,
+        thread_id=resolved_loop_id,
+        no_tui=False,
+        autonomous=False,
+        max_iterations=None,
     )
-
-    if "error" in response:
-        typer.echo(f"Error: {response['error']}", err=True)
-        sys.exit(1)
-
-    console.print(f"[success]Attached to loop {loop_id}[/success]")
-
-    # Show loop status
-    status_response = asyncio.run(
-        _rpc(
-            ws_url,
-            "send_loop_get",
-            {"loop_id": loop_id, "verbose": False},
-            "loop_get_response",
-        )
-    )
-
-    loop = status_response.get("loop", {})
-    console.print(
-        Panel(
-            f"Status: {loop.get('status', 'unknown')}\n"
-            f"Goals: {loop.get('total_goals_completed', 0)} completed\n"
-            f"Internal Threads: {len(loop.get('thread_ids', []))}",
-            title=f"Loop: {loop_id}",
-        )
-    )
-
-    # Execute prompt if provided
-    if prompt:
-        input_response = asyncio.run(
-            _rpc(
-                ws_url,
-                "send_loop_input",
-                {"loop_id": loop_id, "content": prompt},
-                "loop_input_response",
-            )
-        )
-        if "error" in input_response:
-            typer.echo(f"Error: {input_response['error']}", err=True)
-            sys.exit(1)
-        console.print("[info]Prompt sent to loop[/info]")
 
 
 @loop_app.command("detach")

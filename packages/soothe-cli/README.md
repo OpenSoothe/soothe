@@ -36,7 +36,7 @@ This package is the **client** component that communicates with the Soothe daemo
 
 - `soothe-sdk>=0.2.0` - WebSocket client, protocol, types
 - `typer>=0.9.0` - CLI framework
-- `textual>=0.40.0` - TUI framework
+- `textual>=8.0.0` - TUI framework
 - `rich>=13.0.0` - Console output
 
 ## Configuration

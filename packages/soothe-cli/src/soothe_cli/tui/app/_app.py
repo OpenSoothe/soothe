@@ -371,6 +371,15 @@ class SootheApp(
         self._message_store = MessageStore()
         """Message virtualization store."""
 
+        self._hydrate_scheduled = False
+        """Whether a hydrate task has been queued via `call_later`."""
+
+        self._hydrate_in_progress = False
+        """Whether `_hydrate_messages_above` is currently running."""
+
+        self._last_hydration_check_mono: float = 0.0
+        """Monotonic timestamp of the last scroll-triggered hydration check."""
+
         self._startup_task: asyncio.Task[None] | None = None
         """Startup task reference (set in on_mount)."""
 

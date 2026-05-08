@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Final
 
 # --- Assistant markdown cards (`AssistantMessage` collapsed body) ---
-ASSISTANT_MESSAGE_PREVIEW_LINES: Final[int] = 3
+ASSISTANT_MESSAGE_PREVIEW_LINES: Final[int] = 10
 ASSISTANT_MESSAGE_PREVIEW_CHARS: Final[int] = 800
 
 # --- Tool call cards (`ToolCallMessage` collapsed output) ---

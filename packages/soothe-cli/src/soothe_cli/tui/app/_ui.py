@@ -31,6 +31,9 @@ from soothe_cli.tui.widgets.messages import AppMessage, AssistantMessage
 logger = logging.getLogger(__name__)
 _monotonic = time.monotonic
 
+_HYDRATION_CHECK_INTERVAL_SECONDS = 0.08
+"""Minimum interval between scroll-triggered hydration checks."""
+
 
 class _UIMixin:
     """UI interaction: status, tokens, hydration, spinner, approval, ask_user, quit/interrupt."""
@@ -95,6 +98,12 @@ class _UIMixin:
 
         Called when user scrolls up near the top of visible messages.
         """
+        if self._hydrate_in_progress or self._hydrate_scheduled:
+            return
+        now = _monotonic()
+        if (now - self._last_hydration_check_mono) < _HYDRATION_CHECK_INTERVAL_SECONDS:
+            return
+        self._last_hydration_check_mono = now
         if not self._message_store.has_messages_above:
             return
 
@@ -108,6 +117,7 @@ class _UIMixin:
         viewport_height = chat.size.height
 
         if self._message_store.should_hydrate_above(scroll_y, viewport_height):
+            self._hydrate_scheduled = True
             self.call_later(self._hydrate_messages_above)
 
     async def _hydrate_messages_above(self) -> None:
@@ -116,73 +126,100 @@ class _UIMixin:
         This recreates widgets for archived messages and inserts them
         at the top of the messages container.
         """
-        if not self._message_store.has_messages_above:
+        self._hydrate_scheduled = False
+        if self._hydrate_in_progress:
             return
-
+        self._hydrate_in_progress = True
         try:
-            chat = self.query_one("#chat", VerticalScroll)
-        except NoMatches:
-            logger.debug("Skipping hydration: #chat not found")
-            return
+            if not self._message_store.has_messages_above:
+                return
 
-        try:
-            messages_container = self.query_one("#messages", Container)
-        except NoMatches:
-            logger.debug("Skipping hydration: #messages not found")
-            return
-
-        to_hydrate = self._message_store.get_messages_to_hydrate()
-        if not to_hydrate:
-            return
-
-        old_scroll_y = chat.scroll_y
-        first_child = messages_container.children[0] if messages_container.children else None
-
-        # Build widgets in chronological order, then mount in reverse so
-        # each is inserted before the previous first_child, resulting in
-        # correct chronological order in the DOM.
-        hydrated_count = 0
-        hydrated_widgets: list[tuple] = []  # (widget, msg_data)
-        for msg_data in to_hydrate:
             try:
-                widget = msg_data.to_widget()
-                hydrated_widgets.append((widget, msg_data))
-            except Exception:
-                logger.warning(
-                    "Failed to create widget for message %s",
-                    msg_data.id,
-                    exc_info=True,
-                )
+                chat = self.query_one("#chat", VerticalScroll)
+            except NoMatches:
+                logger.debug("Skipping hydration: #chat not found")
+                return
 
-        for widget, msg_data in reversed(hydrated_widgets):
             try:
-                if first_child:
-                    await messages_container.mount(widget, before=first_child)
-                else:
-                    await messages_container.mount(widget)
-                first_child = widget
-                hydrated_count += 1
-                # Render Markdown content for hydrated assistant messages
-                if isinstance(widget, AssistantMessage) and msg_data.content:
-                    await widget.set_content(msg_data.content)
-            except Exception:
-                logger.warning(
-                    "Failed to mount hydrated widget %s",
-                    widget.id,
-                    exc_info=True,
-                )
+                messages_container = self.query_one("#messages", Container)
+            except NoMatches:
+                logger.debug("Skipping hydration: #messages not found")
+                return
 
-        # Only update store for the number we actually mounted
-        if hydrated_count > 0:
-            self._message_store.mark_hydrated(hydrated_count)
+            to_hydrate = self._message_store.get_messages_to_hydrate()
+            if not to_hydrate:
+                return
 
-        # Adjust scroll position to maintain the user's view.
-        # Widget heights aren't known until after layout, so we use a
-        # heuristic. A more accurate approach would measure actual heights
-        # via call_after_refresh.
-        estimated_height_per_message = 5  # terminal rows, rough estimate
-        added_height = hydrated_count * estimated_height_per_message
-        chat.scroll_y = old_scroll_y + added_height
+            old_scroll_y = chat.scroll_y
+            first_child = messages_container.children[0] if messages_container.children else None
+
+            # Build widgets in chronological order, then mount in reverse so
+            # each is inserted before the previous first_child, resulting in
+            # correct chronological order in the DOM.
+            hydrated_count = 0
+            hydrated_widgets: list[tuple[Widget, Any]] = []  # (widget, msg_data)
+            for msg_data in to_hydrate:
+                try:
+                    widget = msg_data.to_widget()
+                    hydrated_widgets.append((widget, msg_data))
+                except Exception:
+                    logger.warning(
+                        "Failed to create widget for message %s",
+                        msg_data.id,
+                        exc_info=True,
+                    )
+
+            assistant_render_tasks: list[Any] = []
+            mounted_messages: list[Any] = []
+            for widget, msg_data in reversed(hydrated_widgets):
+                try:
+                    if first_child:
+                        await messages_container.mount(widget, before=first_child)
+                    else:
+                        await messages_container.mount(widget)
+                    first_child = widget
+                    hydrated_count += 1
+                    mounted_messages.append(msg_data)
+                    # Render Markdown content for hydrated assistant messages
+                    if isinstance(widget, AssistantMessage) and msg_data.content:
+                        assistant_render_tasks.append(widget.set_content(msg_data.content))
+                except Exception:
+                    logger.warning(
+                        "Failed to mount hydrated widget %s",
+                        widget.id,
+                        exc_info=True,
+                    )
+
+            if assistant_render_tasks:
+                rendered = await asyncio.gather(*assistant_render_tasks, return_exceptions=True)
+                for error in rendered:
+                    if isinstance(error, Exception):
+                        logger.warning(
+                            "Failed to render hydrated assistant message",
+                            exc_info=True,
+                        )
+
+            # Only update store for the number we actually mounted
+            if hydrated_count > 0:
+                self._message_store.mark_hydrated(hydrated_count)
+
+            # Adjust scroll position to maintain the user's view.
+            # Prefer cached measured heights (captured when pruning), and
+            # fall back to a conservative estimate when unavailable.
+            estimated_height_per_message = 5  # terminal rows, fallback estimate
+            added_height = sum(
+                int(msg_data.height_hint or estimated_height_per_message)
+                for msg_data in mounted_messages
+            )
+            chat.scroll_y = old_scroll_y + added_height
+
+            # If the user is still near the top and we still have history above,
+            # schedule one more hydration pass (debounced by flags).
+            if self._message_store.should_hydrate_above(chat.scroll_y, chat.size.height):
+                self._hydrate_scheduled = True
+                self.call_later(self._hydrate_messages_above)
+        finally:
+            self._hydrate_in_progress = False
 
     async def _mount_before_queued(self, container: Container, widget: Widget) -> None:
         """Mount a widget in the messages container, before any queued widgets.

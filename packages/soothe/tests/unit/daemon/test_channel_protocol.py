@@ -375,7 +375,8 @@ class TestChannelOutbox:
         filename = outbox.send(msg)
         parts = filename.split("_", 1)
         ack_id = parts[0]
-        assert len(ack_id) == 12
+        # UUID7 format: 36 chars with dashes (e.g., 019e004b-d421-7d71-a8ea-47d923c82e92)
+        assert len(ack_id) == 36
         assert msg.ack_id == ack_id
 
     def test_send_no_ack_id_for_non_critical(self, tmp_path: str) -> None:

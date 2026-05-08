@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import webbrowser
 from typing import TYPE_CHECKING
 
@@ -56,7 +57,11 @@ def open_style_link(event: Click) -> None:
         return
 
     try:
-        webbrowser.open(url)
+        threading.Thread(
+            target=webbrowser.open,
+            args=(url,),
+            daemon=True,
+        ).start()
     except Exception:
         logger.debug("Could not open browser for URL: %s", url, exc_info=True)
         return
