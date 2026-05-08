@@ -181,3 +181,78 @@ async def test_summary_completion_sets_skip_replay_false() -> None:
     )
     assert completed_payload is not None
     assert completed_payload.get("skip_goal_completion_wire_duplicate") is False
+
+
+@pytest.mark.asyncio
+async def test_ledger_direct_filters_out_planning_messages_for_final_output() -> None:
+    loop_state = LoopState(goal="g", thread_id="thr-1", loop_messages=[])
+    loop_state.loop_messages.extend(
+        [
+            LoopHumanMessage(
+                content="Execute: x",
+                thread_id="thr-1",
+                iteration=0,
+                phase="execute_step",
+            ),
+            LoopAIMessage(
+                content="execute answer",
+                thread_id="thr-1",
+                iteration=0,
+                phase="execute_step",
+            ),
+            LoopHumanMessage(
+                content="Assess if done",
+                thread_id="thr-1",
+                iteration=0,
+                phase="plan_assess",
+            ),
+            LoopAIMessage(
+                content="status=done",
+                thread_id="thr-1",
+                iteration=0,
+                phase="plan_assess",
+            ),
+            LoopHumanMessage(
+                content="Generate final structure",
+                thread_id="thr-1",
+                iteration=0,
+                phase="plan_generate",
+            ),
+            LoopAIMessage(
+                content="planner generated text",
+                thread_id="thr-1",
+                iteration=0,
+                phase="plan_generate",
+            ),
+        ]
+    )
+    plan_result = PlanResult(status="done", goal_progress="complete", require_goal_completion=False)
+    pm = PlanManager(goal="g")
+    pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.LEDGER_DIRECT)
+
+    agent_loop = Mock()
+    agent_loop.loop_planner = Mock()
+    agent_loop.loop_planner._model = Mock()
+    agent_loop.core_agent = Mock()
+    agent_loop.config.agent_loop.final_response = "adaptive"
+
+    sm = Mock()
+    sm.record_iteration = AsyncMock()
+    sm.finalize_goal = AsyncMock()
+
+    ctx = _ctx(
+        loop_state=loop_state,
+        plan_manager=pm,
+        agent_loop=agent_loop,
+        state_manager=sm,
+        plan_result=plan_result,
+    )
+
+    await node_goal_completion(ctx, {})
+
+    completed_payload = next(
+        (c.args[1] for c in ctx.emit.await_args_list if c.args and c.args[0] == "completed"),
+        None,
+    )
+    assert completed_payload is not None
+    assert completed_payload["result"].full_output == "execute answer"

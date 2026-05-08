@@ -13,20 +13,29 @@ if TYPE_CHECKING:
 
 
 def last_ledger_ai_content(state: LoopState) -> str:
-    """Return content of the last LoopAIMessage in the agentloop ledger.
+    """Return content of the last non-planning ``LoopAIMessage`` in ledger.
 
     Used by goal completion when ``require_goal_completion=False`` to provide
-    the user with the most recent execute assistant response from the ledger,
-    replacing the deprecated ``last_execute_assistant_text`` path.
+    the user with the most recent non-planning assistant response from the
+    ledger, replacing the deprecated ``last_execute_assistant_text`` path.
+    RFC-214 records plan-assess and plan-generate turns in the same ledger,
+    but these planning messages must not be surfaced as final user output in
+    ``ledger_direct`` completion mode.
 
     Args:
         state: LoopState with populated ``loop_messages``.
 
     Returns:
-        Stripped content of the last AI message, or empty string if none found.
+        Stripped content of the last non-planning AI message, or empty string
+        if none found.
     """
+    planning_phases = {"plan_assess", "plan_generate"}
     for msg in reversed(state.loop_messages):
-        if isinstance(msg, LoopAIMessage) and msg.content:
+        if (
+            isinstance(msg, LoopAIMessage)
+            and msg.content
+            and (getattr(msg, "phase", None) not in planning_phases)
+        ):
             text = msg.content.strip()
             if text:
                 return text
@@ -54,8 +63,9 @@ class LoopHumanMessage(HumanMessage):
     - Thread tracking (thread_id)
     - Iteration tracking (iteration)
     - Goal context (goal_summary)
-    - Execution phase (phase: "execute_wave", "execute_step", "goal_completion")
+    - Execution phase (phase: plan_assess, plan_generate, execute_step, etc.)
     - Wave tracking (wave_id for execute_wave phase)
+    - CoreAgent dedup (core_agent_message_id for RFC-214 reference-based dedup)
 
     All fields are Optional to support all message creation points uniformly,
     including planner/synthesis calls without thread context.
@@ -84,16 +94,19 @@ class LoopHumanMessage(HumanMessage):
     workspace: str | None = None
     phase: (
         Literal[
-            "plan",
-            "execute_wave",
-            "execute_step",
-            "goal_completion",
-            "chitchat",
-            "quiz",
+            "plan_assess",  # RFC-214: Plan assess phase
+            "plan_generate",  # RFC-214: Plan generate phase
+            "execute_wave",  # Parallel execution wave
+            "execute_step",  # Single step execution
+            "goal_completion",  # Goal completion phase
+            "chitchat",  # Chitchat response
+            "quiz",  # Quiz response
         ]
         | None
     ) = None
     wave_id: str | None = None  # UUID[:8] for wave tracking
+    # RFC-214: Reference to original CoreAgent message for dedup during ledger projection
+    core_agent_message_id: str | None = None
 
     # Preserve langchain type discrimination
     type: Literal["human"] = "human"
@@ -107,6 +120,7 @@ class LoopAIMessage(AIMessage):
     - usage_metadata for standardized token counts
     - tool_calls for tool tracking
     - AgentLoop-specific metadata (iteration, phase)
+    - CoreAgent dedup (core_agent_message_id for RFC-214 reference-based dedup)
 
     NOTE: LoopAIMessage is rarely directly instantiated - CoreAgent returns
     AIMessage/AIMessageChunk from .astream(). This class enables future
@@ -135,6 +149,8 @@ class LoopAIMessage(AIMessage):
     iteration: int | None = None
     phase: str | None = None
     wave_id: str | None = None
+    # RFC-214: Reference to original CoreAgent message for dedup during ledger projection
+    core_agent_message_id: str | None = None
 
     # Inherited: response_metadata, usage_metadata, tool_calls, content
     type: Literal["ai"] = "ai"
@@ -222,7 +238,8 @@ def loop_message_to_thread_metadata(msg: LoopHumanMessage) -> dict[str, str | in
         msg: LoopHumanMessage with agentloop context (may have None fields)
 
     Returns:
-        Dict with thread_id, iteration, goal_summary, phase, wave_id, workspace.
+        Dict with thread_id, iteration, goal_summary, phase, wave_id, workspace,
+        and core_agent_message_id.
         Fields may be None if message was created without thread context.
 
     Example:
@@ -240,4 +257,5 @@ def loop_message_to_thread_metadata(msg: LoopHumanMessage) -> dict[str, str | in
         "phase": msg.phase,
         "wave_id": msg.wave_id,
         "workspace": msg.workspace,
+        "core_agent_message_id": msg.core_agent_message_id,
     }

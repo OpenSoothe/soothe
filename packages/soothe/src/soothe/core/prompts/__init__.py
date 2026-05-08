@@ -6,6 +6,10 @@ from .context_xml import (
     build_soothe_environment_section,
     build_soothe_workspace_section,
 )
+from .plan_ledger_projection import (
+    project_loop_messages_for_core_agent,
+    project_loop_messages_for_plan,
+)
 from .system_templates import (
     _DATA_GUIDE,
     _DEFAULT_SYSTEM_PROMPT,
@@ -16,6 +20,10 @@ from .system_templates import (
     _SIMPLE_SYSTEM_PROMPT,
     _SUBAGENT_GUIDE,
     _TOOL_ORCHESTRATION_GUIDE,
+)
+from .user_envelope import (
+    build_execute_step_envelope,
+    build_plan_context_envelope,
 )
 
 __all__ = [
@@ -30,6 +38,10 @@ __all__ = [
     "_SUBAGENT_GUIDE",
     "_TOOL_ORCHESTRATION_GUIDE",
     "build_context_sections_for_complexity",
+    "build_execute_step_envelope",
+    "build_plan_context_envelope",
     "build_soothe_environment_section",
     "build_soothe_workspace_section",
+    "project_loop_messages_for_core_agent",
+    "project_loop_messages_for_plan",
 ]

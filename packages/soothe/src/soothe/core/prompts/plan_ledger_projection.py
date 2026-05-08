@@ -1,4 +1,9 @@
-"""Project AgentLoop ledger messages for plan-assess / plan-generate (IG-380).
+"""Project AgentLoop ledger messages for plan-assess / plan-generate (IG-380, RFC-214).
+
+RFC-214: The complete ledger includes all phases (plan_assess, plan_generate,
+execute_step). Plan prompts see the full ledger for cache maximization.
+CoreAgent execution sees only execute_step messages (plan-phase reasoning
+not injected into CoreAgent thread).
 
 When ``PlanPromptLedgerConfig`` limits are all zero/unset behavior, the caller
 receives the same message object references as ``state.loop_messages`` (shallow
@@ -148,3 +153,38 @@ def project_loop_messages_for_plan(
         max_per or "off",
     )
     return copies
+
+
+def project_loop_messages_for_core_agent(
+    loop_messages: list[BaseMessage],
+) -> list[BaseMessage]:
+    """Return ledger messages for CoreAgent thread (RFC-214).
+
+    Filters to only execute_step phase messages. Plan-phase messages
+    (plan_assess, plan_generate) are NOT injected into CoreAgent thread,
+    keeping CoreAgent's history focused on tool execution.
+
+    Args:
+        loop_messages: RFC-214 complete ledger from ``LoopState.loop_messages``.
+
+    Returns:
+        Filtered list with only execute_step Human/AI message pairs.
+    """
+    from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
+
+    out: list[BaseMessage] = []
+    for msg in loop_messages:
+        phase = getattr(msg, "phase", None)
+        if isinstance(msg, (LoopHumanMessage, LoopAIMessage)):
+            if phase == "execute_step":
+                out.append(msg)
+        # Also include any non-loop messages (plain HumanMessage/AIMessage from early phases)
+        elif isinstance(msg, (HumanMessage, AIMessage)) and phase is None:
+            out.append(msg)
+
+    logger.debug(
+        "CoreAgent ledger projection: %d execute_step messages (filtered from %d total)",
+        len(out),
+        len(loop_messages),
+    )
+    return out
