@@ -76,8 +76,8 @@ setup:
 	@if pyenv prefix $(PYENV_VENV_NAME) >/dev/null 2>&1; then \
 		echo "pyenv virtualenv '$(PYENV_VENV_NAME)' already exists"; \
 	else \
-		echo "Creating pyenv virtualenv '$(PYENV_VENV_NAME)' with Python 3.12.9..."; \
-		pyenv virtualenv 3.12.9 $(PYENV_VENV_NAME); \
+		echo "Creating pyenv virtualenv '$(PYENV_VENV_NAME)' with Python 3.12..."; \
+		pyenv virtualenv 3.12 $(PYENV_VENV_NAME); \
 		echo "Setting local .python-version to $(PYENV_VENV_NAME)..."; \
 		pyenv local $(PYENV_VENV_NAME); \
 		echo "Virtualenv created and activated"; \
