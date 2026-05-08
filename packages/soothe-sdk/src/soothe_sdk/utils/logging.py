@@ -252,12 +252,6 @@ def setup_logging(
     # Configure root logger
     logging.basicConfig(level=root_level, format=format_string, handlers=[])
 
-    # Console: WARNING only — DEBUG/INFO must not stream to the terminal during TUI.
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(ShortLevelFormatter(format_string))
-    console_handler.setLevel(logging.WARNING)
-    logging.getLogger().addHandler(console_handler)
-
     # Add file handler if specified - full log level
     if log_file:
         log_file.parent.mkdir(parents=True, exist_ok=True)
