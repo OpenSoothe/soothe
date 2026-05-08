@@ -435,6 +435,7 @@ class SootheApp(
                 yield WelcomeBanner(
                     thread_id=self._lc_loop_id,
                     mcp_tool_count=self._mcp_tool_count,
+                    workspace_path=self._cwd,
                     connecting=self._connecting,
                     resuming=self._resume_thread_intent is not None,
                     local_server=self._server_kwargs is not None,
