@@ -4,15 +4,25 @@
 # 1. soothe-sdk        - Shared SDK (WebSocket client, protocol, types)
 # 2. soothe-cli        - CLI client (Typer CLI + Textual TUI)
 # 3. soothe            - Daemon server (main package)
+#
+# Uses pyenv virtualenv "soothe-dev" for isolation (not .venv).
 
-.PHONY: sync sync-dev format format-check lint lint-fix test test-unit test-integration test-coverage build publish publish-test clean help \
+PYENV_VENV_NAME := soothe-dev
+PYENV_VENV := $(shell pyenv prefix $(PYENV_VENV_NAME) 2>/dev/null)
+PYTHON := $(PYENV_VENV)/bin/python
+PIP := $(PYENV_VENV)/bin/pip
+
+.PHONY: setup sync sync-dev format format-check lint lint-fix test test-unit test-integration test-coverage build publish publish-test clean help \
         sdk-sync sdk-format sdk-lint sdk-test sdk-build sdk-publish sdk-publish-test \
         cli-sync cli-format cli-lint cli-test cli-build cli-publish cli-publish-test \
         all-sync all-format all-lint all-lint-fix all-test all-build all-publish all-clean
 
 # Default target
 help:
-	@echo "Soothe Multi-Package Monorepo"
+	@echo "Soothe Multi-Package Monorepo (pyenv: $(PYENV_VENV_NAME))"
+	@echo ""
+	@echo "Setup:"
+	@echo "  make setup       - Create pyenv virtualenv 'soothe-dev' if missing"
 	@echo ""
 	@echo "SDK Package (soothe-sdk):"
 	@echo "  make sdk-sync    - Sync SDK dependencies"
@@ -49,7 +59,7 @@ help:
 	@echo "  make clean      - Clean build artifacts"
 	@echo ""
 	@echo "Multi-Package Targets:"
-	@echo "  make all-sync    - Sync all packages with all extras (each package individually)"
+	@echo "  make all-sync    - Sync all packages with all extras"
 	@echo "  make all-format  - Format all packages"
 	@echo "  make all-lint    - Lint all packages"
 	@echo "  make all-lint-fix  - Auto-fix all linting issues"
@@ -58,90 +68,109 @@ help:
 	@echo "  make all-publish - Publish all packages"
 	@echo "  make all-clean   - Clean all packages"
 
+# ============================================================================
+# Pyenv Virtualenv Setup
+# ============================================================================
+
+setup:
+	@if pyenv prefix $(PYENV_VENV_NAME) >/dev/null 2>&1; then \
+		echo "pyenv virtualenv '$(PYENV_VENV_NAME)' already exists"; \
+	else \
+		echo "Creating pyenv virtualenv '$(PYENV_VENV_NAME)' with Python 3.12.9..."; \
+		pyenv virtualenv 3.12.9 $(PYENV_VENV_NAME); \
+		echo "Setting local .python-version to $(PYENV_VENV_NAME)..."; \
+		pyenv local $(PYENV_VENV_NAME); \
+		echo "Virtualenv created and activated"; \
+	fi
+
+# ============================================================================
+# Daemon Package Targets (soothe)
+# ============================================================================
+
 # Sync dependencies (daemon package)
 sync:
 	@echo "Syncing daemon dependencies..."
-	cd packages/soothe && uv sync --all-extras
-	@echo "✓ Dependencies synced"
+	cd packages/soothe && UV_PROJECT_ENVIRONMENT=$(PYENV_VENV) uv sync --all-extras --active
+	@echo "Dependencies synced"
 
 # Sync dev dependencies
 sync-dev:
 	@echo "Syncing dev dependencies..."
-	cd packages/soothe && uv sync --all-extras
-	@echo "✓ Dev dependencies synced"
+	cd packages/soothe && UV_PROJECT_ENVIRONMENT=$(PYENV_VENV) uv sync --all-extras --active
+	@echo "Dev dependencies synced"
 
 # Format code
 format: sync-dev
 	@echo "Formatting code..."
-	cd packages/soothe && uv run ruff format src/
-	@echo "✓ Code formatted"
+	cd packages/soothe && $(PYENV_VENV)/bin/ruff format src/
+	@echo "Code formatted"
 
 # Check formatting (for CI)
 format-check: sync-dev
 	@echo "Checking code formatting..."
-	cd packages/soothe && uv run ruff format --check src/
-	@echo "✓ Format check passed"
+	cd packages/soothe && $(PYENV_VENV)/bin/ruff format --check src/
+	@echo "Format check passed"
 
 # Lint code
 lint: sync-dev
 	@echo "Linting code..."
-	cd packages/soothe && uv run ruff check src/
-	@echo "✓ Linting complete"
+	cd packages/soothe && $(PYENV_VENV)/bin/ruff check src/
+	@echo "Linting complete"
 
 # Auto-fix linting issues
 lint-fix: sync-dev
 	@echo "Auto-fixing linting issues..."
-	cd packages/soothe && uv run ruff check --fix src/
-	@echo "✓ Linting issues fixed"
+	cd packages/soothe && $(PYENV_VENV)/bin/ruff check --fix src/
+	@echo "Linting issues fixed"
 
 # Run all tests (unit tests only by default)
 test: test-unit test-integration
-	@echo "✓ All tests complete"
+	@echo "All tests complete"
 
 # Run unit tests only
 test-unit: sync-dev
 	@echo "Running unit tests..."
-	cd packages/soothe && uv run pytest tests/unit/ -v
-	@echo "✓ Unit tests complete"
+	cd packages/soothe && $(PYENV_VENV)/bin/pytest tests/unit/ -v
+	@echo "Unit tests complete"
 
 # Run integration tests (requires external services and real LLM calls)
 test-integration: sync-dev
 	@echo "Running integration tests..."
 	@echo "Note: Integration tests require external services (PostgreSQL, Weaviate) and real LLM API calls"
 	@echo "Use: pytest tests/integration/ --run-integration"
-	cd packages/soothe && uv run pytest tests/integration/ --run-integration -v
-	@echo "✓ Integration tests complete"
+	cd packages/soothe && $(PYENV_VENV)/bin/pytest tests/integration/ --run-integration -v
+	@echo "Integration tests complete"
 
 # Run tests with coverage
 test-coverage: sync-dev
 	@echo "Running tests with coverage..."
-	cd packages/soothe && uv run pytest tests/ --cov=soothe --cov-report=term-missing --cov-report=html
-	@echo "✓ Coverage report generated in htmlcov/"
+	cd packages/soothe && $(PYENV_VENV)/bin/pytest tests/ --cov=soothe --cov-report=term-missing --cov-report=html
+	@echo "Coverage report generated in htmlcov/"
 
 # Build package
 build:
 	@echo "Building package..."
 	cd packages/soothe && uv build --out-dir dist
-	@echo "✓ Package built"
+	@echo "Package built"
 
 # Publish package to PyPI
 publish:
 	@echo "Publishing package to PyPI..."
 	cd packages/soothe && uv publish dist/* --native-tls
-	@echo "✓ Package published to PyPI"
+	@echo "Package published to PyPI"
 
 # Publish package to TestPyPI
 publish-test:
 	@echo "Publishing package to TestPyPI..."
 	cd packages/soothe && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
-	@echo "✓ Package published to TestPyPI"
+	@echo "Package published to TestPyPI"
 
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -rf build/ dist/ *.egg-info .pytest_cache .coverage .ruff_cache .uv
+	rm -rf build/ dist/ *.egg-info .pytest_cache .coverage .ruff_cache
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	@echo "✓ Build artifacts cleaned"
+	@echo "Build artifacts cleaned"
 
 # ============================================================================
 # SDK Package Targets (soothe-sdk)
@@ -149,38 +178,38 @@ clean:
 
 sdk-sync:
 	@echo "Syncing SDK dependencies..."
-	cd packages/soothe-sdk && uv sync --all-extras
-	@echo "✓ SDK dependencies synced"
+	cd packages/soothe-sdk && UV_PROJECT_ENVIRONMENT=$(PYENV_VENV) uv sync --all-extras --active
+	@echo "SDK dependencies synced"
 
 sdk-format: sdk-sync
 	@echo "Formatting SDK code..."
-	cd packages/soothe-sdk && uv run ruff format src/
-	@echo "✓ SDK code formatted"
+	cd packages/soothe-sdk && $(PYENV_VENV)/bin/ruff format src/
+	@echo "SDK code formatted"
 
 sdk-lint: sdk-sync
 	@echo "Linting SDK code..."
-	cd packages/soothe-sdk && uv run ruff check src/
-	@echo "✓ SDK linting complete"
+	cd packages/soothe-sdk && $(PYENV_VENV)/bin/ruff check src/
+	@echo "SDK linting complete"
 
-sdk-test:
+sdk-test: sdk-sync
 	@echo "Running SDK tests..."
-	cd packages/soothe-sdk && uv run pytest tests/ -v
-	@echo "✓ SDK tests complete"
+	cd packages/soothe-sdk && $(PYENV_VENV)/bin/pytest tests/ -v
+	@echo "SDK tests complete"
 
 sdk-build:
 	@echo "Building SDK package..."
 	cd packages/soothe-sdk && uv build --out-dir dist
-	@echo "✓ SDK package built"
+	@echo "SDK package built"
 
 sdk-publish:
 	@echo "Publishing SDK package to PyPI..."
 	cd packages/soothe-sdk && uv publish dist/* --native-tls
-	@echo "✓ SDK package published to PyPI"
+	@echo "SDK package published to PyPI"
 
 sdk-publish-test:
 	@echo "Publishing SDK package to TestPyPI..."
 	cd packages/soothe-sdk && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
-	@echo "✓ SDK package published to TestPyPI"
+	@echo "SDK package published to TestPyPI"
 
 # ============================================================================
 # CLI Package Targets (soothe-cli)
@@ -188,38 +217,38 @@ sdk-publish-test:
 
 cli-sync:
 	@echo "Syncing CLI dependencies..."
-	cd packages/soothe-cli && uv sync --all-extras
-	@echo "✓ CLI dependencies synced"
+	cd packages/soothe-cli && UV_PROJECT_ENVIRONMENT=$(PYENV_VENV) uv sync --all-extras --active
+	@echo "CLI dependencies synced"
 
 cli-format: cli-sync
 	@echo "Formatting CLI code..."
-	cd packages/soothe-cli && uv run ruff format src/
-	@echo "✓ CLI code formatted"
+	cd packages/soothe-cli && $(PYENV_VENV)/bin/ruff format src/
+	@echo "CLI code formatted"
 
 cli-lint: cli-sync
 	@echo "Linting CLI code..."
-	cd packages/soothe-cli && uv run ruff check src/
-	@echo "✓ CLI linting complete"
+	cd packages/soothe-cli && $(PYENV_VENV)/bin/ruff check src/
+	@echo "CLI linting complete"
 
-cli-test:
+cli-test: cli-sync
 	@echo "Running CLI tests..."
-	cd packages/soothe-cli && uv run pytest tests/ -v
-	@echo "✓ CLI tests complete"
+	cd packages/soothe-cli && $(PYENV_VENV)/bin/pytest tests/ -v
+	@echo "CLI tests complete"
 
 cli-build:
 	@echo "Building CLI package..."
 	cd packages/soothe-cli && uv build --out-dir dist
-	@echo "✓ CLI package built"
+	@echo "CLI package built"
 
 cli-publish:
 	@echo "Publishing CLI package to PyPI..."
 	cd packages/soothe-cli && uv publish dist/* --native-tls
-	@echo "✓ CLI package published to PyPI"
+	@echo "CLI package published to PyPI"
 
 cli-publish-test:
 	@echo "Publishing CLI package to TestPyPI..."
 	cd packages/soothe-cli && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
-	@echo "✓ CLI package published to TestPyPI"
+	@echo "CLI package published to TestPyPI"
 
 # ============================================================================
 # Multi-Package Targets (all packages)
@@ -227,33 +256,33 @@ cli-publish-test:
 
 all-sync:
 	@echo "Syncing all workspace dependencies with extras..."
-	uv sync --all-extras --package soothe --package soothe-sdk --package soothe-cli
-	@echo "✓ All packages synced with all dependencies and extras"
+	UV_PROJECT_ENVIRONMENT=$(PYENV_VENV) uv sync --all-extras --package soothe --package soothe-sdk --package soothe-cli --active
+	@echo "All packages synced with all dependencies and extras"
 
 all-format: format sdk-format cli-format
-	@echo "✓ All packages formatted"
+	@echo "All packages formatted"
 
 all-lint: lint sdk-lint cli-lint
-	@echo "✓ All packages linted"
+	@echo "All packages linted"
 
 all-lint-fix:
 	@echo "Auto-fixing linting issues in all packages..."
-	cd packages/soothe && uv run ruff check --fix src/
-	cd packages/soothe-sdk && uv run ruff check --fix src/
-	cd packages/soothe-cli && uv run ruff check --fix src/
-	@echo "✓ All packages lint-fixed"
+	cd packages/soothe && $(PYENV_VENV)/bin/ruff check --fix src/
+	cd packages/soothe-sdk && $(PYENV_VENV)/bin/ruff check --fix src/
+	cd packages/soothe-cli && $(PYENV_VENV)/bin/ruff check --fix src/
+	@echo "All packages lint-fixed"
 
 all-test: test-unit sdk-test cli-test
-	@echo "✓ All packages tested"
+	@echo "All packages tested"
 
 all-build: build sdk-build cli-build
-	@echo "✓ All packages built"
+	@echo "All packages built"
 
 all-publish: publish sdk-publish cli-publish
-	@echo "✓ All packages published"
+	@echo "All packages published"
 
 all-clean: clean
 	@echo "Cleaning all package artifacts..."
 	rm -rf packages/*/dist/ packages/*/*.egg-info
 	find packages -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	@echo "✓ All packages cleaned"
+	@echo "All packages cleaned"
