@@ -2,7 +2,7 @@
 
 Models for LLM-driven query intent classification with three-tier system:
 - chitchat: Direct response (no goal)
-- thread_continuation: Reuse current thread/goal
+- continue_thread: Reuse current thread/goal
 - new_goal: Create goal via GoalEngine
 """
 
@@ -46,7 +46,7 @@ class IntentClassification(BaseModel):
     Four-tier classification system with conversation context awareness.
 
     Args:
-        intent_type: Primary intent (chitchat | thread_continuation | new_goal | quiz).
+        intent_type: Primary intent (chitchat | continue_thread | new_goal | quiz).
         reuse_current_goal: Whether to reuse active goal in current thread.
         goal_description: Normalized goal description for GoalEngine.
         friendly_message: User-friendly reinterpretation for display (IG-287).
@@ -56,13 +56,13 @@ class IntentClassification(BaseModel):
         reasoning: LLM reasoning for classification decision.
     """
 
-    intent_type: Literal["chitchat", "thread_continuation", "new_goal", "quiz"] = Field(
-        description="Primary intent: chitchat (greeting), thread_continuation (follow-up), "
+    intent_type: Literal["chitchat", "continue_thread", "new_goal", "quiz"] = Field(
+        description="Primary intent: chitchat (greeting), continue_thread (follow-up), "
         "new_goal (tool-requiring task), quiz (factual knowledge query)"
     )
     reuse_current_goal: bool = Field(
         default=False,
-        description="Whether to reuse active goal in current thread (thread_continuation only)",
+        description="Whether to reuse active goal in current thread (continue_thread only)",
     )
     goal_description: str | None = Field(
         default=None, description="Normalized goal description extracted from query (new_goal only)"

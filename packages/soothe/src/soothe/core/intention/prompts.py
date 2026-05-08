@@ -23,7 +23,7 @@ Classify the user's query intent and task complexity.
 
 CRITICAL OUTPUT RULES:
 - Return ONLY valid JSON matching the schema below
-- "intent_type" MUST be exactly one of: "chitchat", "thread_continuation", "new_goal", "quiz"
+- "intent_type" MUST be exactly one of: "chitchat", "continue_thread", "new_goal", "quiz"
 - Keep "reasoning" short (one sentence)
 
 Intent classification criteria:
@@ -35,7 +35,7 @@ Intent classification criteria:
   → quiz_response required (brief factual answer, 1-3 sentences)
   → task_complexity=quiz
 
-- thread_continuation: References prior conversation/results, follow-up actions, refinements
+- continue_thread: References prior conversation/results, follow-up actions, refinements
   → reuse_current_goal=true if active_goal exists, false otherwise
   → task_complexity=medium (follow-up actions)
 
@@ -56,12 +56,12 @@ Intent precedence (apply in order):
    context (ignore earlier, new topic unrelated to last turns, fresh assignment) → new_goal
 2. If query is conversational filler (greeting/thanks) → chitchat
 3. If query is factual knowledge question (no tools needed) → quiz
-4. If query references prior conversation or is a follow-up on recent results → thread_continuation
+4. If query references prior conversation or is a follow-up on recent results → continue_thread
 5. If query requires tools/files/analysis → new_goal (DEFAULT when uncertain)
 
 Required JSON shape:
 {{
-  "intent_type": "chitchat"|"thread_continuation"|"new_goal"|"quiz",
+  "intent_type": "chitchat"|"continue_thread"|"new_goal"|"quiz",
   "reuse_current_goal": boolean,
   "goal_description": string|null,
   "friendly_message": string|null,
@@ -95,10 +95,10 @@ You are {assistant_name}. Re-classify this query's intent.
 
 CRITICAL OUTPUT RULES:
 - Return ONLY valid JSON matching the schema
-- "intent_type" MUST be exactly one of: "chitchat", "thread_continuation", "new_goal", "quiz"
+- "intent_type" MUST be exactly one of: "chitchat", "continue_thread", "new_goal", "quiz"
 - For "chitchat": set chitchat_response (detect user language from query)
 - For "quiz": set quiz_response (brief factual answer)
-- For "thread_continuation": set reuse_current_goal based on active_goal
+- For "continue_thread": set reuse_current_goal based on active_goal
 - For "new_goal": set goal_description AND friendly_message (action-oriented reinterpretation)
 - "task_complexity": chitchat | quiz | simple | medium | complex
 - "reasoning" is REQUIRED
@@ -107,12 +107,12 @@ Intent precedence:
 1. Explicit new standalone task or user overrides / ignores prior context → new_goal
 2. Conversational filler → chitchat
 3. Factual knowledge question (no tools) → quiz
-4. Prior-turn follow-up or refinement → thread_continuation
+4. Prior-turn follow-up or refinement → continue_thread
 5. Tool-requiring task → new_goal (DEFAULT)
 
 Required JSON shape:
 {{
-  "intent_type": "chitchat"|"thread_continuation"|"new_goal"|"quiz",
+  "intent_type": "chitchat"|"continue_thread"|"new_goal"|"quiz",
   "reuse_current_goal": boolean,
   "goal_description": string|null,
   "friendly_message": string|null,

@@ -27,6 +27,11 @@ from soothe.core.agent_loop.state.schemas import (
     StepResult,
 )
 from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.core.context.model_override import (
+    attach_stream_model_override,
+    reset_stream_model_override,
+)
+from soothe.middleware.tool_concurrency import init_tool_concurrency_for_thread
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, log_preview, preview, preview_first
 
@@ -397,6 +402,9 @@ class Executor:
         This method yields stream events (custom events from tool execution)
         during execution, then yields final StepResult objects.
 
+        IG-XXX: Uses fast model for tool-heavy execution phase to reduce latency.
+        IG-XXX: Bounds concurrent tool calls per thread via semaphore.
+
         Args:
             decision: AgentDecision with steps to execute
             state: Current loop state
@@ -410,25 +418,48 @@ class Executor:
             logger.warning("No ready steps to execute (all completed or blocked)")
             return
 
+        # Initialize tool concurrency semaphore for this thread
+        max_parallel_tools = 5  # Default
+        if self._config is not None:
+            max_parallel_tools = self._config.agent_loop.limits.max_parallel_tools
+        init_tool_concurrency_for_thread(max_parallel_tools)
+
+        # IG-XXX: Use fast model for execute phase (tool-heavy operations)
+        # The execute phase runs tools which benefit from a faster/cheaper model
+        # rather than the default heavy model used for planning/reasoning
+        model_override_token = None
+        if self._config is not None:
+            fast_model_spec = self._config.router.fast
+            if fast_model_spec:
+                model_override_token = attach_stream_model_override(fast_model_spec, {})
+                logger.info("[Execute] Using fast model override: %s", fast_model_spec)
+
         logger.info(
-            "[Execute] steps=%d mode=%s max_parallel=%d",
+            "[Execute] steps=%d mode=%s max_parallel=%d tool_limit=%d",
             len(ready_steps),
             decision.execution_mode,
             self._max_parallel_steps,
+            max_parallel_tools,
         )
 
-        if decision.execution_mode == "parallel":
-            async for item in self._execute_parallel_waves(ready_steps, state):
-                yield item
-        elif decision.execution_mode == "sequential":
-            async for item in self._execute_sequential_waves(ready_steps, state):
-                yield item
-        elif decision.execution_mode == "dependency":
-            async for item in self._execute_dependency(decision, state):
-                yield item
-        else:
-            msg = f"Unknown execution mode: {decision.execution_mode}"
-            raise ValueError(msg)
+        try:
+            if decision.execution_mode == "parallel":
+                async for item in self._execute_parallel_waves(ready_steps, state):
+                    yield item
+            elif decision.execution_mode == "sequential":
+                async for item in self._execute_sequential_waves(ready_steps, state):
+                    yield item
+            elif decision.execution_mode == "dependency":
+                async for item in self._execute_dependency(decision, state):
+                    yield item
+            else:
+                msg = f"Unknown execution mode: {decision.execution_mode}"
+                raise ValueError(msg)
+        finally:
+            # Reset model override after execute phase completes
+            if model_override_token is not None:
+                reset_stream_model_override(model_override_token)
+                logger.debug("[Execute] Fast model override reset")
 
     def _wave_size(self, remaining: int) -> int:
         """Steps to schedule in the next wave (``0`` config = unlimited)."""

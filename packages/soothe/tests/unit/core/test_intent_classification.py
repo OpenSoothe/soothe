@@ -32,16 +32,16 @@ class TestIntentClassification:
         assert not intent.reuse_current_goal
         assert intent.goal_description is None
 
-    def test_model_creation_thread_continuation(self) -> None:
-        """IntentClassification for thread continuation query."""
+    def test_model_creation_continue_thread(self) -> None:
+        """IntentClassification for continue-thread query."""
         intent = IntentClassification(
-            intent_type="thread_continuation",
+            intent_type="continue_thread",
             reuse_current_goal=True,
             task_complexity="medium",
             reasoning="Query references prior result",
         )
 
-        assert intent.intent_type == "thread_continuation"
+        assert intent.intent_type == "continue_thread"
         assert intent.reuse_current_goal
         assert intent.task_complexity == "medium"
         assert intent.chitchat_response is None
@@ -153,8 +153,8 @@ class TestIntentClassificationLLM:
         assert not result.reuse_current_goal
 
     @pytest.mark.asyncio
-    async def test_thread_continuation_with_context(self) -> None:
-        """LLM detects thread continuation from conversation context."""
+    async def test_continue_thread_with_context(self) -> None:
+        """LLM detects continue-thread from conversation context."""
         mock_model = MagicMock()
         mock_intent_model = AsyncMock()
 
@@ -164,10 +164,10 @@ class TestIntentClassificationLLM:
             AIMessage("Found 42 .py files in the workspace: main.py, utils.py, ..."),
         ]
 
-        # Mock LLM response for thread continuation
+        # Mock LLM response for continue-thread
         mock_intent_model.ainvoke = AsyncMock(
             return_value=IntentClassification(
-                intent_type="thread_continuation",
+                intent_type="continue_thread",
                 reuse_current_goal=True,
                 task_complexity="medium",
                 reasoning="Query references prior conversation result",
@@ -186,22 +186,22 @@ class TestIntentClassificationLLM:
             active_goal_description="List python files in workspace",
         )
 
-        assert result.intent_type == "thread_continuation"
+        assert result.intent_type == "continue_thread"
         assert result.reuse_current_goal
         assert result.task_complexity == "medium"
         assert result.chitchat_response is None
         assert result.goal_description is None
 
     @pytest.mark.asyncio
-    async def test_thread_continuation_without_active_goal(self) -> None:
-        """Thread continuation without active goal sets reuse_current_goal=False."""
+    async def test_continue_thread_without_active_goal(self) -> None:
+        """Continue-thread without active goal sets reuse_current_goal=False."""
         mock_model = MagicMock()
         mock_intent_model = AsyncMock()
 
         # Mock LLM response
         mock_intent_model.ainvoke = AsyncMock(
             return_value=IntentClassification(
-                intent_type="thread_continuation",
+                intent_type="continue_thread",
                 reuse_current_goal=False,  # No active goal
                 task_complexity="medium",
                 reasoning="Follow-up action but no active goal in thread",
@@ -219,7 +219,7 @@ class TestIntentClassificationLLM:
             active_goal_id=None,  # No active goal
         )
 
-        assert result.intent_type == "thread_continuation"
+        assert result.intent_type == "continue_thread"
         assert not result.reuse_current_goal
 
     @pytest.mark.asyncio
@@ -492,7 +492,7 @@ class TestIntentClassificationEdgeCases:
 
         mock_intent_model.ainvoke = AsyncMock(
             return_value=IntentClassification(
-                intent_type="thread_continuation",
+                intent_type="continue_thread",
                 reuse_current_goal=True,
                 task_complexity="medium",
                 reasoning="Follow-up detected",
@@ -506,7 +506,7 @@ class TestIntentClassificationEdgeCases:
 
         result = await classifier.classify_intent("continue", recent_messages=recent_messages)
 
-        assert result.intent_type == "thread_continuation"
+        assert result.intent_type == "continue_thread"
 
     @pytest.mark.asyncio
     async def test_complex_task_classification(self) -> None:

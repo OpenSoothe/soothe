@@ -241,9 +241,7 @@ class UserMessage(_TimestampClickMixin, Static):
         content = self._content
 
         # Add role indicator header
-        glyphs = get_glyphs()
-        role_icon = glyphs.user if not is_ascii_mode() else ">"
-        parts.append((f"{role_icon}  ", f"bold {colors.primary}"))
+        parts.append(("> ", f"bold {colors.primary}"))
 
         # Use mode-specific prefix indicator when content starts with a
         # mode trigger character (e.g. "!" for shell, "/" for commands).
@@ -253,9 +251,6 @@ class UserMessage(_TimestampClickMixin, Static):
             glyph = MODE_DISPLAY_GLYPHS.get(mode, content[0])
             parts.append((f"{glyph} ", f"bold {_mode_color(mode, self)}"))
             content = content[1:]
-        else:
-            # Add subtle separator for non-mode messages
-            parts.append(("│ ", f"dim {colors.muted}"))
 
         # Highlight @mentions and /commands in the content
         last_end = 0
@@ -630,7 +625,6 @@ class AssistantMessage(Vertical):
         padding: 0 1;
         margin: 0 0 1 0;
         background: transparent;
-        border-left: wide $tool;
     }
 
     AssistantMessage Markdown {
@@ -650,7 +644,6 @@ class AssistantMessage(Vertical):
     }
 
     AssistantMessage:hover {
-        border-left: wide $tool-hover;
         opacity: 0.95;
     }
     """
@@ -1008,7 +1001,22 @@ class ToolCallMessage(Vertical):
         if _normalize_tool_name_for_arg_map(self._tool_name) == "task":
             tp = get_glyphs().tool_prefix
             if label.startswith(tp) and label[len(tp) :].strip() == "Task":
-                label = f"{tp} ❇️"
+                agent_type = (self._args or {}).get("subagent_type", "")
+                desc = ""
+                for key in ("description", "prompt", "task", "instruction"):
+                    v = (self._args or {}).get(key)
+                    if v and isinstance(v, str):
+                        desc = v.strip()
+                        break
+                if desc and len(desc) > 80:
+                    desc = desc[:77].rstrip() + "..."
+                if agent_type and desc:
+                    body = f"{agent_type}: {desc}"
+                elif agent_type:
+                    body = agent_type
+                else:
+                    body = desc or "…"
+                return _assemble_card_header(self, "❇️ · ", body)
         return _assemble_card_header(self, label, body)
 
     def compose(self) -> ComposeResult:
@@ -1417,6 +1425,9 @@ class ToolCallMessage(Vertical):
         w.remove_class("success")
         w.remove_class("error")
         w.add_class("error" if is_error else "success")
+        if _normalize_tool_name_for_arg_map(self._tool_name) == "task":
+            gutter = f"{get_glyphs().output_prefix} "
+            line = f"{gutter}{line}"
         w.update(Content(line))
         w.display = True
 
@@ -2292,10 +2303,9 @@ class CognitionStepMessage(Vertical):
         return self._last_completed_execute_prose
 
     def _step_header_content(self) -> Content:
-        prefix = get_glyphs().tool_prefix
         return _assemble_card_header(
             self,
-            f"{prefix} 🚀 · ",
+            "🚀 · ",
             f"{self._description}{self._stats_title_suffix()}",
         )
 
@@ -2959,11 +2969,10 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
         self._plan_reasoning = plan_reasoning.strip()
 
     def _plan_header_content(self) -> Content:
-        prefix = get_glyphs().tool_prefix
         body = self._next_action
         if self._plan_action in ("keep", "new"):
             body = f"{body} · {self._plan_action}"
-        return _assemble_card_header(self, f"{prefix} 💭 · ", body)
+        return _assemble_card_header(self, "💭 · ", body)
 
     def compose(self) -> ComposeResult:
         yield Static(self._plan_header_content(), classes="cognition-plan-header")
@@ -3085,12 +3094,11 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         return t[: max_len - 1].rstrip() + "…"
 
     def _goal_header_content(self) -> Content:
-        prefix = get_glyphs().tool_prefix
         g = self._clip(self._goal_text, _MAX_GOAL_HEADER)
         body = g
         if self._max_iterations > 1:
             body = f"{body} · iter<={self._max_iterations}"
-        return _assemble_card_header(self, f"{prefix} 📍 · ", body)
+        return _assemble_card_header(self, "📍 · ", body)
 
     def _goal_footer_styled_content(self) -> Content:
         """Footer content for loop finished / interrupted (parity with step/tool status lines)."""
@@ -3100,14 +3108,15 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001
             colors = theme.DARK_COLORS
+        gutter = f"{get_glyphs().output_prefix} "
         plain = self._footer_plain
         if self._footer_tone == "success":
             mark = get_glyphs().checkmark
-            return Content.styled(f"{mark} {plain}", colors.cognition)
+            return Content.styled(f"{gutter}{mark} {plain}", colors.cognition)
         if self._footer_tone == "error":
             mark = get_glyphs().error
-            return Content.styled(f"{mark} {plain}", colors.error)
-        return Content.styled(plain, "dim")
+            return Content.styled(f"{gutter}{mark} {plain}", colors.error)
+        return Content.styled(f"{gutter}{plain}", "dim")
 
     def _indent_prefix(self) -> str:
         g = get_glyphs()
@@ -3300,7 +3309,9 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         }
         gp_key = str(goal_progress or "").strip().lower()
         pct_display = progress_map.get(gp_key, "0%")
-        parts: list[str] = [str(status or "done"), pct_display]
+        status_str = str(status or "done")
+        status_str = status_str[:1].upper() + status_str[1:] if status_str else status_str
+        parts: list[str] = [status_str, pct_display]
         if total_steps:
             parts.append(f"{total_steps} step(s)")
         cs = (completion_summary or "").strip()

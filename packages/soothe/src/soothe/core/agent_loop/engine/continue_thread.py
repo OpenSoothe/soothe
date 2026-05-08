@@ -1,6 +1,6 @@
-"""Thread continuation first-plan bootstrap (IG-325).
+"""Continue-thread first-plan bootstrap (IG-325).
 
-When intent classification is ``thread_continuation`` and loop state is a true
+When intent classification is ``continue_thread`` and loop state is a true
 first plan for this run, skip the initial planner LLM and inject a single-step
 ``PlanResult``. Guards use execution/checkpoint structure only (no query heuristics).
 """
@@ -17,9 +17,9 @@ from soothe.core.agent_loop.state.schemas import (
 from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
-def thread_continuation_plan_bootstrap_allowed(
+def continue_thread_plan_bootstrap_allowed(
     *,
-    thread_continuation_mode: bool,
+    continue_thread_mode: bool,
     state: LoopState,
     recovery_valid_resume: bool,
     goal_record: GoalExecutionRecord | None,
@@ -27,7 +27,7 @@ def thread_continuation_plan_bootstrap_allowed(
     """Return True when the first Plan call may use a synthetic bootstrap result.
 
     Args:
-        thread_continuation_mode: True when intent is ``thread_continuation``.
+        continue_thread_mode: True when intent is ``continue_thread``.
         state: Current loop state (iteration, step_results).
         recovery_valid_resume: True when resuming a running checkpoint with a valid
             ``GoalExecutionRecord`` (not the invalid-index re-init path).
@@ -37,7 +37,7 @@ def thread_continuation_plan_bootstrap_allowed(
     Returns:
         Whether bootstrap is structurally allowed.
     """
-    if not thread_continuation_mode:
+    if not continue_thread_mode:
         return False
     if state.iteration != 0:
         return False
@@ -55,7 +55,7 @@ def thread_continuation_plan_bootstrap_allowed(
     return True
 
 
-def seed_thread_continuation_ledger_from_prior_goal(
+def seed_continue_thread_ledger_from_prior_goal(
     checkpoint: AgentLoopCheckpoint,
     new_goal: GoalExecutionRecord,
     thread_id: str,
@@ -104,8 +104,8 @@ def seed_thread_continuation_ledger_from_prior_goal(
     )
 
 
-def build_thread_continuation_bootstrap_plan(_goal: str) -> PlanResult:
-    """Build a synthetic first ``PlanResult`` for thread continuation (IG-325, RFC-214).
+def build_continue_thread_bootstrap_plan(_goal: str) -> PlanResult:
+    """Build a synthetic first ``PlanResult`` for continue-thread (IG-325, RFC-214).
 
     The loop goal is the user's current request on ``LoopState.goal``; prior turns
     are supplied via ``loop_messages`` ledger for Execute prompts (RFC-214).
@@ -132,12 +132,12 @@ def build_thread_continuation_bootstrap_plan(_goal: str) -> PlanResult:
             )
         ],
         execution_mode="sequential",
-        reasoning="IG-325: Thread continuation first-plan bootstrap (no planner LLM).",
+        reasoning="Continue-thread first-plan bootstrap (no planner LLM).",
     )
     return PlanResult(
         status="continue",
         goal_progress="low",  # IG-399: descriptive level (initial bootstrap)
-        assessment_reasoning="IG-325 thread continuation: initial planner call skipped.",
+        assessment_reasoning="Continue-thread bootstrap: initial planner call skipped.",
         plan_reasoning="Single execute wave from thread context and loop goal.",
         next_action="Execute one focused step for the user's follow-up request.",
         plan_action="new",

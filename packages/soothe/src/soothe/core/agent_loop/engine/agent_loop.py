@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.agent_loop.branching.anchor_manager import CheckpointAnchorManager
 from soothe.core.agent_loop.context.goal_context_manager import GoalContextManager
-from soothe.core.agent_loop.engine.thread_continuation import (
-    seed_thread_continuation_ledger_from_prior_goal,
+from soothe.core.agent_loop.engine.continue_thread import (
+    seed_continue_thread_ledger_from_prior_goal,
 )
 from soothe.core.agent_loop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.core.agent_loop.planning.manager import PlanManager
@@ -130,7 +130,7 @@ class AgentLoop:
             loop_id: Optional loop_id (None → auto-generate UUID)
             intent: IntentClassification from unified classifier (IG-226). Determines goal handling:
             shared_pool: SharedPostgreSQLPool for high-concurrency (IG-406).
-                - thread_continuation: Adjust iteration behavior, reuse working memory
+                - continue_thread: Adjust iteration behavior, reuse working memory
                 - new_goal: Normal goal execution flow
                 - chitchat: Should not reach here (handled in runner)
             routing_classification: ``RoutingClassification`` for CoreAgent middleware (IG-383).
@@ -150,16 +150,16 @@ class AgentLoop:
         # Initialize checkpoint anchor manager for execution synchronization (IG-055: pass config)
         anchor_manager = CheckpointAnchorManager(state_manager.loop_id, config=self.config)
 
-        # IG-226: Handle thread continuation intent
-        thread_continuation_mode = False
+        # IG-226: Handle continue-thread intent
+        continue_thread_mode = False
         if intent and hasattr(intent, "intent_type"):
-            if intent.intent_type == "thread_continuation":
-                thread_continuation_mode = True
+            if intent.intent_type == "continue_thread":
+                continue_thread_mode = True
                 logger.info(
-                    "[AgentLoop] Thread continuation mode: reuse_current_goal=%s",
+                    "[AgentLoop] Continue-thread mode: reuse_current_goal=%s",
                     intent.reuse_current_goal if hasattr(intent, "reuse_current_goal") else False,
                 )
-                # Thread continuation may benefit from fewer iterations (follow-up actions)
+                # Continue-thread may benefit from fewer iterations (follow-up actions)
                 # but keep max_iterations unchanged for now - let Plan phase determine completion
 
         # RFC-217: Create GoalContextManager for goal-level context injection
@@ -211,8 +211,8 @@ class AgentLoop:
             checkpoint.goal_history.append(goal_record)
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
             checkpoint.status = "running"
-            if thread_continuation_mode:
-                seed_thread_continuation_ledger_from_prior_goal(checkpoint, goal_record, thread_id)
+            if continue_thread_mode:
+                seed_continue_thread_ledger_from_prior_goal(checkpoint, goal_record, thread_id)
             await state_manager.save(checkpoint)
             iteration = 0
             logger.debug(
@@ -256,10 +256,10 @@ class AgentLoop:
             loop_messages=goal_record.loop_messages if goal_record else [],
         )
 
-        # IG-226: Set thread continuation flag for working memory context
-        if thread_continuation_mode:
-            state.thread_continuation = True  # Add flag to LoopState if it exists
-            logger.debug("[AgentLoop] Thread continuation flag set for working memory enhancement")
+        # IG-226: Set continue-thread flag for working memory context
+        if continue_thread_mode:
+            state.continue_thread = True  # Add flag to LoopState if it exists
+            logger.debug("[AgentLoop] Continue-thread flag set for working memory enhancement")
 
         wm_cfg = self.config.agent_loop.working_memory
         if wm_cfg.enabled:
@@ -269,19 +269,19 @@ class AgentLoop:
                 max_entry_chars_before_spill=wm_cfg.max_entry_chars_before_spill,
             )
 
-            # IG-226: Thread continuation working memory enhancement
+            # IG-226: Continue-thread working memory enhancement
             # Reuse current thread's working memory content more aggressively
-            if thread_continuation_mode:
-                logger.info("[AgentLoop] Thread continuation: working memory context reuse enabled")
+            if continue_thread_mode:
+                logger.info("[AgentLoop] Continue-thread: working memory context reuse enabled")
                 # Working memory will automatically load from thread persistence
                 # No special handling needed - it already loads existing entries
 
         logger.info(
-            "[Goal] %s (max_iterations=%d, iteration=%d, thread_continuation=%s)",
+            "[Goal] %s (max_iterations=%d, iteration=%d, continue_thread=%s)",
             log_preview(goal, 80),
             max_iterations,
             state.iteration,
-            thread_continuation_mode,
+            continue_thread_mode,
         )
 
         queue: asyncio.Queue[Any] = asyncio.Queue()
@@ -300,7 +300,7 @@ class AgentLoop:
             plan_manager=plan_manager,
             checkpoint=checkpoint,
             goal_record=goal_record,
-            thread_continuation_mode=thread_continuation_mode,
+            continue_thread_mode=continue_thread_mode,
             recovery_valid_resume=recovery_valid_resume,
             loop_state=state,
             emit=emit,

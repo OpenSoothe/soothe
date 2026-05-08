@@ -166,7 +166,7 @@ class HttpRestTransport(TransportServer):
         @self._app.get("/api/v1/version")
         async def get_version() -> dict[str, str]:
             """Get daemon version."""
-            return {"version": "1.0.0", "protocol": "RFC-0013"}
+            return {"version": "1.0.0", "protocol": "soothe-rest-v1"}
 
         # Thread management (RFC-402)
         @self._app.get("/api/v1/threads")

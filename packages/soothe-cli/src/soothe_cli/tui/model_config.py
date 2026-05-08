@@ -108,7 +108,7 @@ class ModelConfig:
         """
         # TODO(IG-175): Replace with async daemon RPC fetch
         # Currently returns empty instance for graceful degradation
-        logger.debug("ModelConfig.load() returning empty instance during IG-175 transition")
+        logger.debug("ModelConfig.load() returning empty instance during daemon RPC transition")
         return cls(_cfg=None)
 
     def __init__(self, *, _cfg: Any = None) -> None:
@@ -131,7 +131,7 @@ class ModelConfig:
         if not provider:
             return {}
         # TODO(IG-175): Implement daemon RPC fetch
-        logger.debug("get_kwargs returning empty dict during IG-175 transition")
+        logger.debug("get_kwargs returning empty dict during daemon RPC transition")
         return {}
 
     def get_base_url(self, provider: str) -> str | None:
@@ -143,7 +143,7 @@ class ModelConfig:
         if not provider:
             return None
         # TODO(IG-175): Implement daemon RPC fetch
-        logger.debug("get_base_url returning None during IG-175 transition")
+        logger.debug("get_base_url returning None during daemon RPC transition")
         return None
 
     def get_api_key_env(self, provider: str) -> str | None:

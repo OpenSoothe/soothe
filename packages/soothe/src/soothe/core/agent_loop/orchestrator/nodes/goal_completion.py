@@ -73,7 +73,12 @@ def _append_goal_completion_ledger_pair(
 
 
 async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Finalize goal when planner reports ``done`` (record iteration, synthesis, emit completed)."""
+    """Finalize goal when planner reports ``done`` (record iteration, synthesis, emit completed).
+
+    IG-XXX: Clear all pending execution state to prevent task leakage into next query.
+    When goal completion happens, any pending decision, step_results, or working memory
+    from this query must be cleared so the next query starts fresh.
+    """
     agent_loop = ctx.agent_loop
     state = ctx.loop_state
     state_manager = ctx.state_manager
@@ -96,12 +101,27 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     state.iteration += 1
     state.total_duration_ms += int((time.perf_counter() - perf_start) * 1000)
 
+    # IG-XXX: Clear pending execution state to prevent task leakage
+    # When this goal completes, all pending tasks/decisions must be cancelled silently.
+    # The next query should start with a clean slate.
+    state.step_results = []  # Clear completed step results
+    state.current_decision = None  # Clear pending decision for next iteration
+    ctx.scratch.decision = None  # Clear scratch decision
+    ctx.scratch.step_results = []  # Clear scratch step results
+    ctx.scratch.plan_result = None  # Clear scratch plan result (already saved)
+    ctx.scratch.plan_assessment = None  # Clear assessment
+    logger.debug(
+        "[goal_completion] Cleared pending state: step_results=%d, decision=%s",
+        len(state.step_results),
+        "cleared" if state.current_decision is None else "present",
+    )
+
     await state_manager.record_iteration(
         goal_record=goal_record,
         iteration=iteration_completed,
         plan_result=plan_result,
-        decision=None,
-        step_results=[],
+        decision=None,  # IG-XXX: Explicitly None - no pending decision
+        step_results=[],  # IG-XXX: Empty - no pending steps
         state=state,
         working_memory=state.working_memory,
     )

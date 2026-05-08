@@ -73,6 +73,14 @@ This runs:
    - Apply to: docstrings, comments, log messages, parameter names, documentation
    - Example: `agentloop_result` instead of `layer2_result`
 
+10. **NEVER expose internal design doc references (IG-XXX, RFC-XXX) to users** - These are internal indexing terms:
+   - DO NOT include IG-XXX or RFC-XXX in: log messages, user-facing text, CLI output, TUI display, event content, error messages
+   - OK to use in: code comments, docstrings (for developer context), internal documentation
+   - **Why**: Users don't know what IG-271 or RFC-220 means—it's internal tracking noise to them
+   - **How to apply**: When writing log messages or user-facing text, use descriptive phrases instead:
+     - `logger.info("[Plan] Thread continuation mode enabled")` NOT `logger.info("[Plan] IG-226 thread continuation")`
+     - `logger.error("[Plan] Evidence validation failed")` NOT `logger.error("[Plan] Evidence validation failed (RFC-220)")`
+
 ---
 
 ## 🏗️ Architecture at a Glance

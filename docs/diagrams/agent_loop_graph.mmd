@@ -1,0 +1,52 @@
+---
+title: AgentLoop LangGraph (RFC-220)
+config:
+  flowchart:
+    curve: linear
+  theme: base
+  themeVariables:
+    primaryColor: "#e1f5fe"
+    primaryTextColor: "#01579b"
+    primaryBorderColor: "#0288d1"
+    lineColor: "#0288d1"
+    secondaryColor: "#fff3e0"
+    tertiaryColor: "#f3e5f5"
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	init_or_resume(init_or_resume)
+	iteration_gate(iteration_gate)
+	iteration_start(iteration_start)
+	bounded_evidence_gather(bounded_evidence_gather)
+	plan_assess(plan_assess)
+	plan_generate(plan_generate)
+	goal_completion(goal_completion)
+	resolve_decision(resolve_decision)
+	validate_evidence_bindings(validate_evidence_bindings)
+	execute(execute)
+	record_iteration(record_iteration)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> init_or_resume;
+	bounded_evidence_gather --> plan_assess;
+	execute -.-> __end__;
+	execute -.-> record_iteration;
+	init_or_resume -.-> __end__;
+	init_or_resume -.-> iteration_gate;
+	iteration_gate -.-> __end__;
+	iteration_gate -.-> iteration_start;
+	iteration_start --> bounded_evidence_gather;
+	plan_assess -.-> goal_completion;
+	plan_assess -.-> plan_generate;
+	plan_assess -.-> resolve_decision;
+	plan_generate -.-> goal_completion;
+	plan_generate -.-> resolve_decision;
+	record_iteration -.-> __end__;
+	record_iteration -.-> iteration_gate;
+	resolve_decision -.-> __end__;
+	resolve_decision -.-> validate_evidence_bindings;
+	validate_evidence_bindings -.-> __end__;
+	validate_evidence_bindings -.-> execute;
+	goal_completion --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

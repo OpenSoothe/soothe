@@ -33,7 +33,7 @@ class LoopRuntimeContext:
     plan_manager: PlanManager
     checkpoint: AgentLoopCheckpoint
     goal_record: GoalExecutionRecord | None
-    thread_continuation_mode: bool
+    continue_thread_mode: bool
     recovery_valid_resume: bool
     loop_state: LoopState
     emit: EmitFn

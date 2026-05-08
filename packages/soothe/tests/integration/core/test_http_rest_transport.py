@@ -122,7 +122,7 @@ async def test_http_rest_version_endpoint() -> None:
             assert response.status_code == 200
             data = response.json()
             assert "version" in data
-            assert data["protocol"] == "RFC-0013"
+            assert data["protocol"] == "soothe-rest-v1"
     finally:
         await transport.stop()
 

@@ -32,7 +32,7 @@ class IntentClassifier:
     """LLM-driven intent classification system (IG-226).
 
     Pure LLM-driven classification with conversation context:
-    - Intent classification (chitchat/thread_continuation/new_goal)
+    - Intent classification (chitchat/continue_thread/new_goal)
     - Routing classification (task complexity for execution path selection)
     - No keyword heuristics or language detection shortcuts
 
@@ -244,7 +244,7 @@ class IntentClassifier:
         if result is None:
             raise ValueError("LLM returned None - structured output parsing failed")
 
-        if result.intent_type not in ("chitchat", "thread_continuation", "new_goal", "quiz"):
+        if result.intent_type not in ("chitchat", "continue_thread", "new_goal", "quiz"):
             raise ValueError(f"Invalid intent_type from LLM: {result.intent_type!r}")
 
         return result
