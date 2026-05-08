@@ -93,7 +93,7 @@ def test_build_loop_plan_messages_omits_working_memory_in_plan_human_ig371() -> 
 
 
 def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
-    """Test build_plan_messages() includes prior conversation in HumanMessage."""
+    """Test build_plan_messages() converts prior conversation XML to native ledger turns (RFC-214)."""
     state = LoopState(goal="翻译成中文", thread_id="t1", max_iterations=8)
     # RFC-209: Prior conversation always available (same thread_id)
     ctx = PlanContext(
@@ -107,15 +107,25 @@ def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
     messages = builder.build_plan_messages("翻译成中文", state, ctx)
 
     system_content = messages[0].content
-    human_content = messages[1].content
 
-    # RFC-207: Removed SOOTHE_ prefix from PRIOR_CONVERSATION tag
-    # Prior conversation and <GOAL_PROGRESS> on plan-context human after ledger (none here)
-    assert "<PRIOR_CONVERSATION>" in human_content
-    assert "Infrastructure" in human_content
-    assert human_content.strip().startswith("<GOAL_PROGRESS>")
+    # RFC-214: PRIOR_CONVERSATION removed - prior messages are native ledger turns
+    # Prior conversation now appears as native LoopHumanMessage/LoopAIMessage in message list
+    # (not as XML block in plan-context human)
+    assert "<PRIOR_CONVERSATION>" not in messages[-1].content  # Last message is plan-context human
+    # 4 messages: System + 2 prior thread messages (user+assistant) + plan-context human
+    assert len(messages) == 4
+    # Prior thread messages are LoopHumanMessage and LoopAIMessage
+    assert isinstance(messages[1], LoopHumanMessage)
+    assert isinstance(messages[2], LoopAIMessage)
+    # Infrastructure appears in the prior thread LoopAIMessage, not plan-context human
+    assert "Infrastructure" in messages[2].content
+    assert "Infrastructure" not in messages[-1].content
+    # Plan-context human starts with GOAL_PROGRESS
+    assert messages[-1].content.strip().startswith("<GOAL_PROGRESS>")
     assert "</GOAL_PROGRESS>" not in system_content
-    assert "Goal: 翻译成中文" in human_content
+    assert "Goal: 翻译成中文" in messages[-1].content
+    # CONTEXT_INFO with timestamp/date is now in plan-context human (RFC-214)
+    assert "<CONTEXT_INFO>" in messages[-1].content
 
     # FOLLOW_UP_POLICY in SystemMessage (static rule)
     assert "<FOLLOW_UP_POLICY>" in system_content

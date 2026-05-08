@@ -1,4 +1,4 @@
-"""Tests for SystemPromptOptimizationMiddleware."""
+"""Tests for SystemPromptOptimizationMiddleware (RFC-214 volatility-tiered architecture)."""
 
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -68,7 +68,7 @@ class MockModelRequest(ModelRequest[dict]):
 
 
 def test_simple_query_gets_minimal_prompt():
-    """Chitchat queries (LLM-classified) should receive minimal system prompt."""
+    """Chitchat queries (LLM-classified) should receive minimal system prompt (RFC-214)."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
@@ -85,10 +85,11 @@ def test_simple_query_gets_minimal_prompt():
 
     modified = middleware.modify_request(request)
 
-    # Should have minimal prompt
+    # Should have minimal prompt (no date line - date is in user envelope per RFC-214)
     assert "helpful AI assistant" in modified.system_message.content
-    assert len(modified.system_message.content) < 500  # Simple prompt with creator info
-    assert "Today's date is" in modified.system_message.content
+    assert len(modified.system_message.content) < 500
+    # RFC-214: Date line NOT in system prompt - it's in user message envelope
+    assert "Today's date is" not in modified.system_message.content
 
 
 def test_medium_query_gets_medium_prompt():
@@ -112,7 +113,8 @@ def test_medium_query_gets_medium_prompt():
     # Should have medium prompt with guidelines
     assert "proactive AI assistant" in modified.system_message.content
     assert "Be direct and concise" in modified.system_message.content
-    assert 300 < len(modified.system_message.content) < 950  # Medium + nested RFC-104 XML + date
+    # RFC-214: no date line in system prompt
+    assert "Today's date is" not in modified.system_message.content
 
 
 def test_simple_query_gets_compact_prompt() -> None:
@@ -126,7 +128,8 @@ def test_simple_query_gets_compact_prompt() -> None:
     )
     modified = middleware.modify_request(request)
     assert "helpful AI assistant" in modified.system_message.content
-    assert "Today's date is" in modified.system_message.content
+    # RFC-214: Date is in user envelope, not system prompt
+    assert "Today's date is" not in modified.system_message.content
 
 
 def test_complex_query_gets_full_prompt():
@@ -154,7 +157,7 @@ def test_complex_query_gets_full_prompt():
 
 
 def test_no_classification_uses_medium_optimized_prompt():
-    """Requests without classification still get optimized medium-tier system prompt (IG-384)."""
+    """Requests without classification still get optimized medium-tier system prompt."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
@@ -167,17 +170,18 @@ def test_no_classification_uses_medium_optimized_prompt():
 
     assert modified.system_message.content != "original prompt"
     assert "proactive AI assistant" in modified.system_message.content
-    assert "Today's date is" in modified.system_message.content
+    # RFC-214: Date is in user envelope
+    assert "Today's date is" not in modified.system_message.content
 
 
-def test_execution_hints_suffix_merged_into_optimized_prompt():
-    """Layer 2 execution hints appended to state must survive system message replacement."""
+def test_execution_hints_extracted_to_state():
+    """RFC-214: Execution hints extracted from state for user envelope, not merged into system."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
     classification = RoutingClassification(task_complexity="medium")
     hint_body = (
         "Suggested subagent: explore. Expected output: paths under src/. "
-        "Consider using the suggested approach first, but decide based on what works best."
+        "Consider using the suggested approach first."
     )
     request = MockModelRequest(
         state={
@@ -187,9 +191,10 @@ def test_execution_hints_suffix_merged_into_optimized_prompt():
         system_message=SystemMessage(content="original prompt"),
     )
     modified = middleware.modify_request(request)
-    assert "Execution hints:" in modified.system_message.content
-    assert "Suggested subagent: explore" in modified.system_message.content
-    assert "Expected output: paths under src/" in modified.system_message.content
+    # RFC-214: Execution hints NOT in system prompt - they go to user envelope
+    assert "Execution hints:" not in modified.system_message.content
+    # But they should be extracted into state for user envelope building
+    assert request.state.get("_soothe_execution_hints") == hint_body
 
 
 def test_custom_system_prompt_for_complex_queries():
@@ -215,17 +220,12 @@ def test_custom_system_prompt_for_complex_queries():
     assert config.assistant_name in modified.system_message.content
 
 
-def test_all_prompts_include_current_date():
-    """All prompt levels should include current date."""
-    import datetime as dt
-
+def test_all_prompts_do_not_include_date():
+    """RFC-214: Date line is NOT in system prompt - it's in user message envelope."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
-    now = dt.datetime.now(dt.UTC).astimezone()
-    expected_date = now.strftime("%Y-%m-%d")
-
-    # Test all complexity levels
+    # Test all complexity levels - none should have date in system prompt
     for complexity in ["chitchat", "simple", "medium", "complex"]:
         classification = RoutingClassification(
             task_complexity=complexity,
@@ -238,7 +238,7 @@ def test_all_prompts_include_current_date():
         )
 
         modified = middleware.modify_request(request)
-        assert f"Today's date is {expected_date}" in modified.system_message.content
+        assert "Today's date is" not in modified.system_message.content
 
 
 def test_chitchat_query_treated_as_chitchat():
@@ -261,7 +261,7 @@ def test_chitchat_query_treated_as_chitchat():
 
     # Should get simple prompt
     assert "helpful AI assistant" in modified.system_message.content
-    assert len(modified.system_message.content) < 500  # Simple prompt with creator info
+    assert len(modified.system_message.content) < 500
 
 
 def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
@@ -313,7 +313,7 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
 
 
 def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
-    """AgentLoop ``soothe_step_subagent`` narrows root tools to ``task`` on first hop (IG-386)."""
+    """AgentLoop ``soothe_step_subagent`` narrows root tools to ``task`` on first hop."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
     classification = RoutingClassification(
@@ -362,3 +362,19 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
     content = modified.system_message.content
     assert "subagent_type='explore'" in content
     assert "subagent_type='browser'" not in content
+
+
+def test_memory_section_uses_memory_summary_tag():
+    """RFC-214: Memory section should use <MEMORY_SUMMARY> tag."""
+    from soothe.protocols.memory import MemoryItem
+
+    config = SootheConfig()
+    middleware = SystemPromptOptimizationMiddleware(config=config)
+
+    memories = [
+        MemoryItem(content="User prefers Python", source_thread="thread_123"),
+    ]
+
+    section = middleware._build_memory_section(memories)
+    assert "<MEMORY_SUMMARY>" in section
+    assert "</MEMORY_SUMMARY>" in section

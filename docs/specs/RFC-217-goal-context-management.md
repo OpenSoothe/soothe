@@ -910,3 +910,59 @@ Pure additive feature, opt-in via config. All existing behavior preserved when:
 - RFC-203: Layer 2 Unified State Model
 - CoreAgent context briefing mechanism (existing)
 - Design draft: docs/drafts/2026-04-17-goal-context-management-design.md
+
+---
+
+## Amendment: RFC-214 Complete Ledger Supersedes Plan Context
+
+**Date**: 2026-05-08
+
+RFC-214 introduces a complete AgentLoop ledger that records all orchestration turns (plan-assess, plan-generate, execute-step) in `loop_messages`. This supersedes the `get_plan_context()` method defined in this RFC.
+
+### What Changes
+
+| Component | Status | Reason |
+|-----------|--------|--------|
+| `GoalContextManager.get_plan_context()` | **Superseded** | The complete ledger already contains prior plan-assess/plan-generate/execute-step turns from previous iterations as native `LoopHumanMessage`/`LoopAIMessage` pairs. Plan phase reads the ledger directly. No separate XML block injection needed. |
+| `GoalContextManager.get_execute_briefing()` | **Preserved** | The ledger records orchestration turns but does not carry cross-thread goal summaries. Thread-switch briefings remain necessary for knowledge transfer when CoreAgent starts on a new thread with no conversation history. |
+| `inject_previous_goal_context()` | **Removed** | Replaced by the complete ledger. Prior goal reasoning is native ledger turns. |
+| `<previous_goal>` XML blocks in Plan prompts | **Removed** | Replaced by ledger projection. Prior plan-assess/plan-generate turns appear as native message turns in the message list. |
+| `thread_switch_pending` flag mechanism | **Preserved** | Still needed to gate Execute briefing injection on thread switch. The flag is set by `execute_thread_switch()` and cleared by `get_execute_briefing()`. |
+| `ThreadRelationshipModule` | **Preserved** | Still used by `get_execute_briefing()` for semantic similarity-based context construction on thread switch. Not needed for Plan phase (ledger provides that context). |
+| `GoalContext` data model | **Preserved** | Still used as the output of context construction for Execute briefing. |
+
+### Plan Phase Data Flow Change
+
+**Before (this RFC):**
+```
+Plan phase
+  ├─ get_plan_context() → XML blocks from previous goal summaries
+  ├─ <PRIOR_CONVERSATION> XML from plan_conversation_excerpts
+  └─ Plan prompt includes both
+```
+
+**After (RFC-214):**
+```
+Plan phase
+  ├─ Complete ledger as native human/AI message turns
+  │   (includes prior plan-assess, plan-generate, execute-step from all iterations)
+  ├─ No XML blocks for previous goals — they are ledger turns
+  └─ <PRIOR_CONVERSATION> eliminated — prior thread messages are ledger turns
+```
+
+### Execute Phase Data Flow (Unchanged)
+
+```
+Execute phase
+  ├─ On thread switch: get_execute_briefing() → condensed markdown briefing
+  ├─ Via config.configurable: soothe_goal_briefing
+  └─ CoreAgent receives briefing in execute-step user message envelope
+```
+
+### Impact on This RFC's Sections
+
+- **§Solution**: `get_plan_context()` description is superseded. `get_execute_briefing()` is unchanged.
+- **§Content Format**: Plan Phase Format (XML Blocks) is removed. Execute Phase Format (Markdown Briefing) is unchanged.
+- **§Data Flow Scenario 2** (Same-Thread Continuation): Plan no longer calls `get_plan_context()` — the ledger provides continuity. Execute is unchanged.
+- **§Data Flow Scenario 3** (Thread Switch): Plan reads ledger (which may have prior thread goals as execute-step entries). Execute briefing is unchanged.
+- **§Implementation**: `GoalContextManager` keeps `get_execute_briefing()` and supporting methods. `get_plan_context()` is removed.
