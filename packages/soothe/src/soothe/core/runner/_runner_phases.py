@@ -293,6 +293,14 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                 logger.info(
                     "AsyncPostgresSaver pool open and tables initialized, checkpointer replaced"
                 )
+        except ModuleNotFoundError as exc:
+            logger.error("Missing dependency for checkpointer: %s", exc)
+            missing = str(exc.name) if exc.name else "unknown"
+            raise ConfigurationError(
+                f"Checkpointer initialization failed: missing module '{missing}'.\n"
+                f"Install the required package and restart.\n"
+                f"Persistent storage required - no fallback available."
+            ) from exc
         except Exception as exc:
             logger.error("Failed to initialize async checkpointer: %s", exc)
             raise ConfigurationError(

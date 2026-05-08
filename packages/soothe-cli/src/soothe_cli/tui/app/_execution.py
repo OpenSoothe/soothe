@@ -17,9 +17,9 @@ if TYPE_CHECKING:
 
 from textual.app import ScreenStackError
 from textual.containers import VerticalScroll
+from textual.content import Content
 from textual.css.query import NoMatches
 from textual.style import Style as TStyle
-from textual.widgets import Content
 
 from soothe_cli.tui import theme
 from soothe_cli.tui._cli_context import CLIContext

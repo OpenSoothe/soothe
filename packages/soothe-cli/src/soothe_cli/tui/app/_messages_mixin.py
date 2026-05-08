@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from textual.containers import Container
     from textual.events import Click, MouseUp, Paste
-    from textual.screen import ModalScreen
     from textual.widgets import Static
     from textual.worker import Worker
 
@@ -470,7 +469,7 @@ class _MessagesMixin:
         # If a modal screen is active, let it cancel itself (so it can
         # restore state, e.g. the theme selector reverts the previewed theme).
         # Fall back to a plain dismiss for modals without action_cancel.
-        if isinstance(self.screen, ModalScreen):
+        if self.screen.is_modal:
             cancel = getattr(self.screen, "action_cancel", None)
             if cancel is not None:
                 cancel()
@@ -618,7 +617,7 @@ class _MessagesMixin:
             return
         # shift+tab is reused for navigation inside modal screens (e.g.
         # ModelSelectorScreen); skip the toggle so it doesn't fire through.
-        if isinstance(self.screen, ModalScreen):
+        if self.screen.is_modal:
             return
         # Delegate shift+tab to ask_user navigation when interview is active.
         if self._pending_ask_user_widget is not None:
@@ -762,7 +761,7 @@ class _MessagesMixin:
         """
         if not self._chat_input:
             return
-        if isinstance(self.screen, ModalScreen):
+        if self.screen.is_modal:
             return
         if self._pending_approval_widget or self._pending_ask_user_widget:
             return
