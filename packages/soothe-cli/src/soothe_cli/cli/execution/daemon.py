@@ -30,6 +30,23 @@ _SESSION_BOOTSTRAP_TIMEOUT_S = 5.0
 _QUERY_START_TIMEOUT_S = 20.0
 
 
+def _is_thread_scoped_event_for_active_thread(
+    event: dict[str, Any],
+    *,
+    active_thread_id: str,
+) -> bool:
+    """Return whether a daemon frame belongs to the active headless thread.
+
+    In headless mode we only want `status` and streamed `event` frames for the
+    thread started by this CLI invocation. This avoids cross-thread leakage when
+    unrelated frames are present on the transport.
+    """
+    event_type = event.get("type", "")
+    if event_type not in {"status", "event"}:
+        return True
+    return event.get("thread_id") == active_thread_id
+
+
 async def run_headless_via_daemon(
     cfg: Any,
     prompt: str,
@@ -104,6 +121,10 @@ async def run_headless_via_daemon(
                 break
 
             event_type = event.get("type", "")
+            if not _is_thread_scoped_event_for_active_thread(
+                event, active_thread_id=actual_thread_id
+            ):
+                continue
 
             if event_type == "error":
                 typer.echo(f"Daemon error: {event.get('message', 'unknown')}", err=True)
@@ -132,6 +153,10 @@ async def run_headless_via_daemon(
                             break
                         if not nxt:
                             break
+                        if not _is_thread_scoped_event_for_active_thread(
+                            nxt, active_thread_id=actual_thread_id
+                        ):
+                            continue
                         processor.process_event(nxt)
 
                     processor.process_event(event)
