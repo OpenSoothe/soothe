@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from textual.color import Color as TColor
@@ -66,6 +67,7 @@ class WelcomeBanner(Static):
         self,
         thread_id: str | None = None,
         mcp_tool_count: int = 0,
+        workspace_path: str | None = None,
         *,
         connecting: bool = False,
         resuming: bool = False,
@@ -77,6 +79,7 @@ class WelcomeBanner(Static):
         Args:
             thread_id: Optional loop ID to display in the banner (mapped from loop_id).
             mcp_tool_count: Number of MCP tools loaded at startup.
+            workspace_path: Session workspace path shown in the source row.
             connecting: When `True`, show a "Connecting..." footer instead of
                 the normal ready prompt. Call `set_connected` to transition.
             resuming: When `True`, the connecting footer says "Resuming..."
@@ -92,6 +95,7 @@ class WelcomeBanner(Static):
         # Parameter named thread_id to match langgraph's configurable dict convention
         self._cli_loop_id: str | None = thread_id
         self._mcp_tool_count = mcp_tool_count
+        self._workspace_path = workspace_path
         self._connecting = connecting
         self._resuming = resuming
         self._local_server = local_server
@@ -173,8 +177,12 @@ class WelcomeBanner(Static):
         success_color: str = "bold green" if ansi else colors.success
 
         editable_path = _get_editable_install_path()
-        if editable_path:
-            parts.extend([("Source: ", "dim"), (editable_path, "dim"), "\n"])
+        source_path = resolve_source_display_path(
+            workspace_path=self._workspace_path,
+            editable_path=editable_path,
+        )
+        if source_path:
+            parts.extend([("Source: ", "dim"), (source_path, "dim"), "\n"])
 
         if self._cli_loop_id:
             parts.append((f"Loop: {self._cli_loop_id}\n", "dim"))
@@ -260,3 +268,32 @@ def build_welcome_footer(*, primary_color: str = theme.PRIMARY, tip: str | None 
         ("\nReady to unleash your thinking?\n", primary_color),
         (f"Tip: {tip}", "dim italic"),
     )
+
+
+def resolve_source_display_path(
+    *, workspace_path: str | None, editable_path: str | None
+) -> str | None:
+    """Resolve the banner source row path.
+
+    Prefer the session workspace path so the welcome banner and status bar stay
+    consistent. Fall back to editable-install metadata for local-dev installs.
+    """
+    if workspace_path and workspace_path.strip():
+        return _format_path_for_display(workspace_path)
+    if editable_path and editable_path.strip():
+        return editable_path
+    return None
+
+
+def _format_path_for_display(path: str) -> str:
+    """Format a path with `~` contraction when under the user home."""
+    try:
+        resolved = Path(path).expanduser().resolve()
+        home = Path.home()
+        if resolved == home:
+            return "~"
+        if resolved.is_relative_to(home):
+            return "~/" + resolved.relative_to(home).as_posix()
+        return str(resolved)
+    except (RuntimeError, OSError, ValueError):
+        return path
