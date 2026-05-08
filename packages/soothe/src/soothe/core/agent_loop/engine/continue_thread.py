@@ -121,13 +121,12 @@ def build_continue_thread_bootstrap_plan(_goal: str) -> PlanResult:
         steps=[
             StepAction(
                 description=(
-                    "Using the prior Human/Assistant turns in the AgentLoop ledger "
-                    "(loop_messages) and the loop goal as the user's current "
-                    "request, respond and complete the follow-up. Use tools only when needed."
+                    "Use prior conversation context and the user's current request to "
+                    "deliver the follow-up response. Use tools only when needed."
                 ),
                 expected_output=(
-                    "Output that satisfies the user's request in light of the ledger history "
-                    "and the stated goal."
+                    "A response that addresses the current request while staying consistent "
+                    "with earlier conversation context."
                 ),
             )
         ],

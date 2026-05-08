@@ -7,8 +7,9 @@ for messages requiring acknowledgment.
 from __future__ import annotations
 
 import logging
-import uuid
 from pathlib import Path
+
+from uuid_utils import uuid7
 
 from .models import ChannelMessage
 
@@ -58,10 +59,10 @@ class ChannelOutbox:
         self._outbox_dir.mkdir(parents=True, exist_ok=True)
 
         if message.requires_ack and not message.ack_id:
-            message.ack_id = uuid.uuid4().hex[:12]
+            message.ack_id = str(uuid7())
             self._pending_acks[message.ack_id] = 0
 
-        filename = f"{message.ack_id or uuid.uuid4().hex[:12]}_{message.type}.json"
+        filename = f"{message.ack_id or str(uuid7())}_{message.type}.json"
         fpath = self._outbox_dir / filename
         fpath.write_text(message.to_json())
 

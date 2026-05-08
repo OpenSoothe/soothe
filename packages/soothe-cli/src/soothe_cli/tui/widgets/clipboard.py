@@ -6,6 +6,7 @@ import base64
 import logging
 import os
 import pathlib
+from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from soothe_cli.tui.config import get_glyphs
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from textual.app import App
+    from textual.widget import Widget
 
 
 def _copy_osc52(text: str) -> None:
@@ -42,41 +44,36 @@ def _shorten_preview(texts: list[str]) -> str:
     return dense_text
 
 
-def copy_selection_to_clipboard(app: App) -> None:
-    """Copy selected text from app widgets to clipboard.
+def _get_selected_text(widget: Widget) -> str | None:
+    """Return selected text from a widget, if available."""
+    if not hasattr(widget, "text_selection") or not widget.text_selection:
+        return None
 
-    This queries all widgets for their text_selection and copies
-    any selected text to the system clipboard.
-    """
-    selected_texts = []
+    selection = widget.text_selection
+    if selection.end is None:
+        return None
 
-    for widget in app.query("*"):
-        if not hasattr(widget, "text_selection") or not widget.text_selection:
-            continue
+    try:
+        result = widget.get_selection(selection)
+    except (AttributeError, TypeError, ValueError, IndexError) as e:
+        logger.debug(
+            "Failed to get selection from widget %s: %s",
+            type(widget).__name__,
+            e,
+            exc_info=True,
+        )
+        return None
 
-        selection = widget.text_selection
+    if not result:
+        return None
 
-        if selection.end is None:
-            continue
+    selected_text, _ = result
+    text = selected_text.strip()
+    return text or None
 
-        try:
-            result = widget.get_selection(selection)
-        except (AttributeError, TypeError, ValueError, IndexError) as e:
-            logger.debug(
-                "Failed to get selection from widget %s: %s",
-                type(widget).__name__,
-                e,
-                exc_info=True,
-            )
-            continue
 
-        if not result:
-            continue
-
-        selected_text, _ = result
-        if selected_text.strip():
-            selected_texts.append(selected_text)
-
+def _copy_texts_to_clipboard(app: App, selected_texts: list[str]) -> None:
+    """Copy selected text(s) via available clipboard methods."""
     if not selected_texts:
         return
 
@@ -125,3 +122,40 @@ def copy_selection_to_clipboard(app: App) -> None:
         severity="warning",
         timeout=3,
     )
+
+
+def copy_selection_to_clipboard(
+    app: App,
+    *,
+    candidate_widgets: Iterable[Widget] | None = None,
+) -> None:
+    """Copy selected text from app widgets to clipboard.
+
+    This queries all widgets for their text_selection and copies
+    any selected text to the system clipboard.
+    """
+    # Fast path: focus/event candidates usually contain the active selection.
+    if candidate_widgets is not None:
+        seen_ids: set[int] = set()
+        selected_texts: list[str] = []
+        for widget in candidate_widgets:
+            if widget is None:
+                continue
+            marker = id(widget)
+            if marker in seen_ids:
+                continue
+            seen_ids.add(marker)
+            selected = _get_selected_text(widget)
+            if selected:
+                selected_texts.append(selected)
+        if selected_texts:
+            _copy_texts_to_clipboard(app, selected_texts)
+            return
+
+    # Fallback: full DOM scan when selection owner isn't obvious.
+    selected_texts = []
+    for widget in app.query("*"):
+        selected = _get_selected_text(widget)
+        if selected:
+            selected_texts.append(selected)
+    _copy_texts_to_clipboard(app, selected_texts)

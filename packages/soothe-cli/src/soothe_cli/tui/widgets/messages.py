@@ -8,7 +8,7 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from time import time
+from time import monotonic, time
 from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.utils import get_tool_display_name
@@ -59,6 +59,30 @@ _STEP_TOOL_PREVIEW_ROWS = 3
 
 _MAX_STEP_STAT_TOOL_KINDS = 4
 """Max distinct tool display names in the step header before ``+N more``."""
+
+_RUNNING_SPINNER_INTERVAL_SECONDS = 0.2
+"""Spinner/status animation cadence for running cards."""
+
+_RUNNING_ROWS_REFRESH_INTERVAL_SECONDS = 0.5
+"""Minimum interval between expensive running-row re-renders."""
+
+
+def _is_widget_animation_visible(widget: object) -> bool:
+    """Return whether a widget is currently visible on screen.
+
+    This is used to skip animation work for off-screen cards.
+    """
+    try:
+        if not getattr(widget, "is_attached", False):
+            return False
+        if not getattr(widget, "visible", True):
+            return False
+        is_on_screen = getattr(widget, "is_on_screen", True)
+        if callable(is_on_screen):
+            return bool(is_on_screen())
+        return bool(is_on_screen)
+    except Exception:
+        return False
 
 
 def _assemble_card_header(widget: object, label_part: str, body_part: str) -> Content:
@@ -973,6 +997,7 @@ class ToolCallMessage(Vertical):
         self._spinner_position = 0
         self._start_time: float | None = None
         self._animation_timer: Timer | None = None
+        self._last_rows_animation_refresh: float = 0.0
         # Deferred state for hydration (set by MessageData.to_widget)
         self._deferred_status: str | None = None
         self._deferred_output: str | None = None
@@ -985,6 +1010,12 @@ class ToolCallMessage(Vertical):
         self._tools_body_collapsed: bool = False
         # Legacy compat aliases — _rows still needed by callers that iterate rows
         self._rows: list[_StepToolRow] = []  # kept in sync with _activity tool rows
+        # Output rendering cache (long outputs can be expensive to reformat).
+        self._cached_preview_output_key: str | None = None
+        self._cached_preview_output_content: Content | None = None
+        self._cached_preview_truncation: str | None = None
+        self._cached_full_output_key: str | None = None
+        self._cached_full_output_content: Content | None = None
 
     def _tool_header_content(self) -> Content:
         """One-line tool title: tool name in cognition, parentheses block muted."""
@@ -1194,6 +1225,40 @@ class ToolCallMessage(Vertical):
         """Alias for _refresh_activity_display (kept for compat)."""
         self._refresh_activity_display()
 
+    def _invalidate_output_render_cache(self) -> None:
+        """Clear cached preview/full render content for tool output."""
+        self._cached_preview_output_key = None
+        self._cached_preview_output_content = None
+        self._cached_preview_truncation = None
+        self._cached_full_output_key = None
+        self._cached_full_output_content = None
+
+    def _get_cached_full_output_content(self) -> Content:
+        """Return full output content, using cache for repeated expand/collapse."""
+        key = self._output
+        if self._cached_full_output_key == key and self._cached_full_output_content is not None:
+            return self._cached_full_output_content
+        result = self._format_output(key, is_preview=False)
+        prefixed = self._prefix_output(result.content)
+        self._cached_full_output_key = key
+        self._cached_full_output_content = prefixed
+        return prefixed
+
+    def _get_cached_preview_output(self) -> tuple[Content, str | None]:
+        """Return preview output content + truncation hint with cache."""
+        key = self._output
+        if (
+            self._cached_preview_output_key == key
+            and self._cached_preview_output_content is not None
+        ):
+            return self._cached_preview_output_content, self._cached_preview_truncation
+        result = self._format_output(key, is_preview=True)
+        prefixed = self._prefix_output(result.content)
+        self._cached_preview_output_key = key
+        self._cached_preview_output_content = prefixed
+        self._cached_preview_truncation = result.truncation
+        return prefixed, result.truncation
+
     def _refresh_activity_display(self) -> None:
         """Update the unified activity widget with interleaved text lines and tool rows."""
         if self._activity_widget is None:
@@ -1382,11 +1447,16 @@ class ToolCallMessage(Vertical):
             self._status_widget.add_class("pending")
             self._status_widget.display = True
         self._update_running_animation()
-        self._animation_timer = self.set_interval(0.1, self._update_running_animation)
+        self._animation_timer = self.set_interval(
+            _RUNNING_SPINNER_INTERVAL_SECONDS,
+            self._update_running_animation,
+        )
 
     def _update_running_animation(self) -> None:
         """Update the running spinner animation."""
         if self._status != "running" or self._status_widget is None:
+            return
+        if not _is_widget_animation_visible(self):
             return
 
         spinner_frames = get_glyphs().spinner_frames
@@ -1402,8 +1472,12 @@ class ToolCallMessage(Vertical):
         gutter = f"{get_glyphs().output_prefix} "
         line = f"{gutter}{frame} Running...{elapsed}"
         self._status_widget.update(Content.styled(line, colors.cognition))
-        # Also refresh tool rows to update running spinners
-        if self._rows:
+        # Throttle expensive row re-rendering while keeping status spinner smooth.
+        now = monotonic()
+        if any(row.phase == "running" for row in self._rows) and (
+            now - self._last_rows_animation_refresh >= _RUNNING_ROWS_REFRESH_INTERVAL_SECONDS
+        ):
+            self._last_rows_animation_refresh = now
             self._refresh_tools_display()
 
     def _stop_animation(self) -> None:
@@ -1440,6 +1514,7 @@ class ToolCallMessage(Vertical):
         self._stop_animation()
         self._status = "success"
         self._output = _strip_success_exit_line(result)
+        self._invalidate_output_render_cache()
         self._expanded = False
         duration_ms = self._duration_ms_since_start()
         line = _TOOL_CARD_PRESENTATION.format_tool_result_status_line(
@@ -1469,6 +1544,7 @@ class ToolCallMessage(Vertical):
             self._output = f"$ {command}\n\n{error}"
         else:
             self._output = error
+        self._invalidate_output_render_cache()
         self._expanded = False
         duration_ms = self._duration_ms_since_start()
         line = _TOOL_CARD_PRESENTATION.format_tool_result_status_line(
@@ -2028,9 +2104,7 @@ class ToolCallMessage(Vertical):
             if empty_success:
                 self._full_widget.update(_empty_success_content())
             else:
-                result = self._format_output(self._output, is_preview=False)
-                prefixed = self._prefix_output(result.content)
-                self._full_widget.update(prefixed)
+                self._full_widget.update(self._get_cached_full_output_content())
             self._full_widget.display = True
             self._hint_widget.update(Content.styled("click or Ctrl+O to collapse", "dim italic"))
             self._hint_widget.display = True
@@ -2049,9 +2123,7 @@ class ToolCallMessage(Vertical):
             if empty_success:
                 self._full_widget.update(_empty_success_content())
             else:
-                result = self._format_output(self._output, is_preview=False)
-                prefixed = self._prefix_output(result.content)
-                self._full_widget.update(prefixed)
+                self._full_widget.update(self._get_cached_full_output_content())
             self._full_widget.display = True
             self._hint_widget.update(Content.styled("click or Ctrl+O to collapse", "dim italic"))
             self._hint_widget.display = True
@@ -2062,15 +2134,14 @@ class ToolCallMessage(Vertical):
                 self._preview_widget.display = True
                 self._hint_widget.display = False
             elif needs_truncation:
-                result = self._format_output(self._output, is_preview=True)
-                prefixed = self._prefix_output(result.content)
-                self._preview_widget.update(prefixed)
+                preview_content, truncation = self._get_cached_preview_output()
+                self._preview_widget.update(preview_content)
                 self._preview_widget.display = True
 
-                if result.truncation:
+                if truncation:
                     ellipsis = get_glyphs().ellipsis
                     hint = Content.styled(
-                        f"{ellipsis} {result.truncation} — click or Ctrl+O to expand",
+                        f"{ellipsis} {truncation} — click or Ctrl+O to expand",
                         "dim",
                     )
                 else:
@@ -2078,9 +2149,7 @@ class ToolCallMessage(Vertical):
                 self._hint_widget.update(hint)
                 self._hint_widget.display = True
             elif output_stripped:
-                result = self._format_output(output_stripped, is_preview=False)
-                prefixed = self._prefix_output(result.content)
-                self._preview_widget.update(prefixed)
+                self._preview_widget.update(self._get_cached_full_output_content())
                 self._preview_widget.display = True
                 self._hint_widget.display = False
             else:
@@ -2274,6 +2343,7 @@ class CognitionStepMessage(Vertical):
         self._spinner_position = 0
         self._start_time: float | None = None
         self._animation_timer: Timer | None = None
+        self._last_rows_animation_refresh: float = 0.0
         self._status_widget: Static | None = None
         self._header_widget: Static | None = None
         self._tools_widget: Static | None = None
@@ -2758,7 +2828,10 @@ class CognitionStepMessage(Vertical):
             self._status_widget.add_class("pending")
             self._status_widget.display = True
         self._update_running_animation()
-        self._animation_timer = self.set_interval(0.1, self._update_running_animation)
+        self._animation_timer = self.set_interval(
+            _RUNNING_SPINNER_INTERVAL_SECONDS,
+            self._update_running_animation,
+        )
 
     def _stop_animation(self) -> None:
         if self._animation_timer is not None:
@@ -2767,6 +2840,8 @@ class CognitionStepMessage(Vertical):
 
     def _update_running_animation(self) -> None:
         if self._status != "running" or self._status_widget is None:
+            return
+        if not _is_widget_animation_visible(self):
             return
         frames = get_glyphs().spinner_frames
         frame = frames[self._spinner_position]
@@ -2779,7 +2854,11 @@ class CognitionStepMessage(Vertical):
         gutter = f"{get_glyphs().output_prefix} "
         line = f"{gutter}{frame} Running...{elapsed}"
         self._status_widget.update(Content.styled(line, colors.cognition))
-        if any(r.phase == "running" for r in self._rows):
+        now = monotonic()
+        if any(r.phase == "running" for r in self._rows) and (
+            now - self._last_rows_animation_refresh >= _RUNNING_ROWS_REFRESH_INTERVAL_SECONDS
+        ):
+            self._last_rows_animation_refresh = now
             self._refresh_tools_display()
 
     def set_complete(
