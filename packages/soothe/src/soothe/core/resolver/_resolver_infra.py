@@ -173,6 +173,15 @@ def _resolve_postgres_checkpointer(dsn: str) -> tuple[Checkpointer, Any] | None:
         return None
 
     try:
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver  # noqa: F401
+    except ImportError:
+        logger.warning(
+            "PostgreSQL checkpointer requires 'langgraph-checkpoint-postgres'. "
+            "Install with: pip install 'langgraph-checkpoint-postgres'"
+        )
+        return None
+
+    try:
         from psycopg.rows import dict_row
         from psycopg_pool import AsyncConnectionPool
     except ImportError:
