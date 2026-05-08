@@ -67,6 +67,7 @@ agent_loop:
     max_parallel_steps: 2      # IG-380: lower parallel fan-out locally
     max_parallel_subagents: 4
     max_parallel_goals: 1
+    max_parallel_tools: 5      # Concurrent tool calls per thread
     global_max_llm_calls: 5
     step_parallelism: dependency
 

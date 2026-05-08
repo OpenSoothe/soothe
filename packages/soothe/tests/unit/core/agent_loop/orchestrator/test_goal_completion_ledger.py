@@ -33,7 +33,7 @@ def _ctx(
         plan_manager=plan_manager,
         checkpoint=Mock(),
         goal_record=Mock(goal_id="g1"),
-        thread_continuation_mode=False,
+        continue_thread_mode=False,
         recovery_valid_resume=False,
         loop_state=loop_state,
         emit=AsyncMock(),

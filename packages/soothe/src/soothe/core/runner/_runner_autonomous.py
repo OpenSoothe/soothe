@@ -196,29 +196,29 @@ class AutonomousMixin(GoalDirectivesMixin):
 
         goal = None
         if intent and hasattr(intent, "intent_type"):
-            if intent.intent_type == "thread_continuation":
-                # Thread continuation: reuse active goal if available
+            if intent.intent_type == "continue_thread":
+                # Continue-thread: reuse active goal if available
                 if intent.reuse_current_goal:
                     # Find active goal
                     active_goals = await self._goal_engine.list_goals(status="active")
                     if active_goals:
                         goal = active_goals[0]
                         logger.info(
-                            "Thread continuation: reusing active goal %s",
+                            "Continue-thread: reusing active goal %s",
                             goal.id,
                         )
                         logger.debug(
                             "Goal reused: %s | Description: %s", goal.id, goal.description[:50]
                         )
                     else:
-                        # No active goal, create new goal despite thread_continuation
-                        logger.info("Thread continuation but no active goal, creating new goal")
+                        # No active goal, create new goal despite continue_thread
+                        logger.info("Continue-thread but no active goal, creating new goal")
                         goal = await self._goal_engine.create_goal(
                             intent.goal_description or user_input, priority=80
                         )
                 else:
-                    # Thread continuation without goal reuse - skip goal creation
-                    logger.info("Thread continuation without goal, skipping goal creation")
+                    # Continue-thread without goal reuse - skip goal creation
+                    logger.info("Continue-thread without goal, skipping goal creation")
                     # Proceed without goal lifecycle management
                     # AgentLoop will handle thread context continuation
 

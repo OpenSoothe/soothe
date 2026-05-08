@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.core.agent_loop.engine.thread_continuation import (
-    build_thread_continuation_bootstrap_plan,
-    thread_continuation_plan_bootstrap_allowed,
+from soothe.core.agent_loop.engine.continue_thread import (
+    build_continue_thread_bootstrap_plan,
+    continue_thread_plan_bootstrap_allowed,
 )
 from soothe.core.agent_loop.state.schemas import PlanResult
 
@@ -24,14 +24,14 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
     plan_manager = ctx.plan_manager
     context = agent_loop._build_plan_context(state)
 
-    if thread_continuation_plan_bootstrap_allowed(
-        thread_continuation_mode=ctx.thread_continuation_mode,
+    if continue_thread_plan_bootstrap_allowed(
+        continue_thread_mode=ctx.continue_thread_mode,
         state=state,
         recovery_valid_resume=ctx.recovery_valid_resume,
         goal_record=ctx.goal_record,
     ):
-        logger.info("[Plan] iter=0 thread_continuation bootstrap (no planner LLM)")
-        plan_result = build_thread_continuation_bootstrap_plan(state.goal)
+        logger.info("[Plan] iter=0 continue-thread bootstrap (no planner LLM)")
+        plan_result = build_continue_thread_bootstrap_plan(state.goal)
         ctx.scratch.plan_result = plan_result
         ctx.scratch.plan_assessment = None
         plan_manager.ingest_plan(plan_result, state.plan_id, state.iteration)
