@@ -16,7 +16,7 @@ async def test_parallel_tools_config_propagation():
     """Verify concurrency config propagates correctly."""
     # Create config with custom concurrency settings
     config = SootheConfig(
-        execution={"concurrency": {"max_parallel_steps": 5}},
+        agent_loop={"limits": {"max_parallel_steps": 5}},
     )
 
     # Create agent
@@ -60,7 +60,7 @@ async def test_parallel_tools_performance_improvement():
 
     # Test with parallel execution (max_parallel_steps=3)
     config_parallel = SootheConfig(
-        execution={"concurrency": {"max_parallel_steps": 3}},
+        agent_loop={"limits": {"max_parallel_steps": 3}},
     )
 
     create_soothe_agent(
@@ -71,7 +71,7 @@ async def test_parallel_tools_performance_improvement():
 
     # Test with sequential execution (max_parallel_steps=1)
     config_sequential = SootheConfig(
-        execution={"concurrency": {"max_parallel_steps": 1}},
+        agent_loop={"limits": {"max_parallel_steps": 1}},
     )
 
     create_soothe_agent(
@@ -102,7 +102,7 @@ async def test_parallel_tools_mixed_sync_async():
         return x * 3
 
     config = SootheConfig(
-        execution={"concurrency": {"max_parallel_steps": 5}},
+        agent_loop={"limits": {"max_parallel_steps": 5}},
     )
 
     create_soothe_agent(

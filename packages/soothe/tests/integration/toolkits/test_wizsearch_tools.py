@@ -9,6 +9,14 @@ import pytest
 # Wizsearch Search Tool Tests
 # ---------------------------------------------------------------------------
 
+_wizsearch_available = False
+try:
+    import wizsearch  # noqa: F401
+
+    _wizsearch_available = True
+except ImportError:
+    pass
+
 
 @pytest.mark.integration
 class TestWizsearchSearchTool:
@@ -17,6 +25,7 @@ class TestWizsearchSearchTool:
     @pytest.fixture
     def search_tool(self):
         """Create WizsearchSearchTool instance."""
+        pytest.importorskip("wizsearch", reason="wizsearch package required")
         from soothe.toolkits.wizsearch import WizsearchSearchTool
 
         return WizsearchSearchTool()
@@ -73,6 +82,7 @@ class TestWizsearchCrawlTool:
     @pytest.fixture
     def crawl_tool(self):
         """Create WizsearchCrawlTool instance."""
+        pytest.importorskip("wizsearch", reason="wizsearch package required")
         from soothe.toolkits.wizsearch import WizsearchCrawlTool
 
         return WizsearchCrawlTool()
@@ -126,6 +136,7 @@ class TestWizsearchToolErrors:
         if not os.getenv("SERPER_API_KEY"):
             pytest.skip("SERPER_API_KEY required")
 
+        pytest.importorskip("wizsearch", reason="wizsearch package required")
         from soothe.toolkits.wizsearch import WizsearchSearchTool
 
         tool = WizsearchSearchTool()  # noqa: F841
@@ -140,6 +151,7 @@ class TestWizsearchToolErrors:
         if not os.getenv("JINA_API_KEY"):
             pytest.skip("JINA_API_KEY required")
 
+        pytest.importorskip("wizsearch", reason="wizsearch package required")
         from soothe.toolkits.wizsearch import WizsearchCrawlTool
 
         tool = WizsearchCrawlTool()
