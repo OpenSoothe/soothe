@@ -666,3 +666,54 @@ None. All decisions finalized through brainstorming session.
 ---
 
 *This RFC enables context-aware LLM behavior through structured XML injection, aligned with classification-driven optimization.*
+
+---
+
+## Amendment: RFC-214 Volatility-Tiered Prompt Architecture
+
+**Date**: 2026-05-08
+
+RFC-214 refines the prompt-cache ordering principle (this RFC's Principle 5) into a two-tier volatility model. The changes are:
+
+### Principle 5 Updated: Volatility-Tiered Ordering
+
+**Before (this RFC):**
+1. Static first: behavioral system instructions
+2. Structured context next: `<SOOTHE_ENVIRONMENT>`, `<SOOTHE_WORKSPACE>`, `<SOOTHE_THREAD>`, `<SOOTHE_PROTOCOLS>`
+3. Most volatile last: date line appended after all blocks
+
+**After (RFC-214):**
+1. **Static tier** (session-stable): Agent identity + behavioral rules, tool orchestration guide, execution policies, conditional directives
+2. **Semi-static tier** (goal-stable): Workspace rules, workspace metadata, environment, memory summary, context projection, thread context, protocol summary
+3. **No volatile content in system prompt**: Date line, execution hints, and per-turn memories are removed from the system prompt entirely and moved to the user message envelope (RFC-214 §2)
+
+### What Changes in This RFC's Implementation
+
+| Component | Change |
+|-----------|--------|
+| `_current_date_line()` | Removed from system prompt. Date moves to `<CONTEXT_INFO>` in user message envelope |
+| `_build_memory_section()` | Split: long-term persona memories → `<MEMORY_SUMMARY>` in system prompt (semi-static tier); per-turn recall → `<MEMORY>` in user message envelope |
+| `_build_dynamic_sections()` | Execution hints and per-turn context removed from system prompt. Hints move to `<EXECUTION_HINTS>` in user message envelope |
+| `_append_execution_hints_suffix()` | Removed. `ExecutionHintsMiddleware` sets `state['execution_hints']` instead of mutating system prompt |
+| Section ordering | Reordered per RFC-214 §1 volatility tiers: static → semi-static. No volatile content |
+
+### What Is Preserved from This RFC
+
+- All `<SOOTHE_*>` XML tags and inner element structure
+- Classification-driven injection depth (chitchat/medium/complex)
+- `ToolTriggerRegistry` mechanism for conditional section injection
+- "Runner collects, middleware injects" principle
+- Graceful degradation on context collection failures
+- `context_xml.py` shared builders for ENVIRONMENT, WORKSPACE, THREAD, PROTOCOLS sections
+
+### XML Tag Renames
+
+| This RFC | RFC-214 | Reason |
+|----------|---------|--------|
+| `<SOOTHE_ENVIRONMENT>` | `<ENVIRONMENT>` | RFC-207 removed `SOOTHE_` prefix (IG-183). Consistent with current implementation |
+| `<SOOTHE_WORKSPACE>` | `<WORKSPACE>` | Same |
+| `<SOOTHE_THREAD>` | `<THREAD>` | Same |
+| `<SOOTHE_PROTOCOLS>` | `<PROTOCOLS>` | Same |
+| (none) | `<MEMORY_SUMMARY>` | New semi-static tier block for long-term persona memories |
+| (none) | `<WORKSPACE_RULES>` | New semi-static tier block, currently inline in PromptBuilder |
+| `<memory>` | `<MEMORY_SUMMARY>` (system) / `<MEMORY>` (user envelope) | Split by volatility |

@@ -242,16 +242,18 @@ class TestComplexityMapping:
         return SystemPromptOptimizationMiddleware(config)
 
     def test_chitchat_no_sections(self, middleware: SystemPromptOptimizationMiddleware) -> None:
-        """Chitchat complexity gets no XML context sections."""
+        """Chitchat complexity gets minimal prompt with ENVIRONMENT (RFC-214: no date in system prompt)."""
         prompt = middleware._get_prompt_for_complexity("chitchat", {})
 
         assert "<SOOTHE_" not in prompt
-        assert "Today's date is" in prompt
+        # RFC-214: Date is in user message envelope, not system prompt
+        assert "Today's date is" not in prompt
+        assert "<ENVIRONMENT" in prompt  # ENVIRONMENT is always included for non-chitchat
 
     def test_medium_gets_environment_only(
         self, middleware: SystemPromptOptimizationMiddleware
     ) -> None:
-        """Medium complexity gets ENVIRONMENT section (WORKSPACE is tool-triggered per RFC-210)."""
+        """Medium complexity gets ENVIRONMENT section (RFC-214: WORKSPACE_RULES when workspace set)."""
         state = {
             "workspace": Path("/project"),
             "git_status": None,
@@ -260,17 +262,20 @@ class TestComplexityMapping:
         prompt = middleware._get_prompt_for_complexity("medium", state)
 
         # RFC-207: Removed SOOTHE_ prefix from ENVIRONMENT tag
-        # RFC-210: WORKSPACE is tool-triggered, not always included
         assert "<ENVIRONMENT" in prompt
-        assert "<WORKSPACE" not in prompt  # Not tool-triggered in this test
+        # RFC-214: WORKSPACE_RULES is now semi-static tier (injected when workspace set)
+        assert "<WORKSPACE_RULES>" in prompt
+        # WORKSPACE XML block is tool-triggered, not always included
+        assert "<SOOTHE_WORKSPACE>" not in prompt  # Actual WORKSPACE XML block not injected
         assert "<SOOTHE_THREAD" not in prompt
         assert "<SOOTHE_PROTOCOLS" not in prompt
-        assert prompt.strip().endswith(middleware._current_date_line())
+        # RFC-214: Date is in user envelope, not system prompt
+        assert "Today's date is" not in prompt
 
     def test_complex_gets_environment_only(
         self, middleware: SystemPromptOptimizationMiddleware
     ) -> None:
-        """Complex complexity gets ENVIRONMENT section (other sections are tool/state-triggered per RFC-210)."""
+        """Complex complexity gets ENVIRONMENT section (RFC-214: WORKSPACE_RULES when workspace set)."""
         state = {
             "workspace": Path("/project"),
             "git_status": {
@@ -285,12 +290,12 @@ class TestComplexityMapping:
         prompt = middleware._get_prompt_for_complexity("complex", state)
 
         # RFC-207: Removed SOOTHE_ prefix from ENVIRONMENT tag
-        # RFC-210: WORKSPACE/THREAD/PROTOCOLS are tool/state-triggered, not always included
         assert "<ENVIRONMENT" in prompt
-        # WORKSPACE is tool-triggered, not included without tool triggers
-        assert "<WORKSPACE" not in prompt
-        # THREAD is state-triggered (requires multi-turn or active goals)
-        # PROTOCOLS is tool-triggered
+        # RFC-214: WORKSPACE_RULES is semi-static tier (injected when workspace set)
+        assert "<WORKSPACE_RULES>" in prompt
+        # WORKSPACE XML is tool-triggered, not always included
+        assert "<SOOTHE_WORKSPACE>" not in prompt
+        # THREAD is state-triggered (requires tool triggers)
         assert "<SOOTHE_THREAD" not in prompt
         assert "<SOOTHE_PROTOCOLS" not in prompt
 
@@ -304,7 +309,8 @@ class TestComplexityMapping:
         prompt = middleware._get_prompt_for_complexity("medium", state)
 
         assert "Soothe" in prompt
-        assert "Today's date is" in prompt
+        # RFC-214: Date is in user message envelope, not system prompt
+        assert "Today's date is" not in prompt
         core = middleware._get_base_prompt_core("medium")
         assert core in prompt
 

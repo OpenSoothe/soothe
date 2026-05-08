@@ -81,13 +81,13 @@ def test_goal_execution_record_with_ledger_serde_roundtrip():
             content="Plan next steps",
             thread_id="test_thread",
             iteration=10,
-            phase="plan",
+            phase="plan_assess",  # RFC-214: plan_assess or plan_generate
         ),
         LoopAIMessage(
             content="Next actions: 1. Query database",
             thread_id="test_thread",
             iteration=10,
-            phase="plan",
+            phase="plan_assess",  # RFC-214: plan_assess or plan_generate
         ),
         LoopHumanMessage(
             content="Execute: Query database",
@@ -140,8 +140,8 @@ def test_goal_execution_record_with_ledger_serde_roundtrip():
     assert isinstance(deserialized.loop_messages[3], LoopAIMessage)
 
     # Verify Human-AI pairing by phase/step_id
-    assert deserialized.loop_messages[0].phase == "plan"
-    assert deserialized.loop_messages[1].phase == "plan"
+    assert deserialized.loop_messages[0].phase == "plan_assess"  # RFC-214
+    assert deserialized.loop_messages[1].phase == "plan_assess"  # RFC-214
     assert deserialized.loop_messages[2].phase == "execute_step"
     assert deserialized.loop_messages[3].phase == "execute_step"
     assert deserialized.loop_messages[2].step_id == "step_a"

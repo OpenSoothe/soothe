@@ -729,18 +729,18 @@ class LLMPlanner:
                         step["execution_hint"] = _SIMPLE_PLANNER_HINT_MAP.get(hint, "auto")
         return data
 
-    async def _assess_status(
+    async def _assess_status_with_response(
         self,
         messages: list[Any],
         goal: str,
         iteration: int,
         *,
         thread_id: str | None,
-    ) -> Any:
-        """StatusAssessment call: assess goal progress without plan generation (RFC-604).
+    ) -> tuple[Any, Any]:
+        """StatusAssessment call with raw response for ledger recording (RFC-214).
 
-        Lightweight structured output call to evaluate current goal status.
-        Generates ~200-250 tokens per call.
+        Returns both the parsed assessment and the raw LLM response object
+        so the caller can record the AI message in the ledger.
 
         Args:
             messages: Assess-phase messages from ``build_plan_messages(..., plan_phase=\"assess\")``
@@ -749,7 +749,7 @@ class LLMPlanner:
             thread_id: Thread id for Langfuse session correlation.
 
         Returns:
-            StatusAssessment with status, progress, confidence.
+            Tuple of (StatusAssessment, raw_response) or (StatusAssessment, None) on fallback.
         """
         from soothe.core.agent_loop.state.schemas import StatusAssessment
 
@@ -773,18 +773,45 @@ class LLMPlanner:
                 assessment.goal_progress,
             )
 
-            return assessment
+            return assessment, assessment
 
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.warning("[LLMPlanner] StatusAssessment failed: %s", str(e)[:200])
-            # Fallback: return conservative assessment (minimal fields)
+            # Fallback: return conservative assessment
             return StatusAssessment(
                 status="replan",
-                goal_progress="none",  # IG-399: descriptive level
-                require_goal_completion=False,  # Default: skip synthesis
-            )
+                goal_progress="none",
+                require_goal_completion=False,
+            ), None
+
+    async def _assess_status(
+        self,
+        messages: list[Any],
+        goal: str,
+        iteration: int,
+        *,
+        thread_id: str | None,
+    ) -> Any:
+        """StatusAssessment call: assess goal progress without plan generation (RFC-604).
+
+        Lightweight structured output call to evaluate current goal status.
+        Generates ~200-250 tokens per call.
+
+        Args:
+            messages: Assess-phase messages from ``build_plan_messages(..., plan_phase=\"assess\")``
+            goal: Goal description for fallback decision
+            iteration: Current iteration for varied fallback
+            thread_id: Thread id for Langfuse session correlation.
+
+        Returns:
+            StatusAssessment with status, progress, confidence.
+        """
+        assessment, _ = await self._assess_status_with_response(
+            messages, goal, iteration, thread_id=thread_id
+        )
+        return assessment
 
     async def _generate_plan(
         self,
@@ -809,6 +836,35 @@ class LLMPlanner:
 
         Returns:
             PlanGeneration with plan_action and top-level decision fields.
+        """
+        plan_result, _ = await self._generate_plan_with_response(
+            messages, assessment, goal, iteration, thread_id=thread_id
+        )
+        return plan_result
+
+    async def _generate_plan_with_response(
+        self,
+        messages: list[Any],
+        assessment: Any,
+        goal: str,
+        iteration: int,
+        *,
+        thread_id: str | None,
+    ) -> tuple[Any, Any]:
+        """PlanGeneration call with raw response for ledger recording (RFC-214).
+
+        Returns both the parsed plan and the raw LLM response object
+        so the caller can record the AI message in the ledger.
+
+        Args:
+            messages: Generate-phase messages from ``build_plan_messages(..., plan_phase=\"generate\")``
+            assessment: StatusAssessment result from previous call
+            goal: Goal description for fallback decision
+            iteration: Current iteration for varied fallback
+            thread_id: Thread id for Langfuse session correlation.
+
+        Returns:
+            Tuple of (PlanGeneration, raw_response) or (PlanGeneration, None) on fallback.
         """
         from langchain_core.messages import SystemMessage
 
@@ -843,7 +899,7 @@ class LLMPlanner:
                 preview_first(plan_result.next_action, chars=80),
             )
 
-            return plan_result
+            return plan_result, plan_result
 
         except asyncio.CancelledError:
             raise
@@ -857,7 +913,7 @@ class LLMPlanner:
                 reasoning="Fallback default plan after plan generation failure.",
                 steps=_default_agent_decision(goal, iteration).steps,
                 next_action="I'll proceed with a default plan.",
-            )
+            ), None
 
     @staticmethod
     def _plan_generation_to_decision(plan_result: Any) -> AgentDecision | None:
@@ -976,16 +1032,47 @@ class LLMPlanner:
         state: LoopState,
         context: PlanContext,
     ) -> Any:
-        """Assess-only planner call used by split graph flow."""
+        """Assess-only planner call used by split graph flow (RFC-214).
+
+        Records the plan-assess user/AI pair in the ledger after the LLM call.
+        These messages are NOT injected into CoreAgent thread.
+        """
         assess_messages = self._prompt_builder.build_plan_messages(
             goal, state, context, plan_phase="assess"
         )
-        assessment = await self._assess_status(
+        assessment, ai_response = await self._assess_status_with_response(
             assess_messages,
             goal,
             state.iteration,
             thread_id=state.thread_id,
         )
+
+        # RFC-214: Record plan-assess pair in ledger (not injected into CoreAgent)
+        # Find the LoopHumanMessage (last message in assess_messages)
+        human_msg = None
+        for msg in reversed(assess_messages):
+            if isinstance(msg, LoopHumanMessage):
+                human_msg = msg
+                break
+
+        if human_msg is not None and ai_response is not None:
+            from soothe.core.agent_loop.utils.messages import LoopAIMessage
+
+            ai_msg = LoopAIMessage(
+                content=str(ai_response.model_dump())
+                if hasattr(ai_response, "model_dump")
+                else str(ai_response),
+                thread_id=state.thread_id,
+                iteration=state.iteration,
+                phase="plan_assess",
+            )
+            state.loop_messages.append(human_msg)
+            state.loop_messages.append(ai_msg)
+            logger.debug(
+                "Recorded plan-assess ledger pair: human=%d chars, ai=%d chars",
+                len(str(human_msg.content)),
+                len(str(ai_msg.content)),
+            )
 
         if assessment.status == "done":
             guard_enabled = False
@@ -1006,7 +1093,11 @@ class LLMPlanner:
         *,
         plan_manager: Any = None,
     ) -> Any:
-        """Generate plan after an existing assess result (split graph flow)."""
+        """Generate plan after an existing assess result (split graph flow, RFC-214).
+
+        Records the plan-generate user/AI pair in the ledger after the LLM call.
+        These messages are NOT injected into CoreAgent thread.
+        """
         from soothe.core.agent_loop.planning.manager import (
             determine_goal_completion_needs,
         )
@@ -1084,13 +1175,40 @@ class LLMPlanner:
         generate_messages = self._prompt_builder.build_plan_messages(
             goal, state, context, plan_phase="generate", dag_context=dag_context
         )
-        plan_result = await self._generate_plan(
+        plan_result, ai_response = await self._generate_plan_with_response(
             generate_messages,
             assessment,
             goal,
             state.iteration,
             thread_id=state.thread_id,
         )
+
+        # RFC-214: Record plan-generate pair in ledger (not injected into CoreAgent)
+        human_msg = None
+        for msg in reversed(generate_messages):
+            if isinstance(msg, LoopHumanMessage):
+                human_msg = msg
+                break
+
+        if human_msg is not None and ai_response is not None:
+            from soothe.core.agent_loop.utils.messages import LoopAIMessage
+
+            ai_msg = LoopAIMessage(
+                content=str(ai_response.model_dump())
+                if hasattr(ai_response, "model_dump")
+                else str(ai_response),
+                thread_id=state.thread_id,
+                iteration=state.iteration,
+                phase="plan_generate",
+            )
+            state.loop_messages.append(human_msg)
+            state.loop_messages.append(ai_msg)
+            logger.debug(
+                "Recorded plan-generate ledger pair: human=%d chars, ai=%d chars",
+                len(str(human_msg.content)),
+                len(str(ai_msg.content)),
+            )
+
         result = self._combine_results(assessment, plan_result)
         return self._finalize_generated_plan_result(
             result=result,

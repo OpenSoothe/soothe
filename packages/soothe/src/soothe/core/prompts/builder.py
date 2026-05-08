@@ -100,9 +100,10 @@ class PromptBuilder:
             dag_context: Optional XML-formatted DAG context for progressive planning (generate phase).
 
         Returns:
-            Messages to send to the plan LLM: system, ledger copies, then optional plan-context human.
+            Messages to send to the plan LLM: system, ledger copies, prior thread messages,
+            then optional plan-context human.
         """
-        from soothe.core.agent_loop.utils.messages import LoopHumanMessage
+        from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
         system_content = self._build_system_message(
             context,
@@ -127,6 +128,34 @@ class PromptBuilder:
                 len(state.loop_messages),
                 plan_phase,
             )
+
+        # RFC-214: Convert prior thread messages from XML strings to native ledger turns
+        # This maximizes cache hits - prior conversation is native message turns, not XML block
+        if context.recent_messages:
+            for msg_xml in context.recent_messages:
+                # Parse XML strings like "<user>\n...\n</user>" into proper messages
+                msg_xml = msg_xml.strip()
+                if msg_xml.startswith("<user>") and msg_xml.endswith("</user>"):
+                    content = msg_xml[6:-7].strip()  # Strip <user> and </user> tags
+                    out.append(
+                        LoopHumanMessage(
+                            content=content,
+                            thread_id=state.thread_id,
+                            iteration=None,
+                            phase="execute_step",  # Prior thread messages are execute-phase
+                        )
+                    )
+                elif msg_xml.startswith("<assistant>") and msg_xml.endswith("</assistant>"):
+                    content = msg_xml[11:-12].strip()  # Strip <assistant> and </assistant> tags
+                    out.append(
+                        LoopAIMessage(
+                            content=content,
+                            thread_id=state.thread_id,
+                            iteration=None,
+                            phase="execute_step",
+                        )
+                    )
+
         if human_content.strip():
             out.append(
                 LoopHumanMessage(
@@ -134,7 +163,7 @@ class PromptBuilder:
                     thread_id=state.thread_id,
                     iteration=state.iteration,
                     goal_summary=goal[:200],
-                    phase="plan",  # RFC-214: Plan phase marker
+                    phase="plan_assess" if plan_phase == "assess" else "plan_generate",  # RFC-214
                 )
             )
         return out
@@ -304,54 +333,52 @@ class PromptBuilder:
         """Construct plan-context human text without ledger (RFC-214).
 
         AgentLoop ledger messages are appended separately in ``build_plan_messages`` so the
-        plan model sees native human/AI turns instead of a single flattened ``<AGENTLOOP_HISTORY>`` block.
-        Execute-step evidence lives in those ledger messages (IG-368). Working memory is not duplicated
-        here; the ledger carries execution narrative (IG-371).
+        plan model sees native human/AI turns instead of a single flattened block.
+        Execute-step evidence lives in those ledger messages (IG-368).
 
-        Always opens with ``<GOAL_PROGRESS>`` (goal + execute iteration). Optional
-        ``<PRIOR_CONVERSATION>`` follows when ``recent_messages`` is set.
+        RFC-214: Uses the plan-context envelope which includes:
+        - <GOAL_PROGRESS> with goal and iteration
+        - Optional <PLAN_STEP_ID_HINT> (generate phase)
+        - Optional <PLAN_DAG_CONTEXT> (generate phase)
+        - <CONTEXT_INFO> with timestamp and date
+
+        PRIOR_CONVERSATION is REMOVED - prior thread messages appear as native
+        ledger turns in the message list, maximizing cache hits.
 
         Args:
             goal: User's goal description
             state: Current loop state with optional plan snapshot
-            context: Planning context (prior thread XML, etc.)
-            plan_phase: When ``generate`` and prior steps exist, append a local step-id hint (IG-388).
+            context: Planning context (unused now - prior conversation is in ledger)
+            plan_phase: When ``generate``, append step-id hint and optional DAG context.
             dag_context: Optional XML-formatted DAG context for progressive planning.
 
         Returns:
             Formatted prompt string for the plan-context ``LoopHumanMessage``.
         """
         from soothe.core.agent_loop.state.schemas import next_goal_local_step_id_start
+        from soothe.core.prompts.user_envelope import build_plan_context_envelope
 
-        parts: list[str] = [self._format_goal_progress_footer(goal, state).rstrip("\n")]
-
-        # Prior conversation (IG-128, RFC-209)
-        if context.recent_messages:
-            parts.append("\n<PRIOR_CONVERSATION>\n")
-            parts.append(
-                'Prior thread (same session); user may reference "that" / "the above".\n\n'
-            )
-            for msg_xml in context.recent_messages:
-                parts.append(msg_xml)
-                parts.append("\n")
-            parts.append("</PRIOR_CONVERSATION>\n")
-
+        # Build step ID hint for generate phase
+        step_id_hint = None
         if plan_phase == "generate":
             nxt = next_goal_local_step_id_start(state)
             if nxt > 1:
                 width = max(2, len(str(nxt + 1)))
                 ex_a = str(nxt).zfill(width)
                 ex_b = str(nxt + 1).zfill(width)
-                parts.append(
-                    "\n<PLAN_STEP_ID_HINT>\n"
+                step_id_hint = (
+                    "<PLAN_STEP_ID_HINT>\n"
                     f'This goal already used lower step indices; for plan_action "new", '
                     f"use the next unused local step ids starting with {ex_a} "
                     f"(e.g. {ex_a}, {ex_b}, …), not 01/02 again.\n"
-                    "</PLAN_STEP_ID_HINT>\n"
+                    "</PLAN_STEP_ID_HINT>"
                 )
 
-            # Inject progressive DAG context when available
-            if dag_context:
-                parts.append(f"\n{dag_context}\n")
-
-        return "\n".join(parts)
+        # Build envelope with timestamp (RFC-214)
+        return build_plan_context_envelope(
+            goal=goal,
+            iteration=state.iteration + 1 if state.iteration is not None else None,
+            max_iterations=state.max_iterations,
+            dag_context=dag_context,
+            step_id_hint=step_id_hint,
+        )

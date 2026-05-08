@@ -5,7 +5,7 @@
 **Status**: Draft  
 **Kind**: Architecture Design  
 **Created**: 2026-04-08  
-**Dependencies**: RFC-200, RFC-100
+**Dependencies**: RFC-200, RFC-100, RFC-214 (Volatility-Tiered Prompt Architecture & Unified Message Ledger)
 
 ## Abstract
 
@@ -337,3 +337,75 @@ class LLMPlanner:
 - Three-layer structure: SYSTEM_CONTEXT, USER_TASK, INSTRUCTIONS
 - PromptBuilder API and modular fragment composition
 - Ambiguity handling via explicit container boundaries
+
+---
+
+## Amendment: RFC-214 Volatility-Tiered Prompt Architecture
+
+**Date**: 2026-05-08
+
+RFC-214 supersedes the `USER_TASK` layer composition defined in this RFC. The changes are:
+
+### USER_TASK Layer → User Message Envelope
+
+The `USER_TASK` layer's internal structure changes from a single XML block to the user message envelope defined in RFC-214 §2:
+
+**Before (this RFC):**
+```xml
+<USER_TASK>
+  <GOAL>translate to chinese</GOAL>
+  <PRIOR_CONVERSATION>
+    <user>who are you</user>
+    <assistant>I'm Soothe, your AI assistant...</assistant>
+  </PRIOR_CONVERSATION>
+  <EVIDENCE>step results...</EVIDENCE>
+</USER_TASK>
+```
+
+**After (RFC-214):**
+```xml
+<DYNAMIC_CONTEXT>
+  <CURRENT_GOAL>goal text and progress summary</CURRENT_GOAL>
+  <EXECUTION_HINTS>step-specific guidance</EXECUTION_HINTS>
+  <CONTEXT_INFO>timestamp, workspace state, date</CONTEXT_INFO>
+</DYNAMIC_CONTEXT>
+
+<RETRIEVED_KNOWLEDGE>
+  <MEMORY>per-turn recalled memories</MEMORY>
+  <RAG_DOCS>per-turn retrieved documents</RAG_DOCS>
+</RETRIEVED_KNOWLEDGE>
+
+<USER_QUERY>
+  Actual user message or orchestration instruction
+</USER_QUERY>
+```
+
+### Key Changes
+
+1. **`<PRIOR_CONVERSATION>` eliminated**: Prior thread messages are now native `LoopHumanMessage`/`LoopAIMessage` turns in the ledger portion of the message list, not XML inside the user message. This maximizes prompt-cache prefix reuse between plan-assess and plan-generate calls.
+
+2. **`<EVIDENCE>` eliminated**: Step results are now `LoopAIMessage` entries in the ledger. No separate evidence blocks.
+
+3. **`<GOAL>` → `<CURRENT_GOAL>`**: Goal text moves into `<DYNAMIC_CONTEXT>` since it changes every turn.
+
+4. **New sections**: `<EXECUTION_HINTS>`, `<CONTEXT_INFO>`, `<RETRIEVED_KNOWLEDGE>`, `<USER_QUERY>` — all per-turn volatile content that was previously mixed into the system prompt.
+
+### SYSTEM_CONTEXT Layer → Volatility-Tiered System Prompt
+
+The `SYSTEM_CONTEXT` layer is restructured into two tiers per RFC-214 §1:
+
+- **Static tier**: Identity, behavioral rules, tool orchestration guide, execution policies, directives (session-stable, maximum cache hits)
+- **Semi-static tier**: Workspace rules, workspace metadata, environment, memory summary, context projection, thread context, protocol summary (goal-stable)
+
+Volatile content (date line, execution hints, per-turn memories) is removed from `SYSTEM_CONTEXT` entirely.
+
+### INSTRUCTIONS Layer
+
+Unchanged. Execution policies remain in the system prompt's static tier. Plan-phase instructions remain in the plan system prompt.
+
+### Preserved from This RFC
+
+- Hierarchical XML container boundaries for LLM comprehension
+- `PromptBuilder` API and modular fragment composition
+- Ambiguity handling principle (never process system metadata as user content)
+- Classification-driven depth adaptation

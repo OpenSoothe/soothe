@@ -1076,13 +1076,31 @@ class Executor:
             if self._config is not None:
                 config = self._executor_langfuse_merge_for_stream(config, thread_id=cfg_thread)
 
-            step_body = f"Execute: {step.description}"
-            logger.debug("[Human Message] %s", log_preview(step_body, chars=150))
+            # Build user message envelope with execution hints (RFC-214)
+            from soothe.core.prompts.user_envelope import build_execute_step_envelope
+
+            hints_parts: list[str] = []
+            if step.subagent:
+                hints_parts.append(f"Suggested subagent: {step.subagent}")
+            if step.expected_output:
+                hints_parts.append(f"Expected output: {step.expected_output}")
+            execution_hints = None
+            if hints_parts:
+                execution_hints = (
+                    ". ".join(hints_parts) + ". Consider using the suggested approach first."
+                )
+
+            envelope = build_execute_step_envelope(
+                goal=None,  # Single step doesn't have goal context
+                step_description=step.description,
+                execution_hints=execution_hints,
+            )
+            logger.debug("[Human Message Envelope] %s", log_preview(envelope, chars=150))
             human_msg = LoopHumanMessage(
-                content=step_body,
+                content=envelope,
                 thread_id=thread_id,
-                iteration=None,  # Single step doesn't have iteration context
-                goal_summary=None,  # Could extract from goal_briefing if needed
+                iteration=None,
+                goal_summary=None,
                 workspace=workspace,
                 phase="execute_step",
             )
@@ -1132,7 +1150,7 @@ class Executor:
             )
 
             # IG-148: Add CoreAgent input/output evidence
-            primary_outcome["step_input"] = step_body  # HumanMessage content sent to Layer 1
+            primary_outcome["step_input"] = envelope  # HumanMessage content sent to Layer 1
             primary_outcome["output_summary"] = create_output_summary(output)  # Truncated findings
 
             logger.info(
@@ -1434,7 +1452,9 @@ class Executor:
     ) -> list[LoopHumanMessage]:
         """Build N LoopHumanMessage inputs for batch execution (RFC-214).
 
-        Each step gets its own LoopHumanMessage with step_id for ledger pairing.
+        Each step gets its own LoopHumanMessage with the user message envelope
+        containing <DYNAMIC_CONTEXT> (goal, execution hints, timestamp) and
+        <USER_QUERY> (step description).
 
         Args:
             steps: Steps to execute in this wave
@@ -1443,16 +1463,37 @@ class Executor:
         Returns:
             List of LoopHumanMessage instances (one per step)
         """
+        from soothe.core.prompts.user_envelope import build_execute_step_envelope
+
         messages = []
         for step in steps:
+            # Build execution hints from step metadata (RFC-214: hints in user envelope)
+            hints_parts: list[str] = []
+            if step.subagent:
+                hints_parts.append(f"Suggested subagent: {step.subagent}")
+            if step.expected_output:
+                hints_parts.append(f"Expected output: {step.expected_output}")
+            execution_hints = None
+            if hints_parts:
+                execution_hints = (
+                    ". ".join(hints_parts) + ". Consider using the suggested approach first."
+                )
+
+            envelope = build_execute_step_envelope(
+                goal=state.goal,
+                step_description=step.description,
+                execution_hints=execution_hints,
+                iteration=state.iteration + 1 if state.iteration is not None else None,
+                max_iterations=state.max_iterations,
+            )
             msg = LoopHumanMessage(
-                content=f"Execute: {step.description}",
+                content=envelope,
                 thread_id=state.thread_id,
                 iteration=state.iteration,
                 goal_summary=state.goal[:200] if state.goal else None,
                 workspace=state.workspace,
-                phase="execute_step",  # RFC-214: per-step phase
-                step_id=step.id,  # RFC-214: step_id for pairing
+                phase="execute_step",
+                step_id=step.id,
             )
             messages.append(msg)
 

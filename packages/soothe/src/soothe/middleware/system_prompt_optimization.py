@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import logging
 from contextvars import Token
 from typing import TYPE_CHECKING, Annotated, Any, NotRequired
@@ -245,80 +244,6 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
 
         return False
 
-    def _build_dynamic_sections(self, state: dict[str, Any]) -> str:
-        """Build all dynamic context sections based on triggers.
-
-        Args:
-            state: Request state with messages and context.
-
-        Returns:
-            Dynamic sections string with separator, or empty string.
-        """
-        if not state or not self._tool_trigger_registry:
-            return ""
-
-        messages = state.get("messages", [])
-        recent_tools = self._extract_recent_tool_calls(messages)
-        triggered_sections = self._tool_trigger_registry.get_triggered_sections(recent_tools)
-
-        # Build sections list
-        sections = []
-
-        # WORKSPACE (tool-triggered + condition)
-        if "WORKSPACE" in triggered_sections and self._should_inject_workspace(state):
-            workspace_section = self._build_workspace_section(
-                state.get("workspace"), state.get("git_status")
-            )
-            if workspace_section:
-                sections.append(workspace_section)
-
-        # THREAD (state-triggered)
-        if self._should_inject_thread(state):
-            thread_section = self._build_thread_section(state.get("thread_context", {}))
-            if thread_section:
-                sections.append(thread_section)
-
-        # PROTOCOLS (tool-triggered)
-        if "PROTOCOLS" in triggered_sections:
-            protocols_section = self._build_protocols_section(state.get("protocol_summary", {}))
-            if protocols_section:
-                sections.append(protocols_section)
-
-        # Tool-specific sections (from tool_context_registry)
-        if self._tool_context_registry:
-            for tool_name in recent_tools:
-                tool_section = self._tool_context_registry.get_system_context(tool_name)
-                if tool_section:
-                    sections.append(tool_section.strip())
-
-        # IG-268: Scenario-specific guidance (intent / synthesis-scenario triggered)
-        intent_type = (state.get("intent_type") or "").strip()
-        goal_type = ""
-        scen = (state.get("synthesis_scenario") or "").strip()
-        if scen == "code_architecture_design":
-            goal_type = "architecture_analysis"
-        elif scen == "research_synthesis":
-            goal_type = "research_synthesis"
-
-        classification = state.get("routing_classification") or state.get("unified_classification")
-        if not intent_type and classification:
-            if isinstance(classification, dict):
-                intent_type = (classification.get("intent_type") or "").strip()
-            else:
-                intent_type = (getattr(classification, "intent_type", "") or "").strip()
-
-        if intent_type or goal_type:
-            scenario_section = self._build_scenario_section(intent_type, goal_type)
-            if scenario_section:
-                sections.append(scenario_section.strip())
-
-        if not sections:
-            return ""
-
-        # Join with separator (UPPERCASE)
-        separator = "\n--- TOOL-SPECIFIC CONTEXT (DYNAMIC) ---\n"
-        return separator + "\n\n".join(sections) + "\n"
-
     def _get_base_prompt_core(self, complexity: str) -> str:
         """Behavioral system prompt for complexity (no volatile date line; RFC-104 cache order)."""
         from soothe.core.prompts import (
@@ -337,60 +262,65 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             return self._config.system_prompt.format(assistant_name=self._config.assistant_name)
         return _DEFAULT_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
 
-    @staticmethod
-    def _current_date_line() -> str:
-        now = dt.datetime.now(dt.UTC).astimezone()
-        return f"Today's date is {now.strftime('%Y-%m-%d')}."
-
     def _get_prompt_for_complexity(
         self, complexity: str, state: dict[str, Any] | None = None
     ) -> str:
-        """Get prompt with separated static and dynamic context sections.
+        """Build volatility-tiered system prompt (RFC-214).
 
-        Static Zone (always injected):
-        - Base behavioral prompt
-        - <ENVIRONMENT> section
+        Static Tier (session-stable, maximum cache hits):
+        - Base behavioral prompt + tool orchestration guide
+        - Execution policies
+        - Subagent routing directive (when user explicitly requests /browser, /claude, etc.)
+        - Agent loop output contract (execute-step only)
 
-        Dynamic Zone (tool/condition-triggered):
-        - <WORKSPACE> when workspace tools used AND workspace set
-        - <THREAD> when multi-turn or active goals
-        - Tool-specific fragments when tools invoked
+        Semi-Static Tier (goal-stable, changes infrequently):
+        - Workspace rules
+        - Workspace metadata
+        - Environment
+        - Memory summary (long-term persona/preferences)
+        - Context projection
+        - Thread context (complex only)
+        - Protocol summary (complex only)
+        - Scenario guidance
+
+        NOT in system prompt (moved to user message envelope):
+        - Date/time → <CONTEXT_INFO>
+        - Execution hints → <EXECUTION_HINTS>
+        - Current goal context → <CURRENT_GOAL>
+        - Per-turn recalled memories → <RETRIEVED_KNOWLEDGE><MEMORY>
 
         Args:
             complexity: One of "chitchat", "simple", "medium", "complex".
-            state: Request state with context information (workspace, git_status, etc.).
+            state: Request state with context information.
 
         Returns:
-            Base prompt with static and dynamic sections properly separated.
+            Volatility-ordered system prompt string.
         """
         from soothe.core.prompts.context_xml import build_context_sections_for_complexity
 
         base_core = self._get_base_prompt_core(complexity)
-        date_line = self._current_date_line()
 
-        # Chitchat: only base + ENVIRONMENT + date
+        # Chitchat: only base + ENVIRONMENT (no date line — date is in user envelope)
         if complexity == "chitchat":
             env_section = self._build_environment_section()
-            return f"{base_core}\n\n{env_section}\n\n{date_line}"
+            return f"{base_core}\n\n{env_section}"
 
-        # Build STATIC sections
-        static_sections = [base_core]
+        # ── Static Tier (session-stable) ──────────────────────────────
+        static_sections: list[str] = [base_core]
 
-        # ENVIRONMENT (always static)
+        # ENVIRONMENT in static tier for non-chitchat
         env_sections = build_context_sections_for_complexity(
             config=self._config,
             complexity=complexity,  # type: ignore[arg-type]
             state=state or {},
             include_workspace_extras=False,
         )
-        # Only include ENVIRONMENT from the returned sections
-        # (WORKSPACE, THREAD, PROTOCOLS will be handled dynamically)
         for section in env_sections:
             if section.strip().startswith("<ENVIRONMENT"):
                 static_sections.append(section)
                 break
 
-        # Context projection and memories (conditional on tool triggers)
+        # Context projection (static — changes infrequently)
         if state and self._tool_trigger_registry:
             messages = state.get("messages", [])
             recent_tools = self._extract_recent_tool_calls(messages)
@@ -400,11 +330,18 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             if projection and projection.entries and "context" in triggered:
                 static_sections.append(self._build_context_section(projection))
 
+        # Memory summary — long-term persona/preferences only (RFC-214)
+        # Per-turn memories go in the user message envelope <RETRIEVED_KNOWLEDGE>
+        if state and self._tool_trigger_registry:
+            if not messages:
+                messages = state.get("messages", [])
+            recent_tools = self._extract_recent_tool_calls(messages)
+            triggered = self._tool_trigger_registry.get_triggered_sections(recent_tools)
             memories = state.get("recalled_memories")
             if memories and "memory" in triggered:
                 static_sections.append(self._build_memory_section(memories))
 
-        # IG-192 / IG-196 / IG-323: SUBAGENT_ROUTING_DIRECTIVE (explicit /browser, /claude, /research, /explore)
+        # Subagent routing directive (explicit /browser, /claude, /research, /explore)
         subagent_directive = state.get("_subagent_routing_directive") if state else None
         if subagent_directive:
             directive_section = (
@@ -423,24 +360,96 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             )
             static_sections.append(directive_section)
 
-        # Agent loop output contract (Layer 2 only)
+        # Agent loop output contract (execute-step only)
         if state and state.get("current_decision"):
             contract_section = self._build_agent_loop_output_contract_section(self._config)
             if contract_section:
                 static_sections.append(contract_section)
 
-        # Build DYNAMIC sections
-        dynamic_section = ""
+        # ── Semi-Static Tier (goal-stable) ────────────────────────────
+        semi_static_sections: list[str] = []
+
+        # Workspace rules
+        workspace = state.get("workspace") if state else None
+        if workspace:
+            semi_static_sections.append(
+                "<WORKSPACE_RULES>\n"
+                "The open project root (absolute path) is under <WORKSPACE><root> above.\n\n"
+                "Rules:\n"
+                "- Use file tools (list_files, read_file, grep, glob, run_command) against this directory.\n"
+                "- For goals about architecture, structure, or the codebase: inspect this directory immediately.\n"
+                "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal explicitly names "
+                "a different project outside this directory.\n"
+                "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
+                "</WORKSPACE_RULES>"
+            )
+
+        # Workspace metadata
+        if state and self._should_inject_workspace(state):
+            ws_section = self._build_workspace_section(
+                state.get("workspace"), state.get("git_status")
+            )
+            if ws_section:
+                semi_static_sections.append(ws_section)
+
+        # Environment section (already added to static above for non-chitchat;
+        # for semi-static tier we include workspace-related context)
+
+        # Thread context (complex only)
+        if complexity == "complex" and state and self._should_inject_thread(state):
+            thread_section = self._build_thread_section(state.get("thread_context", {}))
+            if thread_section:
+                semi_static_sections.append(thread_section)
+
+        # Protocol summary (complex only)
+        if complexity == "complex" and state and self._tool_trigger_registry:
+            messages = state.get("messages", [])
+            recent_tools = self._extract_recent_tool_calls(messages)
+            triggered = self._tool_trigger_registry.get_triggered_sections(recent_tools)
+            if "PROTOCOLS" in triggered:
+                proto_section = self._build_protocols_section(state.get("protocol_summary", {}))
+                if proto_section:
+                    semi_static_sections.append(proto_section)
+
+        # Scenario guidance
         if state:
-            dynamic_section = self._build_dynamic_sections(state)
+            intent_type = (state.get("intent_type") or "").strip()
+            goal_type = ""
+            scen = (state.get("synthesis_scenario") or "").strip()
+            if scen == "code_architecture_design":
+                goal_type = "architecture_analysis"
+            elif scen == "research_synthesis":
+                goal_type = "research_synthesis"
 
-        # Assemble: static + dynamic (if any) + date
-        static_content = "\n\n".join(static_sections)
+            classification = state.get("routing_classification") or state.get(
+                "unified_classification"
+            )
+            if not intent_type and classification:
+                if isinstance(classification, dict):
+                    intent_type = (classification.get("intent_type") or "").strip()
+                else:
+                    intent_type = (getattr(classification, "intent_type", "") or "").strip()
 
-        if dynamic_section:
-            return static_content + "\n" + dynamic_section + "\n\n" + date_line
-        else:
-            return static_content + "\n\n" + date_line
+            if intent_type or goal_type:
+                scenario_section = self._build_scenario_section(intent_type, goal_type)
+                if scenario_section:
+                    semi_static_sections.append(scenario_section.strip())
+
+        # Tool-specific sections from context registry (semi-static)
+        if state and self._tool_context_registry:
+            messages = state.get("messages", [])
+            recent_tools = self._extract_recent_tool_calls(messages)
+            for tool_name in recent_tools:
+                tool_section = self._tool_context_registry.get_system_context(tool_name)
+                if tool_section:
+                    semi_static_sections.append(tool_section.strip())
+
+        # ── Assemble: static + semi-static (no date line, no execution hints) ──
+        parts = ["\n\n".join(static_sections)]
+        if semi_static_sections:
+            parts.append("\n\n".join(semi_static_sections))
+
+        return "\n\n".join(parts)
 
     def _get_domain_scoped_prompt(
         self, classification: RoutingClassification, state: dict[str, Any] | None = None
@@ -460,124 +469,52 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         return self._get_prompt_for_complexity(classification.task_complexity, state)
 
     def _build_memory_section(self, memories: list[MemoryItem]) -> str:
-        """Build <memory> XML for recalled memories.
+        """Build <MEMORY_SUMMARY> XML for long-term memories (RFC-214).
+
+        Only long-term persona/preferences go here (semi-static, goal-stable).
+        Per-turn situational recall belongs in the user message envelope
+        <RETRIEVED_KNOWLEDGE><MEMORY>.
 
         Args:
             memories: Recalled memory items from MemoryProtocol.
 
         Returns:
             XML section string with top 5 memories, 200 chars each.
-
-        Example:
-            >>> memories = [MemoryItem(content="User prefers Python", ...)]
-            >>> print(self._build_memory_section(memories))
-            <memory>
-            - [thread_123] User prefers Python
-            </memory>
         """
         lines = [
             f"- [{m.source_thread or 'unknown'}] {preview_first(m.content, 200)}"
             for m in memories[:5]
         ]
         joined = "\n".join(lines)
-        return f"<memory>\n{joined}\n</memory>"
+        return f"<MEMORY_SUMMARY>\n{joined}\n</MEMORY_SUMMARY>"
 
     def _build_workspace_section(self, workspace: Any, git_status: dict | None) -> str | None:
-        """Build <WORKSPACE> section.
-
-        Args:
-            workspace: Workspace path (string or Path).
-            git_status: Optional git repository status dict.
-
-        Returns:
-            XML section string, or None if workspace is None.
-        """
+        """Build <WORKSPACE> section via shared context_xml builder."""
         if not workspace:
             return None
-
         from pathlib import Path
 
+        from soothe.core.prompts.context_xml import build_soothe_workspace_section
+
         workspace_path = Path(str(workspace)) if not isinstance(workspace, Path) else workspace
-        is_git = git_status is not None
-
-        content = [
-            f"<root>{workspace_path}</root>",
-            f'<vcs present="{str(is_git).lower()}">',
-        ]
-
-        if git_status:
-            branch = git_status.get("branch", "unknown")
-            main_branch = git_status.get("main_branch", "main")
-            content.append(f"  <branch>{branch}</branch>")
-            content.append(f"  <main_branch>{main_branch}</main_branch>")
-
-            commits = git_status.get("recent_commits", "")
-            if commits:
-                content.append(f"  <recent_commits>{commits}</recent_commits>")
-
-        content.append("</vcs>")
-
-        return "<WORKSPACE>\n" + "\n".join(content) + "\n</WORKSPACE>"
+        return build_soothe_workspace_section(workspace_path, git_status)
 
     def _build_thread_section(self, thread_context: dict) -> str | None:
-        """Build <THREAD> section.
-
-        Args:
-            thread_context: Thread state dict from runner.
-
-        Returns:
-            XML section string, or None if thread_context is empty.
-        """
+        """Build <THREAD> section via shared context_xml builder."""
         if not thread_context:
             return None
+        from soothe.core.prompts.context_xml import build_soothe_thread_section
 
-        thread_id = thread_context.get("thread_id", "unknown")
-        goals = thread_context.get("active_goals", [])
-        turns = thread_context.get("conversation_turns", 0)
-        plan = thread_context.get("current_plan")
-
-        content = [f"<thread_id>{thread_id}</thread_id>"]
-
-        if goals:
-            import json
-
-            goals_json = json.dumps(goals)
-            content.append(f"<active_goals>{goals_json}</active_goals>")
-
-        content.append(f"<conversation_turns>{turns}</conversation_turns>")
-
-        if plan:
-            content.append(f"<current_plan>{plan}</current_plan>")
-
-        return "<THREAD>\n" + "\n".join(content) + "\n</THREAD>"
+        return build_soothe_thread_section(thread_context)
 
     def _build_protocols_section(self, protocol_summary: dict) -> str | None:
-        """Build <PROTOCOLS> section.
-
-        Args:
-            protocol_summary: Protocol state dict from runner.
-
-        Returns:
-            XML section string, or None if protocol_summary is empty.
-        """
+        """Build <PROTOCOLS> section via shared context_xml builder."""
         if not protocol_summary:
             return None
+        from soothe.core.prompts.context_xml import build_soothe_protocols_section
 
-        content = []
-
-        for proto_name, proto_info in protocol_summary.items():
-            if proto_info:
-                proto_type = proto_info.get("type", "unknown")
-                stats = proto_info.get("stats", "")
-                if stats:
-                    content.append(f'<{proto_name} type="{proto_type}" stats="{stats}"/>')
-                else:
-                    content.append(f'<{proto_name} type="{proto_type}"/>')
-
-        if not content:
-            return None
-
-        return "<PROTOCOLS>\n" + "\n".join(content) + "\n</PROTOCOLS>"
+        result = build_soothe_protocols_section(protocol_summary)
+        return result or None
 
     def _build_scenario_section(self, intent_type: str, goal_type: str) -> str | None:
         """Build scenario-specific guidance section (IG-268).
@@ -641,35 +578,32 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         )
 
     @staticmethod
-    def _append_execution_hints_suffix(optimized_prompt: str, state: Any) -> str:
-        """Merge Layer 2 execution hints that were appended to ``state['system_prompt']``.
+    def _extract_execution_hints_from_state(state: Any) -> str | None:
+        """Extract execution hints text from state for user message envelope (RFC-214).
 
-        ``ExecutionHintsMiddleware`` runs before the model and mutates ``system_prompt``;
-        this middleware replaces ``ModelRequest.system_message``, so we copy the hint suffix
-        onto the optimized prompt to avoid dropping hints (IG-384).
-
-        Args:
-            optimized_prompt: Prompt from complexity/context optimization.
-            state: Graph state (mapping-like).
+        ``ExecutionHintsMiddleware`` appends hints to ``state['system_prompt']``.
+        Instead of merging into the system prompt (which breaks cache), we extract
+        them here so the executor can place them in the user message envelope.
 
         Returns:
-            Prompt with hint suffix preserved when present.
+            Hints text without the marker prefix, or None if no hints present.
         """
         if not hasattr(state, "get"):
-            return optimized_prompt
+            return None
         raw = state.get("system_prompt")
         if not isinstance(raw, str) or _EXECUTION_HINTS_MARKER not in raw:
-            return optimized_prompt
+            return None
         idx = raw.find(_EXECUTION_HINTS_MARKER)
-        suffix = raw[idx:]
-        if optimized_prompt.rstrip().endswith(suffix.rstrip()):
-            return optimized_prompt
-        return optimized_prompt + suffix
+        # Return just the hints content (after the marker prefix)
+        return raw[idx + len(_EXECUTION_HINTS_MARKER) :].strip()
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
-        """Replace system prompt based on LLM classification.
+        """Replace system prompt based on LLM classification (RFC-214 volatility tiers).
 
-        Uses complexity-based prompt optimization with XML context injection.
+        Builds the system prompt using static + semi-static tiers only.
+        Execution hints are extracted from state and stored in
+        ``request.state["_soothe_execution_hints"]`` for the executor to
+        include in the user message envelope.
 
         Args:
             request: Model request to modify.
@@ -708,8 +642,6 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             complexity = "medium"
 
         # Check for direct subagent routing hint (preferred_subagent + routing_hint='subagent')
-        # IG-192: Inject explicit directive to use task tool when routing hint present
-
         msgs_for_hop = getattr(request, "messages", None) or []
         first_after_user = _last_message_is_human(msgs_for_hop)
         explicit_subagent = routing_hint == "subagent" and bool(preferred_subagent)
@@ -751,19 +683,21 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                 "git_status": request.state.get("git_status"),
                 "thread_context": request.state.get("thread_context", {}),
                 "protocol_summary": request.state.get("protocol_summary", {}),
-                "messages": request.state.get("messages", []),  # For tool call extraction
-                "active_goals": request.state.get("active_goals", []),  # For THREAD condition
+                "messages": request.state.get("messages", []),
+                "active_goals": request.state.get("active_goals", []),
                 "context_projection": request.state.get("context_projection"),
                 "recalled_memories": request.state.get("recalled_memories"),
-                "_subagent_routing_directive": request.state.get(
-                    "_subagent_routing_directive"
-                ),  # IG-192 / IG-196
+                "_subagent_routing_directive": request.state.get("_subagent_routing_directive"),
                 "intent_type": request.state.get("intent_type"),
                 "synthesis_scenario": request.state.get("synthesis_scenario"),
             }
 
         optimized_prompt = self._get_prompt_for_complexity(complexity, state_dict)
-        optimized_prompt = self._append_execution_hints_suffix(optimized_prompt, request.state)
+
+        # Extract execution hints from state for user message envelope (RFC-214)
+        hints_text = self._extract_execution_hints_from_state(request.state)
+        if hints_text:
+            request.state["_soothe_execution_hints"] = hints_text
 
         new_system_message = SystemMessage(content=optimized_prompt)
         overrides: dict[str, Any] = {"system_message": new_system_message}
