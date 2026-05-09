@@ -8,7 +8,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from soothe_cli.tui.app._app import DaemonReady, ServerReady, ServerStartFailed
+    from soothe_cli.tui.app._app import DaemonReady, ServerStartFailed
     from soothe_cli.tui.skills.load import ExtendedSkillMetadata
 
 from textual.containers import VerticalScroll
@@ -121,9 +121,7 @@ class _StartupMixin:
         Everything here is non-blocking: workers and thread-offloaded calls
         so the UI stays responsive.
         """
-        # Create UI adapter unconditionally — it only holds UI callbacks and
-        # doesn't depend on the agent. The agent is injected later at
-        # execute_task_textual() call time.
+        # Create UI adapter unconditionally — it only holds UI callbacks.
         from soothe_cli.tui.textual_adapter import TextualUIAdapter
 
         self._ui_adapter = TextualUIAdapter(
@@ -147,32 +145,13 @@ class _StartupMixin:
 
         # Fire-and-forget workers — none of these block the event loop.
 
-        # Discover skills on the local machine when not using a daemon backend.
-        # Daemon-backed sessions load skill metadata from the daemon instead.
-        if self._daemon_config is None:
-            self.run_worker(
-                self._discover_skills(),
-                exclusive=True,
-                group="startup-skill-discovery",
-            )
-
         self.run_worker(self._init_session_state, exclusive=True, group="session-init")
 
-        # Daemon-backed TUI startup
-        if self._daemon_config is not None:
-            self.run_worker(
-                self._connect_daemon_background,
-                exclusive=True,
-                group="daemon-connect",
-            )
-
-        # Server startup (model creation + server process)
-        if self._server_kwargs is not None:
-            self.run_worker(
-                self._start_server_background,
-                exclusive=True,
-                group="server-startup",
-            )
+        self.run_worker(
+            self._connect_daemon_background,
+            exclusive=True,
+            group="daemon-connect",
+        )
 
         # Background update check and what's-new banner
         # (opt-out via env var or config.yml [update].check)
@@ -190,8 +169,7 @@ class _StartupMixin:
                 group="startup-whats-new",
             )
 
-        # Prewarm model discovery and profile caches unconditionally so
-        # /model opens instantly even before the agent/server is ready.
+        # Prewarm model discovery and profile caches so /model opens quickly.
         self.run_worker(
             self._prewarm_model_caches,
             exclusive=True,
@@ -199,9 +177,8 @@ class _StartupMixin:
         )
 
         # Auto-submit initial prompt or skill if provided via -m / --skill.
-        # This check must come first because _lc_loop_id and _agent are
-        # always set (even for brand-new sessions), so an elif after the
-        # loop-history branch would never execute.
+        # This check must come first so an elif after the loop-history branch
+        # would not skip initial submission.
         # When connecting, defer until the ready message handler fires.
         # NOTE: _schedule_initial_submission() has a side effect (queues a
         # task via call_after_refresh); short-circuit ensures it only runs
@@ -416,150 +393,8 @@ class _StartupMixin:
 
         return await discover_skills_async(daemon_config=self._daemon_config)
 
-    async def _resolve_resume_loop_intent(self) -> None:
-        """Resolve a `-r` resume intent into a concrete loop id.
-
-        Consumes `self._resume_loop_intent` and resolves it into a loop id
-        (LangGraph uses the same value as ``configurable.thread_id``). Mutates
-        `self._lc_loop_id` and optionally
-        `self._assistant_id` / `self._server_kwargs`. Falls back to a fresh
-        loop id on any DB error.
-        """
-        from soothe_cli.tui.sessions import (
-            find_similar_loops,
-            generate_loop_id,
-            get_loop_agent,
-            get_most_recent,
-            loop_exists,
-        )
-
-        resume = self._resume_loop_intent
-        self._resume_loop_intent = None  # consumed
-
-        if not resume:
-            return
-
-        # Matches _DEFAULT_AGENT_NAME in main.py. Do NOT import it — main.py is
-        # the CLI entry point and pulls in argparse, rich, etc. at module level.
-        # Even a deferred import drags in the full dep tree for a single
-        # string constant.
-        default_agent = "agent"
-
-        try:
-            if resume == "__MOST_RECENT__":
-                agent_filter = self._assistant_id if self._assistant_id != default_agent else None
-                loop_id = await get_most_recent(agent_filter)
-                if loop_id:
-                    agent_name = await get_loop_agent(loop_id)
-                    if agent_name:
-                        self._assistant_id = agent_name
-                        if self._server_kwargs:
-                            self._server_kwargs["assistant_id"] = agent_name
-                    self._lc_loop_id = loop_id
-                else:
-                    self._lc_loop_id = generate_loop_id()
-                    if agent_filter:
-                        msg = f"No prior loop for '{agent_filter}', starting new."
-                    else:
-                        msg = "No prior loop in storage, starting new."
-                    self.notify(msg, severity="warning", markup=False)
-            elif await loop_exists(resume):
-                self._lc_loop_id = resume
-                if self._assistant_id == default_agent:
-                    agent_name = await get_loop_agent(resume)
-                    if agent_name:
-                        self._assistant_id = agent_name
-                        if self._server_kwargs:
-                            self._server_kwargs["assistant_id"] = agent_name
-            else:
-                # Loop id not found in local checkpoint DB — notify + fall back
-                self._lc_loop_id = generate_loop_id()
-                similar = await find_similar_loops(resume)
-                hint = f"Loop id '{resume}' not found."
-                if similar:
-                    hint += f" Did you mean: {', '.join(str(t) for t in similar)}?"
-                self.notify(hint, severity="warning", timeout=6, markup=False)
-        except Exception:
-            logger.exception("Failed to resolve resume intent %r", resume)
-            self._lc_loop_id = generate_loop_id()
-            self.notify(
-                "Could not look up prior conversation. Starting new session.",
-                severity="warning",
-            )
-
-        # Update session state if ready (may still be initializing in a
-        # concurrent worker)
-        if self._session_state:
-            self._session_state.loop_id = self._lc_loop_id
-
-    async def _start_server_background(self) -> None:
-        """Background worker: resolve `-r` resume intent, start server + MCP preload.
-
-        Also runs deferred model creation if `model_kwargs` was provided,
-        so the langchain import + init doesn't block first paint.
-        """
-        # Phase 1: Resolve resume intent (if any) before server startup
-        if self._resume_loop_intent:
-            await self._resolve_resume_loop_intent()
-
-        # Run deferred model creation. settings.model_name / model_provider
-        # are already set eagerly for the status bar display; this call
-        # does the heavy langchain import + SDK init and may refine them
-        # (e.g., context_limit from the model profile).
-        if self._model_kwargs is not None:
-            from soothe_cli.tui.config import create_model
-            from soothe_cli.tui.model_config import ModelConfigError, save_recent_model
-
-            try:
-                result = create_model(**self._model_kwargs)
-            except ModelConfigError as exc:
-                self.post_message(self.ServerStartFailed(error=exc))
-                return
-            result.apply_to_settings()
-            save_recent_model(f"{result.provider}:{result.model_name}")
-            self._model_kwargs = None  # consumed
-
-        from soothe_cli.tui.server_manager import start_server_and_get_agent
-
-        coros: list[Any] = [start_server_and_get_agent(**self._server_kwargs)]  # type: ignore[arg-type]
-
-        try:
-            results = await asyncio.gather(*coros, return_exceptions=True)
-        except Exception as exc:  # noqa: BLE001  # defensive catch around gather
-            self.post_message(self.ServerStartFailed(error=exc))
-            return
-
-        server_result = results[0]
-        if isinstance(server_result, BaseException):
-            self.post_message(
-                self.ServerStartFailed(
-                    error=server_result
-                    if isinstance(server_result, Exception)
-                    else RuntimeError(str(server_result)),
-                )
-            )
-            return
-
-        agent, server_proc, _ = server_result
-
-        # Assign immediately so the finally block in run_textual_app can
-        # clean up the server even if the ServerReady message is never
-        # processed (e.g. user quits during startup).
-        self._server_proc = server_proc
-
-        self.post_message(
-            self.ServerReady(
-                agent=agent,
-                server_proc=server_proc,
-                mcp_server_info=None,
-            )
-        )
-
     async def _connect_daemon_background(self) -> None:
         """Background worker: connect the TUI directly to the daemon."""
-        if self._daemon_config is None:
-            return
-
         try:
             from soothe_sdk.client import (
                 is_daemon_live,
@@ -589,56 +424,10 @@ class _StartupMixin:
 
         self.post_message(self.DaemonReady(session=session, status_event=status_event))
 
-    def on_soothe_app_server_ready(self, event: ServerReady) -> None:
-        """Handle successful background server startup."""
-        self._connecting = False
-        self._agent = event.agent
-        self._server_proc = event.server_proc
-        self._mcp_server_info = event.mcp_server_info
-        self._mcp_tool_count = sum(len(s.tools) for s in (event.mcp_server_info or []))
-
-        # Update welcome banner to show ready state
-        try:
-            banner = self.query_one("#welcome-banner", WelcomeBanner)
-            banner.set_connected(self._mcp_tool_count)
-        except NoMatches:
-            logger.warning("Welcome banner not found during server ready transition")
-
-        # Handle deferred initial prompt, skill, or conversation history
-        if not self._schedule_initial_submission() and (
-            self._lc_loop_id and self._runtime_backend_ready()
-        ):
-            self.call_after_refresh(lambda: asyncio.create_task(self._load_loop_history()))
-
-        # Drain deferred actions (e.g. model or loop switch queued during connection)
-        # if the agent is not actively running. Wrapped in a helper so that
-        # exceptions are logged rather than becoming unhandled task errors.
-        if self._deferred_actions and not self._agent_running:
-
-            async def _safe_drain() -> None:
-                try:
-                    await self._maybe_drain_deferred()
-                except Exception:
-                    logger.exception("Unhandled error while draining deferred actions")
-                    with suppress(Exception):
-                        await self._mount_message(
-                            ErrorMessage(
-                                "A deferred action failed during startup. You may need to retry the operation."
-                            )
-                        )
-
-            self.call_after_refresh(lambda: asyncio.create_task(_safe_drain()))
-
-        # Drain any messages the user typed while the server was starting.
-        # (If an initial submission exists, its cleanup path will drain the queue.)
-        if self._pending_messages and not self._has_initial_submission():
-            self.call_after_refresh(lambda: asyncio.create_task(self._process_next_from_queue()))
-
     def on_soothe_app_daemon_ready(self, event: DaemonReady) -> None:
         """Handle successful daemon bootstrap for the TUI."""
         self._connecting = False
         self._daemon_session = event.session
-        self._agent = event.session
 
         status_loop_id = event.status_event.get("loop_id")
         if isinstance(status_loop_id, str) and status_loop_id:
@@ -696,10 +485,10 @@ class _StartupMixin:
         )
 
     def on_soothe_app_server_start_failed(self, event: ServerStartFailed) -> None:
-        """Handle background server startup failure."""
+        """Handle daemon bootstrap / connection failure."""
         self._connecting = False
         self._server_startup_error = f"{type(event.error).__name__}: {event.error}"
-        logger.error("Server startup failed: %s", event.error, exc_info=event.error)
+        logger.error("Daemon connection failed: %s", event.error, exc_info=event.error)
         # Update banner to show persistent failure state
         try:
             banner = self.query_one("#welcome-banner", WelcomeBanner)
@@ -707,7 +496,7 @@ class _StartupMixin:
         except NoMatches:
             logger.warning("Welcome banner not found during server failure transition")
 
-        # Discard any messages queued while the server was starting
+        # Discard any messages queued while connecting
         if self._pending_messages:
             self._pending_messages.clear()
             for w in self._queued_widgets:
@@ -785,7 +574,7 @@ class _StartupMixin:
 
     async def _prewarm_model_caches(self) -> None:
         """Prewarm model discovery and profile caches without blocking startup."""
-        if self._daemon_config is not None and self._daemon_session is None:
+        if self._daemon_session is None:
             logger.debug("Skipping model cache prewarm - daemon session not ready")
             return
         try:

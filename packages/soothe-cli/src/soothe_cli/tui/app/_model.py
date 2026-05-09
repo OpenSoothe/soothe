@@ -434,8 +434,8 @@ class _ModelMixin:
             loop_id: Active AgentLoop id (same value LangGraph uses as
                 ``configurable.thread_id``).
         """
-        if not self._agent:
-            await self._mount_message(AppMessage("Cannot switch loops: no active agent"))
+        if not self._runtime_backend_ready():
+            await self._mount_message(AppMessage("Cannot switch loops: no execution backend"))
             return
 
         if not self._session_state:
@@ -545,11 +545,9 @@ class _ModelMixin:
     ) -> None:
         """Switch model for the current loop without changing `config.yml`.
 
-        For a local in-process agent, validates via `create_model` and sets an
-        override consumed by `ConfigurableModelMiddleware` through `CLIContext`.
-        For a daemon-backed session, the override is sent on each websocket
-        `input` (resolved on the daemon host). Global `settings` and on-disk
-        defaults are not updated; use `/model --default` to persist a new default.
+        The override is sent on each websocket ``input`` (resolved on the daemon
+        host). Global ``settings`` and on-disk defaults are not updated; use
+        ``/model --default`` to persist a new default.
 
         Args:
             model_spec: The model specification to switch to.
@@ -559,12 +557,8 @@ class _ModelMixin:
                 for auto-detection.
             extra_kwargs: Extra constructor kwargs from `--model-params`.
         """
-        from soothe_cli.tui.config import create_model, detect_provider, settings
-        from soothe_cli.tui.model_config import (
-            ModelSpec,
-            get_credential_env_var,
-            has_provider_credentials,
-        )
+        from soothe_cli.tui.config import detect_provider, settings
+        from soothe_cli.tui.model_config import ModelSpec
 
         logger.info("Switching model to %s", model_spec)
 
@@ -578,8 +572,10 @@ class _ModelMixin:
             # treat ":claude-opus-4-6" as "claude-opus-4-6"
             model_spec = model_spec.removeprefix(":")
 
-            if self._agent is None:
-                await self._mount_message(ErrorMessage("No agent is configured for this session."))
+            if not self._runtime_backend_ready():
+                await self._mount_message(
+                    ErrorMessage("No execution backend is configured for this session.")
+                )
                 return
 
             parsed = ModelSpec.try_parse(model_spec)
@@ -589,28 +585,6 @@ class _ModelMixin:
             else:
                 model_name = model_spec
                 provider = detect_provider(model_spec)
-
-            # Check credentials (local client only; daemon host holds API keys)
-            if self._daemon_session is None:
-                has_creds = has_provider_credentials(provider) if provider else None
-                if has_creds is False and provider is not None:
-                    env_var = get_credential_env_var(provider)
-                    detail = (
-                        f"{env_var} is not set or is empty"
-                        if env_var
-                        else (
-                            f"provider '{provider}' is not recognized. "
-                            "Add it to ~/SOOTHE_HOME/config.yml with an "
-                            "api_key_env field"
-                        )
-                    )
-                    await self._mount_message(ErrorMessage(f"Missing credentials: {detail}"))
-                    return
-                if has_creds is None and provider:
-                    logger.debug(
-                        "Credentials for provider '%s' cannot be verified; proceeding anyway",
-                        provider,
-                    )
 
             # Build the provider:model spec for the configurable middleware.
             display = model_spec
@@ -625,51 +599,25 @@ class _ModelMixin:
                 await self._mount_message(AppMessage(f"Already using {display} for this loop"))
                 return
 
-            if self._daemon_session is not None:
-                self._model_override = display
-                self._model_params_override = extra_kwargs
-                bar_provider = (parsed.provider if parsed else (provider or "")) or ""
-                bar_model = (parsed.model if parsed else model_name) or ""
-                if self._status_bar:
-                    self._status_bar.set_model(provider=bar_provider, model=bar_model)
+            if self._daemon_session is None:
                 await self._mount_message(
-                    AppMessage(
-                        f"Switched this loop to {display} for daemon turns "
-                        f"(session only; daemon host default in config.yml unchanged).",
-                    ),
+                    ErrorMessage("Not connected to the daemon; cannot switch models.")
                 )
-                logger.info("Model override set to %s for daemon-backed TUI session", display)
-            else:
-                try:
-                    result = create_model(
-                        display,
-                        extra_kwargs=extra_kwargs,
-                        profile_overrides=self._profile_override,
-                    )
-                except Exception as exc:
-                    logger.exception("Failed to resolve model metadata for %s", display)
-                    await self._mount_message(ErrorMessage(f"Failed to switch model: {exc}"))
-                    return
+                return
 
-                # Per-session: do not mutate global ``settings`` or persist defaults.
-                self._model_override = display
-                self._model_params_override = extra_kwargs
-
-                if self._status_bar:
-                    self._status_bar.set_model(
-                        provider=result.provider or "",
-                        model=result.model_name or "",
-                    )
-
-                await self._mount_message(
-                    AppMessage(
-                        f"Switched this loop to {display} (session only; default in config.yml unchanged).",
-                    ),
-                )
-                logger.info(
-                    "Model override set to %s for current session (ConfigurableModelMiddleware)",
-                    display,
-                )
+            self._model_override = display
+            self._model_params_override = extra_kwargs
+            bar_provider = (parsed.provider if parsed else (provider or "")) or ""
+            bar_model = (parsed.model if parsed else model_name) or ""
+            if self._status_bar:
+                self._status_bar.set_model(provider=bar_provider, model=bar_model)
+            await self._mount_message(
+                AppMessage(
+                    f"Switched this loop to {display} for daemon turns "
+                    f"(session only; daemon host default in config.yml unchanged).",
+                ),
+            )
+            logger.info("Model override set to %s for daemon-backed TUI session", display)
 
             # Anchor to bottom so the confirmation message is visible
             with suppress(NoMatches, ScreenStackError):
