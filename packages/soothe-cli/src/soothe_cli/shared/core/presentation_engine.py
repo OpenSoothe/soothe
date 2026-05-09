@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from soothe_sdk.core.verbosity import VerbosityTier, should_show
 from soothe_sdk.utils import log_preview
 
+from soothe_cli.shared.duration_format import format_duration_ms
+
 
 @dataclass
 class PresentationState:
@@ -152,7 +154,7 @@ class PresentationEngine:
             icon = "✗" if is_error else "✓"
             result_line = f"{icon} {summarized}"
         if duration_ms > 0:
-            result_line += f" ({duration_ms}ms)"
+            result_line += f" ({format_duration_ms(duration_ms)})"
         return result_line
 
     @staticmethod

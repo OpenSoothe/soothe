@@ -159,7 +159,7 @@ class TestFormatters:
         )
         assert line.icon == "⚙"
         assert line.indent == ""
-        assert line.content == 'Task(explore, "Count README files") -> ✓ Completed (5900ms)'
+        assert line.content == 'Task(explore, "Count README files") -> ✓ Completed (5.9s)'
         assert line.duration_ms is None
 
     def test_format_subagent_done_task_scope_with_answer_summary(self) -> None:
@@ -173,7 +173,7 @@ class TestFormatters:
         )
         assert (
             line.content
-            == 'Task(claude, "Count README files") -> ✓ Completed (40852ms): Found 88 README files in the workspace.'
+            == 'Task(claude, "Count README files") -> ✓ Completed (40.9s): Found 88 README files in the workspace.'
         )
 
     def test_format_step_done(self) -> None:

@@ -29,7 +29,7 @@ from soothe_cli.tui.config import (
     get_glyphs,
     is_ascii_mode,
 )
-from soothe_cli.tui.formatting import format_duration
+from soothe_cli.tui.formatting import format_duration, format_duration_ms
 from soothe_cli.tui.input import EMAIL_PREFIX_PATTERN, INPUT_HIGHLIGHT_PATTERN
 from soothe_cli.tui.preview_limits import (
     APPROVAL_DIFF_MAX_LINES,
@@ -3216,7 +3216,7 @@ class CognitionStepMessage(Vertical):
         self._tools_body_collapsed = True
         self._refresh_tools_display()
 
-        dur_str = f"{duration_ms}ms"
+        dur_str = format_duration_ms(duration_ms)
         tool_part = f" · {tool_call_count} tools" if tool_call_count > 0 else ""
 
         prose = self._execute_assistant_buffer.strip()
@@ -3271,7 +3271,7 @@ class CognitionStepMessage(Vertical):
         sub = f"{g.output_prefix} {g.circle_empty} "
         assembled: list[object] = []
         if self._last_success is not None:
-            dur_str = f"{self._last_duration_ms}ms"
+            dur_str = format_duration_ms(self._last_duration_ms)
             tool_part = (
                 f" · {self._last_tool_call_count} tools" if self._last_tool_call_count > 0 else ""
             )

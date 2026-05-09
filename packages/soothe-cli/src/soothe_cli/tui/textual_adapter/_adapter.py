@@ -47,7 +47,6 @@ from soothe_cli.tui._session_stats import (
     format_token_count as format_token_count,
 )
 from soothe_cli.tui.widgets.messages import (
-    CognitionGoalTreeMessage,
     CognitionStepMessage,
     ToolCallMessage,
 )
@@ -171,9 +170,6 @@ class TextualUIAdapter:
         self._current_step_messages: dict[str, CognitionStepMessage] = {}
         """Map of agent-loop act step IDs to step card widgets."""
 
-        self._goal_tree_by_namespace: dict[tuple[Any, ...], CognitionGoalTreeMessage] = {}
-        """Live Goal→steps tree card per stream namespace (agentic Layer 2)."""
-
         self._step_by_namespace: dict[tuple[Any, ...], CognitionStepMessage] = {}
         """Active step card per stream namespace (main-agent tool aggregation, IG-402)."""
 
@@ -254,9 +250,6 @@ class TextualUIAdapter:
         for step_msg in list(self._current_step_messages.values()):
             step_msg.set_interrupted(message)
         self._current_step_messages.clear()
-        for tree in list(self._goal_tree_by_namespace.values()):
-            tree.set_interrupted(message)
-        self._goal_tree_by_namespace.clear()
         self._tool_to_step.clear()
         self._step_by_namespace.clear()
         self._task_inner_tool_pending_lines.clear()
