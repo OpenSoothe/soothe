@@ -31,6 +31,8 @@ class WebSocketClient:
 
     Args:
         url: WebSocket URL (e.g., ``ws://localhost:8765``).
+        client_id: Optional client identifier for log differentiation. If not
+            provided, a short random ID is generated (8 hex chars).
         max_frame_size: Maximum incoming WebSocket message size in bytes. Should be
             at least the daemon's ``transport.websocket.max_frame_size`` when that
             is customized.
@@ -40,15 +42,18 @@ class WebSocketClient:
         self,
         url: str = "ws://localhost:8765",
         *,
+        client_id: str | None = None,
         max_frame_size: int = _DEFAULT_MAX_FRAME_SIZE,
     ) -> None:
         """Initialize WebSocket client.
 
         Args:
             url: WebSocket URL.
+            client_id: Optional client identifier for log differentiation.
             max_frame_size: Max size for frames received from the daemon.
         """
         self._url = url
+        self._client_id = client_id or uuid.uuid4().hex[:8]
         self._max_frame_size = max_frame_size
         self._ws: websockets.asyncio.client.ClientConnection | None = None
         self._connected = False
@@ -70,7 +75,7 @@ class WebSocketClient:
             )
             self._connected = True
 
-            logger.info("[Client] Connected to daemon at %s", self._url)
+            logger.info("[Client:%s] Connected to daemon at %s", self._client_id, self._url)
         except Exception as e:
             self._connected = False
             msg = f"Failed to connect to daemon: {e}"
@@ -144,6 +149,15 @@ class WebSocketClient:
             self._connected = False
             msg = f"Connection error: {e}"
             raise ConnectionError(msg) from e
+
+    @property
+    def client_id(self) -> str:
+        """Get the client identifier.
+
+        Returns:
+            Client identifier string (8 hex chars).
+        """
+        return self._client_id
 
     @property
     def is_connected(self) -> bool:
@@ -480,18 +494,27 @@ class WebSocketClient:
         payload["request_id"] = request_id
         await self.send(payload)
 
-        async with asyncio.timeout(timeout):
-            while True:
-                event = await self._read_from_socket()
-                if not event:
-                    raise TimeoutError(f"Timed out waiting for {response_type}")
-                if event.get("request_id") != request_id:
-                    self._pending_events.append(event)
-                    continue
-                if event.get("type") == "error":
-                    raise RuntimeError(str(event.get("message", "daemon error")))
-                if event.get("type") == response_type:
-                    return event
+        try:
+            async with asyncio.timeout(timeout):
+                while True:
+                    event = await self._read_from_socket()
+                    if not event:
+                        raise TimeoutError(
+                            f"WebSocket closed while waiting for {response_type} "
+                            f"(request_id={request_id})"
+                        )
+                    if event.get("request_id") != request_id:
+                        self._pending_events.append(event)
+                        continue
+                    if event.get("type") == "error":
+                        raise RuntimeError(str(event.get("message", "daemon error")))
+                    if event.get("type") == response_type:
+                        return event
+        except TimeoutError:
+            raise TimeoutError(
+                f"Daemon did not respond to {payload.get('type', 'unknown')} "
+                f"within {timeout}s (request_id={request_id}, expected={response_type})"
+            ) from None
 
     async def send_detach(self) -> None:
         """Notify the daemon that this client is detaching."""
@@ -619,6 +642,14 @@ class WebSocketClient:
             return self._pending_events.popleft()
 
         return await self._read_from_socket()
+
+    def clear_pending_events(self) -> None:
+        """Clear all pending events from the internal queue.
+
+        Useful in tests to discard setup-phase events that should not
+        affect isolation verification.
+        """
+        self._pending_events.clear()
 
     async def _read_from_socket(self) -> dict[str, Any] | None:
         """Read one event directly from the websocket transport."""

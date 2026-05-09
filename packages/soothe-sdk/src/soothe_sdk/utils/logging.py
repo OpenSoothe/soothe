@@ -9,6 +9,7 @@ This module is part of Phase 1 of IG-174: CLI import violations fix.
 import json
 import logging
 import os
+import random
 import time
 from datetime import UTC
 from pathlib import Path
@@ -17,6 +18,9 @@ from typing import Any
 # Valid values for SOOTHE_LOG_LEVEL (same names as logging module levels).
 _SOOTHE_LOG_LEVEL_ENV = "SOOTHE_LOG_LEVEL"
 _VALID_STD_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
+
+# Client ID for CLI session (8 hex chars, generated once per process)
+_CLI_CLIENT_ID: str = random.randbytes(4).hex()
 
 # Single-letter markers for compact log lines (use %(level_short)s in format strings).
 _LEVEL_SHORT_BY_NO: dict[int, str] = {
@@ -88,6 +92,18 @@ class ShortLevelFormatter(logging.Formatter):
             return super().format(record)
         finally:
             record.name = saved_name
+
+
+class ClientFormatter(ShortLevelFormatter):
+    """Formatter that includes a client ID tag for CLI logs."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format with client ID tag like ``[Client:be5d8902]``."""
+        record.client_id = f"[Client:{_CLI_CLIENT_ID}]"
+        try:
+            return super().format(record)
+        finally:
+            delattr(record, "client_id")
 
 
 def resolve_cli_log_level(
@@ -242,9 +258,9 @@ def setup_logging(
         log_file: Optional log file path (e.g., Path("~/.soothe/logs/soothe-cli.log")).
         format_string: Optional custom format string.
     """
-    # Default format
+    # Default format matches soothed.log: timestamp level [Client:xxxxxxxx] name:lineno message
     if not format_string:
-        format_string = "%(asctime)s - %(name)s - %(level_short)s - %(message)s"
+        format_string = "%(asctime)s %(level_short)s %(client_id)s %(name)s:%(lineno)d %(message)s"
 
     level_upper = level.upper()
     root_level = getattr(logging, level_upper)
@@ -256,12 +272,13 @@ def setup_logging(
     if log_file:
         log_file.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_file)
-        file_handler.setFormatter(ShortLevelFormatter(format_string))
+        file_handler.setFormatter(ClientFormatter(format_string))
         file_handler.setLevel(root_level)
         logging.getLogger().addHandler(file_handler)
 
 
 __all__ = [
+    "ClientFormatter",
     "GlobalInputHistory",
     "ShortLevelFormatter",
     "abbreviate_logger_name",

@@ -37,6 +37,19 @@ async def _connect_and_drain_handshake(client: WebSocketClient) -> None:
     await client.wait_for_daemon_ready()
 
 
+async def _clear_pending_and_subscribe(client: WebSocketClient, loop_id: str) -> None:
+    """Clear pending events from setup phase, then verify subscription."""
+    # The WebSocketClient accumulates pending events during setup (daemon_ready,
+    # status, loop_new_response, etc.). Clear them before isolation checks.
+    client.clear_pending_events()
+    # Wait for subscription confirmation to ensure clean state
+    await client.request_response(
+        {"type": "loop_subscribe", "loop_id": loop_id},
+        response_type="loop_subscribe_response",
+        timeout=5.0,
+    )
+
+
 async def _create_client_with_loop(ws_port: int) -> tuple[WebSocketClient, str]:
     """Helper: create client and bootstrap loop; returns (client, loop_id)."""
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
@@ -132,6 +145,10 @@ class TestLoopIsolation:
             # Create two clients with different loops
             client1, loop1 = await _create_client_with_loop(ws_port)
             client2, loop2 = await _create_client_with_loop(ws_port)
+
+            # Clear pending events only for client2 before isolation check
+            # Client2 should not receive any loop1 events during execution
+            client2.clear_pending_events()
 
             # Send multiple inputs to loop1 while loop2 is idle
             for i in range(3):
@@ -384,6 +401,10 @@ class TestLoopIsolation:
                 timeout=5.0,
             )
 
+            # Clear pending events from setup phase before detach test
+            client1.clear_pending_events()
+            client2.clear_pending_events()
+
             # Client1 detaches from loop
             detach_resp = await client1.request_response(
                 {"type": "loop_detach", "loop_id": loop_id},
@@ -391,6 +412,9 @@ class TestLoopIsolation:
                 timeout=5.0,
             )
             assert detach_resp.get("success", True), "Detach should succeed"
+
+            # Clear any events from detach response handling
+            client1.clear_pending_events()
 
             # Send input to loop from client2
             await client2.send_input(loop_id, "Test after detach")
@@ -429,6 +453,9 @@ class TestLoopIsolation:
             # Create two clients with different loops
             client1, loop1 = await _create_client_with_loop(ws_port)
             client2, loop2 = await _create_client_with_loop(ws_port)
+
+            # Clear pending events from setup phase before isolation check
+            client2.clear_pending_events()
 
             # Client1 executes on loop1 (creates event history)
             await client1.send_input(loop1, "First message in loop1")

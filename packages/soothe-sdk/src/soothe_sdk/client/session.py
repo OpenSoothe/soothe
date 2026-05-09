@@ -102,7 +102,7 @@ async def bootstrap_loop_session(
     if not sub_resp.get("success", True):
         raise RuntimeError(str(sub_resp.get("message", "loop_subscribe failed")))
 
-    logger.info("Subscribed to loop %s with verbosity=%s", loop_id[:16], verbosity)
+    logger.info("Subscribed to loop %s with verbosity=%s", loop_id, verbosity)
     return {"type": "session_ready", "loop_id": loop_id, "success": True}
 
 

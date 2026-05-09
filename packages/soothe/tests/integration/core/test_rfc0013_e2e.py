@@ -203,6 +203,11 @@ async def test_three_clients_complete_isolation(tmp_path: Path, requires_llm_api
         # Verify all thread IDs are unique
         assert len(set(thread_ids)) == 3
 
+        # Clear pending events only for clients 1 and 2 (should not receive events)
+        # Client 0 should receive events from its own query
+        clients[1].clear_pending_events()
+        clients[2].clear_pending_events()
+
         # Send input from client 0
         await clients[0].send_input(thread_ids[0], "Query from client 0")
 
