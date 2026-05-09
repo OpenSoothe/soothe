@@ -74,3 +74,16 @@ async def record_claude_session(
         await durability.update_thread_metadata(thread_id, ThreadMetadata(claude_sessions=merged))
     except Exception:
         logger.debug("Failed to persist Claude session id for thread %s", thread_id, exc_info=True)
+
+
+def cleanup_claude_sessions(thread_ids: list[str]) -> None:
+    """Remove in-memory Claude session entries for the given thread IDs (loop deletion)."""
+    thread_set = set(thread_ids)
+    keys_to_remove = [key for key in _memory_claude_sessions if key[0] in thread_set]
+    for key in keys_to_remove:
+        _memory_claude_sessions.pop(key, None)
+        _locks.pop(key, None)
+    if keys_to_remove:
+        logger.debug(
+            "Cleaned up %d Claude session cache entries for deleted loop", len(keys_to_remove)
+        )

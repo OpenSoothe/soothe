@@ -36,8 +36,10 @@ class QueryEngine:
     """
 
     def __init__(self, daemon: Any) -> None:
-        """Attach to the running ``SootheDaemon`` instance (expects ``_runner`` after ``start()``)."""
+        """Attach to the running ``SootheDaemon`` instance (expects ``_runner_factory`` after ``start()``)."""
         self._daemon = daemon
+        # RFC-221: per-loop runner instances keyed by loop_id
+        self._active_runners: dict[str, Any] = {}
 
     @staticmethod
     def _loop_scoped_client_message(loop_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -276,7 +278,8 @@ class QueryEngine:
                 if preferred_subagent is not None:
                     stream_kwargs["preferred_subagent"] = preferred_subagent
 
-                # Wrap streaming with timeout if configured
+                # RFC-221: interrupt_resolver wired on utility _runner for HITL continuations.
+                # The subprocess runner does not receive it (each subprocess owns its SootheRunner).
                 interrupt_resolver = (
                     self._await_interrupt_resume(
                         thread_id,
@@ -286,12 +289,34 @@ class QueryEngine:
                     if interactive and client_id is not None and effective_loop_id
                     else None
                 )
-                if hasattr(d._runner, "set_interrupt_resolver"):
-                    d._runner.set_interrupt_resolver(interrupt_resolver)
+                if hasattr(d._runner, "set_interrupt_resolver") and effective_loop_id:
+                    d._runner.set_interrupt_resolver(effective_loop_id, interrupt_resolver)
+
+                # RFC-221: build LoopRunRequest and create per-loop subprocess runner.
+                from soothe.protocols.runner import LoopRunRequest
+
+                run_request = LoopRunRequest(
+                    loop_id=effective_loop_id or thread_id,
+                    thread_id=thread_id,
+                    user_input=effective_text,
+                    workspace=stream_kwargs.get("workspace"),
+                    autonomous=stream_kwargs.get("autonomous", False),
+                    max_iterations=stream_kwargs.get("max_iterations"),
+                    preferred_subagent=stream_kwargs.get("preferred_subagent"),
+                    model=model,
+                    model_params=model_params or {},
+                )
+                _runner_key = effective_loop_id or thread_id
+                loop_runner = d._runner_factory.create_runner(_runner_key)
+                self._active_runners[_runner_key] = loop_runner
+
+                async def _stream_chunks():
+                    async for chunk in loop_runner.run(run_request):
+                        yield chunk
 
                 if timeout_enabled:
                     async with asyncio.timeout(timeout_seconds):
-                        async for chunk in d._runner.astream(effective_text, **stream_kwargs):
+                        async for chunk in _stream_chunks():
                             # IG-157: Check for task cancellation from cancel_current_query()
                             if d._current_query_task and d._current_query_task.done():
                                 logger.info("Stream loop detected cancelled task, stopping")
@@ -360,8 +385,8 @@ class QueryEngine:
                                 await d._broadcast(event_msg)
                         logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
                 else:
-                    # No timeout - original behavior
-                    async for chunk in d._runner.astream(effective_text, **stream_kwargs):
+                    # No timeout — use per-loop subprocess runner (RFC-221)
+                    async for chunk in _stream_chunks():
                         # IG-157: Check for task cancellation from cancel_current_query()
                         if d._current_query_task and d._current_query_task.done():
                             logger.info("Stream loop detected cancelled task, stopping")
@@ -453,10 +478,12 @@ class QueryEngine:
                     )
             finally:
                 reset_stream_model_override(override_token)
-                if hasattr(d._runner, "set_interrupt_resolver"):
-                    d._runner.set_interrupt_resolver(None)
+                if hasattr(d._runner, "set_interrupt_resolver") and effective_loop_id:
+                    d._runner.set_interrupt_resolver(effective_loop_id, None)
                 d._query_running = False
                 d._active_threads.pop(thread_id, None)
+                # RFC-221: clean up the per-loop runner
+                self._active_runners.pop(effective_loop_id or thread_id, None)
                 if effective_loop_id:  # Flaw 4.8: guard against None key
                     d._pending_interrupt_responses.pop(effective_loop_id, None)
                 if effective_loop_id:
@@ -956,6 +983,11 @@ class QueryEngine:
             logger.info("Cancelling query task %s for loop %s", label, lidq[:16])
             task.cancel()
             await self._await_cancel_after_signal(task, label)
+
+        # RFC-221: also cancel the subprocess runner for this loop
+        loop_runner = self._active_runners.pop(lidq, None)
+        if loop_runner is not None:
+            await loop_runner.cancel()
 
     async def cancel_thread(self, checkpoint_thread_id: str) -> None:
         """Cancel a specific query task keyed by LangGraph checkpoint id."""

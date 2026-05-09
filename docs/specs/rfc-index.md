@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-05-05
-**Total RFCs**: 47
+**Last Updated**: 2026-05-09
+**Total RFCs**: 51
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,8 +11,8 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 30 |
-| Implemented | 16 |
+| Draft | 34 |
+| Implemented | 17 |
 
 ---
 
@@ -98,6 +98,14 @@ This index reflects the canonical RFC set and defines which files are active for
   - Created: 2026-05-05
   - Supersedes draft id: RFC-620 (renumbered into 2xx AgentLoop series)
 
+- **RFC-221**: [LoopRunnerProtocol: Unified Subprocess-Isolated Agent Loop Execution](RFC-221*.md)
+  - Status: Draft
+  - Created: 2026-05-09
+
+- **RFC-616**: [Scenario-Driven Goal Completion Synthesis](RFC-616*.md)
+  - Status: Draft
+  - Created: 2026-04-28
+
 ### Agent Behavior
 
 - **RFC-300**: [Context and Memory Architecture Design](RFC-300*.md)
@@ -157,6 +165,10 @@ This index reflects the canonical RFC set and defines which files are active for
   - See also: [IG-355](../impl/IG-355-subagent-completion-wire.md) (delegate finals / headless wire parity)
   - Created: 2026-04-27
 
+- **RFC-617**: [OperationSecurityProtocol: Unified Workspace and Tool Operation Security](RFC-617*.md)
+  - Status: Draft
+  - Created: 2026-04-30
+
 ### Daemon & Transport
 
 - **RFC-500**: [CLI TUI Architecture Design](RFC-500*.md)
@@ -195,6 +207,10 @@ This index reflects the canonical RFC set and defines which files are active for
   - Status: Draft
   - Created: 2026-04-13
 
+- **RFC-613**: [Explore Agent — LLM-Orchestrated Iterative Search](RFC-613*.md)
+  - Status: Draft
+  - Created: 2026-04-24
+
 - **RFC-606**: [DeepAgents CLI TUI Migration Specification](RFC-606*.md)
   - Status: Draft
   - Created: 2026-04-13
@@ -217,6 +233,10 @@ This index reflects the canonical RFC set and defines which files are active for
 
 ## Recently Added
 
+- RFC-221: LoopRunnerProtocol — Unified Subprocess-Isolated Agent Loop Execution (2026-05-09; one subprocess per loop_id via multiprocessing or Ray actor; fixes SootheRunner singleton data race; removes daemon._runner; renumbered into 2xx AgentLoop series)
+- RFC-617: OperationSecurityProtocol — Unified Workspace and Tool Operation Security (2026-04-30)
+- RFC-616: Scenario-Driven Goal Completion Synthesis (2026-04-28; refactors goal completion from keyword-driven to scenario-driven adaptive synthesis)
+- RFC-613: Explore Agent — LLM-Orchestrated Iterative Search (2026-04-24)
 - RFC-220: LangGraph Agent Loop Orchestrator (2026-05-05; Loop Graph keyed by `loop_id`, evidence-bound plan steps, no backward compat with imperative loop; renumbered from RFC-620)
 - RFC-214: AgentLoop Loop Message Surface and Plan Context (2026-05-03; plan human `Execute iteration` — 2026-05-04)
 - RFC-215: AgentLoop Persistence Backend Architecture (renamed from RFC-409, 2026-05-03)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextvars import Token
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware.types import AgentMiddleware
@@ -30,8 +32,11 @@ class WorkspaceContextMiddleware(AgentMiddleware):
 
         → FrameworkFilesystem.set_current_workspace("/home/user/project-a")
         → Tools resolve paths against /home/user/project-a
-        → FrameworkFilesystem.clear_current_workspace() after execution
+        → FrameworkFilesystem.clear_current_workspace(token) after execution
     """
+
+    def __init__(self) -> None:
+        self._workspace_token: Token[Path | None] | None = None
 
     async def abefore_agent(
         self,
@@ -65,7 +70,7 @@ class WorkspaceContextMiddleware(AgentMiddleware):
         soothe_config = configurable.get("soothe_config")
 
         if workspace:
-            FrameworkFilesystem.set_current_workspace(workspace)
+            self._workspace_token = FrameworkFilesystem.set_current_workspace(workspace)
 
             # Determine virtual mode from config (IG-405)
             virtual_mode = False
@@ -79,7 +84,7 @@ class WorkspaceContextMiddleware(AgentMiddleware):
         # Try to get workspace from state if available
         if "workspace" in state:
             ws = state["workspace"]
-            FrameworkFilesystem.set_current_workspace(ws)
+            self._workspace_token = FrameworkFilesystem.set_current_workspace(ws)
             # Also set virtual mode context from state if available
             soothe_config = state.get("soothe_config")
             virtual_mode = False
@@ -107,6 +112,7 @@ class WorkspaceContextMiddleware(AgentMiddleware):
         from soothe.core import FrameworkFilesystem
         from soothe.core.workspace import clear_virtual_mode_context
 
-        FrameworkFilesystem.clear_current_workspace()
+        FrameworkFilesystem.clear_current_workspace(self._workspace_token)
+        self._workspace_token = None
         clear_virtual_mode_context()  # IG-405
         return None

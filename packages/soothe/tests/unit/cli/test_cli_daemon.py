@@ -49,6 +49,41 @@ class _FakeRunner:
         return {"backend": "test", "entries": 5}
 
 
+class _FakeLoopRunner:
+    """Minimal loop runner stub that delegates to a fake runner."""
+
+    def __init__(
+        self, runner: _FakeRunner | _FakeRunnerWithMessages | _FakeRunnerThatSwapsThread
+    ) -> None:
+        self._runner = runner
+
+    async def run(self, request: Any) -> Any:  # type: ignore[no-untyped-def]  # noqa: ANN401
+        async for chunk in self._runner.astream(
+            request.user_input,
+            thread_id=request.thread_id,
+            workspace=request.workspace,
+            autonomous=request.autonomous,
+            max_iterations=request.max_iterations,
+            preferred_subagent=request.preferred_subagent,
+        ):
+            yield chunk
+
+    async def cancel(self) -> None:
+        pass
+
+
+class _FakeRunnerFactory:
+    """Creates ``_FakeLoopRunner`` instances backed by a shared runner."""
+
+    def __init__(
+        self, runner: _FakeRunner | _FakeRunnerWithMessages | _FakeRunnerThatSwapsThread
+    ) -> None:
+        self._runner = runner
+
+    def create_runner(self, loop_id: str) -> _FakeLoopRunner:  # noqa: ARG002
+        return _FakeLoopRunner(self._runner)
+
+
 class _FakeRunnerWithMessages:
     """Runner stub that yields AI messages for session logging tests."""
 
@@ -96,7 +131,9 @@ class _FakeRunnerThatSwapsThread:
 @pytest.mark.asyncio
 async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
     daemon = SootheDaemon(SootheConfig())
-    daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
+    fake_runner = _FakeRunner()
+    daemon._runner = fake_runner  # type: ignore[attr-defined]
+    daemon._runner_factory = _FakeRunnerFactory(fake_runner)  # type: ignore[attr-defined]
 
     sent: list[dict] = []
 
@@ -276,7 +313,9 @@ async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
     from soothe.logging import ThreadLogger
 
     daemon = SootheDaemon(SootheConfig())
-    daemon._runner = _FakeRunnerWithMessages()  # type: ignore[attr-defined]
+    fake_runner = _FakeRunnerWithMessages()
+    daemon._runner = fake_runner  # type: ignore[attr-defined]
+    daemon._runner_factory = _FakeRunnerFactory(fake_runner)  # type: ignore[attr-defined]
 
     sent: list[dict] = []
 
@@ -496,7 +535,9 @@ async def test_daemon_initial_status_no_thread_leak() -> None:
 @pytest.mark.asyncio
 async def test_daemon_run_query_broadcasts_idle_to_original_thread() -> None:
     daemon = SootheDaemon(SootheConfig())
-    daemon._runner = _FakeRunnerThatSwapsThread()  # type: ignore[attr-defined]
+    fake_runner = _FakeRunnerThatSwapsThread()
+    daemon._runner = fake_runner  # type: ignore[attr-defined]
+    daemon._runner_factory = _FakeRunnerFactory(fake_runner)  # type: ignore[attr-defined]
 
     sent: list[dict[str, Any]] = []
 

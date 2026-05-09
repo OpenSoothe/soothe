@@ -139,3 +139,11 @@ class DaemonConfig(BaseModel):
         ge=30,
         description="Suppress stats logs after this many seconds without any published events",
     )
+    # RFC-221: subprocess-isolated loop execution
+    distributed: bool = Field(
+        default=False,
+        description=(
+            "Run each loop in an isolated subprocess (local multiprocessing or Ray actor). "
+            "Set SOOTHE_DISTRIBUTED=true to enable."
+        ),
+    )

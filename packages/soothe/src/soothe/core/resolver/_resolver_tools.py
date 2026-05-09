@@ -208,8 +208,13 @@ def _resolve_single_tool_group(name: str, config: SootheConfig | None = None) ->
     import time
 
     from soothe.core.scheduling.tool_cache import cache_tools, get_cached_tools
+    from soothe.core.workspace.framework_filesystem import FrameworkFilesystem
 
-    cached = get_cached_tools(name)
+    # Include workspace in cache key to prevent cross-workspace tool reuse
+    current_ws = FrameworkFilesystem.get_current_workspace()
+    ws_key = str(current_ws) if current_ws else None
+
+    cached = get_cached_tools(name, workspace=ws_key)
     if cached is not None:
         logger.debug("Tool group '%s' loaded from cache (%d tools)", name, len(cached))
         return cached
@@ -219,7 +224,7 @@ def _resolve_single_tool_group(name: str, config: SootheConfig | None = None) ->
     elapsed_ms = (time.perf_counter() - start) * 1000
 
     if tools:
-        cache_tools(name, tools)
+        cache_tools(name, tools, workspace=ws_key)
 
     logger.debug("Tool group '%s' loaded in %.1fms (%d tools)", name, elapsed_ms, len(tools))
     return tools
