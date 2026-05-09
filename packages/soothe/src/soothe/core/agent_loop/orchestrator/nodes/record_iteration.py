@@ -90,4 +90,6 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
         )
     state.current_decision = decision
 
+    # Both "continue" and "replan" status cycle back to iteration_gate for next iteration
+    # The iteration_gate will check iteration limit and route accordingly
     return {"last_outcome": "continue"}

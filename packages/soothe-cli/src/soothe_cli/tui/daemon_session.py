@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.client import (
@@ -12,6 +13,7 @@ from soothe_sdk.client import (
     connect_websocket_with_retries,
     websocket_url_from_config,
 )
+from soothe_sdk.client.protocol import _serialize_for_json
 
 if TYPE_CHECKING:
     pass
@@ -204,3 +206,106 @@ class TuiDaemonSession:
             return
         await connect_websocket_with_retries(self._rpc_client)
         self._rpc_connected = True
+
+    async def aget_loop_state(self, loop_id: str) -> Any:
+        """Load agent-loop state channels from the daemon (``loop_state_get`` RPC).
+
+        Returns a namespace with a ``values`` mapping so history code can share the
+        same consumption pattern as the in-process agent snapshot, without passing
+        graph config objects over the wire.
+
+        Args:
+            loop_id: AgentLoop id.
+
+        Returns:
+            ``types.SimpleNamespace`` with ``values: dict[str, Any]``.
+        """
+        lid = str(loop_id or "").strip()
+        if not lid:
+            return SimpleNamespace(values={})
+
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            try:
+                resp = await self._rpc_client.request_response(
+                    {"type": "loop_state_get", "loop_id": lid},
+                    response_type="loop_state_get_response",
+                    timeout=30.0,
+                )
+            except Exception:
+                logger.warning(
+                    "loop_state_get failed for loop %s",
+                    lid[:16],
+                    exc_info=True,
+                )
+                return SimpleNamespace(values={})
+
+        raw = resp.get("values")
+        values: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
+        return SimpleNamespace(values=values)
+
+    async def aupdate_loop_state(
+        self,
+        loop_id: str,
+        values: dict[str, Any],
+        *,
+        timeout: float = 10.0,
+    ) -> None:
+        """Merge partial state into the loop on the daemon host (``loop_state_update`` RPC).
+
+        Args:
+            loop_id: AgentLoop id.
+            values: Channel updates (e.g. ``messages``) in JSON-serializable form.
+            timeout: RPC wait budget in seconds.
+        """
+        lid = str(loop_id or "").strip()
+        if not lid:
+            return
+
+        payload_values = _serialize_for_json(values)
+        if not isinstance(payload_values, dict):
+            return
+
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            await self._rpc_client.request_response(
+                {
+                    "type": "loop_state_update",
+                    "loop_id": lid,
+                    "values": payload_values,
+                },
+                response_type="loop_state_update_response",
+                timeout=timeout,
+            )
+
+    async def fetch_conversation_log(
+        self,
+        loop_id: str,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        include_events: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Load persisted rows for a loop from the daemon (conversation + optional events)."""
+        lid = str(loop_id or "").strip()
+        if not lid:
+            return []
+
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            resp = await self._rpc_client.request_response(
+                {
+                    "type": "loop_messages",
+                    "loop_id": lid,
+                    "limit": limit,
+                    "offset": offset,
+                    "include_events": include_events,
+                },
+                response_type="loop_messages_response",
+                timeout=10.0,
+            )
+
+        raw = resp.get("messages")
+        if not isinstance(raw, list):
+            return []
+        return [m for m in raw if isinstance(m, dict)]

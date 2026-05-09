@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from soothe_cli.tui.widgets.message_store import MessageData, MessageType
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
@@ -52,3 +53,16 @@ def test_widget_instances_preserve_can_select() -> None:
     assistant_msg = AssistantMessage("test")
     assert hasattr(assistant_msg, "can_select"), "AssistantMessage instance must have can_select"
     assert AssistantMessage.can_select is True
+
+
+def test_queued_user_message_store_roundtrip() -> None:
+    """Virtualized chat must serialize QueuedUserMessage without falling back to APP."""
+    w = QueuedUserMessage("hello queue", id="msg-fixed-id")
+    data = MessageData.from_widget(w)
+    assert data.type == MessageType.QUEUED_USER
+    assert data.content == "hello queue"
+    assert data.id == "msg-fixed-id"
+    restored = data.to_widget()
+    assert isinstance(restored, QueuedUserMessage)
+    assert restored._content == "hello queue"
+    assert restored.id == "msg-fixed-id"
