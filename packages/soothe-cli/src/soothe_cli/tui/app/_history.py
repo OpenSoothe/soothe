@@ -41,12 +41,76 @@ from soothe_cli.tui.widgets.messages import (
 
 logger = logging.getLogger(__name__)
 
+# Phases persisted on loop checkpoint messages that the live TUI aggregates into
+# cognition cards (plan / step / task rows) rather than standalone assistant
+# and tool widgets.
+_LOOP_INTERNAL_CHECKPOINT_PHASES: frozenset[str] = frozenset(
+    {"plan_assess", "plan_generate", "execute_step", "execute_wave"}
+)
+
 
 class _HistoryMixin:
     """History conversion, loading, and daemon WebSocket event consumption."""
 
     @staticmethod
-    def _convert_messages_to_data(messages: list[Any]) -> list[MessageData]:
+    def _is_loop_internal_checkpoint_message(msg: Any) -> bool:
+        """True when this checkpoint message is loop-orchestration internals only."""
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        if not isinstance(msg, (HumanMessage, AIMessage)):
+            return False
+        phase = getattr(msg, "phase", None)
+        return isinstance(phase, str) and phase in _LOOP_INTERNAL_CHECKPOINT_PHASES
+
+    @staticmethod
+    def _merge_visible_messages_with_cognition_cards(
+        visible: list[MessageData],
+        cognition: list[MessageData],
+    ) -> list[MessageData]:
+        """Interleave visible checkpoint cards with cognition replay by time.
+
+        Visible messages have unreliable wall times; cognition rows carry parsed
+        event timestamps. Spread visible items across [0, 1] in order and map
+        cognition timestamps into the same range so the transcript reads
+        naturally (user → plan/step cards → final assistant).
+
+        Args:
+            visible: MessageData from checkpoint after internal phases were
+                stripped.
+            cognition: Cognition card replay from the conversation log.
+
+        Returns:
+            Merged list for bulk load.
+        """
+        if not cognition:
+            return visible
+        if not visible:
+            return list(cognition)
+
+        n = len(visible)
+        vis_spread = max(1, n - 1)
+        vis_entries: list[tuple[float, MessageData]] = [
+            (i / vis_spread, m) for i, m in enumerate(visible)
+        ]
+        sorted_cog = sorted(cognition, key=lambda m: m.timestamp)
+        ts0 = sorted_cog[0].timestamp
+        ts1 = sorted_cog[-1].timestamp
+        span = ts1 - ts0 or 1.0
+        cog_entries: list[tuple[float, MessageData]] = []
+        for m in sorted_cog:
+            # Keep inside (0, 1) so tie-break ordering stays stable vs endpoints.
+            frac = (m.timestamp - ts0) / span
+            mapped = 0.05 + 0.9 * frac
+            cog_entries.append((mapped, m))
+        merged = sorted([*vis_entries, *cog_entries], key=lambda x: x[0])
+        return [m for _, m in merged]
+
+    @staticmethod
+    def _convert_messages_to_data(
+        messages: list[Any],
+        *,
+        cognition_card_replay: list[MessageData] | None = None,
+    ) -> list[MessageData]:
         """Convert LangChain messages into lightweight `MessageData` objects.
 
         This is a pure function with zero DOM operations. Tool call matching
@@ -55,6 +119,9 @@ class _HistoryMixin:
 
         Args:
             messages: LangChain message objects from a LangGraph checkpoint.
+            cognition_card_replay: When non-empty, strip checkpoint messages
+                tagged with internal loop phases and merge these cognition cards
+                (plan / goal / step) so resume matches live streaming.
 
         Returns:
             Ordered list of `MessageData` ready for `MessageStore.bulk_load`.
@@ -66,12 +133,15 @@ class _HistoryMixin:
             normalize_tool_calls_list,
         )
 
+        hide_internals = bool(cognition_card_replay)
         result: list[MessageData] = []
         # Maps tool_call_id -> index into result list
         pending_tool_indices: dict[str, int] = {}
 
         for msg in messages:
             msg = normalize_stream_message(msg)
+            if hide_internals and _HistoryMixin._is_loop_internal_checkpoint_message(msg):
+                continue
             user_text = extract_user_text_for_display(msg)
             if user_text is not None:
                 # Detect skill invocations persisted via additional_kwargs
@@ -149,6 +219,11 @@ class _HistoryMixin:
         for idx in pending_tool_indices.values():
             result[idx].tool_status = ToolStatus.REJECTED
 
+        if cognition_card_replay:
+            return _HistoryMixin._merge_visible_messages_with_cognition_cards(
+                result,
+                cognition_card_replay,
+            )
         return result
 
     async def _get_loop_state_values(self, loop_id: str) -> dict[str, Any]:
@@ -325,7 +400,8 @@ class _HistoryMixin:
             return parsed.replace(tzinfo=UTC)
         return parsed.astimezone(UTC)
 
-    def _convert_event_to_message_data(self, event: dict[str, Any]) -> MessageData | None:
+    @staticmethod
+    def _convert_event_to_message_data(event: dict[str, Any]) -> MessageData | None:
         """Convert one persisted activity-event row to MessageData.
 
         Args:
@@ -339,7 +415,7 @@ class _HistoryMixin:
         kind = str(event.get("kind") or "").strip()
         metadata_raw = event.get("metadata")
         metadata = metadata_raw if isinstance(metadata_raw, dict) else {}
-        parsed_ts = self._parse_loop_event_timestamp(event.get("timestamp"))
+        parsed_ts = _HistoryMixin._parse_loop_event_timestamp(event.get("timestamp"))
 
         event_timestamp = parsed_ts.timestamp() if parsed_ts is not None else time.time()
 
@@ -390,6 +466,10 @@ class _HistoryMixin:
             if isinstance(event_data, dict):
                 event_type = str(event_data.get("type") or "").strip()
                 summary = str(event_data.get("summary") or "").strip()
+                if event_type == "soothe.cognition.agent_loop.completed":
+                    # Final answer is replayed from checkpoint AIMessage
+                    # (``phase=goal_completion``); avoid duplicate app-line noise.
+                    return None
                 if event_type == "soothe.cognition.agent_loop.reasoned":
                     plan_action_raw = str(event_data.get("plan_action") or "new").strip()
                     plan_action = plan_action_raw if plan_action_raw in {"keep", "new"} else "new"
@@ -466,6 +546,42 @@ class _HistoryMixin:
 
         return None
 
+    @staticmethod
+    def _collect_cognition_card_replay(events: list[dict[str, Any]]) -> list[MessageData]:
+        """Build cognition card replay rows for TUI parity with live streaming.
+
+        Args:
+            events: Raw conversation-log rows (``kind=event`` with cognition
+                payloads).
+
+        Returns:
+            Ordered cognition ``MessageData`` (goal tree, plan, step cards).
+        """
+        from datetime import datetime
+
+        sorted_events = sorted(
+            events,
+            key=lambda event: (
+                _HistoryMixin._parse_loop_event_timestamp(event.get("timestamp"))
+                or datetime.min.replace(tzinfo=UTC)
+            ),
+        )
+        cards: list[MessageData] = []
+        for event in sorted_events:
+            if str(event.get("kind") or "").strip() != "event":
+                continue
+            msg_data = _HistoryMixin._convert_event_to_message_data(event)
+            if msg_data is None:
+                continue
+            if msg_data.type not in (
+                MessageType.COGNITION_PLAN,
+                MessageType.COGNITION_GOAL_TREE,
+                MessageType.STEP_PROGRESS,
+            ):
+                continue
+            cards.append(msg_data)
+        return cards
+
     def _convert_loop_events_to_data(self, events: list[dict[str, Any]]) -> list[MessageData]:
         """Convert persisted activity-event rows into stable TUI cards.
 
@@ -485,7 +601,7 @@ class _HistoryMixin:
         )
         for event in sorted_events:
             kind = str(event.get("kind") or "").strip()
-            msg_data = self._convert_event_to_message_data(event)
+            msg_data = _HistoryMixin._convert_event_to_message_data(event)
             if msg_data is None:
                 continue
 
@@ -542,7 +658,7 @@ class _HistoryMixin:
             ts = self._parse_loop_event_timestamp(event.get("timestamp")) or min_timestamp
 
             # Convert event to MessageData
-            msg_data = self._convert_event_to_message_data(event)
+            msg_data = _HistoryMixin._convert_event_to_message_data(event)
             if msg_data:
                 timeline.append((ts, "event", msg_data))
 
@@ -608,7 +724,17 @@ class _HistoryMixin:
 
             messages = messages_from_wire_dicts(messages)
         if messages:
-            data = await asyncio.to_thread(self._convert_messages_to_data, messages)
+            cognition_replay: list[MessageData] | None = None
+            if self._daemon_session is not None:
+                log_events = await self._fetch_loop_activity_events(loop_id)
+                replay = self._collect_cognition_card_replay(log_events)
+                if replay:
+                    cognition_replay = replay
+            data = await asyncio.to_thread(
+                self._convert_messages_to_data,
+                messages,
+                cognition_card_replay=cognition_replay,
+            )
             return _LoopHistoryPayload(data, context_tokens)
 
         # 3. Fallback: persisted activity events when checkpoints are unavailable.
