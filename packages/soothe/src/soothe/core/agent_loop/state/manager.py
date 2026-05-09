@@ -517,25 +517,42 @@ class AgentLoopStateManager:
     def _save_checkpoint_sync(
         self, conn: sqlite3.Connection, checkpoint: AgentLoopCheckpoint
     ) -> None:
-        """Sync save of checkpoint executed in thread pool."""
+        """Sync save of checkpoint executed in thread pool.
+
+        Bug 5.3 fix: Uses UPDATE (not INSERT OR REPLACE) for agentloop_loops.
+        Preserves daemon-managed lifecycle statuses (detached, paused, archived)
+        via CASE WHEN — if the daemon changed status between subprocess load
+        and save, the subprocess preserves it instead of clobbering.
+        Also preserves daemon-managed fields: client_workspace, detached_at,
+        created_at, schema_version.
+        """
         # Serialize complex structures to JSON strings
         thread_ids_json = json.dumps(checkpoint.thread_ids, ensure_ascii=False)
         working_memory_json = checkpoint.working_memory_state.model_dump_json()
         thread_health_json = checkpoint.thread_health_metrics.model_dump_json()
 
-        # Update agentloop_loops table
+        # UPDATE agentloop_loops — preserves daemon-managed fields and statuses
         conn.execute(
             """
-            INSERT OR REPLACE INTO agentloop_loops
-            (loop_id, thread_ids, current_thread_id, status, current_goal_index,
-             working_memory_state, thread_health_metrics,
-             total_goals_completed, total_thread_switches,
-             total_duration_ms, total_tokens_used, thread_switch_pending,
-             created_at, updated_at, schema_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            UPDATE agentloop_loops
+            SET thread_ids = ?,
+                current_thread_id = ?,
+                status = CASE
+                    WHEN status IN ('detached', 'paused', 'archived') THEN status
+                    ELSE ?
+                END,
+                current_goal_index = ?,
+                working_memory_state = ?,
+                thread_health_metrics = ?,
+                total_goals_completed = ?,
+                total_thread_switches = ?,
+                total_duration_ms = ?,
+                total_tokens_used = ?,
+                thread_switch_pending = ?,
+                updated_at = ?
+            WHERE loop_id = ?
             """,
             (
-                checkpoint.loop_id,
                 thread_ids_json,
                 checkpoint.current_thread_id,
                 checkpoint.status,
@@ -547,11 +564,43 @@ class AgentLoopStateManager:
                 checkpoint.total_duration_ms,
                 checkpoint.total_tokens_used,
                 int(checkpoint.thread_switch_pending),
-                checkpoint.created_at.isoformat(),
                 checkpoint.updated_at.isoformat(),
-                checkpoint.schema_version,
+                checkpoint.loop_id,
             ),
         )
+
+        # If no rows were updated (loop not yet registered), fall back to INSERT.
+        # This can happen if initialize() runs before the daemon's register_loop.
+        rows_affected = conn.execute("SELECT changes()").fetchone()[0]
+        if rows_affected == 0:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO agentloop_loops
+                (loop_id, thread_ids, current_thread_id, status, current_goal_index,
+                 working_memory_state, thread_health_metrics,
+                 total_goals_completed, total_thread_switches,
+                 total_duration_ms, total_tokens_used, thread_switch_pending,
+                 created_at, updated_at, schema_version)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    checkpoint.loop_id,
+                    thread_ids_json,
+                    checkpoint.current_thread_id,
+                    checkpoint.status,
+                    checkpoint.current_goal_index,
+                    working_memory_json,
+                    thread_health_json,
+                    checkpoint.total_goals_completed,
+                    checkpoint.total_thread_switches,
+                    checkpoint.total_duration_ms,
+                    checkpoint.total_tokens_used,
+                    int(checkpoint.thread_switch_pending),
+                    checkpoint.created_at.isoformat(),
+                    checkpoint.updated_at.isoformat(),
+                    checkpoint.schema_version,
+                ),
+            )
 
         # Save goal_history to goal_records table
         for goal_record in checkpoint.goal_history:

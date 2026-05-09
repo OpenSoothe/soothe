@@ -5,7 +5,9 @@ Mocks multiprocessing.Process and Queue so no real subprocess is spawned.
 
 from __future__ import annotations
 
+import pickle
 import queue
+import threading
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -62,6 +64,30 @@ class TestLocalLoopRunnerRun:
                 result.append(chunk)
 
         assert result == [chunk1, chunk2]
+
+    @pytest.mark.asyncio
+    async def test_spawn_args_picklable_with_polluted_config_cache(self) -> None:
+        """Runtime model cache must not be sent to the child; spawn uses JSON copy."""
+        config = _make_config()
+        config._model_cache["x"] = threading.RLock()  # type: ignore[attr-defined]
+        runner = LocalLoopRunner("loop-1", config)
+
+        q: queue.Queue[tuple[str, Any]] = queue.Queue()
+        q.put(("done", None))
+        mock_process = MagicMock()
+        mock_process.pid = 1234
+        mock_process.is_alive.return_value = True
+        ctx = MagicMock()
+        ctx.Queue.return_value = q
+        ctx.Process.return_value = mock_process
+
+        with patch("multiprocessing.get_context", return_value=ctx):
+            async for _ in runner.run(_make_request()):
+                pass
+
+        args = ctx.Process.call_args[1]["args"]
+        pickle.dumps(args[0])
+        pickle.dumps(args[1])
 
     @pytest.mark.asyncio
     async def test_raises_on_error_sentinel(self) -> None:
