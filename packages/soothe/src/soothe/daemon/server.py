@@ -190,9 +190,29 @@ class SootheDaemon(DaemonHandlersMixin):
             )
             loop.set_default_executor(self._default_executor)
 
-            # Run heavy SootheRunner init off the event loop
+            # RFC-221: apply env overrides (e.g. SOOTHE_DISTRIBUTED) before factory init
+            from soothe.config.env import apply_env_overrides
+
+            apply_env_overrides(self._config)
+
+            # RFC-221: keep a utility SootheRunner for non-streaming ops
+            # (create_persisted_thread, touch_thread_activity_timestamp, etc.).
+            # Streaming is handled per-loop by LoopRunnerFactory — this instance
+            # is never passed to astream().
+            from soothe.core.runner import SootheRunner
+
             try:
                 self._runner = await asyncio.to_thread(SootheRunner, self._config)
+            except Exception as exc:
+                self._readiness_state = "error"
+                self._readiness_message = str(exc)
+                raise
+
+            # RFC-221: LoopRunnerFactory creates one subprocess runner per loop_id.
+            from soothe.core.runner.factory import LoopRunnerFactory
+
+            try:
+                self._runner_factory = LoopRunnerFactory(self._config)
             except Exception as exc:
                 self._readiness_state = "error"
                 self._readiness_message = str(exc)
@@ -219,17 +239,10 @@ class SootheDaemon(DaemonHandlersMixin):
             self._stop_event = asyncio.Event()
             self._running = True
 
-            # Initialize transport manager (RFC-0013)
-            from soothe.core.thread import ThreadExecutor
-
-            # Initialize ThreadExecutor for multi-threading support (RFC-402)
-            max_concurrent = getattr(self._config.daemon, "max_concurrent_threads", 100)
-            self._thread_executor = ThreadExecutor(
-                self._runner, max_concurrent_threads=max_concurrent
-            )
-            logger.debug(
-                "ThreadExecutor initialized with max_concurrent_threads=%d", max_concurrent
-            )
+            # RFC-221: ThreadExecutor disabled — all loop execution goes through LoopRunnerFactory.
+            # The if d._thread_executor: guard in QueryEngine.run_query() falls through
+            # to the new runner.run(request) path.
+            self._thread_executor = None
 
             self._transport_manager = TransportManager(
                 self._config.daemon,

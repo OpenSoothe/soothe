@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -161,7 +161,7 @@ class FrameworkFilesystem:
     # -----------------------------------------------------------------------
 
     @classmethod
-    def set_current_workspace(cls, workspace: Path | str) -> None:
+    def set_current_workspace(cls, workspace: Path | str) -> Token[Path | None]:
         """Set workspace for current async context.
 
         Called by WorkspaceContextMiddleware at stream start to establish
@@ -169,9 +169,13 @@ class FrameworkFilesystem:
 
         Args:
             workspace: Workspace path (Path or str).
+
+        Returns:
+            A ContextVar Token that can be passed to clear_current_workspace
+            to safely restore the previous value.
         """
         ws_path = Path(workspace) if isinstance(workspace, str) else workspace
-        _current_workspace.set(ws_path)
+        return _current_workspace.set(ws_path)
 
     @classmethod
     def get_current_workspace(cls) -> Path | None:
@@ -183,13 +187,20 @@ class FrameworkFilesystem:
         return _current_workspace.get()
 
     @classmethod
-    def clear_current_workspace(cls) -> None:
+    def clear_current_workspace(cls, token: Token[Path | None] | None = None) -> None:
         """Clear workspace context at stream end.
 
         Called by WorkspaceContextMiddleware to prevent context leaks
         across stream boundaries.
+
+        Args:
+            token: If provided, uses ContextVar.reset(token) to safely restore
+                the previous value. Otherwise falls back to setting None.
         """
-        _current_workspace.set(None)
+        if token is not None:
+            _current_workspace.reset(token)
+        else:
+            _current_workspace.set(None)
 
     @classmethod
     def resolve_path_dynamic(cls, file_path: str) -> Path:

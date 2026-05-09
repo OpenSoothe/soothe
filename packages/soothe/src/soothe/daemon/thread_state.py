@@ -104,3 +104,22 @@ class ThreadStateRegistry:
     def all_thread_ids(self) -> list[str]:
         """List all registered thread IDs."""
         return list(self._by_thread.keys())
+
+    def cleanup_loop(self, loop_id: str) -> list[str]:
+        """Remove all threads associated with *loop_id* (loop deletion).
+
+        Returns:
+            List of thread_ids that were removed.
+        """
+        removed: list[str] = []
+        for tid, lid in list(self._thread_loop.items()):
+            if lid == loop_id:
+                removed.append(tid)
+        for tid in removed:
+            self._by_thread.pop(tid, None)
+            self._thread_loop.pop(tid, None)
+        # Also clean client-thread mappings for these threads
+        for cid, tid in list(self._client_active_thread.items()):
+            if tid in removed:
+                self._client_active_thread.pop(cid, None)
+        return removed

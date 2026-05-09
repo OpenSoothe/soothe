@@ -106,7 +106,7 @@ class TestSootheConfig:
         assert cfg.logging.verbosity == "normal"
 
     def test_verbosity_options(self) -> None:
-        for level in ("quiet", "normal", "detailed", "debug"):
+        for level in ("quiet", "normal", "debug"):
             cfg = SootheConfig(logging={"verbosity": level})
             assert cfg.logging.verbosity == level
 

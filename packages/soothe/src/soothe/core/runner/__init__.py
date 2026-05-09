@@ -43,10 +43,15 @@ from ._runner_phases import PhasesMixin
 from ._runner_shared import StreamChunk
 from ._runner_steps import StepLoopMixin
 from ._types import generate_thread_id
+from .factory import LoopRunnerFactory
+from .local_runner import LocalLoopRunner, SubprocessLoopError
 
 # Re-export types
 __all__ = [
+    "LoopRunnerFactory",
+    "LocalLoopRunner",
     "SootheRunner",
+    "SubprocessLoopError",
     "generate_thread_id",
 ]
 
@@ -184,7 +189,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             )
         )
         self._context_restore_lock = asyncio.Lock()
-        self._interrupt_resolver: Any | None = None
+        self._interrupt_resolvers: dict[str, Any] = {}  # keyed by loop_id (Bug 5.7)
 
         # IG-406: Shared PostgreSQL pool for AgentLoop state persistence
         # Initialized lazily in async context for high-concurrency support
@@ -403,15 +408,19 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
         await self._close_attached_store(self._memory)
 
-    def set_interrupt_resolver(self, resolver: Any | None) -> None:
-        """Set a temporary interactive interrupt resolver for `_stream_phase`.
+    def set_interrupt_resolver(self, loop_id: str, resolver: Any | None) -> None:
+        """Set a temporary interactive interrupt resolver for a specific loop.
 
         Args:
+            loop_id: The loop identifier to scope this resolver to.
             resolver: Async callable receiving pending interrupt payloads and
-                returning a LangGraph resume payload, or `None` to restore the
-                default auto-approve behavior.
+                returning a LangGraph resume payload, or `None` to remove the
+                resolver for this loop.
         """
-        self._interrupt_resolver = resolver
+        if resolver is not None:
+            self._interrupt_resolvers[loop_id] = resolver
+        else:
+            self._interrupt_resolvers.pop(loop_id, None)
 
     async def get_thread_state_values(self, thread_id: str) -> dict[str, Any]:
         """Return checkpoint state values for a thread.
