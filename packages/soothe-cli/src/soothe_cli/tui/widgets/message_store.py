@@ -45,6 +45,7 @@ class MessageType(StrEnum):
     """Types of messages in the chat."""
 
     USER = "user"
+    QUEUED_USER = "queued_user"
     ASSISTANT = "assistant"
     TOOL = "tool"
     SKILL = "skill"
@@ -230,6 +231,7 @@ class MessageData:
             CognitionStepMessage,
             DiffMessage,
             ErrorMessage,
+            QueuedUserMessage,
             SkillMessage,
             SummarizationMessage,
             ToolCallMessage,
@@ -239,6 +241,9 @@ class MessageData:
         match self.type:
             case MessageType.USER:
                 return UserMessage(self.content, id=self.id)
+
+            case MessageType.QUEUED_USER:
+                return QueuedUserMessage(self.content, id=self.id)
 
             case MessageType.ASSISTANT:
                 return AssistantMessage(self.content, id=self.id)
@@ -385,6 +390,7 @@ class MessageData:
             CognitionStepMessage,
             DiffMessage,
             ErrorMessage,
+            QueuedUserMessage,
             SkillMessage,
             SummarizationMessage,
             ToolCallMessage,
@@ -392,6 +398,13 @@ class MessageData:
         )
 
         widget_id = widget.id or f"msg-{uuid.uuid4().hex[:8]}"
+
+        if isinstance(widget, QueuedUserMessage):
+            return cls(
+                type=MessageType.QUEUED_USER,
+                content=widget._content,
+                id=widget_id,
+            )
 
         if isinstance(widget, CognitionGoalTreeMessage):
             return cls(

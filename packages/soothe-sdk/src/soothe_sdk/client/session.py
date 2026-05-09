@@ -13,7 +13,7 @@ _CONNECT_RETRY_COUNT = 40
 _CONNECT_RETRY_DELAY_S = 0.25
 _CONNECT_TIMEOUT_S = 5.0
 _DAEMON_READY_TIMEOUT_S = 20.0
-_SESSION_BOOTSTRAP_TIMEOUT_S = 5.0
+_SESSION_BOOTSTRAP_TIMEOUT_S = 30.0
 
 
 async def connect_websocket_with_retries(client: Any) -> None:
@@ -61,7 +61,7 @@ async def bootstrap_loop_session(
             directory instead of the per-loop daemon scratch dir (IG-409). Ignored on
             resume since the existing loop already has a workspace recorded.
         daemon_ready_timeout_s: Max seconds for daemon ready handshake.
-        subscribe_timeout_s: Max seconds for loop subscribe RPC.
+        subscribe_timeout_s: Max seconds for ``loop_new`` / ``loop_subscribe`` RPCs.
 
     Returns:
         A dict with at least ``loop_id`` on success, or an ``error`` event-shaped dict.

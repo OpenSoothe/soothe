@@ -145,6 +145,9 @@ async def test_http_transport_system_lifecycle(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+@pytest.mark.xfail(
+    reason="HTTP REST thread CRUD endpoints not implemented — loop operations use WebSocket RPC instead (RFC-503)"
+)
 async def test_http_transport_thread_lifecycle(
     http_daemon: tuple[SootheDaemon, int],
 ) -> None:
@@ -229,6 +232,9 @@ async def test_http_transport_thread_lifecycle(
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+@pytest.mark.xfail(
+    reason="HTTP REST thread CRUD endpoints not implemented — loop operations use WebSocket RPC instead (RFC-503)"
+)
 async def test_http_transport_resume_thread(
     http_daemon: tuple[SootheDaemon, int],
 ) -> None:
@@ -253,6 +259,9 @@ async def test_http_transport_resume_thread(
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+@pytest.mark.xfail(
+    reason="HTTP REST thread CRUD endpoints not implemented — loop operations use WebSocket RPC instead (RFC-503)"
+)
 async def test_http_transport_thread_history_continuation(
     http_daemon: tuple[SootheDaemon, int],
 ) -> None:

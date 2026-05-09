@@ -165,8 +165,7 @@ class _HistoryMixin:
             State values keyed by channel name, or empty when none are available.
         """
         if self._daemon_session is not None:
-            config: RunnableConfig = {"configurable": {"thread_id": loop_id}}
-            snapshot = await self._daemon_session.aget_state(config)
+            snapshot = await self._daemon_session.aget_loop_state(loop_id)
             values = dict(snapshot.values)
             recovered = await self._recover_missing_checkpoint_messages(
                 loop_id=loop_id,
@@ -239,9 +238,8 @@ class _HistoryMixin:
         try:
             from langchain_core.messages.base import messages_to_dict
 
-            config: RunnableConfig = {"configurable": {"thread_id": loop_id}}
-            await self._daemon_session.aupdate_state(
-                config,
+            await self._daemon_session.aupdate_loop_state(
+                loop_id,
                 {"messages": messages_to_dict(recovered_messages)},
                 timeout=10.0,
             )

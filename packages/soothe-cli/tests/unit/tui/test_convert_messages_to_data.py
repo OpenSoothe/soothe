@@ -213,7 +213,7 @@ async def test_get_loop_state_values_recovers_messages_from_conversation_rows() 
     """Resume should rehydrate empty checkpoint messages from persisted conversation rows."""
     app = object.__new__(SootheApp)
     daemon_session = SimpleNamespace()
-    daemon_session.aget_state = AsyncMock(return_value=SimpleNamespace(values={}))
+    daemon_session.aget_loop_state = AsyncMock(return_value=SimpleNamespace(values={}))
     daemon_session.fetch_conversation_log = AsyncMock(
         return_value=[
             {"kind": "event", "content": "ignore"},
@@ -224,11 +224,12 @@ async def test_get_loop_state_values_recovers_messages_from_conversation_rows() 
             },
         ]
     )
-    daemon_session.aupdate_state = AsyncMock()
+    daemon_session.aupdate_loop_state = AsyncMock()
     app._daemon_session = daemon_session
 
     values = await app._get_loop_state_values("loop-42")
 
+    daemon_session.aget_loop_state.assert_awaited_once_with("loop-42")
     assert "messages" in values
     assert isinstance(values["messages"], list)
     assert len(values["messages"]) == 2
@@ -239,7 +240,7 @@ async def test_get_loop_state_values_recovers_messages_from_conversation_rows() 
         limit=10000,
         include_events=True,
     )
-    daemon_session.aupdate_state.assert_awaited_once()
+    daemon_session.aupdate_loop_state.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -247,15 +248,16 @@ async def test_get_loop_state_values_skips_recovery_when_messages_exist() -> Non
     """Resume should not fetch conversation logs when checkpoint messages are already present."""
     app = object.__new__(SootheApp)
     daemon_session = SimpleNamespace()
-    daemon_session.aget_state = AsyncMock(
+    daemon_session.aget_loop_state = AsyncMock(
         return_value=SimpleNamespace(values={"messages": [HumanMessage(content="existing")]})
     )
     daemon_session.fetch_conversation_log = AsyncMock()
-    daemon_session.aupdate_state = AsyncMock()
+    daemon_session.aupdate_loop_state = AsyncMock()
     app._daemon_session = daemon_session
 
     values = await app._get_loop_state_values("loop-42")
 
+    daemon_session.aget_loop_state.assert_awaited_once_with("loop-42")
     assert len(values["messages"]) == 1
     daemon_session.fetch_conversation_log.assert_not_awaited()
-    daemon_session.aupdate_state.assert_not_awaited()
+    daemon_session.aupdate_loop_state.assert_not_awaited()

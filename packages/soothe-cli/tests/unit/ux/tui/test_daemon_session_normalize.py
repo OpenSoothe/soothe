@@ -114,13 +114,13 @@ async def test_fetch_conversation_log_uses_request_response_and_filters_rows() -
 
     request_response.assert_awaited_once_with(
         {
-            "type": "thread_messages",
-            "thread_id": "thread-123",
+            "type": "loop_messages",
+            "loop_id": "thread-123",
             "limit": 50,
             "offset": 3,
             "include_events": True,
         },
-        response_type="thread_messages_response",
+        response_type="loop_messages_response",
         timeout=10.0,
     )
     assert result == [

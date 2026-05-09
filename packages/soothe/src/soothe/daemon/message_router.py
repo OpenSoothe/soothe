@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe_sdk.client.protocol import _serialize_for_json
+
 from soothe.core.workspace import resolve_loop_daemon_workspace
 from soothe.utils.text_preview import preview_first
 
@@ -230,6 +232,18 @@ class MessageRouter:
 
         if msg_type == "models_list":
             await self._handle_models_list(client_id, msg)
+            return
+
+        if msg_type == "loop_messages":
+            await self._handle_loop_messages(client_id, msg)
+            return
+
+        if msg_type == "loop_state_get":
+            await self._handle_loop_state_get(client_id, msg)
+            return
+
+        if msg_type == "loop_state_update":
+            await self._handle_loop_state_update(client_id, msg)
             return
 
         # IG-174 Phase 0: Daemon RPC endpoints
@@ -1251,5 +1265,205 @@ class MessageRouter:
                 "loop_id": loop_id,
                 "success": True,
                 "request_id": request_id,
+            },
+        )
+
+    async def _handle_loop_messages(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Return persisted conversation / activity rows for a loop (RFC-503 loop-first).
+
+        Resolves the loop's bound LangGraph checkpoint id from metadata, then reads
+        ThreadLogger rows via the runner (same storage as ``get_persisted_thread_messages``).
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+        limit = msg.get("limit", 100)
+        offset = msg.get("offset", 0)
+        include_events = bool(msg.get("include_events", False))
+
+        try:
+            lim = int(limit) if isinstance(limit, (int, str)) else 100
+        except (TypeError, ValueError):
+            lim = 100
+        try:
+            off = int(offset) if isinstance(offset, (int, str)) else 0
+        except (TypeError, ValueError):
+            off = 0
+
+        runner = d._runner
+        if runner is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "RUNNER_UNAVAILABLE",
+                    "message": "Daemon runner not initialized",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "loop_id required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        try:
+            from soothe.daemon.loop_isolation import bind_execution_thread_for_loop
+
+            checkpoint_thread_id = await bind_execution_thread_for_loop(d, str(loop_id))
+        except Exception as exc:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_CONTEXT",
+                    "message": str(exc),
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        rows = await runner.get_persisted_thread_messages(
+            checkpoint_thread_id,
+            limit=lim,
+            offset=off,
+            include_events=include_events,
+        )
+        serialized: list[Any] = []
+        for r in rows:
+            if hasattr(r, "model_dump"):
+                serialized.append(_serialize_for_json(r.model_dump(mode="json")))
+            elif isinstance(r, dict):
+                serialized.append(_serialize_for_json(r))
+            else:
+                serialized.append(_serialize_for_json(r))
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "loop_messages_response",
+                "request_id": request_id,
+                "messages": serialized,
+            },
+        )
+
+    async def _handle_loop_state_get(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Return LangGraph channel values for the loop's bound checkpoint thread."""
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "loop_id required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        runner = d._runner
+        if runner is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "RUNNER_UNAVAILABLE",
+                    "message": "Daemon runner not initialized",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        try:
+            from soothe.daemon.loop_isolation import bind_execution_thread_for_loop
+
+            checkpoint_thread_id = await bind_execution_thread_for_loop(d, str(loop_id))
+            values = await runner.get_thread_state_values(checkpoint_thread_id)
+        except Exception as exc:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_STATE",
+                    "message": str(exc),
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "loop_state_get_response",
+                "request_id": request_id,
+                "values": _serialize_for_json(values),
+            },
+        )
+
+    async def _handle_loop_state_update(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Apply partial checkpoint values for the loop's bound checkpoint thread."""
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+        raw_values = msg.get("values")
+        if not loop_id or not isinstance(raw_values, dict):
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "loop_id and values dict required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        runner = d._runner
+        if runner is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "RUNNER_UNAVAILABLE",
+                    "message": "Daemon runner not initialized",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        try:
+            from soothe.daemon.loop_isolation import bind_execution_thread_for_loop
+
+            checkpoint_thread_id = await bind_execution_thread_for_loop(d, str(loop_id))
+            await runner.update_thread_state_values(checkpoint_thread_id, dict(raw_values))
+        except Exception as exc:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_STATE",
+                    "message": str(exc),
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "loop_state_update_response",
+                "request_id": request_id,
+                "success": True,
             },
         )
