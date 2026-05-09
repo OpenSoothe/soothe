@@ -392,6 +392,7 @@ class WebSocketClient:
     async def send_loop_new(
         self,
         *,
+        workspace: str | None = None,
         request_id: str | None = None,
     ) -> None:
         """Create new loop via daemon RPC (RFC-503 ``loop_new``).
@@ -399,9 +400,14 @@ class WebSocketClient:
         Creates fresh loop with new loop_id for new query/conversation.
 
         Args:
+            workspace: Optional client workspace path (e.g., user's CWD). When provided,
+                the daemon validates and records it as the loop's filesystem workspace
+                (IG-409); otherwise the daemon falls back to a per-loop scratch dir.
             request_id: Optional request correlation ID.
         """
         payload: dict[str, Any] = {"type": "loop_new"}
+        if workspace:
+            payload["workspace"] = workspace
         if request_id is not None:
             payload["request_id"] = request_id
         await self.send(payload)

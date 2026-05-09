@@ -70,16 +70,35 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
             logger.warning("Failed to update loop metadata for %s: %s", loop_id, e)
 
     daemon._thread_registry.ensure(thread_id, is_draft=False)
-    try:
-        loop_workspace = resolve_loop_daemon_workspace(loop_id)
-    except (OSError, ValueError) as e:
-        logger.warning(
-            "Falling back to daemon workspace for loop %s thread %s: %s",
-            loop_id,
-            thread_id,
-            e,
-        )
-        loop_workspace = Path(daemon._daemon_workspace)
+
+    # Prefer client-provided workspace (IG-409): when the CLI/SDK passes the user's
+    # CWD via loop_new, the agent's filesystem tools should default to the user's
+    # project directory rather than the per-loop daemon scratch dir (IG-300 fallback).
+    loop_workspace: Path | None = None
+    raw_client_ws = metadata.get("client_workspace")
+    if isinstance(raw_client_ws, str) and raw_client_ws.strip():
+        candidate = Path(raw_client_ws).expanduser()
+        if candidate.is_dir():
+            loop_workspace = candidate.resolve()
+        else:
+            logger.warning(
+                "Loop %s client_workspace %r is not a directory; falling back to per-loop dir",
+                loop_id[:16],
+                raw_client_ws,
+            )
+
+    if loop_workspace is None:
+        try:
+            loop_workspace = resolve_loop_daemon_workspace(loop_id)
+        except (OSError, ValueError) as e:
+            logger.warning(
+                "Falling back to daemon workspace for loop %s thread %s: %s",
+                loop_id,
+                thread_id,
+                e,
+            )
+            loop_workspace = Path(daemon._daemon_workspace)
+
     daemon._thread_registry.set_workspace(thread_id, loop_workspace)
     daemon._thread_registry.set_thread_loop(thread_id, loop_id)
     daemon._runner.set_current_thread_id(thread_id)

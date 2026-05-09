@@ -1254,11 +1254,14 @@ class MessageRouter:
     async def _handle_loop_new(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle loop_new RPC request (RFC-503).
 
-        Create fresh loop with new loop_id for new query/conversation.
+        Create fresh loop with new loop_id for new query/conversation. If the client
+        provides a ``workspace`` field (e.g., user's CWD), validate it and record it
+        as the loop's filesystem workspace so file/shell tools default to the user's
+        project directory instead of the per-loop daemon scratch dir (IG-409).
 
         Args:
             client_id: Client connection identifier.
-            msg: Request message (no parameters required).
+            msg: Request message; may contain optional ``workspace`` (string path).
         """
         import json
         from datetime import UTC, datetime
@@ -1268,6 +1271,7 @@ class MessageRouter:
         from soothe.core.agent_loop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
+        from soothe.core.workspace import validate_client_workspace
 
         d = self._daemon
         request_id = msg.get("request_id")
@@ -1282,12 +1286,31 @@ class MessageRouter:
         except OSError as e:
             logger.warning("Could not create loop workspace directory: %s", e)
 
+        # Resolve optional client workspace hint (IG-409). Invalid hints fall back to
+        # the per-loop daemon workspace via _bind_execution_thread_for_loop.
+        client_workspace: str | None = None
+        raw_workspace = msg.get("workspace")
+        if isinstance(raw_workspace, str) and raw_workspace.strip():
+            try:
+                resolved = validate_client_workspace(raw_workspace)
+            except ValueError as e:
+                logger.warning(
+                    "[loop_new] Rejecting invalid client workspace %r: %s", raw_workspace, e
+                )
+            else:
+                client_workspace = str(resolved)
+                logger.info(
+                    "[loop_new] Loop %s using client workspace: %s",
+                    loop_id[:16],
+                    client_workspace,
+                )
+
         # Create loop directory
         loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
         loop_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize metadata
-        metadata = {
+        metadata: dict[str, Any] = {
             "loop_id": loop_id,
             "status": "created",
             "thread_ids": [],
@@ -1297,6 +1320,8 @@ class MessageRouter:
             "created_at": datetime.now(UTC).isoformat(),
             "updated_at": datetime.now(UTC).isoformat(),
         }
+        if client_workspace is not None:
+            metadata["client_workspace"] = client_workspace
 
         metadata_file = loop_dir / "metadata.json"
         metadata_file.write_text(json.dumps(metadata, indent=2))
