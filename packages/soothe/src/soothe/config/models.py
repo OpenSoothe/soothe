@@ -682,7 +682,8 @@ class InfrastructureLimitsConfig(BaseModel):
 
     Args:
         max_parallel_goals: Maximum goals running simultaneously (autonomous mode).
-        max_parallel_steps: Maximum plan steps running simultaneously.
+        max_parallel_steps: Maximum plan steps running concurrently per execute batch (executor
+            schedules further batches until ready steps are exhausted).
         max_parallel_subagents: Maximum subagents running simultaneously.
         global_max_llm_calls: Cross-level circuit breaker for concurrent LLM calls.
         step_parallelism: Scheduling strategy for plan steps (sequential/dependency/max).
@@ -704,7 +705,9 @@ class InfrastructureLimitsConfig(BaseModel):
         default=1, ge=0, description="Maximum parallel goals (0=unlimited)"
     )
     max_parallel_steps: int = Field(
-        default=2, ge=0, description="Maximum parallel steps (0=unlimited)"
+        default=2,
+        ge=0,
+        description="Max concurrent plan steps per batch; 0=unlimited; multiple batches per execute",
     )
     max_parallel_subagents: int = Field(
         default=4, ge=0, description="Maximum parallel subagents (0=unlimited)"

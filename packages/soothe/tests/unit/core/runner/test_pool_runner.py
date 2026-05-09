@@ -5,7 +5,9 @@ Mocks multiprocessing components so no real subprocess is spawned.
 
 from __future__ import annotations
 
+import asyncio
 import queue
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -47,6 +49,7 @@ class TestWorkerProcess:
         worker = WorkerProcess(
             process=mock_process,
             request_queue=MagicMock(),
+            response_queue=MagicMock(),
             worker_id="worker-0",
         )
         worker.status = WorkerStatus.BUSY
@@ -64,10 +67,11 @@ class TestWorkerProcess:
         worker = WorkerProcess(
             process=mock_process,
             request_queue=MagicMock(),
+            response_queue=MagicMock(),
             worker_id="worker-0",
         )
 
-        worker.mark_busy("loop-456")
+        worker.mark_busy("loop-456", "req-456")
 
         assert worker.status == WorkerStatus.BUSY
         assert worker.current_loop_id == "loop-456"
@@ -109,7 +113,7 @@ class TestWorkerPool:
         mock_process.pid = 1234
         mock_process.is_alive.return_value = True
         mock_ctx.Process.return_value = mock_process
-        mock_ctx.Queue.return_value = MagicMock()
+        mock_ctx.Queue.side_effect = queue.Queue
 
         with patch("multiprocessing.get_context", return_value=mock_ctx):
             pool = await WorkerPool.get_shared_instance(config)
@@ -134,7 +138,7 @@ class TestWorkerPool:
         mock_process.pid = 1234
         mock_process.is_alive.return_value = False  # Already dead for clean shutdown
         mock_ctx.Process.return_value = mock_process
-        mock_ctx.Queue.return_value = MagicMock()
+        mock_ctx.Queue.side_effect = queue.Queue
 
         with patch("multiprocessing.get_context", return_value=mock_ctx):
             await WorkerPool.get_shared_instance(config)
@@ -153,13 +157,15 @@ class TestWorkerPool:
         WorkerPool._pool_lock = None
 
         # Create mock worker with pre-filled result queue
+        # Format: (msg_type, request_id, payload) - 3-tuple for _poll_worker_responses
         chunk1 = (("ns",), "messages", "hello")
         chunk2 = (("ns",), "messages", "world")
+        fixed_request_id = "abcd1234efgh5678"
 
-        result_q: queue.Queue[tuple[str, Any]] = queue.Queue()
-        result_q.put(("chunk", chunk1))
-        result_q.put(("chunk", chunk2))
-        result_q.put(("done", None))
+        result_q: queue.Queue[tuple[str, str, Any]] = queue.Queue()
+        result_q.put(("chunk", fixed_request_id, chunk1))
+        result_q.put(("chunk", fixed_request_id, chunk2))
+        result_q.put(("done", fixed_request_id, None))
 
         mock_process = MagicMock()
         mock_process.pid = 1234
@@ -171,15 +177,21 @@ class TestWorkerPool:
         worker = WorkerProcess(
             process=mock_process,
             request_queue=request_q,
+            response_queue=result_q,
             worker_id="worker-0",
             status=WorkerStatus.IDLE,
         )
 
         mock_ctx = MagicMock()
         mock_ctx.Process.return_value = mock_process
-        mock_ctx.Queue.return_value = result_q
+        mock_ctx.Queue.side_effect = queue.Queue
 
-        with patch("multiprocessing.get_context", return_value=mock_ctx):
+        fake_uuid = SimpleNamespace(hex=fixed_request_id + fixed_request_id)
+
+        with (
+            patch("multiprocessing.get_context", return_value=mock_ctx),
+            patch("soothe.core.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
+        ):
             pool = await WorkerPool.get_shared_instance(config)
             pool._workers = {"worker-0": worker}
 
@@ -194,6 +206,71 @@ class TestWorkerPool:
         await WorkerPool.close_shared_instance()
 
     @pytest.mark.asyncio
+    async def test_submit_early_close_drains_remaining_chunks(self) -> None:
+        """Consumer disconnect before done: background drain absorbs rest; worker becomes idle."""
+        config = _make_config()
+
+        WorkerPool._shared_pool = None
+        WorkerPool._pool_lock = None
+
+        fixed_request_id = "abcd1234efgh5678"
+        chunk1 = (("ns",), "messages", "first")
+        chunk2 = (("ns",), "messages", "second")
+
+        result_q: queue.Queue[tuple[str, Any]] = queue.Queue()
+        result_q.put(("chunk", fixed_request_id, chunk1))
+        result_q.put(("chunk", fixed_request_id, chunk2))
+        result_q.put(("done", fixed_request_id, None))
+
+        mock_process = MagicMock()
+        mock_process.pid = 1234
+        mock_process.is_alive.return_value = True
+        request_q = MagicMock()
+
+        worker = WorkerProcess(
+            process=mock_process,
+            request_queue=request_q,
+            response_queue=result_q,
+            worker_id="worker-0",
+            status=WorkerStatus.IDLE,
+        )
+
+        mock_ctx = MagicMock()
+        mock_ctx.Process.return_value = mock_process
+        mock_ctx.Queue.side_effect = queue.Queue
+
+        fake_uuid = SimpleNamespace(hex=fixed_request_id + fixed_request_id)
+
+        with (
+            patch("multiprocessing.get_context", return_value=mock_ctx),
+            patch("soothe.core.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
+        ):
+            pool = await WorkerPool.get_shared_instance(config)
+            pool._workers = {"worker-0": worker}
+
+            seen: list[Any] = []
+            async for chunk in pool.submit(_make_request()):
+                seen.append(chunk)
+                break
+
+            assert seen == [chunk1]
+
+            for _ in range(200):
+                if (
+                    worker.status == WorkerStatus.IDLE
+                    and fixed_request_id not in pool._pending_responses
+                ):
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pytest.fail("abandon drain did not finish")
+
+            assert worker.status == WorkerStatus.IDLE
+            assert fixed_request_id not in pool._pending_responses
+
+        await WorkerPool.close_shared_instance()
+
+    @pytest.mark.asyncio
     async def test_submit_raises_on_worker_error(self) -> None:
         """submit() re-raises error from worker."""
         config = _make_config()
@@ -202,8 +279,10 @@ class TestWorkerPool:
         WorkerPool._pool_lock = None
 
         exc = ValueError("worker boom")
-        result_q: queue.Queue[tuple[str, Any]] = queue.Queue()
-        result_q.put(("error", exc))
+        fixed_request_id = "abcd1234efgh5678"
+
+        result_q: queue.Queue[tuple[str, str, Any]] = queue.Queue()
+        result_q.put(("error", fixed_request_id, exc))
 
         mock_process = MagicMock()
         mock_process.pid = 1234
@@ -213,15 +292,21 @@ class TestWorkerPool:
         worker = WorkerProcess(
             process=mock_process,
             request_queue=request_q,
+            response_queue=result_q,
             worker_id="worker-0",
             status=WorkerStatus.IDLE,
         )
 
         mock_ctx = MagicMock()
         mock_ctx.Process.return_value = mock_process
-        mock_ctx.Queue.return_value = result_q
+        mock_ctx.Queue.side_effect = queue.Queue
 
-        with patch("multiprocessing.get_context", return_value=mock_ctx):
+        fake_uuid = SimpleNamespace(hex=fixed_request_id + fixed_request_id)
+
+        with (
+            patch("multiprocessing.get_context", return_value=mock_ctx),
+            patch("soothe.core.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
+        ):
             pool = await WorkerPool.get_shared_instance(config)
             pool._workers = {"worker-0": worker}
 
@@ -243,16 +328,19 @@ class TestWorkerPool:
         mock_process = MagicMock()
         mock_process.is_alive.return_value = True
         mock_ctx.Process.return_value = mock_process
-        mock_ctx.Queue.return_value = MagicMock()
+        mock_ctx.Queue.side_effect = queue.Queue
 
         with patch("multiprocessing.get_context", return_value=mock_ctx):
             pool = await WorkerPool.get_shared_instance(config)
 
             # Create some workers with different statuses
+            empty_rq = MagicMock()
+            empty_rq.get_nowait.side_effect = queue.Empty
             pool._workers = {
                 "worker-0": WorkerProcess(
                     process=mock_process,
                     request_queue=MagicMock(),
+                    response_queue=empty_rq,
                     worker_id="worker-0",
                     status=WorkerStatus.IDLE,
                     requests_completed=5,
@@ -260,6 +348,7 @@ class TestWorkerPool:
                 "worker-1": WorkerProcess(
                     process=mock_process,
                     request_queue=MagicMock(),
+                    response_queue=empty_rq,
                     worker_id="worker-1",
                     status=WorkerStatus.BUSY,
                     requests_completed=3,
@@ -288,10 +377,11 @@ class TestPoolLoopRunner:
         WorkerPool._pool_lock = None
 
         chunk1 = (("ns",), "messages", "result")
+        fixed_request_id = "abcd1234efgh5678"
 
-        result_q: queue.Queue[tuple[str, Any]] = queue.Queue()
-        result_q.put(("chunk", chunk1))
-        result_q.put(("done", None))
+        result_q: queue.Queue[tuple[str, str, Any]] = queue.Queue()
+        result_q.put(("chunk", fixed_request_id, chunk1))
+        result_q.put(("done", fixed_request_id, None))
 
         mock_process = MagicMock()
         mock_process.is_alive.return_value = True
@@ -300,15 +390,21 @@ class TestPoolLoopRunner:
         worker = WorkerProcess(
             process=mock_process,
             request_queue=request_q,
+            response_queue=result_q,
             worker_id="worker-0",
             status=WorkerStatus.IDLE,
         )
 
         mock_ctx = MagicMock()
         mock_ctx.Process.return_value = mock_process
-        mock_ctx.Queue.return_value = result_q
+        mock_ctx.Queue.side_effect = queue.Queue
 
-        with patch("multiprocessing.get_context", return_value=mock_ctx):
+        fake_uuid = SimpleNamespace(hex=fixed_request_id + fixed_request_id)
+
+        with (
+            patch("multiprocessing.get_context", return_value=mock_ctx),
+            patch("soothe.core.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
+        ):
             pool = await WorkerPool.get_shared_instance(config)
             pool._workers = {"worker-0": worker}
 
@@ -335,7 +431,10 @@ class TestPoolLoopRunner:
         mock_process = MagicMock()
         mock_process.is_alive.return_value = True
         mock_ctx.Process.return_value = mock_process
-        mock_ctx.Queue.return_value = MagicMock()
+        mock_ctx.Queue.side_effect = queue.Queue
+
+        empty_rq = MagicMock()
+        empty_rq.get_nowait.side_effect = queue.Empty
 
         with patch("multiprocessing.get_context", return_value=mock_ctx):
             pool = await WorkerPool.get_shared_instance(config)
@@ -343,6 +442,7 @@ class TestPoolLoopRunner:
                 "worker-0": WorkerProcess(
                     process=mock_process,
                     request_queue=MagicMock(),
+                    response_queue=empty_rq,
                     worker_id="worker-0",
                     status=WorkerStatus.IDLE,
                 )

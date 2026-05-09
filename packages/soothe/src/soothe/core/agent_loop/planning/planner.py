@@ -987,18 +987,8 @@ class LLMPlanner:
             and result.decision is not None
             and result.decision.steps
         ):
-            # Enforce max 2 steps on first wave (safety net if LLM ignores prompt)
-            if state.iteration == 0 and len(result.decision.steps) > 2:
-                logger.warning(
-                    "[PlanGen] Truncated first-wave steps from %d to 2 (iteration 0 constraint)",
-                    len(result.decision.steps),
-                )
-                truncated = result.decision.steps[:2]
-                result = result.model_copy(
-                    update={
-                        "decision": result.decision.model_copy(update={"steps": truncated}),
-                    }
-                )
+            # Full step list is kept; ``agent_loop.limits.max_parallel_steps`` only caps how many
+            # steps run concurrently per batch inside ``Executor`` (multiple batches per execute).
 
             result = result.model_copy(
                 update={
