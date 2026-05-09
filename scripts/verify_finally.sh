@@ -7,8 +7,8 @@
 # 2. Package dependency validation:
 #    - CLI must NOT import daemon runtime
 #    - SDK must be independent (no CLI/daemon imports)
-# 3. Code formatting check (make all-format)
-# 4. Linting (make all-lint) - checks ALL packages
+# 3. Code formatting check (make format)
+# 4. Linting (make lint) - checks ALL packages
 # 5. Unit tests (soothe daemon package tests)
 #
 # Exit codes:
@@ -213,7 +213,7 @@ check_formatting() {
 
     if $AUTO_FIX; then
         print_info "Auto-fixing formatting across all packages..."
-        if make all-format >/dev/null 2>&1; then
+        if make format >/dev/null 2>&1; then
             print_success "Formatting auto-fixed"
         else
             print_failure "Formatting auto-fix failed"
@@ -278,7 +278,7 @@ check_linting() {
 
     if $AUTO_FIX; then
         print_info "Auto-fixing linting issues across all packages..."
-        if make all-lint >/dev/null 2>&1; then
+        if make lint-fix >/dev/null 2>&1; then
             print_success "Linting auto-fixed"
         else
             print_failure "Linting auto-fix failed"

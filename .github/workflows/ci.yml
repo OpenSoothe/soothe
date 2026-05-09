@@ -42,7 +42,7 @@ jobs:
     #     DASHSCOPE_CP_BASE_URL: ${{ secrets.DASHSCOPE_CP_BASE_URL }}
 
     - name: Build all packages
-      run: make all-build
+      run: make build
 
   code-quality:
     runs-on: ubuntu-latest
@@ -67,7 +67,7 @@ jobs:
       run: uv sync
 
     - name: Check formatting (all packages)
-      run: make all-format
+      run: make format
 
     - name: Run linter (all packages)
-      run: make all-lint
+      run: make lint
