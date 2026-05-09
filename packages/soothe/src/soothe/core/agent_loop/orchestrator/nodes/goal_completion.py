@@ -147,7 +147,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         accum = GoalCompletionAccumState()
         chunk_count = 0
 
-        async for inner in synthesis_gen.generate_synthesis(state.goal, state, plan_result):
+        async for inner in synthesis_gen.generate_synthesis(state.goal, state):
             chunk_count += 1
             for msg in iter_messages_for_act_aggregation(inner):
                 update_goal_completion_from_message(accum, msg)

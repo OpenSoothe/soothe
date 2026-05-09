@@ -56,7 +56,10 @@ async def bootstrap_loop_session(
         client: ``WebSocketClient`` instance (connected).
         resume_loop_id: If set, subscribe to this existing loop. Otherwise create ``loop_new``.
         verbosity: Event verbosity for ``loop_subscribe``.
-        workspace: Reserved for future client workspace hints (ignored for loop bootstrap).
+        workspace: Optional client workspace hint (e.g., user's CWD). Forwarded to the
+            daemon on ``loop_new`` so filesystem tools default to the user's project
+            directory instead of the per-loop daemon scratch dir (IG-409). Ignored on
+            resume since the existing loop already has a workspace recorded.
         daemon_ready_timeout_s: Max seconds for daemon ready handshake.
         subscribe_timeout_s: Max seconds for loop subscribe RPC.
 
@@ -67,16 +70,19 @@ async def bootstrap_loop_session(
         TimeoutError: If a waited step times out.
         RuntimeError: If daemon reports not-ready during handshake.
     """
-    _ = workspace  # Loop workspaces are resolved on the daemon host per loop_id.
-
     await client.request_daemon_ready()
     await client.wait_for_daemon_ready(ready_timeout_s=daemon_ready_timeout_s)
 
     if resume_loop_id:
         loop_id = resume_loop_id
     else:
+        loop_new_payload: dict[str, Any] = {"type": "loop_new"}
+        if workspace is not None:
+            workspace_str = str(workspace).strip()
+            if workspace_str:
+                loop_new_payload["workspace"] = workspace_str
         new_resp = await client.request_response(
-            {"type": "loop_new"},
+            loop_new_payload,
             response_type="loop_new_response",
             timeout=subscribe_timeout_s,
         )

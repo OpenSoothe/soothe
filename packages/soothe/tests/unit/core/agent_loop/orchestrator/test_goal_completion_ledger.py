@@ -58,7 +58,7 @@ async def test_synthesize_appends_goal_completion_ledger_pair() -> None:
     sm.record_iteration = AsyncMock()
     sm.finalize_goal = AsyncMock()
 
-    async def fake_gen(self, goal, state, plan_result):  # noqa: ARG002
+    async def fake_gen(self, goal, state):  # noqa: ARG002
         yield ((), "messages", (AIMessage(content="final synth body"), {}))
 
     ctx = _ctx(
