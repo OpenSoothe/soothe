@@ -88,8 +88,8 @@ def test_normalize_stream_data_restores_ai_message() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_thread_messages_uses_request_response_and_filters_rows() -> None:
-    """Thread message RPC should run under read lock and return only dict rows."""
+async def test_fetch_conversation_log_uses_request_response_and_filters_rows() -> None:
+    """Conversation log RPC should run under RPC lock and return only dict rows."""
     session = object.__new__(TuiDaemonSession)
     request_response = AsyncMock(
         return_value={
@@ -100,10 +100,12 @@ async def test_get_thread_messages_uses_request_response_and_filters_rows() -> N
             ]
         }
     )
-    session._client = type("StubClient", (), {"request_response": request_response})()
-    session._read_lock = asyncio.Lock()
+    session._rpc_client = type("StubClient", (), {"request_response": request_response})()
+    session._rpc_lock = asyncio.Lock()
+    session._rpc_connected = True
+    session._ensure_rpc_connected = AsyncMock()
 
-    result = await session.get_thread_messages(
+    result = await session.fetch_conversation_log(
         "thread-123",
         limit=50,
         offset=3,
@@ -128,48 +130,48 @@ async def test_get_thread_messages_uses_request_response_and_filters_rows() -> N
 
 
 @pytest.mark.asyncio
-async def test_get_thread_messages_returns_empty_without_thread_id() -> None:
-    """Empty thread IDs should short-circuit without RPC."""
+async def test_fetch_conversation_log_returns_empty_without_id() -> None:
+    """Empty conversation ids should short-circuit without RPC."""
     session = object.__new__(TuiDaemonSession)
     request_response = AsyncMock()
-    session._client = type("StubClient", (), {"request_response": request_response})()
-    session._read_lock = asyncio.Lock()
+    session._rpc_client = type("StubClient", (), {"request_response": request_response})()
+    session._rpc_lock = asyncio.Lock()
 
-    assert await session.get_thread_messages("", include_events=True) == []
+    assert await session.fetch_conversation_log("", include_events=True) == []
     request_response.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_iter_turn_chunks_filters_non_active_thread_events() -> None:
-    """Daemon turn stream should ignore events from other thread IDs."""
+async def test_iter_turn_chunks_filters_non_active_loop_events() -> None:
+    """Daemon turn stream should ignore events from other loop ids."""
     session = object.__new__(TuiDaemonSession)
-    session._thread_id = "thread-main"
+    session._loop_id = "loop-main"
     session._read_lock = asyncio.Lock()
     session._streaming = False
     session._client = _StubEventClient(
         [
-            {"type": "status", "state": "running", "thread_id": "thread-other"},
+            {"type": "status", "state": "running", "loop_id": "loop-other"},
             {
                 "type": "event",
-                "thread_id": "thread-other",
+                "loop_id": "loop-other",
                 "namespace": [],
                 "mode": "messages",
                 "data": ("other", {}),
             },
-            {"type": "status", "state": "running", "thread_id": "thread-main"},
+            {"type": "status", "state": "running", "loop_id": "loop-main"},
             {
                 "type": "event",
-                "thread_id": "thread-main",
+                "loop_id": "loop-main",
                 "namespace": [],
                 "mode": "messages",
                 "data": ("main", {}),
             },
-            {"type": "status", "state": "idle", "thread_id": "thread-other"},
-            {"type": "status", "state": "idle", "thread_id": "thread-main"},
+            {"type": "status", "state": "idle", "loop_id": "loop-other"},
+            {"type": "status", "state": "idle", "loop_id": "loop-main"},
         ]
     )
 
     chunks = [chunk async for chunk in session.iter_turn_chunks()]
 
     assert chunks == [((), "messages", ("main", {}))]
-    assert session._thread_id == "thread-main"
+    assert session._loop_id == "loop-main"

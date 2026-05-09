@@ -70,6 +70,9 @@ class _FakeThreadRegistry:
     def get(self, _thread_id: str) -> None:
         return None
 
+    def get_thread_loop(self, _thread_id: str) -> str:
+        return ""
+
     def get_workspace(self, _thread_id: str) -> Path:
         return Path.cwd()
 
@@ -114,16 +117,17 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
         _query_running=False,
         _current_query_task=None,
         _pending_interrupt_responses={},
+        _active_stream_loop_id=None,
         _broadcast=_broadcast,
         _session_manager=SimpleNamespace(
-            claim_thread_ownership=lambda *_args, **_kwargs: None,
-            release_thread_ownership=lambda *_args, **_kwargs: None,
-            subscribe_thread=lambda *_args, **_kwargs: True,
+            claim_loop_ownership=lambda *_args, **_kwargs: None,
+            release_loop_ownership=lambda *_args, **_kwargs: None,
+            subscribe_loop=lambda *_args, **_kwargs: True,
         ),
     )
 
     engine = QueryEngine(daemon)
-    await engine.run_query("cancel me")
+    await engine.run_query("cancel me", loop_id="loop-cancel")
 
     task = daemon._current_query_task
     assert task is not None
@@ -178,11 +182,12 @@ def _daemon_factory(
         _query_running=False,
         _current_query_task=None,
         _pending_interrupt_responses={},
+        _active_stream_loop_id=None,
         _broadcast=_broadcast,
         _session_manager=SimpleNamespace(
-            claim_thread_ownership=lambda *_args, **_kwargs: None,
-            release_thread_ownership=lambda *_args, **_kwargs: None,
-            subscribe_thread=lambda *_args, **_kwargs: True,
+            claim_loop_ownership=lambda *_args, **_kwargs: None,
+            release_loop_ownership=lambda *_args, **_kwargs: None,
+            subscribe_loop=lambda *_args, **_kwargs: True,
         ),
     )
 
@@ -195,7 +200,7 @@ async def test_cancel_does_not_emit_legacy_success_or_early_idle() -> None:
     daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=60)
     engine = QueryEngine(daemon)
 
-    await engine.run_query("hello")
+    await engine.run_query("hello", loop_id="loop-cancel")
     task = daemon._current_query_task
     assert task is not None
 
@@ -219,7 +224,7 @@ async def test_cancel_waits_for_slow_unwind_before_idle() -> None:
     daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=60)
     engine = QueryEngine(daemon)
 
-    await engine.run_query("slow cancel")
+    await engine.run_query("slow cancel", loop_id="loop-cancel")
     await engine.cancel_current_query()
 
     idle_after_cancel = [
@@ -227,7 +232,7 @@ async def test_cancel_waits_for_slow_unwind_before_idle() -> None:
         for i, m in enumerate(broadcasts)
         if m.get("type") == "status"
         and m.get("state") == "idle"
-        and m.get("thread_id") == "thread-1"
+        and m.get("loop_id") == "loop-cancel"
     ]
     cmd_ix = next(
         i
@@ -250,7 +255,7 @@ async def test_cancel_grace_timeout_keeps_task_then_drains(
     daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=1)
     engine = QueryEngine(daemon)
 
-    await engine.run_query("blocking unwind")
+    await engine.run_query("blocking unwind", loop_id="loop-cancel")
     task = daemon._current_query_task
     assert task is not None
 
@@ -283,7 +288,7 @@ async def test_cancel_multithreaded_path_matches_single_thread() -> None:
     )
     engine = QueryEngine(daemon)
 
-    await engine.run_query("mt slow cancel")
+    await engine.run_query("mt slow cancel", loop_id="loop-cancel")
     task = daemon._current_query_task
     assert task is not None
 
@@ -295,5 +300,62 @@ async def test_cancel_multithreaded_path_matches_single_thread() -> None:
     assert any("Cancellation requested" in c for c in contents)
     assert not any("Query cancelled successfully" in c for c in contents)
 
+    with suppress(asyncio.CancelledError):
+        await task
+
+
+@pytest.mark.asyncio
+async def test_cancel_loop_noop_when_loop_id_empty() -> None:
+    """Empty loop_id must not cancel threads or match unscoped registry entries."""
+    broadcasts: list[dict[str, Any]] = []
+
+    async def _broadcast(msg: dict[str, Any]) -> None:
+        broadcasts.append(msg)
+
+    daemon = SimpleNamespace(
+        _thread_executor=None,
+        _runner=_SlowCancelRunner(unwind_delay=0.04),
+        _thread_registry=_FakeThreadRegistry(),
+        _daemon_workspace=Path.cwd(),
+        _thread_logger=SimpleNamespace(
+            _thread_id="thread-1",
+            log_user_input=lambda _text: None,
+            log_assistant_response=lambda _text: None,
+        ),
+        _config=SimpleNamespace(
+            daemon=SimpleNamespace(
+                max_query_duration_minutes=0,
+                max_concurrent_threads=100,
+                cancel_grace_seconds=60,
+            ),
+            logging=SimpleNamespace(
+                thread_logging=SimpleNamespace(retention_days=7, max_size_mb=10)
+            ),
+            workspace_dir=".",
+        ),
+        _global_history=None,
+        _active_threads={},
+        _query_running=False,
+        _current_query_task=None,
+        _pending_interrupt_responses={},
+        _active_stream_loop_id=None,
+        _broadcast=_broadcast,
+        _session_manager=SimpleNamespace(
+            claim_loop_ownership=lambda *_args, **_kwargs: None,
+            release_loop_ownership=lambda *_args, **_kwargs: None,
+            subscribe_loop=lambda *_args, **_kwargs: True,
+        ),
+    )
+
+    engine = QueryEngine(daemon)
+    await engine.run_query("hello", loop_id="loop-cancel")
+    task = daemon._current_query_task
+    assert task is not None and not task.done()
+
+    await engine.cancel_loop("")
+    assert not task.done()
+    assert not any(m.get("type") == "command_response" for m in broadcasts)
+
+    task.cancel()
     with suppress(asyncio.CancelledError):
         await task

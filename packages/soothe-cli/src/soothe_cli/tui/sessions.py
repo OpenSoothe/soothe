@@ -660,7 +660,8 @@ def _create_jsonplus_serializer() -> JsonPlusSerializer:
     """Import and create a JsonPlus serializer with Soothe type allowlist.
 
     Returns:
-        A ready `JsonPlusSerializer` instance.
+        A ready `JsonPlusSerializer` instance with explicit allowed_msgpack_modules
+        to suppress langgraph deprecation warning.
     """
     from soothe_sdk.utils.serde import create_soothe_serde
 

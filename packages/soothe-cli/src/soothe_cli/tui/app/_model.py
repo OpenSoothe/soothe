@@ -388,7 +388,7 @@ class _ModelMixin:
             self._update_welcome_banner(
                 prev_session_loop,
                 missing_message=(
-                    "Welcome banner not found during rollback to loop %s; banner may display stale loop ID"
+                    "Welcome banner not found during rollback to loop %s; banner may display stale id"
                 ),
                 warn_if_missing=True,
             )
@@ -403,28 +403,28 @@ class _ModelMixin:
 
     def _update_welcome_banner(
         self,
-        thread_id: str,
+        loop_id: str,
         *,
         missing_message: str,
         warn_if_missing: bool,
     ) -> None:
-        """Update the welcome banner thread ID when the banner is mounted.
+        """Update the welcome banner when the banner is mounted.
 
         Args:
-            thread_id: Thread ID to display on the banner.
+            loop_id: Active loop id to display on the banner.
             missing_message: Log message template when banner is missing.
             warn_if_missing: Whether to log missing-banner cases at warning level.
         """
         try:
             banner = self.query_one("#welcome-banner", WelcomeBanner)
-            banner.update_loop_id(thread_id)
+            banner.update_loop_id(loop_id)
         except NoMatches:
             if warn_if_missing:
-                logger.warning(missing_message, thread_id)
+                logger.warning(missing_message, loop_id)
             else:
-                logger.debug(missing_message, thread_id)
+                logger.debug(missing_message, loop_id)
 
-    async def _resume_thread(self, thread_id: str) -> None:
+    async def _resume_thread(self, loop_id: str) -> None:
         """Resume a previously saved thread.
 
         Fetches the selected thread history, then atomically switches UI state.
@@ -432,7 +432,7 @@ class _ModelMixin:
         fails.
 
         Args:
-            thread_id: The thread ID to resume.
+            loop_id: The loop id to attach to (checkpoint key matches LangGraph ``thread_id``).
         """
         if not self._agent:
             await self._mount_message(AppMessage("Cannot switch threads: no active agent"))
@@ -443,8 +443,8 @@ class _ModelMixin:
             return
 
         # Skip if already on this thread
-        if self._session_state.loop_id == thread_id:
-            await self._mount_message(AppMessage(f"Already on thread: {thread_id}"))
+        if self._session_state.loop_id == loop_id:
+            await self._mount_message(AppMessage(f"Already on thread: {loop_id}"))
             return
 
         if self._thread_switching:
@@ -452,16 +452,16 @@ class _ModelMixin:
             return
 
         # Save previous state for rollback on failure
-        prev_thread_id = self._lc_loop_id
-        prev_session_thread = self._session_state.loop_id
+        prev_loop_id = self._lc_loop_id
+        prev_session_loop = self._session_state.loop_id
         self._thread_switching = True
         if self._chat_input:
             self._chat_input.set_cursor_active(active=False)
 
         prefetched_payload: _ThreadHistoryPayload | None = None
         try:
-            self._update_status(f"Loading thread: {thread_id}")
-            prefetched_payload = await self._fetch_thread_history_data(thread_id)
+            self._update_status(f"Loading thread: {loop_id}")
+            prefetched_payload = await self._fetch_thread_history_data(loop_id)
 
             # Clear conversation (similar to /clear, without creating a new thread)
             self._pending_messages.clear()
@@ -474,37 +474,37 @@ class _ModelMixin:
 
             # Switch to the selected thread
             if self._daemon_session is not None:
-                await self._daemon_session.switch_thread(thread_id)
-            self._session_state.loop_id = thread_id
-            self._lc_loop_id = thread_id
+                await self._daemon_session.switch_loop(loop_id)
+            self._session_state.loop_id = loop_id
+            self._lc_loop_id = loop_id
             self._clear_thread_model_override()
 
             self._update_welcome_banner(
-                thread_id,
+                loop_id,
                 missing_message="Welcome banner not found during thread switch to %s",
                 warn_if_missing=False,
             )
 
             # Load thread history
             await self._load_thread_history(
-                thread_id=thread_id,
+                thread_id=loop_id,
                 preloaded_payload=prefetched_payload,
             )
         except Exception as exc:
             if prefetched_payload is None:
-                logger.exception("Failed to prefetch history for thread %s", thread_id)
+                logger.exception("Failed to prefetch history for thread %s", loop_id)
                 await self._mount_message(
                     AppMessage(
-                        f"Failed to switch to thread {thread_id}: {exc}. Use /threads to try again."
+                        f"Failed to switch to thread {loop_id}: {exc}. Use /threads to try again."
                     )
                 )
                 return
-            logger.exception("Failed to switch to thread %s", thread_id)
+            logger.exception("Failed to switch to thread %s", loop_id)
             # Restore previous thread IDs so the user can retry
-            self._session_state.loop_id = prev_session_thread
-            self._lc_loop_id = prev_thread_id
+            self._session_state.loop_id = prev_session_loop
+            self._lc_loop_id = prev_loop_id
             self._update_welcome_banner(
-                prev_session_thread,
+                prev_session_loop,
                 missing_message=(
                     "Welcome banner not found during rollback to thread %s; banner may display stale thread ID"
                 ),
@@ -514,12 +514,12 @@ class _ModelMixin:
             # Attempt to restore the previous thread's visible history
             try:
                 await self._clear_messages()
-                await self._load_thread_history(thread_id=prev_session_thread)
+                await self._load_thread_history(thread_id=prev_session_loop)
             except Exception:  # Resilient session state saving
                 rollback_restore_failed = True
                 msg = "Could not restore previous thread history after failed switch to %s"
-                logger.warning(msg, thread_id, exc_info=True)
-            error_message = f"Failed to switch to thread {thread_id}: {exc}."
+                logger.warning(msg, loop_id, exc_info=True)
+            error_message = f"Failed to switch to thread {loop_id}: {exc}."
             if rollback_restore_failed:
                 error_message += " Previous thread history could not be restored."
             error_message += " Use /threads to try again."

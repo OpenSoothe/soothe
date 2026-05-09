@@ -444,8 +444,8 @@ class _ExecutionMixin:
         if first_word:
             entry = _RFC404_COMMANDS.get(first_word)
             if entry and entry.get("location") == "daemon" and entry.get("type") == "routing":
-                thread_id = self._session_state.loop_id if self._session_state else None
-                ok, err = validate_command(entry, first_word, query, thread_id)
+                loop_id = self._session_state.loop_id if self._session_state else None
+                ok, err = validate_command(entry, first_word, query, loop_id)
                 if not ok:
                     await self._mount_message(UserMessage(command))
                     await self._mount_message(AppMessage(f"Error: {err}"))
@@ -536,20 +536,20 @@ class _ExecutionMixin:
             if self._session_state:
                 if self._daemon_session is not None:
                     status_event = await self._daemon_session.new_thread()
-                    new_thread_id = (
-                        str(status_event.get("thread_id", "")) or self._session_state.reset_thread()
+                    new_loop_id = (
+                        str(status_event.get("loop_id", "")) or self._session_state.reset_thread()
                     )
-                    self._session_state.loop_id = new_thread_id
-                    self._lc_loop_id = new_thread_id
+                    self._session_state.loop_id = new_loop_id
+                    self._lc_loop_id = new_loop_id
                 else:
-                    new_thread_id = self._session_state.reset_thread()
+                    new_loop_id = self._session_state.reset_thread()
                 try:
                     banner = self.query_one("#welcome-banner", WelcomeBanner)
-                    banner.update_loop_id(new_thread_id)
+                    banner.update_loop_id(new_loop_id)
                 except NoMatches:
                     pass
                 self._clear_thread_model_override()
-                await self._mount_message(AppMessage(f"Started new thread: {new_thread_id}"))
+                await self._mount_message(AppMessage(f"Started new loop: {new_loop_id}"))
         elif cmd == "/editor":
             await self.action_open_editor()
         elif cmd == "/loops":

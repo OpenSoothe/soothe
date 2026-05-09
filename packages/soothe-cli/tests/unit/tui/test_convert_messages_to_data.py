@@ -214,7 +214,7 @@ async def test_get_thread_state_values_recovers_messages_from_conversation_rows(
     app = object.__new__(SootheApp)
     daemon_session = SimpleNamespace()
     daemon_session.aget_state = AsyncMock(return_value=SimpleNamespace(values={}))
-    daemon_session.get_thread_messages = AsyncMock(
+    daemon_session.fetch_conversation_log = AsyncMock(
         return_value=[
             {"kind": "event", "content": "ignore"},
             {"kind": "conversation", "role": "user", "content": "Hello"},
@@ -234,7 +234,7 @@ async def test_get_thread_state_values_recovers_messages_from_conversation_rows(
     assert len(values["messages"]) == 2
     assert isinstance(values["messages"][0], HumanMessage)
     assert isinstance(values["messages"][1], AIMessage)
-    daemon_session.get_thread_messages.assert_awaited_once_with(
+    daemon_session.fetch_conversation_log.assert_awaited_once_with(
         "thread-42",
         limit=10000,
         include_events=True,
@@ -250,12 +250,12 @@ async def test_get_thread_state_values_skips_recovery_when_messages_exist() -> N
     daemon_session.aget_state = AsyncMock(
         return_value=SimpleNamespace(values={"messages": [HumanMessage(content="existing")]})
     )
-    daemon_session.get_thread_messages = AsyncMock()
+    daemon_session.fetch_conversation_log = AsyncMock()
     daemon_session.aupdate_state = AsyncMock()
     app._daemon_session = daemon_session
 
     values = await app._get_thread_state_values("thread-42")
 
     assert len(values["messages"]) == 1
-    daemon_session.get_thread_messages.assert_not_awaited()
+    daemon_session.fetch_conversation_log.assert_not_awaited()
     daemon_session.aupdate_state.assert_not_awaited()

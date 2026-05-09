@@ -169,6 +169,7 @@ class WebSocketClient:
 
     async def send_input(
         self,
+        loop_id: str,
         text: str,
         *,
         autonomous: bool = False,
@@ -179,18 +180,12 @@ class WebSocketClient:
         model_params: dict[str, Any] | None = None,
         attachments: list[dict[str, str]] | None = None,
     ) -> None:
-        """Send user input to the daemon.
-
-        Args:
-            text: The user input text.
-            autonomous: Whether to run in autonomous mode.
-            max_iterations: Maximum iterations for autonomous mode.
-            preferred_subagent: Optional subagent hint merged into AgentLoop (IG-349).
-            model: Optional ``provider:model`` override for this turn (daemon host config).
-            model_params: Optional extra kwargs for model construction (JSON-serializable dict).
-            attachments: Optional image attachments (``mime_type`` + base64 ``data``); IG-327.
-        """
-        payload: dict[str, Any] = {"type": "input", "text": text}
+        """Send user input to the daemon for a subscribed loop (``loop_input``)."""
+        payload: dict[str, Any] = {
+            "type": "loop_input",
+            "loop_id": loop_id,
+            "content": text,
+        }
         if autonomous:
             payload["autonomous"] = True
             if max_iterations is not None:
@@ -214,125 +209,6 @@ class WebSocketClient:
             cmd: Command string.
         """
         await self.send({"type": "command", "cmd": cmd})
-
-    async def send_thread_list(
-        self,
-        filter_dict: dict[str, Any] | None = None,
-        *,
-        include_stats: bool = False,
-        include_last_message: bool = True,
-        request_id: str | None = None,
-    ) -> None:
-        """Request persisted threads (RFC-402 ``thread_list`` / ``thread_list_response``)."""
-        payload: dict[str, Any] = {
-            "type": "thread_list",
-            "include_stats": include_stats,
-            "include_last_message": include_last_message,
-        }
-        if filter_dict:
-            payload["filter"] = filter_dict
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_thread_get(self, thread_id: str, *, request_id: str | None = None) -> None:
-        """Request thread metadata for a specific thread."""
-        payload: dict[str, Any] = {"type": "thread_get", "thread_id": thread_id}
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_thread_messages(
-        self,
-        thread_id: str,
-        *,
-        limit: int = 100,
-        offset: int = 0,
-        request_id: str | None = None,
-    ) -> None:
-        """Request persisted thread messages."""
-        payload: dict[str, Any] = {
-            "type": "thread_messages",
-            "thread_id": thread_id,
-            "limit": limit,
-            "offset": offset,
-        }
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_thread_state(self, thread_id: str, *, request_id: str | None = None) -> None:
-        """Request raw checkpoint state values for a thread."""
-        payload: dict[str, Any] = {"type": "thread_state", "thread_id": thread_id}
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_thread_update_state(
-        self,
-        thread_id: str,
-        values: dict[str, Any],
-        *,
-        request_id: str | None = None,
-    ) -> None:
-        """Persist partial state values for a thread."""
-        payload: dict[str, Any] = {
-            "type": "thread_update_state",
-            "thread_id": thread_id,
-            "values": values,
-        }
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_thread_archive(self, thread_id: str, *, request_id: str | None = None) -> None:
-        """Request thread archival via daemon RPC."""
-        payload: dict[str, Any] = {"type": "thread_archive", "thread_id": thread_id}
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_thread_delete(self, thread_id: str, *, request_id: str | None = None) -> None:
-        """Request thread deletion via daemon RPC."""
-        payload: dict[str, Any] = {"type": "thread_delete", "thread_id": thread_id}
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_thread_create(
-        self,
-        *,
-        initial_message: str | None = None,
-        metadata: dict[str, Any] | None = None,
-        request_id: str | None = None,
-    ) -> None:
-        """Request creation of a persisted thread via daemon RPC (RFC-402 ``thread_create``).
-
-        Args:
-            initial_message: Optional seed message for the new thread.
-            metadata: Optional metadata dict (e.g., tags, workspace).
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {"type": "thread_create"}
-        if initial_message is not None:
-            payload["initial_message"] = initial_message
-        if metadata is not None:
-            payload["metadata"] = metadata
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
-    async def send_thread_artifacts(self, thread_id: str, *, request_id: str | None = None) -> None:
-        """Request thread artifacts via daemon RPC (RFC-402 ``thread_artifacts``).
-
-        Args:
-            thread_id: Thread ID to retrieve artifacts for.
-            request_id: Optional request correlation ID.
-        """
-        payload: dict[str, Any] = {"type": "thread_artifacts", "thread_id": thread_id}
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
 
     # ---------------------------------------------------------------------------
     # Loop RPC Methods (RFC-504 Loop Management CLI Commands)
@@ -471,6 +347,7 @@ class WebSocketClient:
         self,
         loop_id: str,
         *,
+        verbosity: VerbosityLevel = "normal",
         request_id: str | None = None,
     ) -> None:
         """Subscribe client to loop events via daemon RPC (RFC-503 ``loop_subscribe``).
@@ -480,9 +357,14 @@ class WebSocketClient:
 
         Args:
             loop_id: Loop identifier.
+            verbosity: Event verbosity (RFC-0022).
             request_id: Optional request correlation ID.
         """
-        payload: dict[str, Any] = {"type": "loop_subscribe", "loop_id": loop_id}
+        payload: dict[str, Any] = {
+            "type": "loop_subscribe",
+            "loop_id": loop_id,
+            "verbosity": verbosity,
+        }
         if request_id is not None:
             payload["request_id"] = request_id
         await self.send(payload)
@@ -551,15 +433,15 @@ class WebSocketClient:
 
     async def send_resume_interrupts(
         self,
-        thread_id: str,
+        loop_id: str,
         resume_payload: dict[str, Any],
         *,
         request_id: str | None = None,
     ) -> None:
-        """Send interactive continuation payload for a paused daemon turn."""
+        """Send interactive continuation payload for a paused daemon turn (loop-scoped)."""
         payload: dict[str, Any] = {
             "type": "resume_interrupts",
-            "thread_id": thread_id,
+            "loop_id": loop_id,
             "resume_payload": resume_payload,
         }
         if request_id is not None:
@@ -608,54 +490,6 @@ class WebSocketClient:
     async def send_detach(self) -> None:
         """Notify the daemon that this client is detaching."""
         await self.send({"type": "detach"})
-
-    async def send_resume_thread(
-        self,
-        thread_id: str,
-        workspace: str | None = None,
-    ) -> None:
-        """Request the daemon to resume a specific thread.
-
-        Args:
-            thread_id: The thread ID to resume.
-            workspace: Optional workspace override. Defaults to client's cwd.
-        """
-        from anyio import Path as AsyncPath
-
-        workspace = (
-            str(await AsyncPath.cwd())
-            if workspace is None
-            else str(await AsyncPath(workspace).resolve())
-        )
-
-        await self.send(
-            {
-                "type": "resume_thread",
-                "thread_id": thread_id,
-                "workspace": workspace,
-            }
-        )
-
-    async def send_new_thread(self, workspace: str | None = None) -> None:
-        """Request the daemon to start a new thread.
-
-        Args:
-            workspace: Optional workspace path. Defaults to client's cwd.
-        """
-        from anyio import Path as AsyncPath
-
-        workspace = (
-            str(await AsyncPath.cwd())
-            if workspace is None
-            else str(await AsyncPath(workspace).resolve())
-        )
-
-        await self.send(
-            {
-                "type": "new_thread",
-                "workspace": workspace,
-            }
-        )
 
     async def list_skills(self, *, timeout: float = 15.0) -> dict[str, Any]:
         """Request wire-safe skill metadata from the daemon (RFC-400 ``skills_list``)."""
@@ -768,73 +602,6 @@ class WebSocketClient:
 
         self._pending_events = kept_events
         return matched
-
-    async def subscribe_thread(
-        self,
-        thread_id: str,
-        verbosity: VerbosityLevel = "normal",
-    ) -> None:
-        """Subscribe to receive events for a thread.
-
-        Args:
-            thread_id: Thread identifier to subscribe to
-            verbosity: Verbosity preference (quiet|minimal|normal|detailed|debug)
-
-        Raises:
-            ConnectionError: If not connected
-        """
-        if not self._ws:
-            raise ConnectionError("Not connected to daemon")
-
-        msg = {
-            "type": "subscribe_thread",
-            "thread_id": thread_id,
-            "verbosity": verbosity,
-        }
-        await self.send(msg)
-        logger.info("[Client] Subscribed to thread %s (%s)", thread_id[:8], verbosity)
-
-    async def wait_for_subscription_confirmed(
-        self,
-        thread_id: str,
-        verbosity: VerbosityLevel = "normal",
-        timeout: float = 5.0,  # noqa: ASYNC109
-    ) -> None:
-        """Wait for subscription confirmation message.
-
-        Args:
-            thread_id: Expected thread ID
-            verbosity: Expected verbosity level
-            timeout: Maximum seconds to wait
-
-        Raises:
-            TimeoutError: If confirmation not received
-            ValueError: If confirmation has different thread_id or verbosity
-        """
-        async with asyncio.timeout(timeout):
-            while True:
-                event = await self._read_from_socket()
-                if not event:
-                    raise ValueError("No event received")
-                if event.get("type") != "subscription_confirmed":
-                    self._pending_events.append(event)
-                    continue
-                if event.get("thread_id") != thread_id:
-                    self._pending_events.append(event)
-                    continue
-                echoed_verbosity = event.get("verbosity", "normal")
-                if echoed_verbosity != verbosity:
-                    logger.warning(
-                        "Verbosity mismatch: requested=%s, received=%s",
-                        verbosity,
-                        echoed_verbosity,
-                    )
-                logger.debug(
-                    "Subscription confirmed for thread %s with verbosity=%s",
-                    thread_id,
-                    echoed_verbosity,
-                )
-                return
 
     async def read_event(self) -> dict[str, Any] | None:
         """Read the next event from the daemon.

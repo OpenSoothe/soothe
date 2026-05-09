@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -24,14 +25,12 @@ async def test_skills_list_response_shape(tmp_path: Any) -> None:
     cfg.skills = [str(skill_dir)]
 
     sent: list[tuple[Any, dict[str, Any]]] = []
-    q: asyncio.Queue = asyncio.Queue()
 
     class _FakeDaemon:
         _config = cfg
         _query_running = False
         _active_threads: set[Any] = set()
         _runner = SimpleNamespace(current_thread_id="t-router")
-        _current_input_queue = q
 
         async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
             sent.append((client_id, msg))
@@ -66,13 +65,20 @@ async def test_invoke_skill_response_then_queued_input(tmp_path: Any) -> None:
 
     sent: list[tuple[Any, dict[str, Any]]] = []
     q: asyncio.Queue = asyncio.Queue()
+    loop_id = "loop-inv"
+
+    async def enqueue(_lid: str, msg: dict[str, Any]) -> None:
+        await q.put(msg)
 
     class _FakeDaemon:
         _config = cfg
         _query_running = False
         _active_threads: set[Any] = set()
         _runner = SimpleNamespace(current_thread_id="t-inv")
-        _current_input_queue = q
+        _loop_input_dispatcher = SimpleNamespace(enqueue=enqueue)
+        _session_manager = SimpleNamespace(
+            get_session=AsyncMock(return_value=SimpleNamespace(subscriptions={loop_id}))
+        )
 
         async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
             sent.append((client_id, msg))

@@ -42,25 +42,25 @@ class _RecorderProcessor:
 
 
 @pytest.mark.asyncio
-async def test_run_headless_filters_non_active_thread_frames(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Headless daemon run should ignore `status/event` frames for other threads."""
-    active_thread_id = "thread-main"
+async def test_run_headless_filters_non_active_loop_frames(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Headless daemon run should ignore `status/event` frames for other loops."""
+    active_loop_id = "loop-main"
     leaked_text = "Hello! I'd be happy to help you with whatever you need. What can I do for you today?"
 
     stub_client = _StubClient(
         [
-            {"type": "status", "state": "running", "thread_id": "thread-other"},
+            {"type": "status", "state": "running", "loop_id": "loop-other"},
             {
                 "type": "event",
-                "thread_id": "thread-other",
+                "loop_id": "loop-other",
                 "mode": "messages",
                 "namespace": [],
                 "data": leaked_text,
             },
-            {"type": "status", "state": "running", "thread_id": active_thread_id},
-            {"type": "event", "thread_id": active_thread_id, "mode": "custom", "data": {"type": "ok"}},
-            {"type": "status", "state": "idle", "thread_id": active_thread_id},
-            {"type": "event", "thread_id": "thread-other", "mode": "custom", "data": {"type": "late"}},
+            {"type": "status", "state": "running", "loop_id": active_loop_id},
+            {"type": "event", "loop_id": active_loop_id, "mode": "custom", "data": {"type": "ok"}},
+            {"type": "status", "state": "idle", "loop_id": active_loop_id},
+            {"type": "event", "loop_id": "loop-other", "mode": "custom", "data": {"type": "late"}},
             None,
         ]
     )
@@ -69,13 +69,13 @@ async def test_run_headless_filters_non_active_thread_frames(monkeypatch: pytest
         return None
 
     async def _bootstrap(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        return {"type": "status", "state": "idle", "thread_id": active_thread_id}
+        return {"type": "session_ready", "loop_id": active_loop_id, "success": True}
 
     monkeypatch.setattr(daemon_exec, "EventProcessor", _RecorderProcessor)
     monkeypatch.setattr(daemon_exec, "connect_websocket_with_retries", _noop_async)
     monkeypatch.setattr(
         daemon_exec,
-        "bootstrap_thread_session",
+        "bootstrap_loop_session",
         _bootstrap,
     )
     monkeypatch.setattr(daemon_exec, "websocket_url_from_config", lambda _cfg: "ws://unit.test")
@@ -85,6 +85,6 @@ async def test_run_headless_filters_non_active_thread_frames(monkeypatch: pytest
     exit_code = await daemon_exec.run_headless_via_daemon(cfg, prompt="hi")
 
     assert exit_code == 0
-    processed_thread_ids = [e.get("thread_id") for e in _RecorderProcessor.events]
-    assert all(tid in {None, active_thread_id} for tid in processed_thread_ids)
+    processed_loop_ids = [e.get("loop_id") for e in _RecorderProcessor.events]
+    assert all(lid in {None, active_loop_id} for lid in processed_loop_ids)
     assert leaked_text not in [str(e.get("data", "")) for e in _RecorderProcessor.events]

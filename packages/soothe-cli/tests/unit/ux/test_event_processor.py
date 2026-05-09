@@ -143,7 +143,7 @@ class TestProcessorState:
         assert state.pending_tool_calls == {}
         assert state.name_map == {}
         assert state.current_plan is None
-        assert state.thread_id == ""
+        assert state.loop_id == ""
 
     def test_reset_turn(self):
         """Test reset_turn clears turn-specific state."""
@@ -179,7 +179,7 @@ class TestEventProcessorStatusHandling:
         renderer = MockRenderer()
         processor = EventProcessor(renderer)
 
-        processor.process_event({"type": "status", "state": "running", "thread_id": "t1"})
+        processor.process_event({"type": "status", "state": "running", "loop_id": "t1"})
 
         assert ("on_status_change", ("running",), {}) in renderer.calls
 
@@ -188,30 +188,40 @@ class TestEventProcessorStatusHandling:
         renderer = MockRenderer()
         processor = EventProcessor(renderer)
 
-        processor.process_event({"type": "status", "state": "idle", "thread_id": "t1"})
+        processor.process_event({"type": "status", "state": "idle", "loop_id": "t1"})
 
         assert ("on_turn_end", (), {}) in renderer.calls
 
-    def test_status_updates_thread_id(self):
-        """Test status event updates processor thread_id."""
+    def test_status_updates_loop_id(self):
+        """Test status event updates processor loop_id."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer)
 
-        processor.process_event({"type": "status", "state": "running", "thread_id": "new-thread"})
+        processor.process_event({"type": "status", "state": "running", "loop_id": "new-thread"})
 
-        assert processor.thread_id == "new-thread"
+        assert processor.loop_id == "new-thread"
+
+    def test_status_ignores_thread_id_without_loop_id(self):
+        """Status frames must use loop_id; checkpoint thread_id alone does not change UI scope."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer)
+
+        processor.process_event({"type": "status", "state": "running", "loop_id": "L1"})
+        processor.process_event({"type": "status", "state": "idle", "thread_id": "checkpoint-99"})
+
+        assert processor.loop_id == "L1"
 
     def test_thread_change_clears_session(self):
-        """Test changing thread clears session state."""
+        """Test changing loop clears session state."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer)
 
-        # Setup initial thread
-        processor.process_event({"type": "status", "state": "running", "thread_id": "t1"})
+        # Setup initial loop
+        processor.process_event({"type": "status", "state": "running", "loop_id": "t1"})
         processor._state.seen_message_ids.add("msg1")
 
-        # Change thread
-        processor.process_event({"type": "status", "state": "running", "thread_id": "t2"})
+        # Change loop
+        processor.process_event({"type": "status", "state": "running", "loop_id": "t2"})
 
         assert processor._state.seen_message_ids == set()
 

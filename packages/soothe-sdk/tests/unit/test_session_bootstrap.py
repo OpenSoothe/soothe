@@ -1,4 +1,4 @@
-"""Tests for daemon thread bootstrap workspace propagation."""
+"""Tests for daemon loop session bootstrap."""
 
 from __future__ import annotations
 
@@ -7,13 +7,12 @@ from typing import Any
 
 import pytest
 
-from soothe_sdk.client.session import bootstrap_thread_session
+from soothe_sdk.client.session import bootstrap_loop_session
 
 
 class _FakeClient:
     def __init__(self) -> None:
         self.calls: list[tuple[str, Any]] = []
-        self._events: list[dict[str, Any]] = [{"type": "status", "thread_id": "thread-1"}]
 
     async def request_daemon_ready(self) -> None:
         self.calls.append(("request_daemon_ready", None))
@@ -21,57 +20,64 @@ class _FakeClient:
     async def wait_for_daemon_ready(self, *, ready_timeout_s: float) -> None:
         self.calls.append(("wait_for_daemon_ready", ready_timeout_s))
 
-    async def send_new_thread(self, workspace: str | None = None) -> None:
-        self.calls.append(("send_new_thread", workspace))
-
-    async def send_resume_thread(self, thread_id: str, workspace: str | None = None) -> None:
-        self.calls.append(("send_resume_thread", (thread_id, workspace)))
-
-    async def read_event(self) -> dict[str, Any]:
-        return self._events.pop(0)
-
-    async def subscribe_thread(self, thread_id: str, *, verbosity: str) -> None:
-        self.calls.append(("subscribe_thread", (thread_id, verbosity)))
-
-    async def wait_for_subscription_confirmed(
+    async def request_response(
         self,
-        thread_id: str,
+        payload: dict[str, Any],
         *,
-        verbosity: str,
+        response_type: str,
         timeout: float,
-    ) -> None:
-        self.calls.append(("wait_for_subscription_confirmed", (thread_id, verbosity, timeout)))
+    ) -> dict[str, Any]:
+        self.calls.append(("request_response", dict(payload), response_type, timeout))
+        req_id = payload.get("request_id")
+        if payload.get("type") == "loop_new":
+            return {"type": "loop_new_response", "loop_id": "loop-created", "request_id": req_id}
+        if payload.get("type") == "loop_subscribe":
+            return {"type": "loop_subscribe_response", "success": True, "request_id": req_id}
+        msg = f"unexpected request {payload.get('type')}"
+        raise AssertionError(msg)
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_new_thread_uses_workspace_override(tmp_path: Path) -> None:
-    """Explicit workspace is forwarded to ``new_thread``."""
+async def test_bootstrap_new_loop_allocates_and_subscribes(tmp_path: Path) -> None:
+    """Fresh session issues ``loop_new`` then ``loop_subscribe``."""
     client = _FakeClient()
     workspace = (tmp_path / "workspace").resolve()
     workspace.mkdir()
 
-    await bootstrap_thread_session(
+    result = await bootstrap_loop_session(
         client,
-        resume_thread_id=None,
+        resume_loop_id=None,
         verbosity="normal",
         workspace=str(workspace),
     )
 
-    assert ("send_new_thread", str(workspace)) in client.calls
+    assert result.get("loop_id") == "loop-created"
+    assert result.get("success") is True
+    rr = [c for c in client.calls if c[0] == "request_response"]
+    assert len(rr) == 2
+    assert rr[0][1]["type"] == "loop_new"
+    assert rr[1][1]["type"] == "loop_subscribe"
+    assert rr[1][1]["loop_id"] == "loop-created"
+    assert rr[1][1]["verbosity"] == "normal"
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_resume_thread_uses_workspace_override(tmp_path: Path) -> None:
-    """Explicit workspace is forwarded to ``resume_thread``."""
+async def test_bootstrap_resume_loop_subscribes_only(tmp_path: Path) -> None:
+    """Resuming an existing loop skips ``loop_new``."""
     client = _FakeClient()
     workspace = (tmp_path / "workspace").resolve()
     workspace.mkdir()
 
-    await bootstrap_thread_session(
+    result = await bootstrap_loop_session(
         client,
-        resume_thread_id="thread-1",
-        verbosity="normal",
+        resume_loop_id="loop-existing",
+        verbosity="minimal",
         workspace=str(workspace),
     )
 
-    assert ("send_resume_thread", ("thread-1", str(workspace))) in client.calls
+    assert result.get("loop_id") == "loop-existing"
+    rr = [c for c in client.calls if c[0] == "request_response"]
+    assert len(rr) == 1
+    assert rr[0][1]["type"] == "loop_subscribe"
+    assert rr[0][1]["loop_id"] == "loop-existing"
+    assert rr[0][1]["verbosity"] == "minimal"

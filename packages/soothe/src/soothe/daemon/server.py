@@ -20,6 +20,7 @@ from soothe.daemon._handlers import DaemonHandlersMixin
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
 from soothe.daemon.event_size_stats import EventSizeDistributionCollector
+from soothe.daemon.loop_isolation import LoopInputDispatcher, loop_event_topic
 from soothe.daemon.message_router import MessageRouter
 from soothe.daemon.paths import pid_path
 from soothe.daemon.query_engine import QueryEngine
@@ -108,14 +109,10 @@ class SootheDaemon(DaemonHandlersMixin):
         self._current_query_task: asyncio.Task | None = None
         self._thread_stop = threading.Event()
         self._stop_event: asyncio.Event | None = None
-        # Input queue with configurable limit (IG-258)
         max_queue_size = self._config.daemon.max_input_queue_size
-        self._current_input_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(
-            maxsize=max_queue_size if max_queue_size > 0 else 0
-        )
+        self._loop_input_dispatcher = LoopInputDispatcher(self, max_queue_size=max_queue_size)
         self._cleanup_task: asyncio.Task[None] | None = None
         self._inactivity_check_task: asyncio.Task[None] | None = None
-        self._input_loop_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._event_size_stats_task: asyncio.Task[None] | None = None
         # Message dispatch concurrency control (IG-258)
@@ -134,13 +131,16 @@ class SootheDaemon(DaemonHandlersMixin):
         self._event_bus: EventBus = EventBus(event_size_stats=self._event_size_stats)
         self._session_manager: ClientSessionManager = ClientSessionManager(
             self._event_bus,
-            cancel_callback=self._cancel_thread,  # RFC-0013: auto-cancel on disconnect
+            cancel_callback=self._cancel_loop_for_session,
             dispatch_cleanup_callback=self._cleanup_dispatch_tasks,  # IG-258
         )
         # Multi-threading support (RFC-402)
         self._thread_executor: Any = None  # ThreadExecutor instance
-        self._active_threads: dict[str, asyncio.Task] = {}  # thread_id -> Task mapping
+        # Keys: LangGraph checkpoint id (``configurable.thread_id``), not ``loop_id``.
+        self._active_threads: dict[str, asyncio.Task] = {}
         self._pending_interrupt_responses: dict[str, asyncio.Future[dict[str, Any]]] = {}
+        #: Loop id for the in-flight main-runner stream (heartbeats; internal only).
+        self._active_stream_loop_id: str | None = None
         # Lock protecting query state transitions (_active_threads, _query_running, _current_query_task)
         self._query_state_lock = asyncio.Lock()
         # Daemon readiness state for explicit startup handshake (RFC-0023)
@@ -152,6 +152,15 @@ class SootheDaemon(DaemonHandlersMixin):
         self._global_history: Any = None  # GlobalInputHistory | None
         self._query_engine: QueryEngine = QueryEngine(self)
         self._message_router: MessageRouter = MessageRouter(self)
+
+    async def _cancel_loop_for_session(self, loop_id: str) -> None:
+        """Cancel in-flight work for a loop when a client disconnects (IG-408)."""
+        if not str(loop_id or "").strip():
+            logger.warning("[Session] cancel_callback with empty loop_id; ignoring")
+            return
+        qe = getattr(self, "_query_engine", None)
+        if qe is not None:
+            await qe.cancel_loop(loop_id)
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -208,10 +217,7 @@ class SootheDaemon(DaemonHandlersMixin):
             self._running = True
 
             # Initialize transport manager (RFC-0013)
-            # Create ThreadContextManager for HTTP REST transport (RFC-402)
             from soothe.core.thread import ThreadExecutor
-
-            thread_manager = self._runner.thread_context_manager()
 
             # Initialize ThreadExecutor for multi-threading support (RFC-402)
             max_concurrent = getattr(self._config.daemon, "max_concurrent_threads", 100)
@@ -224,7 +230,6 @@ class SootheDaemon(DaemonHandlersMixin):
 
             self._transport_manager = TransportManager(
                 self._config.daemon,
-                thread_manager=thread_manager,
                 runner=self._runner,
                 soothe_config=self._config,
                 session_manager=self._session_manager,
@@ -249,11 +254,8 @@ class SootheDaemon(DaemonHandlersMixin):
                 {
                     "type": "status",
                     "state": "idle",
-                    "thread_id": self._runner.current_thread_id or "",
                 }
             )
-            if self._input_loop_task is None or self._input_loop_task.done():
-                self._input_loop_task = asyncio.create_task(self._input_loop())
 
             self._readiness_state = "ready"
             self._readiness_message = None
@@ -306,8 +308,7 @@ class SootheDaemon(DaemonHandlersMixin):
         initial_msg = {
             "type": "status",
             "state": initial_state,
-            "thread_id": "",  # Don't leak cached thread ID - client will request new/resume explicitly
-            "input_history": [],  # Don't send history on initial connect - only when resuming
+            "input_history": [],
         }
         return [initial_msg, self.daemon_ready_message()]
 
@@ -487,16 +488,9 @@ class SootheDaemon(DaemonHandlersMixin):
         except RuntimeError:
             logger.debug("Cannot set signal handlers (not main thread)")
 
-        if self._input_loop_task is None or self._input_loop_task.done():
-            self._input_loop_task = asyncio.create_task(self._input_loop())
         try:
             await self._stop_event.wait()
         finally:
-            if self._input_loop_task is not None:
-                self._input_loop_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await self._input_loop_task
-                self._input_loop_task = None
             await self.stop()
 
     async def _periodic_cleanup(self) -> None:
@@ -546,11 +540,11 @@ class SootheDaemon(DaemonHandlersMixin):
                 # Check input queue depth
                 max_queue_size = self._config.daemon.max_input_queue_size
                 if max_queue_size > 0:  # Only check if limit is set
-                    current_size = self._current_input_queue.qsize()
+                    current_size = self._loop_input_dispatcher.total_queued()
                     threshold = int(max_queue_size * 0.8)  # 80% threshold
                     if current_size > threshold:
                         logger.warning(
-                            "Input queue near capacity: %d/%d (%.1f%%)",
+                            "Loop input queues near capacity: %d/%d (%.1f%%)",
                             current_size,
                             max_queue_size,
                             (current_size / max_queue_size) * 100,
@@ -594,21 +588,21 @@ class SootheDaemon(DaemonHandlersMixin):
                 continue
 
             try:
-                thread_id = self._runner.current_thread_id if self._runner else ""
                 state = "running" if self._query_running else "idle"
+                loop_id = str(getattr(self, "_active_stream_loop_id", None) or "").strip()
 
+                # Event payload field is legacy; routing uses envelope ``loop_id`` (IG-408).
                 heartbeat = DaemonHeartbeatEvent(
-                    thread_id=thread_id or "",
+                    thread_id="",
                     timestamp=datetime.now(UTC).isoformat(),
                     state=state,
                 )
 
-                # Broadcast to all subscribed clients via _broadcast
-                if thread_id:
+                if loop_id:
                     await self._broadcast(
                         {
                             "type": "event",
-                            "thread_id": thread_id,
+                            "loop_id": loop_id,
                             "namespace": [],
                             "mode": "custom",
                             "data": heartbeat.to_dict(),
@@ -681,11 +675,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._running = False
         self._query_running = False
 
-        if self._input_loop_task is not None and not self._input_loop_task.done():
-            self._input_loop_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._input_loop_task
-            self._input_loop_task = None
+        await self._loop_input_dispatcher.shutdown()
 
         # Cancel background tasks
         if self._cleanup_task and not self._cleanup_task.done():
@@ -764,56 +754,40 @@ class SootheDaemon(DaemonHandlersMixin):
     # -- broadcast ----------------------------------------------------------
 
     async def _broadcast(self, msg: dict[str, Any]) -> None:
-        """Route event to appropriate subscribers via event bus.
+        """Route events to loop subscribers (and global only for explicit daemon-wide messages).
 
-        Events with thread_id are routed to thread-specific topics.
-        Events without thread_id are broadcast to all clients.
-
-        Args:
-            msg: Message dict to route. Must contain 'type' field.
+        Client-visible delivery is keyed strictly by ``loop_id`` on the message envelope.
+        Internal CoreAgent ``thread_id`` is not used to infer routing.
         """
         msg_type = msg.get("type", "")
+        lid = str(msg.get("loop_id") or "").strip()
 
-        # Extract thread_id for routing (treat empty string as None)
-        thread_id = msg.get("thread_id") or None
-
-        # Special case: daemon-level status broadcasts (startup/idle/ready)
-        # These should broadcast globally to all clients
-        if not thread_id and msg_type == "status" and msg.get("state") in ["idle", "ready"]:
-            logger.debug(
-                "Daemon-level status broadcast: state=%s",
-                msg.get("state"),
-            )
-            # Broadcast to global topic for daemon-level status
-            await self._event_bus.publish("global", msg, event_meta=None)
-            return
-
-        # For status messages without thread_id, try current thread
-        if not thread_id and msg_type == "status":
-            thread_id = self._runner.current_thread_id if self._runner else None
-
-        # Get event metadata for filtering (RFC-0022)
         from soothe.core.events import REGISTRY
 
-        # For custom events, the actual event type is inside data["type"]
         event_type_for_meta = msg_type
         if msg_type == "event" and isinstance(msg.get("data"), dict):
             event_type_for_meta = msg["data"].get("type", msg_type)
 
         event_meta = REGISTRY.get_meta(event_type_for_meta) if event_type_for_meta else None
 
-        if thread_id:
-            # Route to thread-specific topic
-            topic = f"thread:{thread_id}"
-            await self._event_bus.publish(topic, msg, event_meta=event_meta)
-        else:
-            # IG-248: Event without thread_id - log error (should never happen)
-            # Do NOT broadcast globally to prevent cross-client leakage
-            logger.error(
-                "Event lacks thread_id, cannot route (type=%s): %s",
-                msg_type,
-                msg,
-            )
+        if lid:
+            await self._event_bus.publish(loop_event_topic(lid), msg, event_meta=event_meta)
+            return
+
+        # Unscoped daemon-wide frames only (never infer scope from thread_id).
+        if msg_type == "status" and msg.get("state") in ("idle", "ready", "stopped", "detached"):
+            await self._event_bus.publish("global", msg, event_meta=None)
+            return
+
+        if msg_type == "command_response":
+            await self._event_bus.publish("global", msg, event_meta=None)
+            return
+
+        logger.warning(
+            "Dropping broadcast: missing loop_id for scoped delivery (type=%s, state=%s)",
+            msg_type,
+            msg.get("state"),
+        )
 
     async def _send(self, client: _ClientConn, msg: dict[str, Any]) -> None:
         with contextlib.suppress(Exception):

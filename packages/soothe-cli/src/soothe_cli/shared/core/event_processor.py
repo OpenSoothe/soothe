@@ -120,9 +120,9 @@ class EventProcessor:
         return self._state.current_plan
 
     @property
-    def thread_id(self) -> str:
-        """Current thread ID."""
-        return self._state.thread_id
+    def loop_id(self) -> str:
+        """Active AgentLoop id from daemon status frames."""
+        return self._state.loop_id
 
     @property
     def state(self) -> ProcessorState:
@@ -412,23 +412,22 @@ class EventProcessor:
             self._renderer.clear()
 
     def _handle_status(self, event: dict[str, Any]) -> None:
-        """Process status changes, update thread_id, call on_status_change."""
+        """Process status changes, update loop_id, call on_status_change."""
         state_str = event.get("state", "unknown")
-        tid_raw = event.get("thread_id", self._state.thread_id)
-
-        # Keep existing thread_id when daemon sends empty handshake
-        tid = self._state.thread_id if tid_raw in (None, "") else str(tid_raw)
-        previous_thread_id = self._state.thread_id
-        self._state.thread_id = tid
+        lid_raw = event.get("loop_id")
+        previous_loop_id = self._state.loop_id
+        # Keep existing loop_id when the daemon omits loop_id on the frame (e.g. minimal status).
+        lid = previous_loop_id if lid_raw in (None, "") else str(lid_raw)
+        self._state.loop_id = lid
         log_tui_trace(
             tui_debug=self._tui_debug,
             event="processor.status",
             state=state_str,
-            thread_id=tid,
+            loop_id=lid,
         )
 
-        # Clear session state on thread change
-        if tid and tid != previous_thread_id:
+        # Clear session state on loop change
+        if lid and lid != previous_loop_id:
             self._state.clear_session()
             self._presentation.reset_session()
 

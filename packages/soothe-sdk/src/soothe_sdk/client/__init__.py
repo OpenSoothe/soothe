@@ -13,7 +13,7 @@ from soothe_sdk.client.helpers import (
     websocket_url_from_config,
 )
 from soothe_sdk.client.session import (
-    bootstrap_thread_session,
+    bootstrap_loop_session,
     connect_websocket_with_retries,
 )
 from soothe_sdk.client.websocket import WebSocketClient
@@ -23,7 +23,7 @@ from soothe_sdk.core.types import VerbosityLevel
 __all__ = [
     "WebSocketClient",
     "VerbosityLevel",
-    "bootstrap_thread_session",
+    "bootstrap_loop_session",
     "connect_websocket_with_retries",
     "websocket_url_from_config",
     "check_daemon_status",

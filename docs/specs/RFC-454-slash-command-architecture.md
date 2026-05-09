@@ -165,7 +165,7 @@ User types "/browser AI trends"
 
 ### Command Registry
 
-**Location**: `packages/soothe-cli/src/soothe_cli/shared/slash_commands.py`
+**Location**: `packages/soothe-cli/src/soothe_cli/shared/commands/slash_commands.py`
 
 **Structure**:
 ```python
@@ -180,7 +180,7 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "type": "rpc",
         "daemon_command": "memory",
         "description": "Show memory stats",
-        "requires_thread": True,
+        "requires_loop": True,
         "handler": show_memory  # Rendering function
     },
     "/browser": {
@@ -199,7 +199,7 @@ COMMANDS: dict[str, dict[str, Any]] = {
 - `daemon_command`: Maps CLI syntax to daemon command name
 - `handler`: Rendering function for RPC responses
 - `description`: Help text for `/help` command
-- `requires_thread`: Validation - active thread required
+- `requires_loop`: Validation - active subscribed loop required
 - `requires_query`: Validation - query parameter required (routing commands)
 - `params_schema`: Object - parameter structure for future extensibility
 
@@ -207,14 +207,14 @@ COMMANDS: dict[str, dict[str, Any]] = {
 
 ### Command Router
 
-**Location**: `packages/soothe-cli/src/soothe_cli/shared/command_router.py`
+**Location**: `packages/soothe-cli/src/soothe_cli/shared/commands/command_router.py`
 
 **Functions**:
 - `parse_slash_command(input_text)`: Extract command + query from input
-- `validate_command(entry, command, query, thread_id)`: Check validation rules
-- `route_slash_command(cmd_input, console, client)`: Main routing dispatcher
-- `handle_rpc_command(entry, command, query, console, client)`: Send RPC request, handle response
-- `handle_routing_command(cmd_input, console, client)`: Send plain text input
+- `validate_command(entry, command, query, loop_id)`: Check validation rules
+- `route_slash_command(cmd_input, console, client, *, loop_id=...)`: Main routing dispatcher
+- `handle_rpc_command(..., loop_id=...)`: Send RPC request, handle response
+- `handle_routing_command(..., loop_id=...)`: Send plain text input
 - `parse_command_params(entry, query)`: Parse params from query string
 
 **Routing logic**:
@@ -243,7 +243,7 @@ async def route_slash_command(cmd_input, console, client):
 
 ### Rendering Functions
 
-**Location**: `packages/soothe-cli/src/soothe_cli/shared/slash_commands.py`
+**Location**: `packages/soothe-cli/src/soothe_cli/shared/commands/slash_commands.py`
 
 Each RPC command has a rendering function that takes structured data and renders with Rich:
 

@@ -10,7 +10,7 @@ from soothe_cli.config import CLIConfig
 def run_tui(
     cfg: CLIConfig,
     *,
-    thread_id: str | None = None,
+    resume_loop_id: str | None = None,
     initial_prompt: str | None = None,
 ) -> None:
     """Launch the Textual TUI (with daemon auto-start)."""
@@ -19,7 +19,7 @@ def run_tui(
 
         run_textual_tui(
             config=cfg,
-            thread_id=thread_id,
+            resume_loop_id=resume_loop_id,
             initial_prompt=initial_prompt,
         )
     except ImportError:

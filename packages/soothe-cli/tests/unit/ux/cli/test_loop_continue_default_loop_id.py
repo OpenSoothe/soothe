@@ -35,7 +35,7 @@ def test_loop_continue_without_loop_id_uses_most_recent_loop(monkeypatch) -> Non
 
     result = CliRunner().invoke(app, ["loop", "continue"])
     assert result.exit_code == 0
-    assert captured["thread_id"] == "loop_running"
+    assert captured["resume_loop_id"] == "loop_running"
     assert captured["no_tui"] is False
     assert captured["autonomous"] is False
     assert captured["max_iterations"] is None
@@ -80,4 +80,4 @@ def test_loop_continue_with_explicit_loop_id_launches_tui(monkeypatch) -> None:
 
     result = CliRunner().invoke(app, ["loop", "continue", "ggqfpkrumdbx"])
     assert result.exit_code == 0
-    assert captured["thread_id"] == "ggqfpkrumdbx"
+    assert captured["resume_loop_id"] == "ggqfpkrumdbx"

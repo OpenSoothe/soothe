@@ -169,7 +169,7 @@ class SootheApp(
         assistant_id: str | None = None,
         auto_approve: bool = False,
         cwd: str | Path | None = None,
-        thread_id: str | None = None,
+        resume_loop_id: str | None = None,
         resume_thread: str | None = None,
         initial_prompt: str | None = None,
         initial_skill: str | None = None,
@@ -190,7 +190,7 @@ class SootheApp(
             assistant_id: Agent identifier for memory storage
             auto_approve: Whether to start with auto-approve enabled
             cwd: Current working directory to display
-            thread_id: Thread ID for the session.
+            resume_loop_id: Initial AgentLoop id (daemon-backed).
 
                 `None` when `resume_thread` is provided (resolved asynchronously).
             resume_thread: Raw resume intent from `-r` flag.
@@ -238,11 +238,12 @@ class SootheApp(
 
         self._cwd = str(cwd) if cwd else str(Path.cwd())
 
-        self._lc_loop_id = thread_id
-        """LangChain loop identifier (thread_id in langgraph internals).
+        self._lc_loop_id = resume_loop_id
+        """Active AgentLoop id for this client session.
 
-        Named `_lc_loop_id` to reflect RFC-503 loop-first UX while avoiding
-        collision with Textual's `App._thread_id`.
+        LangGraph still uses ``configurable.thread_id`` as the checkpoint key; the
+        value is the loop id. Named `_lc_loop_id` to avoid collision with Textual's
+        `App._thread_id`.
         """
 
         self._resume_thread_intent = resume_thread
@@ -433,7 +434,7 @@ class SootheApp(
         with VerticalScroll(id="chat"):
             with Vertical(id="chat-body"):
                 yield WelcomeBanner(
-                    thread_id=self._lc_loop_id,
+                    loop_id=self._lc_loop_id,
                     mcp_tool_count=self._mcp_tool_count,
                     workspace_path=self._cwd,
                     connecting=self._connecting,

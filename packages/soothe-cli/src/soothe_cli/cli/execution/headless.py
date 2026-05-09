@@ -22,7 +22,7 @@ def run_headless(
     cfg: CLIConfig,
     prompt: str,
     *,
-    thread_id: str | None = None,
+    resume_loop_id: str | None = None,
     autonomous: bool = False,
     max_iterations: int | None = None,
 ) -> None:
@@ -77,7 +77,7 @@ def run_headless(
         return await run_headless_via_daemon(
             cfg,
             prompt,
-            thread_id=thread_id,
+            resume_loop_id=resume_loop_id,
             autonomous=autonomous,
             max_iterations=max_iterations,
         )

@@ -21,8 +21,6 @@ from soothe_sdk.utils import setup_logging
 # Import from commands subdirectory
 from soothe_cli.shared.commands.slash_commands import (
     KEYBOARD_SHORTCUTS,
-    SLASH_COMMANDS,
-    parse_autonomous_command,
     show_commands,
     show_config,
     show_history,
@@ -108,8 +106,6 @@ __all__ = [
     "update_name_map_from_tool_calls",
     # Slash commands (IG-176)
     "KEYBOARD_SHORTCUTS",
-    "SLASH_COMMANDS",
-    "parse_autonomous_command",
     "show_commands",
     "show_config",
     "show_history",

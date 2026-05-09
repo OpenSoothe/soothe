@@ -10,12 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from soothe_sdk.client.wire import messages_from_wire_dicts
-
-from soothe.core.runner._types import generate_thread_id
-from soothe.core.workspace import resolve_loop_daemon_workspace, validate_client_workspace
-from soothe.daemon.image_understanding import validate_and_normalize_image_attachments
-from soothe.logging import ThreadLogger
+from soothe.core.workspace import resolve_loop_daemon_workspace
 from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
@@ -96,6 +91,30 @@ class MessageRouter:
         """Keep a reference to the daemon for config, runner, and session access."""
         self._daemon = daemon
 
+    async def _client_subscribed_loop_id(self, client_id: Any) -> str | None:
+        """Return the ``loop_id`` this client receives loop-scoped events for (IG-408).
+
+        The session manager enforces **at most one** loop subscription per client
+        (``subscribe_loop`` replaces any prior loop). **Many clients** may subscribe
+        to the **same** loop; this method only answers "which loop is *this* client
+        watching?", not ownership of the loop.
+
+        If ``subscriptions`` ever contains more than one id (unexpected), pick a
+        deterministic value and log a warning so behavior stays stable until
+        multi-loop-per-client is explicitly designed.
+        """
+        session = await self._daemon._session_manager.get_session(client_id)
+        if not session or not session.subscriptions:
+            return None
+        subs = session.subscriptions
+        if len(subs) > 1:
+            logger.warning(
+                "[MsgRouter] Client %s has %d loop subscriptions (expected 1); using min(loop_id)",
+                _client_label(client_id),
+                len(subs),
+            )
+        return min(subs)
+
     async def dispatch(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle a single client message."""
         d = self._daemon
@@ -107,107 +126,53 @@ class MessageRouter:
         )
 
         if msg_type == "input":
-            raw_text = msg.get("text", "")
-            text = raw_text.strip() if isinstance(raw_text, str) else ""
-            normalized_attachments, att_err = validate_and_normalize_image_attachments(
-                msg.get("attachments")
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "UNSUPPORTED_MESSAGE",
+                    "message": "Use loop_input with a subscribed loop_id (global input removed)",
+                },
             )
-            if att_err:
-                await d._send_client_message(
-                    client_id,
-                    {
-                        "type": "error",
-                        "code": "INVALID_MESSAGE",
-                        "message": att_err,
-                    },
-                )
-                return
-            if text or normalized_attachments:
-                # IG-054: Capacity check moved to query_engine.py to eliminate race
-                # between checking len(_active_threads) and actually creating the task
-                opts = _queue_options_from_daemon_message(msg)
-                logger.debug(
-                    "[MsgRouter] Putting input in queue: text=%s, attachments=%d, client=%s",
-                    preview_first(text, 30),
-                    len(normalized_attachments),
-                    _client_label(client_id),
-                )
-                payload: dict[str, Any] = {
-                    "type": "input",
-                    "text": text,
-                    "client_id": client_id,
-                    **opts,
-                }
-                if normalized_attachments:
-                    payload["attachments"] = normalized_attachments
-                await d._current_input_queue.put(payload)
-                logger.debug("[MsgRouter] Input put in queue successfully")
             return
 
         if msg_type == "command":
             cmd = msg.get("cmd", "")
             normalized = cmd.strip().lower()
-            # IG-161: These must not go through _current_input_queue — the loop is blocked
-            # inside await run_query() until the stream ends, so queued commands would not
-            # run until too late (same as /cancel).
             if normalized in ("/exit", "/quit"):
                 logger.info(
                     "Received %s via router — treating as client detach (daemon keeps running)",
                     normalized,
                 )
-                # IG-248: Send directly to this client (deprecated legacy socket support)
-                # IG-161: Bypass input queue - handle immediately in router
-                # IG-248: No thread association for detached status
                 await d._send_client_message(client_id, {"type": "status", "state": "detached"})
                 return
             if normalized == "/cancel" and getattr(d, "_query_engine", None) is not None:
-                await d._query_engine.cancel_current_query()
+                owned = await d._session_manager.get_owned_loop(client_id)
+                target_loop = owned or await self._client_subscribed_loop_id(client_id)
+                if target_loop:
+                    await d._query_engine.cancel_loop(target_loop)
                 return
-            await d._current_input_queue.put({"type": "command", "cmd": cmd})
-            return
-
-        if msg_type == "resume_thread":
-            await self._handle_resume_thread(client_id, msg)
+            active_loop = await self._client_subscribed_loop_id(client_id)
+            if not active_loop:
+                await d._send_client_message(
+                    client_id,
+                    {
+                        "type": "error",
+                        "code": "NO_LOOP_SUBSCRIPTION",
+                        "message": "loop_subscribe required before slash commands",
+                    },
+                )
+                return
+            await d._loop_input_dispatcher.enqueue(
+                active_loop,
+                {"type": "command", "cmd": cmd, "client_id": client_id},
+            )
             return
 
         if msg_type == "daemon_ready":
             await d._send_client_message(client_id, d.daemon_ready_message())
             return
 
-        if msg_type == "new_thread":
-            await self._handle_new_thread(client_id, msg)
-            return
-
-        if msg_type == "thread_list":
-            await self._handle_thread_list(client_id, msg)
-            return
-        if msg_type == "thread_create":
-            await self._handle_thread_create(client_id, msg)
-            return
-        if msg_type == "thread_get":
-            await self._handle_thread_get(client_id, msg)
-            return
-        if msg_type == "thread_archive":
-            await self._handle_thread_archive(client_id, msg)
-            return
-        if msg_type == "thread_delete":
-            await self._handle_thread_delete(client_id, msg)
-            return
-        if msg_type == "thread_messages":
-            await self._handle_thread_messages(client_id, msg)
-            return
-        if msg_type == "thread_artifacts":
-            await self._handle_thread_artifacts(client_id, msg)
-            return
-        if msg_type == "thread_status":
-            await self._handle_thread_status(client_id, msg)
-            return
-        if msg_type == "thread_state":
-            await self._handle_thread_state(client_id, msg)
-            return
-        if msg_type == "thread_update_state":
-            await self._handle_thread_update_state(client_id, msg)
-            return
         if msg_type == "resume_interrupts":
             await self._handle_resume_interrupts(client_id, msg)
             return
@@ -256,10 +221,6 @@ class MessageRouter:
             )
             return
 
-        if msg_type == "subscribe_thread":
-            await self._handle_subscribe_thread(client_id, msg)
-            return
-
         if msg_type == "skills_list":
             await self._handle_skills_list(client_id, msg)
             return
@@ -285,546 +246,68 @@ class MessageRouter:
             await self._handle_config_get(client_id, msg)
             return
 
-        # RFC-404: structured RPC — same sequential queue as legacy ``command`` (CLI / SDK).
         if msg_type == "command_request":
-            await d._current_input_queue.put(dict(msg))
+            active_loop = await self._client_subscribed_loop_id(client_id)
+            if not active_loop:
+                await d._send_client_message(
+                    client_id,
+                    {
+                        "type": "error",
+                        "code": "NO_LOOP_SUBSCRIPTION",
+                        "message": "loop_subscribe required before command_request",
+                        "request_id": msg.get("request_id"),
+                    },
+                )
+                return
+            req = dict(msg)
+            req["client_id"] = client_id
+            await d._loop_input_dispatcher.enqueue(active_loop, req)
             return
 
         logger.debug("Unknown client message type: %s", msg_type)
 
-    async def _handle_resume_thread(self, client_id: str, msg: dict[str, Any]) -> None:
-        d = self._daemon
-        thread_id = msg.get("thread_id", "")
-        client_workspace = msg.get("workspace")
-
-        logger.info(
-            "Received resume_thread request for thread_id=%r from client=%s", thread_id, client_id
-        )
-
-        validated_resume_ws: Path | None = None
-        if client_workspace:
-            try:
-                validated_resume_ws = validate_client_workspace(client_workspace)
-                logger.info("Resume with client workspace: %s", validated_resume_ws)
-            except ValueError as e:
-                logger.warning("Invalid client workspace on resume: %s", e)
-
-        if not thread_id:
-            return
-
-        try:
-            thread_info = await d._runner.resume_persisted_thread(str(thread_id))
-            resumed_thread_id = thread_info.thread_id
-            logger.info("resume_thread: resolved %r -> %s", thread_id, resumed_thread_id)
-            d._runner.set_current_thread_id(resumed_thread_id)
-
-            d._thread_registry.set_client_thread(client_id, resumed_thread_id)
-            reg = d._thread_registry.ensure(resumed_thread_id, is_draft=False)
-            if validated_resume_ws is not None:
-                d._thread_registry.set_workspace(resumed_thread_id, validated_resume_ws)
-            elif d._thread_registry.get_workspace(resumed_thread_id) is None:
-                d._thread_registry.set_workspace(resumed_thread_id, Path(d._daemon_workspace))
-            reg.thread_logger = ThreadLogger(
-                thread_id=resumed_thread_id,
-                retention_days=d._config.observability.thread_logging_retention_days,
-                max_size_mb=d._config.observability.thread_logging_max_size_mb,
-            )
-            d._thread_logger = reg.thread_logger
-
-            conversation_history = d._thread_logger.recent_conversation(limit=50)
-
-            # Get global cross-thread input history for TUI
-            global_history_list = []
-            if d._global_history:
-                global_history_list = d._global_history.get_recent(limit=100)
-
-            # IG-228: Check if thread is actively running in background (after detach)
-            is_active = resumed_thread_id in d._active_threads
-            thread_status = "running" if is_active else "idle"
-
-            session = await d._session_manager.get_session(client_id)
-            logger.info("resume_thread: session for client %s = %s", client_id, session is not None)
-            if session:
-                # Subscribe client to thread events if thread is running
-                # Avoid duplicate subscription if client already subscribed via bootstrap
-                if is_active and resumed_thread_id not in session.subscriptions:
-                    try:
-                        await d._session_manager.subscribe_thread(
-                            client_id, resumed_thread_id, verbosity=session.verbosity
-                        )
-                        logger.info(
-                            "Client %s subscribed to active thread %s",
-                            client_id,
-                            resumed_thread_id,
-                        )
-                        # Send subscription confirmation so client bootstrap completes
-                        await session.transport.send(
-                            session.transport_client,
-                            {
-                                "type": "subscription_confirmed",
-                                "thread_id": resumed_thread_id,
-                                "client_id": client_id,
-                                "verbosity": session.verbosity,
-                            },
-                        )
-                    except Exception:
-                        logger.warning(
-                            "Failed to subscribe client %s to active thread %s",
-                            client_id,
-                            resumed_thread_id,
-                            exc_info=True,
-                        )
-
-                await session.transport.send(
-                    session.transport_client,
-                    {
-                        "type": "status",
-                        "state": thread_status,
-                        "thread_id": resumed_thread_id,
-                        "thread_resumed": True,
-                        "input_history": global_history_list,
-                        "conversation_history": conversation_history,
-                    },
-                )
-            logger.info("Resumed thread %s (status=%s)", resumed_thread_id, thread_status)
-        except KeyError as e:
-            logger.warning("resume_thread: KeyError for %r: %s", thread_id, e)
-            session = await d._session_manager.get_session(client_id)
-            if session:
-                await session.transport.send(
-                    session.transport_client,
-                    {
-                        "type": "error",
-                        "code": "THREAD_NOT_FOUND",
-                        "message": f"Thread {thread_id} not found",
-                    },
-                )
-
-    async def _handle_new_thread(self, client_id: str, msg: dict[str, Any]) -> None:
-        d = self._daemon
-        client_workspace = msg.get("workspace")
-        if client_workspace:
-            try:
-                thread_workspace = validate_client_workspace(client_workspace)
-                logger.info(
-                    "Client %s requested workspace: %s",
-                    _client_label(client_id),
-                    thread_workspace,
-                )
-            except ValueError as e:
-                logger.warning("Invalid client workspace: %s, using daemon default", e)
-                thread_workspace = d._daemon_workspace
-        else:
-            thread_workspace = d._daemon_workspace
-
-        draft_thread_id = generate_thread_id()
-        d._thread_registry.ensure(draft_thread_id, is_draft=True)
-        d._thread_registry.set_workspace(draft_thread_id, Path(thread_workspace))
-        d._thread_registry.set_client_thread(client_id, draft_thread_id)
-        d._runner.set_current_thread_id(draft_thread_id)
-
-        # Get global cross-thread input history for TUI
-        global_history_list = []
-        if d._global_history:
-            global_history_list = d._global_history.get_recent(limit=100)
-
-        session = await d._session_manager.get_session(client_id)
-        if session:
-            await session.transport.send(
-                session.transport_client,
-                {
-                    "type": "status",
-                    "state": "idle",
-                    "thread_id": draft_thread_id,
-                    "new_thread": True,
-                    "workspace": str(thread_workspace),
-                    "input_history": global_history_list,
-                    "client_id": client_id,
-                },
-            )
-        logger.info("Created new thread %s with workspace %s", draft_thread_id, thread_workspace)
-
-    async def _handle_thread_list(self, client_id: str, msg: dict[str, Any]) -> None:
-        d = self._daemon
-        from soothe.protocols.durability import ThreadFilter
-
-        filter_data = msg.get("filter")
-        thread_filter = None
-        if filter_data:
-            thread_filter = ThreadFilter(**filter_data)
-
-        include_stats = msg.get("include_stats", False)
-        include_last_message = msg.get("include_last_message", True)
-
-        threads = await d._runner.list_persisted_threads(
-            thread_filter,
-            include_stats=include_stats,
-            include_last_message=include_last_message,
-        )
-
-        await d._send_client_message(
-            client_id,
-            {
-                "type": "thread_list_response",
-                "threads": [t.model_dump(mode="json") for t in threads],
-                "total": len(threads),
-                "request_id": msg.get("request_id"),
-            },
-        )
-
-    async def _handle_thread_create(self, client_id: str, msg: dict[str, Any]) -> None:
-        d = self._daemon
-        initial_message = msg.get("initial_message")
-        metadata = msg.get("metadata")
-
-        thread_info = await d._runner.create_persisted_thread(
-            initial_message=initial_message,
-            metadata=metadata,
-        )
-        tid = thread_info.thread_id
-        d._thread_registry.ensure(tid, is_draft=False)
-        d._thread_registry.set_workspace(tid, Path(d._daemon_workspace))
-        d._thread_registry.set_client_thread(client_id, tid)
-
-        await d._send_client_message(
-            client_id,
-            {
-                "type": "thread_created",
-                "thread_id": tid,
-                "status": thread_info.status,
-                "request_id": msg.get("request_id"),
-            },
-        )
-
-    async def _handle_thread_get(self, client_id: str, msg: dict[str, Any]) -> None:
-        d = self._daemon
-        thread_id = msg["thread_id"]
-
-        try:
-            thread = await d._runner.get_persisted_thread(thread_id)
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "thread_get_response",
-                    "thread": thread.model_dump(mode="json"),
-                    "request_id": msg.get("request_id"),
-                },
-            )
-        except KeyError:
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "THREAD_NOT_FOUND",
-                    "message": f"Thread {thread_id} not found",
-                    "request_id": msg.get("request_id"),
-                },
-            )
-
-    async def _handle_thread_archive(self, client_id: str, msg: dict[str, Any]) -> None:
-        d = self._daemon
-        thread_id = msg["thread_id"]
-
-        try:
-            await d._runner.archive_persisted_thread(thread_id)
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "thread_operation_ack",
-                    "operation": "archive",
-                    "thread_id": thread_id,
-                    "success": True,
-                    "message": "Thread archived successfully",
-                    "request_id": msg.get("request_id"),
-                },
-            )
-        except Exception as e:
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "thread_operation_ack",
-                    "operation": "archive",
-                    "thread_id": thread_id,
-                    "success": False,
-                    "message": str(e),
-                    "request_id": msg.get("request_id"),
-                },
-            )
-
-    async def _handle_thread_delete(self, client_id: str, msg: dict[str, Any]) -> None:
-        d = self._daemon
-        thread_id = msg["thread_id"]
-
-        try:
-            await d._runner.delete_persisted_thread(thread_id)
-            d._thread_registry.remove(thread_id)
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "thread_operation_ack",
-                    "operation": "delete",
-                    "thread_id": thread_id,
-                    "success": True,
-                    "message": "Thread deleted successfully",
-                    "request_id": msg.get("request_id"),
-                },
-            )
-        except Exception as e:
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "thread_operation_ack",
-                    "operation": "delete",
-                    "thread_id": thread_id,
-                    "success": False,
-                    "message": str(e),
-                    "request_id": msg.get("request_id"),
-                },
-            )
-
-    async def _handle_thread_messages(self, client_id: str, msg: dict[str, Any]) -> None:
-        d = self._daemon
-        thread_id = msg["thread_id"]
-        limit = msg.get("limit", 100)
-        offset = msg.get("offset", 0)
-        include_events = msg.get("include_events", False)  # NEW: full history mode
-
-        try:
-            messages = await d._runner.get_persisted_thread_messages(
-                thread_id,
-                limit=limit,
-                offset=offset,
-                include_events=include_events,
-            )
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "thread_messages_response",
-                    "thread_id": thread_id,
-                    "messages": [m.model_dump(mode="json") for m in messages],
-                    "limit": limit,
-                    "offset": offset,
-                    "include_events": include_events,
-                    "request_id": msg.get("request_id"),
-                },
-            )
-        except KeyError:
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "THREAD_NOT_FOUND",
-                    "message": f"Thread {thread_id} not found",
-                    "request_id": msg.get("request_id"),
-                },
-            )
-
-    async def _handle_thread_artifacts(self, client_id: str, msg: dict[str, Any]) -> None:
-        d = self._daemon
-        thread_id = msg["thread_id"]
-
-        try:
-            artifacts = await d._runner.get_persisted_thread_artifacts(thread_id)
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "thread_artifacts_response",
-                    "thread_id": thread_id,
-                    "artifacts": [a.model_dump(mode="json") for a in artifacts],
-                    "request_id": msg.get("request_id"),
-                },
-            )
-        except KeyError:
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "THREAD_NOT_FOUND",
-                    "message": f"Thread {thread_id} not found",
-                    "request_id": msg.get("request_id"),
-                },
-            )
-
-    async def _handle_thread_status(self, client_id: str, msg: dict[str, Any]) -> None:
-        """Query thread runtime status (running vs idle).
-
-        Returns thread state for reconnecting to active threads.
-        """
-        d = self._daemon
-        thread_id = str(msg.get("thread_id", "")).strip()
-
-        if not thread_id:
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "INVALID_REQUEST",
-                    "message": "thread_id required",
-                    "request_id": msg.get("request_id"),
-                },
-            )
-            return
-
-        active_tasks = getattr(d, "_active_threads", {}) or {}
-        query_task = active_tasks.get(thread_id)
-        has_active_query = query_task is not None and not query_task.done()
-
-        last_activity: str | None = None
-        if d._runner:
-            try:
-                info = await d._runner.get_persisted_thread(thread_id)
-            except KeyError:
-                info = None
-            except Exception:
-                logger.debug(
-                    "thread_status: get_persisted_thread failed for %s",
-                    thread_id,
-                    exc_info=True,
-                )
-                info = None
-            if info is not None:
-                at = getattr(info, "last_activity_at", None) or getattr(info, "updated_at", None)
-                if at is not None:
-                    last_activity = at.isoformat()
-
-        status = {
-            "thread_id": thread_id,
-            "state": "running" if has_active_query else "idle",
-            "has_active_query": has_active_query,
-            "last_activity": last_activity,
-        }
-
-        await d._send_client_message(
-            client_id,
-            {
-                "type": "thread_status_response",
-                **status,
-                "request_id": msg.get("request_id"),
-            },
-        )
-
-    async def _handle_thread_state(self, client_id: str, msg: dict[str, Any]) -> None:
-        """Return raw checkpoint state values for a thread."""
-        d = self._daemon
-        thread_id = str(msg.get("thread_id", "")).strip()
-        if not thread_id:
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "INVALID_MESSAGE",
-                    "message": "thread_state requires thread_id",
-                    "request_id": msg.get("request_id"),
-                },
-            )
-            return
-
-        values = await d._runner.get_thread_state_values(thread_id)
-
-        # Encode LangChain messages explicitly so the TUI can round-trip them.
-        messages = values.get("messages")
-        if isinstance(messages, list):
-            try:
-                from langchain_core.messages.base import messages_to_dict
-
-                values = dict(values)
-                values["messages"] = messages_to_dict(messages)
-            except Exception:
-                logger.debug(
-                    "Failed to serialize thread_state messages for %s", thread_id, exc_info=True
-                )
-
-        await d._send_client_message(
-            client_id,
-            {
-                "type": "thread_state_response",
-                "thread_id": thread_id,
-                "values": values,
-                "request_id": msg.get("request_id"),
-            },
-        )
-
-    async def _handle_thread_update_state(self, client_id: str, msg: dict[str, Any]) -> None:
-        """Persist partial checkpoint state values for a thread.
-
-        Responds immediately before performing the state update to avoid timeout
-        during interrupt cleanup (IG-228).
-        """
-        d = self._daemon
-        thread_id = str(msg.get("thread_id", "")).strip()
-        values = msg.get("values")
-        if not thread_id or not isinstance(values, dict):
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "INVALID_MESSAGE",
-                    "message": "thread_update_state requires thread_id and values",
-                    "request_id": msg.get("request_id"),
-                },
-            )
-            return
-
-        # Respond immediately to avoid client timeout during interrupt cleanup
-        await d._send_client_message(
-            client_id,
-            {
-                "type": "thread_update_state_response",
-                "thread_id": thread_id,
-                "success": True,
-                "request_id": msg.get("request_id"),
-            },
-        )
-
-        # Deserialize messages if present
-        if isinstance(values.get("messages"), list):
-            try:
-                values = dict(values)
-                values["messages"] = messages_from_wire_dicts(values["messages"])
-            except Exception:
-                logger.debug(
-                    "Failed to deserialize thread_update_state messages for %s",
-                    thread_id,
-                    exc_info=True,
-                )
-
-        # Perform state update in background after responding
-        try:
-            await d._runner.update_thread_state_values(thread_id, values)
-        except (RuntimeError, OSError, ValueError, KeyError) as e:
-            # Catch specific exceptions from checkpoint/IO errors, not system interrupts
-            logger.warning(
-                "Failed to persist thread state for %s after acknowledgment: %s",
-                thread_id,
-                e,
-                exc_info=True,
-            )
-
     async def _handle_resume_interrupts(self, client_id: str, msg: dict[str, Any]) -> None:
         """Resume an interactive daemon turn paused on HITL or ask_user."""
         d = self._daemon
-        thread_id = str(msg.get("thread_id", "")).strip()
+        loop_id = str(msg.get("loop_id", "")).strip()
         resume_payload = msg.get("resume_payload")
-        if not thread_id or not isinstance(resume_payload, dict):
+        if not loop_id or not isinstance(resume_payload, dict):
+            logger.warning(
+                "[MsgRouter] resume_interrupts rejected from client %s: missing loop_id or payload",
+                str(client_id)[:8],
+            )
             await d._send_client_message(
                 client_id,
                 {
                     "type": "error",
                     "code": "INVALID_MESSAGE",
-                    "message": "resume_interrupts requires thread_id and resume_payload",
+                    "message": "resume_interrupts requires loop_id and resume_payload",
                     "request_id": msg.get("request_id"),
                 },
             )
             return
 
-        future = d._pending_interrupt_responses.get(thread_id)
+        session = await d._session_manager.get_session(client_id)
+        if not session or loop_id not in session.subscriptions:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_NOT_SUBSCRIBED",
+                    "message": "loop_subscribe required before resume_interrupts",
+                    "request_id": msg.get("request_id"),
+                },
+            )
+            return
+
+        future = d._pending_interrupt_responses.get(loop_id)
         if future is None or future.done():
             await d._send_client_message(
                 client_id,
                 {
                     "type": "error",
                     "code": "NO_PENDING_INTERRUPT",
-                    "message": f"No pending interrupt for thread {thread_id}",
+                    "message": f"No pending interrupt for loop {loop_id}",
                     "request_id": msg.get("request_id"),
                 },
             )
@@ -835,79 +318,11 @@ class MessageRouter:
             client_id,
             {
                 "type": "interrupts_resumed",
-                "thread_id": thread_id,
+                "loop_id": loop_id,
                 "success": True,
                 "request_id": msg.get("request_id"),
             },
         )
-
-    async def _handle_subscribe_thread(self, client_id: str, msg: dict[str, Any]) -> None:
-        d = self._daemon
-        thread_id = msg.get("thread_id", "").strip()
-        verbosity = msg.get("verbosity", "normal")
-
-        if not thread_id:
-            session = await d._session_manager.get_session(client_id)
-            if session:
-                await session.transport.send(
-                    session.transport_client,
-                    {
-                        "type": "error",
-                        "code": "INVALID_MESSAGE",
-                        "message": "subscribe_thread requires thread_id",
-                    },
-                )
-            return
-
-        valid_verbosity = {"quiet", "minimal", "normal", "detailed", "debug"}
-        if verbosity not in valid_verbosity:
-            session = await d._session_manager.get_session(client_id)
-            if session:
-                await session.transport.send(
-                    session.transport_client,
-                    {
-                        "type": "error",
-                        "code": "INVALID_MESSAGE",
-                        "message": f"Invalid verbosity value: {verbosity}. "
-                        f"Must be one of: {', '.join(sorted(valid_verbosity))}",
-                    },
-                )
-            return
-
-        try:
-            # IG-228: Subscribe even if already subscribed (client expects confirmation)
-            await d._session_manager.subscribe_thread(client_id, thread_id, verbosity=verbosity)
-
-            session = await d._session_manager.get_session(client_id)
-            if session:
-                # Always send subscription confirmation so client bootstrap completes
-                await session.transport.send(
-                    session.transport_client,
-                    {
-                        "type": "subscription_confirmed",
-                        "thread_id": thread_id,
-                        "client_id": client_id,
-                        "verbosity": verbosity,
-                    },
-                )
-            logger.info(
-                "Client %s subscribed to thread %s with verbosity=%s",
-                client_id,
-                thread_id,
-                verbosity,
-            )
-        except ValueError as e:
-            logger.exception("Subscription failed")
-            session = await d._session_manager.get_session(client_id)
-            if session:
-                await session.transport.send(
-                    session.transport_client,
-                    {
-                        "type": "error",
-                        "code": "SUBSCRIPTION_FAILED",
-                        "message": str(e),
-                    },
-                )
 
     async def _handle_skills_list(self, client_id: str, msg: dict[str, Any]) -> None:
         """Return wire-safe skill metadata for the daemon's agent config."""
@@ -1011,7 +426,21 @@ class MessageRouter:
             },
         )
 
-        await d._current_input_queue.put(
+        active_loop = await self._client_subscribed_loop_id(client_id)
+        if not active_loop:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "NO_LOOP_SUBSCRIPTION",
+                    "message": "loop_subscribe required before invoke_skill",
+                    "request_id": msg.get("request_id"),
+                },
+            )
+            return
+
+        await d._loop_input_dispatcher.enqueue(
+            active_loop,
             {
                 "type": "input",
                 "text": envelope.prompt,
@@ -1729,10 +1158,22 @@ class MessageRouter:
             )
             return
 
-        # Reattachment handler handles subscription and history replay
         await handle_loop_reattach(loop_id, d, client_id)
 
-        # Send subscribe response
+        verbosity = msg.get("verbosity", "normal")
+        await d._session_manager.subscribe_loop(client_id, loop_id, verbosity=verbosity)
+        session = await d._session_manager.get_session(client_id)
+        if session:
+            await session.transport.send(
+                session.transport_client,
+                {
+                    "type": "subscription_confirmed",
+                    "loop_id": loop_id,
+                    "client_id": client_id,
+                    "verbosity": verbosity,
+                },
+            )
+
         await d._send_client_message(
             client_id,
             {
@@ -1797,13 +1238,7 @@ class MessageRouter:
             except Exception as e:
                 logger.warning("Failed to update metadata for detachment: %s", str(e))
 
-        # Unsubscribe client from loop topic (if subscribed)
-        session = await d._session_manager.get_session(client_id)
-        if session and hasattr(session, "loop_subscription"):
-            if session.loop_subscription:
-                await d._event_bus.unsubscribe(session.loop_subscription, session.event_queue)
-                session.loop_subscription = None
-                logger.info("Client %s unsubscribed from loop %s", client_id, loop_id)
+        await d._session_manager.unsubscribe_loop(client_id, loop_id)
 
         # Send detach response
         await d._send_client_message(
@@ -1880,20 +1315,7 @@ class MessageRouter:
         )
 
     async def _handle_loop_input(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle loop_input RPC request (RFC-503).
-
-        Send user input/prompt to active loop for processing.
-        Integrates with QueryEngine by queueing input to daemon's input queue
-        with thread_id from loop metadata.
-
-        Args:
-            client_id: Client connection identifier.
-            msg: Request message with loop_id and content.
-        """
-        import json
-        from datetime import UTC, datetime
-        from pathlib import Path
-
+        """Handle loop_input RPC: authorize, then enqueue to the loop's isolated input queue."""
         d = self._daemon
         request_id = msg.get("request_id")
         loop_id = msg.get("loop_id")
@@ -1911,7 +1333,6 @@ class MessageRouter:
             )
             return
 
-        # Self-healing: ensure metadata.json exists (reconstruct from SQLite if needed)
         loop_dir = await self._ensure_loop_metadata(loop_id)
         if loop_dir is None:
             await d._send_client_message(
@@ -1925,85 +1346,40 @@ class MessageRouter:
             )
             return
 
-        # Load loop metadata (guaranteed to exist after _ensure_loop_metadata)
-        metadata_file = loop_dir / "metadata.json"
-        try:
-            metadata = json.loads(metadata_file.read_text())
-        except Exception as e:
+        session = await d._session_manager.get_session(client_id)
+        if not session or loop_id not in session.subscriptions:
             await d._send_client_message(
                 client_id,
                 {
                     "type": "error",
-                    "code": "LOOP_METADATA_PARSE_ERROR",
-                    "message": f"Failed to read metadata: {str(e)}",
+                    "code": "LOOP_NOT_SUBSCRIBED",
+                    "message": "loop_subscribe required before loop_input",
                     "request_id": request_id,
                 },
             )
             return
 
-        # Get or create thread_id for execution
-        thread_id = metadata.get("current_thread_id")
-
-        if not thread_id:
-            # Generate new thread_id if loop has no current thread
-            from uuid_utils import uuid7
-
-            thread_id = str(uuid7())
-
-            # Update metadata with new thread
-            metadata["current_thread_id"] = thread_id
-            if thread_id not in metadata.get("thread_ids", []):
-                metadata.setdefault("thread_ids", []).append(thread_id)
-            metadata["status"] = "running"
-            metadata["updated_at"] = datetime.now(UTC).isoformat()
-
-            try:
-                metadata_file.write_text(json.dumps(metadata, indent=2))
-            except Exception as e:
-                logger.warning("Failed to update loop metadata: %s", str(e))
-
-        # Register thread in daemon's thread registry (per-loop workspace, IG-300)
-        d._thread_registry.ensure(thread_id, is_draft=False)
-        try:
-            loop_workspace = resolve_loop_daemon_workspace(loop_id)
-        except (OSError, ValueError) as e:
-            logger.warning(
-                "Falling back to daemon workspace for loop %s thread %s: %s",
-                loop_id,
-                thread_id,
-                e,
-            )
-            loop_workspace = Path(d._daemon_workspace)
-        d._thread_registry.set_workspace(thread_id, loop_workspace)
-        d._thread_registry.set_thread_loop(thread_id, loop_id)
-
-        # Set runner's current thread to loop's thread
-        d._runner.set_current_thread_id(thread_id)
-
         logger.info(
-            "Queueing input for loop %s (thread %s): %s",
+            "Queueing input for loop %s: %s",
             loop_id,
-            thread_id,
             preview_first(prompt_text, 50),
         )
 
-        # Queue input for QueryEngine execution (same option normalization as ``input``)
-        await d._current_input_queue.put(
+        await d._loop_input_dispatcher.enqueue(
+            loop_id,
             {
                 "type": "input",
                 "text": prompt_text,
                 "client_id": client_id,
                 **_queue_options_from_daemon_message(msg),
-            }
+            },
         )
 
-        # Send response (execution will happen asynchronously via QueryEngine)
         await d._send_client_message(
             client_id,
             {
                 "type": "loop_input_response",
                 "loop_id": loop_id,
-                "thread_id": thread_id,
                 "success": True,
                 "request_id": request_id,
             },

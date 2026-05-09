@@ -1,7 +1,7 @@
 """HTTP REST transport implementation (RFC-0013).
 
-This transport implements REST API endpoints for thread management,
-configuration, file operations, and system status.
+HTTP endpoints for health, status, and auxiliary APIs. Conversation control
+uses the WebSocket loop protocol (IG-408); thread CRUD routes are not exposed.
 """
 
 from __future__ import annotations
@@ -31,19 +31,6 @@ logger = logging.getLogger(__name__)
 # Pydantic models for request/response validation
 
 
-class ThreadCreateRequest(BaseModel):
-    """Thread creation request."""
-
-    initial_message: str | None = None
-    metadata: dict[str, Any] | None = None
-
-
-class ThreadResumeRequest(BaseModel):
-    """Thread resume request."""
-
-    message: str
-
-
 class ConfigUpdateRequest(BaseModel):
     """Configuration update request."""
 
@@ -54,17 +41,15 @@ class HttpRestTransport(TransportServer):
     """HTTP REST transport server.
 
     This transport implements the RFC-0013 protocol over HTTP REST.
-    It provides CRUD operations for threads, configuration, and files.
+    It provides health, status, and auxiliary routes.
 
     Args:
         config: HTTP REST configuration.
-        thread_manager: Optional ThreadContextManager for thread operations (RFC-402).
     """
 
     def __init__(
         self,
         config: HttpRestConfig,
-        thread_manager: Any | None = None,
         runner: Any | None = None,
         soothe_config: Any | None = None,
         session_manager: Any | None = None,
@@ -73,13 +58,11 @@ class HttpRestTransport(TransportServer):
 
         Args:
             config: HTTP REST configuration.
-            thread_manager: Optional ThreadContextManager for thread operations.
             runner: Optional SootheRunner instance.
             soothe_config: Optional SootheConfig instance.
             session_manager: Optional ClientSessionManager for queue metrics.
         """
         self._config = config
-        self._thread_manager = thread_manager
         self._runner = runner
         self._soothe_config = soothe_config
         self._session_manager = session_manager
@@ -114,23 +97,6 @@ class HttpRestTransport(TransportServer):
         async def health_check() -> dict[str, Any]:
             """Health check endpoint with queue metrics (IG-258)."""
             queue_metrics = {}
-
-            # Get input queue depth (if runner has it)
-            if self._runner and hasattr(self._runner, "_current_input_queue"):
-                input_queue = self._runner._current_input_queue
-                max_size = (
-                    self._soothe_config.daemon.max_input_queue_size
-                    if self._soothe_config
-                    and hasattr(self._soothe_config.daemon, "max_input_queue_size")
-                    else 0
-                )
-                current_size = input_queue.qsize()
-
-                queue_metrics["input_queue"] = {
-                    "current": current_size,
-                    "max": max_size,
-                    "percent": round((current_size / max_size * 100) if max_size > 0 else 0, 2),
-                }
 
             # Get event queue depths (if session manager available)
             if self._session_manager and hasattr(self._session_manager, "_sessions"):
@@ -167,254 +133,6 @@ class HttpRestTransport(TransportServer):
         async def get_version() -> dict[str, str]:
             """Get daemon version."""
             return {"version": "1.0.0", "protocol": "soothe-rest-v1"}
-
-        # Thread management (RFC-402)
-        @self._app.get("/api/v1/threads")
-        async def list_threads(
-            status: str | None = None,
-            tags: str | None = None,
-            labels: str | None = None,
-            priority: str | None = None,
-            category: str | None = None,
-            created_after: str | None = None,
-            created_before: str | None = None,
-            updated_after: str | None = None,
-            updated_before: str | None = None,
-            limit: int = 50,
-            offset: int = 0,
-            include_stats: bool = False,  # noqa: FBT001, FBT002
-        ) -> dict[str, Any]:
-            """List threads with filtering.
-
-            Query params:
-            - status: Filter by status (idle|running|suspended|archived|error)
-            - tags: Comma-separated tags
-            - labels: Comma-separated labels
-            - priority: Filter by priority (low|normal|high)
-            - category: Filter by category
-            - created_after: ISO 8601 datetime
-            - created_before: ISO 8601 datetime
-            - updated_after: ISO 8601 datetime
-            - updated_before: ISO 8601 datetime
-            - limit: Max results (default: 50)
-            - offset: Pagination offset
-            - include_stats: Include execution stats
-            """
-            if not self._thread_manager or not self._runner or not self._soothe_config:
-                raise HTTPException(status_code=503, detail="Thread management not available")
-
-            from datetime import datetime
-
-            from soothe.protocols.durability import ThreadFilter
-
-            thread_filter = None
-            if any(
-                [
-                    status,
-                    tags,
-                    labels,
-                    priority,
-                    category,
-                    created_after,
-                    created_before,
-                    updated_after,
-                    updated_before,
-                ]
-            ):
-                thread_filter = ThreadFilter(
-                    status=status,
-                    tags=tags.split(",") if tags else None,
-                    labels=labels.split(",") if labels else None,
-                    priority=priority,
-                    category=category,
-                    created_after=datetime.fromisoformat(created_after) if created_after else None,
-                    created_before=datetime.fromisoformat(created_before)
-                    if created_before
-                    else None,
-                    updated_after=datetime.fromisoformat(updated_after) if updated_after else None,
-                    updated_before=datetime.fromisoformat(updated_before)
-                    if updated_before
-                    else None,
-                )
-
-            threads = await self._thread_manager.list_threads(
-                thread_filter,
-                include_stats=include_stats,
-                include_last_message=True,
-            )
-
-            # Apply pagination
-            paginated = threads[offset : offset + limit]
-
-            return {
-                "threads": [t.model_dump(mode="json") for t in paginated],
-                "total": len(threads),
-                "limit": limit,
-                "offset": offset,
-            }
-
-        @self._app.get("/api/v1/threads/{thread_id}")
-        async def get_thread(thread_id: str) -> dict[str, Any]:
-            """Get thread details."""
-            if not self._thread_manager:
-                raise HTTPException(status_code=503, detail="Thread management not available")
-
-            try:
-                thread = await self._thread_manager.get_thread(thread_id)
-                return {"thread": thread.model_dump(mode="json")}
-            except KeyError:
-                raise HTTPException(status_code=404, detail="Thread not found") from None
-
-        @self._app.post("/api/v1/threads")
-        async def create_thread(request: ThreadCreateRequest) -> dict[str, Any]:
-            """Create new thread with optional initial message.
-
-            Request body:
-            {
-              "initial_message": "Analyze code",  // optional
-              "metadata": {                       // optional
-                "tags": ["research"],
-                "priority": "high",
-                "category": "code-review"
-              }
-            }
-            """
-            if not self._thread_manager:
-                raise HTTPException(status_code=503, detail="Thread management not available")
-
-            thread = await self._thread_manager.create_thread(
-                initial_message=request.initial_message,
-                metadata=request.metadata,
-            )
-
-            return {
-                "thread_id": thread.thread_id,
-                "status": thread.status,
-                "created_at": thread.created_at.isoformat(),
-            }
-
-        @self._app.delete("/api/v1/threads/{thread_id}")
-        async def archive_thread(
-            thread_id: str,
-            archive: bool = True,  # noqa: FBT001, FBT002
-        ) -> dict[str, Any]:
-            """Delete or archive thread.
-
-            Query params:
-            - archive: If true, archive; if false, permanently delete (default: true)
-            """
-            if not self._thread_manager:
-                raise HTTPException(status_code=503, detail="Thread management not available")
-
-            try:
-                if archive:
-                    await self._thread_manager.archive_thread(thread_id)
-                    action = "archived"
-                else:
-                    await self._thread_manager.delete_thread(thread_id)
-                    action = "deleted"
-            except KeyError:
-                raise HTTPException(status_code=404, detail="Thread not found") from None
-            else:
-                return {"thread_id": thread_id, "status": action}
-
-        @self._app.post("/api/v1/threads/{thread_id}/resume")
-        async def resume_thread(
-            thread_id: str,
-            request: ThreadResumeRequest,
-            http_request: Request,
-        ) -> dict[str, Any]:
-            """Resume thread with new message.
-
-            Request body:
-            {
-              "message": "Continue analysis"  // required
-            }
-            """
-            if not self._thread_manager or not self._runner:
-                raise HTTPException(status_code=503, detail="Thread management not available")
-
-            # Resume thread context
-            await self._thread_manager.resume_thread(thread_id)
-
-            # Send message to daemon for execution
-            if self._message_handler:
-                client_id = _get_client_id(http_request)
-                self._message_handler(
-                    client_id,
-                    {
-                        "type": "resume_thread",
-                        "thread_id": thread_id,
-                    },
-                )
-                self._message_handler(
-                    client_id,
-                    {
-                        "type": "input",
-                        "text": request.message,
-                    },
-                )
-
-            return {
-                "thread_id": thread_id,
-                "status": "resumed",
-                "message": "Thread resumed and processing message",
-            }
-
-        @self._app.get("/api/v1/threads/{thread_id}/messages")
-        async def get_thread_messages(
-            thread_id: str,
-            limit: int = 100,
-            offset: int = 0,
-        ) -> dict[str, Any]:
-            """Get thread conversation messages."""
-            if not self._thread_manager:
-                raise HTTPException(status_code=503, detail="Thread management not available")
-
-            try:
-                messages = await self._thread_manager.get_thread_messages(
-                    thread_id,
-                    limit=limit,
-                    offset=offset,
-                )
-                return {
-                    "thread_id": thread_id,
-                    "messages": [m.model_dump(mode="json") for m in messages],
-                    "limit": limit,
-                    "offset": offset,
-                }
-            except KeyError:
-                raise HTTPException(status_code=404, detail="Thread not found") from None
-
-        @self._app.get("/api/v1/threads/{thread_id}/artifacts")
-        async def get_thread_artifacts(thread_id: str) -> dict[str, Any]:
-            """Get thread artifacts."""
-            if not self._thread_manager:
-                raise HTTPException(status_code=503, detail="Thread management not available")
-
-            try:
-                artifacts = await self._thread_manager.get_thread_artifacts(thread_id)
-                return {
-                    "thread_id": thread_id,
-                    "artifacts": [a.model_dump(mode="json") for a in artifacts],
-                }
-            except KeyError:
-                raise HTTPException(status_code=404, detail="Thread not found") from None
-
-        @self._app.get("/api/v1/threads/{thread_id}/stats")
-        async def get_thread_stats(thread_id: str) -> dict[str, Any]:
-            """Get thread execution statistics."""
-            if not self._thread_manager:
-                raise HTTPException(status_code=503, detail="Thread management not available")
-
-            try:
-                stats = await self._thread_manager.get_thread_stats(thread_id)
-                return {
-                    "thread_id": thread_id,
-                    "stats": stats.model_dump(mode="json"),
-                }
-            except KeyError:
-                raise HTTPException(status_code=404, detail="Thread not found") from None
 
         # Configuration
         @self._app.get("/api/v1/config")
