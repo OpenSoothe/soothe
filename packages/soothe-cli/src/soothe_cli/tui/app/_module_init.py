@@ -381,57 +381,28 @@ class AppResult:
 
 async def run_textual_app(
     *,
-    agent: Any = None,  # noqa: ANN401
+    daemon_config: Any,  # noqa: ANN401
     assistant_id: str | None = None,
     auto_approve: bool = False,
     cwd: str | Path | None = None,
     resume_loop_id: str | None = None,
-    resume_loop_intent: str | None = None,
     initial_prompt: str | None = None,
     initial_skill: str | None = None,
     mcp_server_info: list[dict[str, Any]] | None = None,
     profile_override: dict[str, Any] | None = None,
-    server_proc: Any | None = None,
-    server_kwargs: dict[str, Any] | None = None,
-    mcp_preload_kwargs: dict[str, Any] | None = None,
-    model_kwargs: dict[str, Any] | None = None,
-    daemon_config: Any = None,  # noqa: ANN401
 ) -> AppResult:
-    """Run the Textual application.
-
-    When `server_kwargs` is provided (and `agent` is `None`), the app starts
-    immediately with a "Connecting..." banner and launches the server in the
-    background.  Server cleanup is handled automatically after the app exits.
+    """Run the Textual TUI (daemon execution only).
 
     Args:
-        agent: Pre-configured LangGraph agent (optional).
+        daemon_config: Loaded Soothe configuration used for WebSocket bootstrap.
         assistant_id: Agent identifier for memory storage.
         auto_approve: Whether to start with auto-approve enabled.
         cwd: Current working directory to display.
-        resume_loop_id: Initial loop id for the session (daemon-backed).
-
-            `None` when `resume_loop_intent` is provided (the TUI resolves the
-            final id asynchronously).
-        resume_loop_intent: Raw resume intent from `-r` flag. `'__MOST_RECENT__'`
-            for bare `-r`, a loop id string for `-r <id>`, or `None` for new
-            sessions.
-
-            Resolved asynchronously during TUI startup.
+        resume_loop_id: Initial loop id when attaching to an existing conversation.
         initial_prompt: Optional prompt to auto-submit when session starts.
         initial_skill: Optional skill name to invoke when session starts.
         mcp_server_info: MCP server metadata for the `/mcp` viewer.
-        profile_override: Extra profile fields from `--profile-override`,
-            retained so later profile-aware behavior stays consistent with
-            the CLI override, including model selection details and
-            on-demand `create_model()` calls.
-        server_proc: LangGraph server process for the interactive session.
-        server_kwargs: Kwargs for deferred `start_server_and_get_agent` call.
-        mcp_preload_kwargs: Kwargs for concurrent MCP metadata preload.
-        model_kwargs: Kwargs for deferred `create_model()` call.
-        daemon_config: Soothe configuration for daemon-backed TUI startup.
-
-            When provided, model creation runs in a background worker after
-            first paint so the splash screen appears immediately.
+        profile_override: Extra profile fields from ``--profile-override``.
 
     Returns:
         An `AppResult` with the return code and final loop id.
@@ -439,30 +410,19 @@ async def run_textual_app(
     from soothe_cli.tui.app._app import SootheApp  # deferred to avoid circular import
 
     app = SootheApp(
-        agent=agent,
+        daemon_config=daemon_config,
         assistant_id=assistant_id,
         auto_approve=auto_approve,
         cwd=cwd,
         resume_loop_id=resume_loop_id,
-        resume_loop_intent=resume_loop_intent,
         initial_prompt=initial_prompt,
         initial_skill=initial_skill,
         mcp_server_info=mcp_server_info,
         profile_override=profile_override,
-        server_proc=server_proc,
-        server_kwargs=server_kwargs,
-        mcp_preload_kwargs=mcp_preload_kwargs,
-        model_kwargs=model_kwargs,
-        daemon_config=daemon_config,
     )
     try:
         await app.run_async()
     finally:
-        # Guarantee server cleanup regardless of how the app exits.
-        # Covers both the pre-started server_proc path and the deferred
-        # server_kwargs path (where the background worker sets _server_proc).
-        if app._server_proc is not None:
-            app._server_proc.stop()
         if app._daemon_session is not None:
             await app._daemon_session.close()
 

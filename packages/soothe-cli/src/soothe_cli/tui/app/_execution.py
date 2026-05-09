@@ -10,10 +10,7 @@ import sys
 import time
 import webbrowser
 from contextlib import suppress
-from typing import TYPE_CHECKING, Any, Literal
-
-if TYPE_CHECKING:
-    from langchain_core.runnables import RunnableConfig
+from typing import Any, Literal
 
 from textual.app import ScreenStackError
 from textual.containers import VerticalScroll
@@ -532,24 +529,25 @@ class _ExecutionMixin:
             self._update_tokens(0)
             # Clear status message (e.g., "Interrupted" from previous session)
             self._update_status("")
-            # New AgentLoop (daemon) or new local loop id
             if self._session_state:
-                if self._daemon_session is not None:
+                if self._daemon_session is None:
+                    await self._mount_message(
+                        AppMessage("Not connected to the daemon; cannot start a new loop.")
+                    )
+                else:
                     status_event = await self._daemon_session.new_loop()
                     new_loop_id = (
                         str(status_event.get("loop_id", "")) or self._session_state.reset_loop()
                     )
                     self._session_state.loop_id = new_loop_id
                     self._lc_loop_id = new_loop_id
-                else:
-                    new_loop_id = self._session_state.reset_loop()
-                try:
-                    banner = self.query_one("#welcome-banner", WelcomeBanner)
-                    banner.update_loop_id(new_loop_id)
-                except NoMatches:
-                    pass
-                self._clear_loop_model_override()
-                await self._mount_message(AppMessage(f"Started new loop: {new_loop_id}"))
+                    try:
+                        banner = self.query_one("#welcome-banner", WelcomeBanner)
+                        banner.update_loop_id(new_loop_id)
+                    except NoMatches:
+                        pass
+                    self._clear_loop_model_override()
+                    await self._mount_message(AppMessage(f"Started new loop: {new_loop_id}"))
         elif cmd == "/editor":
             await self.action_open_editor()
         elif cmd == "/loops":
@@ -708,13 +706,6 @@ class _ExecutionMixin:
                 report += "\nTheme registry reload failed. Check config.yml for errors."
             await self._mount_message(AppMessage(report))
 
-            # Re-discover skills so autocomplete reflects any new/removed skills
-            if self._daemon_config is None:
-                self.run_worker(
-                    self._discover_skills(),
-                    exclusive=True,
-                    group="startup-skill-discovery",
-                )
             if self._daemon_session is not None:
                 self.run_worker(
                     self._refresh_daemon_skills_catalog(),
@@ -758,33 +749,6 @@ class _ExecutionMixin:
         await self._mount_message(
             AppMessage("Skills require a daemon connection. Connect to a daemon first.")
         )
-
-    async def _get_conversation_token_count(self) -> int | None:
-        """Return the approximate conversation-only token count.
-
-        Returns:
-            Token count as an integer, or `None` if state is unavailable.
-        """
-        if not self._agent:
-            return None
-        try:
-            from langchain_core.messages.utils import (
-                count_tokens_approximately,
-            )
-
-            config: RunnableConfig = {
-                "configurable": {"thread_id": self._lc_loop_id},
-            }
-            state = await self._agent.aget_state(config)
-            if not state or not state.values:
-                return None
-            messages = state.values.get("messages", [])
-            if not messages:
-                return None
-            return count_tokens_approximately(messages)
-        except Exception:  # best-effort for /tokens display
-            logger.debug("Failed to retrieve conversation token count", exc_info=True)
-            return None
 
     async def _handle_user_message(self, message: str) -> None:
         """Handle a user message to send to the agent.
@@ -878,7 +842,6 @@ class _ExecutionMixin:
         try:
             await execute_task_textual(
                 user_input=message,
-                agent=self._agent,
                 daemon_session=self._daemon_session,
                 assistant_id=self._assistant_id,
                 session_state=self._session_state,
