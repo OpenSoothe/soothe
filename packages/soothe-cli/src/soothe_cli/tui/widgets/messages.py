@@ -126,10 +126,11 @@ def _is_widget_animation_visible(widget: object) -> bool:
 
 
 def _assemble_card_header(widget: object, label_part: str, body_part: str) -> Content:
-    """Build a card title: cognition-colored label plus muted body (no bold).
+    """Build a card title: cognition-colored label plus foreground body (no bold).
 
     Used for Goal, Plan, Step, and tool (including Task) headers so hierarchy
-    comes from color, not weight.
+    comes from color, not weight. Body uses ``foreground`` so titles stay
+    readable on dark backgrounds (parity with step tool rows).
 
     Args:
         widget: Mounted widget (or any object accepted by ``get_theme_colors``).
@@ -145,7 +146,7 @@ def _assemble_card_header(widget: object, label_part: str, body_part: str) -> Co
         colors = theme.DARK_COLORS
     return Content.assemble(
         Content.styled(label_part, colors.cognition),
-        Content.styled(body_part, colors.muted),
+        Content.styled(body_part, colors.foreground),
     )
 
 
@@ -1079,6 +1080,8 @@ class ToolCallMessage(Vertical):
         """Widget showing expand/collapse hint text."""
         self._task_card_user_expanded: bool = False
         """If True, do not auto-collapse the task card (user expanded the body)."""
+        self._task_activity_list_user_expanded: bool = False
+        """If True, do not auto-fold the task activity preview (user expanded the list)."""
 
     def _is_task_tool_card(self) -> bool:
         return _normalize_tool_name_for_arg_map(self._tool_name) == "task"
@@ -1095,6 +1098,18 @@ class ToolCallMessage(Vertical):
             return
         self._card_collapsed = True
         self._refresh_collapse_state()
+
+    def _maybe_auto_fold_task_activity_list(self) -> None:
+        """Fold long task activity to the preview row cap (unless the user expanded it)."""
+        if not self._is_task_tool_card():
+            return
+        if self._task_activity_list_user_expanded:
+            return
+        if len(self._activity) <= _STEP_TOOL_PREVIEW_ROWS:
+            return
+        if self._tools_body_collapsed:
+            return
+        self._tools_body_collapsed = True
 
     def _tool_header_content(self) -> Content:
         """One-line tool title: tool name in cognition, parentheses block muted."""
@@ -1346,21 +1361,32 @@ class ToolCallMessage(Vertical):
     def _refresh_activity_display(self) -> None:
         """Update the unified activity widget with interleaved text lines and tool rows."""
         if self._activity_widget is None:
+            self._maybe_auto_fold_task_activity_list()
             self._maybe_auto_collapse_task_card()
             return
         if not self._activity:
             self._activity_widget.display = False
             self._maybe_auto_collapse_task_card()
+            self._sync_tool_collapse_hint()
             return
+        self._maybe_auto_fold_task_activity_list()
         self._activity_widget.display = True
         parts: list[Content] = []
-        for entry in self._activity:
+        visible: list[str | _StepToolRow] = self._activity
+        if (
+            self._is_task_tool_card()
+            and len(self._activity) > _STEP_TOOL_PREVIEW_ROWS
+            and self._tools_body_collapsed
+        ):
+            visible = self._activity[:_STEP_TOOL_PREVIEW_ROWS]
+        for entry in visible:
             if isinstance(entry, str):
                 parts.append(Content.styled(entry, "dim"))
             else:
                 parts.append(self._row_to_content(entry))
         self._activity_widget.update(Content("\n").join(parts))
         self._maybe_auto_collapse_task_card()
+        self._sync_tool_collapse_hint()
 
     def add_tool_call(
         self,
@@ -1529,6 +1555,8 @@ class ToolCallMessage(Vertical):
         self._status = "running"
         if self._is_task_tool_card():
             self._task_card_user_expanded = False
+            self._task_activity_list_user_expanded = False
+            self._tools_body_collapsed = False
         self._start_time = time()
         if self._result_summary_widget:
             self._result_summary_widget.display = False
@@ -1718,7 +1746,10 @@ class ToolCallMessage(Vertical):
         event.stop()  # Prevent click from bubbling up and scrolling
         # Priority 1: Toggle tool row collapse if there are enough activity items
         if self._activity and len(self._activity) > _STEP_TOOL_PREVIEW_ROWS:
+            was_collapsed = self._tools_body_collapsed
             self._tools_body_collapsed = not self._tools_body_collapsed
+            if was_collapsed and not self._tools_body_collapsed:
+                self._task_activity_list_user_expanded = True
             self._refresh_activity_display()
             return
         # Priority 2: Card-level collapse when there's content to collapse
@@ -1749,28 +1780,60 @@ class ToolCallMessage(Vertical):
             self.add_class("-collapsed")
         else:
             self.remove_class("-collapsed")
+        self._sync_tool_collapse_hint()
 
-        # Update hint text
-        if self._collapse_hint_widget is None:
+    def _sync_tool_collapse_hint(self) -> None:
+        """Footer hint: expand/collapse card, or task activity list affordances."""
+        w = self._collapse_hint_widget
+        if w is None:
             return
-
         has_content = (
             self._activity or (self._output or "").strip() or self._status in ("success", "error")
         )
-
         if not has_content:
-            self._collapse_hint_widget.display = False
+            w.display = False
             return
 
         glyphs = get_glyphs()
+        gutter = f"{glyphs.output_prefix} "
 
         if self._card_collapsed:
             hint_text = _tui_hint_expand_body(glyphs.ellipsis)
-            self._collapse_hint_widget.update(Content.styled(hint_text, "dim italic"))
-            self._collapse_hint_widget.display = True
-        else:
-            # Only show hint when collapsed, hide when expanded
-            self._collapse_hint_widget.display = False
+            w.update(Content.styled(hint_text, "dim italic"))
+            w.display = True
+            return
+
+        if (
+            self._is_task_tool_card()
+            and self._activity
+            and len(self._activity) > _STEP_TOOL_PREVIEW_ROWS
+        ):
+            show_all = (
+                len(self._activity) <= _STEP_TOOL_PREVIEW_ROWS or not self._tools_body_collapsed
+            )
+            visible = self._activity if show_all else self._activity[:_STEP_TOOL_PREVIEW_ROWS]
+            remaining = len(self._activity) - len(visible)
+            if remaining > 0:
+                hint = _tui_hint_expand_more_tool_calls(glyphs.ellipsis, remaining)
+                w.update(
+                    Content.assemble(
+                        Content.styled(gutter, "dim"),
+                        Content.styled(hint, "dim"),
+                    )
+                )
+                w.display = True
+                return
+            hint = _tui_hint_collapse_body(glyphs.ellipsis)
+            w.update(
+                Content.assemble(
+                    Content.styled(gutter, "dim"),
+                    Content.styled(hint, "dim italic"),
+                )
+            )
+            w.display = True
+            return
+
+        w.display = False
 
     def _format_output(self, output: str, *, is_preview: bool = False) -> FormattedOutput:
         """Format tool output based on tool type for nicer display.
@@ -2212,6 +2275,7 @@ class ToolCallMessage(Vertical):
     def _update_output_display(self) -> None:
         """Update the output display based on expanded state."""
         if not self._preview_widget or not self._full_widget or not self._hint_widget:
+            self._sync_tool_collapse_hint()
             return
 
         output_stripped = (self._output or "").strip()
@@ -2234,6 +2298,7 @@ class ToolCallMessage(Vertical):
                     self._hint_widget.display = True
                 else:
                     self._hint_widget.display = False
+                self._sync_tool_collapse_hint()
                 return
 
             self._preview_widget.display = False
@@ -2246,6 +2311,7 @@ class ToolCallMessage(Vertical):
                 Content.styled(_tui_hint_collapse_body(get_glyphs().ellipsis), "dim italic")
             )
             self._hint_widget.display = True
+            self._sync_tool_collapse_hint()
             return
 
         lines = output_stripped.split("\n")
@@ -2298,6 +2364,8 @@ class ToolCallMessage(Vertical):
             else:
                 self._preview_widget.display = False
                 self._hint_widget.display = False
+
+        self._sync_tool_collapse_hint()
 
     @property
     def has_output(self) -> bool:
@@ -2402,11 +2470,12 @@ class _StepToolRow:
 class CognitionStepMessage(Vertical):
     """Agent-loop act step card: aggregates main-agent tool calls (IG-402).
 
-    Header shows per-tool counts; body lists one CLI-style row per call. Click
-    toggles expansion when there are more than ``_STEP_TOOL_PREVIEW_ROWS`` rows.
-    When tool rows, subagent notes, and execute prose together exceed that same
-    threshold, the card body auto-collapses until the user expands it (a new
-    ``set_running`` clears that preference).
+    Header shows per-tool counts; body lists one CLI-style row per call. When
+    there are more than ``_STEP_TOOL_PREVIEW_ROWS`` rows, click first folds or
+    unfolds the tool list; otherwise click toggles whole-card collapse. When tool
+    rows, subagent notes, and execute prose together exceed that same threshold,
+    the card body auto-collapses until the user expands it (a new ``set_running``
+    clears that preference).
 
     Tool rows use the goal-tree gutter (``⎿``) plus the same hollow/filled circle
     convention as the goal step list: ``circle_empty`` while pending/running,
@@ -2429,7 +2498,7 @@ class CognitionStepMessage(Vertical):
     CognitionStepMessage .step-header {
         height: auto;
         margin: 0;
-        color: $text-muted;
+        color: $foreground;
     }
 
     CognitionStepMessage .step-status {
@@ -2445,13 +2514,6 @@ class CognitionStepMessage(Vertical):
         margin-top: 0;
         height: auto;
         color: $text-muted;
-    }
-
-    CognitionStepMessage .step-tools-hint {
-        margin-left: 0;
-        color: $text-muted;
-        background: transparent;
-        height: auto;
     }
 
     CognitionStepMessage .step-subagent-notes {
@@ -2476,7 +2538,6 @@ class CognitionStepMessage(Vertical):
     }
 
     CognitionStepMessage.-collapsed .step-tools,
-    CognitionStepMessage.-collapsed .step-tools-hint,
     CognitionStepMessage.-collapsed .step-status,
     CognitionStepMessage.-collapsed .step-subagent-notes,
     CognitionStepMessage.-collapsed .step-detail {
@@ -2508,7 +2569,6 @@ class CognitionStepMessage(Vertical):
         self._status_widget: Static | None = None
         self._header_widget: Static | None = None
         self._tools_widget: Static | None = None
-        self._tools_hint_widget: Static | None = None
         self._detail_widget: Static | None = None
         self._deferred_complete: tuple[bool, int, int, str] | None = None
         self._deferred_running: bool = False
@@ -2533,6 +2593,8 @@ class CognitionStepMessage(Vertical):
         """Widget showing expand/collapse hint text."""
         self._step_card_user_expanded: bool = False
         """If True, skip auto-collapse (user expanded the card body)."""
+        self._step_tool_list_user_expanded: bool = False
+        """If True, skip auto-folding the tool-row preview (user expanded the list)."""
 
     def _step_body_line_estimate(self) -> int:
         """Approximate expanded-body line count for auto-collapse."""
@@ -2544,7 +2606,19 @@ class CognitionStepMessage(Vertical):
             n += len(self._last_completed_execute_prose.splitlines())
         if self._status in ("success", "error"):
             n += 1
+        elif self._status == "running":
+            n += 1
         return n
+
+    def _maybe_auto_fold_step_tool_list(self) -> None:
+        """Fold long tool lists to the preview cap while the step runs (not only after complete)."""
+        if self._step_tool_list_user_expanded:
+            return
+        if len(self._rows) <= _STEP_TOOL_PREVIEW_ROWS:
+            return
+        if self._tools_body_collapsed:
+            return
+        self._tools_body_collapsed = True
 
     def _maybe_auto_collapse_step_card(self) -> None:
         if self._step_card_user_expanded:
@@ -2575,7 +2649,6 @@ class CognitionStepMessage(Vertical):
             id="step-cognition-header",
         )
         yield Static("", classes="step-tools", id="step-cognition-tools", markup=False)
-        yield Static("", classes="step-tools-hint", id="step-cognition-tools-hint", markup=False)
         yield Static("", classes="step-status", id="step-cognition-status")
         yield Static(
             "",
@@ -2593,14 +2666,12 @@ class CognitionStepMessage(Vertical):
         self._header_widget = self.query_one("#step-cognition-header", Static)
         self._status_widget = self.query_one("#step-cognition-status", Static)
         self._tools_widget = self.query_one("#step-cognition-tools", Static)
-        self._tools_hint_widget = self.query_one("#step-cognition-tools-hint", Static)
         self._detail_widget = self.query_one("#step-cognition-detail", Static)
         self._collapse_hint_widget = self.query_one("#step-collapse-hint", Static)
         notes = self.query_one("#step-cognition-subagent-notes", Static)
         notes.display = False
         self._status_widget.display = False
         self._tools_widget.display = False
-        self._tools_hint_widget.display = False
         self._detail_widget.display = False
         self._collapse_hint_widget.display = False
         self._refresh_header_title()
@@ -2623,9 +2694,15 @@ class CognitionStepMessage(Vertical):
         self._maybe_auto_collapse_step_card()
 
     def on_click(self, event: Click) -> None:  # noqa: ARG002
-        """Toggle card collapse or tool list collapse based on content."""
+        """Toggle tool-row folding, card collapse, or show timestamp."""
         event.stop()
-        # If card has content to collapse (tools, status, or detail), toggle card collapse
+        if self._rows and len(self._rows) > _STEP_TOOL_PREVIEW_ROWS:
+            was_collapsed = self._tools_body_collapsed
+            self._tools_body_collapsed = not self._tools_body_collapsed
+            if was_collapsed and not self._tools_body_collapsed:
+                self._step_tool_list_user_expanded = True
+            self._refresh_tools_display()
+            return
         has_collapsible_content = (
             self._rows
             or self._subagent_notes
@@ -2646,36 +2723,62 @@ class CognitionStepMessage(Vertical):
         self._refresh_collapse_state()
 
     def _refresh_collapse_state(self) -> None:
-        """Update CSS classes and hint text based on collapse state."""
+        """Update CSS classes and footer hint based on collapse state."""
         if self._card_collapsed:
             self.add_class("-collapsed")
         else:
             self.remove_class("-collapsed")
+        self._sync_step_footer_hint()
 
-        # Update hint text
-        if self._collapse_hint_widget is None:
+    def _sync_step_footer_hint(self) -> None:
+        """Single footer line after status: expand card or tool-list affordances."""
+        w = self._collapse_hint_widget
+        if w is None:
             return
-
         has_content = (
             self._rows
             or self._subagent_notes
             or self._execute_assistant_buffer.strip()
             or self._status in ("success", "error")
         )
-
         if not has_content:
-            self._collapse_hint_widget.display = False
+            w.display = False
             return
 
         glyphs = get_glyphs()
+        gutter = self._step_goal_tree_gutter()
 
         if self._card_collapsed:
             hint_text = _tui_hint_expand_body(glyphs.ellipsis)
-            self._collapse_hint_widget.update(Content.styled(hint_text, "dim italic"))
-            self._collapse_hint_widget.display = True
-        else:
-            # Only show hint when collapsed, hide when expanded
-            self._collapse_hint_widget.display = False
+            w.update(Content.styled(hint_text, "dim italic"))
+            w.display = True
+            return
+
+        if self._rows and len(self._rows) > _STEP_TOOL_PREVIEW_ROWS:
+            show_all = len(self._rows) <= _STEP_TOOL_PREVIEW_ROWS or not self._tools_body_collapsed
+            visible = self._rows if show_all else self._rows[:_STEP_TOOL_PREVIEW_ROWS]
+            remaining = len(self._rows) - len(visible)
+            if remaining > 0:
+                hint = _tui_hint_expand_more_tool_calls(glyphs.ellipsis, remaining)
+                w.update(
+                    Content.assemble(
+                        Content.styled(gutter, "dim"),
+                        Content.styled(hint, "dim"),
+                    )
+                )
+                w.display = True
+                return
+            hint = _tui_hint_collapse_body(glyphs.ellipsis)
+            w.update(
+                Content.assemble(
+                    Content.styled(gutter, "dim"),
+                    Content.styled(hint, "dim italic"),
+                )
+            )
+            w.display = True
+            return
+
+        w.display = False
 
     def append_execute_assistant_delta(self, delta: str) -> None:
         """Accumulate per-step LoopAIMessage (``phase=execute_step``) prose into this card."""
@@ -2853,44 +2956,24 @@ class CognitionStepMessage(Vertical):
         return Content.assemble(*parts)
 
     def _refresh_tools_display(self) -> None:
-        if self._tools_widget is None or self._tools_hint_widget is None:
+        if self._tools_widget is None:
+            self._maybe_auto_fold_step_tool_list()
             self._maybe_auto_collapse_step_card()
             return
         if not self._rows:
             self._tools_widget.display = False
-            self._tools_hint_widget.display = False
             self._maybe_auto_collapse_step_card()
+            self._sync_step_footer_hint()
             return
+        self._maybe_auto_fold_step_tool_list()
         self._tools_widget.display = True
         show_all = len(self._rows) <= _STEP_TOOL_PREVIEW_ROWS or not self._tools_body_collapsed
         visible = self._rows if show_all else self._rows[:_STEP_TOOL_PREVIEW_ROWS]
         lines = [self._row_to_content(r) for r in visible]
         self._tools_widget.update(Content("\n").join(lines))
-        remaining = len(self._rows) - len(visible)
-        if remaining > 0:
-            ellipsis = get_glyphs().ellipsis
-            hint = _tui_hint_expand_more_tool_calls(ellipsis, remaining)
-            self._tools_hint_widget.update(
-                Content.assemble(
-                    Content.styled(self._step_goal_tree_gutter(), "dim"),
-                    Content.styled(hint, "dim"),
-                )
-            )
-            self._tools_hint_widget.display = not show_all
-        elif len(self._rows) > _STEP_TOOL_PREVIEW_ROWS and show_all:
-            g = get_glyphs()
-            hint = _tui_hint_collapse_body(g.ellipsis)
-            self._tools_hint_widget.update(
-                Content.assemble(
-                    Content.styled(self._step_goal_tree_gutter(), "dim"),
-                    Content.styled(hint, "dim italic"),
-                )
-            )
-            self._tools_hint_widget.display = True
-        else:
-            self._tools_hint_widget.display = False
 
         self._maybe_auto_collapse_step_card()
+        self._sync_step_footer_hint()
 
     def add_tool_call(
         self,
@@ -3071,6 +3154,7 @@ class CognitionStepMessage(Vertical):
             return
         self._status = "running"
         self._step_card_user_expanded = False
+        self._step_tool_list_user_expanded = False
         self._start_time = time()
         self._tools_body_collapsed = False
         if self._status_widget:
@@ -3237,7 +3321,7 @@ class CognitionStepMessage(Vertical):
 class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
     """Single card for plan assessment, plan reasoning, and next action (keep/new).
 
-    Header uses the same cognition-colored label plus muted body as ``CognitionStepMessage``.
+    Header uses the same cognition-colored label plus foreground body as ``CognitionStepMessage``.
     """
 
     can_select = True
@@ -3254,7 +3338,7 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
     CognitionPlanReasonMessage .cognition-plan-header {
         height: auto;
         margin: 0;
-        color: $text-muted;
+        color: $foreground;
     }
 
     CognitionPlanReasonMessage .plan-section-line {
@@ -3372,19 +3456,19 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
     CognitionGoalTreeMessage .cognition-goal-tree-header {
         height: auto;
         margin: 0;
-        color: $text-muted;
+        color: $foreground;
     }
 
     CognitionGoalTreeMessage .cognition-goal-tree-steps {
         height: auto;
         margin: 0;
-        color: $text-muted;
+        color: $foreground;
     }
 
     CognitionGoalTreeMessage .cognition-goal-tree-footer {
         height: auto;
         margin: 0;
-        color: $text-muted;
+        color: $foreground;
     }
 
     CognitionGoalTreeMessage:hover {
@@ -3452,40 +3536,46 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         g = get_glyphs()
         return f"{g.output_prefix} "
 
-    def _format_step_line(self, st: _StepLineState) -> str:
+    def _goal_tree_step_line_content(self, st: _StepLineState) -> Content:
+        """One goal→step row: dim tree gutter, foreground body (parity with ``CognitionStepMessage`` tool rows)."""
         g = get_glyphs()
-        body = self._clip(st.description, _MAX_GOAL_STEP_DESC)
-        if st.phase == "running":
-            return f"{self._indent_prefix()}{g.circle_empty} {body}"
-        icon = g.checkmark if st.success else g.error
-        dur_s = max(0.001, st.duration_ms / 1000.0)
-        dur = format_duration(dur_s)
-        line = f"{self._indent_prefix()}{icon} {body} · {dur}"
-        if st.tool_call_count > 0:
-            line += f" · {st.tool_call_count} tools"
-        tail = (st.summary or "").strip()
-        if tail and tail not in ("Done", "Failed"):
-            line += f" — {self._clip(tail, 80)}"
-        return line
-
-    def _refresh_steps_display(self) -> None:
-        if self._steps_static is None:
-            return
         try:
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001
             colors = theme.DARK_COLORS
+        gutter = self._indent_prefix()
+        body = self._clip(st.description, _MAX_GOAL_STEP_DESC)
+        if st.phase == "running":
+            rest = f"{g.circle_empty} {body}"
+        else:
+            icon = g.checkmark if st.success else g.error
+            dur_s = max(0.001, st.duration_ms / 1000.0)
+            dur = format_duration(dur_s)
+            rest = f"{icon} {body} · {dur}"
+            if st.tool_call_count > 0:
+                rest += f" · {st.tool_call_count} tools"
+            tail = (st.summary or "").strip()
+            if tail and tail not in ("Done", "Failed"):
+                rest += f" — {self._clip(tail, 80)}"
+        if st.phase == "error" or (st.phase == "done" and not st.success):
+            return Content.assemble(
+                Content.styled(gutter, "dim"),
+                Content.styled(rest, colors.error),
+            )
+        return Content.assemble(
+            Content.styled(gutter, "dim"),
+            Content.styled(rest, colors.foreground),
+        )
+
+    def _refresh_steps_display(self) -> None:
+        if self._steps_static is None:
+            return
         line_contents: list[Content] = []
         for sid in self._step_order:
             st = self._steps.get(sid)
             if st is None:
                 continue
-            line = self._format_step_line(st)
-            if st.phase == "error" or (st.phase == "done" and not st.success):
-                line_contents.append(Content.styled(line, colors.error))
-            else:
-                # Same subdued tone as Step `.step-tools` / Task `.tool-rows` (`$text-muted`).
-                line_contents.append(Content.styled(line, colors.muted))
+            line_contents.append(self._goal_tree_step_line_content(st))
         if not line_contents:
             self._steps_static.update(Content(""))
             return
