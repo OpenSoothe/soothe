@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import multiprocessing
 import multiprocessing.context
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+from soothe.config.settings import SootheConfig
 from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
 
 if TYPE_CHECKING:
-    from soothe.config.settings import SootheConfig
     from soothe.core.runner._runner_shared import StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -20,6 +22,24 @@ logger = logging.getLogger(__name__)
 
 class SubprocessLoopError(RuntimeError):
     """Raised when the loop subprocess exits with a non-zero exit code."""
+
+
+def _spawn_safe_config(config: SootheConfig) -> SootheConfig:
+    """Return a copy of ``config`` safe for ``multiprocessing`` spawn pickling.
+
+    The daemon may have populated runtime caches (chat models, embeddings,
+    vector stores) that hold unpickleable synchronization primitives. The
+    subprocess only needs declarative settings and rebuilds caches locally.
+    """
+    return SootheConfig.model_validate(config.model_dump(mode="json"))
+
+
+def _spawn_safe_request(request: LoopRunRequest) -> LoopRunRequest:
+    """Ensure ``model_params`` contains only JSON-round-trippable values."""
+    if not request.model_params:
+        return request
+    safe_params = json.loads(json.dumps(request.model_params, default=str))
+    return replace(request, model_params=safe_params)
 
 
 def _loop_worker(
@@ -35,6 +55,9 @@ def _loop_worker(
     import asyncio as _asyncio
 
     from soothe.core.runner import SootheRunner
+    from soothe.core.runner.worker_logging import configure_loop_runner_worker_logging
+
+    configure_loop_runner_worker_logging(config, request.loop_id)
 
     async def _run() -> None:
         runner = SootheRunner(config)
@@ -71,9 +94,11 @@ class LocalLoopRunner:
     async def run(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk]:  # type: ignore[override]
         ctx = multiprocessing.get_context("spawn")
         queue: Any = ctx.Queue()
+        spawn_config = _spawn_safe_config(self._config)
+        spawn_request = _spawn_safe_request(request)
         self._process = ctx.Process(
             target=_loop_worker,
-            args=(self._config, request, queue),
+            args=(spawn_config, spawn_request, queue),
             daemon=True,
             name=f"loop-{self._loop_id}",
         )

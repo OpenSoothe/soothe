@@ -198,7 +198,13 @@ class FrameworkFilesystem:
                 the previous value. Otherwise falls back to setting None.
         """
         if token is not None:
-            _current_workspace.reset(token)
+            try:
+                _current_workspace.reset(token)
+            except ValueError:
+                # Token came from a different asyncio Context (e.g. LangGraph ran
+                # ``abefore_agent`` and ``aafter_agent`` on different task/context
+                # boundaries). Restoring via reset is impossible; clear this Context.
+                _current_workspace.set(None)
         else:
             _current_workspace.set(None)
 

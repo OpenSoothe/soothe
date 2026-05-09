@@ -145,7 +145,7 @@ class DaemonHandlersMixin:
 
         msg_type = msg.get("type", "")
         try:
-            await bind_execution_thread_for_loop(self, loop_id)
+            checkpoint_thread_id = await bind_execution_thread_for_loop(self, loop_id)
         except Exception as exc:
             logger.warning(
                 "Failed to bind LangGraph checkpoint for loop %s: %s",
@@ -200,6 +200,7 @@ class DaemonHandlersMixin:
                         model=model_kw,
                         model_params=model_params,
                         attachments=attachments,
+                        checkpoint_thread_id=checkpoint_thread_id,
                     )
         except Exception:
             logger.exception("Daemon loop input handler error")
@@ -235,6 +236,7 @@ class DaemonHandlersMixin:
         model: str | None = None,
         model_params: dict | None = None,
         attachments: list[dict[str, str]] | None = None,
+        checkpoint_thread_id: str | None = None,
     ) -> None:
         """Delegate to ``QueryEngine`` (keeps unit tests and legacy callers working)."""
         await self._query_engine.run_query(
@@ -248,4 +250,5 @@ class DaemonHandlersMixin:
             model=model,
             model_params=model_params,
             attachments=attachments,
+            checkpoint_thread_id=checkpoint_thread_id,
         )

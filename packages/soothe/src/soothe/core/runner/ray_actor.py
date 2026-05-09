@@ -30,6 +30,10 @@ class LoopRunnerActor:
 
     async def run(self, request: LoopRunRequest, queue: Queue) -> None:
         """Stream chunks from ``SootheRunner.astream()`` into ``queue``."""
+        from soothe.core.runner.worker_logging import configure_loop_runner_worker_logging
+
+        configure_loop_runner_worker_logging(self._runner.config, request.loop_id)
+
         try:
             async for chunk in self._runner.astream(
                 request.user_input,

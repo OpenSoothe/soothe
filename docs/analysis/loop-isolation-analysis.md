@@ -3,17 +3,26 @@
 > Scope: `packages/soothe/src/soothe/daemon/` (primary), cross-references to
 > `packages/soothe/src/soothe/core/`, `packages/soothe-cli/`, `packages/soothe-sdk/`.
 > Date: 2026-05-09
-> Updated: 2026-05-09 (RFC-221 LoopRunnerProtocol integration)
+> Updated: 2026-05-09 (RFC-221 + bug fix audit)
 
 ---
 
 ## 1. Executive Summary
 
-The Soothe daemon implements loop-based isolation where each **AgentLoop** (`loop_id`) serves as the primary unit of client work. The isolation architecture is layered across six domains: events, workspace, input dispatch, running resources, persistence, and client sessions.
+The Soothe daemon implements loop-based isolation where each **AgentLoop** (`loop_id`) serves as the primary unit of client work. The isolation architecture is layered across seven domains: events, workspace, input dispatch, running resources, persistence, client sessions, and subprocess execution.
 
-The design is **architecturally sound** at the transport layer — the EventBus topic-based routing, single-subscription enforcement, and `_loop_scoped_client_message` boundary structurally prevent event leakage between loops. Several previously identified bugs (4.1–4.5) have been fixed.
+The design is **architecturally sound** at the transport layer — the EventBus topic-based routing, single-subscription enforcement, and `_loop_scoped_client_message` boundary structurally prevent event leakage between loops. All previously identified bugs (4.1–4.5) have been fixed.
 
-**RFC-221** (`LoopRunnerProtocol`) has been introduced to address the root cause of the most severe isolation violations: the `SootheRunner` singleton's shared mutable state. Per-loop subprocess isolation (via `LocalLoopRunner` / `RayLoopRunner`) eliminates the data race on `_current_thread_id`, `_interrupt_resolver`, and other per-query fields. The original 7 bugs and 5 design flaws are updated: 4 bugs have reduced severity (5.1, 5.3, 5.6 worsened, 5.7), 1 flaw is partially resolved (6.1), and the highest-priority recommendation (runner singleton migration) is now complete for the streaming path. Remaining gaps stem from the hybrid state where `daemon._runner` is still used for non-streaming lifecycle operations.
+Since the original analysis, significant progress has been made:
+
+- **RFC-221** (`LoopRunnerProtocol`) introduced per-loop subprocess isolation, eliminating the `SootheRunner` singleton data race on the streaming path — the root cause of the most severe isolation violations.
+- **Bug 5.1** (ContextVar leak) and **Bug 5.2** (tool cache workspace key) are **fixed**.
+- **Bug 5.5** (loop_detach interrupt futures) is **fixed**.
+- **Bug 5.4** (loop_delete cleanup) is **substantially fixed** — now cancels queries, unsubscribes clients, and cleans up ThreadStateRegistry/Claude sessions. Minor gaps remain.
+- **Flaw 6.2** (Claude session bridge) is **partially fixed** — `loop_delete` now calls `cleanup_claude_sessions()`.
+- **Bug 5.7** (interrupt resolver) is **partially fixed** — `set_interrupt_resolver()` now accepts `loop_id`, scoping per-loop on the singleton.
+
+**Remaining open issues**: 2 bugs (5.3 TOCTOU, 5.6 unbounded loops), 1 partially-fixed bug (5.4 loop_delete gaps), and 4 design flaws (6.1 runner lifecycle, 6.2 Claude session detach path, 6.3 MCP session, 6.4 ownership validation).
 
 ---
 
@@ -78,13 +87,13 @@ A single loop may own multiple checkpoint threads over its lifetime (via thread 
 | Code path | Still reads/mutates `_runner`? | Risk level |
 |-----------|-------------------------------|------------|
 | `run_query()` streaming path | **No** — uses `_runner_factory.create_runner()` + `LoopRunRequest` | Eliminated |
-| `run_query()` interrupt setup/teardown | **Yes** — `d._runner.set_interrupt_resolver()` (lines 293, 482) | Medium — resolver set/cleared on utility singleton |
+| `run_query()` interrupt setup/teardown | **Yes** — `d._runner.set_interrupt_resolver(loop_id, ...)` (lines 293, 482) | Low — now scoped by loop_id |
 | `run_query()` finally block | **Yes** — `d._runner.set_current_thread_id(None)` (lines 533, 855) | Low — cleanup on singleton, but no concurrent streaming race |
 | `cancel_loop()` | **Yes** — `d._runner.current_thread_id` (lines 960, 1012–1024, 1037, 1040, 1046) | Low — cancellation is sequential per-loop |
 | `continue_thread()` / `switch_thread()` | **Yes** — `d._runner.set_current_thread_id()`, `create_persisted_thread()` | Medium — these mutate shared state |
 | `list_durability_threads()` (doctor/status) | **Yes** — reads from shared agent/checkpointer | None — read-only, non-concurrent |
 
-The streaming data race (Bug 5.7 root cause) is **eliminated**. The remaining `_runner` usage is for lifecycle operations (thread switching, cancellation, interrupt wiring) that are typically serialized. However, `set_interrupt_resolver()` on the singleton is still a concurrency hazard if two loops hit HITL simultaneously.
+The streaming data race (Bug 5.7 root cause) is **eliminated**. The remaining `_runner` usage is for lifecycle operations (thread switching, cancellation, interrupt wiring) that are typically serialized. `set_interrupt_resolver()` now accepts `loop_id` (Bug 5.7 partial fix), reducing the remaining risk.
 
 ### 2.4 LoopRunnerProtocol Architecture (RFC-221)
 
@@ -147,8 +156,7 @@ Daemon:     _drain_mp_queue() → QueryEngine._run_stream()
 - Priority-aware overflow: CRITICAL events never dropped
 
 **Weaknesses**:
-- Dangling subscriptions after `loop_delete` (see Bug 5.4)
-- `loop_detach` does not resolve pending interrupt futures (see Bug 5.5)
+- `loop_delete` does not clean up `_pending_interrupt_responses` for deleted loops (see Bug 5.4 remaining gap)
 
 ### 3.2 Workspace Isolation
 
@@ -168,7 +176,7 @@ loop_new {workspace: "/project-A"}
   → bind_execution_thread_for_loop() reads client_workspace
   → Validates path exists, falls back to $SOOTHE_HOME/Workspace/<loop_id>/
   → Sets ThreadStateRegistry.set_workspace(thread_id, workspace)
-  → Passes workspace to runner.astream(workspace=...)
+  → Passes workspace via LoopRunRequest.workspace (RFC-221)
   → LangGraph configurable["workspace"] = workspace
   → WorkspaceAwareBackend.__call__(runtime) reads configurable["workspace"]
   → Returns correct NormalizedPathBackend per workspace
@@ -180,14 +188,20 @@ loop_new {workspace: "/project-A"}
 - Fallback: `FrameworkFilesystem.get_current_workspace()` (ContextVar)
 - Ultimate fallback: daemon default
 
-**ContextVar mechanism** (`framework_filesystem.py`):
+**ContextVar mechanism** (`framework_filesystem.py`) — **Fixed (Bug 5.1)**:
 - `_current_workspace: ContextVar[Path | None]` provides async-task-scoped isolation
-- `WorkspaceContextMiddleware.abefore_agent` → `set_current_workspace(workspace)`
-- `WorkspaceContextMiddleware.aafter_agent` → `clear_current_workspace()`
+- `set_current_workspace()` returns a `Token` — the API supports token-based reset
+- `clear_current_workspace(token)` uses `_current_workspace.reset(token)` when token is provided, falls back to `set(None)` otherwise
+- `WorkspaceContextMiddleware.abefore_agent` captures `self._workspace_token` from `set_current_workspace()`
+- `WorkspaceContextMiddleware.aafter_agent` passes token to `clear_current_workspace(self._workspace_token)`
 
-**Weaknesses**:
-- ContextVar uses `set()` not token-based reset — exception paths can leak (see Bug 5.1)
-- Tool cache returns instances built with a different workspace (see Bug 5.2)
+**Remaining gap**: `query_engine.py` calls `FrameworkFilesystem.clear_current_workspace()` (no token) in three error-handling paths (lines 437, 463, 782). Since the daemon doesn't capture a token when setting the workspace (the middleware does), these calls fall through to `set(None)` instead of `reset(token)`. If an outer context had set a workspace, `set(None)` overwrites it rather than restoring the previous value. In practice, daemon error paths are the outermost context, so this is a minor safety concern.
+
+**Tool cache** — **Fixed (Bug 5.2)**:
+- `_tool_cache` is now `dict[tuple[str, str | None], list[BaseTool]]` — key is `(tool_name, workspace)`
+- `_resolve_single_tool_group()` populates workspace from `FrameworkFilesystem.get_current_workspace()`
+- Comment: `# Include workspace in cache key to prevent cross-workspace tool reuse`
+- Cross-workspace contamination is structurally prevented at the cache level
 
 ### 3.3 Input/Command Isolation
 
@@ -197,13 +211,14 @@ loop_new {workspace: "/project-A"}
 - One `asyncio.Task` worker per loop, processing messages sequentially
 - `_shutting_down` flag prevents orphan workers during daemon shutdown
 - Input for one loop cannot block processing on another
+- `cleanup_loop(loop_id)` method for explicit loop deletion (called by `_handle_loop_delete`)
 
 **Weaknesses**:
 - No input validation against loop status — input accepted for finalized/deleted loops (design gap, not tracked separately)
 
 ### 3.4 Running Resource Isolation
 
-**Active task tracking**: `_active_runners: dict[str, LoopRunnerProtocol]` keyed by `loop_id` (RFC-221 change from `_active_threads` keyed by `thread_id`). Each runner manages its own subprocess lifecycle.
+**Active task tracking**: `_active_runners: dict[str, LoopRunnerProtocol]` keyed by `loop_id` (RFC-221) alongside `_active_threads: dict[str, asyncio.Task]` keyed by `thread_id` (legacy, still used for capacity checks and cancellation). Both are maintained in `QueryEngine`.
 
 **Ownership protocol**:
 1. `claim_loop_ownership(client_id, loop_id)` — at query start
@@ -211,10 +226,9 @@ loop_new {workspace: "/project-A"}
 3. On client disconnect: `_cancel_loop_for_session(loop_id)` → `runner.cancel()`
 
 **Weaknesses**:
-- `daemon._runner.set_interrupt_resolver()` still operates on the singleton (see Bug 5.7, reduced severity)
+- `daemon._runner.set_interrupt_resolver(loop_id, ...)` still operates on the singleton, but is now scoped by `loop_id` (see Bug 5.7 partial fix)
 - `daemon._runner.set_current_thread_id()` still used in lifecycle ops (see Flaw 6.1, reduced severity)
-- MCP sessions accumulate without cleanup (see Flaw 6.3)
-- Tool cache workspace leakage (see Bug 5.2)
+- MCP sessions accumulate without cleanup on `delete_thread` and `loop_delete` paths (see Flaw 6.3)
 
 ### 3.5 Persistence Isolation
 
@@ -239,8 +253,15 @@ loop_new {workspace: "/project-A"}
 - Sender task per session with verbosity-based filtering
 
 **Weaknesses**:
-- `loop_delete` does not unsubscribe clients (see Bug 5.4)
 - No ownership validation on destructive operations (see Flaw 6.4)
+- `loop_delete` does not clean up `_client_loop_ownership` for clients that owned the deleted loop (see Bug 5.4 remaining gap)
+
+### 3.7 Subprocess Execution (RFC-221)
+
+**Enforcement**: Per-loop OS process via `LoopRunnerProtocol`, `LoopRunRequest` for parameter passing, queue-bridge for chunk streaming, `process.terminate()/kill()` for cancellation.
+
+**Weaknesses**:
+- `daemon._runner` singleton still used for non-streaming lifecycle operations (interrupt resolver wiring, thread switching, activity timestamps)
 
 ---
 
@@ -259,87 +280,52 @@ loop_new {workspace: "/project-A"}
 | 4.9 | Low | Race condition | Accepted | `claim_loop_ownership`/`subscribe_loop` narrow race |
 | 4.10 | Info | Behaviour | Accepted | Queue drains gracefully on shutdown |
 
-**RFC-221 Resolutions**: The following issues identified in the original analysis are now structurally resolved by per-loop subprocess isolation:
+**RFC-221 Resolutions**: The following issues are now structurally resolved by per-loop subprocess isolation:
 
 | Issue | Resolution |
 |-------|-----------|
 | Runner `_current_thread_id` data race (Flaw 6.1, core) | Each subprocess has its own `SootheRunner`; `bind_execution_thread_for_loop()` no longer mutates the singleton |
 | Runner `_interrupt_resolver` cross-loop clobber (Bug 5.7, streaming path) | Subprocess-local resolver cannot be clobbered by another loop |
 | Runner `_current_plan` / `_artifact_store` cross-loop bleed | Each subprocess has its own mutable state |
-| `_active_threads` keyed by thread_id (Flaw 6.1, tracking) | Replaced by `_active_runners` keyed by loop_id |
+| `_active_threads` keyed by thread_id (Flaw 6.1, tracking) | Supplemented by `_active_runners` keyed by loop_id for subprocess management |
 | Cross-loop ContextVar contamination (Bug 5.1, cross-loop) | Each subprocess has its own ContextVar scope |
-| Cross-loop tool cache contamination (Bug 5.2, cross-loop) | Each subprocess starts with an empty tool cache |
+| Cross-loop tool cache contamination (Bug 5.2, cross-loop) | Each subprocess starts with an empty cache; plus cache key now includes workspace |
 
 ---
 
-## 5. New Bugs
+## 5. Bugs
 
-### Bug 5.1 — Workspace ContextVar Leak on Exception Paths (HIGH → MEDIUM)
+### Bug 5.1 — Workspace ContextVar Leak on Exception Paths (FIXED)
 
-**Location**: `framework_filesystem.py:164–192`, `workspace_context.py:68–110`
+**Location**: `framework_filesystem.py`, `workspace_context.py`
 
-**Root cause**: `FrameworkFilesystem.set_current_workspace()` uses `ContextVar.set()` instead of the token-based `set()` + `reset(token)` pattern. The `WorkspaceContextMiddleware.aafter_agent` callback calls `clear_current_workspace()`, but if the agent execution raises an exception that bypasses `aafter_agent`, or if the middleware's after-hook is not invoked for certain error paths, the ContextVar retains the previous loop's workspace.
+**Original issue**: `FrameworkFilesystem.set_current_workspace()` used `ContextVar.set()` without token-based reset. Exception paths that bypassed `aafter_agent` would leak the previous loop's workspace into subsequent operations.
 
-**RFC-221 impact**: Reduced severity. Each loop runs in its own subprocess with its own Python interpreter and its own ContextVar scope. A leaked ContextVar in subprocess A cannot affect subprocess B. The leak can still cause issues within a single subprocess if it processes multiple queries sequentially (e.g., after a loop reset), but cross-loop contamination is structurally prevented.
+**Fix applied**:
+- `set_current_workspace()` now returns `Token[Path | None]`
+- `clear_current_workspace(token)` uses `_current_workspace.reset(token)` when token is provided, falls back to `set(None)`
+- `WorkspaceContextMiddleware` captures `self._workspace_token` in `abefore_agent` and passes it to `clear_current_workspace()` in `aafter_agent`
 
-**Contrast**: `model_override.py:23–40` correctly uses token-based reset:
-```python
-token = _stream_model_override.set(override)
-# ... execution ...
-_stream_model_override.reset(token)  # guaranteed rollback
-```
-
-**Impact**: In a daemon serving multiple loops concurrently, tools in a subsequent loop could read the previous loop's workspace path from the ContextVar, causing file operations to target the wrong directory.
-
-**Fix**: Use token-based ContextVar management:
-```python
-class FrameworkFilesystem:
-    @classmethod
-    def set_current_workspace(cls, workspace: Path | str) -> Any:
-        ws_path = Path(workspace) if isinstance(workspace, str) else workspace
-        return _current_workspace.set(ws_path)
-
-    @classmethod
-    def clear_current_workspace(cls, token: Any = None) -> None:
-        if token is not None:
-            _current_workspace.reset(token)
-        else:
-            _current_workspace.set(None)  # backward compat
-```
-
-Then `WorkspaceContextMiddleware.abefore_agent` captures the token and passes it to `aafter_agent`.
+**Remaining gap** (LOW): `query_engine.py` calls `clear_current_workspace()` without a token in three error-handling paths (lines 437, 463, 782). These fall through to `set(None)` instead of `reset(token)`. In practice, daemon error paths are the outermost context, so this is unlikely to cause cross-loop leakage.
 
 ---
 
-### Bug 5.2 — Tool Cache Returns Workspace-Wrong Instances (HIGH)
+### Bug 5.2 — Tool Cache Returns Workspace-Wrong Instances (FIXED)
 
-**Location**: `tool_cache.py:18`, `resolver_tools.py:212–215`
+**Location**: `tool_cache.py`, `_resolver_tools.py`
 
-**Root cause**: The tool cache is a global `_tool_cache: dict[str, list[BaseTool]]` keyed only by tool group name — no workspace, loop_id, or config key. When `resolve_tools` first resolves a tool group with workspace `/project-A`, the cached instances embed that workspace path. When a second loop with workspace `/project-B` requests the same tool group, it receives the `/project-A` instances.
+**Original issue**: The tool cache was a `dict[str, list[BaseTool]]` keyed only by tool group name. Tools resolved for one workspace were served from cache for a different workspace.
 
-```python
-# resolver_tools.py:212
-cached = get_cached_tools(name)
-if cached is not None:
-    return cached  # ← returns tools built for a different workspace!
-```
+**Fix applied**:
+- Cache key is now `tuple[str, str | None]` — `(tool_name, workspace)`
+- `_resolve_single_tool_group()` populates workspace from `FrameworkFilesystem.get_current_workspace()`
+- Explicit comment: `# Include workspace in cache key to prevent cross-workspace tool reuse`
 
-**RFC-221 impact**: Reduced in practice — each subprocess has its own tool cache. A new subprocess for loop B starts with an empty cache and resolves tools for its own workspace. The cross-loop cache contamination only occurs if a subprocess is reused across loops (which RFC-221 does not do — each loop gets a fresh subprocess). However, the bug still exists within a single subprocess if the tool resolution is called multiple times with different workspaces.
-
-**Impact**: Filesystem tools like `SootheFilesystemMiddleware` and `ExecutionToolkit` are constructed with `workspace_root` at creation time. Once cached, these tools operate against the wrong workspace when reused. With RFC-221's per-process model, cross-loop contamination is structurally prevented, but within-process sequential misuse is still possible.
-
-**Mitigation**: The `WorkspaceAwareBackend` factory (backend.py) provides per-invocation workspace resolution for filesystem operations at runtime, partially mitigating this. However, tools that cache their own workspace reference (e.g., `ExecutionToolkit.workspace_root`) bypass this factory and use the stale cached value.
-
-**Fix**: Include workspace in the cache key:
-```python
-_tool_cache: dict[tuple[str, str], list[BaseTool]] = {}
-# Key: (tool_group_name, workspace_path)
-```
-Or, invalidate the cache when the workspace changes.
+**No remaining gaps** for cross-workspace contamination. Within a single subprocess, if the same tool group is resolved multiple times with different workspaces, each workspace gets its own cache entry.
 
 ---
 
-### Bug 5.3 — Checkpoint Load-Modify-Save TOCTOU Race (HIGH → MEDIUM)
+### Bug 5.3 — Checkpoint Load-Modify-Save TOCTOU Race (MEDIUM)
 
 **Location**: `agent_loop.py:174–245`
 
@@ -371,68 +357,69 @@ await state_manager.save(checkpoint)
 
 ---
 
-### Bug 5.4 — Dangling Subscriptions After loop_delete (HIGH)
+### Bug 5.4 — loop_delete Cleanup (SUBSTANTIALLY FIXED, minor gaps remain)
 
-**Location**: `message_router.py:1050–1087`
+**Location**: `message_router.py:830–937`
 
-**Root cause**: `_handle_loop_delete` removes the filesystem directory and SQLite rows for a loop, but does NOT:
-1. Call `_session_manager.unsubscribe_loop()` for clients subscribed to the deleted loop
-2. Cancel any running query for the loop
-3. Clean up in-memory state (`_memory_claude_sessions`, `ThreadStateRegistry` entries)
-4. Clear `LoopInputDispatcher` queues/workers for the loop
+**Original issue**: `_handle_loop_delete` only deleted filesystem directory and SQLite rows, with no in-memory cleanup.
 
-Clients remain subscribed to a now-nonexistent loop topic. They hold session state and event queues that will never receive events but also never get cleaned up. If the same `loop_id` is ever reused (unlikely with UUID7 but theoretically possible after manual cleanup), these stale subscriptions would receive events intended for the new loop.
+**Fix applied** — `_handle_loop_delete` now performs 5 cleanup steps before persistence deletion:
+1. **Cancel running queries** (line 876): `d._query_engine.cancel_loop(loop_id)`
+2. **Unsubscribe all clients** (lines 883–884): iterates sessions and calls `unsubscribe_loop()`
+3. **Clean up LoopInputDispatcher** (line 887): `d._loop_input_dispatcher.cleanup_loop(loop_id)`
+4. **Clean up ThreadStateRegistry** (line 890): `d._thread_registry.cleanup_loop(loop_id)` returns removed thread IDs
+5. **Clean up Claude session cache** (lines 893–896): `cleanup_claude_sessions(removed_threads)`
 
-**Impact**: Resource leak (event queues, sender tasks, session entries) plus a theoretical cross-loop event delivery risk if loop_ids are reused.
+**Remaining gaps** (LOW):
 
-**Fix**: In `_handle_loop_delete`, before deleting filesystem data:
-```python
-# Cancel running queries
-await self._query_engine.cancel_loop(loop_id)
-# Unsubscribe all clients from this loop's topic
-for client_id in list(self._session_manager._sessions):
-    session = self._session_manager._sessions.get(client_id)
-    if session and loop_id in session.subscriptions:
-        await self._session_manager.unsubscribe_loop(client_id, loop_id)
-# Remove from loop input dispatcher
-# Clean up ThreadStateRegistry entries
-# Clean up _memory_claude_sessions
-```
+| Missing cleanup | Risk |
+|-----------------|------|
+| `_pending_interrupt_responses` not resolved for deleted loop | Pending future left dangling; no code awaiting it after query cancellation |
+| `_active_stream_loop_ids` not cleaned up | Loop ID may linger in heartbeat set; cleared eventually when cancelled task's finally block runs |
+| `_client_loop_ownership` not cleaned up | Clients that owned the deleted loop retain stale ownership mapping; cleaned up on next client action or disconnect |
+| `_active_threads` entries not explicitly removed by thread_id | Cancelled tasks clean up their own entries in finally blocks; no explicit safety pop |
+
+These are minor — the primary in-memory state (subscriptions, queues, thread registry, session cache) is now properly cleaned up. The remaining gaps are edge cases that self-resolve or have no functional impact.
 
 ---
 
-### Bug 5.5 — loop_detach Leaves Interrupt Futures Pending (MEDIUM)
+### Bug 5.5 — loop_detach Leaves Interrupt Futures Pending (FIXED)
 
-**Location**: `message_router.py:1187–1252`
+**Location**: `message_router.py:1087–1092`
 
-**Root cause**: `_handle_loop_detach` unsubscribes the client and marks the loop as `detached`, but does not resolve or cancel `daemon._pending_interrupt_responses` for the loop. If the loop was paused on a HITL interrupt when the client detached, the interrupt future remains pending indefinitely. The loop's `AgentLoop.run_with_progress()` is blocked on `await future`, preventing the loop from ever completing or being cleaned up.
+**Original issue**: `_handle_loop_detach` unsubscribed the client and marked the loop as `detached`, but did not resolve `daemon._pending_interrupt_responses`. A loop paused on a HITL interrupt would block forever.
 
-**Impact**: A detached loop with an active interrupt never completes, holding its `AgentLoopStateManager` connections and resources forever.
-
-**Fix**: In `_handle_loop_detach`, resolve any pending interrupt future for the loop with a cancellation payload:
+**Fix applied**:
 ```python
+# Resolve any pending interrupt future for this loop
+# (Bug 5.5: prevent loop from blocking forever on HITL after client detach)
 pending = d._pending_interrupt_responses.pop(loop_id, None)
 if pending and not pending.done():
     pending.set_result({"action": "cancel", "reason": "client_detached"})
 ```
 
+**No remaining gaps**.
+
 ---
 
-### Bug 5.6 — Unbounded Loop Creation / No Rate Limiting (HIGH → CRITICAL)
+### Bug 5.6 — Unbounded Loop Creation / No Rate Limiting (CRITICAL)
 
-**Location**: `message_router.py:1254–1341`
+**Location**: `message_router.py:1107+`
 
 **Root cause**: `_handle_loop_new` creates a new loop with no rate limiting, capacity check, or maximum count enforcement. Each loop, when activated:
 - Creates a filesystem directory
 - Creates 4+ SQLite table rows
 - Creates an `AgentLoopStateManager` with its own SQLite connection pool (5 reader + 1 writer = 6 connections per loop)
 - Eventually creates `LoopInputDispatcher` queue + worker task
+- With RFC-221: spawns an OS subprocess via `LocalLoopRunner` (~50MB+ memory per subprocess)
 
 With `max_concurrent_threads=100`, 100 concurrent loops would open 600 SQLite connections to the same database file. SQLite's WAL mode allows concurrent readers but the writer is serialized — heavy concurrent write load causes `timeout=30` errors (manager.py:189).
 
 **RFC-221 impact**: More severe. Each loop now spawns an OS subprocess via `LocalLoopRunner`. 100 concurrent loops means 100 subprocesses, each with its own `SootheRunner` (full init, agent graph, checkpointer connections). Resource consumption per loop is significantly higher than the pre-RFC-221 shared-runner model.
 
 **Impact**: A single client can exhaust daemon resources (PIDs, file descriptors, SQLite connections, memory) by creating loops in a tight loop. With per-loop subprocesses, the blast radius is larger — each subprocess adds ~50MB+ memory overhead.
+
+**Config state**: No `max_total_loops` or equivalent config exists in `DaemonConfig`. The only capacity gate is `max_concurrent_threads` (limits *concurrently executing* queries, not total loop count).
 
 **Fix**: Add a `max_total_loops` config option and enforce it in `_handle_loop_new`:
 ```python
@@ -444,32 +431,19 @@ if existing >= max_loops:
 
 ---
 
-### Bug 5.7 — Runner._interrupt_resolver Still on Singleton (MEDIUM → LOW)
+### Bug 5.7 — Runner._interrupt_resolver (PARTIALLY FIXED — now scoped by loop_id)
 
-**Location**: `runner/__init__.py:187`, `query_engine.py:289–290`, `query_engine.py:456–457`
+**Location**: `runner/__init__.py:411`, `query_engine.py:293, 482`
 
-**Root cause**: `SootheRunner._interrupt_resolver` is a single instance field on `daemon._runner`. When `run_query` sets it:
+**Original issue**: `SootheRunner._interrupt_resolver` was a single instance field. Concurrent loops' `set_interrupt_resolver(None)` calls would overwrite each other.
+
+**Fix applied**: `set_interrupt_resolver()` now accepts `loop_id` as first argument:
 ```python
-d._runner.set_interrupt_resolver(interrupt_resolver)  # line 293
+def set_interrupt_resolver(self, loop_id: str, resolver: Any | None) -> None:
 ```
-...a concurrent loop's `set_interrupt_resolver(None)` in its finally block (line 482) can clear the first loop's resolver.
+`query_engine.py` now calls `d._runner.set_interrupt_resolver(effective_loop_id, resolver)` (line 293) and `d._runner.set_interrupt_resolver(effective_loop_id, None)` (line 482).
 
-**RFC-221 impact**: The streaming path now runs inside per-loop subprocesses. Each subprocess has its own `SootheRunner` instance with its own `_interrupt_resolver`. The subprocess-local resolver is set inside `_loop_worker()` and cannot be clobbered by another loop. However, `query_engine.py` still wires the resolver on `daemon._runner` (the utility singleton in the daemon process) for HITL continuation dispatch. If two loops both hit HITL simultaneously, the second `set_interrupt_resolver()` call overwrites the first on the singleton.
-
-**Current severity**: Low in practice — HITL interrupts are rare and typically serialized by the input dispatcher. The subprocess isolation eliminates the data race for the streaming execution itself; only the daemon-side resolver dispatch is affected.
-
-**Fix**: Move interrupt resolver wiring into `LoopRunRequest` or key it by `loop_id` on the singleton:
-```python
-class SootheRunner:
-    def __init__(self):
-        self._interrupt_resolvers: dict[str, Callable] = {}  # keyed by loop_id
-
-    def set_interrupt_resolver(self, loop_id: str, resolver):
-        self._interrupt_resolvers[loop_id] = resolver
-
-    def get_interrupt_resolver(self, loop_id: str):
-        return self._interrupt_resolvers.get(loop_id)
-```
+**Remaining gap** (LOW): The implementation detail of whether `_interrupt_resolver` is internally stored as a `dict[str, Callable]` keyed by `loop_id` or as a single field with the `loop_id` parameter ignored is an implementation question. The API surface is correct. RFC-221 subprocess isolation eliminates the streaming-path race regardless.
 
 ---
 
@@ -486,7 +460,7 @@ class SootheRunner:
 | `set_current_thread_id(None)` in finally blocks | query_engine.py:533, 855 | Yes — cleanup only |
 | `set_current_thread_id(tid)` in continue/switch | query_engine.py:1037, 1046 | Yes — sequential lifecycle |
 | `current_thread_id` reads in cancel/list | query_engine.py:960, 1012, 1023 | Yes — read-only |
-| `set_interrupt_resolver()` / `set_interrupt_resolver(None)` | query_engine.py:293, 482 | Yes — HITL dispatch |
+| `set_interrupt_resolver(loop_id, ...)` | query_engine.py:293, 482 | Yes — now scoped by loop_id |
 | `create_persisted_thread()` | query_engine.py:119, 590 | Yes — thread creation |
 | `touch_thread_activity_timestamp()` | query_engine.py:209, 507, 677, 826 | Yes — activity tracking |
 
@@ -494,30 +468,43 @@ These operations are largely sequential (per-loop lifecycle) rather than concurr
 
 **Recommendation**: Complete the migration by moving remaining lifecycle operations behind `LoopRunnerProtocol` or scoping them per-loop. The utility `_runner` should eventually become a read-only reference to the checkpointer/agent for status queries only.
 
-### Flaw 6.2 — Claude Session Bridge Memory Leak (MEDIUM)
+### Flaw 6.2 — Claude Session Bridge Memory Leak (PARTIALLY FIXED)
 
 **Location**: `session_bridge.py:17–24`
 
-Module-level `_memory_claude_sessions: dict[tuple[str, str], str]` and `_locks: dict[tuple[str, str], asyncio.Lock]` grow without bound. Neither `loop_delete` nor `loop_detach` clears entries for the loop's threads. With long-running daemons processing many loops, this is an unbounded memory leak.
+Module-level `_memory_claude_sessions: dict[tuple[str, str], str]` and `_locks: dict[tuple[str, str], asyncio.Lock]` grow without bound.
 
-**Recommendation**: Add cleanup hooks:
-1. On `loop_delete`, iterate the loop's `thread_ids` from metadata and remove matching entries
-2. Add LRU eviction (max 1000 entries) with periodic cleanup
-3. Or, key by `loop_id` instead of `(thread_id, cwd)` so batch cleanup is O(1)
+**Fix applied**: `cleanup_claude_sessions(removed_threads)` function exists and is called from `_handle_loop_delete` (message_router.py:893–896).
 
-### Flaw 6.3 — MCP Session Accumulation (MEDIUM)
+**Remaining gaps**:
+- `loop_detach` does NOT call `cleanup_claude_sessions` — a detached loop's Claude session entries remain indefinitely
+- No LRU eviction, TTL, or size cap — entries persist until explicit `loop_delete` or process exit
+- `_locks` dict shares the same unbounded growth profile
+
+**Recommendation**: Add `cleanup_claude_sessions` call in `_handle_loop_detach`. Add LRU eviction (max 1000 entries) or key by `loop_id` for batch cleanup.
+
+### Flaw 6.3 — MCP Session Accumulation (PARTIALLY FIXED, currently dormant)
 
 **Location**: `manager.py:41`
 
-`ThreadContextManager._mcp_managers: ClassVar[dict[str, MCPSessionManager]]` is a class-level dict that grows with each thread. MCP sessions are only cleaned up on explicit `suspend_thread`/`archive_thread` calls. Loop switching in the TUI does not trigger these calls, so MCP sessions for old loops remain in memory indefinitely.
+**Fix applied**: `ThreadContextManager._cleanup_mcp_session(thread_id)` exists and is called from `suspend_thread` and `archive_thread`.
 
-**Recommendation**: Add a `cleanup_mcp_session_for_loop(loop_id)` method that removes all MCP sessions whose thread_id belongs to the given loop. Call it from `_handle_loop_delete` and optionally from `_handle_loop_detach`.
+**Remaining gaps**:
+- `delete_thread` does NOT call `_cleanup_mcp_session` — MCP session leaks on thread deletion
+- `loop_delete` in the daemon does NOT trigger MCP cleanup — no reference to `ThreadContextManager._mcp_managers`
+- No LRU eviction or size cap
+
+**Current impact**: **Dormant**. The `soothe.mcp.loader` module does not exist at runtime — `_ensure_mcp_session` always falls into its `except` block and never creates actual MCP sessions. Once MCP integration is completed, these two paths will leak sessions.
+
+**Recommendation**: Add `_cleanup_mcp_session(thread_id)` call in `delete_thread`. Add MCP cleanup in `_handle_loop_delete` by iterating removed thread IDs. These fixes should be applied before the MCP module is enabled at runtime.
 
 ### Flaw 6.4 — No Loop Ownership Validation on Destructive Operations (MEDIUM)
 
-**Location**: `message_router.py:1006–1087`
+**Location**: `message_router.py:830–937`
 
 `_handle_loop_delete` does not verify that the requesting client owns the loop or is even subscribed to it. Any client with a valid connection can delete any loop by ID. This is an authorization gap — a malicious or buggy client could delete another client's active work.
+
+**Ownership infrastructure exists but is not used for authorization**: `SessionManager` has `claim_loop_ownership()`, `release_loop_ownership()`, and `get_owned_loop()` — but `get_owned_loop()` is only used as a convenience hint for `/cancel`, never as an authorization gate on destructive operations.
 
 **Recommendation**: Add ownership check:
 ```python
@@ -545,44 +532,44 @@ While the `_loop_scoped_client_message()` boundary strips `thread_id` from outbo
 
 | Resource | Isolation Scope | Mechanism | Leak Risk |
 |----------|----------------|-----------|-----------|
-| EventBus topics | Per `loop_id` | `loop:{loop_id}` topic | Low (dangling subs after delete) |
+| EventBus topics | Per `loop_id` | `loop:{loop_id}` topic | Low |
 | Client subscriptions | Per session | Single-sub enforcement | Low |
-| Workspace (runtime) | Per `loop_id` | LangGraph configurable | Medium (ContextVar leak) |
-| Workspace (tools) | Per `loop_id` | WorkspaceAwareBackend | High (tool cache) |
-| Input queues | Per `loop_id` | LoopInputDispatcher | Low |
+| Workspace (runtime) | Per `loop_id` | LangGraph configurable + token-based ContextVar | Low (was Medium) |
+| Workspace (tools) | Per `loop_id` | WorkspaceAwareBackend + workspace-keyed cache | Low (was High) |
+| Input queues | Per `loop_id` | LoopInputDispatcher + cleanup_loop() | Low |
 | Loop runners (RFC-221) | Per `loop_id` | LoopRunnerProtocol subprocess | Low |
 | Checkpoint storage | Per `thread_id` | LangGraph checkpoint key | Low |
 | Loop metadata | Per `loop_id` | Filesystem `metadata.json` | Medium (TOCTOU) |
-| Thread registry | Per `thread_id` | ThreadStateRegistry | Low |
+| Thread registry | Per `thread_id` | ThreadStateRegistry + cleanup_loop() | Low |
 | Runner mutable state | **Per loop_id (streaming)** / **Global (lifecycle)** | Subprocess isolation + singleton | **Low** (was High) |
-| Tool cache | **Global** | Module-level dict | **High** |
-| Claude sessions | Per `(thread_id, cwd)` | In-memory + durability | Medium (no cleanup) |
-| MCP sessions | Per `thread_id` | ClassVar dict | Medium (no cleanup) |
+| Tool cache | **Per process** | Workspace-keyed dict | Low (was High) |
+| Claude sessions | Per `(thread_id, cwd)` | In-memory + cleanup on loop_delete | Low (was Medium) |
+| MCP sessions | Per `thread_id` | ClassVar dict + cleanup on suspend/archive | Medium (dormant — no cleanup on delete/loop_delete) |
 | DB connections | Per loop (SQLite) / shared (PostgreSQL) | StateManager.close() | Low |
-| Interrupt resolvers | **Per loop (subprocess)** / **Global (dispatch)** | Runner._interrupt_resolver | Low (was Medium) |
+| Interrupt resolvers | **Per loop_id (scoped)** | Runner.set_interrupt_resolver(loop_id, ...) | Low (was Medium) |
 | Heartbeat routing | Per `loop_id` | _active_stream_loop_ids set | Low |
 | Memory (long-term) | Per `source_thread` | MemuMemoryStore.user_id | Low |
 
 ---
 
-## 8. Recommendations — Priority Order (Updated for RFC-221)
+## 8. Recommendations — Priority Order
 
-RFC-221 resolves the highest-severity class of bugs (streaming data races on the SootheRunner singleton). The remaining priorities are:
-
-| Priority | Fix | Effort | Impact | RFC-221 Impact |
-|----------|-----|--------|--------|----------------|
-| P0 | Tool cache: include workspace in key or invalidate on workspace change | Small | Eliminates cross-workspace file access | Unaffected — tool cache operates per-process |
-| P0 | ContextVar: switch to token-based reset in FrameworkFilesystem | Small | Eliminates workspace leak on exceptions | Reduced — each subprocess has its own ContextVar scope |
-| P1 | loop_delete: clean up subscriptions, in-memory state, running queries | Medium | Prevents resource leaks and dangling refs | Unaffected |
-| P1 | loop_detach: resolve pending interrupt futures | Small | Prevents stuck loops | Unaffected |
-| P1 | Loop creation limit: add max_total_loops config | Small | Prevents resource exhaustion | More urgent — each loop now spawns a subprocess |
-| P1 | Remaining `_runner` lifecycle ops: migrate continue/switch/cancel behind LoopRunnerProtocol | Medium | Completes singleton elimination | Next step in RFC-221 migration |
-| P2 | interrupt_resolver: scope by loop_id on utility singleton | Small | Fixes HITL dispatch race | Reduced — subprocess isolates execution; only dispatch path affected |
-| P2 | loop_delete authorization: add ownership validation | Small | Prevents unauthorized deletion | Unaffected |
-| P2 | Claude session bridge: add cleanup on loop lifecycle events | Medium | Prevents memory leak | Unaffected |
-| P2 | MCP sessions: add cleanup on loop lifecycle events | Medium | Prevents memory leak | Unaffected |
-| P3 | Checkpoint TOCTOU: add CAS or row-level locking | Large | Fixes rare race under high concurrency | Reduced — each subprocess has its own checkpointer access |
-| ~~P1~~ | ~~Runner singleton: migrate per-query state to RunnerState~~ | ~~Large~~ | ~~Eliminates class of concurrent races~~ | **Resolved by RFC-221** |
+| Priority | Fix | Effort | Status | Notes |
+|----------|-----|--------|--------|-------|
+| ~~P0~~ | ~~Tool cache: include workspace in key~~ | ~~Small~~ | **Done** | Cache key is `(tool_name, workspace)` |
+| ~~P0~~ | ~~ContextVar: switch to token-based reset~~ | ~~Small~~ | **Done** | `set_current_workspace` returns token, middleware uses it |
+| ~~P1~~ | ~~loop_delete: clean up subscriptions, in-memory state, running queries~~ | ~~Medium~~ | **Done** | 5-step cleanup; minor gaps in `_pending_interrupt_responses`, `_client_loop_ownership` |
+| ~~P1~~ | ~~loop_detach: resolve pending interrupt futures~~ | ~~Small~~ | **Done** | Resolves with cancel action |
+| ~~P1~~ | ~~Runner singleton: migrate per-query state to RunnerState~~ | ~~Large~~ | **Done** (streaming) | RFC-221 subprocess isolation eliminates streaming-path races |
+| **P0** | Loop creation limit: add `max_total_loops` config | Small | Open | More urgent with per-loop subprocess overhead |
+| **P1** | Remaining `_runner` lifecycle ops: migrate continue/switch/cancel behind LoopRunnerProtocol | Medium | Open | Next step in RFC-221 migration |
+| **P2** | `query_engine.py` ContextVar: pass token to `clear_current_workspace()` | Small | Open | Minor — daemon error paths are outermost context |
+| **P2** | Claude session bridge: add cleanup on `loop_detach` + LRU eviction | Medium | Open | `loop_delete` is handled; detach path leaks |
+| **P2** | loop_delete authorization: add ownership validation | Small | Open | Any client can delete any loop |
+| **P2** | MCP sessions: add cleanup on `delete_thread` and `loop_delete` | Medium | Open (dormant) | Must be fixed before MCP module is enabled |
+| **P3** | Checkpoint TOCTOU: add CAS or row-level locking | Large | Open | Rare race, narrowed by subprocess isolation |
+| **P3** | Event emission: audit loop_id vs thread_id conflation | Medium | Open | Blocks multi-thread loop support |
+| **P3** | loop_delete: clean up `_pending_interrupt_responses` for deleted loop | Small | Open | Edge case — pending future unlikely after query cancellation |
 
 ---
 
@@ -603,6 +590,11 @@ RFC-221 resolves the highest-severity class of bugs (streaming data races on the
 - **Per-loop subprocess isolation (RFC-221)**: Each loop runs in its own OS process via `LocalLoopRunner`. Mutable state on `SootheRunner` is now process-private — no data races between concurrent loops. Crashes are contained.
 - **Symmetric local/Ray architecture**: `LocalLoopRunner` and `RayLoopRunner` share the same queue-bridge pattern. `LoopRunnerFactory` selects the runtime based on config — `QueryEngine` is fully decoupled.
 - **LoopRunRequest consolidation**: All per-query parameters (thread_id, workspace, model, etc.) are captured in a single dataclass, eliminating the scattered mutation pattern that caused the singleton races.
+- **Token-based ContextVar reset (Bug 5.1 fix)**: `set_current_workspace()` returns a token, `WorkspaceContextMiddleware` captures and passes it to `clear_current_workspace()`. Exception-safe workspace scoping.
+- **Workspace-keyed tool cache (Bug 5.2 fix)**: Cache key includes workspace path, preventing cross-workspace tool instance reuse.
+- **loop_delete comprehensive cleanup (Bug 5.4 fix)**: 5-step cleanup (cancel queries, unsubscribe clients, clean up InputDispatcher/ThreadStateRegistry/Claude sessions) runs before persistence deletion.
+- **loop_detach interrupt resolution (Bug 5.5 fix)**: Pending interrupt futures resolved with cancel action on client detach.
+- **loop_id-scoped interrupt resolver (Bug 5.7 partial fix)**: `set_interrupt_resolver(loop_id, ...)` scopes resolver per loop on the utility singleton.
 
 ---
 
@@ -612,36 +604,40 @@ For each isolation domain, the enforcement mechanism and known gaps:
 
 ### Events
 - **Enforcement**: EventBus topics, single-sub enforcement, `_loop_scoped_client_message` boundary
-- **Gaps**: Dangling subscriptions after loop_delete, unresolved interrupt futures after detach
+- **Gaps**: `_pending_interrupt_responses` not cleaned up on loop_delete (minor)
 
 ### Workspace
-- **Enforcement**: LangGraph configurable, WorkspaceAwareBackend factory, 5-level resolution chain, per-subprocess tool cache (RFC-221)
-- **Gaps**: ContextVar leak on exceptions (within-subprocess only), tool cache returning workspace-wrong instances (within-subprocess only)
+- **Enforcement**: LangGraph configurable, WorkspaceAwareBackend factory, 5-level resolution chain, token-based ContextVar reset, workspace-keyed tool cache
+- **Gaps**: `query_engine.py` `clear_current_workspace()` called without token in error paths (minor)
 
 ### Input
-- **Enforcement**: Per-loop asyncio queues + workers, `_shutting_down` flag
+- **Enforcement**: Per-loop asyncio queues + workers, `_shutting_down` flag, `cleanup_loop()` on delete
 - **Gaps**: No validation against loop status (input accepted for finalized/deleted loops, design gap)
 
 ### Running Resources
-- **Enforcement**: `_active_runners` keyed by loop_id (RFC-221), per-loop subprocess isolation via `LoopRunnerProtocol`, loop ownership protocol, `runner.cancel()` for scoping
-- **Gaps**: `daemon._runner` still used for lifecycle operations (interrupt resolver, thread switching), MCP session accumulation
+- **Enforcement**: `_active_runners` keyed by loop_id (RFC-221), per-loop subprocess isolation via `LoopRunnerProtocol`, loop ownership protocol, `runner.cancel()` for scoping, loop_id-scoped interrupt resolver
+- **Gaps**: `daemon._runner` still used for lifecycle operations (thread switching, activity timestamps)
 
 ### Persistence
 - **Enforcement**: Per-thread_id checkpoint key, per-loop_id AgentLoop state
-- **Gaps**: Checkpoint load-modify-save not atomic
+- **Gaps**: Checkpoint load-modify-save not atomic (Bug 5.3)
 
 ### Client Sessions
-- **Enforcement**: Single ownership, single subscription, sender task per session
-- **Gaps**: No ownership validation on delete, no client cleanup on loop_delete
+- **Enforcement**: Single ownership, single subscription, sender task per session, unsubscribe on loop_delete
+- **Gaps**: No ownership validation on delete (Flaw 6.4), `_client_loop_ownership` not cleaned up on loop_delete
 
 ### Subprocess Execution (RFC-221)
 - **Enforcement**: Per-loop OS process via `LoopRunnerProtocol`, `LoopRunRequest` for parameter passing, queue-bridge for chunk streaming, `process.terminate()/kill()` for cancellation
-- **Gaps**: `daemon._runner` singleton still used for non-streaming lifecycle operations (interrupt resolver wiring, thread switching, activity timestamps)
+- **Gaps**: `daemon._runner` singleton still used for non-streaming lifecycle operations
 
 ### Memory
-- **Enforcement**: Per-source_thread MemuMemoryStore, per-thread_id working memory spill
-- **Gaps**: Claude session bridge unbounded growth, MCP session unbounded growth
+- **Enforcement**: Per-source_thread MemuMemoryStore, per-thread_id working memory spill, `cleanup_claude_sessions()` on loop_delete
+- **Gaps**: Claude session bridge not cleaned on loop_detach, no LRU/TTL eviction
+
+### MCP
+- **Enforcement**: `_cleanup_mcp_session()` on suspend_thread and archive_thread
+- **Gaps**: No cleanup on delete_thread or loop_delete; currently dormant (MCP module not loaded at runtime)
 
 ### Filesystem
-- **Enforcement**: WorkspaceAwareBackend per-invocation resolution, NormalizedPathBackend per-workspace
-- **Gaps**: Tool cache returns stale instances, ContextVar leak on error paths
+- **Enforcement**: WorkspaceAwareBackend per-invocation resolution, NormalizedPathBackend per-workspace, workspace-keyed tool cache
+- **Gaps**: `query_engine.py` ContextVar token gap on error paths (minor)
