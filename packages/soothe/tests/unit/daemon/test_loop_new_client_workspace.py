@@ -2,69 +2,99 @@
 
 The CLI passes the user's CWD on bootstrap so the agent's filesystem tools default
 to the user's project directory. ``_handle_loop_new`` must validate the value and
-persist it in ``metadata.json``; ``bind_execution_thread_for_loop`` must prefer it
+persist it in the database; ``bind_execution_thread_for_loop`` must prefer it
 over the per-loop daemon scratch dir created by ``resolve_loop_daemon_workspace``.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 
 import soothe.config as soothe_config
-from soothe.core.agent_loop.state.persistence.directory_manager import (
-    PersistenceDirectoryManager,
+from soothe.core.agent_loop.state.persistence.manager import (
+    AgentLoopCheckpointPersistenceManager,
 )
 from soothe.daemon.loop_isolation import bind_execution_thread_for_loop
 from soothe.daemon.message_router import MessageRouter
 
 
+async def _read_metadata(loop_id: str, config: Any) -> dict[str, Any]:
+    """Read loop metadata from the database (replaces old metadata.json read)."""
+    pm = AgentLoopCheckpointPersistenceManager(config=config)
+    try:
+        return await pm.get_loop_metadata(loop_id) or {}
+    finally:
+        await pm.close()
+
+
 class _CapturingDaemon:
     """Minimal daemon double recording the response sent for ``loop_new``."""
 
-    def __init__(self) -> None:
+    def __init__(self, config: Any = None) -> None:
         self.sent: list[dict[str, Any]] = []
+        self._config = config
+        self._persistence_manager: AgentLoopCheckpointPersistenceManager | None = None
+
+    def _get_pm(self) -> AgentLoopCheckpointPersistenceManager:
+        if self._persistence_manager is None:
+            self._persistence_manager = AgentLoopCheckpointPersistenceManager(config=self._config)
+        return self._persistence_manager
+
+    @property
+    def _pm(self) -> AgentLoopCheckpointPersistenceManager:
+        return self._get_pm()
 
     async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
         self.sent.append(msg)
 
+    async def close(self) -> None:
+        if self._persistence_manager is not None:
+            await self._persistence_manager.close()
 
-def _read_metadata(loop_id: str) -> dict[str, Any]:
-    metadata_file = PersistenceDirectoryManager.get_loop_directory(loop_id) / "metadata.json"
-    return json.loads(metadata_file.read_text())
+
+def _make_daemon_with_pm(config: Any) -> _CapturingDaemon:
+    daemon = _CapturingDaemon(config=config)
+    # Pre-init the persistence manager so _handle_loop_new can use daemon._persistence_manager
+    daemon._persistence_manager = AgentLoopCheckpointPersistenceManager(config=config)
+    return daemon
 
 
 @pytest.mark.asyncio
 async def test_loop_new_persists_client_workspace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A valid client workspace on ``loop_new`` is written into ``metadata.json``."""
+    """A valid client workspace on ``loop_new`` is written into the database."""
     monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
     project = tmp_path / "myproject"
     project.mkdir()
 
-    daemon = _CapturingDaemon()
+    from soothe.config import SootheConfig
+
+    config = SootheConfig()
+    daemon = _make_daemon_with_pm(config)
     router = MessageRouter(daemon)
 
-    await router._handle_loop_new(
-        client_id="client-1",
-        msg={"type": "loop_new", "workspace": str(project), "request_id": "rid-1"},
-    )
+    try:
+        await router._handle_loop_new(
+            client_id="client-1",
+            msg={"type": "loop_new", "workspace": str(project), "request_id": "rid-1"},
+        )
 
-    assert daemon.sent, "Daemon must respond to loop_new"
-    response = daemon.sent[-1]
-    assert response["type"] == "loop_new_response"
-    loop_id = response["loop_id"]
-    assert loop_id
+        assert daemon.sent, "Daemon must respond to loop_new"
+        response = daemon.sent[-1]
+        assert response["type"] == "loop_new_response"
+        loop_id = response["loop_id"]
+        assert loop_id
 
-    metadata = _read_metadata(loop_id)
-    assert metadata["client_workspace"] == str(project.resolve())
+        metadata = await _read_metadata(loop_id, config)
+        assert metadata.get("client_workspace") == str(project.resolve())
+    finally:
+        await daemon.close()
 
 
 @pytest.mark.asyncio
@@ -74,18 +104,24 @@ async def test_loop_new_omits_client_workspace_when_invalid(
     """Unsafe workspace values (system dirs) are rejected without aborting loop creation."""
     monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
-    daemon = _CapturingDaemon()
+    from soothe.config import SootheConfig
+
+    config = SootheConfig()
+    daemon = _make_daemon_with_pm(config)
     router = MessageRouter(daemon)
 
-    await router._handle_loop_new(
-        client_id="client-1",
-        msg={"type": "loop_new", "workspace": "/", "request_id": "rid-2"},
-    )
+    try:
+        await router._handle_loop_new(
+            client_id="client-1",
+            msg={"type": "loop_new", "workspace": "/", "request_id": "rid-2"},
+        )
 
-    response = daemon.sent[-1]
-    loop_id = response["loop_id"]
-    metadata = _read_metadata(loop_id)
-    assert "client_workspace" not in metadata
+        response = daemon.sent[-1]
+        loop_id = response["loop_id"]
+        metadata = await _read_metadata(loop_id, config)
+        assert metadata.get("client_workspace") is None
+    finally:
+        await daemon.close()
 
 
 @pytest.mark.asyncio
@@ -95,18 +131,24 @@ async def test_loop_new_omits_client_workspace_when_missing(
     """Without a ``workspace`` field the loop falls back to per-loop daemon dir."""
     monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
-    daemon = _CapturingDaemon()
+    from soothe.config import SootheConfig
+
+    config = SootheConfig()
+    daemon = _make_daemon_with_pm(config)
     router = MessageRouter(daemon)
 
-    await router._handle_loop_new(
-        client_id="client-1",
-        msg={"type": "loop_new", "request_id": "rid-3"},
-    )
+    try:
+        await router._handle_loop_new(
+            client_id="client-1",
+            msg={"type": "loop_new", "request_id": "rid-3"},
+        )
 
-    response = daemon.sent[-1]
-    loop_id = response["loop_id"]
-    metadata = _read_metadata(loop_id)
-    assert "client_workspace" not in metadata
+        response = daemon.sent[-1]
+        loop_id = response["loop_id"]
+        metadata = await _read_metadata(loop_id, config)
+        assert metadata.get("client_workspace") is None
+    finally:
+        await daemon.close()
 
 
 @pytest.mark.asyncio
@@ -119,46 +161,50 @@ async def test_bind_execution_thread_prefers_client_workspace(
     project = tmp_path / "myproject"
     project.mkdir()
 
-    # Create loop via the same handler so metadata layout matches production.
-    daemon = _CapturingDaemon()
+    from soothe.config import SootheConfig
+
+    config = SootheConfig()
+    daemon = _make_daemon_with_pm(config)
     router = MessageRouter(daemon)
-    await router._handle_loop_new(
-        client_id="client-1",
-        msg={"type": "loop_new", "workspace": str(project), "request_id": "rid-1"},
-    )
-    loop_id = daemon.sent[-1]["loop_id"]
 
-    # Stub the runtime daemon surfaces touched during bind.
-    set_workspace_calls: list[Path] = []
+    try:
+        # Create loop via the same handler so metadata layout matches production.
+        await router._handle_loop_new(
+            client_id="client-1",
+            msg={"type": "loop_new", "workspace": str(project), "request_id": "rid-1"},
+        )
+        loop_id = daemon.sent[-1]["loop_id"]
 
-    class _ThreadRegistry:
-        def ensure(self, _thread_id: str, *, is_draft: bool) -> None:
-            _ = is_draft
+        # Stub the runtime daemon surfaces touched during bind.
+        set_workspace_calls: list[Path] = []
 
-        def set_workspace(self, _thread_id: str, workspace: Path) -> None:
-            set_workspace_calls.append(Path(workspace))
+        class _ThreadRegistry:
+            def ensure(self, _thread_id: str, *, is_draft: bool) -> None:
+                _ = is_draft
 
-        def set_thread_loop(self, _thread_id: str, _loop_id: str) -> None:
-            pass
+            def set_workspace(self, _thread_id: str, workspace: Path) -> None:
+                set_workspace_calls.append(Path(workspace))
 
-    class _Runner:
-        def set_current_thread_id(self, _thread_id: str) -> None:
-            pass
+            def set_thread_loop(self, _thread_id: str, _loop_id: str) -> None:
+                pass
 
-    loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-    router._ensure_loop_metadata = AsyncMock(return_value=loop_dir)
+        class _Runner:
+            def set_current_thread_id(self, _thread_id: str) -> None:
+                pass
 
-    bind_daemon = SimpleNamespace(
-        _message_router=router,
-        _thread_registry=_ThreadRegistry(),
-        _runner=_Runner(),
-        _daemon_workspace=str(tmp_path / "fallback"),
-    )
+        bind_daemon = SimpleNamespace(
+            _persistence_manager=daemon._persistence_manager,
+            _thread_registry=_ThreadRegistry(),
+            _runner=_Runner(),
+            _daemon_workspace=str(tmp_path / "fallback"),
+        )
 
-    await bind_execution_thread_for_loop(bind_daemon, loop_id)
+        await bind_execution_thread_for_loop(bind_daemon, loop_id)
 
-    assert set_workspace_calls, "set_workspace must be invoked"
-    assert set_workspace_calls[0] == project.resolve()
+        assert set_workspace_calls, "set_workspace must be invoked"
+        assert set_workspace_calls[0] == project.resolve()
+    finally:
+        await daemon.close()
 
 
 @pytest.mark.asyncio
@@ -168,42 +214,46 @@ async def test_bind_execution_thread_falls_back_when_client_workspace_missing(
     """When metadata has no client_workspace the per-loop daemon dir is used."""
     monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
-    daemon = _CapturingDaemon()
+    from soothe.config import SootheConfig
+
+    config = SootheConfig()
+    daemon = _make_daemon_with_pm(config)
     router = MessageRouter(daemon)
-    await router._handle_loop_new(
-        client_id="client-1",
-        msg={"type": "loop_new", "request_id": "rid-1"},
-    )
-    loop_id = daemon.sent[-1]["loop_id"]
 
-    set_workspace_calls: list[Path] = []
+    try:
+        await router._handle_loop_new(
+            client_id="client-1",
+            msg={"type": "loop_new", "request_id": "rid-1"},
+        )
+        loop_id = daemon.sent[-1]["loop_id"]
 
-    class _ThreadRegistry:
-        def ensure(self, _thread_id: str, *, is_draft: bool) -> None:
-            _ = is_draft
+        set_workspace_calls: list[Path] = []
 
-        def set_workspace(self, _thread_id: str, workspace: Path) -> None:
-            set_workspace_calls.append(Path(workspace))
+        class _ThreadRegistry:
+            def ensure(self, _thread_id: str, *, is_draft: bool) -> None:
+                _ = is_draft
 
-        def set_thread_loop(self, _thread_id: str, _loop_id: str) -> None:
-            pass
+            def set_workspace(self, _thread_id: str, workspace: Path) -> None:
+                set_workspace_calls.append(Path(workspace))
 
-    class _Runner:
-        def set_current_thread_id(self, _thread_id: str) -> None:
-            pass
+            def set_thread_loop(self, _thread_id: str, _loop_id: str) -> None:
+                pass
 
-    loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-    router._ensure_loop_metadata = AsyncMock(return_value=loop_dir)
+        class _Runner:
+            def set_current_thread_id(self, _thread_id: str) -> None:
+                pass
 
-    bind_daemon = SimpleNamespace(
-        _message_router=router,
-        _thread_registry=_ThreadRegistry(),
-        _runner=_Runner(),
-        _daemon_workspace=str(tmp_path / "fallback"),
-    )
+        bind_daemon = SimpleNamespace(
+            _persistence_manager=daemon._persistence_manager,
+            _thread_registry=_ThreadRegistry(),
+            _runner=_Runner(),
+            _daemon_workspace=str(tmp_path / "fallback"),
+        )
 
-    await bind_execution_thread_for_loop(bind_daemon, loop_id)
+        await bind_execution_thread_for_loop(bind_daemon, loop_id)
 
-    assert set_workspace_calls, "set_workspace must be invoked"
-    expected_loop_ws = Path(tmp_path / "soothe-home").resolve() / "Workspace" / loop_id
-    assert set_workspace_calls[0] == expected_loop_ws
+        assert set_workspace_calls, "set_workspace must be invoked"
+        expected_loop_ws = Path(tmp_path / "soothe-home").resolve() / "Workspace" / loop_id
+        assert set_workspace_calls[0] == expected_loop_ws
+    finally:
+        await daemon.close()

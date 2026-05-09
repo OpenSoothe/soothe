@@ -17,13 +17,13 @@ and imported here for registry.
 **Usage:**
 
 For type-safe event emission (recommended):
-    from soothe.core.events import ThreadCreatedEvent, PlanStepStartedEvent
-    yield custom_event(ThreadCreatedEvent(thread_id=tid).to_dict())
+    from soothe.core.events import GoalCreatedEvent, PlanStepStartedEvent
+    yield custom_event(GoalCreatedEvent(goal_id=gid).to_dict())
 
 For event type string constants:
-    from soothe.core.events import THREAD_CREATED, PLAN_STEP_STARTED
+    from soothe.core.events import GOAL_CREATED, PLAN_STEP_STARTED
     # Use constants for comparisons, routing, etc.
-    if event_type == THREAD_CREATED:
+    if event_type == GOAL_CREATED:
         ...
 
 RFC-0015: 4-segment naming convention: soothe.<domain>.<component>.<action>
@@ -58,6 +58,7 @@ from .constants import (
     AUTOPILLOT_GOAL_PROGRESS,
     AUTOPILLOT_GOAL_SUSPENDED,
     AUTOPILLOT_GOAL_VALIDATED,
+    # ... more imports below
     AUTOPILLOT_RELATIONSHIP_DETECTED,
     AUTOPILLOT_SEND_BACK,
     # System - Autopilot
@@ -81,6 +82,10 @@ from .constants import (
     ITERATION_COMPLETED,
     # Lifecycle - Iteration
     ITERATION_STARTED,
+    LOOP_COMPLETED,
+    LOOP_CREATED,
+    LOOP_STARTED,
+    # Lifecycle - Loop
     MEMORY_RECALLED,
     MEMORY_STORED,
     PLAN_BATCH_STARTED,
@@ -95,12 +100,6 @@ from .constants import (
     POLICY_DENIED,
     # Lifecycle - Recovery
     RECOVERY_RESUMED,
-    # Lifecycle - Thread
-    THREAD_CREATED,
-    THREAD_ENDED,
-    THREAD_RESUMED,
-    THREAD_SAVED,
-    THREAD_STARTED,
 )
 
 # ---------------------------------------------------------------------------
@@ -134,32 +133,6 @@ def custom_event(data: dict[str, Any]) -> StreamChunk:
 # ---------------------------------------------------------------------------
 
 
-class ThreadCreatedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.thread.started"] = "soothe.lifecycle.thread.started"
-    thread_id: str
-
-
-class ThreadStartedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.thread.started"] = "soothe.lifecycle.thread.started"
-    thread_id: str
-    protocols: dict[str, Any] = {}  # noqa: RUF012
-
-
-class ThreadResumedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.thread.resumed"] = "soothe.lifecycle.thread.resumed"
-    thread_id: str
-
-
-class ThreadSavedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.thread.saved"] = "soothe.lifecycle.thread.saved"
-    thread_id: str
-
-
-class ThreadEndedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.thread.ended"] = "soothe.lifecycle.thread.ended"
-    thread_id: str
-
-
 class IterationStartedEvent(LifecycleEvent):
     type: Literal["soothe.lifecycle.iteration.started"] = "soothe.lifecycle.iteration.started"
     iteration: int | str
@@ -189,6 +162,25 @@ class RecoveryResumedEvent(LifecycleEvent):
     completed_steps: list[str] = []  # noqa: RUF012
     completed_goals: list[str] = []  # noqa: RUF012
     mode: str = ""
+
+
+class LoopCreatedEvent(LifecycleEvent):
+    type: Literal["soothe.lifecycle.loop.created"] = "soothe.lifecycle.loop.created"
+    loop_id: str
+    thread_id: str = ""
+
+
+class LoopStartedEvent(LifecycleEvent):
+    type: Literal["soothe.lifecycle.loop.started"] = "soothe.lifecycle.loop.started"
+    loop_id: str
+    thread_id: str = ""
+    protocols: list[str] = []  # noqa: RUF012
+
+
+class LoopCompletedEvent(LifecycleEvent):
+    type: Literal["soothe.lifecycle.loop.completed"] = "soothe.lifecycle.loop.completed"
+    loop_id: str
+    thread_id: str = ""
 
 
 class DaemonHeartbeatEvent(LifecycleEvent):
@@ -526,7 +518,7 @@ def _reg(
     """Internal helper for registering core events.
 
     Args:
-        type_string: Event type string (e.g., "soothe.lifecycle.thread.started").
+        type_string: Event type string (e.g., "soothe.lifecycle.loop.started").
         model: Event model class.
         verbosity: Optional VerbosityTier override.
         summary_template: Optional template for event summaries.
@@ -621,11 +613,6 @@ def register_event(
 
 
 # -- Lifecycle ---------------------------------------------------------------
-_reg(THREAD_CREATED, ThreadCreatedEvent, summary_template="Thread {thread_id} created")
-_reg(THREAD_STARTED, ThreadStartedEvent, summary_template="thread={thread_id}")
-_reg(THREAD_RESUMED, ThreadResumedEvent, summary_template="Resumed thread: {thread_id}")
-_reg(THREAD_SAVED, ThreadSavedEvent, summary_template="Saved thread: {thread_id}")
-_reg(THREAD_ENDED, ThreadEndedEvent, summary_template="thread={thread_id}")
 _reg(
     ITERATION_STARTED,
     IterationStartedEvent,
@@ -646,6 +633,9 @@ _reg(
     RecoveryResumedEvent,
     summary_template="Recovery resumed: mode={mode}",
 )
+_reg(LOOP_CREATED, LoopCreatedEvent, summary_template="Loop {loop_id} created")
+_reg(LOOP_STARTED, LoopStartedEvent, summary_template="loop={loop_id}")
+_reg(LOOP_COMPLETED, LoopCompletedEvent, summary_template="loop={loop_id}")
 _reg(
     DAEMON_HEARTBEAT,
     DaemonHeartbeatEvent,

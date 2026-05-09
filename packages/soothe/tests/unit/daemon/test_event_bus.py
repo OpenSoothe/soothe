@@ -16,10 +16,10 @@ async def test_publish_to_single_subscriber():
     bus = EventBus()
     queue: asyncio.Queue[dict[str, any]] = asyncio.Queue()
 
-    await bus.subscribe("thread:abc123", queue)
+    await bus.subscribe("loop:abc123", queue)
 
     event = {"type": "test", "data": "hello"}
-    await bus.publish("thread:abc123", event)
+    await bus.publish("loop:abc123", event)
 
     received_data = await queue.get()
     # RFC-0022: EventBus now returns (event, event_meta) tuple
@@ -36,11 +36,11 @@ async def test_publish_to_multiple_subscribers():
     queue1: asyncio.Queue[dict[str, any]] = asyncio.Queue()
     queue2: asyncio.Queue[dict[str, any]] = asyncio.Queue()
 
-    await bus.subscribe("thread:abc123", queue1)
-    await bus.subscribe("thread:abc123", queue2)
+    await bus.subscribe("loop:abc123", queue1)
+    await bus.subscribe("loop:abc123", queue2)
 
     event = {"type": "test", "data": "hello"}
-    await bus.publish("thread:abc123", event)
+    await bus.publish("loop:abc123", event)
 
     # RFC-0022: EventBus now returns (event, event_meta) tuple
     received1 = await queue1.get()
@@ -56,11 +56,11 @@ async def test_unsubscribe():
     bus = EventBus()
     queue: asyncio.Queue[dict[str, any]] = asyncio.Queue()
 
-    await bus.subscribe("thread:abc123", queue)
-    await bus.unsubscribe("thread:abc123", queue)
+    await bus.subscribe("loop:abc123", queue)
+    await bus.unsubscribe("loop:abc123", queue)
 
     event = {"type": "test", "data": "hello"}
-    await bus.publish("thread:abc123", event)
+    await bus.publish("loop:abc123", event)
 
     # Queue should be empty
     with pytest.raises(asyncio.TimeoutError):
@@ -73,13 +73,13 @@ async def test_unsubscribe_all():
     bus = EventBus()
     queue: asyncio.Queue[dict[str, any]] = asyncio.Queue()
 
-    await bus.subscribe("thread:abc123", queue)
-    await bus.subscribe("thread:def456", queue)
+    await bus.subscribe("loop:abc123", queue)
+    await bus.subscribe("loop:def456", queue)
     await bus.unsubscribe_all(queue)
 
     # Queue should not receive any events
-    await bus.publish("thread:abc123", {"type": "test1"})
-    await bus.publish("thread:def456", {"type": "test2"})
+    await bus.publish("loop:abc123", {"type": "test1"})
+    await bus.publish("loop:def456", {"type": "test2"})
 
     with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(queue.get(), timeout=0.1)
@@ -92,11 +92,11 @@ async def test_normal_drop_warnings_throttled(caplog: pytest.LogCaptureFixture) 
     queue: asyncio.Queue[dict[str, any]] = asyncio.Queue(maxsize=1)
     meta = SimpleNamespace(priority=EventPriority.NORMAL)
 
-    await bus.subscribe("thread:flood", queue)
+    await bus.subscribe("loop:flood", queue)
 
     with caplog.at_level(logging.WARNING):
         for _ in range(100):
-            await bus.publish("thread:flood", {"type": "drop"}, event_meta=meta)
+            await bus.publish("loop:flood", {"type": "drop"}, event_meta=meta)
 
     warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warn_records) == 1
@@ -110,11 +110,11 @@ async def test_queue_overflow():
     # Queue with maxsize=1
     queue: asyncio.Queue[dict[str, any]] = asyncio.Queue(maxsize=1)
 
-    await bus.subscribe("thread:abc123", queue)
+    await bus.subscribe("loop:abc123", queue)
 
     # Send 3 events, only first should be delivered
     for i in range(3):
-        await bus.publish("thread:abc123", {"type": "test", "data": i})
+        await bus.publish("loop:abc123", {"type": "test", "data": i})
 
     # Only one event in queue
     received_data = await queue.get()
@@ -134,7 +134,7 @@ async def test_no_subscribers():
     bus = EventBus()
 
     # Should not raise an error
-    await bus.publish("thread:abc123", {"type": "test"})
+    await bus.publish("loop:abc123", {"type": "test"})
 
 
 @pytest.mark.asyncio
@@ -144,11 +144,11 @@ async def test_multiple_topics():
     queue1: asyncio.Queue[dict[str, any]] = asyncio.Queue()
     queue2: asyncio.Queue[dict[str, any]] = asyncio.Queue()
 
-    await bus.subscribe("thread:abc123", queue1)
-    await bus.subscribe("thread:def456", queue2)
+    await bus.subscribe("loop:abc123", queue1)
+    await bus.subscribe("loop:def456", queue2)
 
-    await bus.publish("thread:abc123", {"type": "test1"})
-    await bus.publish("thread:def456", {"type": "test2"})
+    await bus.publish("loop:abc123", {"type": "test1"})
+    await bus.publish("loop:def456", {"type": "test2"})
 
     # Each queue only gets its own topic
     # RFC-0022: EventBus now returns (event, event_meta) tuple
@@ -176,14 +176,14 @@ async def test_topic_count():
 
     assert bus.topic_count == 0
 
-    await bus.subscribe("thread:abc123", queue)
+    await bus.subscribe("loop:abc123", queue)
     assert bus.topic_count == 1
 
-    await bus.subscribe("thread:def456", queue)
+    await bus.subscribe("loop:def456", queue)
     assert bus.topic_count == 2
 
-    await bus.unsubscribe("thread:abc123", queue)
+    await bus.unsubscribe("loop:abc123", queue)
     assert bus.topic_count == 1
 
-    await bus.unsubscribe("thread:def456", queue)
+    await bus.unsubscribe("loop:def456", queue)
     assert bus.topic_count == 0

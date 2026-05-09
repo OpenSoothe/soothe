@@ -293,6 +293,7 @@ grep -E "(workspace|LangGraph configurable)" ~/.soothe/logs/soothe.log | tail -2
 
 | Run Date | TC-001 | TC-002 | TC-003 | TC-004 | TC-005 | TC-006 | Notes |
 |----------|--------|--------|--------|--------|--------|--------|-------|
+| 2026-05-09 | ❌ | ✅ | ✅ | ✅ | ❌ | ⏱️ | TC-001 shows `/` instead of workspace path; TC-005 shows root filesystem; TC-006 timeout |
 | 2026-04-01 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Initial verification |
 | 2026-04-01 | ✅ | ✅ | ✅ | ❌ | ✅ | ⚠️ | Evaluation before fix: TC-004 explored root filesystem, TC-006 timeout |
 | 2026-04-01 | ✅ | ✅ | ✅ | ✅ | ✅ | - | After fix: Planner workspace context properly injected |

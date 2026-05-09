@@ -39,9 +39,7 @@ async def test_handle_routing_command_sets_subagent_for_browser() -> None:
     client.send_input = AsyncMock()
     console = MagicMock()
 
-    await handle_routing_command(
-        "/browser open example.com", console, client, loop_id="loop-a"
-    )
+    await handle_routing_command("/browser open example.com", console, client, loop_id="loop-a")
 
     client.send_input.assert_awaited_once_with(
         "loop-a", "open example.com", preferred_subagent="browser"
@@ -55,9 +53,7 @@ async def test_handle_routing_command_sets_subagent_for_explore() -> None:
     client.send_input = AsyncMock()
     console = MagicMock()
 
-    await handle_routing_command(
-        "/explore find Python files", console, client, loop_id="loop-a"
-    )
+    await handle_routing_command("/explore find Python files", console, client, loop_id="loop-a")
 
     client.send_input.assert_awaited_once_with(
         "loop-a", "find Python files", preferred_subagent="explore"
@@ -71,9 +67,7 @@ async def test_handle_routing_command_plan_untagged() -> None:
     client.send_input = AsyncMock()
     console = MagicMock()
 
-    await handle_routing_command(
-        "/plan refactor the module", console, client, loop_id="loop-a"
-    )
+    await handle_routing_command("/plan refactor the module", console, client, loop_id="loop-a")
 
     client.send_input.assert_awaited_once_with(
         "loop-a", "/plan refactor the module", preferred_subagent=None

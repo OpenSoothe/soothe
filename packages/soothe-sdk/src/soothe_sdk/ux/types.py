@@ -13,12 +13,12 @@ from typing import Final
 ESSENTIAL_EVENT_TYPES: Final[frozenset[str]] = frozenset(
     {
         # Lifecycle events (always show)
-        "soothe.lifecycle.thread.started",
-        "soothe.lifecycle.thread.completed",
         "soothe.cognition.agent_loop.started",
         "soothe.cognition.agent_loop.completed",
         "soothe.cognition.goal.created",
         "soothe.cognition.goal.completed",
+        "soothe.lifecycle.loop.created",
+        "soothe.lifecycle.loop.completed",
         # Cognition events (milestones)
         "soothe.cognition.plan.created",
         "soothe.cognition.plan.completed",

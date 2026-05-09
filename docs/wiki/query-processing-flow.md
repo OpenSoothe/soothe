@@ -313,7 +313,7 @@ Daemon._run_query() receives events
     ↓
 _broadcast(event_msg)
     ↓
-EventBus.publish(topic="thread:{thread_id}")
+EventBus.publish(topic="loop:{loop_id}")
     ↓
 Subscribed client sessions receive event
     ↓

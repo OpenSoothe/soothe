@@ -156,7 +156,7 @@ async def route_slash_command(
         return True
 
     elif entry["location"] == "daemon" and entry.get("type") == "rpc":
-        # Daemon RPC: send command_request (loop-scoped; no client thread_id)
+        # Daemon RPC: send command_request (scoped by loop_id)
         await handle_rpc_command(entry, command, query, console, client, loop_id=loop_id)
         return True
 
@@ -189,7 +189,7 @@ async def handle_rpc_command(
     """
     daemon_command = entry["daemon_command"]
 
-    # Build request (loop_id only; daemon resolves CoreAgent thread internally)
+    # Build request
     request: dict[str, Any] = {
         "type": "command_request",
         "command": daemon_command,

@@ -156,8 +156,8 @@ def show_autopilot_dashboard(console: Console, data: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 KEYBOARD_SHORTCUTS: dict[str, str] = {
-    "Ctrl+Q": "Quit TUI: Stop thread (confirm) and exit client",
-    "Ctrl+D": "Detach TUI: Leave thread running (confirm) and exit client",
+    "Ctrl+Q": "Quit TUI: Stop the loop (confirm) and exit client",
+    "Ctrl+D": "Detach TUI: Leave the loop running (confirm) and exit client",
     "Ctrl+C": "Cancel running job, press twice within 1s to quit",
     "Ctrl+E": "Focus chat input",
     "Ctrl+Y": "Copy last message to clipboard",
@@ -180,31 +180,31 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "handler": show_keymaps,
         "description": "Show keyboard shortcuts",
     },
-    # Daemon RPC commands (12)
+    # Daemon RPC commands (11)
     "/clear": {
         "location": "daemon",
         "type": "rpc",
         "daemon_command": "clear",
-        "description": "Clear thread history",
+        "description": "Clear conversation on the active loop",
         "requires_loop": True,
     },
     "/exit": {
         "location": "daemon",
         "type": "rpc",
         "daemon_command": "exit",
-        "description": "Stop thread and exit client",
+        "description": "Stop the loop and exit client",
     },
     "/quit": {
         "location": "daemon",
         "type": "rpc",
         "daemon_command": "quit",
-        "description": "Stop thread and exit client",
+        "description": "Stop the loop and exit client",
     },
     "/detach": {
         "location": "daemon",
         "type": "rpc",
         "daemon_command": "detach",
-        "description": "Leave thread running and exit client",
+        "description": "Leave the loop running and exit client",
     },
     "/cancel": {
         "location": "daemon",
@@ -251,21 +251,11 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "requires_loop": True,
         "handler": show_review,
     },
-    "/thread": {
-        "location": "daemon",
-        "type": "rpc",
-        "daemon_command": "thread",
-        "description": "Thread operations (archive <id>)",
-        "params_schema": {
-            "action": {"type": "string", "required": True},
-            "id": {"type": "string", "required": False},
-        },
-    },
     "/resume": {
         "location": "daemon",
         "type": "rpc",
         "daemon_command": "resume",
-        "description": "Resume a recent thread",
+        "description": "Resume a loop by id",
         "params_schema": {"loop_id": {"type": "string", "required": True}},
     },
     "/autopilot": {

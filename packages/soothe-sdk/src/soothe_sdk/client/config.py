@@ -15,13 +15,13 @@ from typing import Protocol
 
 # Default Soothe home directory
 # Overridable via SOOTHE_HOME environment variable
-SOOTHE_HOME: str = os.environ.get("SOOTHE_HOME", str(Path.home() / ".soothe"))
+SOOTHE_HOME: Path = Path(os.environ.get("SOOTHE_HOME", str(Path.home() / ".soothe"))).expanduser()
 
 """Default Soothe home directory. Overridable via `SOOTHE_HOME` env var."""
 
 # Default Soothe data directory for runtime database/history files
 # Overridable via SOOTHE_DATA_DIR environment variable
-SOOTHE_DATA_DIR: str = os.environ.get("SOOTHE_DATA_DIR", str(Path(SOOTHE_HOME) / "data"))
+SOOTHE_DATA_DIR: str = os.environ.get("SOOTHE_DATA_DIR", str(SOOTHE_HOME / "data"))
 
 """Default Soothe data directory. Overridable via `SOOTHE_DATA_DIR` env var."""
 

@@ -323,13 +323,13 @@ class ApprovalMenu(Container):
         if count == 1:
             options = [
                 "1. Approve (y)",
-                "2. Auto-approve for this thread (a)",
+                "2. Auto-approve for this loop (a)",
                 "3. Reject (n)",
             ]
         else:
             options = [
                 f"1. Approve all {count} (y)",
-                "2. Auto-approve for this thread (a)",
+                "2. Auto-approve for this loop (a)",
                 f"3. Reject all {count} (n)",
             ]
 

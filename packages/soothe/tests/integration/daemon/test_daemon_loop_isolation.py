@@ -13,7 +13,6 @@ These tests verify that loops are properly isolated with:
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
 
 import pytest
@@ -277,17 +276,14 @@ class TestLoopIsolation:
             assert loop1_dir.exists(), "Loop1 directory should exist"
             assert loop2_dir.exists(), "Loop2 directory should exist"
 
-            # Check metadata files are independent
-            metadata1_path = loop1_dir / "metadata.json"
-            metadata2_path = loop2_dir / "metadata.json"
+            # Check metadata is independent via DB
+            metadata1 = await daemon._persistence_manager.get_loop_metadata(loop1)
+            metadata2 = await daemon._persistence_manager.get_loop_metadata(loop2)
 
-            if metadata1_path.exists():
-                metadata1 = json.loads(metadata1_path.read_text())
-                assert metadata1.get("loop_id") == loop1
-
-            if metadata2_path.exists():
-                metadata2 = json.loads(metadata2_path.read_text())
-                assert metadata2.get("loop_id") == loop2
+            assert metadata1 is not None, "Loop1 metadata should exist in DB"
+            assert metadata2 is not None, "Loop2 metadata should exist in DB"
+            assert metadata1.get("loop_id") == loop1
+            assert metadata2.get("loop_id") == loop2
 
             await client1.close()
             await client2.close()
@@ -513,15 +509,12 @@ class TestLoopIsolation:
             assert loop1_dir.exists(), "Loop1 directory should exist"
             assert loop2_dir.exists(), "Loop2 directory should exist"
 
-            # Check metadata.json files are independent
-            metadata1_path = loop1_dir / "metadata.json"
-            metadata2_path = loop2_dir / "metadata.json"
+            # Check metadata is independent via DB
+            metadata1 = await daemon._persistence_manager.get_loop_metadata(loop1)
+            metadata2 = await daemon._persistence_manager.get_loop_metadata(loop2)
 
-            assert metadata1_path.exists(), "Loop1 metadata should exist"
-            assert metadata2_path.exists(), "Loop2 metadata should exist"
-
-            metadata1 = json.loads(metadata1_path.read_text())
-            metadata2 = json.loads(metadata2_path.read_text())
+            assert metadata1 is not None, "Loop1 metadata should exist in DB"
+            assert metadata2 is not None, "Loop2 metadata should exist in DB"
 
             # Verify metadata is independent
             assert metadata1.get("loop_id") == loop1
@@ -633,11 +626,10 @@ class TestLoopIsolation:
             loop2_dir = PersistenceDirectoryManager.get_loop_directory(loop2)
             assert loop2_dir.exists(), "Loop2 directory should still exist"
 
-            # Verify loop2 metadata unchanged
-            metadata2_path = loop2_dir / "metadata.json"
-            if metadata2_path.exists():
-                metadata2 = json.loads(metadata2_path.read_text())
-                assert metadata2.get("loop_id") == loop2, "Loop2 metadata should be intact"
+            # Verify loop2 metadata unchanged in DB
+            metadata2 = await daemon._persistence_manager.get_loop_metadata(loop2)
+            assert metadata2 is not None, "Loop2 metadata should still be in DB"
+            assert metadata2.get("loop_id") == loop2, "Loop2 metadata should be intact"
 
             # Verify loop2 can still execute
             await client2.send_input(loop2, "Continue execution in loop2")

@@ -54,6 +54,9 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     """
     loop_id = ctx.state_manager.loop_id
     base: dict[str, Any] = {"configurable": {"thread_id": loop_id}}
+    # BM-001 fix: propagate workspace to configurable so tools use client workspace
+    if ctx.loop_state.workspace:
+        base["configurable"]["workspace"] = ctx.loop_state.workspace
     cfg = ctx.agent_loop.config
     run_name = loop_graph_langfuse_run_display_name(cfg.observability.langfuse.trace_name)
     merged = merge_langfuse_runnable_config(

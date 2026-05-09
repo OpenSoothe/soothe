@@ -68,7 +68,7 @@ Pub/sub event bus routes events to clients by thread subscriptions.
 - `ClientSessionManager`: Manages sessions, client IDs, thread subscriptions
 - `ClientSession`: Unique ID, event queue (maxsize=100), sender task
 
-**Topic Routing**: Events to `thread:{thread_id}` topics. Clients subscribe to specific threads only.
+**Topic Routing**: Events to `loop:{loop_id}` topics via `loop_event_topic()`. Clients subscribe to specific loops only.
 
 **Event Flow**: SootheRunner → EventBus.publish → Client queues → Sender task → Transport → Client.
 

@@ -78,6 +78,43 @@ class AgentLoopCheckpointPersistenceManager:
             "Registered loop: loop=%s threads=%s current=%s", loop_id, thread_ids, current_thread_id
         )
 
+    async def get_loop_metadata(self, loop_id: str) -> dict | None:
+        """Get loop metadata from database.
+
+        Args:
+            loop_id: Loop identifier.
+
+        Returns:
+            Loop metadata dict if found, None otherwise.
+        """
+        return await self._backend.get_loop_metadata(loop_id)
+
+    async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
+        """Partially update loop metadata fields.
+
+        Args:
+            loop_id: Loop identifier.
+            **fields: Column names and values to update.
+        """
+        await self._backend.update_loop_metadata(loop_id, **fields)
+        logger.debug("Updated loop metadata: loop=%s fields=%s", loop_id, list(fields))
+
+    async def list_loops(
+        self,
+        status_filter: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Return summary rows for all loops, ordered by created_at DESC.
+
+        Args:
+            status_filter: Optional status value to filter by.
+            limit: Maximum rows to return.
+
+        Returns:
+            List of loop metadata dicts.
+        """
+        return await self._backend.list_loops(status_filter=status_filter, limit=limit)
+
     async def save_checkpoint_anchor(
         self,
         loop_id: str,

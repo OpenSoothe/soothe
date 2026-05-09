@@ -363,6 +363,7 @@ print("All parse_subagent_from_input assertions passed!")
 
 | Run Date | TC-001 | TC-002 | TC-003 | TC-004 | TC-005 | TC-006 | TC-007 | TC-008 | Notes |
 |----------|--------|--------|--------|--------|--------|--------|--------|--------|-------|
+| 2026-05-09 | ✅ (14s) | ✅ (5s) | ✅ (5s) | ✅ (7s) | ✅ (22s) | ✅ (19s) | ✅ (30s) | ⏱️ timeout | TC-008 timeout; routing logs show correct subagent activation |
 | 2026-04-01 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Initial run. Fixed 3 bugs: (1) research subagent missing config/context kwargs in resolver, (2) create_research_subagent returned raw graph instead of CompiledSubAgent dict, (3) headless mode not parsing slash commands — fixed in daemon.py |
 
 ---

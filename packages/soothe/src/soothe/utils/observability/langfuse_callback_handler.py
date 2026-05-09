@@ -7,45 +7,64 @@ from typing import Any
 from uuid import UUID
 
 from langchain_core.messages import BaseMessage, SystemMessage
-from langfuse.langchain import CallbackHandler as LangfuseCallbackHandler
+
+# Optional dependency - langfuse may not be installed
+try:
+    from langfuse.langchain import CallbackHandler as LangfuseCallbackHandler
+
+    LANGFUSE_AVAILABLE = True
+except ImportError:
+    LangfuseCallbackHandler = None  # type: ignore[misc,assignment]
+    LANGFUSE_AVAILABLE = False
 
 from soothe.utils.observability.langfuse_system_hint import get_langfuse_system_prompt_hint
 
 logger = logging.getLogger(__name__)
 
 
-class SootheLangfuseCallbackHandler(LangfuseCallbackHandler):
-    """Extends Langfuse's handler so chat model traces include the effective system prompt.
+# Only define the handler class when langfuse is available
+if LANGFUSE_AVAILABLE:
 
-    Some agent / provider paths omit or flatten system content in the message batch
-    passed to ``on_chat_model_start``. The active hint (set by
-    ``SystemPromptOptimizationMiddleware``) is merged in when the batch has no
-    non-empty ``SystemMessage`` first.
-    """
+    class SootheLangfuseCallbackHandler(LangfuseCallbackHandler):
+        """Extends Langfuse's handler so chat model traces include the effective system prompt.
 
-    def on_chat_model_start(
-        self,
-        serialized: dict[str, Any] | None,
-        messages: list[list[BaseMessage]],
-        *,
-        run_id: UUID,
-        parent_run_id: UUID | None = None,
-        tags: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
-        **kwargs: Any,
-    ) -> Any:
-        hint = get_langfuse_system_prompt_hint()
-        if hint:
-            messages = _ensure_system_in_message_batches(messages, hint)
-        return super().on_chat_model_start(
-            serialized,
-            messages,
-            run_id=run_id,
-            parent_run_id=parent_run_id,
-            tags=tags,
-            metadata=metadata,
-            **kwargs,
-        )
+        Some agent / provider paths omit or flatten system content in the message batch
+        passed to ``on_chat_model_start``. The active hint (set by
+        ``SystemPromptOptimizationMiddleware``) is merged in when the batch has no
+        non-empty ``SystemMessage`` first.
+        """
+
+        def on_chat_model_start(
+            self,
+            serialized: dict[str, Any] | None,
+            messages: list[list[BaseMessage]],
+            *,
+            run_id: UUID,
+            parent_run_id: UUID | None = None,
+            tags: list[str] | None = None,
+            metadata: dict[str, Any] | None = None,
+            **kwargs: Any,
+        ) -> Any:
+            hint = get_langfuse_system_prompt_hint()
+            if hint:
+                messages = _ensure_system_in_message_batches(messages, hint)
+            return super().on_chat_model_start(
+                serialized,
+                messages,
+                run_id=run_id,
+                parent_run_id=parent_run_id,
+                tags=tags,
+                metadata=metadata,
+                **kwargs,
+            )
+
+
+else:
+    # Placeholder when langfuse is not installed
+    class SootheLangfuseCallbackHandler:
+        """Placeholder when langfuse is not installed."""
+
+        pass
 
 
 def _system_message_has_visible_text(msg: SystemMessage) -> bool:

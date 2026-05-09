@@ -18,9 +18,9 @@ from soothe.core.agent_loop.state.schemas import PlanResult
 from soothe.core.agent_loop.utils.messages import loop_assistant_messages_chunk
 from soothe.core.events import (
     GoalFailedEvent,
+    LoopCompletedEvent,
     PlanCreatedEvent,
     PlanReflectedEvent,
-    ThreadEndedEvent,
 )
 from soothe.protocols.planner import StepResult
 
@@ -343,7 +343,9 @@ class AutonomousMixin(GoalDirectivesMixin):
         if self._goal_engine and self._goal_engine.is_complete():
             await self._check_scheduled_and_dream(state, user_input)
 
-        yield _custom(ThreadEndedEvent(thread_id=state.thread_id).to_dict())
+        yield _custom(
+            LoopCompletedEvent(loop_id=state.thread_id, thread_id=state.thread_id).to_dict()
+        )
 
     async def _execute_autonomous_goal(
         self,

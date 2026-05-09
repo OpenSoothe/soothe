@@ -125,7 +125,9 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                         status TEXT NOT NULL,
                         created_at TIMESTAMPTZ DEFAULT NOW(),
                         updated_at TIMESTAMPTZ DEFAULT NOW(),
-                        checkpoint_data JSONB NOT NULL
+                        checkpoint_data JSONB NOT NULL,
+                        client_workspace TEXT,
+                        detached_at TIMESTAMPTZ
                     )
                 """)
 
@@ -459,7 +461,9 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
             async with conn.cursor() as cur:
                 await cur.execute(
                     """
-                    SELECT checkpoint_data FROM agentloop_checkpoints WHERE loop_id = %s
+                    SELECT checkpoint_data, client_workspace, detached_at,
+                           created_at, updated_at
+                    FROM agentloop_checkpoints WHERE loop_id = %s
                 """,
                     (loop_id,),
                 )
@@ -468,7 +472,149 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                 if not result:
                     return None
 
-                return result["checkpoint_data"]
+                data = dict(result["checkpoint_data"]) if result["checkpoint_data"] else {}
+                data["loop_id"] = loop_id
+                # Top-level columns take precedence over JSONB blob values
+                if result["client_workspace"] is not None:
+                    data["client_workspace"] = result["client_workspace"]
+                if result["detached_at"] is not None:
+                    data["detached_at"] = (
+                        result["detached_at"].isoformat()
+                        if hasattr(result["detached_at"], "isoformat")
+                        else result["detached_at"]
+                    )
+                if result["created_at"] is not None:
+                    data["created_at"] = (
+                        result["created_at"].isoformat()
+                        if hasattr(result["created_at"], "isoformat")
+                        else result["created_at"]
+                    )
+                if result["updated_at"] is not None:
+                    data["updated_at"] = (
+                        result["updated_at"].isoformat()
+                        if hasattr(result["updated_at"], "isoformat")
+                        else result["updated_at"]
+                    )
+                return data
+
+    async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
+        """Partially update loop metadata fields."""
+        _allowed = {
+            "status",
+            "current_thread_id",
+            "thread_ids",
+            "client_workspace",
+            "detached_at",
+            "total_goals_completed",
+            "total_thread_switches",
+            "total_duration_ms",
+            "total_tokens_used",
+        }
+        updates = {k: v for k, v in fields.items() if k in _allowed}
+        if not updates:
+            return
+
+        pool = await self._ensure_pool()
+
+        # Merge scalar fields into checkpoint_data JSONB blob and update top-level columns
+        jsonb_updates = {k: v for k, v in updates.items()}
+
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    UPDATE agentloop_checkpoints
+                    SET checkpoint_data = checkpoint_data || %s::jsonb,
+                        thread_id = COALESCE(%s, thread_id),
+                        status = COALESCE(%s, status),
+                        client_workspace = CASE WHEN %s IS NOT NULL THEN %s ELSE client_workspace END,
+                        detached_at = CASE WHEN %s IS NOT NULL THEN %s::TIMESTAMPTZ ELSE detached_at END,
+                        updated_at = NOW()
+                    WHERE loop_id = %s
+                    """,
+                    (
+                        json.dumps(jsonb_updates),
+                        updates.get("current_thread_id"),
+                        updates.get("status"),
+                        updates.get("client_workspace"),
+                        updates.get("client_workspace"),
+                        updates.get("detached_at"),
+                        updates.get("detached_at"),
+                        loop_id,
+                    ),
+                )
+        logger.debug("Updated loop metadata: loop=%s fields=%s", loop_id, list(updates))
+
+    async def list_loops(
+        self,
+        status_filter: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Return summary rows for all loops, ordered by created_at DESC."""
+        pool = await self._ensure_pool()
+
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                if status_filter:
+                    await cur.execute(
+                        """
+                        SELECT loop_id, status,
+                               checkpoint_data->>'thread_ids' AS thread_ids_json,
+                               thread_id AS current_thread_id,
+                               COALESCE((checkpoint_data->>'total_goals_completed')::int, 0) AS total_goals_completed,
+                               COALESCE((checkpoint_data->>'total_thread_switches')::int, 0) AS total_thread_switches,
+                               created_at, updated_at, client_workspace, detached_at
+                        FROM agentloop_checkpoints
+                        WHERE status = %s
+                        ORDER BY created_at DESC
+                        LIMIT %s
+                        """,
+                        (status_filter, limit),
+                    )
+                else:
+                    await cur.execute(
+                        """
+                        SELECT loop_id, status,
+                               checkpoint_data->>'thread_ids' AS thread_ids_json,
+                               thread_id AS current_thread_id,
+                               COALESCE((checkpoint_data->>'total_goals_completed')::int, 0) AS total_goals_completed,
+                               COALESCE((checkpoint_data->>'total_thread_switches')::int, 0) AS total_thread_switches,
+                               created_at, updated_at, client_workspace, detached_at
+                        FROM agentloop_checkpoints
+                        ORDER BY created_at DESC
+                        LIMIT %s
+                        """,
+                        (limit,),
+                    )
+                rows = await cur.fetchall()
+
+        result = []
+        for row in rows:
+            raw_tids = row.get("thread_ids_json")
+            try:
+                thread_ids = json.loads(raw_tids) if raw_tids else []
+            except (ValueError, TypeError):
+                thread_ids = []
+            created = row.get("created_at")
+            updated = row.get("updated_at")
+            detached = row.get("detached_at")
+            result.append(
+                {
+                    "loop_id": row["loop_id"],
+                    "status": row["status"],
+                    "thread_ids": thread_ids,
+                    "current_thread_id": row["current_thread_id"],
+                    "total_goals_completed": row["total_goals_completed"],
+                    "total_thread_switches": row["total_thread_switches"],
+                    "created_at": created.isoformat() if hasattr(created, "isoformat") else created,
+                    "updated_at": updated.isoformat() if hasattr(updated, "isoformat") else updated,
+                    "client_workspace": row.get("client_workspace"),
+                    "detached_at": detached.isoformat()
+                    if hasattr(detached, "isoformat")
+                    else detached,
+                }
+            )
+        return result
 
     async def save_checkpoint_anchor(
         self,

@@ -170,7 +170,7 @@ class SootheApp(
         auto_approve: bool = False,
         cwd: str | Path | None = None,
         resume_loop_id: str | None = None,
-        resume_thread: str | None = None,
+        resume_loop_intent: str | None = None,
         initial_prompt: str | None = None,
         initial_skill: str | None = None,
         mcp_server_info: list[dict[str, Any]] | None = None,
@@ -192,13 +192,13 @@ class SootheApp(
             cwd: Current working directory to display
             resume_loop_id: Initial AgentLoop id (daemon-backed).
 
-                `None` when `resume_thread` is provided (resolved asynchronously).
-            resume_thread: Raw resume intent from `-r` flag.
+                `None` when `resume_loop_intent` is provided (resolved asynchronously).
+            resume_loop_intent: Raw resume intent from `-r` flag.
 
-                `'__MOST_RECENT__'` for bare `-r`, a thread ID string for
+                `'__MOST_RECENT__'` for bare `-r`, a loop id for
                 `-r <id>`, or `None` for new sessions.
 
-                Resolved via `_resolve_resume_thread`
+                Resolved via `_resolve_resume_loop_intent`
                 during `_start_server_background`.
 
                 Requires `server_kwargs` to be set; ignored otherwise.
@@ -238,15 +238,11 @@ class SootheApp(
 
         self._cwd = str(cwd) if cwd else str(Path.cwd())
 
+        # Active AgentLoop id; LangGraph stores it as configurable.thread_id.
+        # Named `_lc_loop_id` to avoid colliding with Textual's App._thread_id.
         self._lc_loop_id = resume_loop_id
-        """Active AgentLoop id for this client session.
 
-        LangGraph still uses ``configurable.thread_id`` as the checkpoint key; the
-        value is the loop id. Named `_lc_loop_id` to avoid collision with Textual's
-        `App._thread_id`.
-        """
-
-        self._resume_thread_intent = resume_thread
+        self._resume_loop_intent = resume_loop_intent
 
         self._initial_prompt = initial_prompt
 
@@ -361,7 +357,7 @@ class SootheApp(
 
         self._processing_pending = False
 
-        self._thread_switching = False
+        self._loop_switching = False
 
         self._model_switching = False
         self._detaching = False
@@ -438,7 +434,7 @@ class SootheApp(
                     mcp_tool_count=self._mcp_tool_count,
                     workspace_path=self._cwd,
                     connecting=self._connecting,
-                    resuming=self._resume_thread_intent is not None,
+                    resuming=self._resume_loop_intent is not None,
                     local_server=self._server_kwargs is not None,
                     id="welcome-banner",
                 )

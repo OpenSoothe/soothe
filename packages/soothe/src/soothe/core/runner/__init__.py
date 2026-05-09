@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
@@ -93,6 +94,15 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
         self._config = config or SootheConfig()
         self._checkpointer_pool = None  # Will be set if using PostgreSQL
+
+        # Installation workspace for fallback resolution (BM-001 fix)
+        from soothe.config.env import default_soothe_workspace_dir
+
+        self._installation_workspace = (
+            Path(self._config.workspace_dir or default_soothe_workspace_dir())
+            .expanduser()
+            .resolve()
+        )
 
         # Initialize intent classifier (IG-226: core.intention module).
         # Unified classification is always enabled; classifier is omitted only if fast model is unavailable.
@@ -524,6 +534,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
         resolved = resolve_workspace_for_stream(
             explicit=workspace,
+            installation_default=str(self._installation_workspace),
             config_workspace_dir=getattr(self._config, "workspace_dir", None),
         )
         effective_workspace = resolved.path

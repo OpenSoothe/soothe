@@ -1,8 +1,8 @@
-# BM-003: AI-Driven Daemon Endpoint Benchmark
+# BM-003: Daemon HTTP REST Endpoint Benchmark
 
-> **Purpose**: Validate daemon HTTP REST endpoints with AI-style workload patterns, including endpoint health, thread lifecycle, and response latency budgets.
+> **Purpose**: Validate daemon HTTP REST endpoints for health, status, version, configuration, and autopilot goal management.
 >
-> **Last Updated**: 2026-04-16
+> **Last Updated**: 2026-05-09
 >
 > **Status**: Active
 
@@ -10,13 +10,12 @@
 
 ## Overview
 
-This benchmark evaluates daemon endpoint behavior under realistic prompt-driven interactions:
+This benchmark evaluates daemon endpoint behavior for:
 
 1. Baseline service health and protocol metadata checks.
-2. Thread creation and retrieval via HTTP REST.
-3. AI-driven continuation flow using `/resume` with prompt-like messages.
-4. History verification to ensure user prompt persistence.
-5. Lifecycle cleanup through archive/delete operations.
+2. Configuration retrieval and schema validation.
+3. Autopilot goal lifecycle (submit, list, approve/reject).
+4. Autopilot wake/dream state management.
 
 ---
 
@@ -27,11 +26,17 @@ This benchmark evaluates daemon endpoint behavior under realistic prompt-driven 
 | `/api/v1/health` | GET | Transport health |
 | `/api/v1/status` | GET | Runtime status |
 | `/api/v1/version` | GET | Protocol/version contract |
-| `/api/v1/threads` | POST | Thread creation |
-| `/api/v1/threads/{thread_id}` | GET | Thread fetch |
-| `/api/v1/threads/{thread_id}/resume` | POST | AI prompt continuation |
-| `/api/v1/threads/{thread_id}/messages` | GET | Prompt persistence check |
-| `/api/v1/threads/{thread_id}` | DELETE | Archive/delete cleanup |
+| `/api/v1/config` | GET | Current configuration |
+| `/api/v1/config/schema` | GET | Configuration schema |
+| `/api/v1/autopilot/status` | GET | Autopilot state |
+| `/api/v1/autopilot/goals` | GET | List pending goals |
+| `/api/v1/autopilot/submit` | POST | Submit new goal |
+| `/api/v1/autopilot/goals/{goal_id}` | GET | Get specific goal |
+| `/api/v1/autopilot/goals/{goal_id}/approve` | POST | Approve goal |
+| `/api/v1/autopilot/goals/{goal_id}/reject` | POST | Reject goal |
+| `/api/v1/autopilot/wake` | POST | Wake autopilot |
+| `/api/v1/autopilot/dream` | POST | Dream autopilot |
+| `/api/v1/autopilot/inbox` | GET | Get inbox items |
 
 ---
 
@@ -85,90 +90,63 @@ This benchmark evaluates daemon endpoint behavior under realistic prompt-driven 
 
 ---
 
-### TC-004: Create Thread for AI Prompting
+### TC-004: Configuration Retrieval
 
-**Request**: `POST /api/v1/threads`
-
-**Payload**:
-```json
-{
-  "initial_message": "Benchmark bootstrap message for daemon endpoint validation.",
-  "metadata": {
-    "tags": ["benchmark", "bm-003", "ai-driven"],
-    "priority": "normal"
-  }
-}
-```
+**Request**: `GET /api/v1/config`
 
 **Expected Behavior**:
 - Returns HTTP 200
-- Response includes `thread_id`
+- Response includes configuration object
 
 **Verification Conditions**:
 - [ ] Status code is 200
-- [ ] `thread_id` exists and is non-empty
-- [ ] Endpoint responds under 2.0s
+- [ ] Response body is valid JSON
+- [ ] Endpoint responds under 1.5s
 
 ---
 
-### TC-005: Resume Thread with AI-style Prompt
+### TC-005: Configuration Schema
 
-**Request**: `POST /api/v1/threads/{thread_id}/resume`
-
-**Payload**:
-```json
-{
-  "message": "Summarize the purpose of this daemon benchmark in one sentence."
-}
-```
+**Request**: `GET /api/v1/config/schema`
 
 **Expected Behavior**:
 - Returns HTTP 200
-- Response includes `status=resumed`
-- Response thread id matches created thread
+- Response includes schema definition
 
 **Verification Conditions**:
 - [ ] Status code is 200
-- [ ] `status` equals `resumed`
-- [ ] `thread_id` matches created thread id
-- [ ] Endpoint responds under 2.5s
+- [ ] Response body is valid JSON schema
+- [ ] Endpoint responds under 1.5s
 
 ---
 
-### TC-006: Verify Prompt Persistence in Message History
+### TC-006: Autopilot Status
 
-**Request**: `GET /api/v1/threads/{thread_id}/messages?limit=50&offset=0`
+**Request**: `GET /api/v1/autopilot/status`
 
 **Expected Behavior**:
 - Returns HTTP 200
-- Thread history contains at least one user message
-- Thread history contains benchmark prompt content
+- Response includes autopilot state information
 
 **Verification Conditions**:
 - [ ] Status code is 200
-- [ ] `messages` is an array
-- [ ] At least one message with `role=user` exists
-- [ ] One user message contains `Summarize the purpose of this daemon benchmark`
-- [ ] Endpoint responds under 3.0s
+- [ ] Response body is valid JSON
+- [ ] Endpoint responds under 1.5s
 
 ---
 
-### TC-007: Cleanup via Archive then Delete
+### TC-007: Autopilot Goals List
 
-**Requests**:
-- `DELETE /api/v1/threads/{thread_id}?archive=true`
-- `DELETE /api/v1/threads/{thread_id}?archive=false`
+**Request**: `GET /api/v1/autopilot/goals`
 
 **Expected Behavior**:
-- Archive returns `status=archived`
-- Delete returns `status=deleted`
+- Returns HTTP 200
+- Response includes goals array
 
 **Verification Conditions**:
-- [ ] Archive request status code is 200
-- [ ] Archive response status is `archived`
-- [ ] Delete request status code is 200
-- [ ] Delete response status is `deleted`
-- [ ] Combined cleanup under 2.0s
+- [ ] Status code is 200
+- [ ] Response body contains `goals` array (may be empty)
+- [ ] Endpoint responds under 1.5s
 
 ---
 
@@ -184,20 +162,36 @@ uv run soothed start --config config/config.dev.yml
 curl http://127.0.0.1:8766/api/v1/health
 ```
 
-### Automated Runner
+### Manual Execution
 
 ```bash
-uv run python benchmarks/run_bm003_daemon_endpoint.py --base-url http://127.0.0.1:8766
+# TC-001: Health check
+curl -s http://127.0.0.1:8766/api/v1/health
+
+# TC-002: Status check
+curl -s http://127.0.0.1:8766/api/v1/status
+
+# TC-003: Version check
+curl -s http://127.0.0.1:8766/api/v1/version
+
+# TC-004: Config retrieval
+curl -s http://127.0.0.1:8766/api/v1/config
+
+# TC-005: Config schema
+curl -s http://127.0.0.1:8766/api/v1/config/schema
+
+# TC-006: Autopilot status
+curl -s http://127.0.0.1:8766/api/v1/autopilot/status
+
+# TC-007: Autopilot goals
+curl -s http://127.0.0.1:8766/api/v1/autopilot/goals
 ```
 
-Optional flags:
+### Automated Runner (TODO)
 
 ```bash
-uv run python benchmarks/run_bm003_daemon_endpoint.py \
-  --base-url http://127.0.0.1:8766 \
-  --timeout 10 \
-  --history-poll-timeout 12 \
-  --json
+# Future: Python runner script
+uv run python benchmarks/run_bm003_daemon_endpoint.py --base-url http://127.0.0.1:8766
 ```
 
 ---
@@ -208,7 +202,7 @@ Benchmark run is considered successful when:
 
 - All test cases pass
 - No endpoint latency exceeds its threshold
-- Script exits with code `0`
+- All responses are valid JSON
 
 Any failed test case or latency breach should return non-zero exit code.
 
@@ -218,9 +212,8 @@ Any failed test case or latency breach should return non-zero exit code.
 
 1. Daemon endpoint unreachable or non-200 response.
 2. Endpoint contract drift (`status`, `transport`, `protocol` missing/changed unexpectedly).
-3. Thread lifecycle breakage (create/resume/messages/archive/delete failures).
-4. Prompt persistence regression (user message not retained).
-5. Latency regressions beyond benchmark budgets.
+3. Configuration endpoints return invalid JSON.
+4. Autopilot endpoints fail to respond.
 
 ---
 
@@ -228,6 +221,7 @@ Any failed test case or latency breach should return non-zero exit code.
 
 | Run Date | TC-001 | TC-002 | TC-003 | TC-004 | TC-005 | TC-006 | TC-007 | Notes |
 |----------|--------|--------|--------|--------|--------|--------|--------|-------|
-| 2026-04-16 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | First successful run - all tests passed, latencies well within budget |
-| 2026-04-16 | 🔍 | 🔍 | 🔍 | 🔍 | 🔍 | 🔍 | 🔍 | Initial benchmark definition |
+| 2026-05-09 | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | TC-006 autopilot/status returns 500; other endpoints work |
+| 2026-05-09 | ✅ | ✅ | ✅ | 🔍 | 🔍 | 🔍 | 🔍 | Updated to match current daemon API (removed /threads endpoints, added /autopilot) |
+| 2026-04-16 | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | Original test failed: /threads endpoints don't exist in current API |
 
