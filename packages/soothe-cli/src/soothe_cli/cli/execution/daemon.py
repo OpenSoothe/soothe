@@ -26,7 +26,7 @@ from soothe_cli.shared.core.presentation_engine import PresentationEngine
 logger = logging.getLogger(__name__)
 
 _DAEMON_FALLBACK_EXIT_CODE = 42
-_SESSION_BOOTSTRAP_TIMEOUT_S = 5.0
+_SESSION_BOOTSTRAP_TIMEOUT_S = 30.0
 _QUERY_START_TIMEOUT_S = 20.0
 
 
