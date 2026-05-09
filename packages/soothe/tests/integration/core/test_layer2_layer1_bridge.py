@@ -1,22 +1,42 @@
-"""Integration tests for Layer 2 → Layer 1 execution hints bridge."""
+"""Integration tests for AgentLoop execution hints (RFC-214).
+
+Execution hints are delivered in the per-turn user message envelope
+(``<EXECUTION_HINTS>`` via ``build_execute_step_envelope``), not by mutating
+``system_prompt``. ``ExecutionHintsMiddleware.abefore_agent`` is a no-op kept
+for stack compatibility.
+"""
+
+from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from soothe.core.prompts.user_envelope import build_execute_step_envelope
 from soothe.middleware import ExecutionHintsMiddleware
 
 
-class TestLayer2Layer1Bridge:
-    """Test complete Layer 2 → Layer 1 integration with hints."""
+def _execution_hints_text(*, subagent: str | None, expected_output: str | None) -> str | None:
+    """Build the same hint string as ``executor.py`` (single-step and wave paths)."""
+    hints_parts: list[str] = []
+    if subagent:
+        hints_parts.append(f"Suggested subagent: {subagent}")
+    if expected_output:
+        hints_parts.append(f"Expected output: {expected_output}")
+    if not hints_parts:
+        return None
+    return ". ".join(hints_parts) + ". Consider using the suggested approach first."
+
+
+class TestExecutionHintsEnvelopeIntegration:
+    """RFC-214: hints in user envelope; middleware does not touch system prompt."""
 
     @pytest.mark.asyncio
-    async def test_hints_propagate_from_stepaction_to_coreagent(self):
-        """Test hints flow from StepAction through Executor to CoreAgent."""
+    async def test_middleware_does_not_mutate_system_prompt_when_hints_in_config(self) -> None:
+        """Configurable step hints do not flow through ExecutionHintsMiddleware."""
         middleware = ExecutionHintsMiddleware()
-
-        state = {"system_prompt": "You are Soothe agent."}
-
+        original = "You are Soothe agent."
+        state: dict[str, str] = {"system_prompt": original}
         config = {
             "configurable": {
                 "thread_id": "thread-123",
@@ -24,99 +44,62 @@ class TestLayer2Layer1Bridge:
                 "soothe_step_expected_output": "Matching paths under src/",
             }
         }
-
-        mock_runtime = MagicMock()
-
-        with patch("langgraph.config.get_config", return_value=config):
-            await middleware.abefore_agent(state, mock_runtime)
-
-        assert "Execution hints:" in state["system_prompt"]
-        assert "Suggested subagent: explore" in state["system_prompt"]
-        assert "Expected output: Matching paths under src/" in state["system_prompt"]
-
-    @pytest.mark.asyncio
-    async def test_llm_sees_hints_in_prompt(self):
-        """Test LLM receives enhanced system prompt with hints."""
-        middleware = ExecutionHintsMiddleware()
-
-        original_prompt = "You are Soothe agent."
-        state = {"system_prompt": original_prompt}
-        config = {
-            "configurable": {
-                "thread_id": "test",
-                "soothe_step_expected_output": "File contents",
-            }
-        }
-
         mock_runtime = MagicMock()
         with patch("langgraph.config.get_config", return_value=config):
-            await middleware.abefore_agent(state, mock_runtime)
-
-        enhanced_prompt = state["system_prompt"]
-        assert "Expected output: File contents" in enhanced_prompt
-        assert "Consider using the suggested approach first" in enhanced_prompt
+            result = await middleware.abefore_agent(state, mock_runtime)
+        assert result is None
+        assert state["system_prompt"] == original
+        assert "Execution hints:" not in state["system_prompt"]
 
     @pytest.mark.asyncio
-    async def test_step_without_hints_works(self):
-        """Test backward compatibility - steps without hints still work."""
+    async def test_middleware_preserves_prompt_without_step_hints(self) -> None:
+        """No configurable hints → unchanged system prompt."""
         middleware = ExecutionHintsMiddleware()
-
-        original_prompt = "You are Soothe agent."
-        state = {"system_prompt": original_prompt}
-        config = {
-            "configurable": {
-                "thread_id": "test",
-            }
-        }
-
+        original = "You are Soothe agent."
+        state: dict[str, str] = {"system_prompt": original}
+        config = {"configurable": {"thread_id": "test"}}
         mock_runtime = MagicMock()
         with patch("langgraph.config.get_config", return_value=config):
-            await middleware.abefore_agent(state, mock_runtime)
+            result = await middleware.abefore_agent(state, mock_runtime)
+        assert result is None
+        assert state["system_prompt"] == original
 
-        assert state["system_prompt"] == original_prompt
-
-    @pytest.mark.asyncio
-    async def test_executor_to_middleware_integration(self):
-        """Test Executor → CoreAgent → ExecutionHintsMiddleware integration."""
-        executor_config = {
-            "configurable": {
-                "thread_id": "thread-123",
-                "soothe_step_subagent": "browser",
-                "soothe_step_expected_output": "Page summary",
-            }
-        }
-
-        middleware = ExecutionHintsMiddleware()
-        state = {"system_prompt": "You are Soothe agent."}
-
-        mock_runtime = MagicMock()
-        with patch("langgraph.config.get_config", return_value=executor_config):
-            await middleware.abefore_agent(state, mock_runtime)
-
-        assert "Suggested subagent: browser" in state["system_prompt"]
-        assert "Expected output: Page summary" in state["system_prompt"]
-
-    @pytest.mark.asyncio
-    async def test_advisory_nature_preserved(self):
-        """Test hints are advisory - LLM can override."""
-        middleware = ExecutionHintsMiddleware()
-
-        state = {"system_prompt": "You are Soothe agent."}
-        config = {
-            "configurable": {
-                "thread_id": "test",
-                "soothe_step_subagent": "research",
-                "soothe_step_expected_output": "Result",
-            }
-        }
-
-        mock_runtime = MagicMock()
-        with patch("langgraph.config.get_config", return_value=config):
-            await middleware.abefore_agent(state, mock_runtime)
-
-        enhanced_prompt = state["system_prompt"]
-        assert "Suggested subagent: research" in enhanced_prompt
-        assert (
-            "Consider using the suggested approach first, but decide based on what works best"
-            in enhanced_prompt
+    def test_envelope_includes_subagent_and_expected_output(self) -> None:
+        """Executor-format hints appear inside <EXECUTION_HINTS>."""
+        hints = _execution_hints_text(subagent="browser", expected_output="Page summary")
+        assert hints is not None
+        envelope = build_execute_step_envelope(
+            goal="Test goal",
+            step_description="Open the page",
+            execution_hints=hints,
+            iteration=1,
+            max_iterations=3,
         )
+        assert "<EXECUTION_HINTS>" in envelope
+        assert "</EXECUTION_HINTS>" in envelope
+        assert "Suggested subagent: browser" in envelope
+        assert "Expected output: Page summary" in envelope
+        assert "Consider using the suggested approach first" in envelope
+
+    def test_envelope_expected_output_only(self) -> None:
+        """Hints may omit subagent when only expected_output is set."""
+        hints = _execution_hints_text(subagent=None, expected_output="File contents")
+        assert hints is not None
+        envelope = build_execute_step_envelope(
+            goal=None,
+            step_description="Read file",
+            execution_hints=hints,
+        )
+        assert "<EXECUTION_HINTS>" in envelope
+        assert "Expected output: File contents" in envelope
+        assert "Suggested subagent:" not in envelope
+
+    def test_envelope_omits_hints_block_when_empty(self) -> None:
+        """No step metadata → no <EXECUTION_HINTS> section."""
+        envelope = build_execute_step_envelope(
+            goal="G",
+            step_description="Plain step",
+            execution_hints=None,
+        )
+        assert "<EXECUTION_HINTS>" not in envelope
+        assert "<USER_QUERY>" in envelope

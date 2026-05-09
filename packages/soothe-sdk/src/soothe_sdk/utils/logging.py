@@ -163,18 +163,18 @@ class GlobalInputHistory:
             return []
 
     def add(
-        self, text: str, thread_id: str = "default", metadata: dict[str, Any] | None = None
+        self, text: str, loop_id: str = "default", metadata: dict[str, Any] | None = None
     ) -> None:
         """Add entry to history (CLI-friendly API).
 
         Args:
             text: Input text to add.
-            thread_id: Thread ID for grouping.
+            loop_id: Client scope for grouping (e.g. active loop or ``\"default\"``).
             metadata: Optional metadata dict.
         """
         entry = {
             "text": text,
-            "thread_id": thread_id,
+            "loop_id": loop_id,
             "timestamp": self._get_timestamp(),
             "metadata": metadata or {},
         }

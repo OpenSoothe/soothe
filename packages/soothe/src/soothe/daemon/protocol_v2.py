@@ -108,67 +108,9 @@ def validate_message(msg: dict[str, Any]) -> list[str]:
         elif not isinstance(msg.get("cmd"), str):
             errors.append("Command cmd must be a string")
 
-    elif msg_type == "resume_thread":
-        if "thread_id" not in msg:
-            errors.append("Resume thread message missing required field: thread_id")
-        elif not isinstance(msg.get("thread_id"), str):
-            errors.append("Resume thread thread_id must be a string")
-
     elif msg_type == "daemon_ready":
         # No additional fields required
         pass
-
-    # Thread management messages (RFC-402)
-    elif msg_type == "thread_list":
-        # filter is optional
-        if "filter" in msg and not isinstance(msg["filter"], dict):
-            errors.append("thread_list filter must be an object")
-        # include_stats is optional boolean
-        if "include_stats" in msg and not isinstance(msg["include_stats"], bool):
-            errors.append("thread_list include_stats must be a boolean")
-
-    elif msg_type == "thread_create":
-        # initial_message is optional string
-        if "initial_message" in msg and not isinstance(msg["initial_message"], str):
-            errors.append("thread_create initial_message must be a string")
-        # metadata is optional object
-        if "metadata" in msg and not isinstance(msg["metadata"], dict):
-            errors.append("thread_create metadata must be an object")
-
-    elif msg_type == "thread_get":
-        if "thread_id" not in msg:
-            errors.append("thread_get message missing required field: thread_id")
-        elif not isinstance(msg.get("thread_id"), str):
-            errors.append("thread_get thread_id must be a string")
-
-    elif msg_type == "thread_archive":
-        if "thread_id" not in msg:
-            errors.append("thread_archive message missing required field: thread_id")
-        elif not isinstance(msg.get("thread_id"), str):
-            errors.append("thread_archive thread_id must be a string")
-
-    elif msg_type == "thread_delete":
-        if "thread_id" not in msg:
-            errors.append("thread_delete message missing required field: thread_id")
-        elif not isinstance(msg.get("thread_id"), str):
-            errors.append("thread_delete thread_id must be a string")
-
-    elif msg_type == "thread_messages":
-        if "thread_id" not in msg:
-            errors.append("thread_messages message missing required field: thread_id")
-        elif not isinstance(msg.get("thread_id"), str):
-            errors.append("thread_messages thread_id must be a string")
-        # limit and offset are optional integers
-        if "limit" in msg and not isinstance(msg["limit"], int):
-            errors.append("thread_messages limit must be an integer")
-        if "offset" in msg and not isinstance(msg["offset"], int):
-            errors.append("thread_messages offset must be an integer")
-
-    elif msg_type == "thread_artifacts":
-        if "thread_id" not in msg:
-            errors.append("thread_artifacts message missing required field: thread_id")
-        elif not isinstance(msg.get("thread_id"), str):
-            errors.append("thread_artifacts thread_id must be a string")
 
     elif msg_type == "detach":
         # No additional fields required
@@ -189,6 +131,14 @@ def validate_message(msg: dict[str, Any]) -> list[str]:
             errors.append("invoke_skill skill must be a string")
         if "args" in msg and not isinstance(msg["args"], str):
             errors.append("invoke_skill args must be a string")
+
+    elif msg_type == "resume_interrupts":
+        if "loop_id" not in msg or not str(msg.get("loop_id", "")).strip():
+            errors.append("resume_interrupts requires non-empty loop_id")
+        elif not isinstance(msg.get("loop_id"), str):
+            errors.append("resume_interrupts loop_id must be a string")
+        if "resume_payload" not in msg or not isinstance(msg.get("resume_payload"), dict):
+            errors.append("resume_interrupts requires resume_payload object")
 
     else:
         # Unknown message type - allow but log warning

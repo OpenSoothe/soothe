@@ -8,6 +8,7 @@ import os
 import socket
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -75,6 +76,44 @@ def _has_valid_api_key() -> bool:
 # ---------------------------------------------------------------------------
 # Shared Daemon Test Utilities
 # ---------------------------------------------------------------------------
+
+
+async def websocket_bootstrap_loop_session(
+    client: Any,
+    *,
+    resume_loop_id: str | None = None,
+    verbosity: str = "normal",
+) -> str:
+    """Create or attach to a loop and subscribe for streaming; returns ``loop_id``."""
+    from soothe_sdk.client.session import bootstrap_loop_session
+
+    ev = await bootstrap_loop_session(
+        client,
+        resume_loop_id=resume_loop_id,
+        verbosity=verbosity,
+    )
+    if ev.get("type") == "error" or not ev.get("success", True):
+        raise RuntimeError(str(ev.get("message", "loop bootstrap failed")))
+    lid = ev.get("loop_id")
+    if not lid:
+        raise RuntimeError("bootstrap missing loop_id")
+    return str(lid)
+
+
+async def websocket_create_loop_only(client: Any, *, timeout: float = 10.0) -> str:
+    """Allocate a new ``loop_id`` without ``loop_subscribe`` (unsubscribed client tests)."""
+    await client.request_daemon_ready()
+    await client.wait_for_daemon_ready()
+    resp = await client.request_response(
+        {"type": "loop_new"},
+        response_type="loop_new_response",
+        timeout=timeout,
+    )
+    lid = str(resp.get("loop_id") or "").strip()
+    if not lid:
+        raise RuntimeError("loop_new_response missing loop_id")
+    return lid
+
 
 # Cache for base config to avoid repeated file reads
 _CACHED_BASE_CONFIG: SootheConfig | None = None

@@ -10,6 +10,7 @@ from soothe_sdk.core.verbosity import VerbosityTier
 from soothe.core.events import EventMeta
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
+from soothe.daemon.loop_isolation import loop_event_topic
 
 
 @pytest.mark.asyncio
@@ -35,8 +36,8 @@ async def test_create_session():
 
 
 @pytest.mark.asyncio
-async def test_subscribe_thread():
-    """Test thread subscription."""
+async def test_subscribe_loop():
+    """Test loop subscription."""
     bus = EventBus()
     manager = ClientSessionManager(bus)
 
@@ -45,20 +46,20 @@ async def test_subscribe_thread():
 
     client_id = await manager.create_session(transport, None)
 
-    result = await manager.subscribe_thread(client_id, "thread-abc123")
+    result = await manager.subscribe_loop(client_id, "loop-abc123")
     assert result is True
 
     session = await manager.get_session(client_id)
     assert session is not None
-    assert "thread-abc123" in session.subscriptions
+    assert "loop-abc123" in session.subscriptions
 
     # Cleanup
     await manager.remove_session(client_id)
 
 
 @pytest.mark.asyncio
-async def test_unsubscribe_thread():
-    """Test thread unsubscription."""
+async def test_unsubscribe_loop():
+    """Test loop unsubscription."""
     bus = EventBus()
     manager = ClientSessionManager(bus)
 
@@ -66,14 +67,14 @@ async def test_unsubscribe_thread():
     transport.transport_type = "test"
 
     client_id = await manager.create_session(transport, None)
-    subscribe_result = await manager.subscribe_thread(client_id, "thread-abc123")
+    subscribe_result = await manager.subscribe_loop(client_id, "loop-abc123")
     assert subscribe_result is True
-    unsubscribe_result = await manager.unsubscribe_thread(client_id, "thread-abc123")
+    unsubscribe_result = await manager.unsubscribe_loop(client_id, "loop-abc123")
     assert unsubscribe_result is True
 
     session = await manager.get_session(client_id)
     assert session is not None
-    assert "thread-abc123" not in session.subscriptions
+    assert "loop-abc123" not in session.subscriptions
 
     # Cleanup
     await manager.remove_session(client_id)
@@ -86,7 +87,7 @@ async def test_subscribe_invalid_client():
     manager = ClientSessionManager(bus)
 
     # Should return False instead of raising ValueError
-    result = await manager.subscribe_thread("invalid", "thread-abc123")
+    result = await manager.subscribe_loop("invalid", "loop-abc123")
     assert result is False
 
 
@@ -97,7 +98,7 @@ async def test_unsubscribe_invalid_client():
     manager = ClientSessionManager(bus)
 
     # Should return False instead of raising ValueError
-    result = await manager.unsubscribe_thread("invalid", "thread-abc123")
+    result = await manager.unsubscribe_loop("invalid", "loop-abc123")
     assert result is False
 
 
@@ -111,7 +112,7 @@ async def test_remove_session():
     transport.transport_type = "test"
 
     client_id = await manager.create_session(transport, None)
-    result = await manager.subscribe_thread(client_id, "thread-abc123")
+    result = await manager.subscribe_loop(client_id, "loop-abc123")
     assert result is True
 
     assert manager.session_count == 1
@@ -134,14 +135,13 @@ async def test_sender_loop_sends_events():
     transport.send = AsyncMock()
 
     client_id = await manager.create_session(transport, None)
-    await manager.subscribe_thread(client_id, "thread-abc123")
+    await manager.subscribe_loop(client_id, "loop-abc123")
 
     # Give sender task time to start
     await asyncio.sleep(0.05)
 
-    # Publish event (topic format must match: thread:{thread_id})
     event = {"type": "test", "data": "hello"}
-    await bus.publish("thread:thread-abc123", event)
+    await bus.publish(loop_event_topic("loop-abc123"), event)
 
     # Wait for sender loop to process
     await asyncio.sleep(0.2)
@@ -166,12 +166,11 @@ async def test_sender_loop_stops_on_error():
     transport.send = AsyncMock(side_effect=Exception("Connection error"))
 
     client_id = await manager.create_session(transport, None)
-    result = await manager.subscribe_thread(client_id, "thread-abc123")
+    result = await manager.subscribe_loop(client_id, "loop-abc123")
     assert result is True
 
-    # Publish event (topic format must match: thread:{thread_id})
     event = {"type": "test", "data": "hello"}
-    await bus.publish("thread:thread-abc123", event)
+    await bus.publish(loop_event_topic("loop-abc123"), event)
 
     # Wait for sender loop to process
     await asyncio.sleep(0.1)
@@ -184,8 +183,8 @@ async def test_sender_loop_stops_on_error():
 
 
 @pytest.mark.asyncio
-async def test_multiple_subscriptions():
-    """Test client can subscribe to multiple threads."""
+async def test_subscribe_loop_replaces_prior_subscription():
+    """Second loop subscription replaces the first (strict single-loop client plane)."""
     bus = EventBus()
     manager = ClientSessionManager(bus)
 
@@ -194,23 +193,21 @@ async def test_multiple_subscriptions():
 
     client_id = await manager.create_session(transport, None)
 
-    result1 = await manager.subscribe_thread(client_id, "thread-abc123")
+    result1 = await manager.subscribe_loop(client_id, "loop-abc123")
     assert result1 is True
-    result2 = await manager.subscribe_thread(client_id, "thread-def456")
+    result2 = await manager.subscribe_loop(client_id, "loop-def456")
     assert result2 is True
 
     session = await manager.get_session(client_id)
     assert session is not None
-    assert len(session.subscriptions) == 2
-    assert "thread-abc123" in session.subscriptions
-    assert "thread-def456" in session.subscriptions
+    assert session.subscriptions == {"loop-def456"}
 
     # Cleanup
     await manager.remove_session(client_id)
 
 
 @pytest.mark.asyncio
-async def test_subscribe_thread_accepts_minimal_verbosity() -> None:
+async def test_subscribe_loop_accepts_minimal_verbosity() -> None:
     """Test `minimal` is accepted as a client verbosity level."""
     bus = EventBus()
     manager = ClientSessionManager(bus)
@@ -219,7 +216,7 @@ async def test_subscribe_thread_accepts_minimal_verbosity() -> None:
     transport.transport_type = "test"
 
     client_id = await manager.create_session(transport, None)
-    result = await manager.subscribe_thread(client_id, "thread-abc123", verbosity="minimal")
+    result = await manager.subscribe_loop(client_id, "loop-abc123", verbosity="minimal")
     assert result is True
 
     session = await manager.get_session(client_id)
@@ -240,7 +237,7 @@ async def test_sender_loop_filters_detailed_event_for_minimal_verbosity() -> Non
     transport.send = AsyncMock()
 
     client_id = await manager.create_session(transport, None)
-    result = await manager.subscribe_thread(client_id, "thread-abc123", verbosity="minimal")
+    result = await manager.subscribe_loop(client_id, "loop-abc123", verbosity="minimal")
     assert result is True
 
     class TestEvent(SootheEvent):
@@ -255,7 +252,7 @@ async def test_sender_loop_filters_detailed_event_for_minimal_verbosity() -> Non
         action="created",
         verbosity=VerbosityTier.DETAILED,
     )
-    await bus.publish("thread:thread-abc123", event, event_meta=event_meta)
+    await bus.publish(loop_event_topic("loop-abc123"), event, event_meta=event_meta)
     await asyncio.sleep(0.05)
 
     transport.send.assert_not_called()

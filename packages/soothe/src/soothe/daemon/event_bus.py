@@ -63,17 +63,20 @@ class EventBus:
     events to specific topics and subscribers receive events for topics
     they've subscribed to.
 
-    Topic Format:
-        "thread:{thread_id}" - Events for a specific conversation thread
+    Topic format (IG-408):
+        ``loop:{loop_id}`` — primary; client subscriptions and daemon ``_broadcast``
+        scoped delivery.
+        ``global`` — daemon-wide frames (e.g. some status, command_response).
+        ``thread:{checkpoint_id}`` — legacy / internal only; do not use for new code.
 
-    Example:
+    Example (loop-scoped):
         >>> bus = EventBus()
         >>> queue = asyncio.Queue()
-        >>> await bus.subscribe("thread:abc123", queue)
-        >>> await bus.publish("thread:abc123", {"type": "event", "data": "hello"})
+        >>> await bus.subscribe("loop:abc123", queue)
+        >>> await bus.publish("loop:abc123", {"type": "event", "loop_id": "abc123"})
         >>> event = await queue.get()
-        >>> print(event)
-        {'type': 'event', 'data': 'hello'}
+        >>> print(event["loop_id"])
+        abc123
     """
 
     def __init__(

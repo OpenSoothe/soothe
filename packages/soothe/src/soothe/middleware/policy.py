@@ -66,7 +66,7 @@ class SoothePolicyMiddleware(AgentMiddleware):
         workspace = self._workspace_from_request(request)
         ctx = PolicyContext(
             active_permissions=self._resolve_permissions(),
-            thread_id=self._thread_id_from_request(request),
+            scope_id=self._thread_id_from_request(request),
             workspace=workspace,
         )
         decision = self._policy.check(

@@ -30,6 +30,7 @@ def log_tui_trace(*, tui_debug: bool, event: str, **fields: Any) -> None:
         tui_debug: Whether tracing is enabled (from config).
         event: Short event name (e.g. ``renderer.assistant_text``).
         fields: Key/value pairs appended as ``key='value'`` (strings truncated).
+            Common fields include ``loop_id`` for the active AgentLoop id.
     """
     if not tui_debug:
         return

@@ -117,7 +117,7 @@ class PolicyContext(BaseModel):
 
     Args:
         active_permissions: The currently granted permissions.
-        thread_id: The current thread (for audit).
+        scope_id: Opaque execution scope for audit (e.g. AgentLoop id or checkpoint key).
         workspace: Absolute workspace root for stream-scoped filesystem policy
             (from LangGraph ``configurable["workspace"]``), when available.
     """
@@ -125,7 +125,7 @@ class PolicyContext(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     active_permissions: Any  # PermissionSet (Any to avoid Pydantic issues with non-BaseModel)
-    thread_id: str | None = None
+    scope_id: str | None = None
     workspace: str | None = None
 
 

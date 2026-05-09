@@ -186,7 +186,7 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "type": "rpc",
         "daemon_command": "clear",
         "description": "Clear thread history",
-        "requires_thread": True,
+        "requires_loop": True,
     },
     "/exit": {
         "location": "daemon",
@@ -211,14 +211,14 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "type": "rpc",
         "daemon_command": "cancel",
         "description": "Cancel the current running job",
-        "requires_thread": True,
+        "requires_loop": True,
     },
     "/memory": {
         "location": "daemon",
         "type": "rpc",
         "daemon_command": "memory",
         "description": "Show memory stats",
-        "requires_thread": True,
+        "requires_loop": True,
         "handler": show_memory,
     },
     "/policy": {
@@ -233,7 +233,7 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "type": "rpc",
         "daemon_command": "history",
         "description": "Show recent prompt history",
-        "requires_thread": True,
+        "requires_loop": True,
         "handler": show_history,
     },
     "/config": {
@@ -248,7 +248,7 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "type": "rpc",
         "daemon_command": "review",
         "description": "Review recent conversation and action history",
-        "requires_thread": True,
+        "requires_loop": True,
         "handler": show_review,
     },
     "/thread": {
@@ -266,14 +266,14 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "type": "rpc",
         "daemon_command": "resume",
         "description": "Resume a recent thread",
-        "params_schema": {"thread_id": {"type": "string", "required": True}},
+        "params_schema": {"loop_id": {"type": "string", "required": True}},
     },
     "/autopilot": {
         "location": "daemon",
         "type": "rpc",
         "daemon_command": "autopilot_dashboard",
         "description": "Show autopilot dashboard",
-        "requires_thread": True,
+        "requires_loop": True,
         "handler": show_autopilot_dashboard,
     },
     # Daemon routing commands (5)
@@ -305,50 +305,9 @@ COMMANDS: dict[str, dict[str, Any]] = {
 }
 
 
-# Legacy compatibility (used by tests/old code)
-SLASH_COMMANDS: dict[str, str] = {
-    cmd: entry.get("description", "") for cmd, entry in COMMANDS.items()
-}
-
-
-# ---------------------------------------------------------------------------
-# Legacy helper (used by tests/old code)
-# ---------------------------------------------------------------------------
-
-
-def parse_autonomous_command(cmd: str) -> tuple[int | None, str] | None:
-    """Parse `/autopilot` command payload (legacy helper)."""
-    stripped = cmd.strip()
-    if not stripped.startswith("/autopilot"):
-        return None
-
-    parts = stripped.split(maxsplit=2)
-    if len(parts) == 1:
-        return None
-
-    if len(parts) == 2:
-        single = parts[1].strip()
-        if not single or single.isdigit():
-            return None
-        return (None, single)
-
-    maybe_num = parts[1].strip()
-    if maybe_num.isdigit():
-        prompt = parts[2].strip()
-        if not prompt:
-            return None
-        max_iterations = int(maybe_num)
-        return (max_iterations if max_iterations > 0 else None, prompt)
-
-    prompt = f"{parts[1]} {parts[2]}".strip()
-    return (None, prompt) if prompt else None
-
-
 __all__ = [
     "COMMANDS",
-    "SLASH_COMMANDS",
     "KEYBOARD_SHORTCUTS",
-    "parse_autonomous_command",
     "show_commands",
     "show_keymaps",
     "show_memory",

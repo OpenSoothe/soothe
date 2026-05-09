@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import messages_from_dict
 from soothe_sdk.client import (
     WebSocketClient,
-    bootstrap_thread_session,
+    bootstrap_loop_session,
     connect_websocket_with_retries,
     websocket_url_from_config,
 )
@@ -38,43 +38,43 @@ class TuiDaemonSession:
         ws_url = websocket_url_from_config(cfg)
         self._client = WebSocketClient(url=ws_url)
         self._rpc_client = WebSocketClient(url=ws_url)
-        self._thread_id: str | None = None
+        self._loop_id: str | None = None
         self._read_lock = asyncio.Lock()
         self._rpc_lock = asyncio.Lock()
         self._rpc_connected = False
         self._streaming = False
 
     @property
-    def thread_id(self) -> str | None:
-        """Current thread ID known to the session."""
-        return self._thread_id
+    def loop_id(self) -> str | None:
+        """Active AgentLoop id for this WebSocket session."""
+        return self._loop_id
 
-    async def connect(self, *, resume_thread_id: str | None = None) -> dict[str, Any]:
-        """Connect and bootstrap a daemon thread session."""
+    async def connect(self, *, resume_loop_id: str | None = None) -> dict[str, Any]:
+        """Connect and bootstrap a daemon loop session."""
         await connect_websocket_with_retries(self._client)
-        status_event = await self._bootstrap_thread(resume_thread_id=resume_thread_id)
+        status_event = await self._bootstrap_loop(resume_loop_id=resume_loop_id)
         return status_event
 
-    async def _bootstrap_thread(self, *, resume_thread_id: str | None = None) -> dict[str, Any]:
-        """Create or resume a daemon thread on an already-connected websocket."""
-        status_event = await bootstrap_thread_session(
+    async def _bootstrap_loop(self, *, resume_loop_id: str | None = None) -> dict[str, Any]:
+        """Create or attach to a loop on an already-connected websocket."""
+        status_event = await bootstrap_loop_session(
             self._client,
-            resume_thread_id=resume_thread_id,
+            resume_loop_id=resume_loop_id,
             verbosity="normal",
             workspace=self._workspace,
         )
         if status_event.get("type") == "error":
             raise RuntimeError(str(status_event.get("message", "daemon bootstrap failed")))
-        self._thread_id = status_event.get("thread_id")
+        self._loop_id = status_event.get("loop_id")
         return status_event
 
     async def new_thread(self) -> dict[str, Any]:
-        """Switch the session to a new daemon thread."""
-        return await self._bootstrap_thread(resume_thread_id=None)
+        """Start a new AgentLoop conversation."""
+        return await self._bootstrap_loop(resume_loop_id=None)
 
-    async def switch_thread(self, thread_id: str) -> dict[str, Any]:
-        """Switch the session to a specific persisted thread."""
-        return await self._bootstrap_thread(resume_thread_id=thread_id)
+    async def switch_loop(self, loop_id: str) -> dict[str, Any]:
+        """Subscribe to an existing loop (re-bootstrap on the same connection)."""
+        return await self._bootstrap_loop(resume_loop_id=loop_id)
 
     async def close(self) -> None:
         """Close the daemon websocket."""
@@ -99,7 +99,10 @@ class TuiDaemonSession:
         attachments: list[dict[str, str]] | None = None,
     ) -> None:
         """Send a new user turn to the daemon."""
+        if not self._loop_id:
+            raise RuntimeError("No active loop session")
         await self._client.send_input(
+            self._loop_id,
             text,
             autonomous=autonomous,
             max_iterations=max_iterations,
@@ -116,14 +119,14 @@ class TuiDaemonSession:
 
     async def resume_interrupts(self, resume_payload: dict[str, Any]) -> None:
         """Resume a paused interactive turn."""
-        if not self._thread_id:
-            raise RuntimeError("No active daemon thread")
-        await self._client.send_resume_interrupts(self._thread_id, resume_payload)
+        if not self._loop_id:
+            raise RuntimeError("No active loop for interrupt resume")
+        await self._client.send_resume_interrupts(self._loop_id, resume_payload)
 
     async def iter_turn_chunks(self) -> Any:
         """Yield `(namespace, mode, data)` chunks for the active daemon turn."""
         query_started = False
-        expected_thread_id = self._thread_id
+        expected_loop_id = self._loop_id
         self._streaming = True
         async with self._read_lock:
             try:
@@ -133,20 +136,18 @@ class TuiDaemonSession:
                         break
 
                     event_type = event.get("type", "")
-                    event_thread_id = event.get("thread_id")
+                    event_loop_id = event.get("loop_id")
 
-                    # Strict thread isolation: ignore stale events from a different
-                    # subscribed thread so current-turn UI state stays consistent.
                     if (
-                        expected_thread_id
-                        and isinstance(event_thread_id, str)
-                        and event_thread_id
-                        and event_thread_id != expected_thread_id
+                        expected_loop_id
+                        and isinstance(event_loop_id, str)
+                        and event_loop_id
+                        and event_loop_id != expected_loop_id
                     ):
                         logger.debug(
-                            "Skipping daemon event for non-active thread %s (active=%s, type=%s)",
-                            event_thread_id,
-                            expected_thread_id,
+                            "Skipping daemon event for non-active loop %s (active=%s, type=%s)",
+                            event_loop_id,
+                            expected_loop_id,
                             event_type,
                         )
                         continue
@@ -155,11 +156,11 @@ class TuiDaemonSession:
                         raise RuntimeError(str(event.get("message", "daemon error")))
 
                     if event_type == "status":
-                        thread_id = event.get("thread_id")
-                        if isinstance(thread_id, str) and thread_id:
-                            self._thread_id = thread_id
-                            if expected_thread_id is None:
-                                expected_thread_id = thread_id
+                        loop_ev = event.get("loop_id")
+                        if isinstance(loop_ev, str) and loop_ev:
+                            self._loop_id = loop_ev
+                            if expected_loop_id is None:
+                                expected_loop_id = loop_ev
                         state = event.get("state", "")
                         if state == "running":
                             query_started = True
@@ -232,31 +233,31 @@ class TuiDaemonSession:
                 logger.debug("Failed to deserialize thread-state messages", exc_info=True)
         return DaemonStateSnapshot(values=values)
 
-    async def get_thread_messages(
+    async def fetch_conversation_log(
         self,
-        thread_id: str,
+        conversation_id: str,
         *,
         limit: int = 10000,
         offset: int = 0,
         include_events: bool = False,
     ) -> list[dict[str, Any]]:
-        """Fetch persisted thread messages through the daemon.
+        """Fetch persisted conversation rows through the daemon (checkpoint / durability id).
 
         Args:
-            thread_id: Thread identifier to read.
+            conversation_id: CoreAgent checkpoint conversation id (LangGraph ``configurable.thread_id``).
             limit: Maximum records to return.
             offset: Pagination offset.
             include_events: Include non-conversation event records.
 
         Returns:
-            Wire-safe thread message rows from `thread_messages_response`.
+            Wire-safe rows from ``thread_messages_response``.
         """
-        if not thread_id:
+        if not conversation_id:
             return []
 
         payload: dict[str, Any] = {
             "type": "thread_messages",
-            "thread_id": thread_id,
+            "thread_id": conversation_id,
             "limit": limit,
             "offset": offset,
         }

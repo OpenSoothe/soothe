@@ -42,7 +42,7 @@ async def test_daemon_persists_after_client_disconnect() -> None:
 
     # Simulate client disconnect via RPC detach command (RFC-404)
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "detach", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "detach", "loop_id": "loop-1", "params": {}}
     )
 
     # Daemon should keep running
@@ -65,7 +65,7 @@ async def test_daemon_persists_after_exit_command() -> None:
 
     # Send /exit RPC command (RFC-404)
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "exit", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "exit", "loop_id": "loop-1", "params": {}}
     )
 
     # IG-085: Daemon should KEEP RUNNING
@@ -88,7 +88,7 @@ async def test_daemon_persists_after_quit_command() -> None:
 
     # Send /quit RPC command (RFC-404)
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "quit", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "quit", "loop_id": "loop-1", "params": {}}
     )
 
     # IG-085: Daemon should KEEP RUNNING
@@ -111,21 +111,21 @@ async def test_multiple_clients_connect_disconnect_daemon_persists() -> None:
 
     # Simulate first client connecting and disconnecting (RFC-404)
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "exit", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "exit", "loop_id": "loop-1", "params": {}}
     )
     assert daemon._running is True
 
     # Simulate second client connecting and disconnecting (RFC-404)
     sent.clear()
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "quit", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "quit", "loop_id": "loop-1", "params": {}}
     )
     assert daemon._running is True
 
     # Simulate third client connecting and detaching (RPC-404)
     sent.clear()
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "detach", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "detach", "loop_id": "loop-1", "params": {}}
     )
     assert daemon._running is True
 
@@ -139,12 +139,12 @@ async def test_only_explicit_stop_shutdowns_daemon() -> None:
 
     # Multiple clients disconnect via RPC (RFC-404)
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "exit", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "exit", "loop_id": "loop-1", "params": {}}
     )
     assert daemon._running is True
 
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "quit", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "quit", "loop_id": "loop-1", "params": {}}
     )
     assert daemon._running is True
 
@@ -162,7 +162,7 @@ async def test_cancel_command_does_not_stop_daemon() -> None:
 
     # Send /cancel RPC command (RFC-404)
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "cancel", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "cancel", "loop_id": "loop-1", "params": {}}
     )
 
     # Daemon should keep running
@@ -205,27 +205,27 @@ async def test_daemon_lifecycle_comprehensive_scenario() -> None:
 
     # Scenario: Client A connects, sends query, disconnects (RFC-404)
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "exit", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "exit", "loop_id": "loop-1", "params": {}}
     )
     assert daemon._running is True
 
     # Scenario: Client B connects and cancels (RFC-404)
     sent.clear()
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "cancel", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "cancel", "loop_id": "loop-1", "params": {}}
     )
     assert daemon._running is True
 
     sent.clear()
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "detach", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "detach", "loop_id": "loop-1", "params": {}}
     )
     assert daemon._running is True
 
     # Scenario: Client C connects and quits (RFC-404)
     sent.clear()
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "quit", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "quit", "loop_id": "loop-1", "params": {}}
     )
     assert daemon._running is True
 

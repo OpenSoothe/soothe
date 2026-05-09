@@ -216,7 +216,7 @@ class TestConfigDrivenPolicy:
         )
 
         context = PolicyContext(
-            thread_id="thread_1",
+            scope_id="thread_1",
             active_permissions=STANDARD_PROFILE.permissions,
         )
 
@@ -246,7 +246,7 @@ class TestConfigDrivenPolicy:
         )
 
         context = PolicyContext(
-            thread_id="thread_1",
+            scope_id="thread_1",
             active_permissions=no_execute_permissions,
         )
 
@@ -266,7 +266,7 @@ class TestConfigDrivenPolicy:
         )
 
         context = PolicyContext(
-            thread_id="thread_1",
+            scope_id="thread_1",
             active_permissions=READONLY_PROFILE.permissions,
         )
 
@@ -293,7 +293,7 @@ class TestConfigDrivenPolicy:
         )
 
         context = PolicyContext(
-            thread_id="thread_1",
+            scope_id="thread_1",
             active_permissions=deny_profile.permissions,
         )
 
@@ -311,7 +311,7 @@ class TestConfigDrivenPolicy:
         )
 
         context = PolicyContext(
-            thread_id="thread_1",
+            scope_id="thread_1",
             active_permissions=STANDARD_PROFILE.permissions,
         )
 

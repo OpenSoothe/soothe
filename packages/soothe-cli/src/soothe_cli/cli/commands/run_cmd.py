@@ -17,18 +17,20 @@ logger = logging.getLogger(__name__)
 
 def run_impl(
     prompt: str | None,
-    thread_id: str | None,
+    resume_loop_id: str | None,
     no_tui: bool,  # noqa: FBT001
     autonomous: bool,  # noqa: FBT001
     max_iterations: int | None,
     streaming_enabled: bool | None = None,
     streaming_mode: str | None = None,
+    *,
+    config_path: str | None = None,
 ) -> None:
     """Core implementation for running Soothe agent.
 
     Args:
         prompt: Optional prompt for headless mode
-        thread_id: Thread ID to resume
+        resume_loop_id: Existing loop id to attach to (optional)
         no_tui: Force headless mode
         autonomous: Enable autonomous iteration mode
         max_iterations: Max iterations for autonomous mode
@@ -38,7 +40,7 @@ def run_impl(
     startup_start = time.perf_counter()
 
     try:
-        cfg = load_config()
+        cfg = load_config(config_path)
         log_level = resolve_cli_log_level(logging_level=cfg.logging_level)
         log_file = Path(SOOTHE_HOME) / "logs" / "soothe-cli.log"
         setup_logging(log_level, log_file=log_file)
@@ -65,13 +67,13 @@ def run_impl(
             run_headless(
                 cfg,
                 prompt or "",
-                thread_id=thread_id,
+                resume_loop_id=resume_loop_id,
                 autonomous=autonomous,
                 max_iterations=max_iterations,
             )
         else:
             # TUI mode (with optional initial prompt)
-            run_tui(cfg, thread_id=thread_id, initial_prompt=prompt)
+            run_tui(cfg, resume_loop_id=resume_loop_id, initial_prompt=prompt)
 
         run_elapsed_s = time.perf_counter() - run_start
         typer.echo(f"Total running time: {run_elapsed_s:.2f}s", err=True)
