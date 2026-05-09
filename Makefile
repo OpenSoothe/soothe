@@ -5,12 +5,7 @@
 # 2. soothe-cli        - CLI client (Typer CLI + Textual TUI)
 # 3. soothe            - Daemon server (main package)
 #
-# Uses pyenv virtualenv "soothe-dev" for isolation (not .venv).
-
-PYENV_VENV_NAME := soothe-dev
-PYENV_VENV := $(shell pyenv prefix $(PYENV_VENV_NAME) 2>/dev/null)
-PYTHON := $(PYENV_VENV)/bin/python
-PIP := $(PYENV_VENV)/bin/pip
+# Uses .venv managed by uv for development.
 
 .PHONY: setup reset-the-world sync sync-dev format format-check lint lint-fix test test-unit test-integration test-coverage build publish publish-test clean help \
         sdk-sync sdk-format sdk-lint sdk-test sdk-build sdk-publish sdk-publish-test \
@@ -19,10 +14,10 @@ PIP := $(PYENV_VENV)/bin/pip
 
 # Default target
 help:
-	@echo "Soothe Multi-Package Monorepo (pyenv: $(PYENV_VENV_NAME))"
+	@echo "Soothe Multi-Package Monorepo"
 	@echo ""
 	@echo "Setup:"
-	@echo "  make setup            - Create pyenv virtualenv 'soothe-dev' if missing"
+	@echo "  make setup            - Sync workspace dependencies (creates .venv if needed)"
 	@echo "  make reset-the-world  - Reset all state: docker compose down -v + clean ~/.soothe/ (keeps config)"
 	@echo ""
 	@echo "Multi-Package Targets (all packages):"
@@ -70,19 +65,13 @@ help:
 	@echo "  make daemon-clean     - Clean daemon build artifacts"
 
 # ============================================================================
-# Pyenv Virtualenv Setup
+# Workspace Setup
 # ============================================================================
 
 setup:
-	@if pyenv prefix $(PYENV_VENV_NAME) >/dev/null 2>&1; then \
-		echo "pyenv virtualenv '$(PYENV_VENV_NAME)' already exists"; \
-	else \
-		echo "Creating pyenv virtualenv '$(PYENV_VENV_NAME)' with Python 3.12..."; \
-		pyenv virtualenv 3.12 $(PYENV_VENV_NAME); \
-		echo "Setting local .python-version to $(PYENV_VENV_NAME)..."; \
-		pyenv local $(PYENV_VENV_NAME); \
-		echo "Virtualenv created and activated"; \
-	fi
+	@echo "Syncing workspace dependencies..."
+	uv sync --all-extras
+	@echo "Workspace ready (.venv created if needed)"
 
 # Reset all state: docker volumes + ~/.soothe/ (keeps config)
 reset-the-world:
@@ -101,7 +90,7 @@ reset-the-world:
 
 sync:
 	@echo "Syncing all workspace dependencies with extras..."
-	UV_PROJECT_ENVIRONMENT=$(PYENV_VENV) uv sync --all-extras --package soothe --package soothe-sdk --package soothe-cli
+	uv sync --all-extras --package soothe --package soothe-sdk --package soothe-cli
 	@echo "All packages synced with all dependencies and extras"
 
 format: daemon-format sdk-format cli-format
@@ -112,13 +101,17 @@ lint: daemon-lint sdk-lint cli-lint
 
 lint-fix:
 	@echo "Auto-fixing linting issues in all packages..."
-	cd packages/soothe && $(PYENV_VENV)/bin/ruff check --fix src/
-	cd packages/soothe-sdk && $(PYENV_VENV)/bin/ruff check --fix src/
-	cd packages/soothe-cli && $(PYENV_VENV)/bin/ruff check --fix src/
+	cd packages/soothe && uv run ruff check --fix src/
+	cd packages/soothe-sdk && uv run ruff check --fix src/
+	cd packages/soothe-cli && uv run ruff check --fix src/
 	@echo "All packages lint-fixed"
 
 test: daemon-test-unit sdk-test cli-test
 	@echo "All packages tested"
+
+# Alias: root Makefile previously listed test-integration in .PHONY but had no recipe.
+test-integration: daemon-test-integration
+	@echo "Integration tests complete"
 
 build: daemon-build sdk-build cli-build
 	@echo "All packages built"
@@ -138,32 +131,32 @@ clean: daemon-clean
 
 daemon-sync:
 	@echo "Syncing daemon dependencies..."
-	cd packages/soothe && UV_PROJECT_ENVIRONMENT=$(PYENV_VENV) uv sync --all-extras
+	cd packages/soothe && uv sync --all-extras
 	@echo "Daemon dependencies synced"
 
 daemon-sync-dev:
 	@echo "Syncing daemon dev dependencies..."
-	cd packages/soothe && UV_PROJECT_ENVIRONMENT=$(PYENV_VENV) uv sync --all-extras
+	cd packages/soothe && uv sync --all-extras
 	@echo "Daemon dev dependencies synced"
 
 daemon-format: daemon-sync-dev
 	@echo "Formatting daemon code..."
-	cd packages/soothe && $(PYENV_VENV)/bin/ruff format src/
+	cd packages/soothe && uv run ruff format src/
 	@echo "Daemon code formatted"
 
 daemon-format-check: daemon-sync-dev
 	@echo "Checking daemon code formatting..."
-	cd packages/soothe && $(PYENV_VENV)/bin/ruff format --check src/
+	cd packages/soothe && uv run ruff format --check src/
 	@echo "Daemon format check passed"
 
 daemon-lint: daemon-sync-dev
 	@echo "Linting daemon code..."
-	cd packages/soothe && $(PYENV_VENV)/bin/ruff check src/
+	cd packages/soothe && uv run ruff check src/
 	@echo "Daemon linting complete"
 
 daemon-lint-fix: daemon-sync-dev
 	@echo "Auto-fixing daemon linting issues..."
-	cd packages/soothe && $(PYENV_VENV)/bin/ruff check --fix src/
+	cd packages/soothe && uv run ruff check --fix src/
 	@echo "Daemon linting issues fixed"
 
 daemon-test: daemon-test-unit daemon-test-integration
@@ -171,19 +164,19 @@ daemon-test: daemon-test-unit daemon-test-integration
 
 daemon-test-unit: daemon-sync-dev
 	@echo "Running daemon unit tests..."
-	cd packages/soothe && $(PYENV_VENV)/bin/pytest tests/unit/ -v
+	cd packages/soothe && uv run pytest tests/unit/ -v
 	@echo "Daemon unit tests complete"
 
 daemon-test-integration: daemon-sync-dev
 	@echo "Running daemon integration tests..."
 	@echo "Note: Integration tests require external services (PostgreSQL, Weaviate) and real LLM API calls"
 	@echo "Use: pytest tests/integration/ --run-integration"
-	cd packages/soothe && $(PYENV_VENV)/bin/pytest tests/integration/ --run-integration -v
+	cd packages/soothe && uv run pytest tests/integration/ --run-integration -v
 	@echo "Daemon integration tests complete"
 
 daemon-test-coverage: daemon-sync-dev
 	@echo "Running daemon tests with coverage..."
-	cd packages/soothe && $(PYENV_VENV)/bin/pytest tests/ --cov=soothe --cov-report=term-missing --cov-report=html
+	cd packages/soothe && uv run pytest tests/ --cov=soothe --cov-report=term-missing --cov-report=html
 	@echo "Daemon coverage report generated in htmlcov/"
 
 daemon-build:
@@ -213,22 +206,22 @@ daemon-clean:
 
 sdk-sync:
 	@echo "Syncing SDK dependencies..."
-	cd packages/soothe-sdk && UV_PROJECT_ENVIRONMENT=$(PYENV_VENV) uv sync --all-extras
+	cd packages/soothe-sdk && uv sync --all-extras
 	@echo "SDK dependencies synced"
 
 sdk-format: sdk-sync
 	@echo "Formatting SDK code..."
-	cd packages/soothe-sdk && $(PYENV_VENV)/bin/ruff format src/
+	cd packages/soothe-sdk && uv run ruff format src/
 	@echo "SDK code formatted"
 
 sdk-lint: sdk-sync
 	@echo "Linting SDK code..."
-	cd packages/soothe-sdk && $(PYENV_VENV)/bin/ruff check src/
+	cd packages/soothe-sdk && uv run ruff check src/
 	@echo "SDK linting complete"
 
 sdk-test: sdk-sync
 	@echo "Running SDK tests..."
-	cd packages/soothe-sdk && $(PYENV_VENV)/bin/pytest tests/ -v
+	cd packages/soothe-sdk && uv run pytest tests/ -v
 	@echo "SDK tests complete"
 
 sdk-build:
@@ -252,22 +245,22 @@ sdk-publish-test:
 
 cli-sync:
 	@echo "Syncing CLI dependencies..."
-	cd packages/soothe-cli && UV_PROJECT_ENVIRONMENT=$(PYENV_VENV) uv sync --all-extras
+	cd packages/soothe-cli && uv sync --all-extras
 	@echo "CLI dependencies synced"
 
 cli-format: cli-sync
 	@echo "Formatting CLI code..."
-	cd packages/soothe-cli && $(PYENV_VENV)/bin/ruff format src/
+	cd packages/soothe-cli && uv run ruff format src/
 	@echo "CLI code formatted"
 
 cli-lint: cli-sync
 	@echo "Linting CLI code..."
-	cd packages/soothe-cli && $(PYENV_VENV)/bin/ruff check src/
+	cd packages/soothe-cli && uv run ruff check src/
 	@echo "CLI linting complete"
 
 cli-test: cli-sync
 	@echo "Running CLI tests..."
-	cd packages/soothe-cli && $(PYENV_VENV)/bin/pytest tests/ -v
+	cd packages/soothe-cli && uv run pytest tests/ -v
 	@echo "CLI tests complete"
 
 cli-build:

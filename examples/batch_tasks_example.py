@@ -4,11 +4,8 @@ Runs a series of diverse tasks sequentially using the Soothe CLI in headless
 mode, demonstrating auto-routing to different subagents.
 
 Usage:
-    # From project root with pyenv virtualenv activated:
-    pyenv activate soothe-dev && python examples/batch_tasks_example.py
-
-    # Or use make run:
-    make run-dev examples/batch_tasks_example.py
+    # From project root:
+    uv run python examples/batch_tasks_example.py
 """
 
 import subprocess
@@ -33,12 +30,12 @@ def find_soothe_cli() -> str:
     """Find the soothe CLI executable.
 
     Returns:
-        Path to soothe CLI (pyenv virtualenv or system PATH).
+        Path to soothe CLI (local .venv or system PATH).
     """
-    # Check pyenv virtualenv first
-    pyenv_root = Path.home() / ".pyenv" / "versions" / "soothe-dev" / "bin" / "soothe"
-    if pyenv_root.is_file():
-        return str(pyenv_root)
+    # Check local .venv first
+    venv_root = Path(__file__).resolve().parent.parent / ".venv" / "bin" / "soothe"
+    if venv_root.is_file():
+        return str(venv_root)
 
     # Fall back to system PATH
     return "soothe"

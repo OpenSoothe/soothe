@@ -18,10 +18,14 @@ import pytest
 from soothe.daemon import SootheDaemon, WebSocketClient
 from tests.integration.conftest import (
     alloc_ephemeral_port,
-    await_event_type,
     await_status_state,
     build_daemon_config,
     force_isolated_home,
+)
+from tests.integration.ws_loop_client import (
+    loop_new_with_initial_input,
+    request_loop_list,
+    subscribe_loop_stream,
 )
 
 
@@ -53,9 +57,8 @@ async def test_malformed_json_handling(
     await client.connect()
 
     try:
-        await client.send_thread_list()
-        response = await await_event_type(client.read_event, "thread_list_response", timeout=2.0)
-        assert response["type"] == "thread_list_response"
+        response = await request_loop_list(client)
+        assert response["type"] == "loop_list_response"
 
     finally:
         await client.close()
@@ -73,9 +76,8 @@ async def test_missing_required_fields(
     await client.connect()
 
     try:
-        await client.send_thread_list()
-        response = await await_event_type(client.read_event, "thread_list_response", timeout=2.0)
-        assert response["type"] == "thread_list_response"
+        response = await request_loop_list(client)
+        assert response["type"] == "loop_list_response"
 
     finally:
         await client.close()
@@ -91,9 +93,8 @@ async def test_invalid_message_type(daemon_fixture: tuple[SootheDaemon, int]) ->
     await client.connect()
 
     try:
-        await client.send_thread_list()
-        response = await await_event_type(client.read_event, "thread_list_response", timeout=2.0)
-        assert response["type"] == "thread_list_response"
+        response = await request_loop_list(client)
+        assert response["type"] == "loop_list_response"
 
     finally:
         await client.close()
@@ -109,21 +110,18 @@ async def test_thread_not_found_error(daemon_fixture: tuple[SootheDaemon, int]) 
     await client.connect()
 
     try:
-        fake_thread_id = f"non-existent-{uuid.uuid4().hex}"
-        await client.send_thread_get(fake_thread_id)
+        fake_loop_id = f"non-existent-{uuid.uuid4().hex}"
+        await client.send_loop_get(fake_loop_id)
 
         response = await asyncio.wait_for(client.read_event(), timeout=3.0)
         assert response is not None
 
-        await client.send_thread_archive(fake_thread_id)
+        await client.send_loop_delete(fake_loop_id)
         response2 = await asyncio.wait_for(client.read_event(), timeout=3.0)
         assert response2 is not None
 
-        await client.send_thread_list()
-        list_response = await await_event_type(
-            client.read_event, "thread_list_response", timeout=2.0
-        )
-        assert list_response["type"] == "thread_list_response"
+        list_response = await request_loop_list(client)
+        assert list_response["type"] == "loop_list_response"
 
     finally:
         await client.close()
@@ -141,11 +139,10 @@ async def test_client_disconnection_during_stream(
     await client.connect()
 
     try:
-        await client.send_thread_create(initial_message="test disconnection")
-        created = await await_event_type(client.read_event, "thread_created", timeout=3.0)
-        thread_id = created["thread_id"]
+        loop_id = await loop_new_with_initial_input(client, initial_message="test disconnection")
+        await subscribe_loop_stream(client, loop_id)
 
-        await client.send_input("Start a long-running operation")
+        await client.send_input(loop_id, "Start a long-running operation")
         await await_status_state(client.read_event, "running", timeout=5.0)
 
         await client.close()
@@ -156,14 +153,12 @@ async def test_client_disconnection_during_stream(
         await client2.connect()
 
         try:
-            await client2.send_thread_list()
-            list_response = await await_event_type(
-                client2.read_event, "thread_list_response", timeout=2.0
-            )
-            assert list_response["type"] == "thread_list_response"
+            list_response = await request_loop_list(client2)
+            assert list_response["type"] == "loop_list_response"
 
-            threads = {t["thread_id"]: t for t in list_response["threads"]}
-            assert thread_id in threads
+            loops = list_response.get("loops") or []
+            loop_ids = {row["loop_id"] for row in loops}
+            assert loop_id in loop_ids
 
         finally:
             await client2.close()
@@ -195,24 +190,21 @@ async def test_concurrent_client_connections(
 
         async def send_request(client_idx: int):
             client = clients[client_idx]
-            await client.send_thread_create(initial_message=f"client {client_idx}")
-            return await await_event_type(client.read_event, "thread_created", timeout=5.0)
+            return await loop_new_with_initial_input(client, initial_message=f"client {client_idx}")
 
         tasks = [send_request(i) for i in range(num_clients)]
         responses = await asyncio.gather(*tasks, return_exceptions=True)
 
         successful = 0
         for response in responses:
-            if isinstance(response, dict):
-                assert response.get("type") == "thread_created"
+            if isinstance(response, str) and response:
                 successful += 1
 
         assert successful >= num_clients - 1, f"Only {successful}/{num_clients} clients succeeded"
 
         for client in clients:
             try:
-                await client.send_thread_list()
-                list_response = await asyncio.wait_for(client.read_event(), timeout=2.0)
+                list_response = await request_loop_list(client)
                 assert list_response is not None
             except Exception:
                 pass
@@ -235,10 +227,10 @@ async def test_daemon_shutdown_during_operation(
     await client.connect()
 
     try:
-        await client.send_thread_create(initial_message="test shutdown")
-        await await_event_type(client.read_event, "thread_created", timeout=3.0)
+        loop_id = await loop_new_with_initial_input(client, initial_message="test shutdown")
+        await subscribe_loop_stream(client, loop_id)
 
-        await client.send_input("Start an operation")
+        await client.send_input(loop_id, "Start an operation")
         await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
 
     finally:

@@ -18,10 +18,10 @@ import pytest
 from soothe.daemon import SootheDaemon, WebSocketClient
 from tests.integration.conftest import (
     alloc_ephemeral_port,
-    await_event_type,
     build_daemon_config,
     force_isolated_home,
 )
+from tests.integration.ws_loop_client import loop_new_with_initial_input, request_loop_list
 
 
 @pytest.fixture
@@ -67,9 +67,8 @@ async def test_websocket_cors_validation(
     await client.connect()
 
     try:
-        await client.send_thread_list()
-        response = await await_event_type(client.read_event, "thread_list_response", timeout=3.0)
-        assert response["type"] == "thread_list_response"
+        response = await request_loop_list(client)
+        assert response["type"] == "loop_list_response"
 
     finally:
         await client.close()
@@ -91,9 +90,8 @@ async def test_message_size_limit(tmp_path: Path) -> None:
 
         try:
             small_message = "x" * (1 * 1024 * 1024)
-            await client.send_thread_create(initial_message=small_message)
-            response = await await_event_type(client.read_event, "thread_created", timeout=5.0)
-            assert response["type"] == "thread_created"
+            loop_id = await loop_new_with_initial_input(client, initial_message=small_message)
+            assert loop_id
 
         finally:
             await client.close()
@@ -121,11 +119,8 @@ async def test_rate_limiting(tmp_path: Path) -> None:
 
         try:
             for _ in range(5):
-                await client.send_thread_list()
-                response = await await_event_type(
-                    client.read_event, "thread_list_response", timeout=2.0
-                )
-                assert response["type"] == "thread_list_response"
+                response = await request_loop_list(client)
+                assert response["type"] == "loop_list_response"
 
         finally:
             await client.close()
@@ -153,11 +148,8 @@ async def test_pid_lock_enforcement(tmp_path: Path) -> None:
         await client1.connect()
 
         try:
-            await client1.send_thread_list()
-            response = await await_event_type(
-                client1.read_event, "thread_list_response", timeout=2.0
-            )
-            assert response["type"] == "thread_list_response"
+            response = await request_loop_list(client1)
+            assert response["type"] == "loop_list_response"
         finally:
             await client1.close()
 
@@ -170,11 +162,8 @@ async def test_pid_lock_enforcement(tmp_path: Path) -> None:
             try:
                 await client2.connect()
 
-                await client2.send_thread_list()
-                response2 = await await_event_type(
-                    client2.read_event, "thread_list_response", timeout=2.0
-                )
-                assert response2["type"] == "thread_list_response"
+                response2 = await request_loop_list(client2)
+                assert response2["type"] == "loop_list_response"
 
             finally:
                 await client2.close()

@@ -24,14 +24,19 @@ class SubprocessLoopError(RuntimeError):
     """Raised when the loop subprocess exits with a non-zero exit code."""
 
 
-def _spawn_safe_config(config: SootheConfig) -> SootheConfig:
+def _spawn_safe_config(config: SootheConfig | None) -> SootheConfig:
     """Return a copy of ``config`` safe for ``multiprocessing`` spawn pickling.
 
     The daemon may have populated runtime caches (chat models, embeddings,
     vector stores) that hold unpickleable synchronization primitives. The
     subprocess only needs declarative settings and rebuilds caches locally.
+
+    Args:
+        config: Loaded daemon config, or ``None`` (tests / callers without config)
+            to use declarative defaults only.
     """
-    return SootheConfig.model_validate(config.model_dump(mode="json"))
+    base = config if config is not None else SootheConfig()
+    return SootheConfig.model_validate(base.model_dump(mode="json"))
 
 
 def _spawn_safe_request(request: LoopRunRequest) -> LoopRunRequest:
@@ -85,7 +90,7 @@ class LocalLoopRunner:
     One instance per ``loop_id``. Created by ``LoopRunnerFactory``.
     """
 
-    def __init__(self, loop_id: str, config: SootheConfig) -> None:
+    def __init__(self, loop_id: str, config: SootheConfig | None) -> None:
         self._loop_id = loop_id
         self._config = config
         self._process: multiprocessing.Process | None = None  # type: ignore[type-arg]

@@ -258,14 +258,14 @@ async def test_websocket_heartbeat_emits_while_query_running(
 
     try:
         created = await client.request_response(
-            {"type": "thread_create"},
-            response_type="thread_created",
+            {"type": "loop_new"},
+            response_type="loop_new_response",
         )
-        thread_id = created["thread_id"]
-        daemon._runner.set_current_thread_id(thread_id)
+        loop_id = created["loop_id"]
+        daemon._runner.set_current_thread_id(loop_id)
         daemon._query_running = True
-        await client.subscribe_thread(thread_id)
-        await client.wait_for_subscription_confirmed(thread_id, timeout=5.0)
+        await client.send_loop_subscribe(loop_id)
+        await await_event_type(client.read_event, "subscription_confirmed", timeout=5.0)
 
         async with asyncio.timeout(8.0):
             while True:
@@ -274,7 +274,8 @@ async def test_websocket_heartbeat_emits_while_query_running(
                     continue
                 data = event.get("data")
                 if isinstance(data, dict) and data.get("type") == "soothe.system.daemon.heartbeat":
-                    assert event["thread_id"] == thread_id
+                    ctx = event.get("loop_id") or event.get("thread_id")
+                    assert ctx == loop_id
                     assert data["state"] == "running"
                     break
     finally:

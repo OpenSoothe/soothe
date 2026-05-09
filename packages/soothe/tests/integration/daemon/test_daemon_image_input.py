@@ -19,6 +19,7 @@ from tests.integration.conftest import (
     await_status_state,
     get_base_config,
 )
+from tests.integration.ws_loop_client import loop_new, subscribe_loop_stream
 
 TINY_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
@@ -97,22 +98,14 @@ async def test_websocket_input_with_image_runs_turn(
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
     try:
-        await client.send({"type": "thread_create", "metadata": {}})
-        created = await await_event_type(client.read_event, "thread_created", timeout=8.0)
-        thread_id = created["thread_id"]
-        assert thread_id
+        loop_id = await loop_new(client)
+        await subscribe_loop_stream(client, loop_id)
 
-        await client.send({"type": "resume_thread", "thread_id": thread_id})
-        resume = await await_event_type(client.read_event, "status", timeout=8.0)
-        assert resume.get("thread_resumed") is True
-
-        await client.send(
-            {
-                "type": "input",
-                "text": "ack",
-                "interactive": True,
-                "attachments": [{"mime_type": "image/png", "data": TINY_PNG_B64}],
-            }
+        await client.send_input(
+            loop_id,
+            "ack",
+            interactive=True,
+            attachments=[{"mime_type": "image/png", "data": TINY_PNG_B64}],
         )
         running = await await_status_state(client.read_event, "running", timeout=8.0)
         assert running.get("state") == "running"
@@ -139,18 +132,13 @@ async def test_websocket_input_invalid_attachment_returns_error(
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
     try:
-        await client.send({"type": "thread_create", "metadata": {}})
-        created = await await_event_type(client.read_event, "thread_created", timeout=8.0)
-        thread_id = created["thread_id"]
-        await client.send({"type": "resume_thread", "thread_id": thread_id})
-        await await_event_type(client.read_event, "status", timeout=8.0)
+        loop_id = await loop_new(client)
+        await subscribe_loop_stream(client, loop_id)
 
-        await client.send(
-            {
-                "type": "input",
-                "text": "x",
-                "attachments": [{"mime_type": "image/png", "data": "!!!"}],
-            }
+        await client.send_input(
+            loop_id,
+            "x",
+            attachments=[{"mime_type": "image/png", "data": "!!!"}],
         )
         err = await await_event_type(client.read_event, "error", timeout=5.0)
         assert err.get("code") == "INVALID_MESSAGE"

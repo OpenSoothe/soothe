@@ -334,6 +334,13 @@ class ClientSessionManager:
                         session.client_id[:8],
                     )
                     break
+                except ConnectionError as e:
+                    logger.debug(
+                        "Client %s disconnected while sending: %s",
+                        session.client_id[:8],
+                        e,
+                    )
+                    break
                 except Exception:
                     logger.warning(
                         "Failed to send event to client %s, stopping sender loop",

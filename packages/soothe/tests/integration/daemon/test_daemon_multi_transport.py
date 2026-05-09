@@ -22,6 +22,13 @@ from tests.integration.conftest import (
     build_daemon_config,
     force_isolated_home,
 )
+from tests.integration.ws_loop_client import (
+    loop_new_with_initial_input,
+    request_loop_delete,
+    request_loop_get,
+    request_loop_list,
+    subscribe_loop_stream,
+)
 
 
 def _build_daemon_config(
@@ -85,10 +92,8 @@ async def test_all_transports_simultaneous_lifecycle(
     # Verify client count increases
     assert daemon._transport_manager.client_count >= 1
 
-    # Send ping and receive status
-    await ws_client.send_thread_list()
-    response = await await_event_type(ws_client.read_event, "thread_list_response", timeout=3.0)
-    assert response["type"] == "thread_list_response"
+    response = await request_loop_list(ws_client)
+    assert response["type"] == "loop_list_response"
 
     await ws_client.close()
 
@@ -109,27 +114,17 @@ async def test_multi_transport_broadcast(multi_transport_daemon: dict) -> None:
     await unix_client.connect()
 
     try:
-        # Create thread to trigger events
-        await unix_client.send_thread_create(
+        loop_id = await loop_new_with_initial_input(
+            unix_client,
             initial_message="test broadcast",
-            metadata={"tags": ["multi-transport"]},
         )
-        created = await await_event_type(unix_client.read_event, "thread_created", timeout=5.0)
-        thread_id = created["thread_id"]
-
-        # Verify thread_created event received
-        assert created["type"] == "thread_created"
-        assert isinstance(thread_id, str)
+        assert isinstance(loop_id, str)
 
         # Verify daemon reports correct client count
         assert daemon._transport_manager.client_count >= 1
 
-        # Archive thread
-        await unix_client.send_thread_archive(thread_id)
-        archive_response = await await_event_type(
-            unix_client.read_event, "thread_operation_ack", timeout=3.0
-        )
-        assert archive_response["success"] is True
+        archive_response = await request_loop_delete(unix_client, loop_id)
+        assert archive_response.get("success") is True
 
     finally:
         await unix_client.close()
@@ -149,29 +144,24 @@ async def test_multi_transport_thread_operations(multi_transport_daemon: dict) -
     await unix_client.connect()
 
     try:
-        # Create thread via Unix socket
-        await unix_client.send_thread_create(
+        loop_id = await loop_new_with_initial_input(
+            unix_client,
             initial_message="cross-transport thread",
-            metadata={"source": "unix"},
         )
-        created = await await_event_type(unix_client.read_event, "thread_created", timeout=5.0)
-        thread_id = created["thread_id"]
 
-        # Access thread via same transport (HTTP/WebSocket would need separate clients)
-        await unix_client.send_thread_get(thread_id)
-        get_response = await await_event_type(
-            unix_client.read_event, "thread_get_response", timeout=3.0
-        )
-        assert get_response["thread"]["thread_id"] == thread_id
+        get_response = await request_loop_get(unix_client, loop_id)
+        assert get_response["loop"]["loop_id"] == loop_id
 
-        # Resume thread
-        await unix_client.send_resume_thread(thread_id)
+        await unix_client.send_loop_reattach(loop_id)
         resume_response = await await_event_type(unix_client.read_event, "status", timeout=3.0)
-        assert resume_response["thread_resumed"] is True
-        assert resume_response["thread_id"] == thread_id
+        assert (
+            resume_response.get("loop_id") == loop_id or resume_response.get("thread_id") == loop_id
+        )
+
+        await subscribe_loop_stream(unix_client, loop_id)
 
         # Send query and verify state consistency
-        await unix_client.send_input("Say test")
+        await unix_client.send_input(loop_id, "Say test")
         status = await await_status_state(unix_client.read_event, {"running", "idle"}, timeout=5.0)
 
         # If running, wait for idle
@@ -182,12 +172,8 @@ async def test_multi_transport_thread_operations(multi_transport_daemon: dict) -
                 # Continue even if idle not reached - query may have completed quickly
                 pass
 
-        # Verify thread state preserved
-        await unix_client.send_thread_get(thread_id)
-        final_get = await await_event_type(
-            unix_client.read_event, "thread_get_response", timeout=3.0
-        )
-        assert final_get["thread"]["thread_id"] == thread_id
+        final_get = await request_loop_get(unix_client, loop_id)
+        assert final_get["loop"]["loop_id"] == loop_id
 
     finally:
         await unix_client.close()
@@ -209,21 +195,17 @@ async def test_multi_transport_cross_transport_thread_sync(
 
     try:
         created = await ws_client.request_response(
-            {
-                "type": "thread_create",
-                "metadata": {"channel": "websocket", "tags": ["cross-transport"]},
-            },
-            response_type="thread_created",
+            {"type": "loop_new"},
+            response_type="loop_new_response",
         )
-        thread_id = created["thread_id"]
+        loop_id = created["loop_id"]
 
-        await unix_client.send_thread_get(thread_id)
-        fetched = await await_event_type(unix_client.read_event, "thread_get_response", timeout=3.0)
-        assert fetched["thread"]["thread_id"] == thread_id
+        fetched = await request_loop_get(unix_client, loop_id)
+        assert fetched["loop"]["loop_id"] == loop_id
 
-        await unix_client.send_resume_thread(thread_id)
+        await unix_client.send_loop_reattach(loop_id)
         resumed = await await_event_type(unix_client.read_event, "status", timeout=3.0)
-        assert resumed["thread_id"] == thread_id
+        assert resumed.get("loop_id") == loop_id or resumed.get("thread_id") == loop_id
     finally:
         if ws_client.is_connected:
             await ws_client.close()
@@ -280,10 +262,8 @@ async def test_multi_transport_shutdown_order(multi_transport_daemon: dict) -> N
         # Verify connection
         assert daemon._transport_manager.client_count >= 1
 
-        # Send simple request
-        await client.send_thread_list()
-        response = await await_event_type(client.read_event, "thread_list_response", timeout=3.0)
-        assert response["type"] == "thread_list_response"
+        response = await request_loop_list(client)
+        assert response["type"] == "loop_list_response"
 
     finally:
         await client.close()
