@@ -17,8 +17,8 @@ class ConcurrencyPolicy(BaseModel):
     Args:
         max_parallel_goals: Maximum goals running simultaneously (autonomous mode).
             Set to 0 for unlimited concurrent goals.
-        max_parallel_steps: Maximum plan steps running simultaneously.
-            Set to 0 for unlimited concurrent steps.
+        max_parallel_steps: Max plan steps concurrent in one batch; the runner / agent-loop
+            executor repeats batches until the plan wave is done. Set to 0 for unlimited.
         max_parallel_subagents: Maximum subagents running simultaneously.
             Reserved for future ConcurrencyMiddleware enforcement.
             Set to 0 for unlimited concurrent subagents.

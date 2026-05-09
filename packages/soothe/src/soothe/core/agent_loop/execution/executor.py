@@ -159,7 +159,9 @@ class Executor:
 
         Args:
             core_agent: Layer 1 CoreAgent for step execution
-            max_parallel_steps: Max steps per wave; ``0`` means unlimited (RFC-201 / concurrency).
+            max_parallel_steps: Max steps to run **concurrently** in one batch. ``execute`` repeats
+                batches until all ready steps finish (e.g. 4 ready steps and ``2`` → two batches of 2).
+                ``0`` means unlimited (RFC-201 / concurrency).
             config: Optional Soothe config for Act wave caps (IG-130).
             goal_context_manager: Optional GoalContextManager for goal briefing injection (RFC-217).
         """
@@ -462,7 +464,10 @@ class Executor:
                 logger.debug("[Execute] Fast model override reset")
 
     def _wave_size(self, remaining: int) -> int:
-        """Steps to schedule in the next wave (``0`` config = unlimited)."""
+        """Concurrent step count for the next execute batch (``0`` = unlimited).
+
+        One batch does not exhaust ``execute``; callers loop until all ready steps are scheduled.
+        """
         if remaining <= 0:
             return 0
         if self._max_parallel_steps <= 0:

@@ -103,7 +103,7 @@ agent_loop:
   limits:
     # Concurrency controls (0 = unlimited)
     max_parallel_goals: 1         # Autonomous goal parallelism
-    max_parallel_steps: 2         # Step parallelism
+    max_parallel_steps: 2         # Max plan steps concurrent per batch; executor runs extra batches until done
     max_parallel_subagents: 4     # Subagent task parallelism
     max_parallel_tools: 5         # Concurrent tool calls per thread (bounds asyncio.gather)
     global_max_llm_calls: 5       # Global LLM call cap

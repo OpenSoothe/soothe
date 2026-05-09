@@ -208,10 +208,16 @@ async def test_input_queue_bounded_under_burst_load():
     config.daemon.max_concurrent_dispatches = 50
 
     server = SootheDaemon(config)
+    server._running = True  # Enable dispatcher workers
     metrics = LoadTestMetrics()
 
     # Mock WebSocket transport with 100 clients
     mock_clients = {f"ws:{i}": MockWebSocketClient(f"ws:{i}") for i in range(100)}
+
+    # Create a test loop queue via dispatcher
+    test_loop_id = "test-loop-1"
+    await server._loop_input_dispatcher.enqueue(test_loop_id, {"type": "init"})
+    test_queue = server._loop_input_dispatcher._queues[test_loop_id]
 
     # Simulate burst inputs
     metrics.start_timer()
@@ -228,8 +234,8 @@ async def test_input_queue_bounded_under_burst_load():
                     "content": f"Burst input {i} from {client_id}",
                 }
                 try:
-                    # Try to queue input (with backpressure check)
-                    server._current_input_queue.put_nowait(msg)
+                    # Try to queue input (with backpressure check) on the test loop queue
+                    test_queue.put_nowait(msg)
                 except asyncio.QueueFull:
                     # Record DAEMON_BUSY rejection
                     metrics.record_daemon_busy()
@@ -237,7 +243,7 @@ async def test_input_queue_bounded_under_burst_load():
                 # Sample queue depth periodically
                 if i % 10 == 0:
                     metrics.record_queue_depths(
-                        server._current_input_queue,
+                        test_queue,
                         {},  # No event queues yet
                     )
 
@@ -257,8 +263,11 @@ async def test_input_queue_bounded_under_burst_load():
     assert summary["daemon_busy_rejections"] > 0, "Expected DAEMON_BUSY rejections when queue full"
 
     # 3. Queue stays at or below capacity after burst (no unbounded growth)
-    final_depth = server._current_input_queue.qsize()
+    final_depth = test_queue.qsize()
     assert final_depth <= 1000, f"Queue exceeded capacity after burst: {final_depth} items"
+
+    # Cleanup
+    await server._loop_input_dispatcher.cleanup_loop(test_loop_id)
 
     print("\n=== Test 1: Input Queue Bounded ===")
     print(f"Total inputs: {total_inputs}")
@@ -613,16 +622,25 @@ async def test_queue_depth_monitoring_warnings():
     config.daemon.max_input_queue_size = 1000
 
     server = SootheDaemon(config)
+    server._running = True  # Enable dispatcher workers
+
+    # Create a test loop queue via dispatcher
+    test_loop_id = "test-loop-monitor"
+    await server._loop_input_dispatcher.enqueue(test_loop_id, {"type": "init"})
+    test_queue = server._loop_input_dispatcher._queues[test_loop_id]
 
     # Fill queue to 90% capacity
     for i in range(900):
-        server._current_input_queue.put_nowait({"type": "test", "index": i})
+        test_queue.put_nowait({"type": "test", "index": i})
 
-    queue_depth = server._current_input_queue.qsize()
+    queue_depth = test_queue.qsize()
     threshold = 800  # 80% of 1000
 
     # Verify queue at 90%
     assert queue_depth > threshold, f"Queue not filled to threshold: {queue_depth}/{threshold}"
+
+    # Cleanup
+    await server._loop_input_dispatcher.cleanup_loop(test_loop_id)
 
     # Note: Can't directly test log output in pytest,
     # but we verify the monitoring infrastructure exists
@@ -664,6 +682,7 @@ async def test_phase1_full_integration():
     config.daemon.max_concurrent_dispatches = 50
 
     server = SootheDaemon(config)
+    server._running = True  # Enable dispatcher workers
     bus = EventBus()
     metrics = LoadTestMetrics()
 
@@ -676,6 +695,11 @@ async def test_phase1_full_integration():
     # Subscribe all queues to broadcast topic
     for client_id, queue in event_queues.items():
         await bus.subscribe(f"loop:{client_id}", queue)
+
+    # Create a test loop queue via dispatcher
+    test_loop_id = "test-loop-integration"
+    await server._loop_input_dispatcher.enqueue(test_loop_id, {"type": "init"})
+    test_queue = server._loop_input_dispatcher._queues[test_loop_id]
 
     metrics.start_timer()
 
@@ -691,7 +715,7 @@ async def test_phase1_full_integration():
                     "content": f"Sustained input {round_idx}-{i}",
                 }
                 try:
-                    server._current_input_queue.put_nowait(msg)
+                    test_queue.put_nowait(msg)
                 except asyncio.QueueFull:
                     metrics.record_daemon_busy()
 
@@ -710,13 +734,16 @@ async def test_phase1_full_integration():
 
             # Sample metrics every 5 rounds
             if round_idx % 5 == 0:
-                metrics.record_queue_depths(server._current_input_queue, event_queues)
+                metrics.record_queue_depths(test_queue, event_queues)
                 metrics.record_dispatch_task_count(len(server._dispatch_tasks))
 
             await asyncio.sleep(0.1)  # 100ms per round
 
     await sustained_load()
     metrics.stop_timer()
+
+    # Cleanup
+    await server._loop_input_dispatcher.cleanup_loop(test_loop_id)
 
     # Verify Phase 1 guarantees
     summary = metrics.get_summary()
