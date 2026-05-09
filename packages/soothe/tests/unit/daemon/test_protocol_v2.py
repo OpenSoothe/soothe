@@ -81,19 +81,9 @@ def test_validate_message_command_missing_cmd() -> None:
     assert "cmd" in errors[0]
 
 
-def test_validate_message_resume_thread_valid() -> None:
-    """Test valid resume thread message validation."""
-    msg = {"type": "resume_thread", "thread_id": "thread_001"}
-    errors = validate_message(msg)
-    assert errors == []
-
-
-def test_validate_message_resume_thread_missing_id() -> None:
-    """Test resume thread message missing thread_id."""
-    msg = {"type": "resume_thread"}
-    errors = validate_message(msg)
-    assert len(errors) == 1
-    assert "thread_id" in errors[0]
+def test_validate_message_resume_interrupts_requires_loop_id() -> None:
+    errors = validate_message({"type": "resume_interrupts", "resume_payload": {}})
+    assert errors and "loop_id" in errors[0].lower()
 
 
 def test_validate_message_detach_valid() -> None:

@@ -31,11 +31,11 @@ def run(
 
     run_impl(
         prompt=prompt,
-        config=config,
-        thread_id=None,
+        resume_loop_id=None,
         no_tui=True,
         autonomous=True,
         max_iterations=max_iterations,
+        config_path=config,
     )
 
 

@@ -15,7 +15,7 @@ def test_run_textual_tui_forwards_non_default_workspace(monkeypatch, tmp_path: P
 
     async def fake_run_textual_app(**kwargs: Any) -> app_module.AppResult:
         captured.update(kwargs)
-        return app_module.AppResult(return_code=0, thread_id=None)
+        return app_module.AppResult(return_code=0, loop_id=None)
 
     monkeypatch.setattr(app_module, "run_textual_app", fake_run_textual_app)
 
@@ -31,7 +31,7 @@ def test_run_textual_tui_keeps_default_cwd_when_workspace_is_dot(monkeypatch) ->
 
     async def fake_run_textual_app(**kwargs: Any) -> app_module.AppResult:
         captured.update(kwargs)
-        return app_module.AppResult(return_code=0, thread_id=None)
+        return app_module.AppResult(return_code=0, loop_id=None)
 
     monkeypatch.setattr(app_module, "run_textual_app", fake_run_textual_app)
 

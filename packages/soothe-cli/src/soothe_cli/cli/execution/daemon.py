@@ -13,7 +13,7 @@ from typing import Any
 
 import typer
 from soothe_sdk.client import (
-    bootstrap_thread_session,
+    bootstrap_loop_session,
     connect_websocket_with_retries,
     websocket_url_from_config,
 )
@@ -30,28 +30,19 @@ _SESSION_BOOTSTRAP_TIMEOUT_S = 5.0
 _QUERY_START_TIMEOUT_S = 20.0
 
 
-def _is_thread_scoped_event_for_active_thread(
-    event: dict[str, Any],
-    *,
-    active_thread_id: str,
-) -> bool:
-    """Return whether a daemon frame belongs to the active headless thread.
-
-    In headless mode we only want `status` and streamed `event` frames for the
-    thread started by this CLI invocation. This avoids cross-thread leakage when
-    unrelated frames are present on the transport.
-    """
+def _is_loop_scoped_event(event: dict[str, Any], *, active_loop_id: str) -> bool:
+    """Return whether a daemon frame belongs to the active AgentLoop session."""
     event_type = event.get("type", "")
     if event_type not in {"status", "event"}:
         return True
-    return event.get("thread_id") == active_thread_id
+    return event.get("loop_id") == active_loop_id
 
 
 async def run_headless_via_daemon(
     cfg: Any,
     prompt: str,
     *,
-    thread_id: str | None = None,
+    resume_loop_id: str | None = None,
     autonomous: bool = False,
     max_iterations: int | None = None,
 ) -> int:
@@ -68,27 +59,27 @@ async def run_headless_via_daemon(
     try:
         await connect_websocket_with_retries(client)
         cli_ws = os.environ.get("SOOTHE_CLI_WORKSPACE", "").strip() or os.getcwd()
-        status_event = await bootstrap_thread_session(
+        status_event = await bootstrap_loop_session(
             client,
-            resume_thread_id=thread_id,
+            resume_loop_id=resume_loop_id,
             verbosity="normal",
             workspace=cli_ws,
-            thread_status_timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S,
-            subscription_timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S,
+            subscribe_timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S,
         )
         if status_event.get("type") == "error":
             typer.echo(f"Daemon error: {status_event.get('message', 'unknown')}", err=True)
             return 1
 
-        actual_thread_id = status_event.get("thread_id")
-        if not actual_thread_id:
-            typer.echo("Error: No thread_id in status message", err=True)
+        active_loop_id = status_event.get("loop_id")
+        if not active_loop_id:
+            typer.echo("Error: No loop_id after session bootstrap", err=True)
             return 1
 
         subagent_name, cleaned_prompt = parse_subagent_from_input(prompt)
 
         await asyncio.wait_for(
             client.send_input(
+                active_loop_id,
                 cleaned_prompt if subagent_name else prompt,
                 autonomous=autonomous,
                 max_iterations=max_iterations,
@@ -121,9 +112,7 @@ async def run_headless_via_daemon(
                 break
 
             event_type = event.get("type", "")
-            if not _is_thread_scoped_event_for_active_thread(
-                event, active_thread_id=actual_thread_id
-            ):
+            if not _is_loop_scoped_event(event, active_loop_id=active_loop_id):
                 continue
 
             if event_type == "error":
@@ -153,9 +142,7 @@ async def run_headless_via_daemon(
                             break
                         if not nxt:
                             break
-                        if not _is_thread_scoped_event_for_active_thread(
-                            nxt, active_thread_id=actual_thread_id
-                        ):
+                        if not _is_loop_scoped_event(nxt, active_loop_id=active_loop_id):
                             continue
                         processor.process_event(nxt)
 

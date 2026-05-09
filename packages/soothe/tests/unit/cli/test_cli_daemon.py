@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -15,6 +16,7 @@ from soothe_sdk.client import session as sdk_session  # For retry logic (moved f
 
 from soothe.config import SootheConfig
 from soothe.daemon import SootheDaemon, WebSocketClient
+from soothe.daemon.message_router import MessageRouter
 from soothe.daemon.server import _ClientConn
 
 
@@ -103,7 +105,7 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
         sent.append(msg)
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
-    await daemon._run_query("download skills", autonomous=True, max_iterations=42)
+    await daemon._run_query("download skills", loop_id="loop-u", autonomous=True, max_iterations=42)
 
     # IG-054: run_query now creates background task, wait for it to complete
     if daemon._active_threads:
@@ -122,35 +124,58 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
 
 
 @pytest.mark.asyncio
-async def test_daemon_input_message_enqueues_options() -> None:
+async def test_loop_input_enqueues_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``loop_input`` is normalized and placed on the per-loop dispatcher queue."""
+
+    async def _stub_ensure(_self: MessageRouter, _loop_id: str) -> Path:
+        return Path(".")
+
+    monkeypatch.setattr(MessageRouter, "_ensure_loop_metadata", _stub_ensure)
+
     daemon = SootheDaemon(SootheConfig())
-    client = _ClientConn(reader=SimpleNamespace(), writer=SimpleNamespace())
-    daemon._query_running = False
+    loop_id = "loop-9"
+    session = SimpleNamespace(subscriptions={loop_id})
+    enqueue = AsyncMock()
+    daemon._loop_input_dispatcher = SimpleNamespace(enqueue=enqueue)
+    daemon._session_manager = SimpleNamespace(get_session=AsyncMock(return_value=session))  # type: ignore[attr-defined]
 
     await daemon._handle_client_message(
-        client,
-        {"type": "input", "text": "crawl", "autonomous": True, "max_iterations": 12},
+        "client-1",
+        {
+            "type": "loop_input",
+            "loop_id": loop_id,
+            "content": "crawl",
+            "autonomous": True,
+            "max_iterations": 12,
+        },
     )
 
-    queued = await daemon._current_input_queue.get()
-    assert queued["type"] == "input"
-    assert queued["text"] == "crawl"
-    assert queued["autonomous"] is True
-    assert queued["max_iterations"] == 12
+    enqueue.assert_awaited()
+    body = enqueue.call_args[0][1]
+    assert body["type"] == "input"
+    assert body["text"] == "crawl"
+    assert body["autonomous"] is True
+    assert body["max_iterations"] == 12
 
 
 @pytest.mark.asyncio
 async def test_cancel_command_bypasses_input_queue() -> None:
-    """IG-161: /cancel must not enqueue — input loop may be blocked on run_query."""
+    """IG-161: /cancel must not enqueue — targets ``QueryEngine.cancel_loop`` directly."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     cancel_mock = AsyncMock()
-    daemon._query_engine = SimpleNamespace(cancel_current_query=cancel_mock)  # type: ignore[attr-defined]
+    daemon._query_engine = SimpleNamespace(cancel_loop=cancel_mock)  # type: ignore[attr-defined]
+    loop_id = "loop-sub"
+    session = SimpleNamespace(subscriptions={loop_id})
+    daemon._session_manager = SimpleNamespace(
+        get_owned_loop=AsyncMock(return_value=None),
+        get_session=AsyncMock(return_value=session),
+    )  # type: ignore[attr-defined]
 
     await daemon._handle_client_message("client-1", {"type": "command", "cmd": "/cancel "})
 
-    cancel_mock.assert_awaited_once()
-    assert daemon._current_input_queue.qsize() == 0
+    cancel_mock.assert_awaited_once_with(loop_id)
+    assert daemon._loop_input_dispatcher.total_queued() == 0
 
 
 @pytest.mark.asyncio
@@ -168,7 +193,7 @@ async def test_exit_and_quit_commands_bypass_input_queue() -> None:
     daemon._send_client_message = _fake_send_client_message  # type: ignore[method-assign]
 
     await daemon._handle_client_message("client-1", {"type": "command", "cmd": " /exit "})
-    assert daemon._current_input_queue.qsize() == 0
+    assert daemon._loop_input_dispatcher.total_queued() == 0
     # IG-248: Direct send to client (no thread_id, deprecated legacy socket)
     assert sent_to_client == [
         {"client_id": "client-1", "msg": {"type": "status", "state": "detached"}}
@@ -176,7 +201,7 @@ async def test_exit_and_quit_commands_bypass_input_queue() -> None:
 
     sent_to_client.clear()
     await daemon._handle_client_message("client-1", {"type": "command", "cmd": "/QUIT"})
-    assert daemon._current_input_queue.qsize() == 0
+    assert daemon._loop_input_dispatcher.total_queued() == 0
     assert sent_to_client == [
         {"client_id": "client-1", "msg": {"type": "status", "state": "detached"}}
     ]
@@ -184,52 +209,43 @@ async def test_exit_and_quit_commands_bypass_input_queue() -> None:
 
 @pytest.mark.asyncio
 async def test_non_cancel_command_still_enqueues() -> None:
-    """Commands not handled in MessageRouter continue to use the sequential input queue."""
+    """Slash commands are serialized on the subscribed loop's dispatcher queue."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
-    daemon._query_engine = SimpleNamespace(cancel_current_query=AsyncMock())  # type: ignore[attr-defined]
+    daemon._query_engine = SimpleNamespace(cancel_loop=AsyncMock())  # type: ignore[attr-defined]
+    loop_id = "loop-cmd"
+    session = SimpleNamespace(subscriptions={loop_id})
+    enqueue = AsyncMock()
+    daemon._loop_input_dispatcher = SimpleNamespace(enqueue=enqueue)
+    daemon._session_manager = SimpleNamespace(get_session=AsyncMock(return_value=session))  # type: ignore[attr-defined]
 
     await daemon._handle_client_message("client-1", {"type": "command", "cmd": "/help"})
 
-    queued = await daemon._current_input_queue.get()
-    assert queued["type"] == "command"
-    assert queued["cmd"] == "/help"
+    enqueue.assert_awaited_once()
+    assert enqueue.call_args[0][0] == loop_id
+    assert enqueue.call_args[0][1]["type"] == "command"
+    assert enqueue.call_args[0][1]["cmd"] == "/help"
 
 
 @pytest.mark.asyncio
-async def test_daemon_input_message_queued_at_capacity() -> None:
-    """IG-054: Capacity check moved to query_engine to eliminate race condition.
-
-    The message router no longer checks capacity - it only queues the input.
-    The capacity check happens later in query_engine.run_query() right before
-    creating the task, which eliminates the race window between checking
-    len(_active_threads) and actually creating the task.
-    """
+async def test_daemon_rejects_legacy_top_level_input_message() -> None:
+    """Clients must use ``loop_input``; bare ``input`` is rejected at the router."""
     daemon = SootheDaemon(SootheConfig())
-    daemon._config.daemon.max_concurrent_threads = 1
-    daemon._active_threads = {"thread-busy": SimpleNamespace()}
-    daemon._runner = SimpleNamespace(current_thread_id="thread-busy")
 
     transport = SimpleNamespace(send=AsyncMock())
-    transport_client = SimpleNamespace()  # Mock transport client
+    transport_client = SimpleNamespace()
     session = SimpleNamespace(transport=transport, transport_client=transport_client)
     daemon._session_manager = SimpleNamespace(get_session=AsyncMock(return_value=session))  # type: ignore[attr-defined]
 
-    # Input should be queued (no immediate DAEMON_BUSY error at router level)
     await daemon._handle_client_message(
         "client-1",
         {"type": "input", "text": "crawl", "autonomous": True, "max_iterations": 12},
     )
 
-    # Message should be queued, not rejected immediately
-    queued = await daemon._current_input_queue.get()
-    assert queued["type"] == "input"
-    assert queued["text"] == "crawl"
-    assert queued["autonomous"] is True
-    assert queued["max_iterations"] == 12
-
-    # No DAEMON_BUSY error sent at routing level (happens later in query_engine)
-    transport.send.assert_not_awaited()
+    transport.send.assert_awaited()
+    err = transport.send.call_args[0][1]
+    assert err.get("type") == "error"
+    assert err.get("code") == "UNSUPPORTED_MESSAGE"
 
 
 @pytest.mark.asyncio
@@ -242,12 +258,13 @@ async def test_websocket_client_send_input_includes_options() -> None:
 
     client._connected = True
     client.send = _fake_send  # type: ignore[method-assign]
-    await client.send_input("run task", autonomous=True, max_iterations=9)
+    await client.send_input("loop-1", "run task", autonomous=True, max_iterations=9)
 
     assert captured == [
         {
-            "type": "input",
-            "text": "run task",
+            "type": "loop_input",
+            "loop_id": "loop-1",
+            "content": "run task",
             "autonomous": True,
             "max_iterations": 9,
         }
@@ -274,7 +291,7 @@ async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
     daemon._thread_logger = thread_logger
 
     # Run a query
-    await daemon._run_query("Hello, assistant")
+    await daemon._run_query("Hello, assistant", loop_id="loop-u")
 
     # IG-054: run_query now creates background task, wait for it to complete
     if daemon._active_threads:
@@ -319,7 +336,7 @@ async def test_daemon_handles_slash_commands() -> None:
 
     # Test /memory RPC command (now uses command_request protocol)
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "memory", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "memory", "loop_id": "loop-1", "params": {}}
     )
 
     # Should have sent a command_response message
@@ -352,7 +369,7 @@ async def test_daemon_command_exit_does_not_stop_daemon() -> None:
 
     # Test /exit RPC command (RFC-404 protocol)
     await daemon._handle_command_request(
-        {"type": "command_request", "command": "exit", "thread_id": "thread-1", "params": {}}
+        {"type": "command_request", "command": "exit", "loop_id": "loop-1", "params": {}}
     )
 
     # IG-085: Daemon should KEEP RUNNING (not stop)
@@ -426,20 +443,6 @@ async def test_websocket_client_wait_for_daemon_ready_raises_on_error_state() ->
 
 
 @pytest.mark.asyncio
-async def test_wait_for_thread_status_skips_empty_handshake_status() -> None:
-    client = _SequencedClient(
-        events=[
-            {"type": "status", "state": "idle", "thread_id": ""},
-            {"type": "status", "state": "idle", "thread_id": "thread-123", "new_thread": True},
-        ]
-    )
-
-    event = await sdk_session._wait_for_thread_status(client, timeout_s=0.5)
-
-    assert event["thread_id"] == "thread-123"
-
-
-@pytest.mark.asyncio
 async def test_daemon_initial_status_no_thread_leak() -> None:
     """Test that daemon initial status doesn't leak cached thread_id to new clients."""
     daemon = SootheDaemon(SootheConfig())
@@ -484,8 +487,10 @@ async def test_daemon_initial_status_no_thread_leak() -> None:
     initial_msg = decode(sent_messages[0])
     assert initial_msg is not None
     assert initial_msg["type"] == "status"
-    # Critical: thread_id should be empty, not "old-thread-123"
-    assert initial_msg["thread_id"] == "", "Initial status should not leak cached thread_id"
+    # Legacy line protocol must not echo the runner's cached CoreAgent thread id.
+    assert initial_msg.get("thread_id") in (None, ""), (
+        "Initial status should not leak cached thread_id"
+    )
     assert initial_msg["state"] in ("running", "idle", "stopped")
 
 
@@ -500,7 +505,7 @@ async def test_daemon_run_query_broadcasts_idle_to_original_thread() -> None:
         sent.append(msg)
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
-    await daemon._run_query("analyze project structure")
+    await daemon._run_query("analyze project structure", loop_id="loop-u")
 
     # IG-054: run_query now creates background task, wait for it to complete
     if daemon._active_threads:
@@ -511,27 +516,14 @@ async def test_daemon_run_query_broadcasts_idle_to_original_thread() -> None:
 
     status_messages = [msg for msg in sent if msg.get("type") == "status"]
     assert status_messages[0]["state"] == "running"
-    assert status_messages[0]["thread_id"] == "thread-start"
+    assert status_messages[0]["loop_id"] == "loop-u"
     assert status_messages[-1]["state"] == "idle"
-    assert status_messages[-1]["thread_id"] == "thread-start"
+    assert status_messages[-1]["loop_id"] == "loop-u"
 
 
 @pytest.mark.asyncio
 async def test_run_headless_via_daemon_returns_direct_error_before_query_start(monkeypatch) -> None:
-    events = iter(
-        [
-            {"type": "status", "state": "idle", "thread_id": ""},
-            {"type": "daemon_ready", "state": "ready"},
-            {"type": "status", "state": "idle", "thread_id": "thread-123", "new_thread": True},
-            {
-                "type": "subscription_confirmed",
-                "thread_id": "thread-123",
-                "client_id": "c1",
-                "verbosity": "normal",
-            },
-            {"type": "error", "code": "DAEMON_BUSY", "message": "busy"},
-        ]
-    )
+    post_bootstrap = iter([{"type": "error", "code": "DAEMON_BUSY", "message": "busy"}])
 
     class _BusyClient:
         async def connect(self) -> None:
@@ -543,23 +535,26 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
         async def wait_for_daemon_ready(self, ready_timeout_s: float = 10.0) -> dict[str, Any]:
             return {"type": "daemon_ready", "state": "ready"}
 
-        async def send_new_thread(self, workspace: str | None = None) -> None:
-            return None
-
-        async def send_resume_thread(self, thread_id: str, workspace: str | None = None) -> None:
-            return None
-
-        async def subscribe_thread(self, thread_id: str, verbosity: str = "normal") -> None:
-            return None
-
-        async def wait_for_subscription_confirmed(
-            self, thread_id: str, verbosity: str = "normal", timeout: float = 5.0
-        ) -> None:
-            return None
+        async def request_response(
+            self,
+            payload: dict[str, Any],
+            *,
+            response_type: str,
+            timeout: float,
+        ) -> dict[str, Any]:
+            req_id = payload.get("request_id")
+            if payload.get("type") == "loop_new":
+                return {"type": "loop_new_response", "loop_id": "loop-123", "request_id": req_id}
+            if payload.get("type") == "loop_subscribe":
+                return {"type": "loop_subscribe_response", "success": True, "request_id": req_id}
+            msg = f"unexpected request_response payload {payload!r}"
+            raise AssertionError(msg)
 
         async def send_input(
             self,
-            text: str,
+            _loop_id: str,
+            _text: str,
+            *,
             autonomous: bool = False,  # noqa: FBT001, FBT002
             max_iterations: int | None = None,
             preferred_subagent: str | None = None,
@@ -567,7 +562,7 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
             return None
 
         async def read_event(self) -> dict[str, Any] | None:
-            return next(events, None)
+            return next(post_bootstrap, None)
 
         async def close(self) -> None:
             return None

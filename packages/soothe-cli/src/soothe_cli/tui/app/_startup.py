@@ -591,7 +591,7 @@ class _StartupMixin:
                 )
 
             session = TuiDaemonSession(self._daemon_config, workspace=self._cwd)
-            status_event = await session.connect(resume_thread_id=self._lc_loop_id)
+            status_event = await session.connect(resume_loop_id=self._lc_loop_id)
         except Exception as exc:
             self.post_message(self.ServerStartFailed(error=exc))
             return
@@ -649,11 +649,11 @@ class _StartupMixin:
         self._daemon_session = event.session
         self._agent = event.session
 
-        status_thread_id = event.status_event.get("thread_id")
-        if isinstance(status_thread_id, str) and status_thread_id:
-            self._lc_loop_id = status_thread_id
+        status_loop_id = event.status_event.get("loop_id")
+        if isinstance(status_loop_id, str) and status_loop_id:
+            self._lc_loop_id = status_loop_id
             if self._session_state is not None:
-                self._session_state.loop_id = status_thread_id
+                self._session_state.loop_id = status_loop_id
 
         try:
             banner = self.query_one("#welcome-banner", WelcomeBanner)
@@ -667,8 +667,8 @@ class _StartupMixin:
         thread_state = event.status_event.get("state", "")
         if thread_state == "running" and self._daemon_session is not None:
             logger.info(
-                "Thread %s is running, starting background event reader",
-                status_thread_id[:8] if status_thread_id else "?",
+                "Loop %s is running, starting background event reader",
+                status_loop_id[:8] if status_loop_id else "?",
             )
             self.run_worker(
                 self._consume_daemon_events_background(),

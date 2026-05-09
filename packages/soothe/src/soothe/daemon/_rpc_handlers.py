@@ -2,6 +2,12 @@
 
 Structured command request/response handlers for slash commands.
 Each handler executes a specific command and returns structured data.
+
+IG-408 naming:
+    - Wire / clients: ``loop_id`` (AgentLoop subscription scope).
+    - First positional argument to each ``_cmd_*`` handler: ``checkpoint_thread_id`` —
+      the LangGraph / durability checkpoint key (``configurable.thread_id``) after
+      ``bind_execution_thread_for_loop``; not a client routing id.
 """
 
 from __future__ import annotations
@@ -16,12 +22,45 @@ async def _handle_command_request(self, msg: dict[str, Any]) -> None:
     """Handle structured RPC command requests (RFC-404).
 
     Args:
-        msg: Command request message with command, thread_id, params
+        msg: Command request with ``command``, optional ``params``, and ``loop_id``
+            (required; set by the loop input worker after bind, or supplied by tests with
+            a runner that already has ``current_thread_id``).
     """
     request_id = msg.get("request_id")
     command = msg.get("command")
-    thread_id = msg.get("thread_id")
+    lid = str(msg.get("loop_id") or "").strip()
     params = msg.get("params", {})
+
+    if not lid:
+        await self._send_command_response(
+            command or "",
+            error="command_request requires loop_id",
+            request_id=request_id,
+            loop_id=None,
+        )
+        return
+
+    checkpoint_thread_id = ""
+    if self._runner is not None:
+        checkpoint_thread_id = str(self._runner.current_thread_id or "").strip()
+
+    if not checkpoint_thread_id:
+        from soothe.daemon.loop_isolation import bind_execution_thread_for_loop
+
+        try:
+            checkpoint_thread_id = await bind_execution_thread_for_loop(self, lid)
+        except Exception as exc:
+            logger.warning("command_request: failed to bind loop %s: %s", lid[:16], exc)
+            await self._send_command_response(
+                command or "",
+                error=f"Could not resolve execution context for loop: {exc}",
+                request_id=request_id,
+                loop_id=lid,
+            )
+            return
+
+    resolved_checkpoint = checkpoint_thread_id
+    loop_id = lid
 
     try:
         # Dispatch to handlers
@@ -48,15 +87,23 @@ async def _handle_command_request(self, msg: dict[str, Any]) -> None:
                 command or "",
                 error=f"Unknown command: {command!r}",
                 request_id=request_id,
+                loop_id=loop_id,
             )
             return
 
-        result = await handler(thread_id, params)
-        await self._send_command_response(command, data=result, request_id=request_id)
+        result = await handler(resolved_checkpoint, params, loop_id=loop_id)
+        await self._send_command_response(
+            command, data=result, request_id=request_id, loop_id=loop_id
+        )
 
     except Exception as exc:
         logger.exception(f"Command {command} failed")
-        await self._send_command_response(command or "", error=str(exc), request_id=request_id)
+        await self._send_command_response(
+            command or "",
+            error=str(exc),
+            request_id=request_id,
+            loop_id=loop_id,
+        )
 
 
 async def _send_command_response(
@@ -66,6 +113,7 @@ async def _send_command_response(
     error: str | None = None,
     *,
     request_id: str | None = None,
+    loop_id: str | None = None,
 ) -> None:
     """Send structured command response (RFC-404).
 
@@ -86,6 +134,8 @@ async def _send_command_response(
         response["error"] = error
     if request_id is not None:
         response["request_id"] = request_id
+    if loop_id:
+        response["loop_id"] = loop_id
 
     await self._broadcast(response)
 
@@ -93,81 +143,103 @@ async def _send_command_response(
 # Individual command handlers
 
 
-async def _cmd_clear(self, thread_id: str | None, params: dict) -> dict[str, Any]:
-    """Clear thread history."""
-    if not thread_id:
-        raise ValueError("Thread ID required")
+async def _cmd_clear(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
+    """Clear conversation history for the bound checkpoint (loop-scoped broadcast)."""
+    if not checkpoint_thread_id:
+        raise ValueError("Active loop required")
 
     # Clear thread state
     # TODO: Implement clear_thread in runner
-    # await self._runner.clear_thread(thread_id)
+    # await self._runner.clear_thread(checkpoint_thread_id)
 
-    # Broadcast clear event to all clients
-    await self._broadcast({"type": "clear", "thread_id": thread_id})
+    lid = str(loop_id or "").strip()
+    if lid:
+        await self._broadcast({"type": "clear", "loop_id": lid})
+    else:
+        logger.warning("RPC clear: missing loop_id; not routing clear event to loop subscribers")
 
-    return {"cleared": True, "thread_id": thread_id}
+    return {"cleared": True}
 
 
-async def _cmd_exit(self, thread_id: str | None, params: dict) -> dict[str, Any]:
-    """Stop thread and mark for exit."""
-    if not thread_id:
-        raise ValueError("Thread ID required")
+async def _cmd_exit(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
+    """Stop execution and mark for exit (cancel targets the subscribed loop)."""
+    if not checkpoint_thread_id:
+        raise ValueError("Active loop required")
 
-    # Stop thread execution
-    if self._query_running:
-        await self._query_engine.cancel_current_query()
-
-    # Mark thread as stopped
-    await self._broadcast(
-        {"type": "status", "state": "stopped", "thread_id": thread_id, "exit_requested": True}
+    lid = str(loop_id or "").strip() or (
+        self._thread_registry.get_thread_loop(checkpoint_thread_id) or ""
     )
+    if self._query_running and lid:
+        await self._query_engine.cancel_loop(lid)
+    elif self._query_running and not lid:
+        logger.warning("RPC exit: active query but no loop_id; not cancelling (avoid broad cancel)")
 
-    return {"exit": True, "thread_id": thread_id}
+    await self._broadcast({"type": "status", "state": "stopped", "exit_requested": True})
+
+    return {"exit": True}
 
 
-async def _cmd_quit(self, thread_id: str | None, params: dict) -> dict[str, Any]:
-    """Stop thread and mark for exit (same as exit)."""
-    return await self._cmd_exit(thread_id, params)
+async def _cmd_quit(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
+    """Same as ``_cmd_exit``."""
+    return await self._cmd_exit(checkpoint_thread_id, params, loop_id=loop_id)
 
 
-async def _cmd_detach(self, thread_id: str | None, params: dict) -> dict[str, Any]:
-    """Mark thread as detached."""
-    if not thread_id:
-        raise ValueError("Thread ID required")
+async def _cmd_detach(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
+    """Mark the client session detached (loop-scoped status when ``loop_id`` is known)."""
+    if not checkpoint_thread_id:
+        raise ValueError("Active loop required")
 
-    # Mark thread as detached (continues running)
-    await self._broadcast(
-        {
-            "type": "status",
-            "state": "detached",
-            "thread_id": thread_id,
-        }
+    lid = str(loop_id or "").strip()
+    if lid:
+        await self._broadcast({"type": "status", "state": "detached", "loop_id": lid})
+    else:
+        await self._broadcast({"type": "status", "state": "detached"})
+
+    return {"detached": True}
+
+
+async def _cmd_cancel(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
+    """Cancel the running query for the subscribed loop."""
+    if not checkpoint_thread_id:
+        raise ValueError("Active loop required")
+
+    lid = str(loop_id or "").strip() or (
+        self._thread_registry.get_thread_loop(checkpoint_thread_id) or ""
     )
+    if self._query_running and lid:
+        await self._query_engine.cancel_loop(lid)
+    elif self._query_running and not lid:
+        logger.warning(
+            "RPC cancel: active query but no loop_id; not cancelling (avoid broad cancel)"
+        )
 
-    return {"detached": True, "thread_id": thread_id}
-
-
-async def _cmd_cancel(self, thread_id: str | None, params: dict) -> dict[str, Any]:
-    """Cancel running query."""
-    if not thread_id:
-        raise ValueError("Thread ID required")
-
-    if self._query_running:
-        await self._query_engine.cancel_current_query()
-
-    return {"cancelled": True, "thread_id": thread_id}
+    return {"cancelled": True}
 
 
-async def _cmd_memory(self, thread_id: str | None, params: dict) -> dict[str, Any]:
+async def _cmd_memory(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
     """Query memory stats."""
-    if not thread_id:
-        raise ValueError("Thread ID required")
+    if not checkpoint_thread_id:
+        raise ValueError("Active loop required")
 
     stats = await self._runner.memory_stats()
     return {"memory_stats": stats}
 
 
-async def _cmd_policy(self, thread_id: str | None, params: dict) -> dict[str, Any]:
+async def _cmd_policy(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
     """Query policy profile."""
     policy_data = {
         "profile": self._runner.config.protocols.policy.profile,
@@ -177,13 +249,15 @@ async def _cmd_policy(self, thread_id: str | None, params: dict) -> dict[str, An
     return {"policy": policy_data}
 
 
-async def _cmd_history(self, thread_id: str | None, params: dict) -> dict[str, Any]:
-    """Query input history."""
-    if not thread_id:
-        raise ValueError("Thread ID required")
+async def _cmd_history(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
+    """Query input history for the active checkpoint."""
+    if not checkpoint_thread_id:
+        raise ValueError("Active loop required")
 
     # Get history from thread state
-    st = self._thread_registry.get(thread_id)
+    st = self._thread_registry.get(checkpoint_thread_id)
     if st and hasattr(st, "input_history"):
         history = st.input_history.get_recent(20)
     else:
@@ -192,7 +266,9 @@ async def _cmd_history(self, thread_id: str | None, params: dict) -> dict[str, A
     return {"history": history}
 
 
-async def _cmd_config(self, thread_id: str | None, params: dict) -> dict[str, Any]:
+async def _cmd_config(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
     """Query configuration."""
     config_data = {
         "providers": [
@@ -205,13 +281,15 @@ async def _cmd_config(self, thread_id: str | None, params: dict) -> dict[str, An
     return {"config": config_data}
 
 
-async def _cmd_review(self, thread_id: str | None, params: dict) -> dict[str, Any]:
-    """Query conversation history."""
-    if not thread_id:
-        raise ValueError("Thread ID required")
+async def _cmd_review(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
+    """Query conversation history from checkpoint state."""
+    if not checkpoint_thread_id:
+        raise ValueError("Active loop required")
 
     # Get conversation from thread state
-    state = await self._runner.aget_state({"configurable": {"thread_id": thread_id}})
+    state = await self._runner.aget_state({"configurable": {"thread_id": checkpoint_thread_id}})
     messages = state.values.get("messages", [])
 
     review = []
@@ -223,10 +301,12 @@ async def _cmd_review(self, thread_id: str | None, params: dict) -> dict[str, An
     return {"review": review}
 
 
-async def _cmd_plan(self, thread_id: str | None, params: dict) -> dict[str, Any]:
-    """Query current plan."""
-    if not thread_id:
-        raise ValueError("Thread ID required")
+async def _cmd_plan(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
+    """Query current plan for the active checkpoint."""
+    if not checkpoint_thread_id:
+        raise ValueError("Active loop required")
 
     # Get current plan from runner
     plan = None
@@ -253,39 +333,45 @@ async def _cmd_plan(self, thread_id: str | None, params: dict) -> dict[str, Any]
     return {"plan": plan_data}
 
 
-async def _cmd_thread(self, thread_id: str | None, params: dict) -> dict[str, Any]:
-    """Thread operations."""
+async def _cmd_thread(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
+    """Durability / checkpoint operations (params use checkpoint ids, not ``loop_id``)."""
     action = params.get("action")
-    thread_id_param = params.get("id")
+    target_checkpoint_id = params.get("id")
 
     if action == "archive":
-        if not thread_id_param:
-            raise ValueError("Thread ID required for archive")
+        if not target_checkpoint_id:
+            raise ValueError("Checkpoint id required for archive (params.id)")
 
         # TODO: Implement thread archiving in runner
-        # await self._runner.archive_thread(thread_id_param)
+        # await self._runner.archive_thread(target_checkpoint_id)
 
-        return {"archived": True, "thread_id": thread_id_param}
+        return {"archived": True, "checkpoint_thread_id": target_checkpoint_id}
     else:
         raise ValueError(f"Unknown thread action: {action}")
 
 
-async def _cmd_resume(self, thread_id: str | None, params: dict) -> dict[str, Any]:
-    """Resume thread."""
-    thread_id_param = params.get("thread_id")
-    if not thread_id_param:
-        raise ValueError("Thread ID required for resume")
+async def _cmd_resume(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
+    """Resume target loop (``params.loop_id``)."""
+    target_loop = params.get("loop_id")
+    if not target_loop:
+        raise ValueError("loop_id required for resume")
 
     # TODO: Implement thread resuming
     # Similar to resume_thread WebSocket message handling
 
-    return {"resumed": True, "thread_id": thread_id_param}
+    return {"resumed": True, "loop_id": target_loop}
 
 
-async def _cmd_autopilot_dashboard(self, thread_id: str | None, params: dict) -> dict[str, Any]:
-    """Show autopilot dashboard."""
-    if not thread_id:
-        raise ValueError("Thread ID required")
+async def _cmd_autopilot_dashboard(
+    self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
+) -> dict[str, Any]:
+    """Show autopilot dashboard for the bound loop/checkpoint."""
+    if not checkpoint_thread_id:
+        raise ValueError("Active loop required")
 
     # TODO: Get autopilot state from runner
     dashboard = {

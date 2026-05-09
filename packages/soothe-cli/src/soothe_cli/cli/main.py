@@ -106,7 +106,7 @@ def main(
 
         run_impl(
             prompt=prompt,
-            thread_id=None,
+            resume_loop_id=None,
             no_tui=no_tui,
             autonomous=False,
             max_iterations=None,

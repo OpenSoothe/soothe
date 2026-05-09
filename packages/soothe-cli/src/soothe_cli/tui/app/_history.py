@@ -229,7 +229,7 @@ class _HistoryMixin:
         if isinstance(existing, list) and existing:
             return None
 
-        rows = await self._daemon_session.get_thread_messages(
+        rows = await self._daemon_session.fetch_conversation_log(
             thread_id,
             limit=10000,
             include_events=True,
@@ -295,7 +295,7 @@ class _HistoryMixin:
             return []
 
         try:
-            messages = await self._daemon_session.get_thread_messages(
+            messages = await self._daemon_session.fetch_conversation_log(
                 thread_id,
                 limit=10000,
                 include_events=True,

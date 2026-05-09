@@ -28,7 +28,7 @@ try:
 except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
-__soothe_required_version__ = ">=0.4.0,<1.0.0"
+__soothe_required_version__ = ">=0.5.0,<1.0.0"
 
 # Minimal exports - version + plugin decorators only
 __all__ = [

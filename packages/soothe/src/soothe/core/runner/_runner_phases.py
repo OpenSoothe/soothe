@@ -719,7 +719,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                     ActionRequest(action_type="user_request", tool_name=None, tool_args={}),
                     PolicyContext(
                         active_permissions=PermissionSet(frozenset()),
-                        thread_id=state.thread_id,
+                        scope_id=state.thread_id,
                     ),
                 )
                 logger.debug("Policy checked: user_request → %s", decision.verdict)

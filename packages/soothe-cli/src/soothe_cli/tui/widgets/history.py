@@ -89,7 +89,7 @@ class HistoryManager:
         if self._global_history_writer is not None:
             self._global_history_writer.add(
                 text,
-                thread_id="tui",
+                loop_id="tui",
                 metadata={"source": "tui"},
             )
             return

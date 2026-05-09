@@ -369,9 +369,8 @@ class AppResult:
     return_code: int
     """Exit code (0 for success, non-zero for error)."""
 
-    thread_id: str | None
-    """The final thread ID at shutdown. May differ from the initial thread ID if
-    the user switched threads via `/threads`."""
+    loop_id: str | None
+    """The final AgentLoop id at shutdown (may change if the user switched loops)."""
 
     session_stats: SessionStats = field(default_factory=SessionStats)
     """Cumulative usage stats across all turns in the session."""
@@ -386,7 +385,7 @@ async def run_textual_app(
     assistant_id: str | None = None,
     auto_approve: bool = False,
     cwd: str | Path | None = None,
-    thread_id: str | None = None,
+    resume_loop_id: str | None = None,
     resume_thread: str | None = None,
     initial_prompt: str | None = None,
     initial_skill: str | None = None,
@@ -409,10 +408,10 @@ async def run_textual_app(
         assistant_id: Agent identifier for memory storage.
         auto_approve: Whether to start with auto-approve enabled.
         cwd: Current working directory to display.
-        thread_id: Thread ID for the session.
+        resume_loop_id: Initial loop id for the session (daemon-backed).
 
             `None` when `resume_thread` is provided (the TUI resolves the final
-            ID asynchronously).
+            id asynchronously).
         resume_thread: Raw resume intent from `-r` flag. `'__MOST_RECENT__'` for
             bare `-r`, a thread ID string for `-r <id>`, or `None` for new
             sessions.
@@ -435,7 +434,7 @@ async def run_textual_app(
             first paint so the splash screen appears immediately.
 
     Returns:
-        An `AppResult` with the return code and final thread ID.
+        An `AppResult` with the return code and final loop id.
     """
     from soothe_cli.tui.app._app import SootheApp  # deferred to avoid circular import
 
@@ -444,7 +443,7 @@ async def run_textual_app(
         assistant_id=assistant_id,
         auto_approve=auto_approve,
         cwd=cwd,
-        thread_id=thread_id,
+        resume_loop_id=resume_loop_id,
         resume_thread=resume_thread,
         initial_prompt=initial_prompt,
         initial_skill=initial_skill,
@@ -469,7 +468,7 @@ async def run_textual_app(
 
     return AppResult(
         return_code=app.return_code or 0,
-        thread_id=app._lc_loop_id,
+        loop_id=app._lc_loop_id,
         session_stats=app._session_stats,
         update_available=app._update_available,
     )
@@ -478,7 +477,7 @@ async def run_textual_app(
 # SOOTHE: Alias for Soothe compatibility
 def run_textual_tui(
     config: Any,  # noqa: ANN401
-    thread_id: str | None = None,
+    resume_loop_id: str | None = None,
     initial_prompt: str | None = None,
 ) -> AppResult:
     """Launch Soothe TUI (alias for run_textual_app).
@@ -487,7 +486,7 @@ def run_textual_tui(
 
     Args:
         config: Soothe configuration (unused, kept for compatibility)
-        thread_id: Thread ID for the session
+        resume_loop_id: Loop id to attach to when starting the TUI
         initial_prompt: Auto-submit prompt on launch
     """
 
@@ -499,7 +498,7 @@ def run_textual_tui(
 
     return asyncio.run(
         run_textual_app(
-            thread_id=thread_id,
+            resume_loop_id=resume_loop_id,
             initial_prompt=initial_prompt,
             daemon_config=config,
             cwd=cwd,

@@ -27,11 +27,25 @@ _MSG_PAIR_LENGTH = 2
 
 
 class QueryEngine:
-    """Runs ``SootheRunner.astream`` and manages cancel/ownership for the daemon."""
+    """Runs ``SootheRunner.astream`` and manages cancel/ownership for the daemon.
+
+    IG-408: Locals named ``thread_id`` in this module are LangGraph **checkpoint ids**
+    (``configurable.thread_id``). Client-visible scope is always ``loop_id`` /
+    ``effective_loop_id``; ``_loop_scoped_client_message`` strips stray ``thread_id``
+    keys from outbound frames.
+    """
 
     def __init__(self, daemon: Any) -> None:
         """Attach to the running ``SootheDaemon`` instance (expects ``_runner`` after ``start()``)."""
         self._daemon = daemon
+
+    @staticmethod
+    def _loop_scoped_client_message(loop_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Build a client-visible frame: always ``loop_id``, never CoreAgent ``thread_id``."""
+        out = dict(payload)
+        out["loop_id"] = str(loop_id).strip()
+        out.pop("thread_id", None)
+        return out
 
     def _workspace_str_for_thread(self, thread_id: str) -> str:
         """Workspace path for ``runner.astream`` via unified resolution (IG-116)."""
@@ -46,6 +60,7 @@ class QueryEngine:
         self,
         text: str,
         *,
+        loop_id: str | None = None,
         autonomous: bool = False,
         max_iterations: int | None = None,
         preferred_subagent: str | None = None,
@@ -61,6 +76,7 @@ class QueryEngine:
         if d._thread_executor:
             await self.run_query_multithreaded(
                 text,
+                loop_id=loop_id,
                 autonomous=autonomous,
                 max_iterations=max_iterations,
                 preferred_subagent=preferred_subagent,
@@ -72,7 +88,29 @@ class QueryEngine:
             )
             return
 
-        thread_id = await self.ensure_active_thread_id(client_id)
+        thread_id = str(d._runner.current_thread_id or "").strip()
+        if not thread_id:
+            thread_id = await self.ensure_active_checkpoint_thread_id(client_id)
+
+        lid_in = str(loop_id or "").strip()
+        if client_id and not lid_in:
+            logger.warning(
+                "[Query] Rejecting client %s: missing loop_id (work must be scoped to a loop)",
+                client_id[:8],
+            )
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "NO_LOOP_ID",
+                    "message": "loop_id is required; subscribe to a loop before sending input",
+                },
+            )
+            return
+
+        effective_loop_id = (
+            lid_in or str(d._thread_registry.get_thread_loop(thread_id) or "").strip()
+        )
 
         st = d._thread_registry.get(thread_id)
         if st and st.is_draft:
@@ -92,31 +130,40 @@ class QueryEngine:
         at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
         if at_capacity:
             logger.warning(
-                "Daemon at capacity (%d/%d threads), rejecting query for thread %s",
+                "Daemon at capacity (%d/%d queries), rejecting (loop=%s checkpoint=%s)",
                 len(d._active_threads),
                 max_concurrent,
-                thread_id,
+                effective_loop_id or "?",
+                thread_id[:16] if thread_id else "?",
             )
 
-            await d._broadcast(
-                {
-                    "type": "event",
-                    "thread_id": thread_id,
-                    "namespace": [],
-                    "mode": "custom",
-                    "data": {
-                        "type": ERROR,
-                        "error": (
-                            f"Daemon has reached its concurrent query limit ({max_concurrent}). "
-                            "Wait for a query to finish or cancel one before starting a new one."
-                        ),
-                        "code": "DAEMON_BUSY",
-                    },
-                }
-            )
-            await d._broadcast({"type": "status", "state": "idle", "thread_id": thread_id})
+            if effective_loop_id:
+                await d._broadcast(
+                    self._loop_scoped_client_message(
+                        effective_loop_id,
+                        {
+                            "type": "event",
+                            "namespace": [],
+                            "mode": "custom",
+                            "data": {
+                                "type": ERROR,
+                                "error": (
+                                    f"Daemon has reached its concurrent query limit ({max_concurrent}). "
+                                    "Wait for a query to finish or cancel one before starting a new one."
+                                ),
+                                "code": "DAEMON_BUSY",
+                            },
+                        },
+                    )
+                )
+                await d._broadcast(
+                    self._loop_scoped_client_message(
+                        effective_loop_id,
+                        {"type": "status", "state": "idle"},
+                    )
+                )
             if client_id:
-                await d._session_manager.release_thread_ownership(client_id)
+                await d._session_manager.release_loop_ownership(client_id)
             return
 
         effective_text = text
@@ -124,19 +171,31 @@ class QueryEngine:
             try:
                 effective_text = await enrich_user_text_with_vision(d._config, text, attachments)
             except Exception as exc:
-                logger.exception("Vision preflight failed for thread %s", thread_id)
-                await d._broadcast(
-                    {
-                        "type": "event",
-                        "thread_id": thread_id,
-                        "namespace": [],
-                        "mode": "custom",
-                        "data": emit_error_event(exc),
-                    }
+                logger.exception(
+                    "Vision preflight failed (loop=%s checkpoint=%s)",
+                    effective_loop_id or "?",
+                    thread_id[:16] if thread_id else "?",
                 )
-                await d._broadcast({"type": "status", "state": "idle", "thread_id": thread_id})
+                if effective_loop_id:
+                    await d._broadcast(
+                        self._loop_scoped_client_message(
+                            effective_loop_id,
+                            {
+                                "type": "event",
+                                "namespace": [],
+                                "mode": "custom",
+                                "data": emit_error_event(exc),
+                            },
+                        )
+                    )
+                    await d._broadcast(
+                        self._loop_scoped_client_message(
+                            effective_loop_id,
+                            {"type": "status", "state": "idle"},
+                        )
+                    )
                 if client_id:
-                    await d._session_manager.release_thread_ownership(client_id)
+                    await d._session_manager.release_loop_ownership(client_id)
                 return
 
         if d._thread_logger:
@@ -162,17 +221,23 @@ class QueryEngine:
         # No placeholder pattern - set task directly after creation
         d._query_running = True
 
-        if client_id:
-            await d._session_manager.claim_thread_ownership(client_id, thread_id)
-            subscribed = await d._session_manager.subscribe_thread(client_id, thread_id)
+        if client_id and effective_loop_id:
+            await d._session_manager.claim_loop_ownership(client_id, effective_loop_id)
+            subscribed = await d._session_manager.subscribe_loop(client_id, effective_loop_id)
             if not subscribed:
                 logger.warning(
-                    "Client %s not found for thread %s subscription - query will run without client notifications",
+                    "Client %s not found for loop %s subscription - query will run without client notifications",
                     client_id[:8],
-                    thread_id[:8],
+                    effective_loop_id[:8],
                 )
 
-        await d._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
+        if effective_loop_id:
+            await d._broadcast(
+                self._loop_scoped_client_message(
+                    effective_loop_id,
+                    {"type": "status", "state": "running"},
+                )
+            )
 
         full_response: list[str] = []
 
@@ -182,6 +247,8 @@ class QueryEngine:
                 reset_stream_model_override,
             )
 
+            if effective_loop_id:
+                d._active_stream_loop_id = effective_loop_id
             m_clean = model.strip() if isinstance(model, str) and model.strip() else None
             override_token = attach_stream_model_override(m_clean, model_params)
 
@@ -207,8 +274,12 @@ class QueryEngine:
 
                 # Wrap streaming with timeout if configured
                 interrupt_resolver = (
-                    self._await_interrupt_resume(thread_id, client_id)
-                    if interactive and client_id is not None
+                    self._await_interrupt_resume(
+                        thread_id,
+                        client_id,
+                        effective_loop_id,
+                    )
+                    if interactive and client_id is not None and effective_loop_id
                     else None
                 )
                 if hasattr(d._runner, "set_interrupt_resolver"):
@@ -231,23 +302,27 @@ class QueryEngine:
                                     warning_sent = True
                                     remaining = timeout_seconds - elapsed
                                     logger.warning(
-                                        "Query approaching timeout for thread %s (%.1fs remaining)",
-                                        thread_id,
+                                        "Query approaching timeout (loop=%s checkpoint=%s, %.1fs left)",
+                                        effective_loop_id or "?",
+                                        thread_id[:16] if thread_id else "?",
                                         remaining,
                                     )
-                                    await d._broadcast(
-                                        {
-                                            "type": "event",
-                                            "thread_id": thread_id,
-                                            "namespace": [],
-                                            "mode": "custom",
-                                            "data": {
-                                                "type": "query_timeout_warning",
-                                                "message": f"Query will timeout in {remaining:.0f} seconds",
-                                                "remaining_seconds": remaining,
-                                            },
-                                        }
-                                    )
+                                    if effective_loop_id:
+                                        await d._broadcast(
+                                            self._loop_scoped_client_message(
+                                                effective_loop_id,
+                                                {
+                                                    "type": "event",
+                                                    "namespace": [],
+                                                    "mode": "custom",
+                                                    "data": {
+                                                        "type": "query_timeout_warning",
+                                                        "message": f"Query will timeout in {remaining:.0f} seconds",
+                                                        "remaining_seconds": remaining,
+                                                    },
+                                                },
+                                            )
+                                        )
 
                             # Process chunk
                             if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
@@ -268,14 +343,17 @@ class QueryEngine:
                                 msg, _metadata = data
                                 full_response.extend(extract_text_from_ai_message(msg))
 
-                            event_msg = {
-                                "type": "event",
-                                "thread_id": thread_id,
-                                "namespace": list(namespace),
-                                "mode": mode,
-                                "data": data,
-                            }
-                            await d._broadcast(event_msg)
+                            if effective_loop_id:
+                                event_msg = self._loop_scoped_client_message(
+                                    effective_loop_id,
+                                    {
+                                        "type": "event",
+                                        "namespace": list(namespace),
+                                        "mode": mode,
+                                        "data": data,
+                                    },
+                                )
+                                await d._broadcast(event_msg)
                         logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
                 else:
                     # No timeout - original behavior
@@ -304,22 +382,26 @@ class QueryEngine:
                             msg, _metadata = data
                             full_response.extend(extract_text_from_ai_message(msg))
 
-                        event_msg = {
-                            "type": "event",
-                            "thread_id": thread_id,
-                            "namespace": list(namespace),
-                            "mode": mode,
-                            "data": data,
-                        }
-                        await d._broadcast(event_msg)
+                        if effective_loop_id:
+                            event_msg = self._loop_scoped_client_message(
+                                effective_loop_id,
+                                {
+                                    "type": "event",
+                                    "namespace": list(namespace),
+                                    "mode": mode,
+                                    "data": data,
+                                },
+                            )
+                            await d._broadcast(event_msg)
                     logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
 
             except TimeoutError:
                 # Query exceeded maximum duration
                 logger.warning(
-                    "Query exceeded %d minute timeout for thread %s",
+                    "Query exceeded %d minute timeout (loop=%s checkpoint=%s)",
                     timeout_minutes,
-                    thread_id,
+                    effective_loop_id or "?",
+                    thread_id[:16] if thread_id else "?",
                 )
                 from soothe.core import FrameworkFilesystem
 
@@ -329,20 +411,22 @@ class QueryEngine:
                 if d._current_query_task:
                     d._current_query_task.cancel()
 
-                # Broadcast timeout error to client
-                await d._broadcast(
-                    {
-                        "type": "event",
-                        "thread_id": thread_id,
-                        "namespace": [],
-                        "mode": "custom",
-                        "data": {
-                            "type": ERROR,
-                            "error": f"Query cancelled after {timeout_minutes} minute timeout",
-                            "timeout_minutes": timeout_minutes,
-                        },
-                    }
-                )
+                if effective_loop_id:
+                    await d._broadcast(
+                        self._loop_scoped_client_message(
+                            effective_loop_id,
+                            {
+                                "type": "event",
+                                "namespace": [],
+                                "mode": "custom",
+                                "data": {
+                                    "type": ERROR,
+                                    "error": f"Query cancelled after {timeout_minutes} minute timeout",
+                                    "timeout_minutes": timeout_minutes,
+                                },
+                            },
+                        )
+                    )
             except asyncio.CancelledError:
                 logger.info("Query cancelled by user")
                 from soothe.core import FrameworkFilesystem
@@ -351,22 +435,28 @@ class QueryEngine:
                 raise
             except Exception as exc:
                 logger.exception("Daemon query error")
-                await d._broadcast(
-                    {
-                        "type": "event",
-                        "thread_id": thread_id,
-                        "namespace": [],
-                        "mode": "custom",
-                        "data": emit_error_event(exc),
-                    }
-                )
+                if effective_loop_id:
+                    await d._broadcast(
+                        self._loop_scoped_client_message(
+                            effective_loop_id,
+                            {
+                                "type": "event",
+                                "namespace": [],
+                                "mode": "custom",
+                                "data": emit_error_event(exc),
+                            },
+                        )
+                    )
             finally:
                 reset_stream_model_override(override_token)
                 if hasattr(d._runner, "set_interrupt_resolver"):
                     d._runner.set_interrupt_resolver(None)
                 d._query_running = False
                 d._active_threads.pop(thread_id, None)
-                d._pending_interrupt_responses.pop(thread_id, None)
+                if effective_loop_id:
+                    d._pending_interrupt_responses.pop(effective_loop_id, None)
+                if getattr(d, "_active_stream_loop_id", None) == effective_loop_id:
+                    d._active_stream_loop_id = None
 
                 # IG-054: Moved post-query logic here since we don't await task
                 final_thread_id = d._runner.current_thread_id or ""
@@ -384,16 +474,16 @@ class QueryEngine:
                 if final_thread_id:
                     await d._runner.touch_thread_activity_timestamp(final_thread_id)
 
-                completion_thread_id = thread_id or final_thread_id
-                # Only broadcast status if we have a valid thread_id
-                if completion_thread_id:
+                if effective_loop_id:
                     await d._broadcast(
-                        {"type": "status", "state": "idle", "thread_id": completion_thread_id}
+                        self._loop_scoped_client_message(
+                            effective_loop_id,
+                            {"type": "status", "state": "idle"},
+                        )
                     )
 
-                # Release thread ownership
                 if client_id:
-                    await d._session_manager.release_thread_ownership(client_id)
+                    await d._session_manager.release_loop_ownership(client_id)
                 d._current_query_task = None
 
         try:
@@ -416,13 +506,14 @@ class QueryEngine:
             if thread_id in d._active_threads:
                 d._active_threads.pop(thread_id, None)
             if client_id:
-                await d._session_manager.release_thread_ownership(client_id)
+                await d._session_manager.release_loop_ownership(client_id)
             raise
 
     async def run_query_multithreaded(
         self,
         text: str,
         *,
+        loop_id: str | None = None,
         autonomous: bool = False,
         max_iterations: int | None = None,
         preferred_subagent: str | None = None,
@@ -438,7 +529,29 @@ class QueryEngine:
         cancellation targets the query — **not** the ``_input_loop`` task.
         """
         d = self._daemon
-        thread_id = await self.ensure_active_thread_id(client_id)
+        thread_id = str(d._runner.current_thread_id or "").strip()
+        if not thread_id:
+            thread_id = await self.ensure_active_checkpoint_thread_id(client_id)
+
+        lid_in = str(loop_id or "").strip()
+        if client_id and not lid_in:
+            logger.warning(
+                "[Query] Rejecting client %s (multithreaded): missing loop_id",
+                client_id[:8],
+            )
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "NO_LOOP_ID",
+                    "message": "loop_id is required; subscribe to a loop before sending input",
+                },
+            )
+            return
+
+        effective_loop_id = (
+            lid_in or str(d._thread_registry.get_thread_loop(thread_id) or "").strip()
+        )
 
         st = d._thread_registry.get(thread_id)
         if st and st.is_draft:
@@ -457,31 +570,40 @@ class QueryEngine:
         at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
         if at_capacity:
             logger.warning(
-                "Daemon at capacity (%d/%d threads), rejecting multithreaded query for thread %s",
+                "Daemon at capacity (%d/%d queries), rejecting multithreaded (loop=%s checkpoint=%s)",
                 len(d._active_threads),
                 max_concurrent,
-                thread_id,
+                effective_loop_id or "?",
+                thread_id[:16] if thread_id else "?",
             )
 
-            await d._broadcast(
-                {
-                    "type": "event",
-                    "thread_id": thread_id,
-                    "namespace": [],
-                    "mode": "custom",
-                    "data": {
-                        "type": ERROR,
-                        "error": (
-                            f"Daemon has reached its concurrent query limit ({max_concurrent}). "
-                            "Wait for a query to finish or cancel one before starting a new one."
-                        ),
-                        "code": "DAEMON_BUSY",
-                    },
-                }
-            )
-            await d._broadcast({"type": "status", "state": "idle", "thread_id": thread_id})
+            if effective_loop_id:
+                await d._broadcast(
+                    self._loop_scoped_client_message(
+                        effective_loop_id,
+                        {
+                            "type": "event",
+                            "namespace": [],
+                            "mode": "custom",
+                            "data": {
+                                "type": ERROR,
+                                "error": (
+                                    f"Daemon has reached its concurrent query limit ({max_concurrent}). "
+                                    "Wait for a query to finish or cancel one before starting a new one."
+                                ),
+                                "code": "DAEMON_BUSY",
+                            },
+                        },
+                    )
+                )
+                await d._broadcast(
+                    self._loop_scoped_client_message(
+                        effective_loop_id,
+                        {"type": "status", "state": "idle"},
+                    )
+                )
             if client_id:
-                await d._session_manager.release_thread_ownership(client_id)
+                await d._session_manager.release_loop_ownership(client_id)
             return
 
         effective_text = text
@@ -489,19 +611,31 @@ class QueryEngine:
             try:
                 effective_text = await enrich_user_text_with_vision(d._config, text, attachments)
             except Exception as exc:
-                logger.exception("Vision preflight failed for thread %s", thread_id)
-                await d._broadcast(
-                    {
-                        "type": "event",
-                        "thread_id": thread_id,
-                        "namespace": [],
-                        "mode": "custom",
-                        "data": emit_error_event(exc),
-                    }
+                logger.exception(
+                    "Vision preflight failed multithreaded (loop=%s checkpoint=%s)",
+                    effective_loop_id or "?",
+                    thread_id[:16] if thread_id else "?",
                 )
-                await d._broadcast({"type": "status", "state": "idle", "thread_id": thread_id})
+                if effective_loop_id:
+                    await d._broadcast(
+                        self._loop_scoped_client_message(
+                            effective_loop_id,
+                            {
+                                "type": "event",
+                                "namespace": [],
+                                "mode": "custom",
+                                "data": emit_error_event(exc),
+                            },
+                        )
+                    )
+                    await d._broadcast(
+                        self._loop_scoped_client_message(
+                            effective_loop_id,
+                            {"type": "status", "state": "idle"},
+                        )
+                    )
                 if client_id:
-                    await d._session_manager.release_thread_ownership(client_id)
+                    await d._session_manager.release_loop_ownership(client_id)
                 return
 
         if d._thread_logger:
@@ -524,18 +658,24 @@ class QueryEngine:
             }
             d._global_history.add(effective_text, thread_id=thread_id, metadata=metadata)
 
-        if client_id:
-            await d._session_manager.claim_thread_ownership(client_id, thread_id)
-            subscribed = await d._session_manager.subscribe_thread(client_id, thread_id)
+        if client_id and effective_loop_id:
+            await d._session_manager.claim_loop_ownership(client_id, effective_loop_id)
+            subscribed = await d._session_manager.subscribe_loop(client_id, effective_loop_id)
             if not subscribed:
                 logger.warning(
-                    "Client %s not found for multithreaded thread %s subscription - query will run without client notifications",
+                    "Client %s not found for multithreaded loop %s subscription - query will run without client notifications",
                     client_id[:8],
-                    thread_id[:8],
+                    effective_loop_id[:8],
                 )
 
         d._query_running = True
-        await d._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
+        if effective_loop_id:
+            await d._broadcast(
+                self._loop_scoped_client_message(
+                    effective_loop_id,
+                    {"type": "status", "state": "running"},
+                )
+            )
 
         full_response: list[str] = []
 
@@ -545,6 +685,8 @@ class QueryEngine:
                 reset_stream_model_override,
             )
 
+            if effective_loop_id:
+                d._active_stream_loop_id = effective_loop_id
             m_clean = model.strip() if isinstance(model, str) and model.strip() else None
             override_token = attach_stream_model_override(m_clean, model_params)
             try:
@@ -583,36 +725,54 @@ class QueryEngine:
                         msg, _metadata = data
                         full_response.extend(extract_text_from_ai_message(msg))
 
-                    event_msg = {
-                        "type": "event",
-                        "thread_id": thread_id,
-                        "namespace": list(namespace),
-                        "mode": mode,
-                        "data": data,
-                    }
-                    await d._broadcast(event_msg)
+                    if effective_loop_id:
+                        event_msg = self._loop_scoped_client_message(
+                            effective_loop_id,
+                            {
+                                "type": "event",
+                                "namespace": list(namespace),
+                                "mode": mode,
+                                "data": data,
+                            },
+                        )
+                        await d._broadcast(event_msg)
 
             except asyncio.CancelledError:
-                logger.info("Query cancelled by user in thread %s", thread_id)
+                logger.info(
+                    "Query cancelled by user (loop=%s checkpoint=%s)",
+                    effective_loop_id or "?",
+                    thread_id[:16] if thread_id else "?",
+                )
                 from soothe.core import FrameworkFilesystem
 
                 FrameworkFilesystem.clear_current_workspace()
                 raise
             except Exception as exc:
-                logger.exception("Multi-threaded query error in thread %s", thread_id)
-                await d._broadcast(
-                    {
-                        "type": "event",
-                        "thread_id": thread_id,
-                        "namespace": [],
-                        "mode": "custom",
-                        "data": emit_error_event(exc),
-                    }
+                logger.exception(
+                    "Multi-threaded query error (loop=%s checkpoint=%s)",
+                    effective_loop_id or "?",
+                    thread_id[:16] if thread_id else "?",
                 )
+                if effective_loop_id:
+                    await d._broadcast(
+                        self._loop_scoped_client_message(
+                            effective_loop_id,
+                            {
+                                "type": "event",
+                                "namespace": [],
+                                "mode": "custom",
+                                "data": emit_error_event(exc),
+                            },
+                        )
+                    )
             finally:
                 reset_stream_model_override(override_token)
                 d._query_running = False
                 d._active_threads.pop(thread_id, None)
+                if effective_loop_id:
+                    d._pending_interrupt_responses.pop(effective_loop_id, None)
+                if getattr(d, "_active_stream_loop_id", None) == effective_loop_id:
+                    d._active_stream_loop_id = None
 
                 # IG-054: Moved post-query logic here since we don't await task
                 final_thread_id = d._runner.current_thread_id or ""
@@ -630,16 +790,16 @@ class QueryEngine:
                 if final_thread_id:
                     await d._runner.touch_thread_activity_timestamp(final_thread_id)
 
-                completion_thread_id = thread_id or final_thread_id
-                # Only broadcast status if we have a valid thread_id
-                if completion_thread_id:
+                if effective_loop_id:
                     await d._broadcast(
-                        {"type": "status", "state": "idle", "thread_id": completion_thread_id}
+                        self._loop_scoped_client_message(
+                            effective_loop_id,
+                            {"type": "status", "state": "idle"},
+                        )
                     )
 
-                # Release thread ownership
                 if client_id:
-                    await d._session_manager.release_thread_ownership(client_id)
+                    await d._session_manager.release_loop_ownership(client_id)
                 d._current_query_task = None
 
         try:
@@ -652,16 +812,24 @@ class QueryEngine:
             # This allows the input loop to process concurrent queries
             # The task's internal finally block handles cleanup
         except asyncio.CancelledError:
-            logger.info("Query task cancelled during creation for thread %s", thread_id)
+            logger.info(
+                "Query task cancelled during creation (loop=%s checkpoint=%s)",
+                effective_loop_id or "?",
+                thread_id[:16] if thread_id else "?",
+            )
             d._runner.set_current_thread_id(None)
             raise
         except Exception:
-            logger.exception("Failed to create multithreaded query task for thread %s", thread_id)
+            logger.exception(
+                "Failed to create multithreaded query task (loop=%s checkpoint=%s)",
+                effective_loop_id or "?",
+                thread_id[:16] if thread_id else "?",
+            )
             d._query_running = False
             if thread_id in d._active_threads:
                 d._active_threads.pop(thread_id, None)
             if client_id:
-                await d._session_manager.release_thread_ownership(client_id)
+                await d._session_manager.release_loop_ownership(client_id)
             raise
 
     async def _await_cancel_after_signal(self, task: asyncio.Task, label: str) -> None:
@@ -734,44 +902,93 @@ class QueryEngine:
             task.cancel()
             await self._await_cancel_after_signal(task, label)
 
-    async def cancel_thread(self, thread_id: str) -> None:
-        """Cancel a specific thread's execution."""
+    async def cancel_loop(self, loop_id: str) -> None:
+        """Cancel running query tasks bound to ``loop_id`` (IG-408)."""
+        lidq = str(loop_id or "").strip()
+        if not lidq:
+            logger.warning("cancel_loop called with empty loop_id; ignoring (no cancellation)")
+            return
+
+        d = self._daemon
+        tasks_to_cancel: list[tuple[str, asyncio.Task]] = []
+        seen: set[int] = set()
+        for tid, t in list(d._active_threads.items()):
+            if (
+                d._thread_registry.get_thread_loop(tid) == lidq
+                and t is not None
+                and not t.done()
+                and id(t) not in seen
+            ):
+                tasks_to_cancel.append((str(tid), t))
+                seen.add(id(t))
+        ct = d._current_query_task
+        cur = d._runner.current_thread_id if d._runner else None
+        if (
+            ct is not None
+            and not ct.done()
+            and id(ct) not in seen
+            and cur
+            and d._thread_registry.get_thread_loop(cur) == lidq
+        ):
+            tasks_to_cancel.append(("current", ct))
+            seen.add(id(ct))
+
+        if not tasks_to_cancel:
+            return
+
+        await d._broadcast(
+            {
+                "type": "command_response",
+                "content": "[yellow]Cancellation requested.[/yellow]",
+                "loop_id": lidq,
+            }
+        )
+
+        for label, task in tasks_to_cancel:
+            logger.info("Cancelling query task %s for loop %s", label, lidq[:16])
+            task.cancel()
+            await self._await_cancel_after_signal(task, label)
+
+    async def cancel_thread(self, checkpoint_thread_id: str) -> None:
+        """Cancel a specific query task keyed by LangGraph checkpoint id."""
         d = self._daemon
         query_state_lock = getattr(d, "_query_state_lock", None)
         if query_state_lock:
             async with query_state_lock:
-                await self._cancel_thread_locked(thread_id)
+                await self._cancel_thread_locked(checkpoint_thread_id)
         else:
-            await self._cancel_thread_locked(thread_id)
+            await self._cancel_thread_locked(checkpoint_thread_id)
 
-    async def _cancel_thread_locked(self, thread_id: str) -> None:
+    async def _cancel_thread_locked(self, checkpoint_thread_id: str) -> None:
         d = self._daemon
-        task = d._active_threads.get(thread_id)
+        task = d._active_threads.get(checkpoint_thread_id)
         if task is not None and not task.done():
-            logger.info("Cancelled thread %s", thread_id)
+            logger.info("Cancelled query task for checkpoint %s", checkpoint_thread_id[:16])
             task.cancel()
-            await self._await_cancel_after_signal(task, thread_id)
+            await self._await_cancel_after_signal(task, checkpoint_thread_id)
             return
 
         if d._current_query_task and not d._current_query_task.done():
             current_thread = d._runner.current_thread_id if d._runner else None
-            if current_thread == thread_id:
-                logger.info("Cancelled thread %s (legacy single-threaded mode)", thread_id)
+            if current_thread == checkpoint_thread_id:
+                logger.info(
+                    "Cancelled current query (legacy single-threaded, checkpoint=%s)",
+                    checkpoint_thread_id[:16],
+                )
                 d._current_query_task.cancel()
-                await self._await_cancel_after_signal(d._current_query_task, thread_id)
+                await self._await_cancel_after_signal(d._current_query_task, checkpoint_thread_id)
                 return
 
-        logger.debug("Thread %s not found or already complete", thread_id)
-        if d._runner and d._runner.current_thread_id == thread_id:
+        logger.debug("Checkpoint %s not found or already complete", checkpoint_thread_id[:16])
+        if d._runner and d._runner.current_thread_id == checkpoint_thread_id:
             d._runner.set_current_thread_id(None)
 
-    async def ensure_active_thread_id(self, client_id: str | None = None) -> str:
-        """Ensure current query runs with a concrete thread ID.
+    async def ensure_active_checkpoint_thread_id(self, client_id: str | None = None) -> str:
+        """Ensure the runner has a concrete LangGraph checkpoint id.
 
-        Prefer the thread last bound to ``client_id`` (``thread_create`` /
-        ``new_thread`` / ``resume``) so ``input`` does not mint a duplicate
-        persisted thread when the runner has no global current thread
-        (IG-361).
+        Prefer the checkpoint last bound to ``client_id`` (legacy thread_create /
+        new_thread / resume) so ad-hoc paths do not mint a duplicate persisted
+        checkpoint when the runner has no global current id (IG-361).
         """
         d = self._daemon
         if client_id:
@@ -793,8 +1010,9 @@ class QueryEngine:
 
     def _await_interrupt_resume(
         self,
-        thread_id: str,
+        checkpoint_thread_id: str,
         client_id: str | None,
+        loop_id: str,
     ) -> Any:
         """Return a resolver that waits for daemon-side interrupt continuation."""
 
@@ -802,15 +1020,16 @@ class QueryEngine:
             del _pending_interrupts  # The client already received the interrupt chunk.
             loop = asyncio.get_running_loop()
             future: asyncio.Future[dict[str, Any]] = loop.create_future()
-            self._daemon._pending_interrupt_responses[thread_id] = future
+            self._daemon._pending_interrupt_responses[loop_id] = future
             logger.debug(
-                "Waiting for interactive resume payload on thread %s (client=%s)",
-                thread_id,
+                "Waiting for interactive resume (loop=%s checkpoint=%s client=%s)",
+                loop_id[:16],
+                checkpoint_thread_id[:16],
                 client_id,
             )
             try:
                 return await future
             finally:
-                self._daemon._pending_interrupt_responses.pop(thread_id, None)
+                self._daemon._pending_interrupt_responses.pop(loop_id, None)
 
         return _resolver

@@ -709,7 +709,7 @@ def continue_loop(
 
     run_impl(
         prompt=prompt,
-        thread_id=resolved_loop_id,
+        resume_loop_id=resolved_loop_id,
         no_tui=False,
         autonomous=False,
         max_iterations=None,

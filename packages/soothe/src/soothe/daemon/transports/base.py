@@ -36,7 +36,7 @@ class TransportServer(ABC):
     async def broadcast(self, message: dict[str, Any]) -> None:
         """Broadcast a message to all connected clients.
 
-        Used for events without thread_id that should reach all clients.
+        Used for daemon-wide frames (no ``loop_id``) that should reach all clients.
 
         Args:
             message: Message dict to broadcast to all clients.

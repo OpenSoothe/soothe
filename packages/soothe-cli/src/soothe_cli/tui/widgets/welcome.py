@@ -65,7 +65,7 @@ class WelcomeBanner(Static):
 
     def __init__(
         self,
-        thread_id: str | None = None,
+        loop_id: str | None = None,
         mcp_tool_count: int = 0,
         workspace_path: str | None = None,
         *,
@@ -77,7 +77,7 @@ class WelcomeBanner(Static):
         """Initialize the welcome banner.
 
         Args:
-            thread_id: Optional loop ID to display in the banner (mapped from loop_id).
+            loop_id: Optional AgentLoop id to display in the banner.
             mcp_tool_count: Number of MCP tools loaded at startup.
             workspace_path: Session workspace path shown in the source row.
             connecting: When `True`, show a "Connecting..." footer instead of
@@ -92,8 +92,7 @@ class WelcomeBanner(Static):
             **kwargs: Additional arguments passed to parent.
         """
         # Avoid collision with Widget._thread_id (Textual internal int)
-        # Parameter named thread_id to match langgraph's configurable dict convention
-        self._cli_loop_id: str | None = thread_id
+        self._cli_loop_id: str | None = loop_id
         self._mcp_tool_count = mcp_tool_count
         self._workspace_path = workspace_path
         self._connecting = connecting
@@ -109,7 +108,7 @@ class WelcomeBanner(Static):
         """Update the displayed loop ID and re-render the banner.
 
         Args:
-            loop_id: The new loop ID to display (mapped to thread_id internally).
+            loop_id: The new loop id to display.
         """
         self._cli_loop_id = loop_id
         self.update(self._build_banner())

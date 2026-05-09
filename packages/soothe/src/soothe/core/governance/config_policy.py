@@ -155,7 +155,7 @@ class ConfigDrivenPolicy:
         if action.action_type == "tool_call" and action.tool_name:
             request = self._build_operation_security_request(action)
             op_context = OperationSecurityContext(
-                thread_id=context.thread_id,
+                thread_id=context.scope_id,
                 workspace=context.workspace,
                 security_config=getattr(self._config, "security", None),
             )

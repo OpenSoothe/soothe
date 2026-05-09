@@ -40,7 +40,7 @@ def test_glob_denied_outside_workspace(tmp_path: Path) -> None:
     policy = ConfigDrivenPolicy(config=cfg)
     ctx = PolicyContext(
         active_permissions=PermissionSet(frozenset([Permission("fs", "read", "*")])),
-        thread_id="t1",
+        scope_id="t1",
         workspace=str(ws.resolve()),
     )
     action = ActionRequest(
@@ -65,7 +65,7 @@ def test_read_file_allowed_inside_workspace(tmp_path: Path) -> None:
         active_permissions=PermissionSet(
             frozenset([Permission("fs", "read", "*"), Permission("fs", "write", "*")])
         ),
-        thread_id="t1",
+        scope_id="t1",
         workspace=str(ws.resolve()),
     )
     action = ActionRequest(
@@ -90,7 +90,7 @@ def test_outside_path_need_approval_when_configured(tmp_path: Path) -> None:
     policy = ConfigDrivenPolicy(config=cfg)
     ctx = PolicyContext(
         active_permissions=PermissionSet(frozenset([Permission("fs", "read", "*")])),
-        thread_id="t1",
+        scope_id="t1",
         workspace=str(ws.resolve()),
     )
     action = ActionRequest(
@@ -115,7 +115,7 @@ def test_outside_allowed_when_flag_true_and_no_approval_required(tmp_path: Path)
     policy = ConfigDrivenPolicy(config=cfg)
     ctx = PolicyContext(
         active_permissions=PermissionSet(frozenset([Permission("fs", "read", "*")])),
-        thread_id="t1",
+        scope_id="t1",
         workspace=str(ws.resolve()),
     )
     action = ActionRequest(
@@ -144,7 +144,7 @@ def test_denied_by_allowed_paths_whitelist(tmp_path: Path) -> None:
     policy = ConfigDrivenPolicy(config=cfg)
     ctx = PolicyContext(
         active_permissions=PermissionSet(frozenset([Permission("fs", "read", "*")])),
-        thread_id="t1",
+        scope_id="t1",
         workspace=str(ws.resolve()),
     )
     action = ActionRequest(
@@ -173,7 +173,7 @@ def test_run_background_denied_for_dangerous_command() -> None:
     policy = ConfigDrivenPolicy(config=cfg)
     ctx = PolicyContext(
         active_permissions=PermissionSet(frozenset([Permission("shell", "execute", "*")])),
-        thread_id="t1",
+        scope_id="t1",
         workspace="/tmp/ws",
     )
     action = ActionRequest(
@@ -195,7 +195,7 @@ def test_sensitive_system_path_denied_even_if_allowed_paths_wildcard(tmp_path: P
     policy = ConfigDrivenPolicy(config=cfg)
     ctx = PolicyContext(
         active_permissions=PermissionSet(frozenset([Permission("fs", "read", "*")])),
-        thread_id="t1",
+        scope_id="t1",
         workspace=str(ws.resolve()),
     )
     action = ActionRequest(
@@ -213,7 +213,7 @@ def test_git_local_operation_allowed_but_remote_denied() -> None:
     policy = ConfigDrivenPolicy(config=cfg)
     ctx = PolicyContext(
         active_permissions=PermissionSet(frozenset([Permission("shell", "execute", "*")])),
-        thread_id="t1",
+        scope_id="t1",
         workspace="/tmp/ws",
     )
 
@@ -240,7 +240,7 @@ def test_git_remote_read_sync_operations_allowed() -> None:
     policy = ConfigDrivenPolicy(config=cfg)
     ctx = PolicyContext(
         active_permissions=PermissionSet(frozenset([Permission("shell", "execute", "*")])),
-        thread_id="t1",
+        scope_id="t1",
         workspace="/tmp/ws",
     )
 
@@ -274,7 +274,7 @@ def test_path_whitelist_bypass_overrides_default_deny() -> None:
     policy = ConfigDrivenPolicy(config=cfg)
     ctx = PolicyContext(
         active_permissions=PermissionSet(frozenset([Permission("fs", "read", "*")])),
-        thread_id="t1",
+        scope_id="t1",
         workspace="/tmp/ws",
     )
     decision = policy.check(
@@ -301,7 +301,7 @@ def test_command_whitelist_bypass_overrides_default_deny() -> None:
     policy = ConfigDrivenPolicy(config=cfg)
     ctx = PolicyContext(
         active_permissions=PermissionSet(frozenset([Permission("shell", "execute", "*")])),
-        thread_id="t1",
+        scope_id="t1",
         workspace="/tmp/ws",
     )
     decision = policy.check(

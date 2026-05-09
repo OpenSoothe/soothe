@@ -27,7 +27,6 @@ class TransportManager:
 
     Args:
         config: Daemon configuration.
-        thread_manager: Optional ThreadContextManager for HTTP REST transport.
         runner: Optional SootheRunner for HTTP REST transport.
         soothe_config: Optional SootheConfig for HTTP REST transport.
     """
@@ -35,7 +34,6 @@ class TransportManager:
     def __init__(
         self,
         config: DaemonConfig,
-        thread_manager: Any | None = None,
         runner: Any | None = None,
         soothe_config: Any | None = None,
         session_manager: Any | None = None,
@@ -44,13 +42,11 @@ class TransportManager:
 
         Args:
             config: Daemon configuration.
-            thread_manager: Optional ThreadContextManager for HTTP REST transport.
             runner: Optional SootheRunner for HTTP REST transport.
             soothe_config: Optional SootheConfig for HTTP REST transport.
             session_manager: Optional ClientSessionManager for session management.
         """
         self._config = config
-        self._thread_manager = thread_manager
         self._runner = runner
         self._soothe_config = soothe_config
         self._session_manager = session_manager
@@ -97,7 +93,6 @@ class TransportManager:
 
             http_transport = HttpRestTransport(
                 self._config.transports.http_rest,
-                thread_manager=self._thread_manager,
                 runner=self._runner,
                 soothe_config=self._soothe_config,
                 session_manager=self._session_manager,

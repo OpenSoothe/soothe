@@ -108,7 +108,6 @@ class DaemonHandlersMixin:
             initial_msg = {
                 "type": "status",
                 "state": initial_state,
-                "thread_id": "",
                 "input_history": [],
             }
 
@@ -140,93 +139,94 @@ class DaemonHandlersMixin:
         """Handle a message from a client (WebSocket / HTTP transports)."""
         await self._message_router.dispatch(client_id, msg)
 
-    async def _cancel_thread(self, thread_id: str) -> None:
-        """Cancel a running thread (used by session disconnect)."""
-        qe = getattr(self, "_query_engine", None)
-        if qe is not None:
-            await qe.cancel_thread(thread_id)
+    async def _process_loop_input_message(self, loop_id: str, msg: dict[str, Any]) -> None:
+        """Process one loop-scoped message from ``LoopInputDispatcher`` (IG-408)."""
+        from soothe.daemon.loop_isolation import bind_execution_thread_for_loop
 
-    async def _input_loop(self) -> None:
-        """Process user input from clients in an infinite loop."""
-        while self._running:
-            try:
-                msg = await self._current_input_queue.get()
-            except asyncio.CancelledError:
-                break
+        msg_type = msg.get("type", "")
+        try:
+            await bind_execution_thread_for_loop(self, loop_id)
+        except Exception as exc:
+            logger.warning(
+                "Failed to bind LangGraph checkpoint for loop %s: %s",
+                loop_id,
+                exc,
+            )
+            client_id = msg.get("client_id")
+            if client_id:
+                await self._send_client_message(
+                    client_id,
+                    {"type": "error", "code": "LOOP_CONTEXT", "message": str(exc)},
+                )
+            return
 
-            msg_type = msg.get("type", "")
-            try:
-                if msg_type == "command":
-                    cmd = msg.get("cmd", "")
-                    if cmd in ("/exit", "/quit"):
-                        # IG-248: LEGACY SOCKET DEPRECATED - /exit/quit handled in MessageRouter
-                        # Commands no longer enqueued; handled immediately in dispatch()
-                        # Legacy socket clients still connect but use modern WebSocket protocol
-                        logger.warning(
-                            "Received %s command in _input_loop - should be handled in MessageRouter",
-                            cmd,
-                        )
-                        continue
-                    if cmd.strip().lower() == "/cancel":
-                        if self._query_engine is not None:
-                            await self._query_engine.cancel_current_query()
-                        continue
-                    # Legacy command handling removed (RFC-404)
-                    # Commands now use command_request message type or plain text input
-                    logger.warning("Received legacy 'command' message - ignoring")
-                    continue
-                elif msg_type == "command_request":
-                    # RFC-404: Structured RPC command requests
-                    await self._handle_command_request(msg)
-                    continue
-                elif msg_type == "input":
-                    text = msg["text"]
+        try:
+            if msg_type == "command":
+                cmd = msg.get("cmd", "")
+                if cmd in ("/exit", "/quit"):
+                    logger.warning(
+                        "Received %s in loop worker — should be handled in MessageRouter",
+                        cmd,
+                    )
+                    return
+                if cmd.strip().lower() == "/cancel":
                     if self._query_engine is not None:
-                        mp = msg.get("model_params")
-                        model_params = mp if isinstance(mp, dict) else None
-                        raw_m = msg.get("model")
-                        model_kw = (
-                            raw_m.strip() if isinstance(raw_m, str) and raw_m.strip() else None
-                        )
-                        raw_att = msg.get("attachments")
-                        attachments = raw_att if isinstance(raw_att, list) and raw_att else None
-                        await self._query_engine.run_query(
-                            text,
-                            autonomous=bool(msg.get("autonomous", False)),
-                            max_iterations=msg.get("max_iterations"),
-                            preferred_subagent=msg.get("preferred_subagent"),
-                            client_id=msg.get("client_id"),
-                            interactive=bool(msg.get("interactive", False)),
-                            model=model_kw,
-                            model_params=model_params,
-                            attachments=attachments,
-                        )
-            except asyncio.CancelledError:
-                break
-            except Exception:
-                logger.exception("Daemon input loop handler error")
-                self._query_running = False
+                        await self._query_engine.cancel_loop(loop_id)
+                    return
+                logger.warning("Received legacy 'command' message in loop worker — ignoring")
+                return
+            if msg_type == "command_request":
+                req = dict(msg)
+                req.setdefault("loop_id", loop_id)
+                await self._handle_command_request(req)
+                return
+            if msg_type == "input":
+                text = msg["text"]
+                if self._query_engine is not None:
+                    mp = msg.get("model_params")
+                    model_params = mp if isinstance(mp, dict) else None
+                    raw_m = msg.get("model")
+                    model_kw = raw_m.strip() if isinstance(raw_m, str) and raw_m.strip() else None
+                    raw_att = msg.get("attachments")
+                    attachments = raw_att if isinstance(raw_att, list) and raw_att else None
+                    await self._query_engine.run_query(
+                        text,
+                        loop_id=loop_id,
+                        autonomous=bool(msg.get("autonomous", False)),
+                        max_iterations=msg.get("max_iterations"),
+                        preferred_subagent=msg.get("preferred_subagent"),
+                        client_id=msg.get("client_id"),
+                        interactive=bool(msg.get("interactive", False)),
+                        model=model_kw,
+                        model_params=model_params,
+                        attachments=attachments,
+                    )
+        except Exception:
+            logger.exception("Daemon loop input handler error")
+            self._query_running = False
+            lid = str(loop_id or "").strip()
+            if lid and self._query_engine is not None:
+                qe = self._query_engine
                 await self._broadcast(
-                    {
-                        "type": "event",
-                        "thread_id": self._runner.current_thread_id or "",
-                        "namespace": [],
-                        "mode": "custom",
-                        "data": {"type": ERROR, "error": "Daemon failed to process input"},
-                    }
+                    qe._loop_scoped_client_message(
+                        lid,
+                        {
+                            "type": "event",
+                            "namespace": [],
+                            "mode": "custom",
+                            "data": {"type": ERROR, "error": "Daemon failed to process input"},
+                        },
+                    )
                 )
                 await self._broadcast(
-                    {
-                        "type": "status",
-                        "state": "idle",
-                        "thread_id": self._runner.current_thread_id or "",
-                    }
+                    qe._loop_scoped_client_message(lid, {"type": "status", "state": "idle"})
                 )
 
     async def _run_query(
         self,
         text: str,
         *,
+        loop_id: str | None = None,
         autonomous: bool = False,
         max_iterations: int | None = None,
         preferred_subagent: str | None = None,
@@ -239,6 +239,7 @@ class DaemonHandlersMixin:
         """Delegate to ``QueryEngine`` (keeps unit tests and legacy callers working)."""
         await self._query_engine.run_query(
             text,
+            loop_id=loop_id,
             autonomous=autonomous,
             max_iterations=max_iterations,
             preferred_subagent=preferred_subagent,

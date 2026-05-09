@@ -1,8 +1,8 @@
-"""Per-thread state for daemon isolation (IG-110).
+"""Per-checkpoint state for daemon isolation (IG-110, IG-408).
 
-Replaces scattered daemon-level ``_thread_logger``, ``_draft_thread_id``,
-and ``_thread_workspaces`` with explicit per-thread records so concurrent
-clients do not overwrite each other's state.
+Registry keys are LangGraph / durability **checkpoint ids** (historically called
+``thread_id`` in code). **Client routing** uses **``loop_id``**; this module maps
+checkpoint ↔ loop via ``set_thread_loop`` / ``get_thread_loop``.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from typing import Any
 
 @dataclass
 class ThreadState:
-    """Mutable state for a single durability thread (or draft)."""
+    """Mutable state for a single LangGraph checkpoint row (or draft)."""
 
     thread_id: str
     workspace: Path | None = None
@@ -28,10 +28,11 @@ class ThreadState:
 
 
 class ThreadStateRegistry:
-    """Registry of per-thread state keyed by ``thread_id``.
+    """Registry of per-checkpoint state keyed by LangGraph ``thread_id``.
 
-    Also tracks which thread_id a client last created or resumed for helpers
-    that need client-scoped lookups (optional; primary routing uses thread_id).
+    Also tracks legacy client→checkpoint associations (``set_client_thread``).
+    **Loop-first routing** uses ``loop_id`` on the wire; use ``get_thread_loop`` to
+    resolve checkpoint → loop.
     """
 
     def __init__(self) -> None:
@@ -73,11 +74,11 @@ class ThreadStateRegistry:
         return self._thread_loop.get(thread_id)
 
     def set_client_thread(self, client_id: str, thread_id: str) -> None:
-        """Record the thread a client last bound to (new_thread / resume)."""
+        """Record the checkpoint id last associated with *client_id* (legacy helpers)."""
         self._client_active_thread[client_id] = thread_id
 
     def get_client_thread(self, client_id: str) -> str | None:
-        """Return last bound thread_id for *client_id*, if any."""
+        """Return last bound checkpoint id for *client_id*, if any."""
         return self._client_active_thread.get(client_id)
 
     def set_workspace(self, thread_id: str, workspace: Path) -> None:

@@ -42,7 +42,7 @@ def parse_slash_command(input_text: str) -> tuple[str, str | None]:
 
 
 def validate_command(
-    entry: dict[str, Any], command: str, query: str | None, thread_id: str | None
+    entry: dict[str, Any], command: str, query: str | None, loop_id: str | None
 ) -> tuple[bool, str | None]:
     """Validate command before routing.
 
@@ -50,14 +50,13 @@ def validate_command(
         entry: Command registry entry
         command: Command name
         query: Query parameter (if present)
-        thread_id: Current thread ID
+        loop_id: Active AgentLoop id for this session
 
     Returns:
         Tuple of (is_valid, error_message)
     """
-    # Check thread requirement
-    if entry.get("requires_thread") and not thread_id:
-        return (False, "No active thread")
+    if entry.get("requires_loop") and not loop_id:
+        return (False, "No active loop")
 
     # Check query requirement for routing commands
     if entry.get("requires_query") and not query:
@@ -110,7 +109,13 @@ def parse_command_params(entry: dict[str, Any], query: str) -> dict[str, Any]:
     return params
 
 
-async def route_slash_command(cmd_input: str, console: Console, client: WebSocketClient) -> bool:
+async def route_slash_command(
+    cmd_input: str,
+    console: Console,
+    client: WebSocketClient,
+    *,
+    loop_id: str | None = None,
+) -> bool:
     """Route slash command based on registry metadata (RFC-404).
 
     Args:
@@ -137,7 +142,7 @@ async def route_slash_command(cmd_input: str, console: Console, client: WebSocke
         return True  # Handled (as error)
 
     # Validate command
-    is_valid, error = validate_command(entry, command, query, client.thread_id)
+    is_valid, error = validate_command(entry, command, query, loop_id)
     if not is_valid:
         console.print(f"[red]Error: {error}[/red]")
         return True  # Handled (as error)
@@ -151,13 +156,13 @@ async def route_slash_command(cmd_input: str, console: Console, client: WebSocke
         return True
 
     elif entry["location"] == "daemon" and entry.get("type") == "rpc":
-        # Daemon RPC: send command_request
-        await handle_rpc_command(entry, command, query, console, client)
+        # Daemon RPC: send command_request (loop-scoped; no client thread_id)
+        await handle_rpc_command(entry, command, query, console, client, loop_id=loop_id)
         return True
 
     elif entry["location"] == "daemon" and entry.get("type") == "routing":
         # Daemon routing: send as plain text input
-        await handle_routing_command(cmd_input, console, client)
+        await handle_routing_command(cmd_input, console, client, loop_id=loop_id)
         return True
 
     return False
@@ -169,6 +174,8 @@ async def handle_rpc_command(
     query: str | None,
     console: Console,
     client: WebSocketClient,
+    *,
+    loop_id: str | None = None,
 ) -> None:
     """Handle daemon RPC command with structured request/response (RFC-404).
 
@@ -178,15 +185,17 @@ async def handle_rpc_command(
         query: Query/params (if present)
         console: Rich console
         client: WebSocket client
+        loop_id: Active subscribed loop (required for daemon-side binding)
     """
     daemon_command = entry["daemon_command"]
 
-    # Build request
-    request = {
+    # Build request (loop_id only; daemon resolves CoreAgent thread internally)
+    request: dict[str, Any] = {
         "type": "command_request",
         "command": daemon_command,
-        "thread_id": client.thread_id,
     }
+    if loop_id:
+        request["loop_id"] = loop_id
 
     # Parse params if schema exists
     if entry.get("params_schema") and query:
@@ -225,7 +234,13 @@ async def handle_rpc_command(
         console.print(f"[red]Error: {exc}[/red]")
 
 
-async def handle_routing_command(cmd_input: str, console: Console, client: WebSocketClient) -> None:
+async def handle_routing_command(
+    cmd_input: str,
+    console: Console,
+    client: WebSocketClient,
+    *,
+    loop_id: str | None = None,
+) -> None:
     """Handle daemon routing command by sending input with optional subagent (RFC-404).
 
     For ``/browser``, ``/claude``, ``/research``, and ``/explore``, sets the WebSocket
@@ -236,9 +251,13 @@ async def handle_routing_command(cmd_input: str, console: Console, client: WebSo
         cmd_input: Full command input (e.g., "/browser AI trends")
         console: Rich console
         client: WebSocket client
+        loop_id: Subscribed loop to target (required for ``loop_input``)
     """
+    if not loop_id:
+        console.print("[red]Error: No active loop for routing command[/red]")
+        return
     subagent_name, text = parse_subagent_from_input(cmd_input.strip())
-    await client.send_input(text, preferred_subagent=subagent_name)
+    await client.send_input(loop_id, text, preferred_subagent=subagent_name)
 
 
 __all__ = [
