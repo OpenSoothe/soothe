@@ -139,7 +139,12 @@ class ClientSessionManager:
         loop_id: str,
         verbosity: VerbosityLevel = "normal",
     ) -> bool:
-        """Subscribe client to loop event topic; replaces prior loop subscriptions."""
+        """Subscribe client to loop event topic; replaces prior loop subscriptions.
+
+        For strict isolation, also unsubscribes from the ``global`` topic when
+        subscribing to a specific loop. Loop-scoped clients should only receive
+        events from their subscribed loop, not daemon-wide broadcasts.
+        """
         async with self._lock:
             session = self._sessions.get(client_id)
 
@@ -162,6 +167,10 @@ class ClientSessionManager:
         topic = loop_event_topic(loop_id)
         await self._event_bus.subscribe(topic, session.event_queue)
         session.subscriptions.add(loop_id)
+
+        # Unsubscribe from global for strict loop isolation (IG-408)
+        # Loop-scoped clients should only receive events from their subscribed loop
+        await self._event_bus.unsubscribe(_GLOBAL_TOPIC, session.event_queue)
 
         logger.info(
             "[Session] Client %s → loop %s (verbosity=%s)",

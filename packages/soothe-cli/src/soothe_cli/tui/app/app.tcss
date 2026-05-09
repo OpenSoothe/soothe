@@ -6,9 +6,18 @@ Screen {
     layers: base autocomplete;
 }
 
-/* Thin scrollbars app-wide */
+/* Scrollable regions keep wheel / key scrolling; scrollbar chrome is hidden. */
 * {
+    scrollbar-visibility: hidden;
     scrollbar-size-vertical: 1;
+    scrollbar-size-horizontal: 1;
+    scrollbar-background: $background;
+    scrollbar-background-hover: $background;
+    scrollbar-background-active: $background;
+    scrollbar-color: $foreground-muted;
+    scrollbar-color-hover: $text-muted;
+    scrollbar-color-active: $primary-muted;
+    scrollbar-corner-color: $background;
 }
 
 /* Main content goes on base layer by default */
