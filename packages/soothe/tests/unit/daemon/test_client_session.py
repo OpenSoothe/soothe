@@ -207,8 +207,8 @@ async def test_subscribe_loop_replaces_prior_subscription():
 
 
 @pytest.mark.asyncio
-async def test_subscribe_loop_accepts_minimal_verbosity() -> None:
-    """Test `minimal` is accepted as a client verbosity level."""
+async def test_subscribe_loop_accepts_normal_verbosity() -> None:
+    """Test `normal` is accepted as a client verbosity level."""
     bus = EventBus()
     manager = ClientSessionManager(bus)
 
@@ -216,19 +216,19 @@ async def test_subscribe_loop_accepts_minimal_verbosity() -> None:
     transport.transport_type = "test"
 
     client_id = await manager.create_session(transport, None)
-    result = await manager.subscribe_loop(client_id, "loop-abc123", verbosity="minimal")
+    result = await manager.subscribe_loop(client_id, "loop-abc123", verbosity="normal")
     assert result is True
 
     session = await manager.get_session(client_id)
     assert session is not None
-    assert session.verbosity == "minimal"
+    assert session.verbosity == "normal"
 
     await manager.remove_session(client_id)
 
 
 @pytest.mark.asyncio
-async def test_sender_loop_filters_detailed_event_for_minimal_verbosity() -> None:
-    """Test daemon-side filtering treats `minimal` like `normal`."""
+async def test_sender_loop_filters_detailed_event_for_normal_verbosity() -> None:
+    """Test daemon-side filtering at `normal` verbosity hides DETAILED-tier events."""
     bus = EventBus()
     manager = ClientSessionManager(bus)
 
@@ -237,7 +237,7 @@ async def test_sender_loop_filters_detailed_event_for_minimal_verbosity() -> Non
     transport.send = AsyncMock()
 
     client_id = await manager.create_session(transport, None)
-    result = await manager.subscribe_loop(client_id, "loop-abc123", verbosity="minimal")
+    result = await manager.subscribe_loop(client_id, "loop-abc123", verbosity="normal")
     assert result is True
 
     class TestEvent(SootheEvent):
