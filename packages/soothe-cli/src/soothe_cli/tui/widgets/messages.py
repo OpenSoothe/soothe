@@ -69,42 +69,38 @@ _RUNNING_ROWS_REFRESH_INTERVAL_SECONDS = 0.5
 
 
 def _tui_hint_expand_body(ellipsis_glyph: str) -> str:
-    """Whole card or section is folded; user can open it (click or Ctrl+O)."""
-    return f"{ellipsis_glyph} click or Ctrl+O to expand"
+    """Whole card or section is folded; user can open it."""
+    return ""
 
 
 def _tui_hint_collapse_body(ellipsis_glyph: str) -> str:
     """Whole card or section is open; user can fold it."""
-    return f"{ellipsis_glyph} click or Ctrl+O to collapse"
+    return ""
 
 
 def _tui_hint_expand_plain() -> str:
     """Expand hint without a leading ellipsis (rare short-truncation paths)."""
-    return "click or Ctrl+O to expand"
+    return ""
 
 
 def _tui_hint_expand_lines(ellipsis_glyph: str, remaining: int) -> str:
     """Preview truncated by line count."""
-    if remaining == 1:
-        return f"{ellipsis_glyph} 1 more line — click or Ctrl+O to expand"
-    return f"{ellipsis_glyph} {remaining} more lines — click or Ctrl+O to expand"
+    return ""
 
 
 def _tui_hint_expand_more_text(ellipsis_glyph: str) -> str:
     """Preview truncated primarily by character budget."""
-    return f"{ellipsis_glyph} more text — click or Ctrl+O to expand"
+    return ""
 
 
 def _tui_hint_expand_truncation(ellipsis_glyph: str, truncation: str) -> str:
     """Tool/output preview with formatter-supplied tail (e.g. ``3 more lines``)."""
-    return f"{ellipsis_glyph} {truncation} — click or Ctrl+O to expand"
+    return ""
 
 
 def _tui_hint_expand_more_tool_calls(ellipsis_glyph: str, remaining: int) -> str:
     """Step/task tool list preview."""
-    if remaining == 1:
-        return f"{ellipsis_glyph} 1 more tool call — click or Ctrl+O to expand"
-    return f"{ellipsis_glyph} {remaining} more tool calls — click or Ctrl+O to expand"
+    return ""
 
 
 def _is_widget_animation_visible(widget: object) -> bool:
@@ -1587,7 +1583,13 @@ class ToolCallMessage(Vertical):
 
         colors = theme.get_theme_colors(self)
         gutter = f"{get_glyphs().output_prefix} "
-        line = f"{gutter}{frame} Running...{elapsed}"
+        # Expand/collapse affordance: collapsed → expand glyph; expanded → collapse glyph.
+        has_collapsible = self._activity or (self._output or "").strip()
+        g = get_glyphs()
+        toggle_icon = ""
+        if has_collapsible:
+            toggle_icon = f" {g.expand if self._card_collapsed else g.collapse}"
+        line = f"{gutter}{frame} Running...{elapsed}{toggle_icon}"
         self._status_widget.update(Content.styled(line, colors.cognition))
         # Throttle expensive row re-rendering while keeping status spinner smooth.
         now = monotonic()
@@ -1619,6 +1621,11 @@ class ToolCallMessage(Vertical):
         if _normalize_tool_name_for_arg_map(self._tool_name) == "task":
             gutter = f"{get_glyphs().output_prefix} "
             line = f"{gutter}{line}"
+        # Add expand/collapse icon at the end of status line
+        has_collapsible = self._activity or (self._output or "").strip()
+        if has_collapsible:
+            icon = get_glyphs().expand if self._card_collapsed else get_glyphs().collapse
+            line = f"{line} {icon}"
         w.update(Content(line))
         w.display = True
 
@@ -1783,57 +1790,29 @@ class ToolCallMessage(Vertical):
         self._sync_tool_collapse_hint()
 
     def _sync_tool_collapse_hint(self) -> None:
-        """Footer hint: expand/collapse card, or task activity list affordances."""
+        """Footer hint: expand/collapse card, or task activity list affordances.
+
+        Note: The expand/collapse icon is now shown inline in the status line,
+        so this widget is hidden for a cleaner design.
+        """
         w = self._collapse_hint_widget
         if w is None:
             return
-        has_content = (
-            self._activity or (self._output or "").strip() or self._status in ("success", "error")
-        )
-        if not has_content:
-            w.display = False
-            return
-
-        glyphs = get_glyphs()
-        gutter = f"{glyphs.output_prefix} "
-
-        if self._card_collapsed:
-            hint_text = _tui_hint_expand_body(glyphs.ellipsis)
-            w.update(Content.styled(hint_text, "dim italic"))
-            w.display = True
-            return
-
-        if (
-            self._is_task_tool_card()
-            and self._activity
-            and len(self._activity) > _STEP_TOOL_PREVIEW_ROWS
-        ):
-            show_all = (
-                len(self._activity) <= _STEP_TOOL_PREVIEW_ROWS or not self._tools_body_collapsed
-            )
-            visible = self._activity if show_all else self._activity[:_STEP_TOOL_PREVIEW_ROWS]
-            remaining = len(self._activity) - len(visible)
-            if remaining > 0:
-                hint = _tui_hint_expand_more_tool_calls(glyphs.ellipsis, remaining)
-                w.update(
-                    Content.assemble(
-                        Content.styled(gutter, "dim"),
-                        Content.styled(hint, "dim"),
-                    )
-                )
-                w.display = True
-                return
-            hint = _tui_hint_collapse_body(glyphs.ellipsis)
-            w.update(
-                Content.assemble(
-                    Content.styled(gutter, "dim"),
-                    Content.styled(hint, "dim italic"),
-                )
-            )
-            w.display = True
-            return
-
+        # Hide the separate hint widget - icon is shown inline in status line
         w.display = False
+        # Refresh status line to update the inline expand/collapse icon
+        if self._status == "running":
+            self._update_running_animation()
+        elif self._status in ("success", "error") and self._result_summary_widget:
+            # Re-apply result summary with updated icon
+            duration_ms = self._duration_ms_since_start()
+            line = _TOOL_CARD_PRESENTATION.format_tool_result_status_line(
+                self._tool_name,
+                self._output,
+                is_error=(self._status == "error"),
+                duration_ms=duration_ms,
+            )
+            self._apply_result_summary(line, is_error=(self._status == "error"))
 
     def _format_output(self, output: str, *, is_preview: bool = False) -> FormattedOutput:
         """Format tool output based on tool type for nicer display.
@@ -2731,54 +2710,37 @@ class CognitionStepMessage(Vertical):
         self._sync_step_footer_hint()
 
     def _sync_step_footer_hint(self) -> None:
-        """Single footer line after status: expand card or tool-list affordances."""
+        """Single footer line after status: expand card or tool-list affordances.
+
+        Note: The expand/collapse icon is now shown inline in the status line,
+        so this widget is hidden for a cleaner design.
+        """
         w = self._collapse_hint_widget
         if w is None:
             return
-        has_content = (
-            self._rows
-            or self._subagent_notes
-            or self._execute_assistant_buffer.strip()
-            or self._status in ("success", "error")
-        )
-        if not has_content:
-            w.display = False
-            return
-
-        glyphs = get_glyphs()
-        gutter = self._step_goal_tree_gutter()
-
-        if self._card_collapsed:
-            hint_text = _tui_hint_expand_body(glyphs.ellipsis)
-            w.update(Content.styled(hint_text, "dim italic"))
-            w.display = True
-            return
-
-        if self._rows and len(self._rows) > _STEP_TOOL_PREVIEW_ROWS:
-            show_all = len(self._rows) <= _STEP_TOOL_PREVIEW_ROWS or not self._tools_body_collapsed
-            visible = self._rows if show_all else self._rows[:_STEP_TOOL_PREVIEW_ROWS]
-            remaining = len(self._rows) - len(visible)
-            if remaining > 0:
-                hint = _tui_hint_expand_more_tool_calls(glyphs.ellipsis, remaining)
-                w.update(
-                    Content.assemble(
-                        Content.styled(gutter, "dim"),
-                        Content.styled(hint, "dim"),
+        # Hide the separate hint widget - icon is shown inline in status line
+        w.display = False
+        # Refresh status line to update the inline expand/collapse icon
+        if self._status == "running":
+            self._update_running_animation()
+        elif self._status in ("success", "error") and self._detail_widget:
+            # Re-apply completion detail with updated icon
+            dur_str = format_duration_ms(self._last_duration_ms)
+            tool_part = (
+                f" · {self._last_tool_call_count} tools" if self._last_tool_call_count > 0 else ""
+            )
+            if self._last_success:
+                status_body = f"Completed ({dur_str}){tool_part}"
+                self._detail_widget.update(
+                    self._step_branched_completion_detail(
+                        success=True,
+                        status_line_body=status_body,
+                        prose=self._last_completed_execute_prose,
                     )
                 )
-                w.display = True
-                return
-            hint = _tui_hint_collapse_body(glyphs.ellipsis)
-            w.update(
-                Content.assemble(
-                    Content.styled(gutter, "dim"),
-                    Content.styled(hint, "dim italic"),
-                )
-            )
-            w.display = True
-            return
-
-        w.display = False
+            else:
+                err_text = self._last_summary.strip() or "Step failed"
+                self._detail_widget.update(self._step_branched_error_detail(err_text))
 
     def append_execute_assistant_delta(self, delta: str) -> None:
         """Accumulate per-step LoopAIMessage (``phase=execute_step``) prose into this card."""
@@ -2918,8 +2880,10 @@ class CognitionStepMessage(Vertical):
         icon = g.checkmark if success else g.error
         # Match running step line and tool activity: cognition accent, not semantic green.
         tone = colors.cognition if success else colors.error
+        # Add expand/collapse icon at the end of status line
+        collapse_icon = g.expand if self._card_collapsed else g.collapse
         parts: list[object] = [
-            Content.styled(f"{gutter}{icon} {status_line_body}", tone),
+            Content.styled(f"{gutter}{icon} {status_line_body} {collapse_icon}", tone),
         ]
         prose = (prose or "").strip()
         if prose:
@@ -3185,7 +3149,15 @@ class CognitionStepMessage(Vertical):
             elapsed = f" ({format_duration(float(elapsed_secs))})"
         colors = theme.get_theme_colors(self)
         gutter = f"{get_glyphs().output_prefix} "
-        line = f"{gutter}{frame} Running...{elapsed}"
+        # Expand/collapse affordance: collapsed → expand glyph; expanded → collapse glyph.
+        has_collapsible = (
+            self._rows or self._subagent_notes or self._execute_assistant_buffer.strip()
+        )
+        g = get_glyphs()
+        toggle_icon = ""
+        if has_collapsible:
+            toggle_icon = f" {g.expand if self._card_collapsed else g.collapse}"
+        line = f"{gutter}{frame} Running...{elapsed}{toggle_icon}"
         self._status_widget.update(Content.styled(line, colors.cognition))
         now = monotonic()
         if any(r.phase == "running" for r in self._rows) and (
@@ -3244,8 +3216,19 @@ class CognitionStepMessage(Vertical):
         if self._status_widget:
             self._status_widget.remove_class("pending")
             self._status_widget.add_class("error")
-            icon = get_glyphs().error
-            self._status_widget.update(Content.styled(f"{icon} Failed · {dur_str}", colors.error))
+            g = get_glyphs()
+            # Add expand/collapse icon at the end of status line
+            has_collapsible = self._rows or self._subagent_notes or prose
+            collapse_icon = (
+                f" {g.expand}"
+                if self._card_collapsed and has_collapsible
+                else f" {g.collapse}"
+                if has_collapsible
+                else ""
+            )
+            self._status_widget.update(
+                Content.styled(f"{g.error} Failed · {dur_str}{collapse_icon}", colors.error)
+            )
             self._status_widget.display = True
         if prose:
             err_text = f"{err_text}\n\n{prose}"
