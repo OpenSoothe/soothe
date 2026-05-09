@@ -68,7 +68,7 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
 
     # Workspace resolution — two tiers only:
     #   1. client_workspace from loop metadata (IG-409): the user's CWD passed via loop_new.
-    #   2. per-loop daemon scratch dir: $SOOTHE_HOME/Workspace/<loop_id>/ (IG-300).
+    #   2. per-loop daemon scratch dir: $SOOTHE_HOME/data/loops/<loop_id>/workspace/ (IG-300).
     loop_workspace: Path | None = None
     raw_client_ws = metadata.get("client_workspace")
     if isinstance(raw_client_ws, str) and raw_client_ws.strip():

@@ -253,7 +253,9 @@ async def test_bind_execution_thread_falls_back_when_client_workspace_missing(
         await bind_execution_thread_for_loop(bind_daemon, loop_id)
 
         assert set_workspace_calls, "set_workspace must be invoked"
-        expected_loop_ws = Path(tmp_path / "soothe-home").resolve() / "Workspace" / loop_id
+        expected_loop_ws = (
+            Path(tmp_path / "soothe-home").resolve() / "data" / "loops" / loop_id / "workspace"
+        )
         assert set_workspace_calls[0] == expected_loop_ws
     finally:
         await daemon.close()

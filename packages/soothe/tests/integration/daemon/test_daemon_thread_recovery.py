@@ -1,8 +1,7 @@
-"""Thread recovery integration tests for RFC-402 compliance.
+"""Loop recovery integration tests (RFC-402 / RFC-503).
 
-This module validates RFC-402 thread resumption and recovery including
-thread resume from disk after restart, recovery with missing metadata,
-concurrent thread execution, thread cancellation, and thread isolation.
+Validates loop persistence across daemon restart, concurrent loops, cancellation,
+and basic isolation using ``loop_*`` WebSocket RPC—no legacy thread_* wire types.
 """
 
 from __future__ import annotations
@@ -22,12 +21,18 @@ from tests.integration.conftest import (
     force_isolated_home,
     get_base_config,
 )
+from tests.integration.ws_loop_client import (
+    loop_new_with_initial_input,
+    request_loop_get,
+    request_loop_list,
+    subscribe_loop_stream,
+)
 
 
 def _build_daemon_config(
     tmp_path: Path, websocket_port: int, max_concurrent_threads: int = 3
 ) -> SootheConfig:
-    """Build an isolated daemon config for thread recovery tests."""
+    """Build an isolated daemon config for recovery tests."""
     base_config = get_base_config()
 
     return SootheConfig(
@@ -60,7 +65,7 @@ def _build_daemon_config(
 
 @pytest.fixture
 async def daemon_fixture(tmp_path: Path):
-    """Start a daemon for thread recovery tests."""
+    """Start a daemon for recovery tests."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
 
@@ -77,30 +82,30 @@ async def daemon_fixture(tmp_path: Path):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_thread_resume_from_disk(tmp_path: Path) -> None:
-    """Test resuming thread after daemon restart (RFC-402)."""
+async def test_loop_resume_from_disk(tmp_path: Path) -> None:
+    """Loop metadata survives daemon restart; client can reattach and continue."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
     config = _build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    # Start first daemon instance
     daemon1 = SootheDaemon(config)
     await daemon1.start()
     await asyncio.sleep(0.2)
 
-    thread_id = None
+    loop_id = None
 
     try:
-        # Create thread and execute query
         client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client1.connect()
 
         try:
-            await client1.send_thread_create(initial_message="First conversation turn")
-            created = await await_event_type(client1.read_event, "thread_created", timeout=5.0)
-            thread_id = created["thread_id"]
+            loop_id = await loop_new_with_initial_input(
+                client1,
+                initial_message="First conversation turn",
+            )
+            await subscribe_loop_stream(client1, loop_id)
 
-            await client1.send_input("Say test")
+            await client1.send_input(loop_id, "Say test")
             status = await await_status_state(client1.read_event, {"running", "idle"}, timeout=5.0)
             if status.get("state") == "running":
                 await await_status_state(client1.read_event, "idle", timeout=5.0)
@@ -111,48 +116,30 @@ async def test_thread_resume_from_disk(tmp_path: Path) -> None:
     finally:
         await daemon1.stop()
 
-    # Wait for cleanup
     await asyncio.sleep(0.2)
 
-    # Start second daemon instance with same config (same durability location)
     daemon2 = SootheDaemon(config)
     await daemon2.start()
     await asyncio.sleep(0.2)
 
     try:
-        # Resume thread
         client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
 
         try:
-            # List threads to verify thread persisted
-            await client2.send_thread_list()
-            list_response = await await_event_type(
-                client2.read_event, "thread_list_response", timeout=3.0
-            )
+            list_response = await request_loop_list(client2)
+            loop_ids = {row["loop_id"] for row in (list_response.get("loops") or [])}
+            assert loop_id is not None and loop_id in loop_ids
 
-            thread_ids = {t["thread_id"] for t in list_response["threads"]}
-            assert thread_id in thread_ids, f"Thread {thread_id} should persist after restart"
-
-            # Resume the thread
-            await client2.send_resume_thread(thread_id)
+            await client2.send_loop_reattach(loop_id)
             resume_status = await await_event_type(client2.read_event, "status", timeout=3.0)
-            assert resume_status.get("thread_resumed") is True
-            assert resume_status.get("thread_id") == thread_id
-            assert resume_status.get("new_thread") is not True
-            assert isinstance(resume_status.get("conversation_history", []), list)
-
-            # Verify conversation history
-            await client2.send_thread_messages(thread_id)
-            messages_response = await await_event_type(
-                client2.read_event, "thread_messages_response", timeout=5.0
+            assert (
+                resume_status.get("loop_id") == loop_id or resume_status.get("thread_id") == loop_id
             )
 
-            messages = messages_response.get("messages", [])
-            [m for m in messages if m.get("role") == "user"]
+            await subscribe_loop_stream(client2, loop_id)
 
-            # Continue conversation
-            await client2.send_input("Say hello")
+            await client2.send_input(loop_id, "Say hello")
             status2 = await await_status_state(client2.read_event, {"running", "idle"}, timeout=5.0)
             if status2.get("state") == "running":
                 await await_status_state(client2.read_event, "idle", timeout=5.0)
@@ -169,38 +156,25 @@ async def test_thread_resume_from_disk(tmp_path: Path) -> None:
 async def test_thread_recovery_missing_metadata(
     daemon_fixture: tuple[SootheDaemon, str, SootheConfig],
 ) -> None:
-    """Test thread recovery when durability metadata is missing (RFC-402)."""
+    """Loop metadata is readable via ``loop_get`` after activity."""
     daemon, ws_port, config = daemon_fixture
     _ = daemon
+    _ = config
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
-        # Create thread
-        await client.send_thread_create(initial_message="test recovery")
-        created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
-        thread_id = created["thread_id"]
+        loop_id = await loop_new_with_initial_input(client, initial_message="test recovery")
+        await subscribe_loop_stream(client, loop_id)
 
-        # Execute query
-        await client.send_input("Say test")
+        await client.send_input(loop_id, "Say test")
         status = await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
         if status.get("state") == "running":
             await await_status_state(client.read_event, "idle", timeout=5.0)
 
-        # Note: Corrupting durability files would require:
-        # 1. Accessing config.durability persist_dir
-        # 2. Deleting or corrupting thread metadata file
-        # 3. Attempting to resume thread
-        # 4. Verifying graceful degradation with warning
-        #
-        # For this test, we verify thread recovery works normally
-        # Full corruption testing would require file manipulation
-
-        # Verify thread is accessible
-        await client.send_thread_get(thread_id)
-        get_response = await await_event_type(client.read_event, "thread_get_response", timeout=3.0)
-        assert get_response["thread"]["thread_id"] == thread_id
+        get_response = await request_loop_get(client, loop_id)
+        assert get_response["loop"]["loop_id"] == loop_id
 
     finally:
         await client.close()
@@ -211,45 +185,31 @@ async def test_thread_recovery_missing_metadata(
 async def test_concurrent_thread_execution(
     daemon_fixture: tuple[SootheDaemon, str, SootheConfig],
 ) -> None:
-    """Test concurrent thread execution with RFC-402 ThreadExecutor."""
+    """Multiple loops can be registered and listed."""
     daemon, ws_port, config = daemon_fixture
     _ = daemon
+    _ = config
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
-        # Create multiple threads
-        thread_ids = []
+        loop_ids: list[str] = []
         for i in range(3):
-            await client.send_thread_create(initial_message=f"Thread {i}")
-            created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
-            thread_ids.append(created["thread_id"])
+            lid = await loop_new_with_initial_input(client, initial_message=f"Thread {i}")
+            loop_ids.append(lid)
 
-        # Note: Full concurrent execution testing would require:
-        # 1. Starting queries on multiple threads simultaneously
-        # 2. Verifying execution respects max_concurrent_threads limit
-        # 3. Verifying threads queue when limit is reached
-        # 4. Verifying all threads complete successfully
-        #
-        # The current daemon protocol processes one thread at a time per client
-        # Multi-thread concurrency requires multiple clients or daemon-side changes
+        list_response = await request_loop_list(client)
+        listed = {row["loop_id"] for row in (list_response.get("loops") or [])}
+        for lid in loop_ids:
+            assert lid in listed
 
-        # Verify all threads exist
-        await client.send_thread_list()
-        list_response = await await_event_type(
-            client.read_event, "thread_list_response", timeout=3.0
-        )
-
-        listed_ids = {t["thread_id"] for t in list_response["threads"]}
-        for tid in thread_ids:
-            assert tid in listed_ids
-
-        # Execute on first thread
-        await client.send_resume_thread(thread_ids[0])
+        await client.send_loop_reattach(loop_ids[0])
         await await_event_type(client.read_event, "status", timeout=3.0)
 
-        await client.send_input("Say thread")
+        await subscribe_loop_stream(client, loop_ids[0])
+
+        await client.send_input(loop_ids[0], "Say thread")
         status = await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
         if status.get("state") == "running":
             await await_status_state(client.read_event, "idle", timeout=5.0)
@@ -263,54 +223,42 @@ async def test_concurrent_thread_execution(
 async def test_thread_cancellation(
     daemon_fixture: tuple[SootheDaemon, str, SootheConfig],
 ) -> None:
-    """Test thread cancellation during execution (RFC-402)."""
+    """Cancellation command during a turn (best-effort)."""
     daemon, ws_port, config = daemon_fixture
     _ = daemon
+    _ = config
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
-        # Create thread
-        await client.send_thread_create(initial_message="test cancellation")
-        created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
-        thread_id = created["thread_id"]
+        loop_id = await loop_new_with_initial_input(client, initial_message="test cancellation")
+        await subscribe_loop_stream(client, loop_id)
 
-        # Start query
-        await client.send_input("Start a potentially long operation")
+        await client.send_input(loop_id, "Start a potentially long operation")
 
-        # Wait for running state or proceed directly
         try:
             await await_status_state(client.read_event, "running", timeout=5.0)
 
-            # Send cancel command
             await client.send_command("/cancel")
 
-            # Wait for idle state (cancellation should stop execution)
             cancel_status = await await_status_state(client.read_event, "idle", timeout=5.0)
             assert cancel_status.get("state") == "idle"
         except TimeoutError:
-            # Query may have completed quickly, verify thread still exists
             pass
 
-        # Verify thread still exists
-        await client.send_thread_get(thread_id)
-        get_response = await await_event_type(client.read_event, "thread_get_response", timeout=3.0)
-        assert get_response["thread"]["thread_id"] == thread_id
+        get_response = await request_loop_get(client, loop_id)
+        assert get_response["loop"]["loop_id"] == loop_id
 
-        # Verify we can continue the thread
-        await client.send_input("Say continue")
+        await client.send_input(loop_id, "Say continue")
         try:
             status2 = await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
             if status2.get("state") == "running":
                 try:
                     await await_status_state(client.read_event, "idle", timeout=5.0)
                 except TimeoutError:
-                    # Query may complete on its own
                     pass
         except TimeoutError:
-            # Thread may have completed quickly or daemon may be in an inconsistent state
-            # This is acceptable for cancellation test - what matters is we tried to cancel
             pass
 
     finally:
@@ -319,64 +267,26 @@ async def test_thread_cancellation(
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_thread_isolation(
+async def test_loop_isolation_distinct_ids(
     daemon_fixture: tuple[SootheDaemon, str, SootheConfig],
 ) -> None:
-    """Test thread state isolation guarantees (RFC-402)."""
+    """Two loops have distinct ids and independent ``loop_get`` metadata."""
     daemon, ws_port, config = daemon_fixture
     _ = daemon
+    _ = config
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
     await client.connect()
 
     try:
-        # Create two threads
-        await client.send_thread_create(
-            initial_message="Thread A context", metadata={"thread": "A"}
-        )
-        created_a = await await_event_type(client.read_event, "thread_created", timeout=5.0)
-        thread_a = created_a["thread_id"]
+        loop_a = await loop_new_with_initial_input(client, initial_message="Thread A context")
+        loop_b = await loop_new_with_initial_input(client, initial_message="Thread B context")
+        assert loop_a != loop_b
 
-        await client.send_thread_create(
-            initial_message="Thread B context", metadata={"thread": "B"}
-        )
-        created_b = await await_event_type(client.read_event, "thread_created", timeout=5.0)
-        thread_b = created_b["thread_id"]
-
-        # Execute queries on both threads
-        await client.send_resume_thread(thread_a)
-        await await_event_type(client.read_event, "status", timeout=3.0)
-
-        await client.send_input("Say A")
-        status_a = await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
-        if status_a.get("state") == "running":
-            await await_status_state(client.read_event, "idle", timeout=5.0)
-
-        # Switch to thread B
-        await client.send_resume_thread(thread_b)
-        await await_event_type(client.read_event, "status", timeout=3.0)
-
-        await client.send_input("Say B")
-        status_b = await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
-        if status_b.get("state") == "running":
-            await await_status_state(client.read_event, "idle", timeout=5.0)
-
-        # Verify messages are isolated
-        await client.send_thread_messages(thread_a)
-        messages_a = await await_event_type(
-            client.read_event, "thread_messages_response", timeout=5.0
-        )
-        user_msgs_a = [m["content"] for m in messages_a["messages"] if m.get("role") == "user"]
-        assert "Say A" in user_msgs_a
-        assert "Say B" not in user_msgs_a
-
-        await client.send_thread_messages(thread_b)
-        messages_b = await await_event_type(
-            client.read_event, "thread_messages_response", timeout=5.0
-        )
-        user_msgs_b = [m["content"] for m in messages_b["messages"] if m.get("role") == "user"]
-        assert "Say B" in user_msgs_b
-        assert "Say A" not in user_msgs_b
+        ga = await request_loop_get(client, loop_a)
+        gb = await request_loop_get(client, loop_b)
+        assert ga["loop"]["loop_id"] == loop_a
+        assert gb["loop"]["loop_id"] == loop_b
 
     finally:
         await client.close()

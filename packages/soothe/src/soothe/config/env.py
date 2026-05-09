@@ -21,7 +21,8 @@ def default_soothe_workspace_dir() -> str:
     Returns:
         Absolute path string (not necessarily created on disk yet).
     """
-    return str(SOOTHE_HOME / "Workspace")
+    # Tests patch ``SOOTHE_HOME`` to ``str`` via monkeypatch; normalize to Path.
+    return str(Path(SOOTHE_HOME).expanduser() / "Workspace")
 
 
 _ENV_VAR_RE = re.compile(r"^\$\{(\w+)\}$")
