@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-_MS_PER_SECOND = 1000
+from soothe_cli.shared.duration_format import format_duration_ms
 
 
 @dataclass
@@ -44,10 +44,7 @@ class DisplayLine:
             parts.append(f" [{self.status}]")
 
         if self.duration_ms is not None:
-            if self.duration_ms >= _MS_PER_SECOND:
-                parts.append(f" ({self.duration_ms / _MS_PER_SECOND:.1f}s)")
-            else:
-                parts.append(f" ({self.duration_ms}ms)")
+            parts.append(f" ({format_duration_ms(self.duration_ms)})")
 
         return "".join(parts)
 

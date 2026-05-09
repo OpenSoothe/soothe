@@ -211,9 +211,6 @@ async def _handle_interrupt_cleanup(
     adapter._step_by_namespace.clear()
     adapter._pending_main_tools.clear()
 
-    for gt in list(adapter._goal_tree_by_namespace.values()):
-        gt.set_interrupted("Interrupted by user")
-    adapter._goal_tree_by_namespace.clear()
     adapter._last_completed_main_step_execute_prose = ""
     adapter._last_main_flushed_assistant_prose = ""
 
