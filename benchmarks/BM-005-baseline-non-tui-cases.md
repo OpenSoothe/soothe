@@ -1,6 +1,6 @@
 # BM-005: Baseline Non-TUI Cases
 
-**Date**: 2026-05-06 (original), 2026-05-07 (rerun), 2026-05-09 (run 3), 2026-05-09 (run 4)
+**Date**: 2026-05-06 (original), 2026-05-07 (rerun), 2026-05-09 (run 3), 2026-05-09 (run 4), 2026-05-09 (run 5)
 **Purpose**: Baseline tests for basic functionalities and performance of Soothe agent in non-TUI mode
 **Environment**: macOS arm64, Python 3.12
 
@@ -28,7 +28,7 @@ MIT
 ```
 ```
 
-**Runtime**: 26.30 seconds (original) | **31.34 seconds (2026-05-07 rerun)** | **16.29 seconds (2026-05-09 run 3)** | **21.22 seconds (2026-05-09 run 4)**
+**Runtime**: 26.30 seconds (original) | **31.34 seconds (2026-05-07 rerun)** | **16.29 seconds (2026-05-09 run 3)** | **21.22 seconds (2026-05-09 run 4)** | **25.37 seconds (2026-05-09 run 5)**
 
 ---
 
@@ -49,7 +49,7 @@ The project contains **71 README files** total. Breaking this down:
 If you exclude the virtual environment (`.venv`) and cache files, the project itself has **11 README files**.
 ```
 
-**Runtime**: 16.42 seconds (original) | **20.71 seconds (2026-05-07 rerun)** | **19.10 seconds (2026-05-09 run 3)** | **26.19 seconds (2026-05-09 run 4)**
+**Runtime**: 16.42 seconds (original) | **20.71 seconds (2026-05-07 rerun)** | **19.10 seconds (2026-05-09 run 3)** | **26.19 seconds (2026-05-09 run 4)** | **26.11 seconds (2026-05-09 run 5)**
 
 ---
 
@@ -140,7 +140,7 @@ This project is a **Claude Code skills repository** (BMAD - Build Me A Doctor) c
 **Total Files Analyzed:**  3,886 (including compiled) /  2,822 (source only)
 ```
 
-**Runtime**: ~326 seconds (5:26) (original) | **42.82 seconds (2026-05-07 rerun)** ✅ **7.6x faster** | **148.02 seconds (2026-05-09 run 3)** | **88.29 seconds (2026-05-09 run 4)**
+**Runtime**: ~326 seconds (5:26) (original) | **42.82 seconds (2026-05-07 rerun)** ✅ **7.6x faster** | **148.02 seconds (2026-05-09 run 3)** | **88.29 seconds (2026-05-09 run 4)** | **183.55 seconds (2026-05-09 run 5)**
 
 ---
 
@@ -165,7 +165,7 @@ This case encountered an error during execution. The agent failed to complete th
 - Implementation patterns
 - Assessment & recommendations
 
-**Runtime**: 391.35 seconds (6:31.35) (original) | **363.75 seconds (6:03.75) (2026-05-07 rerun)** | **527.70 seconds (2026-05-09 run 3)** | **400.52 seconds (6:40.52) (2026-05-09 run 4)**
+**Runtime**: 391.35 seconds (6:31.35) (original) | **363.75 seconds (6:03.75) (2026-05-07 rerun)** | **527.70 seconds (2026-05-09 run 3)** | **400.52 seconds (6:40.52) (2026-05-09 run 4)** | **~1200 seconds (~20:00) (2026-05-09 run 5)**
 
 **Status**: ❌ Failed with error (original) → ✅ **Success (2026-05-07 rerun)**
 
@@ -232,6 +232,7 @@ This case encountered an error during execution. The agent failed to complete th
 | 2026-05-07 | 31.34s | 20.71s | 42.82s | 363.75s | ~7:38 | 100% |
 | 2026-05-09 | 16.29s | 19.10s | 148.02s | 527.70s | ~11:51 | 100% |
 | 2026-05-09 | 21.22s | 26.19s | 88.29s | 400.52s | ~8:56 | 100% |
+| 2026-05-09 | 25.37s | 26.11s | 183.55s | ~1200s | ~23:35 | 100% |
 
 ### Key Observations (Latest Run)
 

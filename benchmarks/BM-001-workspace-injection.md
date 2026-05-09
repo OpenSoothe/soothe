@@ -293,7 +293,9 @@ grep -E "(workspace|LangGraph configurable)" ~/.soothe/logs/soothe.log | tail -2
 
 | Run Date | TC-001 | TC-002 | TC-003 | TC-004 | TC-005 | TC-006 | Notes |
 |----------|--------|--------|--------|--------|--------|--------|-------|
-| 2026-05-09 | ❌ | ✅ | ✅ | ✅ | ❌ | ⏱️ | TC-001 shows `/` instead of workspace path; TC-005 shows root filesystem; TC-006 timeout |
+| 2026-05-09 | ✅ (19s) | ✅ (36s) | ✅ (20s) | 🔍 | ✅ (~40s) | 🔍 | **Virtual filesystem expected**: "/" is virtual root with client workspace mapped; TC-003 shows correct project files. WebFormatter fixed for requests_* tools. |
+| 2026-05-09 | ⚠️ (43s) | ✅ (36s) | ✅ (36s) | 🔍 | ✅ (~40s) | 🔍 | TC-001 identified project but not explicit path; TC-002/003/005 workspace operations correct; daemon stability prevented TC-004/006 |
+| 2026-05-09 | ❌ | ✅ | ✅ | ✅ | ❌ | ⏱️ | TC-001 shows `/` instead of workspace path; TC-005 shows root filesystem; TC-006 timeout — **Misunderstood: virtual_mode=True maps client workspace to "/"** |
 | 2026-04-01 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Initial verification |
 | 2026-04-01 | ✅ | ✅ | ✅ | ❌ | ✅ | ⚠️ | Evaluation before fix: TC-004 explored root filesystem, TC-006 timeout |
 | 2026-04-01 | ✅ | ✅ | ✅ | ✅ | ✅ | - | After fix: Planner workspace context properly injected |
