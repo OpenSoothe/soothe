@@ -154,7 +154,7 @@ async def execute_task_textual(
         skip_daemon_send_turn: When ``True`` with ``daemon_session`` set, skip
             ``send_turn`` and only consume chunks (daemon already queued the
             prompt, e.g. after ``invoke_skill``). Also used for consuming
-            events from already-running threads.
+            events from already-running loops.
 
     Returns:
         Stats accumulated over this turn (request count, token counts,

@@ -51,6 +51,38 @@ class AgentLoopPersistenceBackend(ABC):
         """
         pass
 
+    @abstractmethod
+    async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
+        """Partially update loop metadata fields.
+
+        Args:
+            loop_id: Loop identifier.
+            **fields: Column names and values to update. Supported keys:
+                status, current_thread_id, thread_ids, client_workspace,
+                detached_at, total_goals_completed, total_thread_switches,
+                total_duration_ms, total_tokens_used, updated_at.
+        """
+        pass
+
+    @abstractmethod
+    async def list_loops(
+        self,
+        status_filter: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Return summary rows for all loops, ordered by created_at DESC.
+
+        Args:
+            status_filter: Optional status value to filter by.
+            limit: Maximum rows to return.
+
+        Returns:
+            List of dicts with keys: loop_id, status, thread_ids, current_thread_id,
+            total_goals_completed, total_thread_switches, created_at, updated_at,
+            client_workspace, detached_at.
+        """
+        pass
+
     # Checkpoint anchor operations
 
     @abstractmethod

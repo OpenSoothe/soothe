@@ -82,17 +82,17 @@ async def test_event_bus_topic_isolation() -> None:
     queue_thread1_dup: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
     # Subscribe to different topics
-    await bus.subscribe("thread:thread1", queue_thread1)
-    await bus.subscribe("thread:thread2", queue_thread2)
-    await bus.subscribe("thread:thread1", queue_thread1_dup)  # Multiple subscribers
+    await bus.subscribe("loop:thread1", queue_thread1)
+    await bus.subscribe("loop:thread2", queue_thread2)
+    await bus.subscribe("loop:thread1", queue_thread1_dup)  # Multiple subscribers
 
     # Publish events to thread1
     event1 = {"type": "test", "data": "event1"}
-    await bus.publish("thread:thread1", event1)
+    await bus.publish("loop:thread1", event1)
 
     # Publish events to thread2
     event2 = {"type": "test", "data": "event2"}
-    await bus.publish("thread:thread2", event2)
+    await bus.publish("loop:thread2", event2)
 
     # Verify thread1 subscribers only get thread1 events
     # EventBus now sends (event, event_meta) tuples for RFC-0022 filtering
@@ -126,15 +126,15 @@ async def test_event_bus_unsubscribe_cleanup() -> None:
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
     # Subscribe
-    await bus.subscribe("thread:abc", queue)
+    await bus.subscribe("loop:abc", queue)
     assert bus.topic_count == 1
 
     # Unsubscribe
-    await bus.unsubscribe("thread:abc", queue)
+    await bus.unsubscribe("loop:abc", queue)
     assert bus.topic_count == 0
 
     # Publish should not deliver to unsubscribed queue
-    await bus.publish("thread:abc", {"type": "test"})
+    await bus.publish("loop:abc", {"type": "test"})
 
     with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(queue.get(), timeout=0.1)
@@ -148,11 +148,11 @@ async def test_event_bus_overflow_protection() -> None:
 
     # Queue with maxsize=2
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=2)
-    await bus.subscribe("thread:abc", queue)
+    await bus.subscribe("loop:abc", queue)
 
     # Send more events than queue can hold
     for i in range(10):
-        await bus.publish("thread:abc", {"type": "test", "data": i})
+        await bus.publish("loop:abc", {"type": "test", "data": i})
 
     # Should only receive first 2 events (rest dropped)
     # EventBus now sends (event, event_meta) tuples

@@ -23,14 +23,6 @@ from __future__ import annotations
 # LIFECYCLE DOMAIN (soothe.lifecycle.*)
 # ============================================================================
 
-# Thread lifecycle (internal)
-THREAD_CREATED = "soothe.lifecycle.thread.started"
-THREAD_STARTED = "soothe.lifecycle.thread.started"
-THREAD_RESUMED = "soothe.lifecycle.thread.resumed"
-THREAD_SAVED = "soothe.lifecycle.thread.saved"
-THREAD_ENDED = "soothe.lifecycle.thread.ended"
-THREAD_SWITCHED = "soothe.lifecycle.thread.switched"
-
 # Iteration lifecycle
 ITERATION_STARTED = "soothe.lifecycle.iteration.started"
 ITERATION_COMPLETED = "soothe.lifecycle.iteration.completed"
@@ -132,13 +124,6 @@ ERROR = "soothe.error.general.failed"
 
 
 __all__ = [
-    # Lifecycle - Thread
-    "THREAD_CREATED",
-    "THREAD_STARTED",
-    "THREAD_RESUMED",
-    "THREAD_SAVED",
-    "THREAD_ENDED",
-    "THREAD_SWITCHED",
     # Lifecycle - Iteration
     "ITERATION_STARTED",
     "ITERATION_COMPLETED",
@@ -154,6 +139,7 @@ __all__ = [
     "LOOP_REATTACHED",
     "LOOP_COMPLETED",
     "HISTORY_REPLAY_COMPLETE",
+    # Lifecycle - Thread
     # Cognition - Goal
     "GOAL_CREATED",
     "GOAL_COMPLETED",

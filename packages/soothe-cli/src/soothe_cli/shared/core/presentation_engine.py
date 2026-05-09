@@ -64,7 +64,7 @@ class PresentationEngine:
         self._state.last_action_time = 0.0
 
     def reset_session(self) -> None:
-        """Clear presentation state for a new session (e.g. thread change)."""
+        """Clear presentation state for a new session (e.g. new or switched loop)."""
         self.reset_turn()
 
     def tier_visible(self, tier: VerbosityTier) -> bool:

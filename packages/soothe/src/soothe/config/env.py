@@ -7,7 +7,7 @@ import os
 import re
 from pathlib import Path
 
-SOOTHE_HOME: str = os.environ.get("SOOTHE_HOME", str(Path.home() / ".soothe"))
+SOOTHE_HOME: Path = Path(os.environ.get("SOOTHE_HOME", str(Path.home() / ".soothe"))).expanduser()
 """Default Soothe home directory. Overridable via ``SOOTHE_HOME`` env var."""
 
 
@@ -20,7 +20,7 @@ def default_soothe_workspace_dir() -> str:
     Returns:
         Absolute path string (not necessarily created on disk yet).
     """
-    return str(Path(SOOTHE_HOME).expanduser() / "Workspace")
+    return str(SOOTHE_HOME / "Workspace")
 
 
 _ENV_VAR_RE = re.compile(r"^\$\{(\w+)\}$")

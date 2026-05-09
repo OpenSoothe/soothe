@@ -1,4 +1,4 @@
-"""Model switching, thread management, and modal screen managers mixin."""
+"""Model switching, loop switching, and modal screen managers mixin."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from textual.theme import Theme
 from soothe_cli.tui import theme
 from soothe_cli.tui.app._module_init import (
     DeferredAction,
-    _ThreadHistoryPayload,
+    _LoopHistoryPayload,
     save_theme_preference,
 )
 from soothe_cli.tui.widgets.messages import AppMessage, ErrorMessage
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class _ModelMixin:
-    """Model switching, thread management, and modal screen managers."""
+    """Model switching, loop switching, and modal screen managers."""
 
     async def _show_model_selector(
         self,
@@ -270,11 +270,11 @@ class _ModelMixin:
         """Show interactive loop selector as a modal screen."""
         from functools import partial
 
-        from soothe_cli.tui.sessions import get_thread_limit
+        from soothe_cli.tui.sessions import get_loop_limit
         from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen
 
         current = self._session_state.loop_id if self._session_state else None
-        loop_limit = get_thread_limit()  # Reuse thread limit config
+        loop_limit = get_loop_limit()
 
         def handle_result(result: str | None) -> None:
             """Handle the loop selector result."""
@@ -302,7 +302,7 @@ class _ModelMixin:
     async def _resume_loop_via_daemon(self, loop_id: str) -> None:
         """Resume a loop by subscribing to daemon events (RFC-503).
 
-        Similar to thread resume, but uses loop_subscribe RPC to attach
+        Similar to continuing a loop in the CLI, but uses ``loop_subscribe`` RPC to attach
         to the loop's event stream.
 
         Args:
@@ -321,21 +321,21 @@ class _ModelMixin:
             await self._mount_message(AppMessage(f"Already on loop: {loop_id}"))
             return
 
-        if self._thread_switching:
+        if self._loop_switching:
             await self._mount_message(AppMessage("Loop switch already in progress."))
             return
 
         # Save previous state for rollback on failure
         prev_loop_id = self._lc_loop_id
         prev_session_loop = self._session_state.loop_id
-        self._thread_switching = True
+        self._loop_switching = True
         if self._chat_input:
             self._chat_input.set_cursor_active(active=False)
 
         try:
             self._update_status(f"Attaching to loop: {loop_id}")
 
-            # Clear conversation (similar to /clear, without creating new thread)
+            # Clear conversation (similar to /clear, without creating a new loop)
             self._pending_messages.clear()
             self._queued_widgets.clear()
             await self._clear_messages()
@@ -364,7 +364,7 @@ class _ModelMixin:
                         # Update session state
                         self._session_state.loop_id = loop_id
                         self._lc_loop_id = loop_id
-                        self._clear_thread_model_override()
+                        self._clear_loop_model_override()
 
                         self._update_welcome_banner(
                             loop_id,
@@ -396,7 +396,7 @@ class _ModelMixin:
                 AppMessage(f"Failed to attach to loop {loop_id}: {exc}. Use /loops to try again.")
             )
         finally:
-            self._thread_switching = False
+            self._loop_switching = False
             if self._chat_input:
                 self._chat_input.set_cursor_active(active=True)
                 self._chat_input.focus_input()
@@ -424,46 +424,45 @@ class _ModelMixin:
             else:
                 logger.debug(missing_message, loop_id)
 
-    async def _resume_thread(self, loop_id: str) -> None:
-        """Resume a previously saved thread.
+    async def _resume_loop_on_local_agent(self, loop_id: str) -> None:
+        """Resume a loop for an in-process LangGraph agent (local checkpointer path).
 
-        Fetches the selected thread history, then atomically switches UI state.
-        Prefetching first avoids clearing the active chat when history loading
-        fails.
+        Fetches history for that loop, then switches UI state. Prefetching
+        first avoids clearing the active chat when history loading fails.
 
         Args:
-            loop_id: The loop id to attach to (checkpoint key matches LangGraph ``thread_id``).
+            loop_id: Active AgentLoop id (same value LangGraph uses as
+                ``configurable.thread_id``).
         """
         if not self._agent:
-            await self._mount_message(AppMessage("Cannot switch threads: no active agent"))
+            await self._mount_message(AppMessage("Cannot switch loops: no active agent"))
             return
 
         if not self._session_state:
-            await self._mount_message(AppMessage("Cannot switch threads: no active session"))
+            await self._mount_message(AppMessage("Cannot switch loops: no active session"))
             return
 
-        # Skip if already on this thread
         if self._session_state.loop_id == loop_id:
-            await self._mount_message(AppMessage(f"Already on thread: {loop_id}"))
+            await self._mount_message(AppMessage(f"Already on loop: {loop_id}"))
             return
 
-        if self._thread_switching:
-            await self._mount_message(AppMessage("Thread switch already in progress."))
+        if self._loop_switching:
+            await self._mount_message(AppMessage("Loop switch already in progress."))
             return
 
         # Save previous state for rollback on failure
         prev_loop_id = self._lc_loop_id
         prev_session_loop = self._session_state.loop_id
-        self._thread_switching = True
+        self._loop_switching = True
         if self._chat_input:
             self._chat_input.set_cursor_active(active=False)
 
-        prefetched_payload: _ThreadHistoryPayload | None = None
+        prefetched_payload: _LoopHistoryPayload | None = None
         try:
-            self._update_status(f"Loading thread: {loop_id}")
-            prefetched_payload = await self._fetch_thread_history_data(loop_id)
+            self._update_status(f"Loading loop: {loop_id}")
+            prefetched_payload = await self._fetch_loop_history_data(loop_id)
 
-            # Clear conversation (similar to /clear, without creating a new thread)
+            # Clear conversation (similar to /clear, without creating a new loop)
             self._pending_messages.clear()
             self._queued_widgets.clear()
             await self._clear_messages()
@@ -472,66 +471,62 @@ class _ModelMixin:
             self._update_tokens(0)
             self._update_status("")
 
-            # Switch to the selected thread
             if self._daemon_session is not None:
                 await self._daemon_session.switch_loop(loop_id)
             self._session_state.loop_id = loop_id
             self._lc_loop_id = loop_id
-            self._clear_thread_model_override()
+            self._clear_loop_model_override()
 
             self._update_welcome_banner(
                 loop_id,
-                missing_message="Welcome banner not found during thread switch to %s",
+                missing_message="Welcome banner not found during loop switch to %s",
                 warn_if_missing=False,
             )
 
-            # Load thread history
-            await self._load_thread_history(
-                thread_id=loop_id,
+            await self._load_loop_history(
+                loop_id=loop_id,
                 preloaded_payload=prefetched_payload,
             )
         except Exception as exc:
             if prefetched_payload is None:
-                logger.exception("Failed to prefetch history for thread %s", loop_id)
+                logger.exception("Failed to prefetch history for loop %s", loop_id)
                 await self._mount_message(
                     AppMessage(
-                        f"Failed to switch to thread {loop_id}: {exc}. Use /threads to try again."
+                        f"Failed to switch to loop {loop_id}: {exc}. Use /loops to try again."
                     )
                 )
                 return
-            logger.exception("Failed to switch to thread %s", loop_id)
-            # Restore previous thread IDs so the user can retry
+            logger.exception("Failed to switch to loop %s", loop_id)
             self._session_state.loop_id = prev_session_loop
             self._lc_loop_id = prev_loop_id
             self._update_welcome_banner(
                 prev_session_loop,
                 missing_message=(
-                    "Welcome banner not found during rollback to thread %s; banner may display stale thread ID"
+                    "Welcome banner not found during rollback to loop %s; banner may display stale id"
                 ),
                 warn_if_missing=True,
             )
             rollback_restore_failed = False
-            # Attempt to restore the previous thread's visible history
             try:
                 await self._clear_messages()
-                await self._load_thread_history(thread_id=prev_session_loop)
+                await self._load_loop_history(loop_id=prev_session_loop)
             except Exception:  # Resilient session state saving
                 rollback_restore_failed = True
-                msg = "Could not restore previous thread history after failed switch to %s"
+                msg = "Could not restore previous conversation after failed switch to %s"
                 logger.warning(msg, loop_id, exc_info=True)
-            error_message = f"Failed to switch to thread {loop_id}: {exc}."
+            error_message = f"Failed to switch to loop {loop_id}: {exc}."
             if rollback_restore_failed:
-                error_message += " Previous thread history could not be restored."
-            error_message += " Use /threads to try again."
+                error_message += " Previous conversation could not be restored."
+            error_message += " Use /loops to try again."
             await self._mount_message(AppMessage(error_message))
         finally:
-            self._thread_switching = False
+            self._loop_switching = False
             self._update_status("")
             if self._chat_input:
                 self._chat_input.set_cursor_active(active=not self._agent_running)
 
-    def _clear_thread_model_override(self) -> None:
-        """Drop per-thread model override; next turns use config/CLI defaults."""
+    def _clear_loop_model_override(self) -> None:
+        """Drop per-loop model override; next turns use config/CLI defaults."""
         from soothe_cli.tui.config import settings
 
         self._model_override = None
@@ -548,7 +543,7 @@ class _ModelMixin:
         *,
         extra_kwargs: dict[str, Any] | None = None,
     ) -> None:
-        """Switch model for the current thread without changing `config.yml`.
+        """Switch model for the current loop without changing `config.yml`.
 
         For a local in-process agent, validates via `create_model` and sets an
         override consumed by `ConfigurableModelMiddleware` through `CLIContext`.
@@ -622,12 +617,12 @@ class _ModelMixin:
             if provider and not parsed:
                 display = f"{provider}:{model_name}"
 
-            # Effective model for this thread (session override wins over CLI defaults).
+            # Effective model for this loop (session override wins over CLI defaults).
             prior_effective = (
                 self._model_override or f"{settings.model_provider}:{settings.model_name}"
             ).strip()
             if display.strip() == prior_effective:
-                await self._mount_message(AppMessage(f"Already using {display} for this thread"))
+                await self._mount_message(AppMessage(f"Already using {display} for this loop"))
                 return
 
             if self._daemon_session is not None:
@@ -639,11 +634,11 @@ class _ModelMixin:
                     self._status_bar.set_model(provider=bar_provider, model=bar_model)
                 await self._mount_message(
                     AppMessage(
-                        f"Switched this thread to {display} for daemon turns "
+                        f"Switched this loop to {display} for daemon turns "
                         f"(session only; daemon host default in config.yml unchanged).",
                     ),
                 )
-                logger.info("Model override set to %s for daemon-backed TUI thread", display)
+                logger.info("Model override set to %s for daemon-backed TUI session", display)
             else:
                 try:
                     result = create_model(
@@ -656,7 +651,7 @@ class _ModelMixin:
                     await self._mount_message(ErrorMessage(f"Failed to switch model: {exc}"))
                     return
 
-                # Per-thread/session: do not mutate global ``settings`` or persist defaults.
+                # Per-session: do not mutate global ``settings`` or persist defaults.
                 self._model_override = display
                 self._model_params_override = extra_kwargs
 
@@ -668,11 +663,11 @@ class _ModelMixin:
 
                 await self._mount_message(
                     AppMessage(
-                        f"Switched this thread to {display} (session only; default in config.yml unchanged).",
+                        f"Switched this loop to {display} (session only; default in config.yml unchanged).",
                     ),
                 )
                 logger.info(
-                    "Model override set to %s for current thread (ConfigurableModelMiddleware)",
+                    "Model override set to %s for current session (ConfigurableModelMiddleware)",
                     display,
                 )
 

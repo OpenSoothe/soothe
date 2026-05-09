@@ -4,29 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import messages_from_dict
 from soothe_sdk.client import (
     WebSocketClient,
     bootstrap_loop_session,
     connect_websocket_with_retries,
     websocket_url_from_config,
 )
-from soothe_sdk.client.wire import envelope_langchain_message_dict, messages_from_wire_dicts
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(slots=True)
-class DaemonStateSnapshot:
-    """Minimal `aget_state()` compatible wrapper."""
-
-    values: dict[str, Any]
 
 
 class TuiDaemonSession:
@@ -68,7 +58,7 @@ class TuiDaemonSession:
         self._loop_id = status_event.get("loop_id")
         return status_event
 
-    async def new_thread(self) -> dict[str, Any]:
+    async def new_loop(self) -> dict[str, Any]:
         """Start a new AgentLoop conversation."""
         return await self._bootstrap_loop(resume_loop_id=None)
 
@@ -180,127 +170,11 @@ class TuiDaemonSession:
 
                     namespace = tuple(event.get("namespace", []) or [])
                     mode = str(event.get("mode", ""))
-                    normalized = self._normalize_stream_data(mode, data)
-                    yield (namespace, mode, normalized)
-                    if (
-                        mode == "updates"
-                        and isinstance(normalized, dict)
-                        and "__interrupt__" in normalized
-                    ):
+                    yield (namespace, mode, data)
+                    if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
                         break
             finally:
                 self._streaming = False
-
-    def _normalize_stream_data(self, mode: str, data: Any) -> Any:
-        """Convert daemon wire payloads back to TUI-friendly objects."""
-        if mode != "messages":
-            return data
-
-        if not isinstance(data, (list, tuple)) or len(data) != 2:
-            return data
-
-        message, metadata = data
-        if isinstance(message, dict):
-            try:
-                to_restore = envelope_langchain_message_dict(message)
-                restored = messages_from_dict([to_restore])
-                if restored:
-                    message = restored[0]
-            except Exception:
-                logger.debug("Failed to restore message from daemon payload", exc_info=True)
-        return (message, metadata)
-
-    async def aget_state(self, config: dict[str, Any]) -> DaemonStateSnapshot:
-        """Fetch thread state values through the daemon."""
-        thread_id = str(config.get("configurable", {}).get("thread_id", "")).strip()
-        if not thread_id:
-            return DaemonStateSnapshot(values={})
-        async with self._rpc_lock:
-            await self._ensure_rpc_connected()
-            response = await self._rpc_client.request_response(
-                {"type": "thread_state", "thread_id": thread_id},
-                response_type="thread_state_response",
-            )
-        values = response.get("values", {})
-        if not isinstance(values, dict):
-            values = {}
-        messages = values.get("messages")
-        if isinstance(messages, list) and messages and isinstance(messages[0], dict):
-            try:
-                values = dict(values)
-                values["messages"] = messages_from_wire_dicts(messages)
-            except Exception:
-                logger.debug("Failed to deserialize thread-state messages", exc_info=True)
-        return DaemonStateSnapshot(values=values)
-
-    async def fetch_conversation_log(
-        self,
-        conversation_id: str,
-        *,
-        limit: int = 10000,
-        offset: int = 0,
-        include_events: bool = False,
-    ) -> list[dict[str, Any]]:
-        """Fetch persisted conversation rows through the daemon (checkpoint / durability id).
-
-        Args:
-            conversation_id: CoreAgent checkpoint conversation id (LangGraph ``configurable.thread_id``).
-            limit: Maximum records to return.
-            offset: Pagination offset.
-            include_events: Include non-conversation event records.
-
-        Returns:
-            Wire-safe rows from ``thread_messages_response``.
-        """
-        if not conversation_id:
-            return []
-
-        payload: dict[str, Any] = {
-            "type": "thread_messages",
-            "thread_id": conversation_id,
-            "limit": limit,
-            "offset": offset,
-        }
-        if include_events:
-            payload["include_events"] = True
-
-        async with self._rpc_lock:
-            await self._ensure_rpc_connected()
-            response = await self._rpc_client.request_response(
-                payload,
-                response_type="thread_messages_response",
-                timeout=10.0,
-            )
-        messages = response.get("messages", [])
-        if not isinstance(messages, list):
-            return []
-        return [m for m in messages if isinstance(m, dict)]
-
-    async def aupdate_state(
-        self, config: dict[str, Any], values: dict[str, Any], timeout: float = 5.0
-    ) -> None:
-        """Persist partial thread state through the daemon.
-
-        Args:
-            config: Thread configuration containing thread_id.
-            values: State values to persist.
-            timeout: Timeout in seconds for daemon response. Default 5.0s.
-                Use shorter timeout (e.g., 2.0s) during interrupt cleanup.
-        """
-        thread_id = str(config.get("configurable", {}).get("thread_id", "")).strip()
-        if not thread_id:
-            return
-        async with self._rpc_lock:
-            await self._ensure_rpc_connected()
-            await self._rpc_client.request_response(
-                {
-                    "type": "thread_update_state",
-                    "thread_id": thread_id,
-                    "values": values,
-                },
-                response_type="thread_update_state_response",
-                timeout=timeout,
-            )
 
     async def list_skills(self) -> list[dict[str, Any]]:
         """Return skill rows from the daemon catalog (no filesystem paths)."""

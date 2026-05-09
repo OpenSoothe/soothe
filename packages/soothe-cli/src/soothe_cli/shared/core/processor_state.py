@@ -38,7 +38,7 @@ class ProcessorState:
     # Current plan state (updated on plan events)
     current_plan: Plan | None = None
 
-    # Active AgentLoop id from daemon status frames (``loop_id``, legacy ``thread_id``)
+    # Active AgentLoop id from daemon status frames (``loop_id``)
     loop_id: str = ""
 
     # Internal context tracking (suppress internal LLM responses)
@@ -87,7 +87,7 @@ class ProcessorState:
     def clear_session(self) -> None:
         """Clear all session state.
 
-        Called when thread changes. Resets everything for fresh session.
+        Called when the active loop changes. Resets everything for fresh session.
         """
         self.seen_message_ids.clear()
         self.pending_tool_calls.clear()

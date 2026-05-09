@@ -149,17 +149,17 @@ class _ExecutionMixin:
 
         await dispatch_hook("user.prompt", {})
 
-        # /quit and /q always execute immediately, even mid-thread-switch.
+        # /quit and /q always execute immediately, even mid-loop-switch.
         from soothe_cli.tui.command_registry import ALWAYS_IMMEDIATE
 
         if mode == "command" and value.lower().strip() in ALWAYS_IMMEDIATE:
             self.exit()
             return
 
-        # Prevent message handling while a thread switch is in-flight.
-        if self._thread_switching:
+        # Prevent message handling while a loop switch is in-flight.
+        if self._loop_switching:
             self.notify(
-                "Thread switch in progress. Please wait.",
+                "Loop switch in progress. Please wait.",
                 severity="warning",
                 timeout=3,
             )
@@ -411,17 +411,17 @@ class _ExecutionMixin:
         await self._mount_message(AppMessage(link))
 
     @staticmethod
-    async def _build_thread_message(prefix: str, thread_id: str) -> str | Content:
-        """Build a thread status message with the thread id.
+    async def _build_loop_status_line(prefix: str, loop_id: str) -> str | Content:
+        """Build a status line with the loop id.
 
         Args:
-            prefix: Label before the thread ID (e.g. `'Resumed thread'`).
-            thread_id: The thread identifier.
+            prefix: Label before the id (e.g. ``'Resumed loop'``).
+            loop_id: Loop id.
 
         Returns:
             Plain status line.
         """
-        return f"{prefix}: {thread_id}"
+        return f"{prefix}: {loop_id}"
 
     async def _handle_command(self, command: str) -> None:
         """Handle a slash command.
@@ -532,23 +532,23 @@ class _ExecutionMixin:
             self._update_tokens(0)
             # Clear status message (e.g., "Interrupted" from previous session)
             self._update_status("")
-            # Reset thread to start fresh conversation
+            # New AgentLoop (daemon) or new local loop id
             if self._session_state:
                 if self._daemon_session is not None:
-                    status_event = await self._daemon_session.new_thread()
+                    status_event = await self._daemon_session.new_loop()
                     new_loop_id = (
-                        str(status_event.get("loop_id", "")) or self._session_state.reset_thread()
+                        str(status_event.get("loop_id", "")) or self._session_state.reset_loop()
                     )
                     self._session_state.loop_id = new_loop_id
                     self._lc_loop_id = new_loop_id
                 else:
-                    new_loop_id = self._session_state.reset_thread()
+                    new_loop_id = self._session_state.reset_loop()
                 try:
                     banner = self.query_one("#welcome-banner", WelcomeBanner)
                     banner.update_loop_id(new_loop_id)
                 except NoMatches:
                     pass
-                self._clear_thread_model_override()
+                self._clear_loop_model_override()
                 await self._mount_message(AppMessage(f"Started new loop: {new_loop_id}"))
         elif cmd == "/editor":
             await self.action_open_editor()
@@ -865,7 +865,9 @@ class _ExecutionMixin:
         # Caller ensures _ui_adapter is set (checked in _handle_user_message)
         if self._ui_adapter is None:
             return
-        from soothe_cli.tui.textual_adapter import execute_task_textual
+        # Import from submodule so package ``__init__`` does not eagerly load
+        # unrelated symbols; ``execute_task_textual`` graph is prewarmed on startup.
+        from soothe_cli.tui.textual_adapter._turn import execute_task_textual
 
         # Create the stats object up-front and store on the app so
         # exit() can merge it synchronously if the worker is cancelled

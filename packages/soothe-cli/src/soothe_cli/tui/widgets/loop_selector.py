@@ -70,7 +70,7 @@ _COLUMN_WIDTHS: dict[str, int | None] = {
 _COLUMN_LABELS = {
     "loop_id": "Loop ID",
     "status": "Status",
-    "threads": "Threads",
+    "threads": "Contexts",
     "goals": "Goals",
     "created_at": "Created",
     "updated_at": "Updated",
@@ -78,7 +78,7 @@ _COLUMN_LABELS = {
 _COLUMN_TOGGLE_LABELS = {
     "loop_id": "Loop ID",
     "status": "Status",
-    "threads": "# Threads",
+    "threads": "# Contexts",
     "goals": "# Goals",
     "created_at": "Created At",
     "updated_at": "Updated At",
@@ -661,7 +661,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         )
         limit = self._effective_loop_limit()
         if len(self._loops) >= limit:
-            lines += f"\nShowing last {limit} loops. Set DA_CLI_RECENT_THREADS to override."
+            lines += f"\nShowing last {limit} loops. Set DA_CLI_RECENT_LOOPS to override."
         return lines
 
     def _effective_loop_limit(self) -> int:
@@ -1130,7 +1130,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
 
     def _pending_checkpoint_fields(self) -> tuple[bool, bool]:
         """Return which visible checkpoint-derived fields still need loading."""
-        # Loops don't have checkpoint-derived fields like threads
+        # Loop list RPC does not include per-checkpoint message counts in this view
         return False, False
 
     async def _populate_visible_checkpoint_details(self) -> tuple[bool, bool]:
@@ -1184,7 +1184,6 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                 self._loops = await list_loops_via_daemon_rpc(
                     daemon_session=self._daemon_session,
                     limit=limit,
-                    include_message_count=False,
                     sort_by=sort_by,
                 )
             else:

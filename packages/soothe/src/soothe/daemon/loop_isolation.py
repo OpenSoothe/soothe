@@ -10,9 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -44,36 +42,33 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
     Raises:
         RuntimeError: If loop metadata is missing or invalid.
     """
-    loop_dir = await daemon._message_router._ensure_loop_metadata(loop_id)
-    if loop_dir is None:
+    # Check loop exists in DB
+    metadata = await daemon._persistence_manager.get_loop_metadata(loop_id)
+    if metadata is None:
         msg = f"Loop {loop_id} not found"
         raise RuntimeError(msg)
-
-    metadata_file = loop_dir / "metadata.json"
-    try:
-        metadata = json.loads(metadata_file.read_text())
-    except Exception as e:
-        msg = f"Failed to read loop metadata: {e}"
-        raise RuntimeError(msg) from e
 
     thread_id = metadata.get("current_thread_id")
     if not thread_id:
         thread_id = str(uuid7())
-        metadata["current_thread_id"] = thread_id
-        if thread_id not in metadata.get("thread_ids", []):
-            metadata.setdefault("thread_ids", []).append(thread_id)
-        metadata["status"] = "running"
-        metadata["updated_at"] = datetime.now(UTC).isoformat()
+        thread_ids = list(metadata.get("thread_ids") or [])
+        if thread_id not in thread_ids:
+            thread_ids.append(thread_id)
         try:
-            metadata_file.write_text(json.dumps(metadata, indent=2))
-        except OSError as e:
+            await daemon._persistence_manager.update_loop_metadata(
+                loop_id,
+                current_thread_id=thread_id,
+                thread_ids=thread_ids,
+                status="running",
+            )
+        except Exception as e:
             logger.warning("Failed to update loop metadata for %s: %s", loop_id, e)
 
     daemon._thread_registry.ensure(thread_id, is_draft=False)
 
-    # Prefer client-provided workspace (IG-409): when the CLI/SDK passes the user's
-    # CWD via loop_new, the agent's filesystem tools should default to the user's
-    # project directory rather than the per-loop daemon scratch dir (IG-300 fallback).
+    # Workspace resolution — two tiers only:
+    #   1. client_workspace from loop metadata (IG-409): the user's CWD passed via loop_new.
+    #   2. per-loop daemon scratch dir: $SOOTHE_HOME/Workspace/<loop_id>/ (IG-300).
     loop_workspace: Path | None = None
     raw_client_ws = metadata.get("client_workspace")
     if isinstance(raw_client_ws, str) and raw_client_ws.strip():
@@ -88,16 +83,7 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
             )
 
     if loop_workspace is None:
-        try:
-            loop_workspace = resolve_loop_daemon_workspace(loop_id)
-        except (OSError, ValueError) as e:
-            logger.warning(
-                "Falling back to daemon workspace for loop %s thread %s: %s",
-                loop_id,
-                thread_id,
-                e,
-            )
-            loop_workspace = Path(daemon._daemon_workspace)
+        loop_workspace = resolve_loop_daemon_workspace(loop_id)
 
     daemon._thread_registry.set_workspace(thread_id, loop_workspace)
     daemon._thread_registry.set_thread_loop(thread_id, loop_id)
@@ -114,14 +100,26 @@ class LoopInputDispatcher:
         self._queues: dict[str, asyncio.Queue[dict[str, Any]]] = {}
         self._workers: dict[str, asyncio.Task[None]] = {}
         self._lock = asyncio.Lock()
+        self._shutting_down: bool = False
 
     def total_queued(self) -> int:
         """Approximate sum of pending items across loop queues (for metrics)."""
         return sum(q.qsize() for q in self._queues.values())
 
     async def enqueue(self, loop_id: str, message: dict[str, Any]) -> None:
-        """Enqueue a message for the given loop; starts a worker on first use."""
+        """Enqueue a message for the given loop; starts a worker on first use.
+
+        Silently drops the message if shutdown has already been initiated so that
+        concurrent callers cannot create new orphan workers after the snapshot in
+        ``shutdown()`` has been taken.
+        """
         async with self._lock:
+            if self._shutting_down:
+                logger.debug(
+                    "LoopInputDispatcher shutting down; dropping message for loop %s",
+                    loop_id[:16],
+                )
+                return
             if loop_id not in self._queues:
                 q: asyncio.Queue[dict[str, Any]] = asyncio.Queue(
                     maxsize=self._max_queue_size if self._max_queue_size > 0 else 0
@@ -134,6 +132,7 @@ class LoopInputDispatcher:
     async def shutdown(self) -> None:
         """Cancel all loop workers (daemon stop)."""
         async with self._lock:
+            self._shutting_down = True  # prevent new enqueue() from spawning workers
             workers = list(self._workers.items())
             self._workers.clear()
             self._queues.clear()
@@ -144,7 +143,7 @@ class LoopInputDispatcher:
 
     async def _worker(self, loop_id: str, queue: asyncio.Queue[dict[str, Any]]) -> None:
         d = self._daemon
-        while d._running:
+        while d._running and not self._shutting_down:
             try:
                 msg = await queue.get()
             except asyncio.CancelledError:

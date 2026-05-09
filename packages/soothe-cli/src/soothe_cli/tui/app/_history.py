@@ -1,4 +1,4 @@
-"""Thread history conversion, loading, and daemon event consumption mixin."""
+"""Conversation history conversion, checkpoint loading, and daemon event consumption mixin."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 from textual.content import Content
 
 from soothe_cli.shared.tools.tool_card_payload import extract_tool_result_card_payload
-from soothe_cli.tui.app._module_init import _ThreadHistoryPayload
+from soothe_cli.tui.app._module_init import _LoopHistoryPayload
 from soothe_cli.tui.message_display_filter import (
     extract_ai_text_for_display,
     extract_message_tool_calls,
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 class _HistoryMixin:
-    """Thread history conversion, loading, and daemon event consumption."""
+    """History conversion, loading, and daemon WebSocket event consumption."""
 
     @staticmethod
     def _convert_messages_to_data(messages: list[Any]) -> list[MessageData]:
@@ -54,7 +54,7 @@ class _HistoryMixin:
         stored directly on the corresponding `MessageData`.
 
         Args:
-            messages: LangChain message objects from a thread checkpoint.
+            messages: LangChain message objects from a LangGraph checkpoint.
 
         Returns:
             Ordered list of `MessageData` ready for `MessageStore.bulk_load`.
@@ -151,27 +151,25 @@ class _HistoryMixin:
 
         return result
 
-    async def _get_thread_state_values(self, thread_id: str) -> dict[str, Any]:
-        """Fetch thread state values, with remote checkpointer fallback.
+    async def _get_loop_state_values(self, loop_id: str) -> dict[str, Any]:
+        """Fetch checkpoint channel values, with remote checkpointer fallback.
 
-        In server mode the LangGraph dev server can report an empty thread state
-        after a restart even when checkpoints exist on disk. When that happens,
-        read the latest checkpoint directly so resumed threads can still load
-        history and display correctly.
+        In server mode the LangGraph dev server can report empty state after a
+        restart even when checkpoints exist on disk. When that happens, read the
+        latest checkpoint directly so resumed sessions still load history.
 
         Args:
-            thread_id: Thread ID to fetch from checkpoint storage.
+            loop_id: Loop id.
 
         Returns:
-            Thread state values keyed by channel name. Returns an empty dict
-                when no checkpointed values are available.
+            State values keyed by channel name, or empty when none are available.
         """
         if self._daemon_session is not None:
-            config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+            config: RunnableConfig = {"configurable": {"thread_id": loop_id}}
             snapshot = await self._daemon_session.aget_state(config)
             values = dict(snapshot.values)
             recovered = await self._recover_missing_checkpoint_messages(
-                thread_id=thread_id,
+                loop_id=loop_id,
                 values=values,
             )
             if recovered:
@@ -181,7 +179,7 @@ class _HistoryMixin:
         if not self._agent:
             return {}
 
-        config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+        config: RunnableConfig = {"configurable": {"thread_id": loop_id}}
         state = await self._agent.aget_state(config)
 
         values: dict[str, Any] = {}
@@ -195,10 +193,10 @@ class _HistoryMixin:
             return values
 
         logger.debug(
-            "Remote state empty for thread %s; falling back to local checkpointer",
-            thread_id,
+            "Remote state empty for %s; falling back to local checkpointer",
+            loop_id,
         )
-        fallback_values = await self._read_channel_values_from_checkpointer(thread_id)
+        fallback_values = await self._read_channel_values_from_checkpointer(loop_id)
         fallback_messages = fallback_values.get("messages")
         if isinstance(fallback_messages, list) and fallback_messages:
             values["messages"] = fallback_messages
@@ -211,14 +209,14 @@ class _HistoryMixin:
     async def _recover_missing_checkpoint_messages(
         self,
         *,
-        thread_id: str,
+        loop_id: str,
         values: dict[str, Any],
     ) -> list[Any] | None:
-        """Recover missing checkpoint messages from persisted thread conversation rows.
+        """Recover missing checkpoint messages from persisted conversation rows.
 
         Args:
-            thread_id: Thread ID being resumed.
-            values: Current checkpoint values from `thread_state`.
+            loop_id: Loop id.
+            values: Current checkpoint channel values.
 
         Returns:
             Recovered LangChain message objects, or `None` when recovery is not possible.
@@ -230,7 +228,7 @@ class _HistoryMixin:
             return None
 
         rows = await self._daemon_session.fetch_conversation_log(
-            thread_id,
+            loop_id,
             limit=10000,
             include_events=True,
         )
@@ -241,21 +239,21 @@ class _HistoryMixin:
         try:
             from langchain_core.messages.base import messages_to_dict
 
-            config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+            config: RunnableConfig = {"configurable": {"thread_id": loop_id}}
             await self._daemon_session.aupdate_state(
                 config,
                 {"messages": messages_to_dict(recovered_messages)},
                 timeout=10.0,
             )
             logger.info(
-                "Recovered %d checkpoint messages from thread log for %s",
+                "Recovered %d checkpoint messages from conversation log for %s",
                 len(recovered_messages),
-                thread_id,
+                loop_id,
             )
         except Exception:
             logger.warning(
                 "Failed to persist recovered checkpoint messages for %s",
-                thread_id,
+                loop_id,
                 exc_info=True,
             )
         return recovered_messages
@@ -281,40 +279,38 @@ class _HistoryMixin:
                 messages.append(AIMessage(content=content))
         return messages
 
-    async def _fetch_thread_activity_events(self, thread_id: str) -> list[dict[str, Any]]:
-        """Read ThreadLogger JSONL events for thread history recovery via daemon RPC.
+    async def _fetch_loop_activity_events(self, loop_id: str) -> list[dict[str, Any]]:
+        """Read persisted activity events from the daemon conversation log (RPC).
 
         Args:
-            thread_id: Thread ID to read events from.
+            loop_id: Loop id.
 
         Returns:
-            List of event records (tool_call, tool_result, custom events) from ThreadLogger.
+            Event rows (tool_call, tool_result, custom) suitable for UI replay.
         """
         if self._daemon_session is None:
-            logger.debug("No daemon session - cannot read ThreadLogger events")
+            logger.debug("No daemon session - cannot read persisted activity events")
             return []
 
         try:
             messages = await self._daemon_session.fetch_conversation_log(
-                thread_id,
+                loop_id,
                 limit=10000,
                 include_events=True,
             )
             # Filter for event types (tool calls, tool results, events).
-            # The daemon API returns ThreadMessage objects with `kind` field.
+            # Daemon rows expose a `kind` discriminator.
             return [m for m in messages if m.get("kind") in ("event", "tool_call", "tool_result")]
         except Exception:
-            logger.debug(
-                "Failed to read ThreadLogger events for thread %s", thread_id, exc_info=True
-            )
+            logger.debug("Failed to read persisted activity events for %s", loop_id, exc_info=True)
             return []
 
     @staticmethod
-    def _parse_thread_event_timestamp(timestamp: Any) -> datetime | None:
+    def _parse_loop_event_timestamp(timestamp: Any) -> datetime | None:
         """Parse an event timestamp into a UTC-aware datetime.
 
         Args:
-            timestamp: Event timestamp value from ThreadLogger.
+            timestamp: Raw timestamp string from a persisted event row.
 
         Returns:
             Parsed UTC-aware datetime, or `None` when parsing fails.
@@ -332,10 +328,10 @@ class _HistoryMixin:
         return parsed.astimezone(UTC)
 
     def _convert_event_to_message_data(self, event: dict[str, Any]) -> MessageData | None:
-        """Convert one persisted thread-event row to MessageData.
+        """Convert one persisted activity-event row to MessageData.
 
         Args:
-            event: Persisted `thread_messages` row with optional metadata payload.
+            event: Conversation-log row with optional metadata payload.
 
         Returns:
             MessageData when a displayable card can be built, else `None`.
@@ -345,7 +341,7 @@ class _HistoryMixin:
         kind = str(event.get("kind") or "").strip()
         metadata_raw = event.get("metadata")
         metadata = metadata_raw if isinstance(metadata_raw, dict) else {}
-        parsed_ts = self._parse_thread_event_timestamp(event.get("timestamp"))
+        parsed_ts = self._parse_loop_event_timestamp(event.get("timestamp"))
 
         event_timestamp = parsed_ts.timestamp() if parsed_ts is not None else time.time()
 
@@ -472,8 +468,8 @@ class _HistoryMixin:
 
         return None
 
-    def _convert_thread_events_to_data(self, events: list[dict[str, Any]]) -> list[MessageData]:
-        """Convert persisted thread event rows into stable TUI cards.
+    def _convert_loop_events_to_data(self, events: list[dict[str, Any]]) -> list[MessageData]:
+        """Convert persisted activity-event rows into stable TUI cards.
 
         This fallback is used only when checkpoint messages are unavailable.
         """
@@ -485,7 +481,7 @@ class _HistoryMixin:
         sorted_events = sorted(
             events,
             key=lambda event: (
-                self._parse_thread_event_timestamp(event.get("timestamp"))
+                self._parse_loop_event_timestamp(event.get("timestamp"))
                 or datetime.min.replace(tzinfo=UTC)
             ),
         )
@@ -518,13 +514,13 @@ class _HistoryMixin:
     def _merge_history_sources(
         self,
         checkpoint_messages: list[Any],
-        thread_logger_events: list[dict[str, Any]],
+        activity_events: list[dict[str, Any]],
     ) -> list[tuple[str, Any]]:
-        """Merge checkpoint messages and ThreadLogger events chronologically.
+        """Merge checkpoint messages and persisted activity events chronologically.
 
         Args:
             checkpoint_messages: LangChain message objects from checkpoint.
-            thread_logger_events: ThreadLogger event records.
+            activity_events: Event rows from the daemon conversation log.
 
         Returns:
             List of (source_type, data) tuples sorted by timestamp:
@@ -543,9 +539,9 @@ class _HistoryMixin:
             # We'll place them relative to events based on tool call matching
             timeline.append((min_timestamp, "message", msg))
 
-        # Add ThreadLogger events with explicit timestamps
-        for event in thread_logger_events:
-            ts = self._parse_thread_event_timestamp(event.get("timestamp")) or min_timestamp
+        # Activity events carry explicit timestamps for ordering
+        for event in activity_events:
+            ts = self._parse_loop_event_timestamp(event.get("timestamp")) or min_timestamp
 
             # Convert event to MessageData
             msg_data = self._convert_event_to_message_data(event)
@@ -589,21 +585,21 @@ class _HistoryMixin:
         flush_checkpoint_messages()
         return data
 
-    async def _fetch_thread_history_data(self, thread_id: str) -> _ThreadHistoryPayload:
-        """Fetch and convert complete thread history (checkpoint + ThreadLogger).
+    async def _fetch_loop_history_data(self, loop_id: str) -> _LoopHistoryPayload:
+        """Fetch and convert complete conversation history (checkpoint + persisted events).
 
-        Enhanced to read from both checkpoint messages and ThreadLogger events
-        to reconstruct full visual history including tool calls, activities, and events.
+        Reads checkpoint messages when present; otherwise replays persisted activity
+        rows from the daemon conversation log.
 
         Args:
-            thread_id: Thread ID to fetch from checkpoint and ThreadLogger storage.
+            loop_id: Loop id.
 
         Returns:
             Payload containing converted message data and the persisted
             context-token count.
         """
         # 1. Read checkpoint messages (existing)
-        state_values = await self._get_thread_state_values(thread_id)
+        state_values = await self._get_loop_state_values(loop_id)
         raw_tokens = state_values.get("_context_tokens")
         context_tokens = raw_tokens if isinstance(raw_tokens, int) and raw_tokens >= 0 else 0
         messages = state_values.get("messages", [])
@@ -615,23 +611,23 @@ class _HistoryMixin:
             messages = messages_from_wire_dicts(messages)
         if messages:
             data = await asyncio.to_thread(self._convert_messages_to_data, messages)
-            return _ThreadHistoryPayload(data, context_tokens)
+            return _LoopHistoryPayload(data, context_tokens)
 
-        # 3. Fallback source: ThreadLogger events when checkpoints are unavailable.
-        events = await self._fetch_thread_activity_events(thread_id)
+        # 3. Fallback: persisted activity events when checkpoints are unavailable.
+        events = await self._fetch_loop_activity_events(loop_id)
         if not events:
-            return _ThreadHistoryPayload([], context_tokens)
+            return _LoopHistoryPayload([], context_tokens)
 
-        data = await asyncio.to_thread(self._convert_thread_events_to_data, events)
+        data = await asyncio.to_thread(self._convert_loop_events_to_data, events)
 
-        return _ThreadHistoryPayload(data, context_tokens)
+        return _LoopHistoryPayload(data, context_tokens)
 
     @staticmethod
-    async def _read_channel_values_from_checkpointer(thread_id: str) -> dict[str, Any]:
+    async def _read_channel_values_from_checkpointer(loop_id: str) -> dict[str, Any]:
         """Read checkpoint channel values directly from the SQLite checkpointer.
 
         Args:
-            thread_id: Thread ID to look up.
+            loop_id: Loop id.
 
         Returns:
             Channel values from the latest checkpoint, or an empty dict on
@@ -643,7 +639,7 @@ class _HistoryMixin:
             from soothe_cli.tui.sessions import get_db_path
 
             db_path = str(get_db_path())
-            config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+            config: RunnableConfig = {"configurable": {"thread_id": loop_id}}
             async with AsyncSqliteSaver.from_conn_string(db_path) as saver:
                 tup = await saver.aget_tuple(config)
                 if tup and tup.checkpoint:
@@ -653,89 +649,88 @@ class _HistoryMixin:
         except (ImportError, OSError) as exc:
             logger.warning(
                 "Failed to read checkpointer directly for %s: %s",
-                thread_id,
+                loop_id,
                 exc,
             )
         except Exception:
             logger.warning(
                 "Unexpected error reading checkpointer for %s",
-                thread_id,
+                loop_id,
                 exc_info=True,
             )
         return {}
 
-    async def _upgrade_thread_message_link(
+    async def _upgrade_loop_message_link(
         self,
         widget: AppMessage,
         *,
         prefix: str,
-        thread_id: str,
+        loop_id: str,
     ) -> None:
-        """Upgrade a plain thread message to a linked one when URL resolves.
+        """Upgrade a plain status message to a linked one when URL resolves.
 
         Args:
             widget: The already-mounted app message.
-            prefix: Text prefix before thread ID.
-            thread_id: Thread ID to resolve.
+            prefix: Text prefix before the loop id.
+            loop_id: Loop id.
         """
         try:
-            thread_msg = await self._build_thread_message(prefix, thread_id)
-            if not isinstance(thread_msg, Content):
+            loop_msg = await self._build_loop_status_line(prefix, loop_id)
+            if not isinstance(loop_msg, Content):
                 logger.debug(
-                    "Skipping thread link upgrade for %s: URL did not resolve",
-                    thread_id,
+                    "Skipping loop link upgrade for %s: URL did not resolve",
+                    loop_id,
                 )
                 return
             if widget.parent is None:
                 logger.debug(
-                    "Skipping thread link upgrade for %s: widget no longer mounted",
-                    thread_id,
+                    "Skipping loop link upgrade for %s: widget no longer mounted",
+                    loop_id,
                 )
                 return
             # Keep serialized content in sync with the rendered content.
-            widget._content = thread_msg
-            widget.update(thread_msg)
+            widget._content = loop_msg
+            widget.update(loop_msg)
         except Exception:
             logger.warning(
-                "Failed to upgrade thread message link for %s",
-                thread_id,
+                "Failed to upgrade loop message link for %s",
+                loop_id,
                 exc_info=True,
             )
 
-    def _schedule_thread_message_link(
+    def _schedule_loop_message_link(
         self,
         widget: AppMessage,
         *,
         prefix: str,
-        thread_id: str,
+        loop_id: str,
     ) -> None:
-        """Schedule thread URL link resolution and apply updates in the background.
+        """Schedule loop URL link resolution and apply updates in the background.
 
         Args:
             widget: The message widget to update.
-            prefix: Text prefix before thread ID.
-            thread_id: Thread ID to resolve.
+            prefix: Text prefix before the loop id.
+            loop_id: Loop id.
         """
         self.run_worker(
-            self._upgrade_thread_message_link(
+            self._upgrade_loop_message_link(
                 widget,
                 prefix=prefix,
-                thread_id=thread_id,
+                loop_id=loop_id,
             ),
             exclusive=False,
         )
 
     async def _consume_daemon_events_background(self) -> None:
-        """Consume events from daemon when subscribed to a running thread.
+        """Consume daemon websocket events for an already-running loop subscription.
 
-        IG-228: This background task reads events from the daemon websocket
-        when the thread is already running passively (not during an active
-        turn). It uses the same event processing pipeline as active queries.
+        IG-228: Reads passively when the loop is running without an active local turn,
+        using the same processing pipeline as streaming queries.
         """
         if not self._daemon_session:
             return
 
-        logger.info("Starting background event consumer for subscribed thread")
+        logger.info("Starting background event consumer for subscribed loop")
         from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
         from soothe_cli.cli.stream.pipeline import StreamDisplayPipeline

@@ -16,11 +16,6 @@ __all__ = [
     "PLAN_CREATED",
     "PLAN_STEP_STARTED",
     "PLAN_STEP_COMPLETED",
-    # Thread lifecycle (DEBUG/DETAILED)
-    "THREAD_CREATED",
-    "THREAD_RESUMED",
-    "THREAD_COMPLETED",
-    "THREAD_ERROR",
     # Tool (DEBUG/DETAILED)
     "TOOL_STARTED",
     "TOOL_COMPLETED",
@@ -60,10 +55,6 @@ from soothe_sdk.core.events import (
     PLAN_CREATED,
     PLAN_STEP_COMPLETED,
     PLAN_STEP_STARTED,
-    THREAD_COMPLETED,
-    THREAD_CREATED,
-    THREAD_ERROR,
-    THREAD_RESUMED,
     TOOL_COMPLETED,
     TOOL_ERROR,
     TOOL_STARTED,

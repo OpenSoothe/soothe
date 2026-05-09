@@ -1,4 +1,4 @@
-"""Regression tests for headless daemon thread isolation."""
+"""Regression tests for headless daemon loop isolation."""
 
 from __future__ import annotations
 
@@ -45,7 +45,9 @@ class _RecorderProcessor:
 async def test_run_headless_filters_non_active_loop_frames(monkeypatch: pytest.MonkeyPatch) -> None:
     """Headless daemon run should ignore `status/event` frames for other loops."""
     active_loop_id = "loop-main"
-    leaked_text = "Hello! I'd be happy to help you with whatever you need. What can I do for you today?"
+    leaked_text = (
+        "Hello! I'd be happy to help you with whatever you need. What can I do for you today?"
+    )
 
     stub_client = _StubClient(
         [

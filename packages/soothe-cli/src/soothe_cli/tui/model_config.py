@@ -25,7 +25,7 @@ _ENV_PREFIX = "SOOTHE_"
 
 
 def _in_running_loop() -> bool:
-    """Return whether current thread is already running an asyncio loop."""
+    """Return whether an asyncio event loop is already running (caller context)."""
     import asyncio
 
     try:
@@ -264,17 +264,17 @@ def get_credential_env_var(provider: str) -> str | None:
     return PROVIDER_API_KEY_ENV.get(provider)
 
 
-# Thread configuration for TUI preferences
+# Loop configuration for TUI preferences
 
 
 @dataclass(frozen=True, slots=True)
-class ThreadConfig:
-    """Thread list display preferences for TUI.
+class LoopConfig:
+    """Loop list display preferences for TUI.
 
     Attributes:
         columns: Column visibility settings keyed by column name.
         relative_time: Whether to show relative timestamps.
-        sort_order: Sort order for thread list ("updated_at" or "created_at").
+        sort_order: Sort order for loop list ("updated_at" or "created_at").
     """
 
     columns: dict[str, bool]
@@ -282,101 +282,33 @@ class ThreadConfig:
     sort_order: str
 
 
-# Default column visibility (all columns visible by default)
-_DEFAULT_COLUMNS = {
-    "thread_id": True,
-    "agent_name": True,
-    "messages": True,
+# Default column visibility for loops
+_DEFAULT_LOOP_COLUMNS = {
+    "loop_id": True,
+    "status": True,
+    "threads": True,
+    "goals": True,
     "created_at": True,
     "updated_at": True,
-    "git_branch": True,
-    "cwd": True,
-    "initial_prompt": True,
 }
 
 
-def load_loop_config() -> ThreadConfig:
-    """Load loop display configuration (stub: reuse thread config).
-
-    Args:
-        None (loop config is global).
+def load_loop_config() -> LoopConfig:
+    """Load loop display configuration.
 
     Returns:
-        ThreadConfig instance with columns, relative_time, sort_order.
+        LoopConfig instance with columns, relative_time, sort_order.
     """
-    # Use thread config defaults for now
-    return ThreadConfig(
-        columns=dict(_DEFAULT_COLUMNS),
+    return LoopConfig(
+        columns=dict(_DEFAULT_LOOP_COLUMNS),
         relative_time=load_loop_relative_time(),
         sort_order=load_loop_sort_order(),
     )
 
 
-def load_thread_config(thread_id: str | None = None) -> ThreadConfig:
-    """Load thread-specific TUI preferences.
-
-    Stub implementation - returns default configuration.
-    Full implementation should use SootheConfig's persistence.
-
-    Args:
-        thread_id: Thread identifier. Can be None for default config.
-
-    Returns:
-        Thread configuration object.
-    """
-    # Use existing stub functions for defaults
-    return ThreadConfig(
-        columns=dict(_DEFAULT_COLUMNS),
-        relative_time=load_thread_relative_time(),
-        sort_order=load_thread_sort_order(),
-    )
-
-
-def save_thread_relative_time(thread_id: str, relative_time: str) -> None:
-    """Save thread's relative time display preference.
-
-    Args:
-        thread_id: Thread identifier.
-        relative_time: Relative time format.
-    """
-    # Stub - implement with SootheConfig persistence
-    pass
-
-
-def save_thread_columns(thread_id: str, columns: list) -> None:
-    """Save thread's column display preferences.
-
-    Args:
-        thread_id: Thread identifier.
-        columns: Column configuration list.
-    """
-    # Stub - implement with SootheConfig persistence
-    pass
-
-
-def save_thread_sort_order(sort_order: str) -> None:
-    """Save thread list sort order preference.
-
-    Args:
-        sort_order: Sort order specification.
-    """
-    # Stub - implement with SootheConfig persistence
-    pass
-
-
-def load_thread_sort_order() -> str:
-    """Return persisted thread list sort key (stub: most recently updated first)."""
-    return "updated_at"
-
-
 def load_loop_sort_order() -> str:
     """Return persisted loop list sort key (stub: most recently updated first)."""
     return "updated_at"
-
-
-def load_thread_relative_time() -> bool:
-    """Return whether thread list uses relative timestamps (stub: on)."""
-    return True
 
 
 def load_loop_relative_time() -> bool:
@@ -595,7 +527,7 @@ def has_provider_credentials(provider: str) -> bool | None:
             return bool(proj and proj.strip())
         return None
 
-    # Try to fetch from daemon only when no event loop is active in this thread.
+    # Fetch from daemon only when no asyncio loop is running in this context.
     if not _in_running_loop():
         try:
             import asyncio

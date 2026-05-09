@@ -67,7 +67,6 @@ class EventBus:
         ``loop:{loop_id}`` — primary; client subscriptions and daemon ``_broadcast``
         scoped delivery.
         ``global`` — daemon-wide frames (e.g. some status, command_response).
-        ``thread:{checkpoint_id}`` — legacy / internal only; do not use for new code.
 
     Example (loop-scoped):
         >>> bus = EventBus()
@@ -115,7 +114,7 @@ class EventBus:
         - LOW events: Silent drop when queue near capacity (80%)
 
         Args:
-            topic: Topic identifier (e.g., "thread:abc123")
+            topic: Topic identifier (e.g., "loop:abc123")
             event: Event dictionary to broadcast
             event_meta: Optional EventMeta for filtering (RFC-0022) and priority (IG-258)
         """

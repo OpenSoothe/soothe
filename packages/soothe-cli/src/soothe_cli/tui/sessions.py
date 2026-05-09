@@ -1,4 +1,4 @@
-"""Thread management using LangGraph's built-in checkpoint persistence."""
+"""Loop management using LangGraph's built-in checkpoint persistence."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple, NotRequired, cast
+from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.client.config import SOOTHE_HOME
 from typing_extensions import TypedDict
@@ -16,21 +16,10 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     import aiosqlite
-    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
-    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-
-    from soothe_cli.tui.output import OutputFormat
 
 logger = logging.getLogger(__name__)
 
 _aiosqlite_patched = False
-_jsonplus_serializer: JsonPlusSerializer | None = None
-_message_count_cache: dict[str, tuple[str | None, int]] = {}
-_MAX_MESSAGE_COUNT_CACHE = 4096
-_initial_prompt_cache: dict[str, tuple[str | None, str | None]] = {}
-_MAX_INITIAL_PROMPT_CACHE = 4096
-_recent_threads_cache: dict[tuple[str | None, int], list[ThreadInfo]] = {}
-_MAX_RECENT_THREADS_CACHE_KEYS = 16
 
 
 def _patch_aiosqlite() -> None:
@@ -81,37 +70,6 @@ async def _connect() -> AsyncIterator[aiosqlite.Connection]:
         yield conn
 
 
-class ThreadInfo(TypedDict):
-    """Thread metadata returned by `list_threads`."""
-
-    thread_id: str
-    """Unique identifier for the thread."""
-
-    agent_name: str | None
-    """Name of the agent that owns the thread."""
-
-    updated_at: str | None
-    """ISO timestamp of the last update."""
-
-    created_at: NotRequired[str | None]
-    """ISO timestamp of thread creation (earliest checkpoint)."""
-
-    git_branch: NotRequired[str | None]
-    """Git branch active when the thread was created."""
-
-    initial_prompt: NotRequired[str | None]
-    """First human message in the thread."""
-
-    message_count: NotRequired[int]
-    """Number of messages in the thread."""
-
-    latest_checkpoint_id: NotRequired[str | None]
-    """Most recent checkpoint ID for cache invalidation."""
-
-    cwd: NotRequired[str | None]
-    """Working directory where the thread was last used."""
-
-
 class LoopInfo(TypedDict):
     """Loop metadata returned by `list_loops_via_daemon_rpc`."""
 
@@ -122,26 +80,16 @@ class LoopInfo(TypedDict):
     """Loop status (running, paused, completed, etc.)."""
 
     threads: int
-    """Number of threads in the loop."""
+    """Number of checkpoint contexts reported by the daemon for this loop."""
 
     goals: int
     """Total goals completed in the loop."""
 
     switches: int
-    """Total thread switches in the loop."""
+    """Total checkpoint context switches in the loop."""
 
     created: str
     """ISO timestamp of loop creation (truncated to [:16])."""
-
-
-class _CheckpointSummary(NamedTuple):
-    """Structured data extracted from a thread's latest checkpoint."""
-
-    message_count: int
-    """Number of messages in the latest checkpoint."""
-
-    initial_prompt: str | None
-    """First human prompt recovered from the latest checkpoint."""
 
 
 def format_timestamp(iso_timestamp: str | None) -> str:
@@ -210,34 +158,6 @@ def format_relative_timestamp(iso_timestamp: str | None) -> str:
     return f"{years}y ago"
 
 
-def format_path(path: str | None) -> str:
-    """Format a filesystem path for display.
-
-    Paths under the user's home directory are shown relative to `~`.
-    All other paths are returned as-is.
-
-    Args:
-        path: Absolute filesystem path, or `None`.
-
-    Returns:
-        Formatted path string, or empty string if path is falsy.
-    """
-    if not path:
-        return ""
-    try:
-        home = str(Path.home())
-        if path == home:
-            return "~"
-        prefix = home + "/"
-        if path.startswith(prefix):
-            return "~/" + path[len(prefix) :]
-    except (RuntimeError, KeyError, OSError):
-        logger.debug("Could not resolve home directory for path formatting", exc_info=True)
-        return path
-    else:
-        return path
-
-
 _db_path: Path | None = None
 
 
@@ -281,124 +201,23 @@ async def _table_exists(conn: aiosqlite.Connection, table: str) -> bool:
         return await cursor.fetchone() is not None
 
 
-async def list_threads_via_daemon_rpc(
-    daemon_session: Any,
-    agent_name: str | None = None,
-    limit: int = 20,
-    include_message_count: bool = False,
-    sort_by: str = "updated",
-    branch: str | None = None,
-) -> list[ThreadInfo]:
-    """List threads via daemon WebSocket RPC (recommended for TUI).
-
-    Queries daemon's actual thread persistence (per-thread JSON files)
-    instead of direct SQLite database access.
-
-    Args:
-        daemon_session: TuiDaemonSession instance for WebSocket RPC.
-        agent_name: Optional filter by agent name.
-        limit: Maximum number of threads to return.
-        include_message_count: Whether to include message counts.
-        sort_by: Sort field — `"updated"` or `"created"`.
-        branch: Optional filter by git branch name.
-
-    Returns:
-        List of `ThreadInfo` dicts with `thread_id`, `agent_name`,
-            `updated_at`, `created_at`, `latest_checkpoint_id`, `git_branch`,
-            `cwd`, and optionally `message_count`.
-
-    Raises:
-        ValueError: If `sort_by` is not `"updated"` or `"created"`.
-        RuntimeError: If daemon session is not available.
-    """
-    if daemon_session is None:
-        raise RuntimeError("Daemon session required for thread listing")
-
-    if sort_by not in {"updated", "created"}:
-        msg = f"Invalid sort_by {sort_by!r}; expected 'updated' or 'created'"
-        raise ValueError(msg)
-
-    # Build filter for daemon RPC
-    filter_data: dict[str, Any] = {}
-    if agent_name:
-        filter_data["agent_name"] = agent_name
-    if branch:
-        filter_data["git_branch"] = branch
-    # Note: sort_by and limit handled by daemon internally
-
-    # Send thread_list RPC to daemon
-    # Use daemon session's WebSocket client
-    client = daemon_session._client
-    if client is None:
-        raise RuntimeError("Daemon WebSocket client not connected")
-
-    await client.send_thread_list(
-        filter_data if filter_data else None,
-        include_last_message=True,
-        include_stats=include_message_count,
-    )
-
-    # Wait for response
-    import asyncio
-
-    async with asyncio.timeout(10.0):
-        while True:
-            event = await client.read_event()
-            if not event:
-                logger.warning("No response from daemon for thread_list RPC")
-                return []
-            if event.get("type") == "thread_list_response":
-                threads_data = event.get("threads", [])
-                if not isinstance(threads_data, list):
-                    threads_data = []
-                break
-
-    # Convert daemon response to ThreadInfo format
-    threads: list[ThreadInfo] = []
-    for t in threads_data[:limit]:  # Apply limit
-        if not isinstance(t, dict):
-            continue
-        thread_info = ThreadInfo(
-            thread_id=str(t.get("thread_id", "")),
-            agent_name=t.get("agent_name"),
-            updated_at=t.get("updated_at"),
-            created_at=t.get("created_at"),
-            latest_checkpoint_id=t.get("latest_checkpoint_id"),
-            git_branch=t.get("git_branch"),
-            cwd=t.get("cwd"),
-        )
-        # Include message_count if provided
-        if include_message_count and "stats" in t:
-            stats = t.get("stats", {})
-            thread_info["message_count"] = stats.get("message_count")
-        threads.append(thread_info)
-
-    # Cache unfiltered results
-    if sort_by == "updated" and branch is None and agent_name is None:
-        _cache_recent_threads(None, limit, threads)
-
-    return threads
-
-
 async def list_loops_via_daemon_rpc(
     daemon_session: Any,
     limit: int = 20,
-    include_message_count: bool = False,
     sort_by: str = "updated",
 ) -> list[LoopInfo]:
     """List AgentLoop instances via daemon WebSocket RPC (RFC-504).
 
     Queries daemon's loop persistence (per-loop metadata.json files)
-    instead of thread persistence.
+    instead of only local SQLite checkpoint walks.
 
     Args:
         daemon_session: TuiDaemonSession instance for WebSocket RPC.
         limit: Maximum number of loops to return.
-        include_message_count: Ignored (loops don't have message counts).
         sort_by: Sort field — `"updated"` or `"created"`.
 
     Returns:
-        List of `LoopInfo` dicts with `loop_id`, `status`, `threads`,
+        List of `LoopInfo` dicts with `loop_id`, `status`, context counts,
             `goals`, `switches`, `created`.
 
     Raises:
@@ -421,8 +240,6 @@ async def list_loops_via_daemon_rpc(
     await client.send_loop_list(limit=limit)
 
     # Wait for response
-    import asyncio
-
     async with asyncio.timeout(10.0):
         while True:
             event = await client.read_event()
@@ -453,560 +270,11 @@ async def list_loops_via_daemon_rpc(
     return loops
 
 
-async def populate_thread_message_counts(threads: list[ThreadInfo]) -> list[ThreadInfo]:
-    """Populate `message_count` for an existing thread list.
-
-    This is used by the `/threads` modal to render rows quickly, then backfill
-    counts in the background without issuing a second thread-list query.
-
-    Args:
-        threads: Thread rows to enrich in place.
-
-    Returns:
-        The same list object with `message_count` values populated.
-    """
-    if not threads:
-        return threads
-
-    async with _connect() as conn:
-        await _populate_message_counts(conn, threads)
-    return threads
-
-
-async def populate_thread_checkpoint_details(
-    threads: list[ThreadInfo],
-    *,
-    include_message_count: bool = True,
-    include_initial_prompt: bool = True,
-) -> list[ThreadInfo]:
-    """Populate checkpoint-derived fields for an existing thread list.
-
-    This is used by the `/threads` modal to enrich rows in one background pass,
-    so the latest checkpoint is fetched and deserialized at most once per row.
-
-    Args:
-        threads: Thread rows to enrich in place.
-        include_message_count: Whether to populate `message_count`.
-        include_initial_prompt: Whether to populate `initial_prompt`.
-
-    Returns:
-        The same list object with missing checkpoint-derived fields populated.
-    """
-    if not threads or (not include_message_count and not include_initial_prompt):
-        return threads
-
-    async with _connect() as conn:
-        await _populate_checkpoint_fields(
-            conn,
-            threads,
-            include_message_count=include_message_count,
-            include_initial_prompt=include_initial_prompt,
-        )
-    return threads
-
-
-async def prewarm_thread_message_counts_via_daemon_rpc(
-    daemon_session: Any,
-    limit: int | None = None,
-) -> None:
-    """Prewarm thread selector cache for faster `/threads` open via daemon RPC.
-
-    Fetches a bounded list of recent threads and populates checkpoint-derived
-    fields for currently visible columns into the in-memory cache. Intended to
-    run in a background worker during app startup.
-
-    Args:
-        daemon_session: TuiDaemonSession instance for WebSocket RPC.
-        limit: Maximum threads to prewarm. Uses `get_thread_limit()` when `None`.
-    """
-    thread_limit = limit if limit is not None else get_thread_limit()
-    if thread_limit < 1:
-        return
-
-    try:
-        from soothe_cli.tui.model_config import load_thread_config
-
-        cfg = load_thread_config()
-        threads = await list_threads_via_daemon_rpc(
-            daemon_session=daemon_session,
-            limit=thread_limit,
-            include_message_count=cfg.columns.get("messages", False),
-        )
-        if threads:
-            # Daemon already provides message counts and last message
-            # No need to call populate_thread_checkpoint_details
-            pass
-        _cache_recent_threads(None, thread_limit, threads)
-    except Exception:
-        logger.warning(
-            "Unexpected error while prewarming thread selector cache via daemon RPC",
-            exc_info=True,
-        )
-
-
-def get_cached_threads(
-    agent_name: str | None = None,
-    limit: int | None = None,
-) -> list[ThreadInfo] | None:
-    """Get cached recent threads, if available.
-
-    Args:
-        agent_name: Optional agent-name filter key.
-        limit: Maximum rows requested. Uses `get_thread_limit()` when `None`.
-
-    Returns:
-        Copy of cached rows when available, otherwise `None`.
-    """
-
-    def _copy_with_cached_counts(rows: list[ThreadInfo]) -> list[ThreadInfo]:
-        copied_rows = _copy_threads(rows)
-        apply_cached_thread_message_counts(copied_rows)
-        apply_cached_thread_initial_prompts(copied_rows)
-        return copied_rows
-
-    thread_limit = limit if limit is not None else get_thread_limit()
-    if thread_limit < 1:
-        return None
-
-    exact = _recent_threads_cache.get((agent_name, thread_limit))
-    if exact is not None:
-        return _copy_with_cached_counts(exact)
-
-    best_key: tuple[str | None, int] | None = None
-    for key in _recent_threads_cache:
-        cache_agent, cache_limit = key
-        if cache_agent != agent_name or cache_limit < thread_limit:
-            continue
-        if best_key is None or cache_limit < best_key[1]:
-            best_key = key
-
-    if best_key is None:
-        return None
-
-    return _copy_with_cached_counts(_recent_threads_cache[best_key][:thread_limit])
-
-
-def apply_cached_thread_message_counts(threads: list[ThreadInfo]) -> int:
-    """Apply cached message counts onto thread rows when freshness matches.
-
-    Args:
-        threads: Thread rows to mutate in place.
-
-    Returns:
-        Number of rows that were populated from cache.
-    """
-    populated = 0
-    for thread in threads:
-        if "message_count" in thread:
-            continue
-        thread_id = thread["thread_id"]
-        freshness = _thread_freshness(thread)
-        cached = _message_count_cache.get(thread_id)
-        if cached is None or cached[0] != freshness:
-            continue
-        thread["message_count"] = cached[1]
-        populated += 1
-    return populated
-
-
-def apply_cached_thread_initial_prompts(threads: list[ThreadInfo]) -> int:
-    """Apply cached initial prompts onto thread rows when freshness matches.
-
-    Args:
-        threads: Thread rows to mutate in place.
-
-    Returns:
-        Number of rows that were populated from cache.
-    """
-    populated = 0
-    for thread in threads:
-        if "initial_prompt" in thread:
-            continue
-        thread_id = thread["thread_id"]
-        freshness = _thread_freshness(thread)
-        cached = _initial_prompt_cache.get(thread_id)
-        if cached is None or cached[0] != freshness:
-            continue
-        thread["initial_prompt"] = cached[1]
-        populated += 1
-    return populated
-
-
-async def _populate_message_counts(
-    conn: aiosqlite.Connection,
-    threads: list[ThreadInfo],
-) -> None:
-    """Fill `message_count` on thread rows with cache-aware lookup."""
-    await _populate_checkpoint_fields(
-        conn,
-        threads,
-        include_message_count=True,
-        include_initial_prompt=False,
-    )
-
-
-async def _get_jsonplus_serializer() -> JsonPlusSerializer:
-    """Return a cached JsonPlus serializer, loading it off the UI loop."""
-    global _jsonplus_serializer  # noqa: PLW0603  # Module-level cache requires global statement
-    if _jsonplus_serializer is not None:
-        return _jsonplus_serializer
-
-    loop = asyncio.get_running_loop()
-    _jsonplus_serializer = await loop.run_in_executor(None, _create_jsonplus_serializer)
-    return _jsonplus_serializer
-
-
-def _create_jsonplus_serializer() -> JsonPlusSerializer:
-    """Import and create a JsonPlus serializer with Soothe type allowlist.
-
-    Returns:
-        A ready `JsonPlusSerializer` instance with explicit allowed_msgpack_modules
-        to suppress langgraph deprecation warning.
-    """
-    from soothe_sdk.utils.serde import create_soothe_serde
-
-    return create_soothe_serde()
-
-
-def _cache_message_count(thread_id: str, freshness: str | None, count: int) -> None:
-    """Cache a thread's message count with a freshness token."""
-    if len(_message_count_cache) >= _MAX_MESSAGE_COUNT_CACHE and (
-        thread_id not in _message_count_cache
-    ):
-        oldest = next(iter(_message_count_cache))
-        _message_count_cache.pop(oldest, None)
-    _message_count_cache[thread_id] = (freshness, count)
-
-
-def _cache_initial_prompt(
-    thread_id: str,
-    freshness: str | None,
-    initial_prompt: str | None,
-) -> None:
-    """Cache a thread's initial prompt with a freshness token."""
-    if len(_initial_prompt_cache) >= _MAX_INITIAL_PROMPT_CACHE and (
-        thread_id not in _initial_prompt_cache
-    ):
-        oldest = next(iter(_initial_prompt_cache))
-        _initial_prompt_cache.pop(oldest, None)
-    _initial_prompt_cache[thread_id] = (freshness, initial_prompt)
-
-
-def _thread_freshness(thread: ThreadInfo) -> str | None:
-    """Return a cache freshness token for a thread row."""
-    return thread.get("latest_checkpoint_id") or thread.get("updated_at")
-
-
-def _cache_recent_threads(
-    agent_name: str | None,
-    limit: int,
-    threads: list[ThreadInfo],
-) -> None:
-    """Store a copy of recent thread rows for fast selector startup."""
-    key = (agent_name, max(1, limit))
-    if len(_recent_threads_cache) >= _MAX_RECENT_THREADS_CACHE_KEYS and (
-        key not in _recent_threads_cache
-    ):
-        _recent_threads_cache.clear()
-    _recent_threads_cache[key] = _copy_threads(threads)
-
-
-def _copy_threads(threads: list[ThreadInfo]) -> list[ThreadInfo]:
-    """Return shallow-copied thread rows."""
-    return [ThreadInfo(**thread) for thread in threads]
-
-
-async def _count_messages_from_checkpoint(
-    conn: aiosqlite.Connection,
-    thread_id: str,
-    serde: JsonPlusSerializer,
-) -> int:
-    """Count messages from the most recent checkpoint blob.
-
-    With `durability='exit'`, messages are stored in the checkpoint blob, not in
-    the writes table. This function deserializes the checkpoint and counts the
-    messages in channel_values.
-
-    Args:
-        conn: Database connection.
-        thread_id: The thread ID to count messages for.
-        serde: Serializer for decoding checkpoint data.
-
-    Returns:
-        Number of messages in the checkpoint, or 0 if not found.
-    """
-    return (await _load_latest_checkpoint_summary(conn, thread_id, serde)).message_count
-
-
-async def _extract_initial_prompt(
-    conn: aiosqlite.Connection,
-    thread_id: str,
-    serde: JsonPlusSerializer,
-) -> str | None:
-    """Extract the first human message from the latest checkpoint.
-
-    Args:
-        conn: Database connection.
-        thread_id: The thread ID to extract from.
-        serde: Serializer for decoding checkpoint data.
-
-    Returns:
-        First human message content, or None if not found.
-    """
-    summary = await _load_latest_checkpoint_summary(conn, thread_id, serde)
-    return summary.initial_prompt
-
-
-async def populate_thread_initial_prompts(threads: list[ThreadInfo]) -> None:
-    """Populate `initial_prompt` for thread rows in the background.
-
-    Args:
-        threads: Thread rows to enrich in place.
-    """
-    if not threads:
-        return
-
-    async with _connect() as conn:
-        await _populate_checkpoint_fields(
-            conn,
-            threads,
-            include_message_count=False,
-            include_initial_prompt=True,
-        )
-
-
-async def _populate_checkpoint_fields(
-    conn: aiosqlite.Connection,
-    threads: list[ThreadInfo],
-    *,
-    include_message_count: bool,
-    include_initial_prompt: bool,
-) -> None:
-    """Populate checkpoint-derived thread fields with a batched latest-row pass."""
-    serde = await _get_jsonplus_serializer()
-
-    # Phase 1: apply cache hits, collect threads that need DB fetch.
-    uncached: list[ThreadInfo] = []
-    for thread in threads:
-        thread_id = thread["thread_id"]
-        freshness = _thread_freshness(thread)
-        needs_count = False
-        needs_prompt = False
-
-        if include_message_count:
-            cached = _message_count_cache.get(thread_id)
-            if cached is not None and cached[0] == freshness:
-                thread["message_count"] = cached[1]
-            else:
-                needs_count = True
-
-        if include_initial_prompt and "initial_prompt" not in thread:
-            cached_prompt = _initial_prompt_cache.get(thread_id)
-            if cached_prompt is not None and cached_prompt[0] == freshness:
-                thread["initial_prompt"] = cached_prompt[1]
-            else:
-                needs_prompt = True
-
-        if needs_count or needs_prompt:
-            uncached.append(thread)
-
-    if not uncached:
-        return
-
-    # Phase 2: batch-fetch all uncached threads.
-    uncached_ids = [t["thread_id"] for t in uncached]
-    batch_results = await _load_latest_checkpoint_summaries_batch(conn, uncached_ids, serde)
-
-    # Phase 3: apply results and update caches.
-    for thread in uncached:
-        thread_id = thread["thread_id"]
-        freshness = _thread_freshness(thread)
-        summary = batch_results.get(thread_id, _CheckpointSummary(0, None))
-
-        if include_message_count and "message_count" not in thread:
-            thread["message_count"] = summary.message_count
-            _cache_message_count(thread_id, freshness, summary.message_count)
-        if include_initial_prompt and "initial_prompt" not in thread:
-            thread["initial_prompt"] = summary.initial_prompt
-            _cache_initial_prompt(thread_id, freshness, summary.initial_prompt)
-
-
-_SQLITE_MAX_VARIABLE_NUMBER = 500
-"""Max `?` placeholders per SQL query.
-
-SQLite limits how many `?` parameters a single query can have (default 999,
-lower on some builds). If a user accumulates hundreds of threads and the
-`/threads` modal fetches them all at once, the `IN (?, ?, ...)` clause could
-exceed that limit. We chunk to this size to stay safe.
-"""
-
-
-async def _load_latest_checkpoint_summaries_batch(
-    conn: aiosqlite.Connection,
-    thread_ids: list[str],
-    serde: JsonPlusSerializer,
-) -> dict[str, _CheckpointSummary]:
-    """Batch-load the latest checkpoint summary for multiple threads.
-
-    Uses a window function to fetch the latest checkpoint per thread, issuing
-    one query per chunk for SQLite variable-limit safety.
-
-    Args:
-        conn: Database connection.
-        thread_ids: Thread IDs to look up.
-        serde: Serializer for decoding checkpoint blobs.
-
-    Returns:
-        Dict mapping thread IDs to their checkpoint summaries.
-    """
-    if not thread_ids:
-        return {}
-
-    results: dict[str, _CheckpointSummary] = {}
-
-    for start in range(0, len(thread_ids), _SQLITE_MAX_VARIABLE_NUMBER):
-        chunk = thread_ids[start : start + _SQLITE_MAX_VARIABLE_NUMBER]
-        placeholders = ",".join("?" * len(chunk))
-        query = f"""
-            SELECT thread_id, type, checkpoint FROM (
-                SELECT thread_id, type, checkpoint,
-                       ROW_NUMBER() OVER (
-                           PARTITION BY thread_id ORDER BY checkpoint_id DESC
-                       ) AS rn
-                FROM checkpoints
-                WHERE thread_id IN ({placeholders})
-            ) WHERE rn = 1
-        """  # noqa: S608  # placeholders built from len(chunk); user values use ? params
-        async with conn.execute(query, chunk) as cursor:
-            rows = await cursor.fetchall()
-
-        loop = asyncio.get_running_loop()
-        for row in rows:
-            tid, type_str, checkpoint_blob = row
-            if not type_str or not checkpoint_blob:
-                results[tid] = _CheckpointSummary(message_count=0, initial_prompt=None)
-                continue
-            try:
-                data = await loop.run_in_executor(
-                    None, serde.loads_typed, (type_str, checkpoint_blob)
-                )
-                results[tid] = _summarize_checkpoint(data)
-            except Exception:
-                logger.warning(
-                    "Failed to deserialize checkpoint for thread %s; "
-                    "message count and initial prompt may be incomplete",
-                    tid,
-                    exc_info=True,
-                )
-                results[tid] = _CheckpointSummary(message_count=0, initial_prompt=None)
-
-    return results
-
-
-async def _load_latest_checkpoint_summary(
-    conn: aiosqlite.Connection,
-    thread_id: str,
-    serde: JsonPlusSerializer,
-) -> _CheckpointSummary:
-    """Load checkpoint-derived summary data from the latest checkpoint row.
-
-    Returns:
-        Message-count and prompt data extracted from the latest checkpoint row.
-    """
-    query = """
-        SELECT type, checkpoint
-        FROM checkpoints
-        WHERE thread_id = ?
-        ORDER BY checkpoint_id DESC
-        LIMIT 1
-    """
-    async with conn.execute(query, (thread_id,)) as cursor:
-        row = await cursor.fetchone()
-        if not row or not row[0] or not row[1]:
-            return _CheckpointSummary(message_count=0, initial_prompt=None)
-
-        type_str, checkpoint_blob = row
-        try:
-            data = serde.loads_typed((type_str, checkpoint_blob))
-        except (ValueError, TypeError, KeyError, AttributeError):
-            logger.warning(
-                "Failed to deserialize checkpoint for thread %s; message count and initial prompt may be incomplete",
-                thread_id,
-                exc_info=True,
-            )
-            return _CheckpointSummary(message_count=0, initial_prompt=None)
-
-    return _summarize_checkpoint(data)
-
-
-def _summarize_checkpoint(data: object) -> _CheckpointSummary:
-    """Extract message count and initial human prompt from checkpoint data.
-
-    Returns:
-        Structured summary for the decoded checkpoint payload.
-    """
-    messages = _checkpoint_messages(data)
-    return _CheckpointSummary(
-        message_count=len(messages),
-        initial_prompt=_initial_prompt_from_messages(messages),
-    )
-
-
-def _checkpoint_messages(data: object) -> list[object]:
-    """Return checkpoint messages when the decoded payload has the expected shape."""
-    if not isinstance(data, dict):
-        return []
-
-    payload = cast("dict[str, object]", data)
-    channel_values = payload.get("channel_values")
-    if not isinstance(channel_values, dict):
-        return []
-
-    channel_values_dict = cast("dict[str, object]", channel_values)
-    messages = channel_values_dict.get("messages")
-    if not isinstance(messages, list):
-        return []
-
-    return cast("list[object]", messages)
-
-
-def _initial_prompt_from_messages(messages: list[object]) -> str | None:
-    """Return the first human message content from a checkpoint message list."""
-    for msg in messages:
-        if getattr(msg, "type", None) == "human":
-            return _coerce_prompt_text(getattr(msg, "content", None))
-    return None
-
-
-def _coerce_prompt_text(content: object) -> str | None:
-    """Normalize checkpoint message content into displayable text.
-
-    Returns:
-        Displayable prompt text, or `None` when the content is empty.
-    """
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for part in content:
-            if isinstance(part, dict):
-                part_dict = cast("dict[str, object]", part)
-                text = part_dict.get("text")
-                parts.append(text if isinstance(text, str) else "")
-            else:
-                parts.append(str(part))
-        joined = " ".join(parts).strip()
-        return joined or None
-    if content is None:
-        return None
-    return str(content)
-
-
 async def get_most_recent(agent_name: str | None = None) -> str | None:
-    """Get most recent thread_id, optionally filtered by agent.
+    """Return the most recent loop id from local SQLite, optionally filtered by agent.
 
     Returns:
-        Most recent thread_id or None if no threads exist.
+        Loop id (``checkpoints.thread_id``), or `None` when the database is empty.
     """
     async with _connect() as conn:
         if not await _table_exists(conn, "checkpoints"):
@@ -1029,11 +297,11 @@ async def get_most_recent(agent_name: str | None = None) -> str | None:
             return row[0] if row else None
 
 
-async def get_thread_agent(thread_id: str) -> str | None:
-    """Get agent_name for a thread.
+async def get_loop_agent(loop_id: str) -> str | None:
+    """Return ``agent_name`` metadata for a loop id.
 
     Returns:
-        Agent name associated with the thread, or None if not found.
+        Agent name from checkpoint row metadata, or `None` if not found.
     """
     async with _connect() as conn:
         if not await _table_exists(conn, "checkpoints"):
@@ -1045,36 +313,36 @@ async def get_thread_agent(thread_id: str) -> str | None:
             WHERE thread_id = ?
             LIMIT 1
         """
-        async with conn.execute(query, (thread_id,)) as cursor:
+        async with conn.execute(query, (loop_id,)) as cursor:
             row = await cursor.fetchone()
             return row[0] if row else None
 
 
-async def thread_exists(thread_id: str) -> bool:
-    """Check if a thread exists in checkpoints.
+async def loop_exists(loop_id: str) -> bool:
+    """Return True if any checkpoint row exists for this loop id.
 
     Returns:
-        True if thread exists, False otherwise.
+        True if a checkpoint row exists, False otherwise.
     """
     async with _connect() as conn:
         if not await _table_exists(conn, "checkpoints"):
             return False
 
         query = "SELECT 1 FROM checkpoints WHERE thread_id = ? LIMIT 1"
-        async with conn.execute(query, (thread_id,)) as cursor:
+        async with conn.execute(query, (loop_id,)) as cursor:
             row = await cursor.fetchone()
             return row is not None
 
 
-async def find_similar_threads(thread_id: str, limit: int = 3) -> list[str]:
-    """Find threads whose IDs start with the given prefix.
+async def find_similar_loops(loop_id: str, limit: int = 3) -> list[str]:
+    """Find loop ids that share the given prefix.
 
     Args:
-        thread_id: Prefix to match against thread IDs.
-        limit: Maximum number of matching threads to return.
+        loop_id: Prefix to match against `checkpoints.thread_id`.
+        limit: Maximum number of matches.
 
     Returns:
-        List of thread IDs that begin with the given prefix.
+        Matching loop ids (SQLite ``thread_id`` column values).
     """
     async with _connect() as conn:
         if not await _table_exists(conn, "checkpoints"):
@@ -1087,274 +355,26 @@ async def find_similar_threads(thread_id: str, limit: int = 3) -> list[str]:
             ORDER BY thread_id
             LIMIT ?
         """
-        prefix = thread_id + "%"
+        prefix = loop_id + "%"
         async with conn.execute(query, (prefix, limit)) as cursor:
             rows = await cursor.fetchall()
             return [r[0] for r in rows]
 
 
-async def delete_thread(thread_id: str) -> bool:
-    """Delete thread checkpoints.
+def get_loop_limit() -> int:
+    """Default maximum loops to load for `/loops` when no explicit limit is set.
+
+    Reads ``DA_CLI_RECENT_LOOPS``, then the legacy alias ``DA_CLI_RECENT_THREADS``,
+    then defaults to ``20``.
 
     Returns:
-        True if thread was deleted, False if not found.
-    """
-    async with _connect() as conn:
-        if not await _table_exists(conn, "checkpoints"):
-            return False
-
-        cursor = await conn.execute("DELETE FROM checkpoints WHERE thread_id = ?", (thread_id,))
-        deleted = cursor.rowcount > 0
-        if await _table_exists(conn, "writes"):
-            await conn.execute("DELETE FROM writes WHERE thread_id = ?", (thread_id,))
-        await conn.commit()
-        if deleted:
-            _message_count_cache.pop(thread_id, None)
-            for key, rows in list(_recent_threads_cache.items()):
-                filtered = [row for row in rows if row["thread_id"] != thread_id]
-                _recent_threads_cache[key] = filtered
-        return deleted
-
-
-@asynccontextmanager
-async def get_checkpointer() -> AsyncIterator[AsyncSqliteSaver]:
-    """Get AsyncSqliteSaver for the global database.
-
-    Yields:
-        AsyncSqliteSaver instance for checkpoint persistence.
-    """
-    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-
-    _patch_aiosqlite()
-
-    async with AsyncSqliteSaver.from_conn_string(str(get_db_path())) as checkpointer:
-        yield checkpointer
-
-
-_DEFAULT_THREAD_LIMIT = 20
-
-
-def get_thread_limit() -> int:
-    """Read the thread listing limit from `DA_CLI_RECENT_THREADS`.
-
-    Falls back to `_DEFAULT_THREAD_LIMIT` when the variable is unset or contains
-    a non-integer value. The result is clamped to a minimum of 1.
-
-    Returns:
-        Number of threads to display.
+        A positive integer (falls back to ``20`` when unset or invalid).
     """
     import os
 
-    raw = os.environ.get("DA_CLI_RECENT_THREADS")
-    if raw is None:
-        return _DEFAULT_THREAD_LIMIT
+    raw = os.environ.get("DA_CLI_RECENT_LOOPS") or os.environ.get("DA_CLI_RECENT_THREADS", "20")
     try:
-        return max(1, int(raw))
+        n = int(str(raw).strip(), 10)
     except ValueError:
-        logger.warning(
-            "Invalid DA_CLI_RECENT_THREADS value %r, using default %d",
-            raw,
-            _DEFAULT_THREAD_LIMIT,
-        )
-        return _DEFAULT_THREAD_LIMIT
-
-
-async def list_threads_command(
-    agent_name: str | None = None,
-    limit: int | None = None,
-    sort_by: str | None = None,
-    branch: str | None = None,
-    verbose: bool = False,
-    relative: bool | None = None,
-    *,
-    output_format: OutputFormat = "text",
-) -> None:
-    """CLI handler for `Soothe threads list`.
-
-    Fetches and displays a table of recent conversation threads, optionally
-    filtered by agent name or git branch.
-
-    Args:
-        agent_name: Only show threads belonging to this agent.
-
-            When `None`, threads for all agents are shown.
-        limit: Maximum number of threads to display.
-
-            When `None`, reads from `DA_CLI_RECENT_THREADS` or falls back to
-            the default.
-        sort_by: Sort field — `"updated"` or `"created"`.
-
-            When `None`, reads from config (`~/SOOTHE_HOME/config/config.yml`).
-        branch: Only show threads from this git branch.
-        verbose: When `True`, show all columns (branch, created, prompt).
-        relative: Show timestamps as relative time (e.g., '5m ago').
-
-            When `None`, reads from config (`~/SOOTHE_HOME/config/config.yml`).
-        output_format: Output format — `'text'` (Rich) or `'json'`.
-    """
-    from soothe_cli.tui.model_config import (
-        load_thread_relative_time,
-        load_thread_sort_order,
-    )
-
-    if sort_by is None:
-        raw = load_thread_sort_order()
-        sort_by = "created" if raw == "created_at" else "updated"
-    if relative is None:
-        relative = load_thread_relative_time()
-
-    fmt_ts = format_relative_timestamp if relative else format_timestamp
-
-    limit = get_thread_limit() if limit is None else max(1, limit)
-
-    threads = await list_threads_via_daemon_rpc(
-        daemon_session=None,  # CLI command mode - no TUI session
-        agent_name=agent_name,
-        limit=limit,
-        include_message_count=True,  # Always include for CLI output
-        sort_by=sort_by,
-        branch=branch,
-    )
-
-    if verbose and threads:
-        await populate_thread_checkpoint_details(
-            threads, include_message_count=False, include_initial_prompt=True
-        )
-
-    if output_format == "json":
-        from soothe_cli.tui.output import write_json
-
-        write_json("threads list", list(threads))
-        return
-
-    from rich.markup import escape as escape_markup
-    from rich.table import Table
-
-    from soothe_cli.tui import theme
-    from soothe_cli.tui.config import console
-
-    if not threads:
-        filters = []
-        if agent_name:
-            filters.append(f"agent '{escape_markup(agent_name)}'")
-        if branch:
-            filters.append(f"branch '{escape_markup(branch)}'")
-        if filters:
-            console.print(f"[yellow]No threads found for {' and '.join(filters)}.[/yellow]")
-        else:
-            console.print("[yellow]No threads found.[/yellow]")
-        console.print("[dim]Start a conversation with: Soothe[/dim]")
-        return
-
-    title_parts = []
-    if agent_name:
-        title_parts.append(f"agent '{escape_markup(agent_name)}'")
-    if branch:
-        title_parts.append(f"branch '{escape_markup(branch)}'")
-
-    title_filter = f" for {' and '.join(title_parts)}" if title_parts else ""
-    sort_label = "created" if sort_by == "created" else "updated"
-    title = f"Recent Threads{title_filter} (last {limit}, by {sort_label})"
-
-    table = Table(title=title, show_header=True, header_style=f"bold {theme.PRIMARY}")
-    table.add_column("Thread ID", style="bold")
-    table.add_column("Agent")
-    table.add_column("Messages", justify="right")
-    if verbose:
-        table.add_column("Created")
-    table.add_column("Updated" if sort_by == "updated" else "Last Used")
-    if verbose:
-        table.add_column("Branch")
-        table.add_column("Location")
-        table.add_column("Prompt", max_width=40, no_wrap=True)
-
-    prompt_max = 40
-
-    for t in threads:
-        row: list[str] = [
-            t["thread_id"],
-            t["agent_name"] or "unknown",
-            str(t.get("message_count", 0)),
-        ]
-        if verbose:
-            row.append(fmt_ts(t.get("created_at")))
-        row.append(fmt_ts(t.get("updated_at")))
-        if verbose:
-            prompt = " ".join((t.get("initial_prompt") or "").split())
-            if len(prompt) > prompt_max:
-                prompt = prompt[: prompt_max - 3] + "..."
-            row.extend(
-                [
-                    t.get("git_branch") or "",
-                    format_path(t.get("cwd")),
-                    prompt,
-                ]
-            )
-        table.add_row(*row)
-
-    console.print()
-    console.print(table)
-    if len(threads) >= limit:
-        console.print(
-            f"[dim]Showing last {limit} threads. Override with -n/--limit or DA_CLI_RECENT_THREADS.[/dim]"
-        )
-    console.print()
-
-
-async def delete_thread_command(
-    thread_id: str,
-    *,
-    dry_run: bool = False,
-    output_format: OutputFormat = "text",
-) -> None:
-    """CLI handler for: Soothe threads delete.
-
-    Args:
-        thread_id: ID of the thread to delete.
-        dry_run: If `True`, print what would happen without making changes.
-        output_format: Output format — `'text'` (Rich) or `'json'`.
-    """
-    if dry_run:
-        exists = await thread_exists(thread_id)
-        if output_format == "json":
-            from soothe_cli.tui.output import write_json
-
-            write_json(
-                "threads delete",
-                {"thread_id": thread_id, "exists": exists, "dry_run": True},
-            )
-            return
-
-        from rich.markup import escape as escape_markup
-
-        from soothe_cli.tui.config import console
-
-        escaped_id = escape_markup(thread_id)
-        if exists:
-            console.print(f"Would delete thread '{escaped_id}'.")
-        else:
-            console.print(f"Thread '{escaped_id}' not found. Nothing to delete.")
-        console.print("No changes made.", style="dim")
-        return
-
-    deleted = await delete_thread(thread_id)
-
-    if output_format == "json":
-        from soothe_cli.tui.output import write_json
-
-        write_json("threads delete", {"thread_id": thread_id, "deleted": deleted})
-        return
-
-    from rich.markup import escape as escape_markup
-
-    from soothe_cli.tui import theme
-    from soothe_cli.tui.config import console
-
-    escaped_id = escape_markup(thread_id)
-    if deleted:
-        console.print(f"[green]Thread '{escaped_id}' deleted.[/green]")
-    else:
-        console.print(
-            f"Thread '{escaped_id}' not found or already deleted.",
-            style=theme.MUTED,
-        )
+        return 20
+    return max(1, n)

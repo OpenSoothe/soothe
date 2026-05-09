@@ -103,7 +103,7 @@ Users see tool telemetry during execute and receive final / phased assistant tex
 
 **RFC-450 (Daemon Communication)**:
 - Uses existing WebSocket bidirectional transport (no changes)
-- Leverages EventBus pub/sub routing (topic: `thread:{thread_id}`)
+- Leverages EventBus pub/sub routing (topic: `loop:{loop_id}`)
 - Preserves priority-aware overflow strategy (IG-258)
 
 **RFC-401 (Event Processing)**:
@@ -365,7 +365,7 @@ soothe --streaming-mode batch "query"      # Accumulate silently
 2. Runner multiplexes `stream_event` → client `mode="messages"` / `custom`
    ↓ (goal completion: AI chunk + phase="goal_completion", is_chunk metadata)
 3. QueryEngine._broadcast() → EventBus.publish
-   ↓ (topic: "thread:{thread_id}", event: {...})
+   ↓ (topic: "loop:{loop_id}", event: {...})
 4. EventBus → ClientSession.event_queue (priority-aware overflow)
    ↓ (WebSocket JSON transport, RFC-450)
 5. WebSocketClient.read_event() → EventProcessor.process_event()

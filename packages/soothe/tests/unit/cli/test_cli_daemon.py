@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -127,10 +126,10 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
 async def test_loop_input_enqueues_options(monkeypatch: pytest.MonkeyPatch) -> None:
     """``loop_input`` is normalized and placed on the per-loop dispatcher queue."""
 
-    async def _stub_ensure(_self: MessageRouter, _loop_id: str) -> Path:
-        return Path(".")
+    async def _stub_ensure(_self: MessageRouter, _loop_id: str) -> bool:
+        return True
 
-    monkeypatch.setattr(MessageRouter, "_ensure_loop_metadata", _stub_ensure)
+    monkeypatch.setattr(MessageRouter, "_ensure_loop_exists", _stub_ensure)
 
     daemon = SootheDaemon(SootheConfig())
     loop_id = "loop-9"

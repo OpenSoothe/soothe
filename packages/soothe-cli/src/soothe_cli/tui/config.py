@@ -545,7 +545,7 @@ def _get_git_branch() -> str | None:
 
 
 def build_stream_config(
-    thread_id: str,
+    loop_id: str,
     assistant_id: str | None,
     *,
     sandbox_type: str | None = None,
@@ -568,11 +568,11 @@ def build_stream_config(
     * Including the SDK version here ensures it survives the merge.
 
     Args:
-        thread_id: The CLI session thread identifier.
+        loop_id: Active AgentLoop id (stored under LangGraph ``configurable.thread_id``).
         assistant_id: The agent/assistant identifier, if any.
         sandbox_type: Sandbox provider name for trace metadata, or `None` if no
             sandbox is active.
-        workspace: Thread workspace directory for in-process TUI runs. When
+        workspace: Workspace directory for in-process TUI runs. When
             omitted, uses `Path.cwd()` (resolved). Mirrored to
             `configurable["workspace"]` for middleware and task-tool propagation
             (IG-341, RFC-103).
@@ -619,7 +619,7 @@ def build_stream_config(
     if sandbox_type and sandbox_type != "none":
         metadata["sandbox_type"] = sandbox_type
 
-    configurable: dict[str, Any] = {"thread_id": thread_id}
+    configurable: dict[str, Any] = {"thread_id": loop_id}
     resolved_workspace: str | None = None
     if workspace and str(workspace).strip():
         try:
