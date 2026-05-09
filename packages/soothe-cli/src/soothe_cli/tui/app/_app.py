@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
-    from langgraph.pregel import Pregel
     from textual.app import ComposeResult
     from textual.worker import Worker
 
@@ -133,22 +132,8 @@ class SootheApp(
     """App-level keybindings for interrupt, quit, toggles, and approval menu
     navigation."""
 
-    class ServerReady(Message):
-        """Posted by the background server-startup worker on success."""
-
-        def __init__(  # noqa: D107
-            self,
-            agent: Any,  # noqa: ANN401
-            server_proc: Any,  # noqa: ANN401
-            mcp_server_info: list[Any] | None,
-        ) -> None:
-            super().__init__()
-            self.agent = agent
-            self.server_proc = server_proc
-            self.mcp_server_info = mcp_server_info
-
     class ServerStartFailed(Message):
-        """Posted by the background server-startup worker on failure."""
+        """Posted when daemon bootstrap or background connection fails."""
 
         def __init__(self, error: Exception) -> None:  # noqa: D107
             super().__init__()
@@ -165,63 +150,30 @@ class SootheApp(
     def __init__(
         self,
         *,
-        agent: Pregel | None = None,
+        daemon_config: Any,
         assistant_id: str | None = None,
         auto_approve: bool = False,
         cwd: str | Path | None = None,
         resume_loop_id: str | None = None,
-        resume_loop_intent: str | None = None,
         initial_prompt: str | None = None,
         initial_skill: str | None = None,
         mcp_server_info: list[dict[str, Any]] | None = None,
         profile_override: dict[str, Any] | None = None,
-        server_proc: Any | None = None,
-        server_kwargs: dict[str, Any] | None = None,
-        mcp_preload_kwargs: dict[str, Any] | None = None,
-        model_kwargs: dict[str, Any] | None = None,
-        daemon_config: Any | None = None,
         **kwargs: Any,
     ) -> None:
-        """Initialize the Deep Agents application.
+        """Initialize the Textual application (daemon-backed execution only).
 
         Args:
-            agent: Pre-configured LangGraph agent, or `None` when server
-                startup is deferred via `server_kwargs`.
-            assistant_id: Agent identifier for memory storage
-            auto_approve: Whether to start with auto-approve enabled
-            cwd: Current working directory to display
-            resume_loop_id: Initial AgentLoop id (daemon-backed).
-
-                `None` when `resume_loop_intent` is provided (resolved asynchronously).
-            resume_loop_intent: Raw resume intent from `-r` flag.
-
-                `'__MOST_RECENT__'` for bare `-r`, a loop id for
-                `-r <id>`, or `None` for new sessions.
-
-                Resolved via `_resolve_resume_loop_intent`
-                during `_start_server_background`.
-
-                Requires `server_kwargs` to be set; ignored otherwise.
-            initial_prompt: Optional prompt to auto-submit when session starts
+            daemon_config: Loaded Soothe configuration (WebSocket URL, etc.).
+            assistant_id: Agent identifier for memory storage.
+            auto_approve: Whether to start with auto-approve enabled.
+            cwd: Current working directory to display.
+            resume_loop_id: Initial AgentLoop id when attaching to an existing loop.
+            initial_prompt: Optional prompt to auto-submit when session starts.
             initial_skill: Optional skill name to invoke when session starts.
             mcp_server_info: MCP server metadata for the `/mcp` viewer.
-            profile_override: Extra profile fields from `--profile-override`,
-                retained so later profile-aware behavior stays consistent with
-                the CLI override, including model selection details and
-                on-demand `create_model()` calls.
-            server_proc: LangGraph server process for the interactive session.
-            server_kwargs: When provided, server startup is deferred.
-
-                The app shows a "Connecting..." state and starts the server in
-                the background using these kwargs
-                for `start_server_and_get_agent`.
-            mcp_preload_kwargs: Kwargs for `_preload_session_mcp_server_info`,
-                run concurrently with server startup when `server_kwargs` is set.
-            model_kwargs: Kwargs for deferred `create_model()`.
-
-                When provided, model creation runs in a background worker after
-                first paint instead of blocking startup.
-            **kwargs: Additional arguments passed to parent
+            profile_override: Extra profile fields from ``--profile-override``.
+            **kwargs: Additional arguments passed to the Textual ``App``.
         """
         super().__init__(**kwargs)
 
@@ -229,8 +181,6 @@ class SootheApp(
 
         # Apply saved theme preference (or default)
         self.theme = _load_theme_preference()
-
-        self._agent = agent
 
         self._assistant_id = assistant_id
 
@@ -242,8 +192,6 @@ class SootheApp(
         # Named `_lc_loop_id` to avoid colliding with Textual's App._thread_id.
         self._lc_loop_id = resume_loop_id
 
-        self._resume_loop_intent = resume_loop_intent
-
         self._initial_prompt = initial_prompt
 
         self._initial_skill = (
@@ -254,14 +202,6 @@ class SootheApp(
 
         self._profile_override = profile_override
 
-        self._server_proc = server_proc
-
-        self._server_kwargs = server_kwargs
-
-        self._mcp_preload_kwargs = mcp_preload_kwargs
-
-        self._model_kwargs = model_kwargs
-
         self._daemon_config = daemon_config
 
         self._daemon_session: Any | None = None
@@ -269,14 +209,9 @@ class SootheApp(
         self._daemon_skills_wire: list[dict[str, Any]] = []
         """Cached ``skills_list_response`` rows when the TUI uses ``TuiDaemonSession``."""
 
-        self._connecting = server_kwargs is not None or daemon_config is not None
-        # Extract sandbox type from server kwargs for trace metadata.
-        # ServerConfig.__post_init__ normalizes "none" → None, but server_kwargs carries
-        # the raw argparse value, so guard against both.
+        self._connecting = True
 
-        raw = (server_kwargs or {}).get("sandbox_type")
-
-        self._sandbox_type: str | None = raw if raw and raw != "none" else None
+        self._sandbox_type: str | None = None
 
         self._model_override: str | None = None
 
@@ -304,11 +239,7 @@ class SootheApp(
         self._agent_running = False
 
         self._server_startup_error: str | None = None
-        """Set when the background server fails to start; persists for the
-        session lifetime (server failure is terminal).
-
-        Shown in place of the generic 'Agent not configured' message.
-        """
+        """Set when daemon bootstrap fails; persists for the session lifetime."""
 
         self._shell_process: asyncio.subprocess.Process | None = None
         """Shell command process tracking for interruption (! commands)."""
@@ -391,18 +322,9 @@ class SootheApp(
 
         self._image_tracker = MediaTracker()
 
-    def _remote_agent(self) -> Any:  # noqa: ANN401
-        """Return the agent if it appears to be a remote agent, or `None`.
-
-        Returns `None` when no agent is configured or the agent is a local graph.
-        """
-        # RemoteAgent module doesn't exist in this package; always return None.
-        # When the SDK provides a RemoteAgent class, this can be re-implemented.
-        return None
-
     def _runtime_backend_ready(self) -> bool:
-        """Return whether the app has a usable execution backend."""
-        return self._daemon_session is not None or self._agent is not None
+        """Return whether the app has a connected daemon session."""
+        return self._daemon_session is not None
 
     def get_theme_variable_defaults(self) -> dict[str, str]:
         """Return custom CSS variable defaults for the current theme.
@@ -434,8 +356,6 @@ class SootheApp(
                     mcp_tool_count=self._mcp_tool_count,
                     workspace_path=self._cwd,
                     connecting=self._connecting,
-                    resuming=self._resume_loop_intent is not None,
-                    local_server=self._server_kwargs is not None,
                     id="welcome-banner",
                 )
                 yield Container(id="messages")

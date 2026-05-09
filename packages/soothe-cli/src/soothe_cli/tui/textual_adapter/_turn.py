@@ -103,14 +103,13 @@ logger = logging.getLogger(__name__)
 
 async def execute_task_textual(
     user_input: str,
-    agent: Any,  # noqa: ANN401  # Dynamic agent graph type
     assistant_id: str | None,
     session_state: Any,  # noqa: ANN401  # Dynamic session state type
     adapter: TextualUIAdapter,
     image_tracker: MediaTracker | None = None,
     context: CLIContext | None = None,
     *,
-    daemon_session: Any = None,  # noqa: ANN401  # Daemon-backed TUI session
+    daemon_session: Any,  # noqa: ANN401  # TuiDaemonSession
     sandbox_type: str | None = None,
     workspace: str | None = None,
     message_kwargs: dict[str, Any] | None = None,
@@ -124,11 +123,9 @@ async def execute_task_textual(
 
     Args:
         user_input: The user's input message
-        agent: The LangGraph agent to execute
-        daemon_session: Optional daemon-backed session for direct websocket
-            streaming. When provided, this becomes the primary execution path.
-            When thread is already running and skip_daemon_send_turn=True,
-            starts event consumption loop for subscribed thread.
+        daemon_session: Connected daemon websocket session (exclusive execution path).
+            When ``skip_daemon_send_turn=True``, only consumes chunks (prompt already
+            queued server-side).
         assistant_id: The agent identifier
         session_state: Session state with auto_approve flag
         adapter: The TextualUIAdapter for UI operations
@@ -137,10 +134,9 @@ async def execute_task_textual(
             to the graph via `context=`.
         sandbox_type: Sandbox provider name for trace metadata, or `None`
             if no sandbox is active.
-        workspace: Resolved project directory for in-process runs (matches app
-            status-bar cwd / daemon bootstrap). Passed into LangGraph
-            `configurable.workspace`; when omitted, ``build_stream_config`` uses
-            ``Path.cwd()`` (IG-341).
+        workspace: Resolved project directory (status-bar cwd / daemon bootstrap)
+            mirrored into stream ``configurable.workspace``; when omitted,
+            ``build_stream_config`` uses ``Path.cwd()`` (IG-341).
         message_kwargs: Extra fields merged into the stream input message
             dict (e.g., `additional_kwargs` for persisting skill metadata
             in the checkpoint).
@@ -150,10 +146,9 @@ async def execute_task_textual(
             available even if this coroutine is cancelled before it can return.
 
             If `None`, a new instance is created internally.
-        skip_daemon_send_turn: When ``True`` with ``daemon_session`` set, skip
-            ``send_turn`` and only consume chunks (daemon already queued the
-            prompt, e.g. after ``invoke_skill``). Also used for consuming
-            events from already-running loops.
+        skip_daemon_send_turn: When ``True``, skip ``send_turn`` and only consume
+            chunks (prompt already queued, e.g. after ``invoke_skill`` or a
+            running loop).
 
     Returns:
         Stats accumulated over this turn (request count, token counts,
@@ -172,6 +167,9 @@ async def execute_task_textual(
     from pydantic import ValidationError
 
     from soothe_cli.cli.stream import StreamDisplayPipeline
+
+    if daemon_session is None:
+        raise RuntimeError("execute_task_textual requires daemon_session")
 
     hitl_request_adapter = _get_hitl_request_adapter(HITLRequest)
     ask_user_adapter = _get_ask_user_adapter()
@@ -289,54 +287,40 @@ async def execute_task_textual(
             pending_interrupts: dict[str, HITLRequest] = {}
             pending_ask_user: dict[str, AskUserRequest] = {}
 
-            if daemon_session is None:
-                chunk_source = agent.astream(
-                    stream_input,
-                    stream_mode=["messages", "updates"],
-                    subgraphs=True,
-                    config=config,
-                    context=context,
-                    durability="exit",
-                )
+            if isinstance(stream_input, Command):
+                resume_data = getattr(stream_input, "resume", None)
+                if not isinstance(resume_data, dict):
+                    raise ValueError("Invalid daemon resume payload")
+                await daemon_session.resume_interrupts(resume_data)
+                chunk_source = daemon_session.iter_turn_chunks()
+            elif skip_daemon_send_turn:
+                chunk_source = daemon_session.iter_turn_chunks()
             else:
-                if isinstance(stream_input, Command):
-                    resume_data = getattr(stream_input, "resume", None)
-                    if not isinstance(resume_data, dict):
-                        raise ValueError("Invalid daemon resume payload")
-                    await daemon_session.resume_interrupts(resume_data)
-                    chunk_source = daemon_session.iter_turn_chunks()
-                elif skip_daemon_send_turn:
-                    chunk_source = daemon_session.iter_turn_chunks()
-                else:
-                    daemon_text = (
-                        message_content if isinstance(message_content, str) else final_input
-                    )
-                    subagent_name, routed_text = parse_subagent_from_input(
-                        daemon_text if isinstance(daemon_text, str) else final_input
-                    )
-                    ctx_model = context.get("model") if context else None
-                    raw_mp = context.get("model_params") if context else None
-                    mp = raw_mp if isinstance(raw_mp, dict) else None
-                    image_attachments: list[dict[str, str]] | None = None
-                    if images_to_send:
-                        image_attachments = [
-                            {
-                                "mime_type": f"image/{img.format}",
-                                "data": img.base64_data,
-                            }
-                            for img in images_to_send
-                        ]
-                    await daemon_session.send_turn(
-                        routed_text,
-                        interactive=True,
-                        preferred_subagent=subagent_name,
-                        model=ctx_model
-                        if isinstance(ctx_model, str) and ctx_model.strip()
-                        else None,
-                        model_params=mp,
-                        attachments=image_attachments,
-                    )
-                    chunk_source = daemon_session.iter_turn_chunks()
+                daemon_text = message_content if isinstance(message_content, str) else final_input
+                subagent_name, routed_text = parse_subagent_from_input(
+                    daemon_text if isinstance(daemon_text, str) else final_input
+                )
+                ctx_model = context.get("model") if context else None
+                raw_mp = context.get("model_params") if context else None
+                mp = raw_mp if isinstance(raw_mp, dict) else None
+                image_attachments: list[dict[str, str]] | None = None
+                if images_to_send:
+                    image_attachments = [
+                        {
+                            "mime_type": f"image/{img.format}",
+                            "data": img.base64_data,
+                        }
+                        for img in images_to_send
+                    ]
+                await daemon_session.send_turn(
+                    routed_text,
+                    interactive=True,
+                    preferred_subagent=subagent_name,
+                    model=ctx_model if isinstance(ctx_model, str) and ctx_model.strip() else None,
+                    model_params=mp,
+                    attachments=image_attachments,
+                )
+                chunk_source = daemon_session.iter_turn_chunks()
 
             async for chunk in chunk_source:
                 if not isinstance(chunk, (list, tuple)) or len(chunk) != 3:  # noqa: PLR2004
@@ -1748,7 +1732,6 @@ async def execute_task_textual(
     except (asyncio.CancelledError, KeyboardInterrupt):
         await _handle_interrupt_cleanup(
             adapter=adapter,
-            agent=agent,
             config=config,
             daemon_session=daemon_session,
             pending_text_by_namespace=pending_text_by_namespace,
@@ -1763,9 +1746,9 @@ async def execute_task_textual(
     turn_stats.wall_time_seconds = time.monotonic() - start_time
     await _report_and_persist_tokens(
         adapter,
-        agent,
         config,
         captured_input_tokens,
         captured_output_tokens,
+        daemon_session=daemon_session,
     )
     return turn_stats

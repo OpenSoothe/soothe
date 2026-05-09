@@ -68,9 +68,9 @@ class _MessagesMixin:
         if not history_loop_id:
             logger.debug("Skipping history load: no loop id available")
             return
-        if preloaded_payload is None and not self._agent:
+        if preloaded_payload is None and not self._runtime_backend_ready():
             logger.debug(
-                "Skipping history load for %s: no active agent and no preloaded data",
+                "Skipping history load for %s: no execution backend and no preloaded data",
                 history_loop_id,
             )
             return

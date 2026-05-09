@@ -70,8 +70,6 @@ class WelcomeBanner(Static):
         workspace_path: str | None = None,
         *,
         connecting: bool = False,
-        resuming: bool = False,
-        local_server: bool = False,
         **kwargs: Any,
     ) -> None:
         """Initialize the welcome banner.
@@ -80,15 +78,8 @@ class WelcomeBanner(Static):
             loop_id: Optional AgentLoop id to display in the banner.
             mcp_tool_count: Number of MCP tools loaded at startup.
             workspace_path: Session workspace path shown in the source row.
-            connecting: When `True`, show a "Connecting..." footer instead of
+            connecting: When `True`, show a connecting footer instead of
                 the normal ready prompt. Call `set_connected` to transition.
-            resuming: When `True`, the connecting footer says "Resuming..."
-                instead of any `'Connecting...'` variant.
-            local_server: When `True`, the connecting footer qualifies the
-                server as "local" (i.e. a server process managed by the
-                CLI).
-
-                Ignored when `resuming` is `True`.
             **kwargs: Additional arguments passed to parent.
         """
         # Avoid collision with Widget._thread_id (Textual internal int)
@@ -96,8 +87,6 @@ class WelcomeBanner(Static):
         self._mcp_tool_count = mcp_tool_count
         self._workspace_path = workspace_path
         self._connecting = connecting
-        self._resuming = resuming
-        self._local_server = local_server
         self._failed = False
         self._failure_error: str = ""
         self._tip: str = random.choice(_TIPS)  # noqa: S311
@@ -203,17 +192,12 @@ class WelcomeBanner(Static):
         if self._failed:
             parts.append(build_failure_footer(self._failure_error))
         elif self._connecting:
-            parts.append(
-                build_connecting_footer(
-                    resuming=self._resuming,
-                    local_server=self._local_server,
-                )
-            )
+            parts.append(build_connecting_footer())
         return Content.assemble(*parts)
 
 
 def build_failure_footer(error: str) -> Content:
-    """Build a footer shown when the server failed to start.
+    """Build a footer shown when the daemon connection failed.
 
     Args:
         error: Error message describing the failure.
@@ -223,31 +207,15 @@ def build_failure_footer(error: str) -> Content:
     """
     colors = theme.get_theme_colors()
     return Content.assemble(
-        ("\nServer failed to start: ", f"bold {colors.error}"),
+        ("\nCould not connect to daemon: ", f"bold {colors.error}"),
         (error, colors.error),
         ("\n", colors.error),
     )
 
 
-def build_connecting_footer(*, resuming: bool = False, local_server: bool = False) -> Content:
-    """Build a footer shown while waiting for the server to connect.
-
-    Args:
-        resuming: Show `'Resuming...'` instead of any `'Connecting...'` variant.
-        local_server: Qualify the server as "local" in the connecting message.
-
-            Ignored when `resuming` is `True`.
-
-    Returns:
-        Content with a connecting status message.
-    """
-    if resuming:
-        text = "\nResuming...\n"
-    elif local_server:
-        text = "\nConnecting to local server...\n"
-    else:
-        text = "\nConnecting to server...\n"
-    return Content.styled(text, "dim")
+def build_connecting_footer() -> Content:
+    """Build a footer shown while waiting for the daemon session."""
+    return Content.styled("\nConnecting to daemon...\n", "dim")
 
 
 def resolve_source_display_path(

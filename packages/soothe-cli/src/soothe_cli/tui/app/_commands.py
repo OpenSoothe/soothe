@@ -9,7 +9,6 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from langchain_core.runnables import RunnableConfig
     from textual.content import Content
 
 from textual.app import ScreenStackError
@@ -191,24 +190,25 @@ class _CommandsMixin:
             self._update_tokens(0)
             # Clear status message (e.g., "Interrupted" from previous session)
             self._update_status("")
-            # New AgentLoop (daemon) or new local loop id
             if self._session_state:
-                if self._daemon_session is not None:
+                if self._daemon_session is None:
+                    await self._mount_message(
+                        AppMessage("Not connected to the daemon; cannot start a new loop.")
+                    )
+                else:
                     status_event = await self._daemon_session.new_loop()
                     new_loop_id = (
                         str(status_event.get("loop_id", "")) or self._session_state.reset_loop()
                     )
                     self._session_state.loop_id = new_loop_id
                     self._lc_loop_id = new_loop_id
-                else:
-                    new_loop_id = self._session_state.reset_loop()
-                try:
-                    banner = self.query_one("#welcome-banner", WelcomeBanner)
-                    banner.update_loop_id(new_loop_id)
-                except NoMatches:
-                    pass
-                self._clear_loop_model_override()
-                await self._mount_message(AppMessage(f"Started new loop: {new_loop_id}"))
+                    try:
+                        banner = self.query_one("#welcome-banner", WelcomeBanner)
+                        banner.update_loop_id(new_loop_id)
+                    except NoMatches:
+                        pass
+                    self._clear_loop_model_override()
+                    await self._mount_message(AppMessage(f"Started new loop: {new_loop_id}"))
         elif cmd == "/editor":
             await self.action_open_editor()
         elif cmd == "/loops":
@@ -367,13 +367,6 @@ class _CommandsMixin:
                 report += "\nTheme registry reload failed. Check config.yml for errors."
             await self._mount_message(AppMessage(report))
 
-            # Re-discover skills so autocomplete reflects any new/removed skills
-            if self._daemon_config is None:
-                self.run_worker(
-                    self._discover_skills(),
-                    exclusive=True,
-                    group="startup-skill-discovery",
-                )
             if self._daemon_session is not None:
                 self.run_worker(
                     self._refresh_daemon_skills_catalog(),
@@ -424,22 +417,26 @@ class _CommandsMixin:
         Returns:
             Token count as an integer, or `None` if state is unavailable.
         """
-        if not self._agent:
+        if not self._lc_loop_id:
             return None
         try:
-            from langchain_core.messages.utils import (
-                count_tokens_approximately,
-            )
+            from langchain_core.messages import messages_from_dict
+            from langchain_core.messages.utils import count_tokens_approximately
 
-            config: RunnableConfig = {
-                "configurable": {"thread_id": self._lc_loop_id},
-            }
-            state = await self._agent.aget_state(config)
-            if not state or not state.values:
+            if self._daemon_session is None:
                 return None
-            messages = state.values.get("messages", [])
-            if not messages:
+            snap = await self._daemon_session.aget_loop_state(self._lc_loop_id)
+            vals = getattr(snap, "values", None)
+            if not isinstance(vals, dict):
                 return None
+            raw = vals.get("messages")
+            if not isinstance(raw, list) or not raw:
+                return None
+            if isinstance(raw[0], dict):
+                messages = messages_from_dict(raw)
+            else:
+                messages = raw
+
             return count_tokens_approximately(messages)
         except Exception:  # best-effort for /tokens display
             logger.debug("Failed to retrieve conversation token count", exc_info=True)

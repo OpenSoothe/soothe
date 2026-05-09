@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from langchain_core.runnables import RunnableConfig
     from textual.content import Content
 
 from textual.content import Content
@@ -227,11 +226,7 @@ class _HistoryMixin:
         return result
 
     async def _get_loop_state_values(self, loop_id: str) -> dict[str, Any]:
-        """Fetch checkpoint channel values, with remote checkpointer fallback.
-
-        In server mode the LangGraph dev server can report empty state after a
-        restart even when checkpoints exist on disk. When that happens, read the
-        latest checkpoint directly so resumed sessions still load history.
+        """Fetch checkpoint channel values from the daemon host.
 
         Args:
             loop_id: Loop id.
@@ -239,45 +234,17 @@ class _HistoryMixin:
         Returns:
             State values keyed by channel name, or empty when none are available.
         """
-        if self._daemon_session is not None:
-            snapshot = await self._daemon_session.aget_loop_state(loop_id)
-            values = dict(snapshot.values)
-            recovered = await self._recover_missing_checkpoint_messages(
-                loop_id=loop_id,
-                values=values,
-            )
-            if recovered:
-                values["messages"] = recovered
-            return values
-
-        if not self._agent:
+        if self._daemon_session is None:
             return {}
 
-        config: RunnableConfig = {"configurable": {"thread_id": loop_id}}
-        state = await self._agent.aget_state(config)
-
-        values: dict[str, Any] = {}
-        if state and state.values:
-            values = dict(state.values)
-
-        messages = values.get("messages")
-        if isinstance(messages, list) and messages:
-            return values
-        if not self._remote_agent():
-            return values
-
-        logger.debug(
-            "Remote state empty for %s; falling back to local checkpointer",
-            loop_id,
+        snapshot = await self._daemon_session.aget_loop_state(loop_id)
+        values = dict(snapshot.values)
+        recovered = await self._recover_missing_checkpoint_messages(
+            loop_id=loop_id,
+            values=values,
         )
-        fallback_values = await self._read_channel_values_from_checkpointer(loop_id)
-        fallback_messages = fallback_values.get("messages")
-        if isinstance(fallback_messages, list) and fallback_messages:
-            values["messages"] = fallback_messages
-        if values.get("_summarization_event") is None and "_summarization_event" in fallback_values:
-            values["_summarization_event"] = fallback_values["_summarization_event"]
-        if values.get("_context_tokens") is None and "_context_tokens" in fallback_values:
-            values["_context_tokens"] = fallback_values["_context_tokens"]
+        if recovered:
+            values["messages"] = recovered
         return values
 
     async def _recover_missing_checkpoint_messages(
@@ -745,44 +712,6 @@ class _HistoryMixin:
         data = await asyncio.to_thread(self._convert_loop_events_to_data, events)
 
         return _LoopHistoryPayload(data, context_tokens)
-
-    @staticmethod
-    async def _read_channel_values_from_checkpointer(loop_id: str) -> dict[str, Any]:
-        """Read checkpoint channel values directly from the SQLite checkpointer.
-
-        Args:
-            loop_id: Loop id.
-
-        Returns:
-            Channel values from the latest checkpoint, or an empty dict on
-                failure.
-        """
-        try:
-            from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-
-            from soothe_cli.tui.sessions import get_db_path
-
-            db_path = str(get_db_path())
-            config: RunnableConfig = {"configurable": {"thread_id": loop_id}}
-            async with AsyncSqliteSaver.from_conn_string(db_path) as saver:
-                tup = await saver.aget_tuple(config)
-                if tup and tup.checkpoint:
-                    channel_values = tup.checkpoint.get("channel_values", {})
-                    if isinstance(channel_values, dict):
-                        return dict(channel_values)
-        except (ImportError, OSError) as exc:
-            logger.warning(
-                "Failed to read checkpointer directly for %s: %s",
-                loop_id,
-                exc,
-            )
-        except Exception:
-            logger.warning(
-                "Unexpected error reading checkpointer for %s",
-                loop_id,
-                exc_info=True,
-            )
-        return {}
 
     async def _upgrade_loop_message_link(
         self,

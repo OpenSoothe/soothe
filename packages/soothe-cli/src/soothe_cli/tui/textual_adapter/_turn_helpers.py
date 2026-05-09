@@ -22,6 +22,20 @@ from soothe_cli.tui.widgets.messages import AppMessage, AssistantMessage
 logger = logging.getLogger(__name__)
 
 
+def _loop_id_for_remote_state(config: RunnableConfig, daemon_session: Any) -> str:
+    """Resolve checkpoint thread id for daemon ``loop_state_*`` RPCs.
+
+    Prefer ``configurable.thread_id`` from the stream config; fall back to the
+    session's active loop when the config is empty (e.g. edge timing during
+    bootstrap).
+    """
+    loop_id = str((config.get("configurable") or {}).get("thread_id") or "").strip()
+    if loop_id:
+        return loop_id
+    raw = getattr(daemon_session, "loop_id", None)
+    return str(raw or "").strip()
+
+
 def _adapter_has_pending_tools(adapter: TextualUIAdapter) -> bool:
     """True while any tool is awaiting a ``ToolMessage`` (cards, step rows, or task-inner lines)."""
     if adapter._current_tool_messages or adapter._tool_to_step:
@@ -141,9 +155,8 @@ async def _finalize_goal_completion_stream(
 async def _handle_interrupt_cleanup(
     *,
     adapter: TextualUIAdapter,
-    agent: Any,  # noqa: ANN401  # Dynamic agent graph type
     config: RunnableConfig,
-    daemon_session: Any = None,  # noqa: ANN401  # Daemon-backed TUI session
+    daemon_session: Any,  # noqa: ANN401  # TuiDaemonSession
     pending_text_by_namespace: dict[tuple, str],
     captured_input_tokens: int,
     captured_output_tokens: int,
@@ -154,11 +167,9 @@ async def _handle_interrupt_cleanup(
 
     Args:
         adapter: UI adapter with display callbacks.
-        agent: The LangGraph agent.
         config: Runnable config with loop_id mapped to thread_id in configurable.
-        daemon_session: Optional daemon-backed session. When provided, sends
-            ``/cancel`` so the in-flight daemon query stops (matches Ctrl+C / Esc
-            interrupt semantics; use ``detach`` only from explicit quit flows).
+        daemon_session: Active daemon websocket session; also receives ``/cancel``
+            so the in-flight query stops (Ctrl+C / Esc; ``detach`` is quit-only).
         pending_text_by_namespace: Accumulated text per namespace.
         captured_input_tokens: Input tokens captured before interrupt.
         captured_output_tokens: Output tokens captured before interrupt.
@@ -168,6 +179,7 @@ async def _handle_interrupt_cleanup(
     import time
 
     from langchain_core.messages import HumanMessage
+    from langchain_core.messages.base import messages_to_dict
 
     # Clear active message immediately so it won't block pruning.
     # If we don't do this, the store still thinks it's active and protects
@@ -188,13 +200,22 @@ async def _handle_interrupt_cleanup(
     # State update failures shouldn't prevent cleanup.
     # Use shorter timeout (2s) during interrupt cleanup to avoid blocking cancel.
     try:
-        if interrupted_msg:
-            await agent.aupdate_state(config, {"messages": [interrupted_msg]}, timeout=2.0)
-
         cancellation_msg = HumanMessage(
             content="[SYSTEM] Task interrupted by user. Previous operation was cancelled."
         )
-        await agent.aupdate_state(config, {"messages": [cancellation_msg]}, timeout=2.0)
+        loop_id = _loop_id_for_remote_state(config, daemon_session)
+        if loop_id:
+            if interrupted_msg:
+                await daemon_session.aupdate_loop_state(
+                    loop_id,
+                    {"messages": messages_to_dict([interrupted_msg])},
+                    timeout=2.0,
+                )
+            await daemon_session.aupdate_loop_state(
+                loop_id,
+                {"messages": messages_to_dict([cancellation_msg])},
+                timeout=2.0,
+            )
     except Exception:
         logger.warning("Failed to save interrupted state", exc_info=True)
 
@@ -221,41 +242,33 @@ async def _handle_interrupt_cleanup(
     turn_stats.wall_time_seconds = time.monotonic() - start_time
     await _report_and_persist_tokens(
         adapter,
-        agent,
         config,
         captured_input_tokens,
         captured_output_tokens,
         shield=True,
         approximate=approximate,
+        daemon_session=daemon_session,
     )
 
-    # Daemon-backed TUI: ensure the server-side query is cancelled, not detached.
-    # Detach is reserved for explicit quit (Ctrl+D); interrupt cleanup must not
-    # override a user cancel with a detach signal.
-    if daemon_session is not None:
-        try:
-            await daemon_session.cancel_remote_query()
-            logger.info("Sent cancel to daemon during interrupt cleanup")
-        except Exception:
-            logger.warning(
-                "Failed to send cancel to daemon during interrupt cleanup", exc_info=True
-            )
+    # Ensure the daemon-side query is cancelled, not detached (detach is quit-only).
+    try:
+        await daemon_session.cancel_remote_query()
+        logger.info("Sent cancel to daemon during interrupt cleanup")
+    except Exception:
+        logger.warning("Failed to send cancel to daemon during interrupt cleanup", exc_info=True)
 
 
 async def _persist_context_tokens(
-    agent: Any,  # noqa: ANN401  # Dynamic agent graph type
     config: RunnableConfig,
     tokens: int,
+    *,
+    daemon_session: Any,  # noqa: ANN401  # TuiDaemonSession
 ) -> None:
-    """Best-effort persist of the context token count into graph state.
-
-    Args:
-        agent: The LangGraph agent (must support `aupdate_state`).
-        config: Runnable config with loop_id mapped to thread_id in configurable.
-        tokens: Total context tokens to persist.
-    """
+    """Best-effort persist of the context token count into remote loop state."""
     try:
-        await agent.aupdate_state(config, {"_context_tokens": tokens})
+        loop_id = _loop_id_for_remote_state(config, daemon_session)
+        if loop_id:
+            await daemon_session.aupdate_loop_state(loop_id, {"_context_tokens": tokens})
     except Exception:  # non-critical; stale count on resume is acceptable
         logger.warning(
             "Failed to persist _context_tokens=%d; token count may be stale on resume",
@@ -266,40 +279,36 @@ async def _persist_context_tokens(
 
 async def _report_and_persist_tokens(
     adapter: TextualUIAdapter,
-    agent: Any,  # noqa: ANN401  # Dynamic agent graph type
     config: RunnableConfig,
     captured_input_tokens: int,
     captured_output_tokens: int,
     *,
+    daemon_session: Any,  # noqa: ANN401  # TuiDaemonSession
     shield: bool = False,
     approximate: bool = False,
 ) -> None:
-    """Update the token display and best-effort persist to graph state.
-
-    Args:
-        adapter: UI adapter with token callbacks.
-        agent: The LangGraph agent.
-        config: Runnable config with loop_id mapped to thread_id in configurable.
-        captured_input_tokens: Total input tokens captured during the turn.
-        captured_output_tokens: Total output tokens captured during the turn.
-        shield: When `True`, suppress exceptions and `CancelledError` from the
-            persist call so that interrupt handlers can safely await this.
-        approximate: When `True`, signal to the UI that the count is stale
-            (e.g. after an interrupted generation) by appending "+".
-    """
+    """Update the token display and best-effort persist via ``loop_state_update``."""
     if captured_input_tokens or captured_output_tokens:
         if adapter._on_tokens_update:
             adapter._on_tokens_update(captured_input_tokens, approximate=approximate)
         if shield:
             try:
-                await _persist_context_tokens(agent, config, captured_input_tokens)
+                await _persist_context_tokens(
+                    config,
+                    captured_input_tokens,
+                    daemon_session=daemon_session,
+                )
             except (Exception, asyncio.CancelledError):
                 logger.debug(
                     "Token persist suppressed during interrupt cleanup",
                     exc_info=True,
                 )
         else:
-            await _persist_context_tokens(agent, config, captured_input_tokens)
+            await _persist_context_tokens(
+                config,
+                captured_input_tokens,
+                daemon_session=daemon_session,
+            )
     elif adapter._on_tokens_show:
         adapter._on_tokens_show(approximate=approximate)
 
