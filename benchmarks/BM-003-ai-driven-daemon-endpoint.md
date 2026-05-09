@@ -221,6 +221,7 @@ Any failed test case or latency breach should return non-zero exit code.
 
 | Run Date | TC-001 | TC-002 | TC-003 | TC-004 | TC-005 | TC-006 | TC-007 | Notes |
 |----------|--------|--------|--------|--------|--------|--------|--------|-------|
+| 2026-05-09 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | All endpoints working; TC-006 autopilot/status now returns `state=idle` (fixed 500 error) |
 | 2026-05-09 | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | TC-006 autopilot/status returns 500; other endpoints work |
 | 2026-05-09 | ✅ | ✅ | ✅ | 🔍 | 🔍 | 🔍 | 🔍 | Updated to match current daemon API (removed /threads endpoints, added /autopilot) |
 | 2026-04-16 | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | Original test failed: /threads endpoints don't exist in current API |

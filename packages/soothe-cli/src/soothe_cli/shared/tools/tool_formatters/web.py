@@ -42,8 +42,12 @@ class WebFormatter(BaseFormatter):
         # Route to specific formatter (handle both legacy and wizsearch naming)
         if normalized in ("search_web", "wizsearch_search"):
             return self._format_search_web(result)
-        if normalized in ("crawl_web", "wizsearch_crawl"):
+        if normalized in ("crawl_web", "wizsearch_crawl", "fetch_url"):
             return self._format_crawl_web(result)
+
+        # Handle HTTP request tools (IG-339)
+        if normalized.startswith("requests_"):
+            return self._format_http_request(normalized, result)
 
         msg = f"Unknown web tool: {tool_name}"
         raise ValueError(msg)
@@ -141,4 +145,49 @@ class WebFormatter(BaseFormatter):
             summary=summary,
             detail=detail,
             metrics={"size_bytes": size_bytes, "words": words, "lines": lines},
+        )
+
+    def _format_http_request(self, tool_name: str, result: Any) -> ToolBrief:  # noqa: ANN401
+        r"""Format HTTP request tool result (requests_get, requests_post, etc.).
+
+        Shows HTTP method and response status/size.
+
+        Args:
+            tool_name: Name of the HTTP tool (requests_get, requests_post, etc.).
+            result: Tool result (string with response content or error).
+
+        Returns:
+            ToolBrief with HTTP request summary.
+
+        Example:
+            >>> brief = formatter._format_http_request("requests_get", '{"data": 123}')
+            >>> brief.summary
+            'GET 12 B'
+        """
+        # Extract method from tool name
+        method = tool_name.replace("requests_", "").upper()
+
+        # Check for error
+        if text_looks_like_error(result):
+            return ToolBrief(
+                icon="✗",
+                summary=f"{method} failed",
+                detail=self._truncate_text(result, 80),
+                metrics={"error": True},
+            )
+
+        # Calculate size
+        if isinstance(result, str):
+            size_bytes = len(result.encode("utf-8"))
+        else:
+            size_bytes = len(str(result).encode("utf-8"))
+
+        size_str = self._format_size(size_bytes)
+        summary = f"{method} {size_str}"
+
+        return ToolBrief(
+            icon="✓",
+            summary=summary,
+            detail=None,
+            metrics={"method": method, "size_bytes": size_bytes},
         )
