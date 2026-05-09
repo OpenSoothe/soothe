@@ -76,8 +76,8 @@ soothe daemon start
 ### Run Example
 
 ```bash
-# From project root with venv activated:
-source .venv/bin/activate && python examples/image_understanding_example.py
+# From project root with pyenv virtualenv activated:
+pyenv activate soothe-dev && python examples/image_understanding_example.py
 ```
 
 ### Expected Output

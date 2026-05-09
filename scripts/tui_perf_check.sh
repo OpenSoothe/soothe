@@ -18,6 +18,15 @@
 
 set -euo pipefail
 
+# Use pyenv virtualenv instead of .venv
+PYENV_VENV_NAME="soothe-dev"
+if command -v pyenv >/dev/null 2>&1; then
+    PYENV_VENV_PATH="$(pyenv prefix ${PYENV_VENV_NAME} 2>/dev/null || echo '')"
+    if [ -n "${PYENV_VENV_PATH}" ] && [ -d "${PYENV_VENV_PATH}" ]; then
+        export UV_PROJECT_ENVIRONMENT="${PYENV_VENV_PATH}"
+    fi
+fi
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROFILE_DIR="${ROOT_DIR}/tmp/tui-perf"
 DEFAULT_PROFILE_SECONDS=20
