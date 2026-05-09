@@ -218,6 +218,15 @@ class SootheDaemon(DaemonHandlersMixin):
                 self._readiness_message = str(exc)
                 raise
 
+            # RFC-221 enhancement: pre-warm worker pool if enabled
+            if self._config.daemon.worker_pool.enabled:
+                try:
+                    await self._runner_factory.initialize_pool()
+                except Exception as exc:
+                    self._readiness_state = "error"
+                    self._readiness_message = str(exc)
+                    raise
+
             # QueryEngine is created in __init__; runner is now available for queries
             # Initialize global cross-thread input history
             if self._config.logging.global_history.enabled:
@@ -709,6 +718,13 @@ class SootheDaemon(DaemonHandlersMixin):
                 logger.warning("Runner cleanup timed out after %.1fs", _CLEANUP_TIMEOUT_S)
             except Exception:
                 logger.debug("Failed to cleanup runner", exc_info=True)
+
+        # RFC-221 enhancement: shutdown worker pool if active
+        if hasattr(self, "_runner_factory") and self._runner_factory:
+            try:
+                await self._runner_factory.shutdown_pool()
+            except Exception:
+                logger.debug("Failed to shutdown worker pool", exc_info=True)
 
         # Close shared persistence manager
         with contextlib.suppress(Exception):

@@ -41,33 +41,49 @@ class RayLoopRunner:
 
         self._actor = LoopRunnerActor.remote(self._config)
         queue: Queue = Queue(maxsize=1000)
+
         # Non-blocking remote call — actor pushes chunks into queue.
         self._actor.run.remote(request, queue)
         logger.debug("RayLoopRunner: actor started for loop=%s", self._loop_id[:16])
 
-        while True:
-            kind, payload = await queue.get_async()
-            if kind == "done":
-                return
-            if kind == "error":
-                raise payload
-            # kind == "chunk"
-            yield payload
+        try:
+            while True:
+                kind, payload = await queue.get_async()
+                if kind == "done":
+                    return
+                if kind == "error":
+                    raise payload
+                # kind == "chunk"
+                yield payload
+        except asyncio.CancelledError:
+            logger.debug("RayLoopRunner: run cancelled, exiting gracefully")
+            raise
 
     async def cancel(self) -> None:
         if self._actor is None:
             return
         logger.info("RayLoopRunner: cancelling actor for loop=%s", self._loop_id[:16])
+
+        # Ask actor to cancel gracefully — it should emit "done" to queue.
+        cancel_ref = self._actor.cancel.remote()
+
+        # Wait for actor's cancel method to complete (it sets _released and emits "done").
         try:
             await asyncio.wait_for(
-                asyncio.wrap_future(
-                    self._actor.cancel.remote().future()  # type: ignore[attr-defined]
-                ),
-                timeout=5.0,
+                asyncio.wrap_future(cancel_ref.future()),  # type: ignore[attr-defined]
+                timeout=10.0,
             )
         except (TimeoutError, Exception):  # noqa: BLE001
+            logger.warning("RayLoopRunner: actor cancel timed out or failed")
+
+        # Brief grace period for driver to receive pending queue items before hard kill.
+        await asyncio.sleep(0.5)
+
+        # Hard kill actor as cleanup.
+        try:
+            ray.kill(self._actor)
+        except Exception:  # noqa: BLE001
             pass
-        ray.kill(self._actor)
         self._actor = None
 
 

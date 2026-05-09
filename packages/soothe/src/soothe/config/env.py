@@ -37,7 +37,7 @@ def apply_env_overrides(config: Any) -> None:  # noqa: ANN401
     - ``SOOTHE_DISTRIBUTED=1/true/yes``: enables subprocess-isolated loop execution (RFC-221).
     """
     if os.environ.get("SOOTHE_DISTRIBUTED", "").lower() in ("1", "true", "yes"):
-        config.daemon.distributed = True
+        config.daemon.distributed.enabled = True
 
 
 def _resolve_env(value: str) -> str:
