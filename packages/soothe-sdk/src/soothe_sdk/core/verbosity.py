@@ -32,9 +32,7 @@ class VerbosityTier(IntEnum):
 
 _VERBOSITY_LEVEL_VALUES: dict[VerbosityLevel, int] = {
     "quiet": 0,
-    "minimal": 1,
     "normal": 1,
-    "detailed": 2,
     "debug": 3,
 }
 

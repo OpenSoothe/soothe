@@ -1076,7 +1076,7 @@ class ObservabilityConfig(BaseModel):
     )
 
     # Verbosity settings
-    verbosity: Literal["quiet", "normal", "detailed", "debug"] = Field(
+    verbosity: Literal["quiet", "normal", "debug"] = Field(
         default="normal",
         description="Verbosity level for TUI/headless activity display",
     )
