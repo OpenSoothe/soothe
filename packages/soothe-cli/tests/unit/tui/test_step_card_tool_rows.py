@@ -79,6 +79,36 @@ def test_step_respects_user_expand_after_auto_collapse() -> None:
     assert not w._card_collapsed  # noqa: SLF001
 
 
+def test_step_auto_folds_tool_list_when_rows_exceed_preview() -> None:
+    """Tool-row preview folds as rows stream in, not only after set_complete."""
+    w = CognitionStepMessage("s-fold", "Work", id="st-fold")
+    for i in range(STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD + 1):
+        w.add_tool_call(f"c{i}", "grep", {"pattern": str(i)})
+    assert w._tools_body_collapsed  # noqa: SLF001
+
+
+def test_step_tool_list_fold_respects_user_expand() -> None:
+    w = CognitionStepMessage("s-tlu", "Work", id="st-tlu")
+    for i in range(STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD):
+        w.add_tool_call(f"c{i}", "grep", {"pattern": str(i)})
+    w.add_tool_call("c3", "grep", {"pattern": "3"})
+    assert w._tools_body_collapsed  # noqa: SLF001
+    w.toggle_collapse()
+    assert not w._card_collapsed  # noqa: SLF001
+    w._tools_body_collapsed = False
+    w._step_tool_list_user_expanded = True
+    w.add_tool_call("extra", "ls", {"path": "."})
+    assert not w._tools_body_collapsed  # noqa: SLF001
+
+
+def test_task_tool_auto_folds_activity_when_over_preview_threshold() -> None:
+    w = ToolCallMessage("task", {"description": "d"}, id="tsk-fold")
+    for i in range(STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD):
+        w.append_subagent_activity(f"meta {i}")
+    w.append_subagent_activity("meta 3")
+    assert w._tools_body_collapsed  # noqa: SLF001
+
+
 def test_task_auto_collapses_when_activity_exceeds_threshold() -> None:
     w = ToolCallMessage("task", {}, id="tsk-auto")
     for i in range(STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD + 1):
