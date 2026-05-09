@@ -6,12 +6,12 @@ Run this script during daemon startup or deployment to ensure
 the model is ready before explore subagent requests arrive.
 
 Usage:
-    # From soothe project root with correct venv activated:
-    source .venv/bin/activate
+    # From soothe project root with pyenv virtualenv activated:
+    pyenv activate soothe-dev
     python scripts/warmup_semantic.py
 
-    # Or directly with correct Python:
-    .venv/bin/python scripts/warmup_semantic.py
+    # Or use make run:
+    make run-dev scripts/warmup_semantic.py
 """
 
 from __future__ import annotations
@@ -19,12 +19,13 @@ from __future__ import annotations
 import sys
 import time
 
-# Ensure we're using the correct venv
-if not sys.prefix.endswith("/soothe/.venv"):
-    print("⚠ Warning: Not running from soothe/.venv")
+# Check if we're in pyenv virtualenv (optional warning)
+pyenv_venv_name = "soothe-dev"
+if "soothe-dev" not in sys.prefix:
+    print(f"⚠ Warning: Not running from pyenv virtualenv '{pyenv_venv_name}'")
     print(f"  Current Python: {sys.prefix}")
-    print(f"  Expected: <project>/soothe/.venv")
-    print("  Activate correct venv: source .venv/bin/activate")
+    print(f"  Expected: ~/.pyenv/versions/{pyenv_venv_name}")
+    print(f"  Activate correct venv: pyenv activate {pyenv_venv_name}")
     print()
 
 

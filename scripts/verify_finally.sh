@@ -35,6 +35,15 @@
 
 set -euo pipefail
 
+# Use pyenv virtualenv instead of .venv
+PYENV_VENV_NAME="soothe-dev"
+if command -v pyenv >/dev/null 2>&1; then
+    PYENV_VENV_PATH="$(pyenv prefix ${PYENV_VENV_NAME} 2>/dev/null || echo '')"
+    if [ -n "${PYENV_VENV_PATH}" ] && [ -d "${PYENV_VENV_PATH}" ]; then
+        export UV_PROJECT_ENVIRONMENT="${PYENV_VENV_PATH}"
+    fi
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
