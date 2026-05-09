@@ -21,7 +21,7 @@ from soothe.core.events import (
     BRANCH_RETRY_STARTED,
     ITERATION_COMPLETED,
     ITERATION_STARTED,
-    THREAD_SWITCHED,
+    LOOP_REATTACHED,
 )
 
 logger = logging.getLogger(__name__)
@@ -83,11 +83,11 @@ async def reconstruct_event_stream(
             }
         )
 
-        # Check for thread switch
+        # Check for execution context switch
         if previous_thread_id and previous_thread_id != thread_id:
             events.append(
                 {
-                    "type": THREAD_SWITCHED,
+                    "type": LOOP_REATTACHED,
                     "timestamp": start_anchor.get("created_at", min_timestamp),
                     "iteration": iter_num,
                     "from_thread_id": previous_thread_id,

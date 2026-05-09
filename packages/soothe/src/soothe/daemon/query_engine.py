@@ -124,10 +124,14 @@ class QueryEngine:
                 retention_days=d._config.observability.thread_logging_retention_days,
                 max_size_mb=d._config.observability.thread_logging_max_size_mb,
             )
+        thread_logger = d._thread_logger  # local ref — safe against concurrent overwrites
 
         # IG-054: Capacity check before vision preflight (IG-327) to avoid wasted image API calls.
+        # Check is done outside the lock to avoid holding it during awaits; the insert is
+        # protected by _query_state_lock (Bug 4.4).
         max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
-        at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
+        async with d._query_state_lock:
+            at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
         if at_capacity:
             logger.warning(
                 "Daemon at capacity (%d/%d queries), rejecting (loop=%s checkpoint=%s)",
@@ -198,8 +202,7 @@ class QueryEngine:
                     await d._session_manager.release_loop_ownership(client_id)
                 return
 
-        if d._thread_logger:
-            d._thread_logger.log_user_input(effective_text)
+        thread_logger.log_user_input(effective_text)
 
         await d._runner.touch_thread_activity_timestamp(thread_id)
 
@@ -219,7 +222,8 @@ class QueryEngine:
             d._global_history.add(effective_text, thread_id=thread_id, metadata=metadata)
 
         # No placeholder pattern - set task directly after creation
-        d._query_running = True
+        async with d._query_state_lock:
+            d._query_running = True
 
         if client_id and effective_loop_id:
             await d._session_manager.claim_loop_ownership(client_id, effective_loop_id)
@@ -248,7 +252,7 @@ class QueryEngine:
             )
 
             if effective_loop_id:
-                d._active_stream_loop_id = effective_loop_id
+                d._active_stream_loop_ids.add(effective_loop_id)  # Bug 4.3: set-based tracking
             m_clean = model.strip() if isinstance(model, str) and model.strip() else None
             override_token = attach_stream_model_override(m_clean, model_params)
 
@@ -334,7 +338,7 @@ class QueryEngine:
                                 continue
                             namespace, mode, data = chunk
 
-                            d._thread_logger.log(tuple(namespace), mode, data)
+                            thread_logger.log(tuple(namespace), mode, data)
 
                             is_msg_pair = (
                                 isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
@@ -373,7 +377,7 @@ class QueryEngine:
                             continue
                         namespace, mode, data = chunk
 
-                        d._thread_logger.log(tuple(namespace), mode, data)
+                        thread_logger.log(tuple(namespace), mode, data)
 
                         is_msg_pair = (
                             isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
@@ -453,23 +457,24 @@ class QueryEngine:
                     d._runner.set_interrupt_resolver(None)
                 d._query_running = False
                 d._active_threads.pop(thread_id, None)
-                if effective_loop_id:
+                if effective_loop_id:  # Flaw 4.8: guard against None key
                     d._pending_interrupt_responses.pop(effective_loop_id, None)
-                if getattr(d, "_active_stream_loop_id", None) == effective_loop_id:
-                    d._active_stream_loop_id = None
+                if effective_loop_id:
+                    d._active_stream_loop_ids.discard(effective_loop_id)  # Bug 4.3
 
                 # IG-054: Moved post-query logic here since we don't await task
                 final_thread_id = d._runner.current_thread_id or ""
                 if final_thread_id and final_thread_id != thread_id:
-                    d._thread_logger = ThreadLogger(
+                    final_logger = ThreadLogger(
                         thread_id=final_thread_id,
                         retention_days=d._config.observability.thread_logging_retention_days,
                         max_size_mb=d._config.observability.thread_logging_max_size_mb,
                     )
-                    d._thread_logger.log_user_input(effective_text)
-
-                if full_response:
-                    d._thread_logger.log_assistant_response("".join(full_response))
+                    final_logger.log_user_input(effective_text)
+                    if full_response:
+                        final_logger.log_assistant_response("".join(full_response))
+                elif full_response:
+                    thread_logger.log_assistant_response("".join(full_response))
 
                 if final_thread_id:
                     await d._runner.touch_thread_activity_timestamp(final_thread_id)
@@ -565,9 +570,11 @@ class QueryEngine:
                 retention_days=d._config.observability.thread_logging_retention_days,
                 max_size_mb=d._config.observability.thread_logging_max_size_mb,
             )
+        thread_logger = d._thread_logger  # local ref — safe against concurrent overwrites
 
         max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
-        at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
+        async with d._query_state_lock:
+            at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
         if at_capacity:
             logger.warning(
                 "Daemon at capacity (%d/%d queries), rejecting multithreaded (loop=%s checkpoint=%s)",
@@ -638,8 +645,7 @@ class QueryEngine:
                     await d._session_manager.release_loop_ownership(client_id)
                 return
 
-        if d._thread_logger:
-            d._thread_logger.log_user_input(effective_text)
+        thread_logger.log_user_input(effective_text)
 
         await d._runner.touch_thread_activity_timestamp(thread_id)
 
@@ -668,7 +674,8 @@ class QueryEngine:
                     effective_loop_id[:8],
                 )
 
-        d._query_running = True
+        async with d._query_state_lock:
+            d._query_running = True
         if effective_loop_id:
             await d._broadcast(
                 self._loop_scoped_client_message(
@@ -686,7 +693,7 @@ class QueryEngine:
             )
 
             if effective_loop_id:
-                d._active_stream_loop_id = effective_loop_id
+                d._active_stream_loop_ids.add(effective_loop_id)  # Bug 4.3: set-based tracking
             m_clean = model.strip() if isinstance(model, str) and model.strip() else None
             override_token = attach_stream_model_override(m_clean, model_params)
             try:
@@ -718,7 +725,7 @@ class QueryEngine:
                         continue
                     namespace, mode, data = chunk
 
-                    d._thread_logger.log(tuple(namespace), mode, data)
+                    thread_logger.log(tuple(namespace), mode, data)
 
                     is_msg_pair = isinstance(data, (tuple, list)) and len(data) == msg_pair_length
                     if not namespace and mode == "messages" and is_msg_pair:
@@ -769,23 +776,24 @@ class QueryEngine:
                 reset_stream_model_override(override_token)
                 d._query_running = False
                 d._active_threads.pop(thread_id, None)
-                if effective_loop_id:
+                if effective_loop_id:  # Flaw 4.8: guard against None key
                     d._pending_interrupt_responses.pop(effective_loop_id, None)
-                if getattr(d, "_active_stream_loop_id", None) == effective_loop_id:
-                    d._active_stream_loop_id = None
+                if effective_loop_id:
+                    d._active_stream_loop_ids.discard(effective_loop_id)  # Bug 4.3
 
                 # IG-054: Moved post-query logic here since we don't await task
                 final_thread_id = d._runner.current_thread_id or ""
                 if final_thread_id and final_thread_id != thread_id:
-                    d._thread_logger = ThreadLogger(
+                    final_logger = ThreadLogger(
                         thread_id=final_thread_id,
                         retention_days=d._config.observability.thread_logging_retention_days,
                         max_size_mb=d._config.observability.thread_logging_max_size_mb,
                     )
-                    d._thread_logger.log_user_input(effective_text)
-
-                if full_response:
-                    d._thread_logger.log_assistant_response("".join(full_response))
+                    final_logger.log_user_input(effective_text)
+                    if full_response:
+                        final_logger.log_assistant_response("".join(full_response))
+                elif full_response:
+                    thread_logger.log_assistant_response("".join(full_response))
 
                 if final_thread_id:
                     await d._runner.touch_thread_activity_timestamp(final_thread_id)

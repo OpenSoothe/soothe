@@ -78,17 +78,9 @@ class _CommandsMixin:
         await self._mount_message(AppMessage(link))
 
     @staticmethod
-    async def _build_thread_message(prefix: str, thread_id: str) -> str | Content:
-        """Build a thread status message with the thread id.
-
-        Args:
-            prefix: Label before the thread ID (e.g. `'Resumed thread'`).
-            thread_id: The thread identifier.
-
-        Returns:
-            Plain status line.
-        """
-        return f"{prefix}: {thread_id}"
+    async def _build_loop_status_line(prefix: str, loop_id: str) -> str | Content:
+        """Build a status line with the loop id (shown after ``prefix``)."""
+        return f"{prefix}: {loop_id}"
 
     async def _handle_command(self, command: str) -> None:
         """Handle a slash command.
@@ -199,23 +191,23 @@ class _CommandsMixin:
             self._update_tokens(0)
             # Clear status message (e.g., "Interrupted" from previous session)
             self._update_status("")
-            # Reset thread to start fresh conversation
+            # New AgentLoop (daemon) or new local loop id
             if self._session_state:
                 if self._daemon_session is not None:
-                    status_event = await self._daemon_session.new_thread()
+                    status_event = await self._daemon_session.new_loop()
                     new_loop_id = (
-                        str(status_event.get("loop_id", "")) or self._session_state.reset_thread()
+                        str(status_event.get("loop_id", "")) or self._session_state.reset_loop()
                     )
                     self._session_state.loop_id = new_loop_id
                     self._lc_loop_id = new_loop_id
                 else:
-                    new_loop_id = self._session_state.reset_thread()
+                    new_loop_id = self._session_state.reset_loop()
                 try:
                     banner = self.query_one("#welcome-banner", WelcomeBanner)
                     banner.update_loop_id(new_loop_id)
                 except NoMatches:
                     pass
-                self._clear_thread_model_override()
+                self._clear_loop_model_override()
                 await self._mount_message(AppMessage(f"Started new loop: {new_loop_id}"))
         elif cmd == "/editor":
             await self.action_open_editor()

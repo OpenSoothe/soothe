@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import logging
 import os
 import signal
@@ -16,6 +15,7 @@ from soothe_sdk.client.protocol import encode
 
 from soothe.config import SootheConfig
 from soothe.core import resolve_daemon_workspace
+from soothe.core.agent_loop.state.persistence.manager import AgentLoopCheckpointPersistenceManager
 from soothe.daemon._handlers import DaemonHandlersMixin
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
@@ -95,6 +95,9 @@ class SootheDaemon(DaemonHandlersMixin):
         self._config = config or SootheConfig()
         self._handle_sigint_shutdown = handle_sigint_shutdown
 
+        # Shared persistence manager (avoids per-RPC pool creation/teardown)
+        self._persistence_manager = AgentLoopCheckpointPersistenceManager(config=self._config)
+
         # Resolve daemon workspace
         self._daemon_workspace = resolve_daemon_workspace(self._config.workspace_dir)
         logger.info("Daemon workspace: %s", self._daemon_workspace)
@@ -139,8 +142,8 @@ class SootheDaemon(DaemonHandlersMixin):
         # Keys: LangGraph checkpoint id (``configurable.thread_id``), not ``loop_id``.
         self._active_threads: dict[str, asyncio.Task] = {}
         self._pending_interrupt_responses: dict[str, asyncio.Future[dict[str, Any]]] = {}
-        #: Loop id for the in-flight main-runner stream (heartbeats; internal only).
-        self._active_stream_loop_id: str | None = None
+        #: Loop ids for all in-flight streams (heartbeats; internal only).
+        self._active_stream_loop_ids: set[str] = set()
         # Lock protecting query state transitions (_active_threads, _query_running, _current_query_task)
         self._query_state_lock = asyncio.Lock()
         # Daemon readiness state for explicit startup handshake (RFC-0023)
@@ -353,96 +356,68 @@ class SootheDaemon(DaemonHandlersMixin):
         If auto_cancel_on_startup is enabled, threads older than thread_max_age_hours
         are automatically cancelled.
         """
+        import re
         from datetime import datetime, timedelta
 
-        from soothe.core.agent_loop.state.persistence.directory_manager import (
-            PersistenceDirectoryManager,
-        )
-
-        runs_dir = PersistenceDirectoryManager.get_loops_directory()  # noqa: ASYNC240
-        if not runs_dir.exists():
-            return
         try:
-            incomplete = []
             auto_cancel = self._config.daemon.auto_cancel_on_startup
             max_age_hours = self._config.daemon.thread_max_age_hours
             max_age_threshold = (
                 datetime.now(tz=None) - timedelta(hours=max_age_hours) if auto_cancel else None
             )
 
-            # Check for incomplete loops in new directory structure
-            for metadata_file in runs_dir.glob("*/metadata.json"):
-                try:
-                    data = json.loads(metadata_file.read_text(encoding="utf-8"))
-                    # Check for loops with "running" status (new structure uses loop_id, not thread_id)
-                    if isinstance(data, dict) and data.get("status") == "running":
-                        loop_info = {
-                            "loop_id": metadata_file.parent.name,
-                            "thread_ids": data.get("thread_ids", []),
-                            "current_thread_id": data.get("current_thread_id", ""),
-                            "status": data.get("status", ""),
-                            "total_goals_completed": data.get("total_goals_completed", 0),
-                            "updated_at": data.get("updated_at"),
-                        }
-                        incomplete.append(loop_info)
+            rows = await self._persistence_manager.list_loops(status_filter="running")
 
-                        # Auto-cancel very old loops (IG-138)
-                        if auto_cancel and max_age_threshold and loop_info["updated_at"]:
+            incomplete = []
+            for row in rows:
+                loop_info = {
+                    "loop_id": row["loop_id"],
+                    "thread_ids": row.get("thread_ids", []),
+                    "current_thread_id": row.get("current_thread_id", ""),
+                    "status": row.get("status", ""),
+                    "total_goals_completed": row.get("total_goals_completed", 0),
+                    "updated_at": row.get("updated_at"),
+                }
+                incomplete.append(loop_info)
+
+                # Auto-cancel very old loops (IG-138)
+                if auto_cancel and max_age_threshold and loop_info["updated_at"]:
+                    try:
+                        updated_str = loop_info["updated_at"]
+                        if isinstance(updated_str, str):
+                            normalized = re.sub(r"Z$", "+00:00", updated_str)
                             try:
-                                # Parse timestamp (may be ISO string or other format)
-                                updated_str = loop_info["updated_at"]
-                                if isinstance(updated_str, str):
-                                    # Try parsing ISO format (handle both "Z" suffix and standard ISO)
-                                    import re
-
-                                    normalized = re.sub(r"Z$", "+00:00", updated_str)
-                                    try:
-                                        updated_at = datetime.fromisoformat(normalized)
-                                    except ValueError:
-                                        logger.debug(
-                                            "Failed to parse timestamp: %s for loop %s",
-                                            updated_str,
-                                            loop_info["loop_id"],
-                                        )
-                                        continue
-
-                                    if updated_at.tzinfo is not None:
-                                        updated_at = updated_at.replace(tzinfo=None)
-                                else:
-                                    # Skip if not a string
-                                    continue
-
-                                if updated_at < max_age_threshold:
-                                    loop_id = loop_info["loop_id"]
-                                    age_hours = (
-                                        datetime.now(tz=None) - updated_at
-                                    ).total_seconds() / 3600
-
-                                    logger.warning(
-                                        "Auto-cancelling very old loop %s (age: %.1f hours > max: %d)",
-                                        loop_id,
-                                        age_hours,
-                                        max_age_hours,
-                                    )
-
-                                    # Cancel the loop using loop management commands
-                                    # TODO: Implement loop cancellation via persistence manager
-                                    logger.info(
-                                        "Loop %s marked for cancellation (age exceeds threshold)",
-                                        loop_id,
-                                    )
-                            except (ValueError, TypeError):
-                                # Skip if timestamp parsing fails
+                                updated_at = datetime.fromisoformat(normalized)
+                            except ValueError:
                                 logger.debug(
-                                    "Failed to parse timestamp for loop %s",
+                                    "Failed to parse timestamp: %s for loop %s",
+                                    updated_str,
                                     loop_info["loop_id"],
                                 )
                                 continue
-                except Exception:  # noqa: S112
-                    continue
+                            if updated_at.tzinfo is not None:
+                                updated_at = updated_at.replace(tzinfo=None)
+                        else:
+                            continue
+
+                        if updated_at < max_age_threshold:
+                            loop_id = loop_info["loop_id"]
+                            age_hours = (datetime.now(tz=None) - updated_at).total_seconds() / 3600
+                            logger.warning(
+                                "Auto-cancelling very old loop %s (age: %.1f hours > max: %d)",
+                                loop_id,
+                                age_hours,
+                                max_age_hours,
+                            )
+                            logger.info(
+                                "Loop %s marked for cancellation (age exceeds threshold)",
+                                loop_id,
+                            )
+                    except (ValueError, TypeError):
+                        logger.debug("Failed to parse timestamp for loop %s", loop_info["loop_id"])
+                        continue
 
             if incomplete:
-                # Filter out auto-cancelled loops for reporting
                 remaining = [
                     t
                     for t in incomplete
@@ -589,7 +564,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
             try:
                 state = "running" if self._query_running else "idle"
-                loop_id = str(getattr(self, "_active_stream_loop_id", None) or "").strip()
+                active_loop_ids = set(self._active_stream_loop_ids)  # snapshot
 
                 # Event payload field is legacy; routing uses envelope ``loop_id`` (IG-408).
                 heartbeat = DaemonHeartbeatEvent(
@@ -598,7 +573,7 @@ class SootheDaemon(DaemonHandlersMixin):
                     state=state,
                 )
 
-                if loop_id:
+                for loop_id in active_loop_ids:
                     await self._broadcast(
                         {
                             "type": "event",
@@ -721,6 +696,10 @@ class SootheDaemon(DaemonHandlersMixin):
                 logger.warning("Runner cleanup timed out after %.1fs", _CLEANUP_TIMEOUT_S)
             except Exception:
                 logger.debug("Failed to cleanup runner", exc_info=True)
+
+        # Close shared persistence manager
+        with contextlib.suppress(Exception):
+            await self._persistence_manager.close()
 
         # Stop transport manager
         if self._transport_manager:

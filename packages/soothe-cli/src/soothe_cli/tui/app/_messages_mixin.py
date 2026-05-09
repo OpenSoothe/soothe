@@ -20,7 +20,7 @@ from textual.css.query import NoMatches
 from soothe_cli.tui.app._module_init import (
     _ITERM_CURSOR_GUIDE_ON,
     DeferredAction,
-    _ThreadHistoryPayload,
+    _LoopHistoryPayload,
     _write_iterm_escape,
 )
 from soothe_cli.tui.widgets.message_store import MessageData
@@ -42,45 +42,45 @@ logger = logging.getLogger(__name__)
 class _MessagesMixin:
     """Message widget lifecycle, store management, queue, interrupt/quit, toggles, editor, and events."""
 
-    async def _load_thread_history(
+    async def _load_loop_history(
         self,
         *,
-        thread_id: str | None = None,
-        preloaded_payload: _ThreadHistoryPayload | None = None,
+        loop_id: str | None = None,
+        preloaded_payload: _LoopHistoryPayload | None = None,
     ) -> None:
-        """Load and render message history when resuming a thread.
+        """Load and render message history when resuming a loop.
 
-        When `preloaded_payload` is provided (e.g. from `_resume_thread`),
-        this reuses that data. Otherwise, it fetches checkpoint state from the
+        When `preloaded_payload` is provided (e.g. after switching loops),
+        this reuses that data. Otherwise, it fetches persisted graph state from the
         agent and converts stored messages into lightweight `MessageData`
         objects. The method then bulk-loads into the `MessageStore` and mounts
         only the last `WINDOW_SIZE` widgets to reduce DOM operations on large
-        threads.
+        transcripts.
 
         Args:
-            thread_id: Optional explicit thread ID to load.
+            loop_id: Optional loop id.
 
                 Defaults to current.
             preloaded_payload: Optional pre-fetched history payload for the
-                thread.
+                loop.
         """
-        history_thread_id = thread_id or self._lc_loop_id
-        if not history_thread_id:
-            logger.debug("Skipping history load: no thread ID available")
+        history_loop_id = loop_id or self._lc_loop_id
+        if not history_loop_id:
+            logger.debug("Skipping history load: no loop id available")
             return
         if preloaded_payload is None and not self._agent:
             logger.debug(
                 "Skipping history load for %s: no active agent and no preloaded data",
-                history_thread_id,
+                history_loop_id,
             )
             return
 
         try:
-            # Fetch + convert, or reuse preloaded payload on thread switch.
+            # Fetch + convert, or reuse preloaded payload on loop switch.
             payload = (
                 preloaded_payload
                 if preloaded_payload is not None
-                else await self._fetch_thread_history_data(history_thread_id)
+                else await self._fetch_loop_history_data(history_loop_id)
             )
             if not payload.messages:
                 return
@@ -118,17 +118,17 @@ class _MessagesMixin:
                     if isinstance(error, Exception):
                         logger.warning(
                             "Failed to render assistant history message for %s: %s",
-                            history_thread_id,
+                            history_loop_id,
                             error,
                         )
 
             # 9. Add footer immediately and resolve link asynchronously
-            thread_msg_widget = AppMessage(f"Resumed thread: {history_thread_id}")
-            await self._mount_message(thread_msg_widget)
-            self._schedule_thread_message_link(
-                thread_msg_widget,
-                prefix="Resumed thread",
-                thread_id=history_thread_id,
+            loop_msg_widget = AppMessage(f"Resumed loop: {history_loop_id}")
+            await self._mount_message(loop_msg_widget)
+            self._schedule_loop_message_link(
+                loop_msg_widget,
+                prefix="Resumed loop",
+                loop_id=history_loop_id,
             )
 
             # 10. Scroll once to bottom after history loads
@@ -141,8 +141,8 @@ class _MessagesMixin:
 
         except Exception as e:  # Resilient history loading
             logger.exception(
-                "Failed to load thread history for %s",
-                history_thread_id,
+                "Failed to load conversation history for %s",
+                history_loop_id,
             )
             await self._mount_message(AppMessage(f"Could not load history: {e}"))
 
@@ -345,7 +345,7 @@ class _MessagesMixin:
             await self._drain_deferred_actions()
 
     async def _drain_deferred_actions(self) -> None:
-        """Execute deferred actions queued while busy (e.g. model/thread switch)."""
+        """Execute deferred actions queued while busy (e.g. model or loop switch)."""
         while self._deferred_actions:
             action = self._deferred_actions.pop(0)
             try:
@@ -465,15 +465,6 @@ class _MessagesMixin:
         7. If queued messages exist, pop the last one (LIFO)
         8. If agent is running, interrupt it
         """
-        from soothe_cli.tui.widgets.thread_selector import ThreadSelectorScreen
-
-        if (
-            isinstance(self.screen, ThreadSelectorScreen)
-            and self.screen.is_delete_confirmation_open
-        ):
-            self.screen.action_cancel()
-            return
-
         # If a modal screen is active, let it cancel itself (so it can
         # restore state, e.g. the theme selector reverts the previewed theme).
         # Fall back to a plain dismiss for modals without action_cancel.
@@ -532,19 +523,11 @@ class _MessagesMixin:
 
     def action_quit_app(self) -> None:
         """Handle quit action (Ctrl+D)."""
-        from soothe_cli.tui.widgets.thread_selector import (
-            DeleteThreadConfirmScreen,
-            ThreadSelectorScreen,
-        )
+        from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen
 
-        if isinstance(self.screen, ThreadSelectorScreen):
-            self.screen.action_delete_thread()
-            return
-        if isinstance(self.screen, DeleteThreadConfirmScreen):
-            if self._quit_pending:
-                self._detach_or_exit()
-                return
-            self._arm_quit_pending("Ctrl+D")
+        if isinstance(self.screen, LoopSelectorScreen):
+            # Loop selector doesn't have delete confirmation - just detach
+            self._detach_or_exit()
             return
         self._detach_or_exit()
 
@@ -618,9 +601,9 @@ class _MessagesMixin:
         web search, URL fetch) run without prompting. Updates the status
         bar indicator and session state.
         """
-        from soothe_cli.tui.widgets.thread_selector import ThreadSelectorScreen
+        from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen
 
-        if isinstance(self.screen, ThreadSelectorScreen):
+        if isinstance(self.screen, LoopSelectorScreen):
             self.screen.action_focus_previous_filter()
             return
         # shift+tab is reused for navigation inside modal screens (e.g.

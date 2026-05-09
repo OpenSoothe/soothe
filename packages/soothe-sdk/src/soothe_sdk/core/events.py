@@ -41,7 +41,7 @@ class SootheEvent(BaseModel):
 
 
 class LifecycleEvent(SootheEvent):
-    """Thread and session lifecycle events."""
+    """Loop and session lifecycle events."""
 
 
 class ProtocolEvent(SootheEvent):
@@ -64,18 +64,12 @@ class ErrorEvent(SootheEvent):
 
 # Event type constants (IG-174 Phase 2)
 # Wire-safe event type strings for CLI/TUI event processing
-# Exposed at DEBUG and DETAILED level for thread-level events display
+# Exposed at DEBUG and DETAILED level for fine-grained (per-turn) event display
 
 # Plan events
 PLAN_CREATED = "soothe.cognition.plan.created"
 PLAN_STEP_STARTED = "soothe.cognition.plan.step.started"
 PLAN_STEP_COMPLETED = "soothe.cognition.plan.step.completed"
-
-# Thread lifecycle events (exposed for DEBUG/DETAILED level)
-THREAD_CREATED = "soothe.lifecycle.thread.started"
-THREAD_RESUMED = "soothe.lifecycle.thread.resumed"
-THREAD_COMPLETED = "soothe.lifecycle.thread.completed"
-THREAD_ERROR = "soothe.lifecycle.thread.error"
 
 # Tool events (DEBUG/DETAILED level)
 TOOL_STARTED = "soothe.tool.execution.started"
@@ -106,11 +100,6 @@ __all__ = [
     "PLAN_CREATED",
     "PLAN_STEP_STARTED",
     "PLAN_STEP_COMPLETED",
-    # Thread lifecycle (DEBUG/DETAILED)
-    "THREAD_CREATED",
-    "THREAD_RESUMED",
-    "THREAD_COMPLETED",
-    "THREAD_ERROR",
     # Tool (DEBUG/DETAILED)
     "TOOL_STARTED",
     "TOOL_COMPLETED",

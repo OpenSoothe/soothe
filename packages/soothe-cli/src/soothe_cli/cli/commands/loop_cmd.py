@@ -1,13 +1,9 @@
-"""Loop management CLI commands for managing AgentLoop instances.
-
-Replaces thread-based commands with loop-based commands.
-Users interact with loops (threads are internal implementation detail).
+"""Loop management CLI commands for AgentLoop instances.
 
 RFC-503: Loop-First User Experience
 RFC-504: Loop Management CLI Commands
 
-All loop operations communicate exclusively via daemon WebSocket RPC.
-The daemon must be running for loop commands to work.
+All loop operations use daemon WebSocket RPC; the daemon must be running.
 """
 
 from __future__ import annotations
@@ -145,8 +141,6 @@ def list_loops(
 ) -> None:
     """List all AgentLoop instances.
 
-    Replaces: soothe thread list
-
     Examples:
         soothe loop list
         soothe loop list --status running
@@ -178,7 +172,7 @@ def list_loops(
     table = Table(title="AgentLoops")
     table.add_column("Loop ID", style="cyan")
     table.add_column("Status", style="green")
-    table.add_column("Threads", justify="right")
+    table.add_column("Contexts", justify="right")
     table.add_column("Goals", justify="right")
     table.add_column("Switches", justify="right")
     table.add_column("Created", style="dim")
@@ -205,8 +199,6 @@ def describe_loop(
     ] = False,
 ) -> None:
     """Show detailed loop information.
-
-    Replaces: soothe thread describe
 
     Example:
         soothe loop show loop_abc123
@@ -245,13 +237,12 @@ def describe_loop(
         )
     )
 
-    # Thread context (internal, shown for debugging)
-    # RFC-503: Hide thread IDs, show only thread count
+    # Internal checkpoint context counts from loop metadata
     console.print(
         Panel(
-            f"Internal Threads: {len(loop.get('thread_ids', []))}\n"
-            f"Thread Switches: {loop.get('total_thread_switches', 0)}",
-            title="Thread Context (Internal)",
+            f"Internal contexts: {len(loop.get('thread_ids', []))}\n"
+            f"Context switches: {loop.get('total_thread_switches', 0)}",
+            title="Checkpoint contexts (internal)",
             border_style="dim",
         )
     )
@@ -260,7 +251,7 @@ def describe_loop(
     console.print(
         Panel(
             f"Goals Completed: {loop.get('total_goals_completed', 0)}\n"
-            f"Thread Switches: {loop.get('total_thread_switches', 0)}\n"
+            f"Context switches: {loop.get('total_thread_switches', 0)}\n"
             f"Duration: {format_duration(loop.get('total_duration_ms', 0))}\n"
             f"Tokens Used: {format_tokens(loop.get('total_tokens_used', 0))}",
             title="Execution Summary",
@@ -419,9 +410,7 @@ def delete_loop(
 ) -> None:
     """Delete loop entirely.
 
-    Removes loop directory but preserves thread checkpoints.
-
-    Replaces: soothe thread delete
+    Removes this loop's run directory and related artifacts.
 
     Example:
         soothe loop delete loop_abc123
@@ -454,7 +443,7 @@ def delete_loop(
         console.print(
             f"[warning]Warning: This will permanently delete {loop_id} and all associated data:[/warning]"
         )
-        console.print(f"  - {len(loop.get('thread_ids', []))} internal thread contexts")
+        console.print(f"  - {len(loop.get('thread_ids', []))} internal checkpoint contexts")
         console.print(f"  - {loop.get('total_goals_completed', 0)} goal execution records")
         console.print("  - Working memory spills")
 
@@ -481,9 +470,7 @@ def delete_loop(
     console.print("  Removed checkpoint database")
     console.print("  Removed metadata")
     console.print("  Removed working memory spills")
-    console.print(
-        "[dim]  Preserved thread checkpoints (run `soothe thread delete` to remove)[/dim]"
-    )
+    console.print("[dim]  LangGraph checkpoints may remain until pruned separately[/dim]")
 
 
 # Helper functions
@@ -569,7 +556,7 @@ def format_anchor_summary(anchors: list[dict[str, Any]]) -> str:
         line = f"  iteration {anchor['iteration']}: [dim]{anchor['checkpoint_id']}[/dim] "
         line += f"({anchor['anchor_type']})"
 
-        # Check for thread switch (RFC-503: show context refreshed without thread ID)
+        # Context refresh when loop scope (LangGraph thread_id) changes between anchors
         if anchor["iteration"] > 0:
             prev_anchors = [a for a in anchors if a["iteration"] == anchor["iteration"] - 1]
             if prev_anchors and prev_anchors[0]["thread_id"] != anchor["thread_id"]:
@@ -587,10 +574,10 @@ def render_ascii_tree(tree: dict[str, Any]) -> None:
     for iteration in main_line:
         iter_num = iteration["iteration"]
 
-        # RFC-503: Hide thread ID, show context refresh notification
+        # Iteration marker (IDs omitted in UI)
         console.print(f"  iteration {iter_num}")
 
-        # Show context refresh note if thread switch occurred
+        # Context refresh when the tree marks a switch
         if iteration.get("thread_switch"):
             console.print("    [cyan][context refreshed][/cyan]")
 
@@ -610,7 +597,7 @@ def render_ascii_tree(tree: dict[str, Any]) -> None:
         console.print("\n[bold red]Failed Branches:[/bold red]")
 
         for branch in branches:
-            # RFC-503: Hide thread ID in failed branches
+            # Branch identity only (no per-anchor checkpoint id in UI)
             console.print(f"  [dim]{branch['branch_id']}[/dim] (iteration {branch['iteration']})")
             console.print(f"    ├─ [dim]{branch['root_checkpoint']}[/dim] [root] ← Rewind point")
 
@@ -689,8 +676,6 @@ def continue_loop(
 ) -> None:
     """Continue execution on existing loop.
 
-    Replaces: soothe thread continue <thread_id>
-
     Behavior:
     - Resolve target loop (explicit `LOOP_ID` or most-recent loop)
     - Launch TUI on that loop
@@ -724,7 +709,7 @@ def detach_loop(
 
     Behavior:
     - Unsubscribe client from loop events
-    - Loop continues executing (all threads continue)
+    - Loop keeps running on the daemon
     - Loop checkpoint saved at detachment point
     - Client can reattach later with 'soothe loop attach'
 
@@ -807,7 +792,7 @@ def attach_loop(
         Panel(
             f"Status: {loop.get('status', 'unknown')}\n"
             f"Goals: {loop.get('total_goals_completed', 0)} completed\n"
-            f"Internal Threads: {len(loop.get('thread_ids', []))}",
+            f"Internal contexts: {len(loop.get('thread_ids', []))}",
             title=f"Loop: {loop_id} (Reattached)",
         )
     )

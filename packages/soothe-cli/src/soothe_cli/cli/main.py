@@ -118,15 +118,11 @@ def main(
 # ---------------------------------------------------------------------------
 # Sub-command groups (nested Typer apps)
 # ---------------------------------------------------------------------------
-# Thread: read-only diagnostics per RFC-503 (Loop-First UX). Lifecycle
-# management lives under `soothe loop <subcommand>`.
 
 from soothe_cli.cli.commands.autopilot_cmd import app as _autopilot_app  # noqa: E402
 from soothe_cli.cli.commands.loop_cmd import loop_app as _loop_app  # noqa: E402
-from soothe_cli.cli.commands.thread_cmd import thread_app as _thread_app  # noqa: E402
 
 for _sub_app, _name in (
-    (_thread_app, "thread"),
     (_loop_app, "loop"),
     (_autopilot_app, "autopilot"),
 ):

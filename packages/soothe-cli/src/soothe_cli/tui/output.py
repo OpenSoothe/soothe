@@ -57,7 +57,7 @@ def write_json(command: str, data: list | dict) -> None:
 
     Args:
         command: Self-documenting command name (e.g. `'list'`,
-            `'threads list'`).
+            `'loop list'`).
         data: Payload — typically a list for listing commands or a dict
             for action/info commands.
 

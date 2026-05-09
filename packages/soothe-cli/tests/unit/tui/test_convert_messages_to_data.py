@@ -33,7 +33,7 @@ def test_convert_tool_message_respects_status_error_with_benign_content() -> Non
 
 
 def test_convert_tool_message_respects_arguments_json_string() -> None:
-    """Thread replay: wire-style ``arguments`` must populate tool card args."""
+    """Loop replay: wire-style ``arguments`` must populate tool card args."""
     ai = AIMessage(content="", tool_calls=[])
     # LangChain rejects ``arguments`` at construct time; some checkpoints store it anyway.
     ai.tool_calls = [
@@ -78,7 +78,7 @@ def test_merge_history_sources_handles_mixed_timestamp_awareness() -> None:
     """History merge should not crash on aware + naive datetime inputs."""
     app = object.__new__(SootheApp)
     checkpoint_messages = [AIMessage(content="hello")]
-    thread_logger_events = [
+    activity_events = [
         {
             "kind": "event",
             "timestamp": "2026-04-20T15:41:26.946+00:00",
@@ -91,22 +91,22 @@ def test_merge_history_sources_handles_mixed_timestamp_awareness() -> None:
         },
     ]
 
-    merged = app._merge_history_sources(checkpoint_messages, thread_logger_events)
+    merged = app._merge_history_sources(checkpoint_messages, activity_events)
 
     assert [source for source, _ in merged] == ["message", "event", "event"]
 
 
 @pytest.mark.asyncio
-async def test_fetch_thread_history_prefers_checkpoint_cards() -> None:
+async def test_fetch_loop_history_prefers_checkpoint_cards() -> None:
     """Resumed history should prioritize checkpoint conversion over event fallback."""
     app = object.__new__(SootheApp)
-    app._get_thread_state_values = AsyncMock(
+    app._get_loop_state_values = AsyncMock(
         return_value={
             "_context_tokens": 7,
             "messages": [HumanMessage(content="hello"), AIMessage(content="world")],
         }
     )
-    app._fetch_thread_activity_events = AsyncMock(
+    app._fetch_loop_activity_events = AsyncMock(
         return_value=[
             {
                 "kind": "tool_result",
@@ -116,15 +116,15 @@ async def test_fetch_thread_history_prefers_checkpoint_cards() -> None:
         ]
     )
 
-    payload = await app._fetch_thread_history_data("thread-1")
+    payload = await app._fetch_loop_history_data("loop-1")
 
     assert payload.context_tokens == 7
     assert [m.type for m in payload.messages] == [MessageType.USER, MessageType.ASSISTANT]
     assert all("Tool result" not in m.content for m in payload.messages)
-    app._fetch_thread_activity_events.assert_not_awaited()
+    app._fetch_loop_activity_events.assert_not_awaited()
 
 
-def test_convert_thread_events_uses_metadata_for_tool_name_and_output() -> None:
+def test_convert_loop_events_uses_metadata_for_tool_name_and_output() -> None:
     """Event fallback should build TOOL cards from metadata-rich rows."""
     app = object.__new__(SootheApp)
     events = [
@@ -144,7 +144,7 @@ def test_convert_thread_events_uses_metadata_for_tool_name_and_output() -> None:
         },
     ]
 
-    data = app._convert_thread_events_to_data(events)
+    data = app._convert_loop_events_to_data(events)
 
     assert len(data) == 1
     assert data[0].type == MessageType.TOOL
@@ -153,8 +153,8 @@ def test_convert_thread_events_uses_metadata_for_tool_name_and_output() -> None:
     assert data[0].tool_output == "file body"
 
 
-def test_convert_thread_events_maps_cognition_events_to_specialized_cards() -> None:
-    """Cognition thread events should restore goal/plan/step cards, not app text."""
+def test_convert_loop_events_maps_cognition_events_to_specialized_cards() -> None:
+    """Cognition events should restore goal/plan/step cards, not app text."""
     app = object.__new__(SootheApp)
     events = [
         {
@@ -196,7 +196,7 @@ def test_convert_thread_events_maps_cognition_events_to_specialized_cards() -> N
         },
     ]
 
-    data = app._convert_thread_events_to_data(events)
+    data = app._convert_loop_events_to_data(events)
 
     assert [m.type for m in data] == [
         MessageType.COGNITION_GOAL_TREE,
@@ -209,8 +209,8 @@ def test_convert_thread_events_maps_cognition_events_to_specialized_cards() -> N
 
 
 @pytest.mark.asyncio
-async def test_get_thread_state_values_recovers_messages_from_conversation_rows() -> None:
-    """Resume should rehydrate empty checkpoint messages from thread conversation rows."""
+async def test_get_loop_state_values_recovers_messages_from_conversation_rows() -> None:
+    """Resume should rehydrate empty checkpoint messages from persisted conversation rows."""
     app = object.__new__(SootheApp)
     daemon_session = SimpleNamespace()
     daemon_session.aget_state = AsyncMock(return_value=SimpleNamespace(values={}))
@@ -227,7 +227,7 @@ async def test_get_thread_state_values_recovers_messages_from_conversation_rows(
     daemon_session.aupdate_state = AsyncMock()
     app._daemon_session = daemon_session
 
-    values = await app._get_thread_state_values("thread-42")
+    values = await app._get_loop_state_values("loop-42")
 
     assert "messages" in values
     assert isinstance(values["messages"], list)
@@ -235,7 +235,7 @@ async def test_get_thread_state_values_recovers_messages_from_conversation_rows(
     assert isinstance(values["messages"][0], HumanMessage)
     assert isinstance(values["messages"][1], AIMessage)
     daemon_session.fetch_conversation_log.assert_awaited_once_with(
-        "thread-42",
+        "loop-42",
         limit=10000,
         include_events=True,
     )
@@ -243,8 +243,8 @@ async def test_get_thread_state_values_recovers_messages_from_conversation_rows(
 
 
 @pytest.mark.asyncio
-async def test_get_thread_state_values_skips_recovery_when_messages_exist() -> None:
-    """Resume should not fetch thread logs when checkpoint messages are already present."""
+async def test_get_loop_state_values_skips_recovery_when_messages_exist() -> None:
+    """Resume should not fetch conversation logs when checkpoint messages are already present."""
     app = object.__new__(SootheApp)
     daemon_session = SimpleNamespace()
     daemon_session.aget_state = AsyncMock(
@@ -254,7 +254,7 @@ async def test_get_thread_state_values_skips_recovery_when_messages_exist() -> N
     daemon_session.aupdate_state = AsyncMock()
     app._daemon_session = daemon_session
 
-    values = await app._get_thread_state_values("thread-42")
+    values = await app._get_loop_state_values("loop-42")
 
     assert len(values["messages"]) == 1
     daemon_session.fetch_conversation_log.assert_not_awaited()

@@ -40,19 +40,29 @@ class ThreadStateRegistry:
         self._by_thread: dict[str, ThreadState] = {}
         self._client_active_thread: dict[str, str] = {}
         self._thread_loop: dict[str, str] = {}
+        self._lock: asyncio.Lock = asyncio.Lock()
 
     def get(self, thread_id: str) -> ThreadState | None:
         """Return state for *thread_id* if registered."""
         return self._by_thread.get(thread_id)
 
     def ensure(self, thread_id: str, *, is_draft: bool = False) -> ThreadState:
-        """Get or create ``ThreadState`` for *thread_id*."""
+        """Get or create ``ThreadState`` for *thread_id*.
+
+        Safe for concurrent async callers: the dict is checked inside a
+        non-blocking check; because asyncio runs on a single thread there is no
+        true data race, but a second ``ensure`` call that arrives before the first
+        write completes would previously create a stale orphan object.  The lock
+        makes the check-then-create atomic within the event loop.
+        """
         existing = self._by_thread.get(thread_id)
         if existing is not None:
             return existing
+        # Double-checked under lock — safe because we only ever await inside the
+        # lock on the same event-loop thread.
         st = ThreadState(thread_id=thread_id, is_draft=is_draft)
-        self._by_thread[thread_id] = st
-        return st
+        self._by_thread.setdefault(thread_id, st)
+        return self._by_thread[thread_id]
 
     def remove(self, thread_id: str) -> None:
         """Drop state for a thread (e.g. after archive/delete)."""

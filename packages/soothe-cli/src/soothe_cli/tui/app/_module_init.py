@@ -289,7 +289,7 @@ class QueuedMessage:
     """The input mode that determines message routing."""
 
 
-DeferredActionKind = Literal["model_switch", "thread_switch", "chat_output"]
+DeferredActionKind = Literal["model_switch", "loop_switch", "chat_output"]
 """Valid `DeferredAction.kind` values for type-checked deduplication."""
 
 
@@ -305,8 +305,8 @@ class DeferredAction:
 
 
 @dataclass(frozen=True, slots=True)
-class _ThreadHistoryPayload:
-    """Data returned by `_fetch_thread_history_data`."""
+class _LoopHistoryPayload:
+    """Data returned by `_fetch_loop_history_data`."""
 
     messages: list[MessageData]
     """Converted message data ready for bulk loading."""
@@ -386,7 +386,7 @@ async def run_textual_app(
     auto_approve: bool = False,
     cwd: str | Path | None = None,
     resume_loop_id: str | None = None,
-    resume_thread: str | None = None,
+    resume_loop_intent: str | None = None,
     initial_prompt: str | None = None,
     initial_skill: str | None = None,
     mcp_server_info: list[dict[str, Any]] | None = None,
@@ -410,10 +410,10 @@ async def run_textual_app(
         cwd: Current working directory to display.
         resume_loop_id: Initial loop id for the session (daemon-backed).
 
-            `None` when `resume_thread` is provided (the TUI resolves the final
-            id asynchronously).
-        resume_thread: Raw resume intent from `-r` flag. `'__MOST_RECENT__'` for
-            bare `-r`, a thread ID string for `-r <id>`, or `None` for new
+            `None` when `resume_loop_intent` is provided (the TUI resolves the
+            final id asynchronously).
+        resume_loop_intent: Raw resume intent from `-r` flag. `'__MOST_RECENT__'`
+            for bare `-r`, a loop id string for `-r <id>`, or `None` for new
             sessions.
 
             Resolved asynchronously during TUI startup.
@@ -444,7 +444,7 @@ async def run_textual_app(
         auto_approve=auto_approve,
         cwd=cwd,
         resume_loop_id=resume_loop_id,
-        resume_thread=resume_thread,
+        resume_loop_intent=resume_loop_intent,
         initial_prompt=initial_prompt,
         initial_skill=initial_skill,
         mcp_server_info=mcp_server_info,
@@ -474,26 +474,21 @@ async def run_textual_app(
     )
 
 
-# SOOTHE: Alias for Soothe compatibility
 def run_textual_tui(
     config: Any,  # noqa: ANN401
     resume_loop_id: str | None = None,
     initial_prompt: str | None = None,
 ) -> AppResult:
-    """Launch Soothe TUI (alias for run_textual_app).
-
-    SOOTHE: This function wraps run_textual_app for Soothe CLI compatibility.
+    """Launch the Textual TUI with optional loop attachment and initial prompt.
 
     Args:
-        config: Soothe configuration (unused, kept for compatibility)
+        config: Soothe configuration used for daemon-backed startup.
         resume_loop_id: Loop id to attach to when starting the TUI
         initial_prompt: Auto-submit prompt on launch
     """
 
-    # Use the caller's actual cwd as the thread workspace (IG-344).
-    # config.workspace_dir is the daemon-level default (~/.soothe/Workspace),
-    # not the user's project directory. The user's shell cwd is the correct
-    # workspace for thread isolation.
+    # Caller cwd is forwarded as the loop workspace hint (IG-344).
+    # config.workspace_dir is the daemon default (~/.soothe/Workspace), not the project dir.
     cwd = os.getcwd()
 
     return asyncio.run(

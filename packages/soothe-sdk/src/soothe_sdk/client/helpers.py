@@ -30,7 +30,8 @@ async def check_daemon_status(client: WebSocketClient, timeout: float = 5.0) -> 
         timeout: Request timeout in seconds
 
     Returns:
-        dict with keys: "running" (bool), "port_live" (bool), "active_threads" (int)
+        Parsed `daemon_status_response` payload (typically includes `running`,
+        `port_live`, and a numeric count of in-flight client query work).
 
     Raises:
         ConnectionError: If daemon not reachable

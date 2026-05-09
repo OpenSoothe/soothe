@@ -121,19 +121,25 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         status: str,
     ) -> None:
         """Sync register loop."""
+        now = datetime.now(UTC).isoformat()
         conn.execute(
             """
-            INSERT OR REPLACE INTO agentloop_loops
+            INSERT INTO agentloop_loops
             (loop_id, thread_ids, current_thread_id, status, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (loop_id) DO UPDATE SET
+                thread_ids = excluded.thread_ids,
+                current_thread_id = excluded.current_thread_id,
+                status = excluded.status,
+                updated_at = excluded.updated_at
         """,
             (
                 loop_id,
                 json.dumps(thread_ids),
                 current_thread_id,
                 status,
-                datetime.now(UTC).isoformat(),
-                datetime.now(UTC).isoformat(),
+                now,
+                now,
             ),
         )
         conn.commit()
@@ -148,7 +154,10 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         """Sync get loop metadata."""
         cursor = conn.execute(
             """
-            SELECT thread_ids, current_thread_id, status, created_at, updated_at
+            SELECT thread_ids, current_thread_id, status, created_at, updated_at,
+                   total_goals_completed, total_thread_switches,
+                   total_duration_ms, total_tokens_used, schema_version,
+                   client_workspace, detached_at
             FROM agentloop_loops WHERE loop_id = ?
         """,
             (loop_id,),
@@ -159,12 +168,116 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
 
         return {
             "loop_id": loop_id,
-            "thread_ids": json.loads(row[0]),
+            "thread_ids": json.loads(row[0]) if row[0] else [],
             "current_thread_id": row[1],
             "status": row[2],
             "created_at": row[3],
             "updated_at": row[4],
+            "total_goals_completed": row[5],
+            "total_thread_switches": row[6],
+            "total_duration_ms": row[7],
+            "total_tokens_used": row[8],
+            "schema_version": row[9],
+            "client_workspace": row[10],
+            "detached_at": row[11],
         }
+
+    async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
+        """Partially update loop metadata fields."""
+        await self._ensure_pool_initialized()
+        await asyncio.to_thread(self._update_loop_metadata_sync, self._writer_conn, loop_id, fields)
+
+    def _update_loop_metadata_sync(
+        self, conn: sqlite3.Connection, loop_id: str, fields: dict[str, Any]
+    ) -> None:
+        """Sync partial update of loop metadata."""
+        _allowed = {
+            "status",
+            "current_thread_id",
+            "thread_ids",
+            "client_workspace",
+            "detached_at",
+            "total_goals_completed",
+            "total_thread_switches",
+            "total_duration_ms",
+            "total_tokens_used",
+            "updated_at",
+        }
+        updates = {k: v for k, v in fields.items() if k in _allowed}
+        if not updates:
+            return
+        if "thread_ids" in updates and isinstance(updates["thread_ids"], list):
+            updates["thread_ids"] = json.dumps(updates["thread_ids"])
+        updates.setdefault("updated_at", datetime.now(UTC).isoformat())
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        params = list(updates.values()) + [loop_id]
+        conn.execute(
+            f"UPDATE agentloop_loops SET {set_clause} WHERE loop_id = ?",  # noqa: S608
+            params,
+        )
+        conn.commit()
+        logger.debug("Updated loop metadata: loop=%s fields=%s", loop_id, list(updates))
+
+    async def list_loops(
+        self,
+        status_filter: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Return summary rows for all loops, ordered by created_at DESC."""
+        await self._ensure_pool_initialized()
+        return await asyncio.to_thread(
+            self._list_loops_sync, self._writer_conn, status_filter, limit
+        )
+
+    def _list_loops_sync(
+        self,
+        conn: sqlite3.Connection,
+        status_filter: str | None,
+        limit: int,
+    ) -> list[dict]:
+        """Sync list loops."""
+        if status_filter:
+            cursor = conn.execute(
+                """
+                SELECT loop_id, status, thread_ids, current_thread_id,
+                       total_goals_completed, total_thread_switches,
+                       created_at, updated_at, client_workspace, detached_at
+                FROM agentloop_loops
+                WHERE status = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (status_filter, limit),
+            )
+        else:
+            cursor = conn.execute(
+                """
+                SELECT loop_id, status, thread_ids, current_thread_id,
+                       total_goals_completed, total_thread_switches,
+                       created_at, updated_at, client_workspace, detached_at
+                FROM agentloop_loops
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+        rows = cursor.fetchall()
+        result = []
+        for row in rows:
+            d = {
+                "loop_id": row[0],
+                "status": row[1],
+                "thread_ids": json.loads(row[2]) if row[2] else [],
+                "current_thread_id": row[3],
+                "total_goals_completed": row[4],
+                "total_thread_switches": row[5],
+                "created_at": row[6],
+                "updated_at": row[7],
+                "client_workspace": row[8],
+                "detached_at": row[9],
+            }
+            result.append(d)
+        return result
 
     async def save_checkpoint_anchor(
         self,
@@ -694,7 +807,9 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                     thread_switch_pending INTEGER DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    schema_version TEXT DEFAULT '3.1'
+                    schema_version TEXT DEFAULT '3.1',
+                    client_workspace TEXT,
+                    detached_at TEXT
                 )
             """)
 
@@ -839,7 +954,9 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                     thread_switch_pending INTEGER DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    schema_version TEXT DEFAULT '3.1'
+                    schema_version TEXT DEFAULT '3.1',
+                    client_workspace TEXT,
+                    detached_at TEXT
                 )
             """)
 

@@ -27,12 +27,13 @@ BM-NNN-brief-title.md
 
 ## Available Benchmarks
 
-| ID | Title | Purpose |
-|----|-------|---------|
-| [BM-001](BM-001-workspace-injection.md) | Workspace Injection | Verify workspace context propagation |
-| [BM-002](BM-002-subagent-selection.md) | Subagent Selection | Verify slash-command routing and passthrough behavior |
-| [BM-003](BM-003-ai-driven-daemon-endpoint.md) | AI-Driven Daemon Endpoint | Verify HTTP REST daemon endpoint correctness and latency |
-| [BM-004](BM-004-security-verification.md) | Security Verification | Verify operation-level security checks for filesystem and execution tools |
+| ID | Title | Purpose | Latest Status |
+|----|-------|---------|---------------|
+| [BM-001](BM-001-workspace-injection.md) | Workspace Injection | Verify workspace context propagation | ⚠️ Partial (TC-001/005 workspace issue) |
+| [BM-002](BM-002-subagent-selection.md) | Subagent Selection | Verify slash-command routing and passthrough behavior | ✅ Pass |
+| [BM-003](BM-003-ai-driven-daemon-endpoint.md) | Daemon HTTP REST Endpoint | Verify HTTP REST daemon endpoints | ⚠️ Partial (autopilot/status 500) |
+| [BM-004](BM-004-security-verification.md) | Security Verification | Verify operation-level security checks | 🔍 Needs runner script |
+| [BM-005](BM-005-baseline-non-tui-cases.md) | Baseline Non-TUI Cases | Basic functionality and performance | ✅ Pass |
 
 ## Running Benchmarks
 
@@ -40,23 +41,26 @@ BM-NNN-brief-title.md
 
 ```bash
 # Run a specific test case
-soothe --no-tui -p "<query from test case>"
+uv run soothe --no-tui -p "<query from test case>"
 
 # Verify conditions in output
 ```
 
-### Automated Execution
+### BM-003: Daemon HTTP REST Endpoints
 
-```python
-# Use the verification script template from each benchmark
-python verify_benchmark.py BM-001
+```bash
+# Ensure daemon is running
+uv run soothed start --config config/config.dev.yml
 
-# Run BM-003 daemon endpoint benchmark
-uv run python benchmarks/run_bm003_daemon_endpoint.py --base-url http://127.0.0.1:8766
-
-# Run BM-004 security verification benchmark
-uv run python benchmarks/run_bm004_security_verification.py
+# Test endpoints
+curl -s http://127.0.0.1:8766/api/v1/health
+curl -s http://127.0.0.1:8766/api/v1/status
+curl -s http://127.0.0.1:8766/api/v1/version
+curl -s http://127.0.0.1:8766/api/v1/config
+curl -s http://127.0.0.1:8766/api/v1/autopilot/goals
 ```
+
+> **Note**: Conversation control uses WebSocket loop protocol (IG-408). HTTP REST provides health, status, config, and autopilot endpoints only.
 
 ## Adding New Benchmarks
 
@@ -81,3 +85,4 @@ uv run python benchmarks/run_bm004_security_verification.py
 - ❌ Fail
 - ⚠️ Partial
 - 🔍 Needs Review
+- ⏱️ Timeout

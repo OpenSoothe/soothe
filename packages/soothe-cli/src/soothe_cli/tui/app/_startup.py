@@ -201,17 +201,10 @@ class _StartupMixin:
             group="startup-model-prewarm",
         )
 
-        # Prewarm thread message counts so /threads opens instantly.
-        self.run_worker(
-            self._prewarm_threads_cache,
-            exclusive=True,
-            group="startup-thread-prewarm",
-        )
-
         # Auto-submit initial prompt or skill if provided via -m / --skill.
         # This check must come first because _lc_loop_id and _agent are
         # always set (even for brand-new sessions), so an elif after the
-        # thread-history branch would never execute.
+        # loop-history branch would never execute.
         # When connecting, defer until the ready message handler fires.
         # NOTE: _schedule_initial_submission() has a side effect (queues a
         # task via call_after_refresh); short-circuit ensures it only runs
@@ -222,7 +215,7 @@ class _StartupMixin:
             and self._lc_loop_id
             and self._runtime_backend_ready()
         ):
-            self.call_after_refresh(lambda: asyncio.create_task(self._load_thread_history()))
+            self.call_after_refresh(lambda: asyncio.create_task(self._load_loop_history()))
 
     async def _init_session_state(self) -> None:
         """Create session state in a thread (imports soothe.sessions)."""
@@ -426,24 +419,25 @@ class _StartupMixin:
 
         return await discover_skills_async(daemon_config=self._daemon_config)
 
-    async def _resolve_resume_thread(self) -> None:
-        """Resolve a `-r` resume intent into a concrete thread ID.
+    async def _resolve_resume_loop_intent(self) -> None:
+        """Resolve a `-r` resume intent into a concrete loop id.
 
-        Consumes `self._resume_thread_intent` and resolves it into a concrete
-        thread ID. Mutates `self._lc_loop_id` and optionally
+        Consumes `self._resume_loop_intent` and resolves it into a loop id
+        (LangGraph uses the same value as ``configurable.thread_id``). Mutates
+        `self._lc_loop_id` and optionally
         `self._assistant_id` / `self._server_kwargs`. Falls back to a fresh
-        thread on any DB error.
+        loop id on any DB error.
         """
         from soothe_cli.tui.sessions import (
-            find_similar_threads,
+            find_similar_loops,
             generate_loop_id,
+            get_loop_agent,
             get_most_recent,
-            get_thread_agent,
-            thread_exists,
+            loop_exists,
         )
 
-        resume = self._resume_thread_intent
-        self._resume_thread_intent = None  # consumed
+        resume = self._resume_loop_intent
+        self._resume_loop_intent = None  # consumed
 
         if not resume:
             return
@@ -457,42 +451,42 @@ class _StartupMixin:
         try:
             if resume == "__MOST_RECENT__":
                 agent_filter = self._assistant_id if self._assistant_id != default_agent else None
-                thread_id = await get_most_recent(agent_filter)
-                if thread_id:
-                    agent_name = await get_thread_agent(thread_id)
+                loop_id = await get_most_recent(agent_filter)
+                if loop_id:
+                    agent_name = await get_loop_agent(loop_id)
                     if agent_name:
                         self._assistant_id = agent_name
                         if self._server_kwargs:
                             self._server_kwargs["assistant_id"] = agent_name
-                    self._lc_loop_id = thread_id
+                    self._lc_loop_id = loop_id
                 else:
                     self._lc_loop_id = generate_loop_id()
                     if agent_filter:
-                        msg = f"No previous threads for '{agent_filter}', starting new."
+                        msg = f"No prior loop for '{agent_filter}', starting new."
                     else:
-                        msg = "No previous threads, starting new."
+                        msg = "No prior loop in storage, starting new."
                     self.notify(msg, severity="warning", markup=False)
-            elif await thread_exists(resume):
+            elif await loop_exists(resume):
                 self._lc_loop_id = resume
                 if self._assistant_id == default_agent:
-                    agent_name = await get_thread_agent(resume)
+                    agent_name = await get_loop_agent(resume)
                     if agent_name:
                         self._assistant_id = agent_name
                         if self._server_kwargs:
                             self._server_kwargs["assistant_id"] = agent_name
             else:
-                # Thread not found — notify + fall back to new thread
+                # Loop id not found in local checkpoint DB — notify + fall back
                 self._lc_loop_id = generate_loop_id()
-                similar = await find_similar_threads(resume)
-                hint = f"Thread '{resume}' not found."
+                similar = await find_similar_loops(resume)
+                hint = f"Loop id '{resume}' not found."
                 if similar:
                     hint += f" Did you mean: {', '.join(str(t) for t in similar)}?"
                 self.notify(hint, severity="warning", timeout=6, markup=False)
         except Exception:
-            logger.exception("Failed to resolve resume thread %r", resume)
+            logger.exception("Failed to resolve resume intent %r", resume)
             self._lc_loop_id = generate_loop_id()
             self.notify(
-                "Could not look up thread history. Starting new session.",
+                "Could not look up prior conversation. Starting new session.",
                 severity="warning",
             )
 
@@ -502,14 +496,14 @@ class _StartupMixin:
             self._session_state.loop_id = self._lc_loop_id
 
     async def _start_server_background(self) -> None:
-        """Background worker: resolve resume-thread intent, start server + MCP preload.
+        """Background worker: resolve `-r` resume intent, start server + MCP preload.
 
         Also runs deferred model creation if `model_kwargs` was provided,
         so the langchain import + init doesn't block first paint.
         """
-        # Phase 1: Resolve resume thread (if any) before server startup
-        if self._resume_thread_intent:
-            await self._resolve_resume_thread()
+        # Phase 1: Resolve resume intent (if any) before server startup
+        if self._resume_loop_intent:
+            await self._resolve_resume_loop_intent()
 
         # Run deferred model creation. settings.model_name / model_provider
         # are already set eagerly for the status bar display; this call
@@ -613,13 +607,13 @@ class _StartupMixin:
         except NoMatches:
             logger.warning("Welcome banner not found during server ready transition")
 
-        # Handle deferred initial prompt, skill, or thread history
+        # Handle deferred initial prompt, skill, or conversation history
         if not self._schedule_initial_submission() and (
             self._lc_loop_id and self._runtime_backend_ready()
         ):
-            self.call_after_refresh(lambda: asyncio.create_task(self._load_thread_history()))
+            self.call_after_refresh(lambda: asyncio.create_task(self._load_loop_history()))
 
-        # Drain deferred actions (e.g. model/thread switch queued during connection)
+        # Drain deferred actions (e.g. model or loop switch queued during connection)
         # if the agent is not actively running. Wrapped in a helper so that
         # exceptions are logged rather than becoming unhandled task errors.
         if self._deferred_actions and not self._agent_running:
@@ -663,9 +657,9 @@ class _StartupMixin:
         except NoMatches:
             logger.warning("Welcome banner not found during daemon ready transition")
 
-        # IG-228: Start background event reader if thread is already running
-        thread_state = event.status_event.get("state", "")
-        if thread_state == "running" and self._daemon_session is not None:
+        # IG-228: Start background event reader if the loop is already running
+        loop_state = event.status_event.get("state", "")
+        if loop_state == "running" and self._daemon_session is not None:
             logger.info(
                 "Loop %s is running, starting background event reader",
                 status_loop_id[:8] if status_loop_id else "?",
@@ -677,7 +671,7 @@ class _StartupMixin:
             )
 
         if not self._schedule_initial_submission() and self._lc_loop_id:
-            self.call_after_refresh(lambda: asyncio.create_task(self._load_thread_history()))
+            self.call_after_refresh(lambda: asyncio.create_task(self._load_loop_history()))
 
         if self._deferred_actions and not self._agent_running:
 
@@ -745,6 +739,16 @@ class _StartupMixin:
             copy_selection_to_clipboard,  # noqa: F401
         )
 
+        # First user message: ``execute_task_textual`` + CLI stream pipeline.
+        # Warm on this thread so the asyncio loop does not stall on cold import.
+        try:
+            import importlib
+
+            importlib.import_module("soothe_cli.tui.textual_adapter._turn")
+            importlib.import_module("soothe_cli.cli.stream.pipeline")
+        except Exception:
+            logger.warning("Could not prewarm first-turn execute path", exc_info=True)
+
         try:
             # Heavy third-party deps deferred from textual_adapter /
             # tool_display — hit on first message send and first tool
@@ -777,28 +781,10 @@ class _StartupMixin:
         # exceptions propagate.
         from soothe_cli.tui.widgets.approval import ApprovalMenu  # noqa: F401
         from soothe_cli.tui.widgets.ask_user import AskUserMenu  # noqa: F401
+        from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen  # noqa: F401
         from soothe_cli.tui.widgets.model_selector import (
             ModelSelectorScreen,  # noqa: F401
         )
-        from soothe_cli.tui.widgets.thread_selector import (  # noqa: F401
-            DeleteThreadConfirmScreen,
-            ThreadSelectorScreen,
-        )
-
-    async def _prewarm_threads_cache(self) -> None:  # noqa: PLR6301  # Worker hook kept as instance method
-        """Prewarm thread selector cache without blocking app startup."""
-        from soothe_cli.tui.sessions import (
-            get_thread_limit,
-            prewarm_thread_message_counts_via_daemon_rpc,
-        )
-
-        if self._daemon_session is not None:
-            await prewarm_thread_message_counts_via_daemon_rpc(
-                daemon_session=self._daemon_session,
-                limit=get_thread_limit(),
-            )
-        else:
-            logger.debug("Skipping thread cache prewarm - no daemon session available")
 
     async def _prewarm_model_caches(self) -> None:
         """Prewarm model discovery and profile caches without blocking startup."""

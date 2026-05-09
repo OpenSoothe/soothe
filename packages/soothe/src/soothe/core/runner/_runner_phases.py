@@ -17,14 +17,13 @@ from soothe_sdk.core.exceptions import ConfigurationError
 
 from soothe.core.agent_loop.utils.messages import loop_assistant_messages_chunk
 from soothe.core.events import (
+    LoopCompletedEvent,
+    LoopCreatedEvent,
+    LoopStartedEvent,
     PlanCreatedEvent,
     PlanReflectedEvent,
     PlanStepCompletedEvent,
     PlanStepStartedEvent,
-    ThreadCreatedEvent,
-    ThreadEndedEvent,
-    ThreadResumedEvent,
-    ThreadStartedEvent,
 )
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.protocols.policy import ActionRequest, PolicyContext
@@ -636,7 +635,9 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
 
         cfg = getattr(self, "_config", None)
         cfg_dir = getattr(cfg, "workspace_dir", None) if cfg is not None else None
+        installation_ws = str(getattr(self, "_installation_workspace", ""))
         resolved = resolve_workspace_for_stream(
+            installation_default=installation_ws,
             config_workspace_dir=cfg_dir,
         )
         state.workspace = resolved.path
@@ -676,12 +677,20 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
             thread_info = None
             if requested_thread_id:
                 thread_info = await self._durability.resume_thread(requested_thread_id)
-                yield _custom(ThreadResumedEvent(thread_id=thread_info.thread_id).to_dict())
+                yield _custom(
+                    LoopCreatedEvent(
+                        loop_id=thread_info.thread_id, thread_id=thread_info.thread_id
+                    ).to_dict()
+                )
             else:
                 thread_info = await self._durability.create_thread(
                     ThreadMetadata(policy_profile=self._config.protocols.policy.profile),
                 )
-                yield _custom(ThreadCreatedEvent(thread_id=thread_info.thread_id).to_dict())
+                yield _custom(
+                    LoopCreatedEvent(
+                        loop_id=thread_info.thread_id, thread_id=thread_info.thread_id
+                    ).to_dict()
+                )
             state.thread_id = thread_info.thread_id
         except KeyError:
             logger.debug("Thread resume failed, creating a new thread", exc_info=True)
@@ -689,7 +698,11 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                 thread_info = await self._durability.create_thread(
                     ThreadMetadata(policy_profile=self._config.protocols.policy.profile),
                 )
-                yield _custom(ThreadCreatedEvent(thread_id=thread_info.thread_id).to_dict())
+                yield _custom(
+                    LoopCreatedEvent(
+                        loop_id=thread_info.thread_id, thread_id=thread_info.thread_id
+                    ).to_dict()
+                )
                 state.thread_id = thread_info.thread_id
             except Exception:
                 logger.debug("Thread creation failed after resume fallback", exc_info=True)
@@ -709,7 +722,11 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                 yield chunk
 
         protocols = self.protocol_summary()
-        yield _custom(ThreadStartedEvent(thread_id=state.thread_id, protocols=protocols).to_dict())
+        yield _custom(
+            LoopStartedEvent(
+                loop_id=state.thread_id, thread_id=state.thread_id, protocols=protocols
+            ).to_dict()
+        )
 
         if self._policy:
             try:
@@ -911,7 +928,9 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
         except Exception:
             logger.debug("State persistence failed", exc_info=True)
 
-        yield _custom(ThreadEndedEvent(thread_id=state.thread_id).to_dict())
+        yield _custom(
+            LoopCompletedEvent(loop_id=state.thread_id, thread_id=state.thread_id).to_dict()
+        )
 
     # -- internal helpers ---------------------------------------------------
 

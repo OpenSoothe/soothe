@@ -333,7 +333,7 @@ async def test_loop_reattachment_with_thread_switch(tmp_path):
     1. Execute iterations across multiple threads
     2. Thread switches occur
     3. Reattach client
-    4. Verify THREAD_SWITCHED events in replay
+    4. Verify LOOP_REATTACHED events in replay
     """
     with mock_soothe_home(tmp_path):
         PersistenceDirectoryManager.ensure_directories_exist()
@@ -435,10 +435,10 @@ async def test_loop_reattachment_with_thread_switch(tmp_path):
         # Reconstruct event stream
         event_stream = await reconstruct_event_stream(loop_id, persistence_manager)
 
-        # Verify THREAD_SWITCHED event
-        from soothe.core.events import THREAD_SWITCHED
+        # Verify LOOP_REATTACHED event
+        from soothe.core.events import LOOP_REATTACHED
 
-        thread_switch_events = [e for e in event_stream if e["type"] == THREAD_SWITCHED]
+        thread_switch_events = [e for e in event_stream if e["type"] == LOOP_REATTACHED]
         assert len(thread_switch_events) == 1
         assert thread_switch_events[0]["from_thread_id"] == "thread_001"
         assert thread_switch_events[0]["to_thread_id"] == "thread_002"

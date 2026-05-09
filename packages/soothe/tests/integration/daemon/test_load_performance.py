@@ -432,7 +432,7 @@ async def test_event_priority_overflow_strategy():
     event_queue: asyncio.Queue = asyncio.Queue(maxsize=10000)
 
     # Subscribe queue to topic
-    await bus.subscribe("thread:test", event_queue)
+    await bus.subscribe("loop:test", event_queue)
 
     stop_unblock = asyncio.Event()
 
@@ -466,7 +466,7 @@ async def test_event_priority_overflow_strategy():
     metrics.start_timer()
     try:
         for event, event_meta in events:
-            await bus.publish("thread:test", event, event_meta)
+            await bus.publish("loop:test", event, event_meta)
     finally:
         stop_unblock.set()
         unblock_task.cancel()
@@ -675,7 +675,7 @@ async def test_phase1_full_integration():
 
     # Subscribe all queues to broadcast topic
     for client_id, queue in event_queues.items():
-        await bus.subscribe(f"thread:{client_id}", queue)
+        await bus.subscribe(f"loop:{client_id}", queue)
 
     metrics.start_timer()
 
@@ -706,7 +706,7 @@ async def test_phase1_full_integration():
                 )
                 event = {"type": "test.event", "round": round_idx, "index": i}
                 event_meta = SimpleNamespace(priority=priority)
-                await bus.publish(f"thread:ws:{i % 50}", event, event_meta)
+                await bus.publish(f"loop:ws:{i % 50}", event, event_meta)
 
             # Sample metrics every 5 rounds
             if round_idx % 5 == 0:

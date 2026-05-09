@@ -12,11 +12,11 @@ Architecture:
 
 Usage:
     # For event type constants
-    from soothe.core.events import THREAD_CREATED, GOAL_CREATED
+    from soothe.core.events import GOAL_CREATED, BRANCH_CREATED
 
     # For type-safe event emission (recommended)
-    from soothe.core.events import ThreadCreatedEvent, custom_event
-    yield custom_event(ThreadCreatedEvent(thread_id=tid).to_dict())
+    from soothe.core.events import GoalCreatedEvent, custom_event
+    yield custom_event(GoalCreatedEvent(goal_id=gid).to_dict())
 
     # For event registration
     from soothe.core.events import register_event, EventPriority
@@ -53,6 +53,9 @@ from .catalog import (
     GoalReportEvent,
     IterationCompletedEvent,
     IterationStartedEvent,
+    LoopCompletedEvent,
+    LoopCreatedEvent,
+    LoopStartedEvent,
     # Protocol events
     MemoryRecalledEvent,
     MemoryStoredEvent,
@@ -68,12 +71,6 @@ from .catalog import (
     RecoveryResumedEvent,
     # Type alias
     StreamChunk,
-    # Lifecycle events
-    ThreadCreatedEvent,
-    ThreadEndedEvent,
-    ThreadResumedEvent,
-    ThreadSavedEvent,
-    ThreadStartedEvent,
     # Helper functions
     custom_event,
     make_subagent_tool_completed,
@@ -139,24 +136,12 @@ from .constants import (
     POLICY_CHECKED,
     POLICY_DENIED,
     RECOVERY_RESUMED,
-    THREAD_CREATED,
-    THREAD_ENDED,
-    THREAD_RESUMED,
-    THREAD_SAVED,
-    THREAD_STARTED,
-    THREAD_SWITCHED,
 )
 
 __all__ = [
     # Verbosity tier (from SDK)
     "VerbosityTier",
     # All event constants (from constants import *)
-    "THREAD_CREATED",
-    "THREAD_STARTED",
-    "THREAD_RESUMED",
-    "THREAD_SAVED",
-    "THREAD_ENDED",
-    "THREAD_SWITCHED",
     "ITERATION_STARTED",
     "ITERATION_COMPLETED",
     "CHECKPOINT_SAVED",
@@ -222,13 +207,11 @@ __all__ = [
     # Type alias
     "StreamChunk",
     # Event model classes
-    "ThreadCreatedEvent",
-    "ThreadStartedEvent",
-    "ThreadResumedEvent",
-    "ThreadSavedEvent",
-    "ThreadEndedEvent",
     "IterationStartedEvent",
     "IterationCompletedEvent",
+    "LoopCreatedEvent",
+    "LoopStartedEvent",
+    "LoopCompletedEvent",
     "CheckpointSavedEvent",
     "RecoveryResumedEvent",
     "DaemonHeartbeatEvent",

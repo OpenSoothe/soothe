@@ -1,6 +1,6 @@
 # BM-005: Baseline Non-TUI Cases
 
-**Date**: 2026-05-06 (original), 2026-05-07 (rerun)
+**Date**: 2026-05-06 (original), 2026-05-07 (rerun), 2026-05-09 (latest)
 **Purpose**: Baseline tests for basic functionalities and performance of Soothe agent in non-TUI mode
 **Environment**: macOS arm64, Python 3.12
 
@@ -208,3 +208,36 @@ This case encountered an error during execution. The agent failed to complete th
 3. **Cases 1 & 2 slightly slower**: Minor regression (+5s and +4s respectively), within normal variance for LLM response times.
 
 4. **Overall improvement**: Total runtime reduced from ~12:40 to ~7:38 (40% faster), and success rate improved from 75% to 100%.
+
+---
+
+### Latest Results (2026-05-09)
+
+| Case | Query | Runtime | Status |
+|------|-------|---------|--------|
+| 1 | Read last 10 lines of README | 16.29s | ✅ Success |
+| 2 | Count all README files | 19.10s | ✅ Success |
+| 3 | Count all file types | 148.02s | ✅ Success |
+| 4 | Analyze soothe-sdk structure | 527.70s | ✅ Success |
+
+**Total Runtime**: ~711 seconds (~11:51)
+
+**Success Rate**: 4/4 (100%)
+
+### Historical Comparison
+
+| Date | Case 1 | Case 2 | Case 3 | Case 4 | Total | Success |
+|------|--------|--------|--------|--------|-------|---------|
+| 2026-05-06 | 26.30s | 16.42s | 326s | 391s (error) | ~12:40 | 75% |
+| 2026-05-07 | 31.34s | 20.71s | 42.82s | 363.75s | ~7:38 | 100% |
+| 2026-05-09 | 16.29s | 19.10s | 148.02s | 527.70s | ~11:51 | 100% |
+
+### Key Observations (Latest Run)
+
+1. **Case 1 fastest**: 16.29s on 2026-05-09, beating previous runs.
+
+2. **Case 3 variance**: File type counting shows significant variance (42s→148s), likely depends on file system state and LLM response variability.
+
+3. **Case 4 stable**: Architecture analysis consistently works now (~5-9 minutes).
+
+4. **Overall**: 100% success rate maintained, runtime varies within expected range for LLM-powered operations.

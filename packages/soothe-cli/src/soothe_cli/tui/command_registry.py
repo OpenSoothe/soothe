@@ -19,7 +19,7 @@ class BypassTier(StrEnum):
     """Classification that controls whether a command can skip the message queue."""
 
     ALWAYS = "always"
-    """Execute regardless of any busy state, including mid-thread-switch."""
+    """Execute regardless of any busy state, including mid-loop-switch."""
 
     CONNECTING = "connecting"
     """Bypass only during initial server connection, not during agent/shell."""
@@ -63,7 +63,7 @@ COMMANDS: tuple[SlashCommand, ...] = (
     ),
     SlashCommand(
         name="/clear",
-        description="Clear chat and start new thread",
+        description="Clear chat and start a new loop",
         bypass_tier=BypassTier.QUEUED,
         hidden_keywords="reset",
     ),
