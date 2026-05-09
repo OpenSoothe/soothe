@@ -248,6 +248,8 @@ class WorkerPool:
         self._pending_responses: dict[str, asyncio.Queue] = {}
         # Background task to poll worker response queues
         self._poll_task: asyncio.Task | None = None
+        # Client disconnect: finish routing worker stream until done/error
+        self._abandon_drain_tasks: set[asyncio.Task[None]] = set()
 
     @classmethod
     async def get_shared_instance(cls, config: SootheConfig) -> WorkerPool:
@@ -342,6 +344,81 @@ class WorkerPool:
         logger.debug("WorkerPool: spawned worker %s (pid=%d)", worker_id, process.pid)
         return worker
 
+    def _schedule_abandon_drain(
+        self,
+        worker: WorkerProcess,
+        loop_id: str,
+        request_id: str,
+        response_queue: asyncio.Queue,
+    ) -> None:
+        """After client disconnect, keep routing until worker sends done/error."""
+
+        async def _run() -> None:
+            try:
+                await self._drain_abandoned_request(worker, loop_id, request_id, response_queue)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception(
+                    "WorkerPool: abandon drain failed for worker=%s request_id=%s",
+                    worker.worker_id,
+                    request_id,
+                )
+                worker.mark_idle()
+                self._workers_by_loop_id.pop(loop_id, None)
+                self._pending_responses.pop(request_id, None)
+
+        task = asyncio.create_task(_run(), name=f"pool-abandon-{request_id}")
+        self._abandon_drain_tasks.add(task)
+        task.add_done_callback(self._abandon_drain_tasks.discard)
+
+    async def _drain_abandoned_request(
+        self,
+        worker: WorkerProcess,
+        loop_id: str,
+        request_id: str,
+        response_queue: asyncio.Queue,
+    ) -> None:
+        """Consume stream after the client left; release worker when the run completes."""
+        chunks_discarded = 0
+        try:
+            while True:
+                msg_type, payload = await response_queue.get()
+                if msg_type == "chunk":
+                    chunks_discarded += 1
+                    continue
+                if msg_type == "done":
+                    worker.requests_completed += 1
+                    logger.info(
+                        "WorkerPool: client disconnected; finished worker %s request %s "
+                        "(%d chunk(s) not delivered)",
+                        worker.worker_id,
+                        request_id,
+                        chunks_discarded,
+                    )
+                    return
+                if msg_type == "error":
+                    worker.requests_completed += 1
+                    logger.info(
+                        "WorkerPool: client disconnected; worker %s request %s ended with "
+                        "error after %d undelivered chunk(s): %s",
+                        worker.worker_id,
+                        request_id,
+                        chunks_discarded,
+                        payload,
+                    )
+                    return
+                logger.debug(
+                    "WorkerPool: unexpected msg_type=%s in abandon drain for request_id=%s",
+                    msg_type,
+                    request_id,
+                )
+                break
+        finally:
+            worker.mark_idle()
+            self._workers_by_loop_id.pop(loop_id, None)
+            self._pending_responses.pop(request_id, None)
+
     async def _poll_worker_responses(self) -> None:
         """Background task: poll worker response queues and route to pending requests."""
         loop = asyncio.get_event_loop()
@@ -351,26 +428,35 @@ class WorkerPool:
                 if not worker.is_alive():
                     continue
                 if worker.current_request_id is None:
-                    # Check for stale responses (from crashed worker)
-                    try:
-                        msg = await loop.run_in_executor(
-                            None,
-                            lambda: worker.response_queue.get_nowait(),
-                        )
-                        logger.warning(
-                            "WorkerPool: orphan response from idle worker %s: %s",
+                    # Drain any stale multiprocessing queue items in one pass (e.g. races
+                    # or after worker process oddities) without per-item log spam.
+                    drained = 0
+                    last_kind: str | None = None
+                    while True:
+                        try:
+                            msg = await loop.run_in_executor(
+                                None,
+                                worker.response_queue.get_nowait,
+                            )
+                        except queue.Empty:
+                            break
+                        drained += 1
+                        last_kind = msg[0]
+                    if drained:
+                        logger.debug(
+                            "WorkerPool: drained %d stale response(s) from idle worker %s "
+                            "(last=%s)",
+                            drained,
                             worker_id,
-                            msg[0],
+                            last_kind,
                         )
-                    except queue.Empty:
-                        pass
                     continue
 
                 try:
                     # Non-blocking get from response queue
                     msg = await loop.run_in_executor(
                         None,
-                        lambda: worker.response_queue.get_nowait(),
+                        worker.response_queue.get_nowait,
                     )
                 except queue.Empty:
                     continue
@@ -383,9 +469,10 @@ class WorkerPool:
                 if response_queue is not None:
                     await response_queue.put((msg_type, payload))
                 else:
-                    logger.warning(
-                        "WorkerPool: orphan response for unknown request_id=%s",
+                    logger.debug(
+                        "WorkerPool: no pending route for request_id=%s (%s); discarding",
                         request_id,
+                        msg_type,
                     )
 
             # Short sleep to avoid busy polling
@@ -432,24 +519,23 @@ class WorkerPool:
             if worker is None:
                 raise RuntimeError("No available workers in pool")
 
-        # Create response queue for this request (asyncio.Queue for intra-process routing)
-        response_queue: asyncio.Queue = asyncio.Queue()
-        self._pending_responses[request_id] = response_queue
-
-        # Track loop_id -> worker_id for cancellation
-        self._workers_by_loop_id[request.loop_id] = worker.worker_id
-        worker.mark_busy(request.loop_id, request_id)
-
-        # Dispatch to worker: ("request", request_id, LoopRunRequest)
-        worker.request_queue.put(("request", request_id, request))
+            # Register routing and mark busy before releasing the semaphore so the poll
+            # loop cannot treat this worker as idle and drain a stale response_queue.
+            response_queue: asyncio.Queue = asyncio.Queue()
+            self._pending_responses[request_id] = response_queue
+            self._workers_by_loop_id[request.loop_id] = worker.worker_id
+            worker.mark_busy(request.loop_id, request_id)
+            worker.request_queue.put(("request", request_id, request))
 
         start_time = datetime.now()
+        completed = False
 
         try:
             while True:
                 msg_type, payload = await response_queue.get()
 
                 if msg_type == "done":
+                    completed = True
                     worker.mark_idle()
                     self._workers_by_loop_id.pop(request.loop_id, None)
                     self._pending_responses.pop(request_id, None)
@@ -459,6 +545,7 @@ class WorkerPool:
                     worker.requests_completed += 1
                     return
                 if msg_type == "error":
+                    completed = True
                     worker.mark_idle()
                     self._workers_by_loop_id.pop(request.loop_id, None)
                     self._pending_responses.pop(request_id, None)
@@ -470,9 +557,11 @@ class WorkerPool:
             logger.info("Pool request %s cancelled by client disconnect", request_id)
             raise
         finally:
-            worker.mark_idle()
-            self._workers_by_loop_id.pop(request.loop_id, None)
-            self._pending_responses.pop(request_id, None)
+            if not completed:
+                # Client left (cancel, disconnect, or early close): worker may still be
+                # streaming — keep routing until done/error so the worker returns idle
+                # without flooding orphan logs.
+                self._schedule_abandon_drain(worker, request.loop_id, request_id, response_queue)
 
     async def cancel_request(self, loop_id: str) -> None:
         """Signal cancellation to worker handling this loop_id.
@@ -502,6 +591,15 @@ class WorkerPool:
                 await self._poll_task
             except asyncio.CancelledError:
                 pass
+
+        for t in list(self._abandon_drain_tasks):
+            t.cancel()
+        for t in list(self._abandon_drain_tasks):
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
+        self._abandon_drain_tasks.clear()
 
         logger.info("WorkerPool: shutting down %d workers", len(self._workers))
 
