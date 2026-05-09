@@ -159,7 +159,7 @@ class StreamDisplayPipeline:
     def _task_scope_from_event(self, event: dict[str, Any]) -> tuple[str, str] | None:
         """Extract IG-334 ``(task_tool_call_id, subagent_type)`` when attached by the renderer."""
         ts = event.get("task_scope")
-        if isinstance(ts, tuple) and len(ts) == 2:
+        if isinstance(ts, (list, tuple)) and len(ts) == 2:
             a, b = ts
             if isinstance(a, str) and isinstance(b, str):
                 return (a, b)

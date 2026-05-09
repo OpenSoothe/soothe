@@ -744,8 +744,8 @@ class _HistoryMixin:
             # Use iter_turn_chunks to read events (same as active turn execution)
             chunk_source = self._daemon_session.iter_turn_chunks()
             async for chunk in chunk_source:
-                if not isinstance(chunk, tuple) or len(chunk) != 3:
-                    logger.debug("Skipping non-3-tuple chunk: %s", type(chunk).__name__)
+                if not isinstance(chunk, (list, tuple)) or len(chunk) != 3:
+                    logger.debug("Skipping invalid stream chunk: %s", type(chunk).__name__)
                     continue
 
                 namespace, mode, data = chunk
@@ -760,7 +760,7 @@ class _HistoryMixin:
                     continue
 
                 if mode == "messages":
-                    if not isinstance(data, tuple) or len(data) != 2:
+                    if not isinstance(data, (list, tuple)) or len(data) != 2:
                         continue
                     message, _metadata = data
                     message = normalize_stream_message(message)

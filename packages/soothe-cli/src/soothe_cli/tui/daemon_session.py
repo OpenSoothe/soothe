@@ -20,6 +20,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Match headless daemon client: brief read window after ``idle`` so stream events
+# that arrive slightly after status are not dropped (``cli/execution/daemon.py``).
+_POST_IDLE_DRAIN_DEADLINE_S = 2.5
+
 
 class TuiDaemonSession:
     """Own the daemon websocket session used by the TUI."""
@@ -115,6 +119,51 @@ class TuiDaemonSession:
             raise RuntimeError("No active loop for interrupt resume")
         await self._client.send_resume_interrupts(self._loop_id, resume_payload)
 
+    async def _drain_stream_events_after_idle(
+        self,
+        *,
+        expected_loop_id: str | None,
+    ) -> Any:
+        """Yield stream chunks that arrive just after ``idle`` (headless client parity)."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + _POST_IDLE_DRAIN_DEADLINE_S
+        exp = expected_loop_id
+        while loop.time() < deadline:
+            try:
+                event = await asyncio.wait_for(self._client.read_event(), timeout=0.25)
+            except TimeoutError:
+                break
+            if not event:
+                break
+            event_type = event.get("type", "")
+            event_loop_id = event.get("loop_id")
+            if exp and isinstance(event_loop_id, str) and event_loop_id and event_loop_id != exp:
+                logger.debug(
+                    "Skipping daemon event for non-active loop %s (active=%s, type=%s)",
+                    event_loop_id,
+                    exp,
+                    event_type,
+                )
+                continue
+            if event_type == "error":
+                raise RuntimeError(str(event.get("message", "daemon error")))
+            if event_type == "status":
+                loop_ev = event.get("loop_id")
+                if isinstance(loop_ev, str) and loop_ev:
+                    self._loop_id = loop_ev
+                    exp = loop_ev
+                continue
+            if event_type != "event":
+                continue
+            data = event.get("data")
+            if isinstance(data, dict) and data.get("type") == "soothe.system.daemon.heartbeat":
+                continue
+            namespace = tuple(event.get("namespace", []) or [])
+            mode = str(event.get("mode", ""))
+            yield (namespace, mode, data)
+            if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
+                return
+
     async def iter_turn_chunks(self) -> Any:
         """Yield `(namespace, mode, data)` chunks for the active daemon turn."""
         query_started = False
@@ -151,12 +200,17 @@ class TuiDaemonSession:
                         loop_ev = event.get("loop_id")
                         if isinstance(loop_ev, str) and loop_ev:
                             self._loop_id = loop_ev
-                            if expected_loop_id is None:
-                                expected_loop_id = loop_ev
+                            # Keep filter aligned with daemon-canonical loop_id whenever
+                            # status carries it (avoids dropping subsequent events).
+                            expected_loop_id = loop_ev
                         state = event.get("state", "")
                         if state == "running":
                             query_started = True
                         elif query_started and state in {"idle", "stopped"}:
+                            async for chunk in self._drain_stream_events_after_idle(
+                                expected_loop_id=expected_loop_id,
+                            ):
+                                yield chunk
                             break
                         continue
 

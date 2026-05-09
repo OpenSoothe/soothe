@@ -90,6 +90,24 @@ class TestIndentForLevel:
         assert indent_for_level(3) == "  "
 
 
+class TestStreamDisplayPipelineTaskScope:
+    """JSON wire decodes pairs as lists — pipeline must accept both list and tuple."""
+
+    def test_task_scope_from_event_accepts_list_pair(self) -> None:
+        pl = StreamDisplayPipeline()
+        assert pl._task_scope_from_event({"task_scope": ["call-1", "browser"]}) == (
+            "call-1",
+            "browser",
+        )
+
+    def test_task_scope_from_event_accepts_tuple_pair(self) -> None:
+        pl = StreamDisplayPipeline()
+        assert pl._task_scope_from_event({"task_scope": ("call-1", "browser")}) == (
+            "call-1",
+            "browser",
+        )
+
+
 class TestFormatters:
     """Tests for formatter functions."""
 

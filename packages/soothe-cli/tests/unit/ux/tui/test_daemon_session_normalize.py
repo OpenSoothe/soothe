@@ -175,3 +175,29 @@ async def test_iter_turn_chunks_filters_non_active_loop_events() -> None:
 
     assert chunks == [((), "messages", ("main", {}))]
     assert session._loop_id == "loop-main"
+
+
+@pytest.mark.asyncio
+async def test_iter_turn_chunks_drains_events_after_idle() -> None:
+    """Late stream frames after ``idle`` should be consumed (headless CLI parity)."""
+    session = object.__new__(TuiDaemonSession)
+    session._loop_id = "loop-main"
+    session._read_lock = asyncio.Lock()
+    session._streaming = False
+    session._client = _StubEventClient(
+        [
+            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {"type": "status", "state": "idle", "loop_id": "loop-main"},
+            {
+                "type": "event",
+                "loop_id": "loop-main",
+                "namespace": [],
+                "mode": "messages",
+                "data": ("late", {}),
+            },
+        ]
+    )
+
+    chunks = [chunk async for chunk in session.iter_turn_chunks()]
+
+    assert chunks == [((), "messages", ("late", {}))]
