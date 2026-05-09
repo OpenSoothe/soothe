@@ -340,8 +340,8 @@ async def execute_task_textual(
                     chunk_source = daemon_session.iter_turn_chunks()
 
             async for chunk in chunk_source:
-                if not isinstance(chunk, tuple) or len(chunk) != 3:  # noqa: PLR2004  # stream chunk is a 3-tuple (namespace, mode, data)
-                    logger.debug("Skipping non-3-tuple chunk: %s", type(chunk).__name__)
+                if not isinstance(chunk, (list, tuple)) or len(chunk) != 3:  # noqa: PLR2004
+                    logger.debug("Skipping invalid stream chunk: %s", type(chunk).__name__)
                     continue
 
                 namespace, current_stream_mode, data = chunk
@@ -399,9 +399,9 @@ async def execute_task_textual(
                             ns_key,
                         )
 
-                    if not isinstance(data, tuple) or len(data) != 2:  # noqa: PLR2004  # message stream data is a 2-tuple (message, metadata)
+                    if not isinstance(data, (list, tuple)) or len(data) != 2:  # noqa: PLR2004
                         logger.debug(
-                            "Skipping non-2-tuple message data: type=%s",
+                            "Skipping non-pair message data: type=%s",
                             type(data).__name__,
                         )
                         continue

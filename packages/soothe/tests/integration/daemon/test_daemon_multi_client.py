@@ -56,6 +56,10 @@ async def test_two_clients_isolated(tmp_path: Path):
         loop2 = await websocket_bootstrap_loop_session(client2)
         assert loop2 != loop1
 
+        # Clear pending events only for client2 before isolation check
+        # Client2 should not receive loop1 events
+        client2.clear_pending_events()
+
         await client1.send_input(loop1, "Test query from client 1")
 
         event = await asyncio.wait_for(client1.read_event(), timeout=2.0)
@@ -91,6 +95,11 @@ async def test_unsubscribed_client_receives_nothing(tmp_path: Path):
         client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await _connect_and_drain_handshake(client2)
         loop2 = await websocket_bootstrap_loop_session(client2)
+
+        # Clear pending events from setup phase before isolation check
+        client.clear_pending_events()
+        client2.clear_pending_events()
+
         await client2.send_input(loop2, "Test query")
 
         with pytest.raises((asyncio.TimeoutError, asyncio.CancelledError)):

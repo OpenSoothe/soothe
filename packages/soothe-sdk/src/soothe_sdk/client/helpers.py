@@ -1,14 +1,21 @@
 """WebSocket helper functions for daemon communication."""
 
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import logging
 from typing import TYPE_CHECKING
 
 from soothe_sdk.client.websocket import WebSocketClient
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
 
-def websocket_url_from_config(cfg: "SootheConfig") -> str:
+def websocket_url_from_config(cfg: SootheConfig) -> str:
     """Construct WebSocket URL from config (standard helper).
 
     Args:
@@ -42,6 +49,18 @@ async def check_daemon_status(client: WebSocketClient, timeout: float = 5.0) -> 
     return response
 
 
+def _daemon_status_indicates_live(status: dict) -> bool:
+    """Infer liveness from a ``daemon_status_response`` payload.
+
+    Prefer an explicit ``running`` field when present. Older or alternate
+    implementations may omit it; a successful RPC response should not be
+    treated as dead solely due to a missing key.
+    """
+    if "running" in status:
+        return bool(status["running"])
+    return bool(status.get("port_live", True))
+
+
 async def is_daemon_live(ws_url: str, timeout: float = 5.0) -> bool:
     """Composite health check: connection + status RPC.
 
@@ -52,14 +71,29 @@ async def is_daemon_live(ws_url: str, timeout: float = 5.0) -> bool:
     Returns:
         True if daemon is live and responsive, False otherwise
     """
-    try:
-        client = WebSocketClient(url=ws_url)
-        await client.connect()
-        status = await check_daemon_status(client, timeout=timeout)
-        await client.close()
-        return status.get("running", False)
-    except Exception:
-        return False
+    attempts = 3
+    delay_s = 0.35
+    last_error: Exception | None = None
+
+    for attempt in range(attempts):
+        client: WebSocketClient | None = None
+        try:
+            client = WebSocketClient(url=ws_url)
+            await client.connect()
+            status = await check_daemon_status(client, timeout=timeout)
+            return _daemon_status_indicates_live(status)
+        except Exception as exc:
+            last_error = exc
+            if attempt < attempts - 1:
+                await asyncio.sleep(delay_s)
+        finally:
+            if client is not None:
+                with contextlib.suppress(Exception):
+                    await client.close()
+
+    if last_error is not None:
+        logger.debug("Daemon health check failed for %s: %s", ws_url, last_error)
+    return False
 
 
 async def request_daemon_shutdown(client: WebSocketClient, timeout: float = 10.0) -> None:
