@@ -5,8 +5,11 @@ using the WebSocket client from soothe-sdk. The daemon performs vision
 preflight (IG-327) to extract visual information before main processing.
 
 Usage:
-    # From project root with venv activated:
-    source .venv/bin/activate && python examples/image_understanding_example.py
+    # From project root with pyenv virtualenv activated:
+    pyenv activate soothe-dev && python examples/image_understanding_example.py
+
+    # Or use make run:
+    make run-dev examples/image_understanding_example.py
 
     # Ensure daemon is running:
     soothe daemon start
