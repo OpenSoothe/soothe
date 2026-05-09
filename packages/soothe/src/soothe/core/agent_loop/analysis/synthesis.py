@@ -27,7 +27,7 @@ from soothe.core.agent_loop.analysis.scenario_classifier import (
     ScenarioClassification,
     classify_synthesis_scenario,
 )
-from soothe.core.agent_loop.state.schemas import LoopState, PlanResult
+from soothe.core.agent_loop.state.schemas import LoopState
 from soothe.core.agent_loop.utils.messages import (
     LoopHumanMessage,
     tag_messages_stream_chunk_for_goal_completion,
@@ -119,27 +119,19 @@ class SynthesisGenerator:
         self,
         goal: str,
         state: LoopState,
-        plan_result: PlanResult,
     ) -> AsyncGenerator:
-        """Generate synthesis via CoreAgent streaming (RFC-616, IG-300).
+        """Generate synthesis via CoreAgent streaming.
 
-        Two-phase flow:
-        1. Classify scenario from goal + intent + execution
-        2. Assemble ``messages``: copies of ``state.loop_messages`` (plus a final instruction turn)
-        3. Stream via CoreAgent
-
-        Yields LangGraph ``messages``-mode stream tuples tagged with ``phase=goal_completion``
-        for RFC-614 / IG-317 (AgentLoop wraps as ``stream_event``).
+        Two-phase: classify scenario, then assemble ledger copies + instruction and stream via CoreAgent.
+        Uses isolated checkpoint thread to prevent replay of parent AgentLoop history.
 
         Args:
             goal: Goal description.
-            state: Loop state with thread context and execution history.
-            plan_result: Plan result (reserved for future hints).
+            state: Loop state with thread context and execution ledger (`loop_messages`).
 
         Yields:
-            ``(namespace, mode, data)`` stream chunks (same shape as CoreAgent ``astream``).
+            LangGraph ``messages``-mode stream tuples tagged with ``phase=goal_completion``.
         """
-        _ = plan_result  # Reserved for future use
 
         # Phase 1: Classify scenario
         classification = await self._classify_scenario(goal, state)

@@ -63,7 +63,6 @@ async def test_generate_synthesis_astream_uses_isolated_thread_and_workspace() -
             )
         ],
     )
-    plan = MagicMock()
 
     gen = SynthesisGenerator(MagicMock(), core, soothe_config=None)
     with patch.object(
@@ -72,7 +71,7 @@ async def test_generate_synthesis_astream_uses_isolated_thread_and_workspace() -
         new_callable=AsyncMock,
         return_value=classification,
     ):
-        async for _ in gen.generate_synthesis("g", state, plan):
+        async for _ in gen.generate_synthesis("g", state):
             pass
 
     cfg = captured.get("config") or {}
@@ -124,7 +123,6 @@ async def test_generate_synthesis_passes_ledger_messages_before_instruction() ->
         loop_messages=ledger,
         step_results=[],
     )
-    plan = MagicMock()
 
     gen = SynthesisGenerator(MagicMock(), core, soothe_config=None)
     with patch.object(
@@ -133,7 +131,7 @@ async def test_generate_synthesis_passes_ledger_messages_before_instruction() ->
         new_callable=AsyncMock,
         return_value=classification,
     ):
-        async for _ in gen.generate_synthesis("g", state, plan):
+        async for _ in gen.generate_synthesis("g", state):
             pass
 
     msgs = captured.get("messages") or []
