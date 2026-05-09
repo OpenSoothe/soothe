@@ -104,6 +104,101 @@ LC_COGNITION_HOVER = "#7BC9D3"
 
 
 # ---------------------------------------------------------------------------
+# Unified Card Palette — Grayscale system for Goal/Plan/Step/Task cards (IG-XXX)
+#
+# Design principles:
+# - Consistent visual style across all four card types
+# - Restrained grayscale as primary palette
+# - Header/status colors are prominent; activity colors are subdued
+# - Left border color matches activity color for visual harmony
+# ---------------------------------------------------------------------------
+
+# Grayscale base colors (neutral, non-distracting)
+GRAY_50 = "#F9FAFB"
+"""Lightest gray — almost white, for subtle backgrounds."""
+
+GRAY_100 = "#F3F4F6"
+"""Very light gray — card backgrounds in light themes."""
+
+GRAY_200 = "#E5E7EB"
+"""Light gray — borders, dividers."""
+
+GRAY_300 = "#D1D5DB"
+"""Soft gray — secondary borders, disabled states."""
+
+GRAY_400 = "#9CA3AF"
+"""Medium-light gray — placeholder text, subtle elements."""
+
+GRAY_500 = "#6B7280"
+"""Medium gray — primary activity/secondary text color (★ key)."""
+
+GRAY_600 = "#4B5563"
+"""Medium-dark gray — secondary headings, emphasized secondary text."""
+
+GRAY_700 = "#374151"
+"""Dark gray — primary text in light themes."""
+
+GRAY_800 = "#1F2937"
+"""Very dark gray — near-black backgrounds."""
+
+GRAY_900 = "#111827"
+"""Darkest gray — deep backgrounds."""
+
+# Card semantic colors — unified across Goal/Plan/Step/Task
+CARD_BORDER_DARK = GRAY_600
+"""Card left border in dark theme — medium gray for subtle presence."""
+
+CARD_BORDER_LIGHT = GRAY_300
+"""Card left border in light theme — soft gray for subtle presence."""
+
+CARD_BORDER_HOVER_DARK = GRAY_400
+"""Card border hover in dark theme — lighter on interaction."""
+
+CARD_BORDER_HOVER_LIGHT = GRAY_400
+"""Card border hover in light theme — darker on interaction."""
+
+CARD_ACTIVITY_DARK = GRAY_500
+"""Activity text in dark theme — subdued gray (matches border)."""
+
+CARD_ACTIVITY_LIGHT = GRAY_500
+"""Activity text in light theme — subdued gray (matches border)."""
+
+CARD_ACTIVITY_MUTED_DARK = GRAY_600
+"""Secondary activity text in dark theme — darker gray."""
+
+CARD_ACTIVITY_MUTED_LIGHT = GRAY_400
+"""Secondary activity text in light theme — lighter gray."""
+
+# Header colors — prominent but not overwhelming
+CARD_HEADER_DARK = "#7AA2F7"
+"""Card header prefix (📍💭🚀❇️) in dark theme — soft blue."""
+
+CARD_HEADER_LIGHT = "#2E5EAA"
+"""Card header prefix in light theme — deeper blue."""
+
+# Status colors — prominent for visibility
+CARD_SUCCESS_DARK = "#9ECE6A"
+"""Success state in dark theme — soft green."""
+
+CARD_SUCCESS_LIGHT = "#3A7D0A"
+"""Success state in light theme — deeper green."""
+
+CARD_ERROR_DARK = "#F7768E"
+"""Error state in dark theme — soft red."""
+
+CARD_ERROR_LIGHT = "#BE185D"
+"""Error state in light theme — deeper red."""
+
+# Legacy aliases for backward compatibility
+# (cognition colors now map to card colors for unified styling)
+LC_COGNITION = CARD_BORDER_DARK
+"""Legacy alias — now uses unified card border color."""
+
+LC_COGNITION_HOVER = CARD_BORDER_HOVER_DARK
+"""Legacy alias — now uses unified card hover color."""
+
+
+# ---------------------------------------------------------------------------
 # Brand palette — light
 # ---------------------------------------------------------------------------
 LC_LIGHT_BG = "#F5F5F7"
@@ -160,11 +255,11 @@ LC_LIGHT_TOOL = LC_LIGHT_AMBER
 LC_LIGHT_TOOL_HOVER = "#78350F"
 """Tool call hover (darkened for light bg contrast)."""
 
-LC_LIGHT_COGNITION = "#0F766E"
-"""Cognition progress accent (darkened for light bg contrast)."""
+LC_LIGHT_COGNITION = CARD_BORDER_LIGHT
+"""Legacy alias — now uses unified card border color."""
 
-LC_LIGHT_COGNITION_HOVER = "#115E59"
-"""Cognition progress hover (darkened for light bg contrast)."""
+LC_LIGHT_COGNITION_HOVER = CARD_BORDER_HOVER_LIGHT
+"""Legacy alias — now uses unified card hover color."""
 
 
 # ---------------------------------------------------------------------------
@@ -314,6 +409,28 @@ class ThemeColors:
     surface: str
     """Elevated card / panel background."""
 
+    # Unified card colors for Goal/Plan/Step/Task (IG-XXX)
+    card_border: str
+    """Card left border — unified gray across all card types."""
+
+    card_border_hover: str
+    """Card border hover state — slightly lighter/darker on interaction."""
+
+    card_header: str
+    """Card header prefix color (📍💭🚀❇️) — prominent but restrained."""
+
+    card_activity: str
+    """Activity text color — subdued gray, matches border for harmony."""
+
+    card_activity_muted: str
+    """Secondary activity text — more subdued than card_activity."""
+
+    card_success: str
+    """Success state color — prominent green for visibility."""
+
+    card_error: str
+    """Error state color — prominent red for visibility."""
+
     def __post_init__(self) -> None:
         """Validate that every field is a valid hex color.
 
@@ -367,11 +484,19 @@ DARK_COLORS = ThemeColors(
     skill_hover=LC_SKILL_HOVER,
     tool=LC_TOOL,
     tool_hover=LC_TOOL_HOVER,
-    cognition=LC_COGNITION,
-    cognition_hover=LC_COGNITION_HOVER,
+    cognition=CARD_BORDER_DARK,  # Unified: border matches activity
+    cognition_hover=CARD_BORDER_HOVER_DARK,
     foreground=LC_BODY,
     background=LC_DARK,
     surface=LC_CARD,
+    # Unified card colors for Goal/Plan/Step/Task (IG-XXX)
+    card_border=CARD_BORDER_DARK,
+    card_border_hover=CARD_BORDER_HOVER_DARK,
+    card_header=CARD_HEADER_DARK,
+    card_activity=CARD_ACTIVITY_DARK,
+    card_activity_muted=CARD_ACTIVITY_MUTED_DARK,
+    card_success=CARD_SUCCESS_DARK,
+    card_error=CARD_ERROR_DARK,
 )
 """Color set for the dark LangChain theme."""
 
@@ -390,11 +515,19 @@ LIGHT_COLORS = ThemeColors(
     skill_hover=LC_LIGHT_SKILL_HOVER,
     tool=LC_LIGHT_TOOL,
     tool_hover=LC_LIGHT_TOOL_HOVER,
-    cognition=LC_LIGHT_COGNITION,
-    cognition_hover=LC_LIGHT_COGNITION_HOVER,
+    cognition=CARD_BORDER_LIGHT,  # Unified: border matches activity
+    cognition_hover=CARD_BORDER_HOVER_LIGHT,
     foreground=LC_LIGHT_BODY,
     background=LC_LIGHT_BG,
     surface=LC_LIGHT_SURFACE,
+    # Unified card colors for Goal/Plan/Step/Task (IG-XXX)
+    card_border=CARD_BORDER_LIGHT,
+    card_border_hover=CARD_BORDER_HOVER_LIGHT,
+    card_header=CARD_HEADER_LIGHT,
+    card_activity=CARD_ACTIVITY_LIGHT,
+    card_activity_muted=CARD_ACTIVITY_MUTED_LIGHT,
+    card_success=CARD_SUCCESS_LIGHT,
+    card_error=CARD_ERROR_LIGHT,
 )
 """Color set for the light LangChain theme."""
 
@@ -740,6 +873,14 @@ def get_css_variable_defaults(
         "tool-hover": c.tool_hover,
         "cognition": c.cognition,
         "cognition-hover": c.cognition_hover,
+        # Unified card colors for Goal/Plan/Step/Task (IG-XXX)
+        "card-border": c.card_border,
+        "card-border-hover": c.card_border_hover,
+        "card-header": c.card_header,
+        "card-activity": c.card_activity,
+        "card-activity-muted": c.card_activity_muted,
+        "card-success": c.card_success,
+        "card-error": c.card_error,
     }
 
 
@@ -820,6 +961,14 @@ def _colors_from_textual_theme(app: object) -> ThemeColors:
         foreground=_hex_or(ct.foreground, base.foreground),
         background=_hex_or(ct.background, base.background),
         surface=_hex_or(ct.surface, base.surface),
+        # Unified card colors for Goal/Plan/Step/Task (IG-XXX)
+        card_border=base.card_border,
+        card_border_hover=base.card_border_hover,
+        card_header=base.card_header,
+        card_activity=base.card_activity,
+        card_activity_muted=base.card_activity_muted,
+        card_success=base.card_success,
+        card_error=base.card_error,
     )
 
 

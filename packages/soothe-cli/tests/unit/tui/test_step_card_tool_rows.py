@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from soothe_cli.tui.widgets.messages import CognitionStepMessage
+from soothe_cli.tui.preview_limits import STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
+from soothe_cli.tui.widgets.messages import CognitionStepMessage, ToolCallMessage
 
 
 def test_snapshot_apply_roundtrip() -> None:
@@ -57,6 +58,32 @@ def test_format_tool_call_row_branch_glyph_hollow_running_no_braille_spinner() -
     assert g.circle_empty in plain
     for frame in g.spinner_frames:
         assert frame not in plain
+
+
+def test_step_auto_collapses_when_body_lines_exceed_threshold() -> None:
+    w = CognitionStepMessage("s-auto", "Work", id="st-auto")
+    n = STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD + 1
+    for i in range(n):
+        w.add_tool_call(f"c{i}", "grep", {"pattern": str(i)})
+    assert w._card_collapsed  # noqa: SLF001
+
+
+def test_step_respects_user_expand_after_auto_collapse() -> None:
+    w = CognitionStepMessage("s-user", "Work", id="st-user")
+    for i in range(STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD + 1):
+        w.add_tool_call(f"c{i}", "grep", {"pattern": str(i)})
+    assert w._card_collapsed  # noqa: SLF001
+    w.toggle_collapse()
+    assert not w._card_collapsed  # noqa: SLF001
+    w.add_tool_call("extra", "ls", {"path": "."})
+    assert not w._card_collapsed  # noqa: SLF001
+
+
+def test_task_auto_collapses_when_activity_exceeds_threshold() -> None:
+    w = ToolCallMessage("task", {}, id="tsk-auto")
+    for i in range(STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD + 1):
+        w.append_subagent_activity(f"meta {i}")
+    assert w._card_collapsed  # noqa: SLF001
 
 
 def test_format_tool_call_row_branch_glyph_filled_on_success() -> None:
