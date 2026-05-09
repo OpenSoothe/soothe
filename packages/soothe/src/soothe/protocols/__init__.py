@@ -39,6 +39,7 @@ from soothe.protocols.policy import (
     PolicyProtocol,
 )
 from soothe.protocols.remote import RemoteAgentProtocol
+from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
 from soothe.protocols.toolkit import ToolkitProtocol
 from soothe.protocols.vector_store import VectorRecord, VectorStoreProtocol
 
@@ -50,6 +51,8 @@ __all__ = [
     "DurabilityProtocol",
     "GoalReport",
     "LoopPlannerProtocol",
+    "LoopRunRequest",
+    "LoopRunnerProtocol",
     "LoopWorkingMemoryProtocol",
     "MemoryItem",
     "MemoryProtocol",

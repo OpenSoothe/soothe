@@ -28,7 +28,8 @@ class _FakeRunner:
     def set_current_thread_id(self, thread_id: str | None) -> None:
         self.current_thread_id = thread_id
 
-    def set_interrupt_resolver(self, _resolver: Any) -> None:
+    def set_interrupt_resolver(self, loop_id: str, _resolver: Any) -> None:
+        del loop_id
         return None
 
     async def astream(self, _text: str, **_kwargs: Any):  # type: ignore[override]
@@ -37,6 +38,31 @@ class _FakeRunner:
         await asyncio.sleep(0.05)
         raise asyncio.CancelledError
         yield  # pragma: no cover
+
+
+class _FakeLoopRunner:
+    """Wraps a fake runner to satisfy ``LoopRunnerProtocol``."""
+
+    def __init__(self, runner: _FakeRunner | _SlowCancelRunner) -> None:
+        self._runner = runner
+        self._cancelled = False
+
+    async def run(self, _request: Any) -> Any:  # type: ignore[no-untyped-def]  # noqa: ANN401
+        async for chunk in self._runner.astream(""):
+            yield chunk
+
+    async def cancel(self) -> None:
+        self._cancelled = True
+
+
+class _FakeRunnerFactory:
+    """Creates ``_FakeLoopRunner`` instances backed by a shared runner."""
+
+    def __init__(self, runner: _FakeRunner | _SlowCancelRunner) -> None:
+        self._runner = runner
+
+    def create_runner(self, loop_id: str) -> _FakeLoopRunner:  # noqa: ARG002
+        return _FakeLoopRunner(self._runner)
 
 
 class _SlowCancelRunner(_FakeRunner):
@@ -91,9 +117,12 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
     async def _broadcast(msg: dict[str, Any]) -> None:
         broadcasts.append(msg)
 
+    runner = _FakeRunner()
     daemon = SimpleNamespace(
         _thread_executor=None,
-        _runner=_FakeRunner(),
+        _runner=runner,
+        _runner_factory=_FakeRunnerFactory(runner),
+        _query_state_lock=asyncio.Lock(),
         _thread_registry=_FakeThreadRegistry(),
         _daemon_workspace=Path.cwd(),
         _thread_logger=SimpleNamespace(
@@ -117,7 +146,7 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
         _query_running=False,
         _current_query_task=None,
         _pending_interrupt_responses={},
-        _active_stream_loop_id=None,
+        _active_stream_loop_ids=set(),
         _broadcast=_broadcast,
         _session_manager=SimpleNamespace(
             claim_loop_ownership=lambda *_args, **_kwargs: None,
@@ -159,6 +188,8 @@ def _daemon_factory(
     return SimpleNamespace(
         _thread_executor=_DelegatingThreadExecutor(runner) if multithreaded else None,
         _runner=runner,
+        _runner_factory=_FakeRunnerFactory(runner),
+        _query_state_lock=asyncio.Lock(),
         _thread_registry=_FakeThreadRegistry(),
         _daemon_workspace=Path.cwd(),
         _thread_logger=SimpleNamespace(
@@ -182,7 +213,7 @@ def _daemon_factory(
         _query_running=False,
         _current_query_task=None,
         _pending_interrupt_responses={},
-        _active_stream_loop_id=None,
+        _active_stream_loop_ids=set(),
         _broadcast=_broadcast,
         _session_manager=SimpleNamespace(
             claim_loop_ownership=lambda *_args, **_kwargs: None,
@@ -312,9 +343,12 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
     async def _broadcast(msg: dict[str, Any]) -> None:
         broadcasts.append(msg)
 
+    runner = _SlowCancelRunner(unwind_delay=0.04)
     daemon = SimpleNamespace(
         _thread_executor=None,
-        _runner=_SlowCancelRunner(unwind_delay=0.04),
+        _runner=runner,
+        _runner_factory=_FakeRunnerFactory(runner),
+        _query_state_lock=asyncio.Lock(),
         _thread_registry=_FakeThreadRegistry(),
         _daemon_workspace=Path.cwd(),
         _thread_logger=SimpleNamespace(
@@ -338,7 +372,7 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
         _query_running=False,
         _current_query_task=None,
         _pending_interrupt_responses={},
-        _active_stream_loop_id=None,
+        _active_stream_loop_ids=set(),
         _broadcast=_broadcast,
         _session_manager=SimpleNamespace(
             claim_loop_ownership=lambda *_args, **_kwargs: None,

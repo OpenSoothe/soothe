@@ -870,6 +870,31 @@ class MessageRouter:
             )
             return
 
+        # Comprehensive in-memory cleanup before filesystem deletion
+        # 1. Cancel running queries for this loop
+        try:
+            await d._query_engine.cancel_loop(loop_id)
+        except Exception:
+            logger.warning(
+                "Failed to cancel running queries for loop %s", loop_id[:16], exc_info=True
+            )
+
+        # 2. Unsubscribe all clients from this loop's topic
+        for cid in list(d._session_manager._sessions.keys()):
+            await d._session_manager.unsubscribe_loop(cid, loop_id)
+
+        # 3. Clean up LoopInputDispatcher queue/worker for this loop
+        await d._loop_input_dispatcher.cleanup_loop(loop_id)
+
+        # 4. Clean up ThreadStateRegistry entries for this loop
+        removed_threads = d._thread_registry.cleanup_loop(loop_id)
+
+        # 5. Clean up Claude session cache for removed threads
+        if removed_threads:
+            from soothe.subagents.claude.session_bridge import cleanup_claude_sessions
+
+            cleanup_claude_sessions(removed_threads)
+
         # Delete loop directory and database data (IG-246: comprehensive cleanup)
         try:
             import aiosqlite
@@ -1058,6 +1083,13 @@ class MessageRouter:
             )
         except Exception as e:
             logger.warning("Failed to update metadata for detachment: %s", str(e))
+
+        # Resolve any pending interrupt future for this loop
+        # (Bug 5.5: prevent loop from blocking forever on HITL after client detach)
+        pending = d._pending_interrupt_responses.pop(loop_id, None)
+        if pending and not pending.done():
+            pending.set_result({"action": "cancel", "reason": "client_detached"})
+            logger.debug("Resolved pending interrupt future for detached loop %s", loop_id[:16])
 
         await d._session_manager.unsubscribe_loop(client_id, loop_id)
 

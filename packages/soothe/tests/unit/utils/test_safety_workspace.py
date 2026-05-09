@@ -30,7 +30,7 @@ class TestResolveDaemonWorkspace:
             # Remove SOOTHE_WORKSPACE if set
             os.environ.pop("SOOTHE_WORKSPACE", None)
 
-            with mock.patch("soothe.config.env.SOOTHE_HOME", str(tmp_path)):
+            with mock.patch("soothe.config.env.SOOTHE_HOME", tmp_path):
                 result = resolve_daemon_workspace(".")
                 assert result == tmp_path / "Workspace"
                 assert result.exists()
@@ -43,7 +43,7 @@ class TestResolveDaemonWorkspace:
         with mock.patch.dict(os.environ, {}, clear=True):
             os.environ.pop("SOOTHE_WORKSPACE", None)
 
-            with mock.patch("soothe.config.env.SOOTHE_HOME", str(tmp_path)):
+            with mock.patch("soothe.config.env.SOOTHE_HOME", tmp_path):
                 # Create Workspace dir so it exists
                 (tmp_path / "Workspace").mkdir()
 

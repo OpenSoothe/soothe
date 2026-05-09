@@ -6,6 +6,7 @@ This document tracks the change history of all RFCs in this project.
 
 | Date | RFC | Status | Description |
 |------|-----|--------|-------------|
+| 2026-05-09 | RFC-221 | Draft | LoopRunnerProtocol: Unified Subprocess-Isolated Agent Loop Execution — one subprocess per loop_id via Python multiprocessing (local) or Ray actor (distributed); fixes SootheRunner singleton data race on `_current_thread_id`, `_current_plan`, `_interrupt_resolver`, `_artifact_store`; removes `daemon._runner` singleton; `QueryEngine` migrated to `LoopRunnerFactory`; renumbered into 2xx AgentLoop series |
 | 2026-05-05 | RFC-220 | Draft | LangGraph Agent Loop Orchestrator — Layer 2 as Loop Graph (`loop_id` checkpoint key), mandatory evidence-bound steps, cut-over (supersedes RFC-201 imperative driver); **RFC id**: was RFC-620, renumbered into AgentLoop 2xx series |
 | 2026-05-04 | Multiple specs | — | Path migration: `soothe/cognition/*` Python sources documented as `packages/soothe/src/soothe/core/*` (AgentLoop, goal_engine, prompts, events); wire event types `soothe.cognition.*` unchanged (RFC-403) |
 | 2026-05-04 | RFC-603, RFC-604, RFC-214 | Draft / Implemented / Draft | IG-376: `goal_progress` is assess-model output only (remove evidence blend); confidence blend remains in `LLMPlanner`; plan-context human uses `Goal` + `Execute iteration` lines; abstract and §3 updated |

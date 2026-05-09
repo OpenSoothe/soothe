@@ -87,7 +87,9 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
 
     daemon._thread_registry.set_workspace(thread_id, loop_workspace)
     daemon._thread_registry.set_thread_loop(thread_id, loop_id)
-    daemon._runner.set_current_thread_id(thread_id)
+    # RFC-221: set_current_thread_id() removed — thread binding is passed via LoopRunRequest
+    # and applied inside the per-loop subprocess. The utility _runner singleton is no longer
+    # mutated here, eliminating the data race under concurrent loop execution.
     return str(thread_id)
 
 
@@ -140,6 +142,17 @@ class LoopInputDispatcher:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
+
+    async def cleanup_loop(self, loop_id: str) -> None:
+        """Remove queue and worker for a specific loop (loop deletion)."""
+        async with self._lock:
+            worker = self._workers.pop(loop_id, None)
+            self._queues.pop(loop_id, None)
+        if worker is not None and not worker.done():
+            worker.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await worker
+        logger.debug("Cleaned up input dispatcher state for loop %s", loop_id[:16])
 
     async def _worker(self, loop_id: str, queue: asyncio.Queue[dict[str, Any]]) -> None:
         d = self._daemon

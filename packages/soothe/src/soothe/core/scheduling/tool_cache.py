@@ -15,30 +15,35 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_tool_cache: dict[str, list[BaseTool]] = {}
+_tool_cache: dict[tuple[str, str | None], list[BaseTool]] = {}
 
 
-def get_cached_tools(tool_name: str) -> list[BaseTool] | None:
+def get_cached_tools(tool_name: str, workspace: str | None = None) -> list[BaseTool] | None:
     """Get tools from cache if available.
 
     Args:
         tool_name: Name of the tool group.
+        workspace: Workspace path for cache scoping. Tools resolved for
+            different workspaces are cached separately.
 
     Returns:
         Cached tools or None if not cached.
     """
-    return _tool_cache.get(tool_name)
+    return _tool_cache.get((tool_name, workspace))
 
 
-def cache_tools(tool_name: str, tools: list[BaseTool]) -> None:
+def cache_tools(tool_name: str, tools: list[BaseTool], workspace: str | None = None) -> None:
     """Cache a tool group for reuse.
 
     Args:
         tool_name: Name of the tool group.
         tools: List of tools to cache.
+        workspace: Workspace path for cache scoping.
     """
-    _tool_cache[tool_name] = tools
-    logger.debug("Cached tool group '%s' (%d tools)", tool_name, len(tools))
+    _tool_cache[(tool_name, workspace)] = tools
+    logger.debug(
+        "Cached tool group '%s' (workspace=%s, %d tools)", tool_name, workspace, len(tools)
+    )
 
 
 def clear_tool_cache() -> None:
@@ -57,5 +62,5 @@ def get_cache_stats() -> dict[str, Any]:
     return {
         "cached_groups": len(_tool_cache),
         "total_tools": sum(len(tools) for tools in _tool_cache.values()),
-        "groups": list(_tool_cache.keys()),
+        "groups": [k[0] for k in _tool_cache.keys()],
     }
