@@ -163,7 +163,7 @@ observability:
     dedup_window: 10
     retention_days: 90
 
-  verbosity: normal  # Verbosity level: quiet, normal, detailed, debug
+  verbosity: normal  # Verbosity level: quiet, normal, debug
 
   thread_logging_enabled: true  # Whether thread-specific logging is enabled
   thread_logging_retention_days: 30  # Days to retain thread logs before cleanup

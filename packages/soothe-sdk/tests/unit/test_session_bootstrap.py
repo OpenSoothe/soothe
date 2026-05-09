@@ -93,7 +93,7 @@ async def test_bootstrap_resume_loop_subscribes_only(tmp_path: Path) -> None:
     result = await bootstrap_loop_session(
         client,
         resume_loop_id="loop-existing",
-        verbosity="minimal",
+        verbosity="normal",
         workspace=str(workspace),
     )
 
@@ -102,4 +102,4 @@ async def test_bootstrap_resume_loop_subscribes_only(tmp_path: Path) -> None:
     assert len(rr) == 1
     assert rr[0][1]["type"] == "loop_subscribe"
     assert rr[0][1]["loop_id"] == "loop-existing"
-    assert rr[0][1]["verbosity"] == "minimal"
+    assert rr[0][1]["verbosity"] == "normal"

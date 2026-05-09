@@ -8,11 +8,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-VerbosityLevel = Literal["quiet", "minimal", "normal", "detailed", "debug"]
-"""User-configured verbosity level for filtering display content.
-
-Both `minimal` and `normal` are valid verbosity levels that map to VerbosityTier.NORMAL.
-This provides flexibility for user preference without changing behavior.
-"""
+VerbosityLevel = Literal["quiet", "normal", "debug"]
+"""User-configured verbosity level for filtering display content."""
 
 __all__ = ["VerbosityLevel"]
