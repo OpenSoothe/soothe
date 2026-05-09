@@ -1,6 +1,7 @@
 """Unit tests for ClientSession and ClientSessionManager."""
 
 import asyncio
+import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -179,6 +180,36 @@ async def test_sender_loop_stops_on_error():
     # (In real implementation, we might want to handle this differently)
 
     # Cleanup
+    await manager.remove_session(client_id)
+
+
+@pytest.mark.asyncio
+async def test_sender_loop_treats_connection_error_as_disconnect(caplog: pytest.LogCaptureFixture):
+    """Connection errors during send are handled as disconnects without warning traces."""
+    bus = EventBus()
+    manager = ClientSessionManager(bus)
+
+    transport = MagicMock()
+    transport.transport_type = "test"
+    transport.send = AsyncMock(side_effect=ConnectionError("peer closed"))
+
+    client_id = await manager.create_session(transport, None)
+    result = await manager.subscribe_loop(client_id, "loop-abc123")
+    assert result is True
+
+    caplog.set_level(logging.WARNING, logger="soothe.daemon.client_session")
+
+    event = {"type": "test", "data": "hello"}
+    await bus.publish(loop_event_topic("loop-abc123"), event)
+
+    # Wait for sender loop to process and exit.
+    await asyncio.sleep(0.1)
+
+    assert transport.send.await_count == 1
+    assert not any(
+        "Failed to send event to client" in record.getMessage() for record in caplog.records
+    )
+
     await manager.remove_session(client_id)
 
 

@@ -15,7 +15,7 @@ def test_resolve_loop_daemon_workspace_creates_dir(
 
     loop_id = "019dd9ca-f295-7f71-bf54-bf47f2c7a68b"
     p = resolve_loop_daemon_workspace(loop_id)
-    expected = (tmp_path / "Workspace" / loop_id).resolve()
+    expected = (tmp_path / "data" / "loops" / loop_id / "workspace").resolve()
     assert p == expected
     assert p.is_dir()
 

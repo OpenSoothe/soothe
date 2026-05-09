@@ -29,6 +29,11 @@ from tests.integration.conftest import (
     build_daemon_config,
     force_isolated_home,
 )
+from tests.integration.ws_loop_client import (
+    loop_new_with_initial_input,
+    request_loop_list,
+    subscribe_loop_stream,
+)
 
 # ============================================================================
 # Test Fixtures
@@ -188,14 +193,10 @@ async def test_three_clients_complete_isolation(tmp_path: Path, requires_llm_api
         for i in range(3):
             client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await client.connect()
-            await client.send_thread_create(initial_message=f"Client {i}")
+            loop_id = await loop_new_with_initial_input(client, initial_message=f"Client {i}")
+            thread_ids.append(loop_id)
 
-            status = await await_event_type(client.read_event, "thread_created", timeout=3.0)
-            thread_id = status["thread_id"]
-            thread_ids.append(thread_id)
-
-            await client.subscribe_thread(thread_id)
-            await client.wait_for_subscription_confirmed(thread_id)
+            await subscribe_loop_stream(client, loop_id)
 
             clients.append(client)
 
@@ -203,7 +204,7 @@ async def test_three_clients_complete_isolation(tmp_path: Path, requires_llm_api
         assert len(set(thread_ids)) == 3
 
         # Send input from client 0
-        await clients[0].send_input("Query from client 0")
+        await clients[0].send_input(thread_ids[0], "Query from client 0")
 
         # Client 0 should receive events
         event = await asyncio.wait_for(clients[0].read_event(), timeout=2.0)
@@ -239,20 +240,18 @@ async def test_client_subscription_after_thread_creation(tmp_path: Path, require
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
-        # Create thread first (without immediate subscription)
-        await client.send_thread_create(initial_message="Test thread")
-        created = await await_event_type(client.read_event, "thread_created", timeout=3.0)
-        thread_id = created["thread_id"]
+        # Create loop first (without immediate subscription)
+        loop_id = await loop_new_with_initial_input(client, initial_message="Test thread")
 
-        # Subscribe to the thread AFTER creation
-        await client.subscribe_thread(thread_id)
+        # Subscribe to the loop AFTER creation
+        await client.send_loop_subscribe(loop_id)
         confirmation = await await_event_type(
             client.read_event, "subscription_confirmed", timeout=3.0
         )
-        assert confirmation["thread_id"] == thread_id
+        assert confirmation["loop_id"] == loop_id
 
         # Send input and verify events are received
-        await client.send_input("Test query")
+        await client.send_input(loop_id, "Test query")
 
         # Should receive events because we're subscribed
         event = await asyncio.wait_for(client.read_event(), timeout=3.0)
@@ -279,19 +278,17 @@ async def test_client_multiple_thread_subscriptions(tmp_path: Path, requires_llm
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
-        # Create 3 threads and subscribe to all
+        # Create 3 loops and subscribe to all
         thread_ids = []
         for i in range(3):
-            await client.send_thread_create(initial_message=f"Thread {i}")
-            created = await await_event_type(client.read_event, "thread_created", timeout=3.0)
-            thread_id = created["thread_id"]
-            thread_ids.append(thread_id)
+            loop_id = await loop_new_with_initial_input(client, initial_message=f"Thread {i}")
+            thread_ids.append(loop_id)
 
-            await client.subscribe_thread(thread_id)
+            await client.send_loop_subscribe(loop_id)
             confirmation = await await_event_type(
                 client.read_event, "subscription_confirmed", timeout=3.0
             )
-            assert confirmation["thread_id"] == thread_id
+            assert confirmation["loop_id"] == loop_id
 
         # Verify client receives events for all subscribed threads
         # (Behavioral verification instead of implementation details)
@@ -329,17 +326,16 @@ async def test_rapid_client_connections(tmp_path: Path, requires_llm_api) -> Non
             client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
             await client.connect()
 
-            # Create thread
-            await client.send_thread_create(initial_message=f"Iteration {iteration}")
-            created = await await_event_type(client.read_event, "thread_created", timeout=3.0)
-            thread_id = created["thread_id"]
+            # Create loop
+            loop_id = await loop_new_with_initial_input(
+                client, initial_message=f"Iteration {iteration}"
+            )
 
             # Subscribe
-            await client.subscribe_thread(thread_id)
-            await await_event_type(client.read_event, "subscription_confirmed", timeout=3.0)
+            await subscribe_loop_stream(client, loop_id)
 
             # Quick query
-            await client.send_input("Quick test")
+            await client.send_input(loop_id, "Quick test")
             await asyncio.sleep(0.05)
 
             # Disconnect
@@ -351,11 +347,8 @@ async def test_rapid_client_connections(tmp_path: Path, requires_llm_api) -> Non
         # Verify daemon is still stable
         test_client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await test_client.connect()
-        await test_client.send_thread_list()
-        response = await await_event_type(
-            test_client.read_event, "thread_list_response", timeout=3.0
-        )
-        assert response["type"] == "thread_list_response"
+        response = await request_loop_list(test_client)
+        assert response["type"] == "loop_list_response"
         await test_client.close()
 
     finally:
@@ -378,18 +371,14 @@ async def test_event_throughput_stress(tmp_path: Path, requires_llm_api) -> None
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
-        # Create thread and subscribe
-        await client.send_thread_create(initial_message="Throughput test")
-        created = await await_event_type(client.read_event, "thread_created", timeout=3.0)
-        thread_id = created["thread_id"]
-
-        await client.subscribe_thread(thread_id)
-        await await_event_type(client.read_event, "subscription_confirmed", timeout=3.0)
+        # Create loop and subscribe
+        loop_id = await loop_new_with_initial_input(client, initial_message="Throughput test")
+        await subscribe_loop_stream(client, loop_id)
 
         # Send multiple queries rapidly
         num_queries = 5
         for i in range(num_queries):
-            await client.send_input(f"Query {i}")
+            await client.send_input(loop_id, f"Query {i}")
             # Wait for completion before next query
             status = await await_status_state(client.read_event, {"running", "idle"}, timeout=8.0)
             if status.get("state") == "running":
@@ -416,12 +405,10 @@ async def test_large_message_handling(tmp_path: Path, requires_llm_api) -> None:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
-        # Create thread with moderately large initial message (1KB)
+        # Create loop with moderately large initial message (1KB)
         large_message = "x" * 1024
-        await client.send_thread_create(initial_message=large_message)
-        created = await await_event_type(client.read_event, "thread_created", timeout=3.0)
-
-        assert created["type"] == "thread_created"
+        loop_id = await loop_new_with_initial_input(client, initial_message=large_message)
+        assert loop_id
 
         await client.close()
 
@@ -451,12 +438,8 @@ async def test_session_cleanup_on_unexpected_disconnect(tmp_path: Path, requires
         # Connect client
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
-        await client.send_thread_create(initial_message="Test")
-        status = await await_event_type(client.read_event, "thread_created", timeout=3.0)
-        thread_id = status["thread_id"]
-
-        await client.subscribe_thread(thread_id)
-        await await_event_type(client.read_event, "subscription_confirmed", timeout=3.0)
+        loop_id = await loop_new_with_initial_input(client, initial_message="Test")
+        await subscribe_loop_stream(client, loop_id)
 
         # Verify session was created
         assert daemon._session_manager.session_count == initial_count + 1
@@ -490,12 +473,8 @@ async def test_client_reconnect_after_disconnect(tmp_path: Path, requires_llm_ap
         # First connection
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
-        await client.send_thread_create(initial_message="First session")
-        created1 = await await_event_type(client.read_event, "thread_created", timeout=3.0)
-        thread_id1 = created1["thread_id"]
-
-        await client.subscribe_thread(thread_id1)
-        await await_event_type(client.read_event, "subscription_confirmed", timeout=3.0)
+        loop_id1 = await loop_new_with_initial_input(client, initial_message="First session")
+        await subscribe_loop_stream(client, loop_id1)
 
         # Disconnect
         await client.close()
@@ -504,15 +483,11 @@ async def test_client_reconnect_after_disconnect(tmp_path: Path, requires_llm_ap
         # Reconnect
         client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
-        await client2.send_thread_create(initial_message="Second session")
-        created2 = await await_event_type(client2.read_event, "thread_created", timeout=3.0)
-        thread_id2 = created2["thread_id"]
+        loop_id2 = await loop_new_with_initial_input(client2, initial_message="Second session")
+        await subscribe_loop_stream(client2, loop_id2)
 
-        await client2.subscribe_thread(thread_id2)
-        await await_event_type(client2.read_event, "subscription_confirmed", timeout=3.0)
-
-        # Verify different threads
-        assert thread_id1 != thread_id2
+        # Verify different loops
+        assert loop_id1 != loop_id2
 
         await client2.close()
 
@@ -528,7 +503,7 @@ async def test_client_reconnect_after_disconnect(tmp_path: Path, requires_llm_ap
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_protocol_message_thread_id_in_events(tmp_path: Path, requires_llm_api) -> None:
-    """Test that all event messages include thread_id field."""
+    """Test that stream events include loop/thread correlation (``loop_id``)."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
     config = build_daemon_config(tmp_path, websocket_port=ws_port)
@@ -540,16 +515,13 @@ async def test_protocol_message_thread_id_in_events(tmp_path: Path, requires_llm
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
-        # Create thread
-        await client.send_thread_create(initial_message="Test thread_id in events")
-        created = await await_event_type(client.read_event, "thread_created", timeout=3.0)
-        thread_id = created["thread_id"]
-
-        await client.subscribe_thread(thread_id)
-        await await_event_type(client.read_event, "subscription_confirmed", timeout=3.0)
+        loop_id = await loop_new_with_initial_input(
+            client, initial_message="Test thread_id in events"
+        )
+        await subscribe_loop_stream(client, loop_id)
 
         # Send query and collect events
-        await client.send_input("Test query")
+        await client.send_input(loop_id, "Test query")
 
         events_received = 0
         max_events = 20
@@ -566,8 +538,9 @@ async def test_protocol_message_thread_id_in_events(tmp_path: Path, requires_llm
 
                     # Check if this is a stream event
                     if event.get("type") == "event":
-                        assert "thread_id" in event, "Event message missing thread_id"
-                        assert event.get("thread_id") == thread_id
+                        ctx = event.get("loop_id") or event.get("thread_id")
+                        assert ctx is not None, "Event message missing loop_id/thread_id"
+                        assert ctx == loop_id
 
                     # Check for idle status (query completed)
                     if event.get("type") == "status" and event.get("state") == "idle":
@@ -599,10 +572,8 @@ async def test_protocol_client_id_in_status(tmp_path: Path, requires_llm_api) ->
         # Connect first client
         client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client1.connect()
-        await client1.send_thread_create(initial_message="Client 1")
-        created1 = await await_event_type(client1.read_event, "thread_created", timeout=3.0)
-        thread_id1 = created1["thread_id"]
-        await client1.subscribe_thread(thread_id1)
+        loop_id1 = await loop_new_with_initial_input(client1, initial_message="Client 1")
+        await client1.send_loop_subscribe(loop_id1)
         sub1 = await await_event_type(client1.read_event, "subscription_confirmed", timeout=3.0)
 
         client_id1 = sub1.get("client_id")
@@ -612,10 +583,8 @@ async def test_protocol_client_id_in_status(tmp_path: Path, requires_llm_api) ->
         # Connect second client
         client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
-        await client2.send_thread_create(initial_message="Client 2")
-        created2 = await await_event_type(client2.read_event, "thread_created", timeout=3.0)
-        thread_id2 = created2["thread_id"]
-        await client2.subscribe_thread(thread_id2)
+        loop_id2 = await loop_new_with_initial_input(client2, initial_message="Client 2")
+        await client2.send_loop_subscribe(loop_id2)
         sub2 = await await_event_type(client2.read_event, "subscription_confirmed", timeout=3.0)
 
         client_id2 = sub2.get("client_id")
@@ -700,18 +669,13 @@ async def test_event_delivery_latency(tmp_path: Path) -> None:
         client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client.connect()
 
-        # Create thread
-        await client.send_thread_create(initial_message="Latency test")
-        created = await await_event_type(client.read_event, "thread_created", timeout=3.0)
-        thread_id = created["thread_id"]
-
-        await client.subscribe_thread(thread_id)
-        await await_event_type(client.read_event, "subscription_confirmed", timeout=3.0)
+        loop_id = await loop_new_with_initial_input(client, initial_message="Latency test")
+        await subscribe_loop_stream(client, loop_id)
 
         # Measure event delivery time
         start_time = time.time()
 
-        await client.send_input("Quick response test")
+        await client.send_input(loop_id, "Quick response test")
 
         # Wait for first event
         await asyncio.wait_for(client.read_event(), timeout=5.0)
@@ -753,24 +717,21 @@ async def test_daemon_remains_stable_after_client_errors(tmp_path: Path) -> None
         await client.connect()
 
         # Try to access non-existent thread
-        fake_thread_id = f"non-existent-{uuid.uuid4().hex}"
-        await client.send_thread_get(fake_thread_id)
+        fake_loop_id = f"non-existent-{uuid.uuid4().hex}"
+        await client.send_loop_get(fake_loop_id)
 
         # Read response (should not crash daemon)
         response = await asyncio.wait_for(client.read_event(), timeout=3.0)
         assert response is not None
 
         # Verify daemon still works with valid operations
-        await client.send_thread_create(initial_message="Valid thread")
-        created = await await_event_type(client.read_event, "thread_created", timeout=3.0)
-        assert created["type"] == "thread_created"
+        loop_id = await loop_new_with_initial_input(client, initial_message="Valid thread")
+        assert loop_id
 
-        thread_id = created["thread_id"]
-        await client.subscribe_thread(thread_id)
-        await await_event_type(client.read_event, "subscription_confirmed", timeout=3.0)
+        await subscribe_loop_stream(client, loop_id)
 
         # Valid query should work
-        await client.send_input("Valid query")
+        await client.send_input(loop_id, "Valid query")
         status = await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
 
         if status.get("state") == "running":
@@ -798,19 +759,16 @@ async def test_graceful_handling_of_invalid_subscriptions(tmp_path: Path) -> Non
         await client.connect()
 
         # Try to subscribe to non-existent thread
-        fake_thread_id = f"fake-thread-{uuid.uuid4().hex}"
-        await client.subscribe_thread(fake_thread_id)
+        fake_loop_id = f"fake-loop-{uuid.uuid4().hex}"
+        await client.send_loop_subscribe(fake_loop_id)
 
         # Should receive error response
         response = await asyncio.wait_for(client.read_event(), timeout=3.0)
         assert response is not None
 
         # Client should still be connected
-        await client.send_thread_list()
-        list_response = await await_event_type(
-            client.read_event, "thread_list_response", timeout=3.0
-        )
-        assert list_response["type"] == "thread_list_response"
+        list_response = await request_loop_list(client)
+        assert list_response["type"] == "loop_list_response"
 
         await client.close()
 
@@ -839,23 +797,17 @@ async def test_concurrent_queries_different_threads(tmp_path: Path, requires_llm
         # Create two clients with different threads
         client1 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client1.connect()
-        await client1.send_thread_create(initial_message="Thread 1")
-        created1 = await await_event_type(client1.read_event, "thread_created", timeout=3.0)
-        thread1 = created1["thread_id"]
-        await client1.subscribe_thread(thread1)
-        await await_event_type(client1.read_event, "subscription_confirmed", timeout=3.0)
+        loop1 = await loop_new_with_initial_input(client1, initial_message="Thread 1")
+        await subscribe_loop_stream(client1, loop1)
 
         client2 = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
         await client2.connect()
-        await client2.send_thread_create(initial_message="Thread 2")
-        created2 = await await_event_type(client2.read_event, "thread_created", timeout=3.0)
-        thread2 = created2["thread_id"]
-        await client2.subscribe_thread(thread2)
-        await await_event_type(client2.read_event, "subscription_confirmed", timeout=3.0)
+        loop2 = await loop_new_with_initial_input(client2, initial_message="Thread 2")
+        await subscribe_loop_stream(client2, loop2)
 
-        # Send queries on both threads
-        await client1.send_input("Query on thread 1")
-        await client2.send_input("Query on thread 2")
+        # Send queries on both loops
+        await client1.send_input(loop1, "Query on thread 1")
+        await client2.send_input(loop2, "Query on thread 2")
 
         # Both should be able to process
         status1 = await await_status_state(client1.read_event, {"running", "idle"}, timeout=5.0)

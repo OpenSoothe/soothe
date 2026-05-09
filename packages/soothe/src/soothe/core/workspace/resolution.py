@@ -18,7 +18,7 @@ _LOOP_ID_SAFE = re.compile(r"^[A-Za-z0-9._-]{1,256}$")
 
 
 def resolve_loop_daemon_workspace(loop_id: str) -> Path:
-    """Resolve per-loop daemon workspace under ``$SOOTHE_HOME/Workspace/<loop_id>/``.
+    """Resolve per-loop daemon workspace under ``$SOOTHE_HOME/data/loops/<loop_id>/workspace/``.
 
     Used when an AgentLoop owns execution across threads so filesystem tools
     default to an isolated directory instead of the global daemon workspace
@@ -44,7 +44,7 @@ def resolve_loop_daemon_workspace(loop_id: str) -> Path:
         msg = f"Invalid loop_id for workspace directory: {loop_id!r}"
         raise ValueError(msg)
 
-    root = (Path(SOOTHE_HOME) / "Workspace" / text).resolve()
+    root = (Path(SOOTHE_HOME) / "data" / "loops" / text / "workspace").resolve()
     root.mkdir(parents=True, exist_ok=True)
     _validate_workspace_dir(root)
     return root
