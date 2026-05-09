@@ -76,6 +76,110 @@ class TransportConfig(BaseModel):
     http_rest: HttpRestConfig = Field(default_factory=HttpRestConfig)
 
 
+class WorkerPoolConfig(BaseModel):
+    """Persistent worker pool configuration (RFC-221 enhancement).
+
+    Pre-warms N worker processes at daemon startup to eliminate ~8s per-query
+    overhead (subprocess spawn + SootheRunner init). Workers create fresh
+    SootheRunner instances per request, ensuring no user data leakage.
+
+    Args:
+        enabled: Enable persistent worker pool mode.
+        pool_size: Number of pre-warmed worker processes.
+        idle_timeout_seconds: Idle worker timeout before graceful exit.
+        max_requests_per_worker: Max requests before worker respawn (prevents memory buildup).
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable persistent worker pool (reduces ~8s spawn overhead)",
+    )
+    pool_size: int = Field(
+        default=4,
+        ge=1,
+        le=128,
+        description="Number of pre-warmed worker processes",
+    )
+    idle_timeout_seconds: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        description="Idle worker timeout before shutdown (seconds)",
+    )
+    max_requests_per_worker: int = Field(
+        default=100,
+        ge=1,
+        description="Max requests before worker respawn (prevents memory buildup)",
+    )
+
+
+class RayClusterConfig(BaseModel):
+    """Ray cluster configuration for distributed loop execution (RFC-221).
+
+    When distributed.enabled=true, loops are executed as Ray actors. This config
+    controls Ray cluster connection and actor lifecycle.
+
+    Args:
+        address: Ray cluster address (None = start local cluster).
+        num_cpus: CPUs per actor (0 = auto).
+        object_store_memory: Object store memory per actor (bytes, 0 = auto).
+        max_concurrent_actors: Max concurrent loop actors.
+        actor_lifetime: Actor lifetime policy ('detached' or 'non_detached').
+        log_to_driver: Route actor logs to driver process.
+    """
+
+    address: str | None = Field(
+        default=None,
+        description="Ray cluster address (None = start local cluster, or 'auto' for existing)",
+    )
+    num_cpus: float = Field(
+        default=0,
+        ge=0,
+        description="CPUs allocated per loop actor (0 = auto)",
+    )
+    object_store_memory: int = Field(
+        default=0,
+        ge=0,
+        description="Object store memory per actor in bytes (0 = auto)",
+    )
+    max_concurrent_actors: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Maximum concurrent loop actors",
+    )
+    actor_lifetime: str = Field(
+        default="detached",
+        description="Actor lifetime: 'detached' (survives driver) or 'non_detached'",
+    )
+    log_to_driver: bool = Field(
+        default=True,
+        description="Route actor logs to driver process",
+    )
+
+
+class DistributedConfig(BaseModel):
+    """Distributed loop execution configuration (RFC-221).
+
+    Controls whether loops run in isolated subprocesses (local multiprocessing)
+    or Ray actors (distributed cluster). Worker pool is for local mode;
+    Ray config is for distributed cluster mode.
+
+    Args:
+        enabled: Enable distributed mode (Ray actors).
+        ray: Ray cluster configuration.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable distributed mode (Ray actors). Set SOOTHE_DISTRIBUTED=true to enable.",
+    )
+    ray: RayClusterConfig = Field(
+        default_factory=RayClusterConfig,
+        description="Ray cluster configuration for distributed loop execution",
+    )
+
+
 class DaemonConfig(BaseModel):
     """Daemon configuration for WebSocket transport (RFC-0013).
 
@@ -90,6 +194,8 @@ class DaemonConfig(BaseModel):
         auto_cancel_on_startup: Cancel very old incomplete threads on daemon start.
         max_input_queue_size: Maximum pending input messages (0 = unlimited, IG-258).
         max_concurrent_dispatches: Maximum concurrent message handlers (IG-258).
+        distributed: Distributed loop execution configuration (RFC-221).
+        worker_pool: Persistent worker pool configuration (RFC-221 enhancement).
     """
 
     transports: TransportConfig = Field(default_factory=TransportConfig)
@@ -139,11 +245,13 @@ class DaemonConfig(BaseModel):
         ge=30,
         description="Suppress stats logs after this many seconds without any published events",
     )
-    # RFC-221: subprocess-isolated loop execution
-    distributed: bool = Field(
-        default=False,
-        description=(
-            "Run each loop in an isolated subprocess (local multiprocessing or Ray actor). "
-            "Set SOOTHE_DISTRIBUTED=true to enable."
-        ),
+    # RFC-221: Distributed loop execution (Ray actors when enabled)
+    distributed: DistributedConfig = Field(
+        default_factory=DistributedConfig,
+        description="Distributed loop execution configuration",
+    )
+    # RFC-221 enhancement: Persistent worker pool (local multiprocessing mode)
+    worker_pool: WorkerPoolConfig = Field(
+        default_factory=WorkerPoolConfig,
+        description="Persistent worker pool configuration",
     )

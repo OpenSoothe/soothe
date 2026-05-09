@@ -135,6 +135,22 @@ daemon:
       enabled: true
       host: "127.0.0.1"
       port: 8766
+  # RFC-221: Distributed loop execution configuration
+  distributed:
+    enabled: false          # Use local multiprocessing mode
+    ray:
+      address: null
+      num_cpus: 0
+      object_store_memory: 0
+      max_concurrent_actors: 10
+      actor_lifetime: detached
+      log_to_driver: true
+  # RFC-221 enhancement: Persistent worker pool (reduces ~8s spawn overhead)
+  worker_pool:
+    enabled: true           # Enable persistent worker pool mode
+    pool_size: 8            # Number of pre-warmed worker processes
+    idle_timeout_seconds: 300
+    max_requests_per_worker: 100
 
 # =============================================================================
 # Tools Configuration
