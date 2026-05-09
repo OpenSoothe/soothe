@@ -39,7 +39,7 @@ _TIPS: list[str] = [
     "Use /skill:skill-creator to build reusable agent skills",
     "Use /auto-update to toggle automatic CLI updates",
 ]
-"""Rotating tips shown in the welcome footer.
+"""Rotating tips shown under the Loop line when the session is ready.
 
 One is picked per session.
 """
@@ -183,13 +183,22 @@ class WelcomeBanner(Static):
         if source_path:
             parts.extend([("Source: ", "dim"), (source_path, "dim"), "\n"])
 
+        tip_ready = not self._failed and not self._connecting
+        tip_line: str | None = f"{self._tip}\n" if tip_ready else None
+
         if self._cli_loop_id:
             parts.append((f"Loop: {self._cli_loop_id}\n", "dim"))
+            if tip_line is not None:
+                parts.append((tip_line, "dim"))
+                tip_line = None
 
         if self._mcp_tool_count > 0:
             parts.append((f"{get_glyphs().checkmark} ", success_color))
             label = "MCP tool" if self._mcp_tool_count == 1 else "MCP tools"
             parts.append(f"Loaded {self._mcp_tool_count} {label}\n")
+
+        if tip_line is not None:
+            parts.append((tip_line, "dim"))
 
         if self._failed:
             parts.append(build_failure_footer(self._failure_error))
@@ -200,9 +209,6 @@ class WelcomeBanner(Static):
                     local_server=self._local_server,
                 )
             )
-        else:
-            ready_color = "bold" if ansi else colors.primary
-            parts.append(build_welcome_footer(primary_color=ready_color, tip=self._tip))
         return Content.assemble(*parts)
 
 
@@ -242,31 +248,6 @@ def build_connecting_footer(*, resuming: bool = False, local_server: bool = Fals
     else:
         text = "\nConnecting to server...\n"
     return Content.styled(text, "dim")
-
-
-def build_welcome_footer(*, primary_color: str = theme.PRIMARY, tip: str | None = None) -> Content:
-    """Build the footer shown at the bottom of the welcome banner.
-
-    Includes a tip to help users discover features.
-
-    Args:
-        primary_color: Color string for the ready prompt.
-
-            Defaults to the module-level ANSI `PRIMARY` constant; widget callers
-            should pass the active theme's hex value.
-        tip: Tip text to display. When `None`, a random tip is selected.
-
-            Pass an explicit value to keep the tip stable across re-renders.
-
-    Returns:
-        Content with the ready prompt and a tip.
-    """
-    if tip is None:
-        tip = random.choice(_TIPS)  # noqa: S311
-    return Content.assemble(
-        ("\nReady to unleash your thinking?\n", primary_color),
-        (f"Tip: {tip}", "dim italic"),
-    )
 
 
 def resolve_source_display_path(

@@ -91,7 +91,6 @@ from soothe_cli.tui.textual_adapter._turn_helpers import (
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
-    CognitionGoalTreeMessage,
     CognitionPlanReasonMessage,
     CognitionStepMessage,
     DiffMessage,
@@ -1272,8 +1271,6 @@ async def execute_task_textual(
                             continue
 
                         if event_type == AGENT_LOOP_GOAL_STARTED:
-                            goal = str(data.get("goal", "")).strip()
-                            max_it = int(data.get("max_iterations", 0))
                             if not ns_key:
                                 adapter._last_completed_main_step_execute_prose = ""
                                 adapter._last_main_flushed_assistant_prose = ""
@@ -1288,27 +1285,10 @@ async def execute_task_textual(
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
-                            tree = CognitionGoalTreeMessage(
-                                goal=goal or "(goal)",
-                                max_iterations=max_it,
-                                id=f"goaltree-{uuid.uuid4().hex[:8]}",
-                            )
-                            adapter._goal_tree_by_namespace[ns_key] = tree
-                            await adapter._mount_message(tree)
                             continue
 
                         if event_type == AGENT_LOOP_GOAL_COMPLETED:
-                            tr = adapter._goal_tree_by_namespace.get(ns_key)
-                            if tr is not None:
-                                tr.set_loop_finished(
-                                    status=str(data.get("status", "")),
-                                    goal_progress=str(
-                                        data.get("goal_progress", "none")
-                                    ),  # IG-399: descriptive level
-                                    completion_summary=str(data.get("completion_summary", "")),
-                                    total_steps=int(data.get("total_steps", 0)),
-                                )
-                                adapter._goal_tree_by_namespace.pop(ns_key, None)
+                            continue
 
                         if event_type == AGENT_LOOP_STEP_STARTED:
                             step_id = str(data.get("step_id", "")).strip()
@@ -1325,9 +1305,6 @@ async def execute_task_textual(
                                     )
                                     pending_text_by_namespace[ns_key] = ""
                                     assistant_message_by_namespace.pop(ns_key, None)
-                                goal_tree = adapter._goal_tree_by_namespace.get(ns_key)
-                                if goal_tree is not None:
-                                    goal_tree.add_step_running(step_id, description or "(step)")
                                 step_widget = CognitionStepMessage(
                                     step_id=step_id,
                                     description=description or "(step)",
@@ -1386,15 +1363,6 @@ async def execute_task_textual(
                                 )
                                 if not summary.strip():
                                     summary = "Failed" if not success else "Done"
-                                goal_tree = adapter._goal_tree_by_namespace.get(ns_key)
-                                if goal_tree is not None:
-                                    goal_tree.complete_step(
-                                        step_id,
-                                        success,
-                                        duration_ms,
-                                        tool_call_count,
-                                        summary,
-                                    )
                                 widget = adapter._current_step_messages.pop(step_id, None)
                                 if widget is not None:
                                     if adapter._step_by_namespace.get(ns_key) is widget:
@@ -1417,7 +1385,7 @@ async def execute_task_textual(
                                         adapter._last_completed_main_step_execute_prose = (
                                             widget.last_completed_execute_prose
                                         )
-                                elif goal_tree is None:
+                                else:
                                     ev = dict(data)
                                     ev["namespace"] = list(ns_key)
                                     for line in progress_pipeline.process(ev):

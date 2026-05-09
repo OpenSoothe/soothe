@@ -7,6 +7,7 @@ from soothe_cli.cli.stream.task_scope import (
     format_task_scope_prefix,
     format_task_subagent_line,
 )
+from soothe_cli.shared.duration_format import format_duration_ms
 
 # Emoji presentation for step-done success (U+2705 + VS16); distinct from ✓ tool rows.
 _STEP_DONE_OK_MARK = "\u2705\ufe0f"
@@ -101,7 +102,7 @@ def format_subagent_done(
 ) -> DisplayLine:
     """Format a subagent completion line with metrics.
 
-    With Task scope: ``⚙ Task(type, \"…\") -> ✓ Completed (Nms)`` using wire task description
+    With Task scope: ``⚙ Task(type, \"…\") -> ✓ Completed (human duration)`` using wire task description
     when provided; falls back to summary text inside quotes.
     Without scope: legacy ``✓ …`` row with triple markers.
 
@@ -123,7 +124,7 @@ def format_subagent_done(
         ms = max(0, int(duration_s * 1000))
         outcome = "✓ Completed" if task_done_success else "✗ Failed"
         tail = (answer_summary or "").strip()
-        base = f"{quoted} -> {outcome} ({ms}ms)"
+        base = f"{quoted} -> {outcome} ({format_duration_ms(ms)})"
         content = f"{base}: {tail}" if tail else base
         return DisplayLine(
             level=2,
