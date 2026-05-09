@@ -18,7 +18,6 @@ from soothe_cli.tui._version import CHANGELOG_URL
 from soothe_cli.tui.app._module_init import (
     TextualSessionState,
 )
-from soothe_cli.tui.config import is_ascii_mode
 from soothe_cli.tui.widgets.chat_input import ChatInput
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
@@ -50,8 +49,6 @@ class _StartupMixin:
 
         chat = self.query_one("#chat", VerticalScroll)
         chat.anchor()
-        if is_ascii_mode():
-            chat.styles.scrollbar_size_vertical = 0
 
         self._status_bar = self.query_one("#status-bar", StatusBar)
         self._chat_input = self.query_one("#input-area", ChatInput)

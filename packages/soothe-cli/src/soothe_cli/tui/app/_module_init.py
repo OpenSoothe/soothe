@@ -17,7 +17,7 @@ from soothe_cli.tui._session_stats import (
     SessionStats,
 )
 
-# Only is_ascii_mode is needed before first paint (on_mount scrollbar config).
+# Keep module-level imports minimal before first paint.
 # All other config imports — settings, create_model, detect_provider, etc. — are
 # deferred to local imports at their call sites since they are only accessed
 # after user interaction begins.
