@@ -59,6 +59,8 @@ class WorkerProcess:
     requests_completed: int = 0
     started_at: datetime = field(default_factory=datetime.now)
     last_activity: datetime = field(default_factory=datetime.now)
+    #: True after we pushed a synthetic error for an unexpected process exit (poll loop).
+    dead_failure_routed: bool = False
 
     def is_alive(self) -> bool:
         """Check if the process is still running."""
@@ -419,6 +421,49 @@ class WorkerPool:
             self._workers_by_loop_id.pop(loop_id, None)
             self._pending_responses.pop(request_id, None)
 
+    async def _route_failure_for_dead_busy_worker(self, worker: WorkerProcess) -> None:
+        """If a worker process died while handling a request, unblock the waiter with an error.
+
+        Without this, ``submit()`` blocks forever on ``response_queue.get()`` because the
+        poll loop previously skipped dead workers and never forwarded ``done``/``error``.
+        """
+        req_id = worker.current_request_id
+        if req_id is None or worker.dead_failure_routed:
+            return
+
+        aio_q = self._pending_responses.get(req_id)
+        if aio_q is None:
+            logger.warning(
+                "WorkerPool: worker %s died while busy but no pending route (request_id=%s)",
+                worker.worker_id,
+                req_id,
+            )
+            worker.dead_failure_routed = True
+            return
+
+        worker.dead_failure_routed = True
+        err = RuntimeError(
+            "Worker subprocess exited unexpectedly during query execution; "
+            "check daemon logs for worker or model errors."
+        )
+        try:
+            await aio_q.put(("error", err))
+        except Exception:
+            worker.dead_failure_routed = False
+            logger.exception(
+                "WorkerPool: failed to deliver dead-worker error for request_id=%s",
+                req_id,
+            )
+
+    async def _handle_dead_worker(self, worker: WorkerProcess) -> None:
+        """Recover from a dead OS process: fail in-flight work and respawn the slot."""
+        if worker.current_request_id is not None:
+            await self._route_failure_for_dead_busy_worker(worker)
+        try:
+            await self._respawn_worker(worker)
+        except Exception:
+            logger.exception("WorkerPool: failed to respawn dead worker %s", worker.worker_id)
+
     async def _poll_worker_responses(self) -> None:
         """Background task: poll worker response queues and route to pending requests."""
         loop = asyncio.get_event_loop()
@@ -426,6 +471,7 @@ class WorkerPool:
         while self._running:
             for worker_id, worker in list(self._workers.items()):
                 if not worker.is_alive():
+                    await self._handle_dead_worker(worker)
                     continue
                 if worker.current_request_id is None:
                     # Drain any stale multiprocessing queue items in one pass (e.g. races

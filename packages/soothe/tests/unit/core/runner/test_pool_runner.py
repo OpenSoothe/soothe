@@ -9,7 +9,7 @@ import asyncio
 import queue
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -267,6 +267,51 @@ class TestWorkerPool:
 
             assert worker.status == WorkerStatus.IDLE
             assert fixed_request_id not in pool._pending_responses
+
+        await WorkerPool.close_shared_instance()
+
+    @pytest.mark.asyncio
+    async def test_dead_busy_worker_delivers_error_to_waiter(self) -> None:
+        """When the OS worker process dies mid-request, poll path unblocks submit with RuntimeError."""
+        config = _make_config()
+
+        WorkerPool._shared_pool = None
+        WorkerPool._pool_lock = None
+
+        fixed_request_id = "abcd1234efgh5678"
+
+        mock_process = MagicMock()
+        mock_process.pid = 1234
+        mock_process.is_alive.return_value = False
+
+        request_q = MagicMock()
+        worker = WorkerProcess(
+            process=mock_process,
+            request_queue=request_q,
+            response_queue=queue.Queue(),
+            worker_id="worker-0",
+            status=WorkerStatus.BUSY,
+        )
+        worker.mark_busy("loop-1", fixed_request_id)
+
+        mock_ctx = MagicMock()
+        mock_ctx.Process.return_value = mock_process
+        mock_ctx.Queue.side_effect = queue.Queue
+
+        with patch("multiprocessing.get_context", return_value=mock_ctx):
+            pool = await WorkerPool.get_shared_instance(config)
+            pool._workers = {"worker-0": worker}
+
+            pending: asyncio.Queue = asyncio.Queue()
+            pool._pending_responses[fixed_request_id] = pending
+
+            with patch.object(pool, "_respawn_worker", new_callable=AsyncMock):
+                await pool._handle_dead_worker(worker)
+
+            msg_type, payload = await asyncio.wait_for(pending.get(), timeout=2.0)
+            assert msg_type == "error"
+            assert isinstance(payload, RuntimeError)
+            assert "subprocess exited unexpectedly" in str(payload).lower()
 
         await WorkerPool.close_shared_instance()
 
