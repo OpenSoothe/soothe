@@ -209,6 +209,28 @@ daemon:
   event_size_stats_interval_seconds: 60
   event_size_stats_idle_pause_seconds: 120
 
+  # RFC-221: Distributed loop execution configuration
+  # distributed: Controls subprocess isolation (local multiprocessing or Ray actors)
+  distributed:
+    enabled: false          # Enable distributed mode (Ray actors). Set SOOTHE_DISTRIBUTED=true.
+    ray:
+      address: null         # null = start local cluster, 'auto' = connect to existing
+      num_cpus: 0           # CPUs per actor (0 = auto)
+      object_store_memory: 0    # Object store memory per actor (bytes, 0 = auto)
+      max_concurrent_actors: 10 # Maximum concurrent loop actors
+      actor_lifetime: detached  # 'detached' (survives driver) or 'non_detached'
+      log_to_driver: true       # Route actor logs to driver process
+
+  # RFC-221 enhancement: Persistent worker pool (reduces ~8s spawn overhead)
+  # Pre-warms N worker processes at daemon startup. Workers create fresh SootheRunner
+  # per request (Option A) ensuring no user data leakage across requests.
+  # Used when distributed.enabled=false.
+  worker_pool:
+    enabled: true           # Enable persistent worker pool mode
+    pool_size: 4            # Number of pre-warmed worker processes (1-128)
+    idle_timeout_seconds: 300    # Idle worker timeout before shutdown (60-3600)
+    max_requests_per_worker: 100 # Max requests before worker respawn (prevents memory buildup)
+
 # Subagents - Enabled by default (set enabled: false to disable)
 
 subagents:

@@ -9,8 +9,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from langchain_community.agent_toolkits.openapi.toolkit import RequestsToolkit
-from langchain_community.utilities.requests import TextRequestsWrapper
 from langchain_core.tools import BaseTool
 from soothe_sdk.plugin import plugin
 
@@ -50,6 +48,26 @@ class HttpRequestsToolkit:
                 "HttpRequestsToolkit: tools.http_requests.allow_dangerous_requests is false; "
                 "no HTTP tools will be registered. Set both enabled and "
                 "allow_dangerous_requests to true to opt in (see IG-339)."
+            )
+            return []
+
+        try:
+            import aiohttp  # noqa: F401 — pulled in by langchain_community.utilities.requests
+        except ModuleNotFoundError:
+            logger.warning(
+                "HttpRequestsToolkit: missing optional dependency `aiohttp` "
+                "(required by langchain-community for HTTP tools). "
+                "Install project dependencies (e.g. `uv sync` at the repo root)."
+            )
+            return []
+
+        try:
+            from langchain_community.agent_toolkits.openapi.toolkit import RequestsToolkit
+            from langchain_community.utilities.requests import TextRequestsWrapper
+        except ImportError as exc:
+            logger.warning(
+                "HttpRequestsToolkit: failed to import LangChain request toolkit (%s).",
+                exc,
             )
             return []
 

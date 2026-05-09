@@ -14,47 +14,61 @@ import pytest
 from soothe.config import SootheConfig
 from soothe.core.runner.factory import LoopRunnerFactory
 from soothe.core.runner.local_runner import LocalLoopRunner
+from soothe.core.runner.pool_runner import PoolLoopRunner
 
 
-def _config(distributed: bool = False) -> SootheConfig:
+def _config(distributed: bool = False, worker_pool_enabled: bool = True) -> SootheConfig:
+    """Create a config with specific distribution and pool settings."""
     cfg = SootheConfig()
-    cfg.daemon.distributed = distributed
+    cfg.daemon.distributed.enabled = distributed
+    cfg.daemon.worker_pool.enabled = worker_pool_enabled
     return cfg
 
 
-class TestLoopRunnerFactoryLocalMode:
-    """Factory creates LocalLoopRunner when distributed=False."""
+class TestLoopRunnerFactoryPoolMode:
+    """Factory creates PoolLoopRunner when worker_pool.enabled=True (default)."""
 
-    def test_create_runner_returns_local_runner(self) -> None:
-        factory = LoopRunnerFactory(_config(distributed=False))
+    def test_create_runner_returns_pool_runner_by_default(self) -> None:
+        """By default, worker_pool.enabled=True, so PoolLoopRunner is used."""
+        factory = LoopRunnerFactory(SootheConfig())
         runner = factory.create_runner("loop-abc")
-        assert isinstance(runner, LocalLoopRunner)
+        assert isinstance(runner, PoolLoopRunner)
 
     def test_create_runner_unique_per_loop_id(self) -> None:
-        factory = LoopRunnerFactory(_config(distributed=False))
+        factory = LoopRunnerFactory(SootheConfig())
         r1 = factory.create_runner("loop-1")
         r2 = factory.create_runner("loop-2")
         assert r1 is not r2
         assert r1._loop_id == "loop-1"
         assert r2._loop_id == "loop-2"
 
+
+class TestLoopRunnerFactoryLocalMode:
+    """Factory creates LocalLoopRunner when worker_pool.enabled=False and distributed=False."""
+
+    def test_create_runner_returns_local_runner_when_pool_disabled(self) -> None:
+        """When pool disabled and distributed disabled, LocalLoopRunner is used."""
+        factory = LoopRunnerFactory(_config(distributed=False, worker_pool_enabled=False))
+        runner = factory.create_runner("loop-abc")
+        assert isinstance(runner, LocalLoopRunner)
+
     def test_local_mode_does_not_import_ray(self) -> None:
         """Creating a factory or runner in local mode must not import Ray."""
         # Ensure ray is not in sys.modules at all after factory creation
         with patch.dict(sys.modules, {"ray": None}):
-            factory = LoopRunnerFactory(_config(distributed=False))
+            factory = LoopRunnerFactory(_config(distributed=False, worker_pool_enabled=False))
             runner = factory.create_runner("loop-xyz")
         assert isinstance(runner, LocalLoopRunner)
 
 
 class TestLoopRunnerFactoryDistributedMode:
-    """Factory creates RayLoopRunner when distributed=True; fails fast if Ray absent."""
+    """Factory creates RayLoopRunner when distributed.enabled=True; fails fast if Ray absent."""
 
     def test_raises_import_error_when_ray_not_installed(self) -> None:
         """Construction must fail fast when Ray is unavailable in distributed mode."""
         with patch.dict(sys.modules, {"ray": None}):
             with pytest.raises(ImportError, match="Ray is required"):
-                LoopRunnerFactory(_config(distributed=True))
+                LoopRunnerFactory(_config(distributed=True, worker_pool_enabled=False))
 
     def test_create_runner_returns_ray_runner_when_ray_available(self) -> None:
         """create_runner() returns a RayLoopRunner when Ray is importable."""
@@ -74,7 +88,7 @@ class TestLoopRunnerFactoryDistributedMode:
                 "soothe.core.runner.ray_actor": MagicMock(),
             },
         ):
-            factory = LoopRunnerFactory(_config(distributed=True))
+            factory = LoopRunnerFactory(_config(distributed=True, worker_pool_enabled=False))
             runner = factory.create_runner("loop-distributed")
 
         mock_ray_runner_cls.assert_called_once_with("loop-distributed", factory._config)
@@ -82,11 +96,21 @@ class TestLoopRunnerFactoryDistributedMode:
 
 
 class TestLoopRunnerFactoryDefaultConfig:
-    """Default SootheConfig has distributed=False."""
+    """Default SootheConfig has distributed.enabled=False and worker_pool.enabled=True."""
 
-    def test_default_config_is_local(self) -> None:
+    def test_default_config_has_pool_enabled(self) -> None:
+        """Default config enables worker pool (PoolLoopRunner)."""
         cfg = SootheConfig()
-        assert cfg.daemon.distributed is False
+        assert cfg.daemon.distributed.enabled is False
+        assert cfg.daemon.worker_pool.enabled is True
         factory = LoopRunnerFactory(cfg)
         runner = factory.create_runner("loop-default")
+        assert isinstance(runner, PoolLoopRunner)
+
+    def test_explicit_local_mode_returns_local_runner(self) -> None:
+        """Explicitly disabling pool returns LocalLoopRunner."""
+        cfg = SootheConfig()
+        cfg.daemon.worker_pool.enabled = False
+        factory = LoopRunnerFactory(cfg)
+        runner = factory.create_runner("loop-local")
         assert isinstance(runner, LocalLoopRunner)
