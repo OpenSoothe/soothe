@@ -51,7 +51,7 @@ router:
   embedding: "dashscope:multimodal-embedding-v1"
 
 agent_loop:
-  max_iterations: 5
+  max_iterations: 20
   max_subagent_tasks_per_wave: 4
   final_response: adaptive
   goal_completion_mode: llm_only
@@ -64,11 +64,11 @@ agent_loop:
     plan_ledger_max_message_chars: 8000
 
   limits:
-    max_parallel_steps: 2  # concurrent plan steps per batch; more batches in same execute if needed
+    max_parallel_steps: 4  # concurrent plan steps per batch; more batches in same execute if needed
     max_parallel_subagents: 4
     max_parallel_goals: 1
-    max_parallel_tools: 5      # Concurrent tool calls per thread
-    global_max_llm_calls: 5
+    max_parallel_tools: 10      # Concurrent tool calls per thread
+    global_max_llm_calls: 10
     step_parallelism: dependency
 
     llm_rpm_limit: 120

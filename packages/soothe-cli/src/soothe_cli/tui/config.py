@@ -250,6 +250,10 @@ class Glyphs:
     user: str  # User/human icon
     assistant: str  # AI/assistant icon
 
+    # Expand/collapse icons
+    expand: str  # ▼ vs [+]
+    collapse: str  # ▶ vs [-]
+
     # Box-drawing characters
     box_vertical: str  # │ vs |
     box_horizontal: str  # ─ vs -
@@ -281,6 +285,9 @@ UNICODE_GLYPHS = Glyphs(
     cursor="›",  # noqa: RUF001  # Intentional Unicode glyph
     user="👤",  # User/human icon
     assistant="🤖",  # AI/assistant icon
+    # Expand/collapse icons
+    expand="▼",
+    collapse="▶",
     # Box-drawing characters
     box_vertical="│",
     box_horizontal="─",
@@ -309,6 +316,9 @@ ASCII_GLYPHS = Glyphs(
     cursor=">",
     user="[U]",  # User/human icon (ASCII)
     assistant="[A]",  # AI/assistant icon (ASCII)
+    # Expand/collapse icons
+    expand="[+]",
+    collapse="[-]",
     # Box-drawing characters
     box_vertical="|",
     box_horizontal="-",

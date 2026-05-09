@@ -9,7 +9,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from soothe_cli.tui.app import SootheApp
-from soothe_cli.tui.widgets.message_store import MessageType, ToolStatus
+from soothe_cli.tui.widgets.message_store import MessageData, MessageType, ToolStatus
 
 
 def test_convert_tool_message_respects_status_error_with_benign_content() -> None:
@@ -151,6 +151,57 @@ def test_convert_loop_events_uses_metadata_for_tool_name_and_output() -> None:
     assert data[0].tool_name == "read_file"
     assert data[0].tool_status == ToolStatus.SUCCESS
     assert data[0].tool_output == "file body"
+
+
+def test_resume_skips_internal_loop_checkpoint_when_cognition_replay_provided() -> None:
+    """Loop continue should drop internal-phase AI/tools and inject cognition cards."""
+    cognition = [
+        MessageData(
+            type=MessageType.COGNITION_PLAN,
+            content="",
+            cognition_plan_next_action="Inspect outputs",
+            cognition_plan_status="continue",
+            cognition_plan_iteration=1,
+            cognition_plan_action="keep",
+            cognition_plan_assessment="",
+            cognition_plan_strategy="",
+            timestamp=1_000.0,
+        )
+    ]
+    messages = [
+        HumanMessage(content="Ship the fix"),
+        AIMessage(
+            content="calling tool",
+            phase="execute_step",
+            tool_calls=[{"id": "tc1", "name": "read_file", "args": {"file_path": "/a"}}],
+        ),
+        ToolMessage(content="data", tool_call_id="tc1", name="read_file"),
+        AIMessage(content="All set.", phase="goal_completion"),
+    ]
+    data = SootheApp._convert_messages_to_data(
+        messages,
+        cognition_card_replay=cognition,
+    )
+    types = [m.type for m in data]
+    assert MessageType.TOOL not in types
+    assert MessageType.USER in types
+    assert MessageType.ASSISTANT in types
+    assert MessageType.COGNITION_PLAN in types
+
+
+def test_agent_loop_completed_event_yields_no_message_data() -> None:
+    """Persisted completion event must not duplicate the goal-completion assistant line."""
+    event = {
+        "kind": "event",
+        "timestamp": "2026-04-20T15:41:28.000+00:00",
+        "metadata": {
+            "data": {
+                "type": "soothe.cognition.agent_loop.completed",
+                "summary": "Goal done",
+            }
+        },
+    }
+    assert SootheApp._convert_event_to_message_data(event) is None
 
 
 def test_convert_loop_events_maps_cognition_events_to_specialized_cards() -> None:
