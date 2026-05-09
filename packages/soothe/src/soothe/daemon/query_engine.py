@@ -58,6 +58,28 @@ class QueryEngine:
             config_workspace_dir=d._config.workspace_dir,
         ).path
 
+    async def _resolve_query_checkpoint_thread_id(
+        self,
+        *,
+        checkpoint_thread_id: str | None,
+        client_id: str | None,
+    ) -> str:
+        """Pick LangGraph checkpoint id for this query.
+
+        When ``loop_input`` already ran ``bind_execution_thread_for_loop``, callers pass
+        that checkpoint here so workspace/registry state matches the subprocess run.
+        Otherwise fall back to the utility runner singleton + ``ensure_active_*``.
+        """
+        d = self._daemon
+        tid = str(checkpoint_thread_id or "").strip()
+        if tid:
+            d._runner.set_current_thread_id(tid)
+            return tid
+        thread_id = str(d._runner.current_thread_id or "").strip()
+        if not thread_id:
+            thread_id = await self.ensure_active_checkpoint_thread_id(client_id)
+        return thread_id
+
     async def run_query(
         self,
         text: str,
@@ -71,6 +93,7 @@ class QueryEngine:
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
         attachments: list[dict[str, str]] | None = None,
+        checkpoint_thread_id: str | None = None,
     ) -> None:
         """Stream a query through ``SootheRunner`` and broadcast events."""
         d = self._daemon
@@ -87,12 +110,14 @@ class QueryEngine:
                 model=model,
                 model_params=model_params,
                 attachments=attachments,
+                checkpoint_thread_id=checkpoint_thread_id,
             )
             return
 
-        thread_id = str(d._runner.current_thread_id or "").strip()
-        if not thread_id:
-            thread_id = await self.ensure_active_checkpoint_thread_id(client_id)
+        thread_id = await self._resolve_query_checkpoint_thread_id(
+            checkpoint_thread_id=checkpoint_thread_id,
+            client_id=client_id,
+        )
 
         lid_in = str(loop_id or "").strip()
         if client_id and not lid_in:
@@ -554,6 +579,7 @@ class QueryEngine:
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
         attachments: list[dict[str, str]] | None = None,
+        checkpoint_thread_id: str | None = None,
     ) -> None:
         """Execute query using ``ThreadExecutor``.
 
@@ -561,9 +587,10 @@ class QueryEngine:
         cancellation targets the query — **not** the ``_input_loop`` task.
         """
         d = self._daemon
-        thread_id = str(d._runner.current_thread_id or "").strip()
-        if not thread_id:
-            thread_id = await self.ensure_active_checkpoint_thread_id(client_id)
+        thread_id = await self._resolve_query_checkpoint_thread_id(
+            checkpoint_thread_id=checkpoint_thread_id,
+            client_id=client_id,
+        )
 
         lid_in = str(loop_id or "").strip()
         if client_id and not lid_in:

@@ -257,3 +257,32 @@ async def test_bind_execution_thread_falls_back_when_client_workspace_missing(
         assert set_workspace_calls[0] == expected_loop_ws
     finally:
         await daemon.close()
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_thread_id_overrides_stale_runner_for_workspace_resolution() -> None:
+    """``bind`` sets registry workspace on the loop checkpoint; ``run_query`` must use that id.
+
+    RFC-221 stopped mutating ``runner.current_thread_id`` inside ``bind_execution_thread_for_loop``.
+    Without passing the bound checkpoint into ``run_query``, workspace resolution could read
+    a stale singleton id and pass the wrong directory into ``LoopRunRequest``.
+    """
+    from soothe.daemon.query_engine import QueryEngine
+
+    class _Runner:
+        def __init__(self) -> None:
+            self.current_thread_id = "stale-global-thread"
+
+        def set_current_thread_id(self, thread_id: str | None) -> None:
+            self.current_thread_id = thread_id
+
+    qe = QueryEngine.__new__(QueryEngine)
+    qe._daemon = SimpleNamespace(_runner=_Runner())
+
+    resolved = await QueryEngine._resolve_query_checkpoint_thread_id(
+        qe,
+        checkpoint_thread_id="bound-loop-thread",
+        client_id=None,
+    )
+    assert resolved == "bound-loop-thread"
+    assert qe._daemon._runner.current_thread_id == "bound-loop-thread"

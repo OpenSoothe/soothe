@@ -527,8 +527,8 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                     SET checkpoint_data = checkpoint_data || %s::jsonb,
                         thread_id = COALESCE(%s, thread_id),
                         status = COALESCE(%s, status),
-                        client_workspace = CASE WHEN %s IS NOT NULL THEN %s ELSE client_workspace END,
-                        detached_at = CASE WHEN %s IS NOT NULL THEN %s::TIMESTAMPTZ ELSE detached_at END,
+                        client_workspace = COALESCE(%s::text, client_workspace),
+                        detached_at = COALESCE(%s::timestamptz, detached_at),
                         updated_at = NOW()
                     WHERE loop_id = %s
                     """,
@@ -537,8 +537,6 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                         updates.get("current_thread_id"),
                         updates.get("status"),
                         updates.get("client_workspace"),
-                        updates.get("client_workspace"),
-                        updates.get("detached_at"),
                         updates.get("detached_at"),
                         loop_id,
                     ),
