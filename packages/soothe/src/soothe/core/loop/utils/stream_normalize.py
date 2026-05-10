@@ -200,10 +200,37 @@ def update_goal_completion_from_message(state: GoalCompletionAccumState, msg: Ba
 
 
 def resolve_goal_completion_text(state: GoalCompletionAccumState) -> str:
-    """Choose longer of accumulated chunk text vs final non-chunk AI text."""
+    """Choose longer of accumulated chunk text vs final non-chunk AI text.
+
+    Normalizes successive empty lines into a single empty line.
+    Successive empty lines = 2+ blank lines in a row.
+    A blank line is a line with no characters between newlines.
+    """
     if len(state.accumulated_chunks) >= len(state.final_ai_message_text):
-        return state.accumulated_chunks
-    return state.final_ai_message_text
+        text = state.accumulated_chunks
+    else:
+        text = state.final_ai_message_text
+
+    # Split into lines, process, then rejoin
+    lines = text.split('\n')
+    result = []
+    empty_line_count = 0
+
+    for line in lines:
+        if line == '':
+            empty_line_count += 1
+        else:
+            # Output accumulated empty lines (max 1)
+            if empty_line_count > 0:
+                result.append('')
+                empty_line_count = 0
+            result.append(line)
+
+    # Handle trailing empty lines
+    if empty_line_count > 0:
+        result.append('')
+
+    return '\n'.join(result)
 
 
 __all__ = [

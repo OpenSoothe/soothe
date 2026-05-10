@@ -124,6 +124,42 @@ def test_goal_completion_accumulator_tracks_chunked_text() -> None:
     assert resolve_goal_completion_text(state) == "goal completion"
 
 
+def test_resolve_goal_completion_text_normalizes_empty_lines() -> None:
+    """Successive empty lines (3+ newlines) should collapse to single empty line."""
+    state = GoalCompletionAccumState()
+    state.accumulated_chunks = "line1\n\n\n\nline2"  # 2 empty lines between
+    state.final_ai_message_text = ""
+    result = resolve_goal_completion_text(state)
+    assert result == "line1\n\nline2"  # collapsed to 1 empty line
+
+
+def test_resolve_goal_completion_text_preserves_single_empty_line() -> None:
+    """Single empty line (2 newlines) should be preserved."""
+    state = GoalCompletionAccumState()
+    state.accumulated_chunks = "line1\n\nline2"
+    state.final_ai_message_text = ""
+    result = resolve_goal_completion_text(state)
+    assert result == "line1\n\nline2"  # unchanged
+
+
+def test_resolve_goal_completion_text_handles_leading_empty_lines() -> None:
+    """Leading empty lines should be normalized."""
+    state = GoalCompletionAccumState()
+    state.accumulated_chunks = "\n\n\n\nline1"  # 3 leading empty lines
+    state.final_ai_message_text = ""
+    result = resolve_goal_completion_text(state)
+    assert result == "\n\nline1"  # collapsed to 1 empty line
+
+
+def test_resolve_goal_completion_text_handles_trailing_empty_lines() -> None:
+    """Trailing empty lines should be normalized."""
+    state = GoalCompletionAccumState()
+    state.accumulated_chunks = "line1\n\n\n\n"  # 3 trailing empty lines
+    state.final_ai_message_text = ""
+    result = resolve_goal_completion_text(state)
+    assert result == "line1\n\n"  # collapsed to 1 empty line
+
+
 def test_normalize_layer1_input_wraps_string() -> None:
     out = _normalize_layer1_input("hello")
     assert isinstance(out, dict)
