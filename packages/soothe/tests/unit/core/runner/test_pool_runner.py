@@ -216,6 +216,87 @@ class TestWorkerPool:
         await WorkerPool.close_shared_instance()
 
     @pytest.mark.asyncio
+    async def test_submit_waits_when_pool_saturated(self) -> None:
+        """At max_pool_size with all workers busy, submit waits until a worker idles."""
+        config = _make_config()
+
+        WorkerPool._shared_pool = None
+        WorkerPool._pool_lock = None
+
+        mock_process = MagicMock()
+        mock_process.pid = 1234
+        mock_process.is_alive.return_value = True
+
+        mock_ctx = MagicMock()
+        mock_ctx.Process.return_value = mock_process
+        mock_ctx.Queue.side_effect = queue.Queue
+
+        req_id16 = "abcd1234efgh5678"
+        fake_uuid = SimpleNamespace(hex=req_id16 + req_id16)
+
+        result_q1: queue.Queue[tuple[str, str, Any]] = queue.Queue()
+        request_q1 = MagicMock()
+        dispatched = asyncio.Event()
+
+        def _on_put(*_a: Any, **_k: Any) -> None:
+            dispatched.set()
+
+        request_q1.put.side_effect = _on_put
+        request_q2 = MagicMock()
+
+        w1 = WorkerProcess(
+            process=mock_process,
+            request_queue=request_q1,
+            response_queue=result_q1,
+            cancel_event=_make_cancel_event(),
+            worker_id="worker-0",
+            status=WorkerStatus.BUSY,
+        )
+        w1.mark_busy("loop-a", "old-a")
+        w2 = WorkerProcess(
+            process=mock_process,
+            request_queue=request_q2,
+            response_queue=queue.Queue(),
+            cancel_event=_make_cancel_event(),
+            worker_id="worker-1",
+            status=WorkerStatus.BUSY,
+        )
+        w2.mark_busy("loop-b", "old-b")
+
+        with (
+            patch("multiprocessing.get_context", return_value=mock_ctx),
+            patch("soothe.core.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
+        ):
+            pool = await WorkerPool.get_shared_instance(config)
+            pool._workers = {"worker-0": w1, "worker-1": w2}
+            pool._max_pool_size = 2
+
+            async def _consume() -> list[Any]:
+                out: list[Any] = []
+                async for ch in pool.submit(_make_request(loop_id="loop-new")):
+                    out.append(ch)
+                return out
+
+            task = asyncio.create_task(_consume())
+            for _ in range(200):
+                await asyncio.sleep(0.01)
+                if pool._waiting_for_worker_slot == 1:
+                    break
+            else:
+                pytest.fail("expected a blocked waiter while pool is saturated")
+
+            await pool._mark_worker_idle_and_notify(w1)
+            await asyncio.wait_for(dispatched.wait(), timeout=2.0)
+
+            result_q1.put(("done", req_id16, None))
+            chunks = await asyncio.wait_for(task, timeout=2.0)
+
+        assert chunks == []
+        request_q1.put.assert_called()
+
+        await WorkerPool.close_shared_instance()
+
+    @pytest.mark.asyncio
     async def test_submit_early_close_drains_remaining_chunks(self) -> None:
         """Consumer disconnect before done: background drain absorbs rest; worker becomes idle."""
         config = _make_config()
@@ -421,6 +502,7 @@ class TestWorkerPool:
         assert metrics.idle_workers == 1
         assert metrics.busy_workers == 1
         assert metrics.total_requests_completed == 0  # pool-level counter, not per-worker
+        assert metrics.dispatch_waiters_waiting == 0
 
         await WorkerPool.close_shared_instance()
 

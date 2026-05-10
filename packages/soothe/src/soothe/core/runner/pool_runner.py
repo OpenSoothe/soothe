@@ -17,11 +17,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import multiprocessing
 import multiprocessing.context
 import queue
+import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -97,6 +99,183 @@ class PoolMetrics:
     requests_in_progress: int
     avg_request_latency_ms: float = 0.0
     worker_uptimes: dict[str, float] = field(default_factory=dict)
+    #: Coroutines waiting for an idle worker while the pool is at capacity.
+    dispatch_waiters_waiting: int = 0
+
+
+# Upper bounds (exclusive) for dispatch handoff latency (ms), overflow = last bucket.
+_DISPATCH_WAIT_MS_BINS: tuple[float, ...] = (
+    1.0,
+    2.0,
+    5.0,
+    10.0,
+    25.0,
+    50.0,
+    100.0,
+    250.0,
+    500.0,
+    1000.0,
+    5000.0,
+)
+
+# Upper bounds (exclusive) for concurrent waiters snapshot (integer depths as float).
+_WAITER_DEPTH_BINS: tuple[float, ...] = (2.0, 3.0, 4.0, 6.0, 8.0, 16.0, 32.0, 64.0)
+
+
+def _hist_bin_label_ms(idx: int) -> str:
+    if idx >= len(_DISPATCH_WAIT_MS_BINS):
+        return f">={_DISPATCH_WAIT_MS_BINS[-1]:.0f}ms"
+    upper = _DISPATCH_WAIT_MS_BINS[idx]
+    if upper < 1:
+        return f"<{upper:.2f}ms"
+    return f"<{upper:.0f}ms"
+
+
+def _hist_bin_label_waiters(idx: int) -> str:
+    if idx >= len(_WAITER_DEPTH_BINS):
+        return f">={_WAITER_DEPTH_BINS[-1]:.0f} waiting"
+    upper = _WAITER_DEPTH_BINS[idx]
+    return f"<{upper:.0f} waiting"
+
+
+class _ScalarHistogram:
+    """Fixed-bin histogram + Welford mean/variance (O(1) memory)."""
+
+    __slots__ = ("_bin_upper", "_counts", "_n", "_mean", "_m2", "_min", "_max")
+
+    def __init__(self, bin_upper: tuple[float, ...]) -> None:
+        self._bin_upper = bin_upper
+        self._counts = [0] * (len(bin_upper) + 1)
+        self._n = 0
+        self._mean = 0.0
+        self._m2 = 0.0
+        self._min = 0.0
+        self._max = 0.0
+
+    def reset(self) -> None:
+        self._counts = [0] * (len(self._bin_upper) + 1)
+        self._n = 0
+        self._mean = 0.0
+        self._m2 = 0.0
+        self._min = 0.0
+        self._max = 0.0
+
+    @property
+    def count(self) -> int:
+        return self._n
+
+    def observe(self, value: float) -> None:
+        if value < 0:
+            value = 0.0
+        idx = 0
+        for i, edge in enumerate(self._bin_upper):
+            if value < edge:
+                idx = i
+                break
+        else:
+            idx = len(self._bin_upper)
+        self._counts[idx] += 1
+
+        self._n += 1
+        if self._n == 1:
+            self._min = value
+            self._max = value
+        else:
+            self._min = min(self._min, value)
+            self._max = max(self._max, value)
+
+        delta = value - self._mean
+        self._mean += delta / self._n
+        delta2 = value - self._mean
+        self._m2 += delta * delta2
+
+    def variance(self) -> float:
+        if self._n < 2:
+            return 0.0
+        return self._m2 / float(self._n - 1)
+
+    def format_parts(self, *, bin_label: Callable[[int], str]) -> list[str]:
+        n = self._n
+        if n == 0:
+            return []
+        stdev = math.sqrt(self.variance())
+        parts = [
+            f"n={n}",
+            f"mean={self._mean:.2f}",
+            f"stdev={stdev:.2f}",
+            f"min={self._min:.2f}",
+            f"max={self._max:.2f}",
+        ]
+        for i, c in enumerate(self._counts):
+            if c == 0:
+                continue
+            pct = 100.0 * c / n
+            parts.append(f"{bin_label(idx=i)}={pct:.1f}%")
+        return parts
+
+
+class PoolDispatchWaitStatsCollector:
+    """Histograms for time waiting for a worker and for queue-depth snapshots.
+
+    Mirrors the EventBus wire-size stats pattern: fixed bins, periodic log emission.
+    """
+
+    def __init__(self) -> None:
+        self._lock = asyncio.Lock()
+        self._wait_ms = _ScalarHistogram(_DISPATCH_WAIT_MS_BINS)
+        self._waiter_depth = _ScalarHistogram(_WAITER_DEPTH_BINS)
+        self._max_waiters_peak = 0
+        self._last_activity_mono = 0.0
+
+    def _reset_windows(self) -> None:
+        self._wait_ms.reset()
+        self._waiter_depth.reset()
+        self._max_waiters_peak = 0
+
+    async def record_dispatch_handoff(self, wait_ms: float) -> None:
+        """Record end-to-end time inside dispatch semaphore until worker is reserved."""
+        async with self._lock:
+            self._last_activity_mono = time.monotonic()
+            self._wait_ms.observe(wait_ms)
+
+    async def record_waiter_snapshot(self, depth: int) -> None:
+        """Record how many coroutines were waiting (including this one) for a slot."""
+        async with self._lock:
+            self._last_activity_mono = time.monotonic()
+            self._waiter_depth.observe(float(depth))
+            if depth > self._max_waiters_peak:
+                self._max_waiters_peak = depth
+
+    async def emit_log_if_active(
+        self,
+        *,
+        idle_pause_seconds: float,
+        log_fn: Callable[[str], None],
+    ) -> bool:
+        """Emit one log line for the current window; idle windows are discarded."""
+        now = time.monotonic()
+        async with self._lock:
+            if self._last_activity_mono == 0.0:
+                return False
+            if now - self._last_activity_mono >= idle_pause_seconds:
+                self._reset_windows()
+                return False
+            if self._wait_ms.count == 0 and self._waiter_depth.count == 0:
+                return False
+            wait_parts = self._wait_ms.format_parts(bin_label=_hist_bin_label_ms)
+            depth_parts = self._waiter_depth.format_parts(bin_label=_hist_bin_label_waiters)
+            peak = self._max_waiters_peak
+            self._reset_windows()
+        parts = ["[pool_dispatch_stats]"]
+        if wait_parts:
+            parts.append("handoff_ms: " + " ".join(wait_parts))
+        if depth_parts:
+            parts.append("wait_queue_depth: " + " ".join(depth_parts))
+        if peak > 0:
+            parts.append(f"peak_waiters={peak}")
+        line = " ".join(parts)
+        log_fn(line)
+        return True
 
 
 def _spawn_safe_config(config: SootheConfig | None) -> SootheConfig:
@@ -332,6 +511,9 @@ class WorkerPool:
         request_timeout_seconds: int = 1800,
         heartbeat_interval_seconds: int = 30,
         stuck_worker_timeout_seconds: int = 180,
+        dispatch_wait_stats_enabled: bool = False,
+        dispatch_wait_stats_interval_seconds: int = 60,
+        dispatch_wait_stats_idle_pause_seconds: int = 120,
     ) -> None:
         self._config = config
         self._min_pool_size = min_pool_size
@@ -341,11 +523,18 @@ class WorkerPool:
         self._request_timeout_seconds = request_timeout_seconds
         self._heartbeat_interval_seconds = heartbeat_interval_seconds
         self._stuck_worker_timeout_seconds = stuck_worker_timeout_seconds
+        self._dispatch_wait_stats_enabled = dispatch_wait_stats_enabled
+        self._dispatch_wait_stats_interval_seconds = dispatch_wait_stats_interval_seconds
+        self._dispatch_wait_stats_idle_pause_seconds = dispatch_wait_stats_idle_pause_seconds
 
         self._ctx = multiprocessing.get_context("spawn")
         self._workers: dict[str, WorkerProcess] = {}
         self._workers_by_loop_id: dict[str, str] = {}  # loop_id -> worker_id
         self._dispatch_semaphore: asyncio.Semaphore | None = None
+        self._worker_available: asyncio.Condition | None = None
+        self._waiting_for_worker_slot: int = 0
+        self._dispatch_stats: PoolDispatchWaitStatsCollector | None = None
+        self._dispatch_stats_task: asyncio.Task[None] | None = None
         self._running = False
         self._metrics_requests_total = 0
         self._metrics_latencies: list[float] = []
@@ -381,6 +570,9 @@ class WorkerPool:
                 request_timeout_seconds=pool_config.request_timeout_seconds,
                 heartbeat_interval_seconds=pool_config.heartbeat_interval_seconds,
                 stuck_worker_timeout_seconds=pool_config.stuck_worker_timeout_seconds,
+                dispatch_wait_stats_enabled=pool_config.dispatch_wait_stats_enabled,
+                dispatch_wait_stats_interval_seconds=pool_config.dispatch_wait_stats_interval_seconds,
+                dispatch_wait_stats_idle_pause_seconds=pool_config.dispatch_wait_stats_idle_pause_seconds,
             )
             await pool.start()
             cls._shared_pool = pool
@@ -405,6 +597,9 @@ class WorkerPool:
     async def start(self) -> None:
         """Pre-warm min_pool_size worker processes."""
         self._dispatch_semaphore = asyncio.Semaphore(self._max_pool_size)
+        self._worker_available = asyncio.Condition()
+        if self._dispatch_wait_stats_enabled:
+            self._dispatch_stats = PoolDispatchWaitStatsCollector()
         spawn_config = _spawn_safe_config(self._config)
 
         # Pre-warm only min_pool_size workers at startup
@@ -416,6 +611,8 @@ class WorkerPool:
         self._running = True
         # Start background poll task to route responses
         self._poll_task = asyncio.create_task(self._poll_worker_responses())
+        if self._dispatch_stats is not None:
+            self._dispatch_stats_task = asyncio.create_task(self._periodic_dispatch_stats())
 
         logger.info(
             "WorkerPool: pre-warmed %d workers (min=%d, max=%d, idle_timeout=%ds, max_requests=%d)",
@@ -484,7 +681,7 @@ class WorkerPool:
                     worker.worker_id,
                     request_id,
                 )
-                worker.mark_idle()
+                await self._mark_worker_idle_and_notify(worker)
                 self._workers_by_loop_id.pop(loop_id, None)
                 self._pending_responses.pop(request_id, None)
 
@@ -559,7 +756,7 @@ class WorkerPool:
                 )
                 break
         finally:
-            worker.mark_idle()
+            await self._mark_worker_idle_and_notify(worker)
             self._workers_by_loop_id.pop(loop_id, None)
             self._pending_responses.pop(request_id, None)
 
@@ -695,8 +892,7 @@ class WorkerPool:
                     response_queue = self._pending_responses.get(request_id)
                     if response_queue is not None:
                         await response_queue.put(("error", payload))
-                    worker.mark_idle()
-                    worker.last_heartbeat_at = None
+                    await self._mark_worker_idle_and_notify(worker)
                     self._workers_by_loop_id.pop(worker.current_loop_id or "", None)
                     self._pending_responses.pop(request_id, None)
                     logger.warning(
@@ -709,8 +905,7 @@ class WorkerPool:
                     response_queue = self._pending_responses.get(request_id)
                     if response_queue is not None:
                         await response_queue.put(("error", asyncio.CancelledError()))
-                    worker.mark_idle()
-                    worker.last_heartbeat_at = None
+                    await self._mark_worker_idle_and_notify(worker)
                     self._workers_by_loop_id.pop(worker.current_loop_id or "", None)
                     self._pending_responses.pop(request_id, None)
                     logger.info(
@@ -780,6 +975,60 @@ class WorkerPool:
         spawn_config = _spawn_safe_config(self._config)
         new_worker = await self._spawn_worker(dead_worker.worker_id, spawn_config)
         self._workers[dead_worker.worker_id] = new_worker
+        await self._notify_worker_slot_available()
+
+    async def _periodic_dispatch_stats(self) -> None:
+        stats = self._dispatch_stats
+        if stats is None:
+            return
+        interval = float(self._dispatch_wait_stats_interval_seconds)
+        idle_pause = float(self._dispatch_wait_stats_idle_pause_seconds)
+        while self._running:
+            await asyncio.sleep(interval)
+            try:
+                await stats.emit_log_if_active(
+                    idle_pause_seconds=idle_pause,
+                    log_fn=logger.info,
+                )
+            except Exception:
+                logger.debug("pool_dispatch_stats periodic tick failed", exc_info=True)
+
+    async def _notify_worker_slot_available(self) -> None:
+        cond = self._worker_available
+        if cond is None:
+            return
+        async with cond:
+            cond.notify_all()
+
+    async def _mark_worker_idle_and_notify(self, worker: WorkerProcess) -> None:
+        worker.mark_idle()
+        await self._notify_worker_slot_available()
+
+    async def _try_acquire_idle_worker(self) -> WorkerProcess | None:
+        """Return an idle live worker, scale up, or respawn a dead slot; else None."""
+        for w in self._workers.values():
+            if w.status == WorkerStatus.IDLE and w.is_alive():
+                return w
+
+        active_count = sum(1 for w in self._workers.values() if w.is_alive())
+        if active_count < self._max_pool_size:
+            worker_id = f"worker-{self._next_worker_index}"
+            self._next_worker_index += 1
+            spawn_config = _spawn_safe_config(self._config)
+            logger.info(
+                "WorkerPool: scaling up, spawning extra worker %s (active=%d, max=%d)",
+                worker_id,
+                active_count + 1,
+                self._max_pool_size,
+            )
+            return await self._spawn_worker(worker_id, spawn_config)
+
+        for w in self._workers.values():
+            if w.status == WorkerStatus.DEAD or not w.is_alive():
+                await self._respawn_worker(w)
+                return self._workers[w.worker_id]
+
+        return None
 
     async def submit(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk]:
         """Submit request to pool, await available worker, stream results.
@@ -796,41 +1045,36 @@ class WorkerPool:
                 self._request_timeout_seconds if self._request_timeout_seconds > 0 else None
             )
 
-        # Wait for available worker slot (bounded by max_pool_size semaphore)
+        dispatch_wait_start = time.monotonic()
+        # Wait for available worker slot (bounded by max_pool_size semaphore).
+        # When all workers are busy at max_pool_size, wait on a condition until a worker
+        # becomes idle (or the pool scales / respawns a dead process).
         async with self._dispatch_semaphore:
-            # Find an idle worker
-            worker = None
-            for w in self._workers.values():
-                if w.status == WorkerStatus.IDLE and w.is_alive():
-                    worker = w
+            cond = self._worker_available
+            if cond is None:
+                raise RuntimeError("Worker pool is not started")
+
+            worker: WorkerProcess | None = None
+            while True:
+                worker = await self._try_acquire_idle_worker()
+                if worker is not None:
                     break
+                if not self._running:
+                    raise RuntimeError("Worker pool is shutting down")
+                async with cond:
+                    self._waiting_for_worker_slot += 1
+                    try:
+                        if self._dispatch_stats is not None:
+                            await self._dispatch_stats.record_waiter_snapshot(
+                                self._waiting_for_worker_slot
+                            )
+                        await cond.wait()
+                    finally:
+                        self._waiting_for_worker_slot -= 1
 
-            # If no idle worker, check if we can scale up (spawn extra worker)
-            if worker is None:
-                active_count = sum(1 for w in self._workers.values() if w.is_alive())
-                if active_count < self._max_pool_size:
-                    # Scale up: spawn extra worker beyond min_pool_size
-                    worker_id = f"worker-{self._next_worker_index}"
-                    self._next_worker_index += 1
-                    spawn_config = _spawn_safe_config(self._config)
-                    logger.info(
-                        "WorkerPool: scaling up, spawning extra worker %s (active=%d, max=%d)",
-                        worker_id,
-                        active_count + 1,
-                        self._max_pool_size,
-                    )
-                    worker = await self._spawn_worker(worker_id, spawn_config)
-
-            # If still no worker, respawn a dead one
-            if worker is None:
-                for w in self._workers.values():
-                    if w.status == WorkerStatus.DEAD or not w.is_alive():
-                        await self._respawn_worker(w)
-                        worker = self._workers[w.worker_id]
-                        break
-
-            if worker is None:
-                raise RuntimeError("No available workers in pool")
+            wait_ms = (time.monotonic() - dispatch_wait_start) * 1000.0
+            if self._dispatch_stats is not None:
+                await self._dispatch_stats.record_dispatch_handoff(wait_ms)
 
             # Register routing and mark busy before releasing the semaphore so the poll
             # loop cannot treat this worker as idle and drain a stale response_queue.
@@ -849,7 +1093,7 @@ class WorkerPool:
 
                 if msg_type == "done":
                     completed = True
-                    worker.mark_idle()
+                    await self._mark_worker_idle_and_notify(worker)
                     self._workers_by_loop_id.pop(request.loop_id, None)
                     self._pending_responses.pop(request_id, None)
                     self._metrics_requests_total += 1
@@ -859,7 +1103,7 @@ class WorkerPool:
                     return
                 if msg_type == "error":
                     completed = True
-                    worker.mark_idle()
+                    await self._mark_worker_idle_and_notify(worker)
                     self._workers_by_loop_id.pop(request.loop_id, None)
                     self._pending_responses.pop(request_id, None)
                     raise payload
@@ -905,6 +1149,16 @@ class WorkerPool:
     async def shutdown(self) -> None:
         """Graceful shutdown: signal workers, wait, then force-kill."""
         self._running = False
+
+        await self._notify_worker_slot_available()
+
+        if self._dispatch_stats_task is not None:
+            self._dispatch_stats_task.cancel()
+            try:
+                await self._dispatch_stats_task
+            except asyncio.CancelledError:
+                pass
+            self._dispatch_stats_task = None
 
         # Stop poll task
         if self._poll_task is not None:
@@ -984,6 +1238,7 @@ class WorkerPool:
             requests_in_progress=busy,
             avg_request_latency_ms=avg_latency,
             worker_uptimes=uptimes,
+            dispatch_waiters_waiting=self._waiting_for_worker_slot,
         )
 
 

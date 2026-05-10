@@ -237,6 +237,10 @@ daemon:
     request_timeout_seconds: 1800 # Default per-request timeout (0 = no timeout, default 30 min)
     heartbeat_interval_seconds: 30   # Worker heartbeat interval for stuck detection
     stuck_worker_timeout_seconds: 180 # Time since last heartbeat before worker marked stuck
+    # Dispatch wait stats (histograms, similar to event_size_stats on the EventBus)
+    dispatch_wait_stats_enabled: false
+    dispatch_wait_stats_interval_seconds: 60
+    dispatch_wait_stats_idle_pause_seconds: 120
 
 # Subagents - Enabled by default (set enabled: false to disable)
 
