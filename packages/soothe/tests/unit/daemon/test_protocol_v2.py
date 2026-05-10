@@ -1,4 +1,7 @@
-"""Unit tests for protocol validation (RFC-0013)."""
+"""Unit tests for protocol validation (RFC-0013).
+
+Legacy global "input" message type was removed in favor of loop_input.
+"""
 
 from __future__ import annotations
 
@@ -10,60 +13,6 @@ from soothe.daemon.protocol_v2 import (
     validate_message,
     validate_message_size,
 )
-
-
-def test_validate_message_input_valid() -> None:
-    """Test valid input message validation."""
-    msg = {"type": "input", "text": "Hello, assistant!"}
-    errors = validate_message(msg)
-    assert errors == []
-
-
-def test_validate_message_input_image_only_empty_text() -> None:
-    """IG-327: image attachments allow empty user text when attachments are non-empty."""
-    msg = {
-        "type": "input",
-        "text": "",
-        "attachments": [{"mime_type": "image/png", "data": "abc"}],
-    }
-    assert validate_message(msg) == []
-
-
-def test_validate_message_input_neither_text_nor_attachments() -> None:
-    errors = validate_message({"type": "input", "text": ""})
-    assert errors
-    assert "non-empty" in errors[0].lower()
-
-
-def test_validate_message_input_missing_text() -> None:
-    """Test input message missing required text field."""
-    msg = {"type": "input"}
-    errors = validate_message(msg)
-    assert len(errors) == 1
-    assert "text" in errors[0]
-
-
-def test_validate_message_input_invalid_text_type() -> None:
-    """Test input message with invalid text type."""
-    msg = {"type": "input", "text": 123}
-    errors = validate_message(msg)
-    assert len(errors) == 1
-    assert "must be a string" in errors[0]
-
-
-def test_validate_message_input_autonomous_flag() -> None:
-    """Test input message with autonomous flag."""
-    msg = {"type": "input", "text": "Hello", "autonomous": True, "max_iterations": 10}
-    errors = validate_message(msg)
-    assert errors == []
-
-
-def test_validate_message_input_invalid_autonomous() -> None:
-    """Test input message with invalid autonomous flag."""
-    msg = {"type": "input", "text": "Hello", "autonomous": "yes"}
-    errors = validate_message(msg)
-    assert len(errors) == 1
-    assert "autonomous must be a boolean" in errors[0]
 
 
 def test_validate_message_command_valid() -> None:
@@ -130,14 +79,14 @@ def test_validate_message_unknown_type() -> None:
 
 def test_validate_message_size_small() -> None:
     """Test message size validation with small message."""
-    msg = {"type": "input", "text": "Hello"}
+    msg = {"type": "loop_input", "loop_id": "test", "content": "Hello"}
     assert validate_message_size(msg, max_size_bytes=1024)
 
 
 def test_validate_message_size_large() -> None:
     """Test message size validation with large message."""
     large_text = "x" * (1024 * 1024)  # 1MB
-    msg = {"type": "input", "text": large_text}
+    msg = {"type": "loop_input", "loop_id": "test", "content": large_text}
     assert not validate_message_size(msg, max_size_bytes=100)
 
 

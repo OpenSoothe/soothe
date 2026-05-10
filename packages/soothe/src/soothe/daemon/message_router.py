@@ -27,13 +27,13 @@ def _client_label(client_id: Any) -> str:
 
 
 def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
-    """Normalize optional runner fields shared by ``input`` and ``loop_input`` (IG-362).
+    """Normalize optional runner fields for ``loop_input`` messages (IG-362).
 
     Args:
         msg: Raw client message dict.
 
     Returns:
-        Keys to merge into the internal ``input`` queue payload: ``autonomous``,
+        Keys to merge into the internal queue payload: ``autonomous``,
         ``max_iterations``, ``preferred_subagent``, ``interactive``, ``model``,
         ``model_params``.
     """
@@ -125,17 +125,6 @@ class MessageRouter:
             msg_type,
             _client_label(client_id),
         )
-
-        if msg_type == "input":
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "UNSUPPORTED_MESSAGE",
-                    "message": "Use loop_input with a subscribed loop_id (global input removed)",
-                },
-            )
-            return
 
         if msg_type == "command":
             cmd = msg.get("cmd", "")
