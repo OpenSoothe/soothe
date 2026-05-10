@@ -22,14 +22,22 @@ import errno
 import logging
 import re
 import time
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
+from langgraph.types import Command, Interrupt
 
 from soothe.core.context.model_override import (
     attach_stream_model_override,
     reset_stream_model_override,
+)
+from soothe.core.loop.engine.hitl_scope import (
+    _MAX_HITL_ITERATIONS,
+    auto_approve_interrupt_resume_payload,
+    await_next_graph_stream_chunk,
+    get_hitl_interrupt_resolver,
 )
 from soothe.core.loop.engine.metadata_generator import (
     PLANNER_OUTCOME_PREVIEW_CAP,
@@ -46,8 +54,6 @@ from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, log_preview, preview, preview_first
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
-
     from soothe.config import SootheConfig
     from soothe.core.agent import CoreAgent
 
@@ -278,6 +284,66 @@ class Executor:
         if self._config is None:
             return 0
         return max(0, int(self._config.agent_loop.max_subagent_tasks_per_wave))
+
+    async def _core_agent_astream_with_hitl(
+        self,
+        stream_input: dict[str, Any] | Command,
+        graph_config: dict[str, Any],
+    ) -> AsyncGenerator[Any, None]:
+        """Run ``CoreAgent.astream`` with LangGraph HITL interrupt / resume loop.
+
+        When a daemon client registers an interrupt resolver (interactive TUI),
+        pauses until ``resume_interrupts`` delivers the payload; otherwise
+        auto-approves like ``SootheRunner._stream_phase``.
+        """
+        hitl_iterations = 0
+        current_input: dict[str, Any] | Command = stream_input
+        while True:
+            interrupt_occurred = False
+            pending_interrupts: dict[str, Any] = {}
+            chunk_iter = self.core_agent.astream(
+                current_input,
+                config=graph_config,
+                stream_mode=["messages", "updates", "custom"],
+                subgraphs=True,
+            )
+            try:
+                while True:
+                    try:
+                        chunk = await await_next_graph_stream_chunk(chunk_iter)
+                    except StopAsyncIteration:
+                        break
+                    except asyncio.CancelledError:
+                        raise
+
+                    if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
+                        _namespace, mode, data = chunk
+                        if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
+                            interrupts: list[Interrupt] = data["__interrupt__"]
+                            for interrupt_obj in interrupts:
+                                pending_interrupts[interrupt_obj.id] = interrupt_obj.value
+                                interrupt_occurred = True
+                    yield chunk
+            except asyncio.CancelledError:
+                raise
+
+            if not interrupt_occurred:
+                return
+
+            hitl_iterations += 1
+            if hitl_iterations > _MAX_HITL_ITERATIONS:
+                logger.warning(
+                    "CoreAgent HITL: exceeded iteration limit (%d); stopping stream",
+                    _MAX_HITL_ITERATIONS,
+                )
+                return
+
+            resolver = get_hitl_interrupt_resolver()
+            if resolver is not None:
+                resume_payload = await resolver(pending_interrupts)
+            else:
+                resume_payload = auto_approve_interrupt_resume_payload(pending_interrupts)
+            current_input = Command(resume=resume_payload)
 
     @staticmethod
     def _intent_type_for_prompt(state: LoopState) -> str | None:
@@ -921,7 +987,7 @@ class Executor:
                 graph_config = self._executor_langfuse_merge_for_stream(
                     graph_config, thread_id=state.thread_id
                 )
-            stream = self.core_agent.astream(
+            stream = self._core_agent_astream_with_hitl(
                 self._execute_graph_input(
                     step_messages,  # N messages instead of combined description
                     routing_classification=getattr(state, "routing_classification", None),
@@ -929,9 +995,7 @@ class Executor:
                     git_status=state.git_status,
                     intent_type=self._intent_type_for_prompt(state),
                 ),
-                config=graph_config,
-                stream_mode=["messages", "updates", "custom"],
-                subgraphs=True,
+                graph_config,
             )
 
             tool_call_count = 0
@@ -1180,7 +1244,7 @@ class Executor:
                 workspace=workspace,
                 phase="execute_step",
             )
-            stream = self.core_agent.astream(
+            stream = self._core_agent_astream_with_hitl(
                 self._execute_graph_input(
                     [human_msg],
                     routing_classification=routing_classification,
@@ -1188,9 +1252,7 @@ class Executor:
                     git_status=git_status,
                     intent_type=intent_type,
                 ),
-                config=config,
-                stream_mode=["messages", "updates", "custom"],
-                subgraphs=True,
+                config,
             )
 
             # Stream events and collect outcome metadata (RFC-211)

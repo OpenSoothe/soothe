@@ -226,6 +226,8 @@ class DaemonConfig(BaseModel):
         max_query_duration_minutes: Maximum query duration in minutes (0 = unlimited).
         cancel_grace_seconds: Seconds to await query task after ``task.cancel()`` before
             logging slow-unwind; task stays tracked until ``_run_stream`` finally clears it (IG-398).
+        hitl_timeout_seconds: Seconds to wait for client ``resume_interrupts`` during HITL (0 = unlimited).
+            On expiry, the graph resumes with default-first choices (approve tools; first choice for ask_user).
         query_timeout_action: Action on timeout (cancel | suspend).
         thread_max_age_hours: Auto-cancel incomplete threads older than N hours.
         auto_cancel_on_startup: Cancel very old incomplete threads on daemon start.
@@ -248,6 +250,14 @@ class DaemonConfig(BaseModel):
         ge=1,
         description=(
             "Seconds to await in-flight query after /cancel before logging slow-unwind warning"
+        ),
+    )
+    hitl_timeout_seconds: int = Field(
+        default=30,
+        ge=0,
+        description=(
+            "HITL wait for client resume_interrupts in seconds (0 = unlimited). "
+            "On timeout, resume with default-first choices (approve tools; first ask_user choice)."
         ),
     )
     query_timeout_action: str = Field(

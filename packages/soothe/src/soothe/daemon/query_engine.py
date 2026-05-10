@@ -303,8 +303,9 @@ class QueryEngine:
                 if preferred_subagent is not None:
                     stream_kwargs["preferred_subagent"] = preferred_subagent
 
-                # RFC-221: interrupt_resolver wired on utility _runner for HITL continuations.
-                # The subprocess runner does not receive it (each subprocess owns its SootheRunner).
+                # RFC-221: interactive HITL uses the daemon's ``SootheRunner`` in-process so
+                # ``set_interrupt_resolver`` and ContextVar-bound CoreAgent streams share one
+                # process. Non-interactive queries keep subprocess / pool isolation.
                 interrupt_resolver = (
                     self._await_interrupt_resume(
                         thread_id,
@@ -317,27 +318,43 @@ class QueryEngine:
                 if hasattr(d._runner, "set_interrupt_resolver") and effective_loop_id:
                     d._runner.set_interrupt_resolver(effective_loop_id, interrupt_resolver)
 
-                # RFC-221: build LoopRunRequest and create per-loop subprocess runner.
-                from soothe.protocols.runner import LoopRunRequest
-
-                run_request = LoopRunRequest(
-                    loop_id=effective_loop_id or thread_id,
-                    thread_id=thread_id,
-                    user_input=effective_text,
-                    workspace=stream_kwargs.get("workspace"),
-                    autonomous=stream_kwargs.get("autonomous", False),
-                    max_iterations=stream_kwargs.get("max_iterations"),
-                    preferred_subagent=stream_kwargs.get("preferred_subagent"),
-                    model=model,
-                    model_params=model_params or {},
-                )
                 _runner_key = effective_loop_id or thread_id
-                loop_runner = d._runner_factory.create_runner(_runner_key)
-                self._active_runners[_runner_key] = loop_runner
+                use_inproc_hitl = bool(interactive and client_id and effective_loop_id)
 
-                async def _stream_chunks():
-                    async for chunk in loop_runner.run(run_request):
-                        yield chunk
+                if use_inproc_hitl:
+
+                    async def _stream_chunks() -> Any:
+                        async for chunk in d._runner.astream(
+                            effective_text,
+                            thread_id=thread_id,
+                            workspace=stream_kwargs.get("workspace"),
+                            autonomous=stream_kwargs.get("autonomous", False),
+                            max_iterations=stream_kwargs.get("max_iterations"),
+                            preferred_subagent=stream_kwargs.get("preferred_subagent"),
+                            client_loop_id=effective_loop_id,
+                        ):
+                            yield chunk
+
+                else:
+                    from soothe.protocols.runner import LoopRunRequest
+
+                    run_request = LoopRunRequest(
+                        loop_id=effective_loop_id or thread_id,
+                        thread_id=thread_id,
+                        user_input=effective_text,
+                        workspace=stream_kwargs.get("workspace"),
+                        autonomous=stream_kwargs.get("autonomous", False),
+                        max_iterations=stream_kwargs.get("max_iterations"),
+                        preferred_subagent=stream_kwargs.get("preferred_subagent"),
+                        model=model,
+                        model_params=model_params or {},
+                    )
+                    loop_runner = d._runner_factory.create_runner(_runner_key)
+                    self._active_runners[_runner_key] = loop_runner
+
+                    async def _stream_chunks() -> Any:
+                        async for chunk in loop_runner.run(run_request):
+                            yield chunk
 
                 if timeout_enabled:
                     async with asyncio.timeout(timeout_seconds):
@@ -1084,17 +1101,32 @@ class QueryEngine:
         """Return a resolver that waits for daemon-side interrupt continuation."""
 
         async def _resolver(_pending_interrupts: dict[str, Any]) -> dict[str, Any]:
-            del _pending_interrupts  # The client already received the interrupt chunk.
+            from soothe.core.loop.engine.hitl_scope import timeout_default_hitl_resume_payload
+
             loop = asyncio.get_running_loop()
             future: asyncio.Future[dict[str, Any]] = loop.create_future()
             self._daemon._pending_interrupt_responses[loop_id] = future
+            timeout_s = int(getattr(self._daemon._config.daemon, "hitl_timeout_seconds", 0) or 0)
             logger.debug(
-                "Waiting for interactive resume (loop=%s checkpoint=%s client=%s)",
+                "Waiting for interactive resume (loop=%s checkpoint=%s client=%s hitl_timeout=%s)",
                 loop_id[:16],
                 checkpoint_thread_id[:16],
                 client_id,
+                timeout_s if timeout_s > 0 else "unlimited",
             )
             try:
+                if timeout_s > 0:
+                    try:
+                        return await asyncio.wait_for(future, timeout=float(timeout_s))
+                    except TimeoutError:
+                        logger.warning(
+                            "HITL timed out after %ds (loop=%s); resuming with default-first choices",
+                            timeout_s,
+                            loop_id[:16],
+                        )
+                        if not future.done():
+                            future.cancel()
+                        return timeout_default_hitl_resume_payload(_pending_interrupts)
                 return await future
             finally:
                 self._daemon._pending_interrupt_responses.pop(loop_id, None)

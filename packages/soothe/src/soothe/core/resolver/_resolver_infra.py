@@ -103,7 +103,9 @@ def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Che
     if backend == "postgresql":
         # RFC-612: Use dedicated checkpoints database
         dsn = config.resolve_postgres_dsn_for_database("checkpoints")
-        result = _resolve_postgres_checkpointer(dsn)
+        result = _resolve_postgres_checkpointer(
+            dsn, max_pool_size=config.persistence.checkpointer_pool_size
+        )
         if result:
             return result  # (None, pool)
         logger.error("PostgreSQL checkpointer unavailable")
@@ -157,8 +159,14 @@ def _resolve_sqlite_checkpointer(config: SootheConfig) -> tuple[Checkpointer | N
     return (None, db_path)
 
 
-def _resolve_postgres_checkpointer(dsn: str) -> tuple[Checkpointer, Any] | None:
+def _resolve_postgres_checkpointer(
+    dsn: str, *, max_pool_size: int = 8
+) -> tuple[Checkpointer, Any] | None:
     """Initialize PostgreSQL checkpointer with provided DSN.
+
+    Args:
+        dsn: PostgreSQL connection string for the checkpoints database.
+        max_pool_size: ``AsyncConnectionPool`` max_size (``min_size`` is 1 for worker-friendly sizing).
 
     Returns:
         A tuple of (None, AsyncConnectionPool) if successful, None otherwise.
@@ -193,7 +201,8 @@ def _resolve_postgres_checkpointer(dsn: str) -> tuple[Checkpointer, Any] | None:
     try:
         pool = AsyncConnectionPool(
             dsn,
-            max_size=10,
+            min_size=1,
+            max_size=max_pool_size,
             kwargs={
                 "autocommit": True,
                 "prepare_threshold": 0,
@@ -202,7 +211,11 @@ def _resolve_postgres_checkpointer(dsn: str) -> tuple[Checkpointer, Any] | None:
             open=False,
         )
 
-        logger.info("PostgreSQL connection pool created, DSN: %s", _mask_dsn(dsn))
+        logger.info(
+            "PostgreSQL checkpointer pool created (max_size=%d), DSN: %s",
+            max_pool_size,
+            _mask_dsn(dsn),
+        )
     except Exception as exc:
         logger.warning("Failed to create PostgreSQL connection pool: %s", exc)
         return None

@@ -67,19 +67,26 @@ def _loop_worker(
     async def _run() -> None:
         runner = SootheRunner(config)
         try:
-            async for chunk in runner.astream(
-                request.user_input,
-                thread_id=request.thread_id,
-                workspace=request.workspace,
-                autonomous=request.autonomous,
-                max_iterations=request.max_iterations,
-                preferred_subagent=request.preferred_subagent,
-            ):
-                queue.put(("chunk", chunk))
-        except Exception as exc:  # noqa: BLE001
-            queue.put(("error", exc))
-            return
-        queue.put(("done", None))
+            try:
+                async for chunk in runner.astream(
+                    request.user_input,
+                    thread_id=request.thread_id,
+                    workspace=request.workspace,
+                    autonomous=request.autonomous,
+                    max_iterations=request.max_iterations,
+                    preferred_subagent=request.preferred_subagent,
+                    client_loop_id=request.loop_id,
+                ):
+                    queue.put(("chunk", chunk))
+            except Exception as exc:  # noqa: BLE001
+                queue.put(("error", exc))
+            else:
+                queue.put(("done", None))
+        finally:
+            try:
+                await runner.cleanup()
+            except Exception:
+                logger.debug("Loop subprocess: runner cleanup failed", exc_info=True)
 
     _asyncio.run(_run())
 

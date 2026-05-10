@@ -33,11 +33,12 @@ class SharedPostgreSQLPool:
     """Shared PostgreSQL connection pool for AgentLoop state persistence.
 
     IG-406: High-concurrency architecture with 200+ thread support.
-    Pool size: 25-30 connections for efficient queuing without DB overload.
+    Pool size is config-driven (``persistence.agentloop_pool_size``); default suits
+    one active run per process (e.g. pool workers) without multiplying connections by 30×N workers.
 
     Usage:
         # Initialize at daemon startup
-        pool = SharedPostgreSQLPool(dsn, pool_size=30)
+        pool = SharedPostgreSQLPool(dsn, pool_size=12)
         await pool.open()
 
         # Pass to AgentLoopStateManager
@@ -47,12 +48,12 @@ class SharedPostgreSQLPool:
         await pool.close()
     """
 
-    def __init__(self, dsn: str, pool_size: int = 30) -> None:
+    def __init__(self, dsn: str, pool_size: int = 12) -> None:
         """Initialize shared pool configuration.
 
         Args:
             dsn: PostgreSQL DSN for soothe_checkpoints database.
-            pool_size: Shared pool size (default: 30 for high concurrency).
+            pool_size: Shared pool ``max_size`` (default matches ``PersistenceConfig``).
         """
         self.dsn = dsn
         self.pool_size = pool_size
@@ -73,9 +74,10 @@ class SharedPostgreSQLPool:
             if self._pool is not None and self._initialized:
                 return self._pool
 
-            # Create connection pool
+            # Create connection pool (min_size=1: avoid psycopg default min_size=4 when max is small)
             self._pool = AsyncConnectionPool(
                 self.dsn,
+                min_size=1,
                 max_size=self.pool_size,
                 kwargs={
                     "autocommit": True,
@@ -277,9 +279,7 @@ class SharedPostgreSQLPool:
         async with _pool_lock:
             if _shared_pool is None:
                 dsn = config.resolve_postgres_dsn_for_database("checkpoints")
-                # Pool size for 200-thread concurrency: 30 connections
-                # Formula: 25-30 for efficient queuing without DB overload
-                pool_size = getattr(config.persistence, "agentloop_pool_size", 30)
+                pool_size = config.persistence.agentloop_pool_size
                 _shared_pool = SharedPostgreSQLPool(dsn, pool_size=pool_size)
                 await _shared_pool.open()
                 logger.info("Created singleton shared PostgreSQL pool (size=%d)", pool_size)
