@@ -184,6 +184,7 @@ def _pool_worker(
                         autonomous=req.autonomous,
                         max_iterations=req.max_iterations,
                         preferred_subagent=req.preferred_subagent,
+                        client_loop_id=req.loop_id,
                     ):
                         # COOPERATIVE CANCELLATION: Check cancel_event between chunks
                         if cancel_event.is_set():
@@ -233,6 +234,19 @@ def _pool_worker(
                 )
             except Exception as exc:
                 response_queue.put(("error", request_id, exc))
+            finally:
+                # Per-request runners own PostgreSQL checkpointer pools; without cleanup,
+                # connections accumulate across requests and PoolTimeout can occur.
+                try:
+                    await runner.cleanup()
+                except Exception:
+                    logger.debug(
+                        "Worker %s: runner cleanup failed (loop=%s request_id=%s)",
+                        worker_id,
+                        req.loop_id,
+                        request_id,
+                        exc_info=True,
+                    )
 
         loop.run_until_complete(_execute())
 

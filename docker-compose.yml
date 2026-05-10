@@ -13,6 +13,8 @@ services:
   soothe-pgvector:
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/pgvector:pg17
     restart: always
+    # Dev: worker_pool max 8 × (checkpointer + agentloop + pgvector + durability stores) needs headroom
+    command: ["postgres", "-c", "max_connections=200"]
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

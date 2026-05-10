@@ -190,6 +190,8 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         )
         self._context_restore_lock = asyncio.Lock()
         self._interrupt_resolvers: dict[str, Any] = {}  # keyed by loop_id (Bug 5.7)
+        # Client-visible loop id for the active ``astream`` (daemon / TUI HITL scope).
+        self._client_loop_id_for_stream: str | None = None
 
         # IG-406: Shared PostgreSQL pool for AgentLoop state persistence
         # Initialized lazily in async context for high-concurrency support
@@ -511,6 +513,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         autonomous: bool = False,
         max_iterations: int | None = None,
         preferred_subagent: str | None = None,
+        client_loop_id: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
@@ -531,8 +534,15 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             autonomous: Enable autonomous iteration loop (explicit goals).
             max_iterations: Override max iterations from config.
             preferred_subagent: Optional subagent hint merged into AgentLoop (IG-349).
+            client_loop_id: Daemon client loop scope for interactive HITL (RFC-221); when set
+                with a matching ``set_interrupt_resolver`` entry, CoreAgent interrupts pause
+                until the client sends ``resume_interrupts``.
         """
         # Update thread_id for logging if one is provided
+        from soothe.core.loop.engine.hitl_scope import (
+            reset_hitl_interrupt_resolver_context,
+            set_hitl_interrupt_resolver_context,
+        )
         from soothe.logging import set_thread_id
 
         # Only set thread_id if explicitly provided
@@ -541,21 +551,27 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         elif self._current_thread_id:
             set_thread_id(self._current_thread_id)
 
-        resolved = resolve_workspace_for_stream(
-            explicit=workspace,
-            installation_default=str(self._installation_workspace),
-            config_workspace_dir=getattr(self._config, "workspace_dir", None),
+        cl_scope = (client_loop_id or "").strip()
+        prev_client_loop = self._client_loop_id_for_stream
+        self._client_loop_id_for_stream = cl_scope or None
+        hitl_tok = set_hitl_interrupt_resolver_context(
+            self._interrupt_resolvers.get(cl_scope) if cl_scope else None
         )
-        effective_workspace = resolved.path
-        tid_for_log = str(thread_id or self._current_thread_id or "")
-        logger.debug(
-            "stream_workspace_resolved thread_id=%s path=%s source=%s",
-            tid_for_log,
-            effective_workspace,
-            resolved.source,
-        )
-
         try:
+            resolved = resolve_workspace_for_stream(
+                explicit=workspace,
+                installation_default=str(self._installation_workspace),
+                config_workspace_dir=getattr(self._config, "workspace_dir", None),
+            )
+            effective_workspace = resolved.path
+            tid_for_log = str(thread_id or self._current_thread_id or "")
+            logger.debug(
+                "stream_workspace_resolved thread_id=%s path=%s source=%s",
+                tid_for_log,
+                effective_workspace,
+                resolved.source,
+            )
+
             # Autonomous mode
             if autonomous and self._goal_engine:
                 async for chunk in self._run_autonomous(
@@ -577,4 +593,6 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             ):
                 yield chunk
         finally:
+            reset_hitl_interrupt_resolver_context(hitl_tok)
+            self._client_loop_id_for_stream = prev_client_loop
             self._clear_query_scoped_runner_state()

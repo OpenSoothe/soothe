@@ -122,6 +122,7 @@ observability:
 daemon:
   max_concurrent_threads: 100
   cancel_grace_seconds: 30           # /cancel await before slow-unwind warning
+  hitl_timeout_seconds: 30           # HITL wait for resume (0 = unlimited); timeout → default-first
   max_input_queue_size: 1000         # Maximum pending input messages (0 = unlimited)
   max_concurrent_dispatches: 50      # Maximum concurrent message handlers
   event_size_stats_enabled: true     # Periodic EventBus size distribution logs
@@ -145,10 +146,13 @@ daemon:
       actor_lifetime: detached
       log_to_driver: true
   # RFC-221 enhancement: Persistent worker pool (reduces ~8s spawn overhead)
+  # With max_pool_size 8, each busy worker holds LangGraph + AgentLoop + pgvector pools
+  # (see persistence / vector_stores). Default docker Postgres max_connections is often 100;
+  # if you see pool timeouts, raise max_connections (e.g. 200) or lower pool sizes slightly.
   worker_pool:
     enabled: true           # Enable persistent worker pool mode
-    min_pool_size: 2        # Minimum workers to keep pooled (startup baseline)
-    max_pool_size: 8        # Maximum workers to scale up under load
+    min_pool_size: 2        # Two warm workers for low-latency overlap under load
+    max_pool_size: 8        # Up to 8 concurrent loop runs
     idle_timeout_seconds: 300
     max_requests_per_worker: 100
     request_timeout_seconds: 1800 # Default per-request timeout (30 min)
@@ -234,6 +238,10 @@ protocols:
 # PostgreSQL via docker-compose soothe-pgvector service (host port 6432, RFC-612 multi-DB).
 persistence:
   default_backend: postgresql
+  # Sized for max_parallel_steps/subagents (4) plus LangGraph checkpoint bursts; 8 workers × pools
+  # still need headroom vs Postgres max_connections (durability/memory stores add more per worker).
+  checkpointer_pool_size: 8
+  agentloop_pool_size: 10
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
   postgres_databases:
     checkpoints: soothe_checkpoints
@@ -249,7 +257,7 @@ vector_stores:
   - name: pgvector_dev
     provider_type: pgvector
     dsn: "postgresql://postgres:postgres@127.0.0.1:6432/soothe_vectors"
-    pool_size: 5
+    pool_size: 4
     index_type: hnsw
 
 vector_store_router:
