@@ -105,8 +105,8 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         )
         return {"plan_route": PLAN_ROUTE_GOAL_DONE}
 
-    # goal_progress-based early routing: when progress is high or complete, go to goal completion
-    if assessment.goal_progress in ("high", "complete"):
+    # goal_progress-based early routing: when progress is complete, go to goal completion
+    if assessment.goal_progress == "complete":
         logger.info(
             "[Plan] goal_progress=%s routing to goal completion",
             assessment.goal_progress,
