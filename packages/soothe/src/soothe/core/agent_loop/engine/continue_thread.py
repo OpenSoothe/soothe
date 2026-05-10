@@ -7,6 +7,8 @@ first plan for this run, skip the initial planner LLM and inject a single-step
 
 from __future__ import annotations
 
+import random
+
 from soothe.core.agent_loop.state.checkpoint import AgentLoopCheckpoint, GoalExecutionRecord
 from soothe.core.agent_loop.state.schemas import (
     AgentDecision,
@@ -104,6 +106,16 @@ def seed_continue_thread_ledger_from_prior_goal(
     )
 
 
+# First-person action descriptions for continue-thread bootstrap (< 15 words each)
+_CONTINUE_THREAD_DESCRIPTIONS = [
+    "I'll address your follow-up using our conversation context.",
+    "I'll continue from where we left off to help you.",
+    "I'll respond to your request using prior context.",
+    "I'll handle this follow-up based on our earlier work.",
+    "I'll proceed with your request from our previous context.",
+]
+
+
 def build_continue_thread_bootstrap_plan(_goal: str) -> PlanResult:
     """Build a synthetic first ``PlanResult`` for continue-thread (IG-325, RFC-214).
 
@@ -116,14 +128,12 @@ def build_continue_thread_bootstrap_plan(_goal: str) -> PlanResult:
     Returns:
         ``PlanResult`` with ``status=continue`` and a single sequential step.
     """
+    description = random.choice(_CONTINUE_THREAD_DESCRIPTIONS)
     decision = AgentDecision(
         type="execute_steps",
         steps=[
             StepAction(
-                description=(
-                    "Use prior conversation context and the user's current request to "
-                    "deliver the follow-up response. Use tools only when needed."
-                ),
+                description=description,
                 expected_output=(
                     "A response that addresses the current request while staying consistent "
                     "with earlier conversation context."

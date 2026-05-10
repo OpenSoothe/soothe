@@ -15,11 +15,6 @@ from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 from soothe.core.agent_loop.analysis.metadata_generator import (
     PLANNER_OUTCOME_PREVIEW_CAP,
 )
-from soothe.core.agent_loop.execution.act_wave_finalize import (
-    DELEGATE_FINAL_WAVE_CAP,
-    compute_act_wave_finalize,
-    provenance_is_task_delegate,
-)
 from soothe.core.agent_loop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -35,12 +30,19 @@ from soothe.middleware.tool_concurrency import init_tool_concurrency_for_thread
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, log_preview, preview, preview_first
 
+from .act_wave_finalize import (
+    DELEGATE_FINAL_WAVE_CAP,
+    compute_act_wave_finalize,
+    provenance_is_task_delegate,
+)
+
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from soothe.config import SootheConfig
     from soothe.core.agent import CoreAgent
-    from soothe.core.agent_loop.context.goal_context_manager import GoalContextManager
+
+    from .goal_context_manager import GoalContextManager
 
 logger = logging.getLogger(__name__)
 

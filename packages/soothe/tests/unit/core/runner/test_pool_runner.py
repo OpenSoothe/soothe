@@ -417,7 +417,7 @@ class TestWorkerPool:
 
             metrics = pool.get_metrics()
 
-        assert metrics.total_workers == 4  # pool_size from config
+        assert metrics.total_workers == 4  # max_pool_size from config
         assert metrics.idle_workers == 1
         assert metrics.busy_workers == 1
         assert metrics.total_requests_completed == 0  # pool-level counter, not per-worker
@@ -525,18 +525,31 @@ class TestWorkerPoolConfig:
         """Default configuration values."""
         cfg = WorkerPoolConfig()
         assert cfg.enabled is True
-        assert cfg.pool_size == 4
+        assert cfg.min_pool_size == 2
+        assert cfg.max_pool_size == 4
         assert cfg.idle_timeout_seconds == 300
         assert cfg.max_requests_per_worker == 100
+        assert cfg.request_timeout_seconds == 1800  # 30 min
 
     def test_pool_size_bounds(self) -> None:
-        """pool_size must be 1-128."""
+        """min_pool_size and max_pool_size bounds."""
         # Valid
-        WorkerPoolConfig(pool_size=1)
-        WorkerPoolConfig(pool_size=128)
+        WorkerPoolConfig(min_pool_size=1, max_pool_size=64)
+        WorkerPoolConfig(min_pool_size=2, max_pool_size=128)
 
-        # Invalid
+        # Invalid: min out of bounds
         with pytest.raises(Exception):  # Pydantic ValidationError
-            WorkerPoolConfig(pool_size=0)
+            WorkerPoolConfig(min_pool_size=0)
         with pytest.raises(Exception):
-            WorkerPoolConfig(pool_size=129)
+            WorkerPoolConfig(min_pool_size=65)
+
+        # Invalid: max out of bounds
+        with pytest.raises(Exception):
+            WorkerPoolConfig(max_pool_size=0)
+        with pytest.raises(Exception):
+            WorkerPoolConfig(max_pool_size=129)
+
+    def test_get_effective_pool_size(self) -> None:
+        """get_effective_pool_size() ensures max >= min."""
+        cfg = WorkerPoolConfig(min_pool_size=4, max_pool_size=2)
+        assert cfg.get_effective_pool_size() == 4  # max(min, max)

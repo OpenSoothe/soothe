@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.core.agent_loop.branching.anchor_manager import CheckpointAnchorManager
+from soothe.core.agent_loop.engine.anchor_manager import CheckpointAnchorManager
 from soothe.core.agent_loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
@@ -276,7 +276,7 @@ async def test_loop_reattachment_history_replay(tmp_path):
         )
 
         # Create failed branch for iteration 1
-        from soothe.core.agent_loop.branching.branch_manager import FailedBranchManager
+        from soothe.core.agent_loop.engine.branch_manager import FailedBranchManager
 
         branch_manager = FailedBranchManager(loop_id)
 

@@ -9,11 +9,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
-from soothe.core.agent_loop.branching.anchor_manager import CheckpointAnchorManager
-from soothe.core.agent_loop.context.goal_context_manager import GoalContextManager
-from soothe.core.agent_loop.engine.continue_thread import (
-    seed_continue_thread_ledger_from_prior_goal,
-)
 from soothe.core.agent_loop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.core.agent_loop.planning.manager import PlanManager
 from soothe.core.agent_loop.planning.phase import PlanPhase
@@ -27,6 +22,10 @@ from soothe.core.agent_loop.state.working_memory import LoopWorkingMemory
 from soothe.core.agent_loop.utils.reflection import _default_agent_decision
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.utils.text_preview import log_preview
+
+from .anchor_manager import CheckpointAnchorManager
+from .continue_thread import seed_continue_thread_ledger_from_prior_goal
+from .goal_context_manager import GoalContextManager
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator

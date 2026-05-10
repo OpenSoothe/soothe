@@ -3,7 +3,7 @@
 import errno
 from unittest.mock import MagicMock
 
-from soothe.core.agent_loop.execution.executor import (
+from soothe.core.agent_loop.engine.executor import (
     Executor,
     _format_connection_refusal_message,
     _is_expected_connection_refusal,

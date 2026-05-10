@@ -6,6 +6,10 @@ Provides reusable similarity calculation for:
 - Content deduplication and ranking
 
 Uses sentence_transformers when available, falls back to keyword matching.
+
+Model Cache:
+- Models are cached at ~/.soothe/cache/huggingface/ for sharing across processes
+- Use warmup_embedding_model() to pre-download models at daemon startup
 """
 
 from __future__ import annotations
@@ -13,7 +17,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import os
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
@@ -26,6 +32,11 @@ _EMBEDDING_TIMEOUT_SECONDS = 30
 
 # Thread pool for embedding calls (to avoid blocking async loop)
 _embedding_executor: ThreadPoolExecutor | None = None
+
+# Model cache directory - shared across main and worker processes
+_HF_CACHE_DIR = (
+    Path(os.environ.get("SOOTHE_DATA_DIR", Path.home() / ".soothe")) / "cache" / "huggingface"
+)
 
 # Check if sentence_transformers is available
 _has_sentence_transformers = False
@@ -47,6 +58,7 @@ def _get_transformer_model() -> SentenceTransformer | None:
 
     Uses synchronous loading to avoid async client closure issues.
     The model is loaded on first actual use, not at import time.
+    Models are cached at ~/.soothe/cache/huggingface/ for sharing across processes.
     """
     global _transformer_model, _has_sentence_transformers, _model_loading_attempted
 
@@ -59,8 +71,19 @@ def _get_transformer_model() -> SentenceTransformer | None:
 
     _model_loading_attempted = True
     try:
-        _transformer_model = SentenceTransformer(_transformer_model_name)
-        logger.info("Loaded sentence_transformers model: %s", _transformer_model_name)
+        # Ensure cache directory exists
+        _HF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Load model with shared cache folder
+        _transformer_model = SentenceTransformer(
+            _transformer_model_name,
+            cache_folder=str(_HF_CACHE_DIR),
+        )
+        logger.info(
+            "Loaded sentence_transformers model: %s (cache: %s)",
+            _transformer_model_name,
+            _HF_CACHE_DIR,
+        )
     except Exception as e:
         logger.warning("Failed to load sentence_transformers model: %s", e)
         _has_sentence_transformers = False
@@ -493,6 +516,54 @@ async def async_rank_by_similarity(
     scored_items.sort(key=lambda x: x[0], reverse=True)
 
     return [item for _, item in scored_items]
+
+
+def warmup_embedding_model() -> bool:
+    """Pre-download and cache the embedding model at daemon startup.
+
+    This ensures the model is available in the shared cache before any
+    worker processes need it, avoiding repeated downloads or first-use delays.
+
+    Call this at daemon startup to warm up the cache.
+
+    Returns:
+        True if model was successfully downloaded/loaded, False otherwise.
+    """
+    logger.info("Warming up embedding model cache at %s", _HF_CACHE_DIR)
+
+    if not _has_sentence_transformers:
+        logger.warning("sentence_transformers not available, skipping warmup")
+        return False
+
+    # Try loading the model to trigger download
+    model = _get_transformer_model()
+    if model is not None:
+        logger.info("Embedding model warmup successful: %s", _transformer_model_name)
+        return True
+    else:
+        logger.warning("Embedding model warmup failed")
+        return False
+
+
+async def async_warmup_embedding_model() -> bool:
+    """Async version of warmup_embedding_model for use in async startup.
+
+    Returns:
+        True if model was successfully downloaded/loaded, False otherwise.
+    """
+    # Run sync warmup in thread pool to avoid blocking
+    global _embedding_executor
+    if _embedding_executor is None:
+        _embedding_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="embedding")
+
+    try:
+        return await asyncio.get_event_loop().run_in_executor(
+            _embedding_executor,
+            warmup_embedding_model,
+        )
+    except Exception as e:
+        logger.warning("Async embedding model warmup failed: %s", e)
+        return False
 
 
 # Check availability at import time

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, AIMessageChunk
 
-from soothe.core.agent_loop.execution.executor import Executor
+from soothe.core.agent_loop.engine.executor import Executor
 from soothe.core.agent_loop.state.schemas import LoopState, StepAction, StepResult
 
 

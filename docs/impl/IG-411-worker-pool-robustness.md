@@ -22,9 +22,12 @@ The worker continued executing for 2+ hours after the daemon timeout and client 
 ### Phase 1: Protocol and Configuration
 
 Added `timeout_seconds` field to `LoopRunRequest` and timeout/heartbeat config fields to `WorkerPoolConfig`:
-- `request_timeout_seconds: int = 900` (15 min default)
+- `min_pool_size: int = 2` (minimum workers at startup)
+- `max_pool_size: int = 4` (maximum workers to scale up)
+- `request_timeout_seconds: int = 1800` (30 min default)
 - `heartbeat_interval_seconds: int = 30`
 - `stuck_worker_timeout_seconds: int = 180`
+- `get_effective_pool_size()` method ensures max >= min
 
 **Files modified**:
 - `packages/soothe/src/soothe/protocols/runner.py`
@@ -87,23 +90,58 @@ Updated explore middleware to use async versions with 60s synthesis timeout and 
 - `packages/soothe/src/soothe/utils/similarity.py`
 - `packages/soothe/src/soothe/subagents/explore/middleware.py`
 
+### Phase 6: Shared Model Cache
+
+Added shared HuggingFace cache directory for model sharing across processes:
+- `~/.soothe/cache/huggingface` - cache path for sentence_transformers models
+- Model cache configured via `cache_folder` parameter in `_get_transformer_model()`
+- Supports `SOOTHE_DATA_DIR` env override for custom cache location
+
+Added warmup functions:
+- `warmup_embedding_model()` - sync function to pre-download model at startup
+- `async_warmup_embedding_model()` - async version for daemon startup
+
+Added CLI warmup command:
+- `soothed warmup` - pre-download embedding model cache before daemon start
+
+**Files modified**:
+- `packages/soothe/src/soothe/utils/similarity.py`
+- `packages/soothe/src/soothe/cli/daemon_main.py`
+
+### Phase 7: Dynamic Pool Scaling
+
+Implemented min/max pool sizing for dynamic scaling:
+- `WorkerPool` starts with `min_pool_size` workers at daemon startup
+- Spawns extra workers up to `max_pool_size` when all min workers are busy
+- Extra workers idle out after `idle_timeout_seconds`
+- Semaphore bounds concurrent requests to `max_pool_size`
+
+**Files modified**:
+- `packages/soothe/src/soothe/core/runner/pool_runner.py`
+
 ---
 
 ## Testing
 
-Updated unit tests in `test_pool_runner.py` to include cancel_event parameter in WorkerProcess instantiations.
+Updated unit tests in `test_pool_runner.py`:
+- Added `cancel_event` parameter to WorkerProcess instantiations
+- Updated config tests to use `min_pool_size` and `max_pool_size` fields
+- Added test for `get_effective_pool_size()` method
 
-All 1605 unit tests pass.
+All 15 pool_runner tests pass.
 
 ---
 
 ## Summary
 
 This enhancement adds:
-1. **Cooperative cancellation**: Workers check cancel_event.is_set() between chunks
-2. **Per-request timeout**: Workers enforce asyncio.timeout() on execution
+1. **Cooperative cancellation**: Workers check `cancel_event.is_set()` between chunks
+2. **Per-request timeout**: Workers enforce `asyncio.timeout()` on execution (30 min default)
 3. **Heartbeat mechanism**: Workers send periodic pings, daemon detects stuck workers
 4. **Explore timeout**: Embedding/synthesis calls have timeout protection with fallback
+5. **Shared model cache**: Models cached at `~/.soothe/cache/huggingface` for process sharing
+6. **Warmup CLI**: `soothed warmup` command to pre-download model cache
+7. **Dynamic scaling**: Pool scales from min_pool_size to max_pool_size under load
 
 ---
 

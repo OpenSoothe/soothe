@@ -148,10 +148,11 @@ daemon:
   # RFC-221 enhancement: Persistent worker pool (reduces ~8s spawn overhead)
   worker_pool:
     enabled: true           # Enable persistent worker pool mode
-    pool_size: 8            # Number of pre-warmed worker processes
+    min_pool_size: 2        # Minimum workers to keep pooled (startup baseline)
+    max_pool_size: 8        # Maximum workers to scale up under load
     idle_timeout_seconds: 300
     max_requests_per_worker: 100
-    request_timeout_seconds: 900 # Default per-request timeout (15 min)
+    request_timeout_seconds: 1800 # Default per-request timeout (30 min)
     heartbeat_interval_seconds: 30   # Worker heartbeat interval
     stuck_worker_timeout_seconds: 180 # Stuck worker detection threshold
 
