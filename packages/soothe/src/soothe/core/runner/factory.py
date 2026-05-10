@@ -32,8 +32,9 @@ class LoopRunnerFactory:
 
         if config.daemon.worker_pool.enabled:
             logger.info(
-                "LoopRunnerFactory: pool mode enabled (%d workers, max_requests=%d)",
-                config.daemon.worker_pool.pool_size,
+                "LoopRunnerFactory: pool mode enabled (min=%d, max=%d workers, max_requests=%d)",
+                config.daemon.worker_pool.min_pool_size,
+                config.daemon.worker_pool.max_pool_size,
                 config.daemon.worker_pool.max_requests_per_worker,
             )
         elif config.daemon.distributed.enabled:

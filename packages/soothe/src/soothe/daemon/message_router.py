@@ -850,7 +850,7 @@ class MessageRouter:
         """
         import shutil
 
-        from soothe.core.agent_loop.state.persistence.directory_manager import (
+        from soothe.core.loop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
 
@@ -1132,7 +1132,7 @@ class MessageRouter:
         """
         from uuid_utils import uuid7
 
-        from soothe.core.agent_loop.state.persistence.directory_manager import (
+        from soothe.core.loop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
         from soothe.core.workspace import validate_client_workspace

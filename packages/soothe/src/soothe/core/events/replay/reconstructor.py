@@ -12,9 +12,6 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from soothe.core.agent_loop.state.persistence.manager import (
-    AgentLoopCheckpointPersistenceManager,
-)
 from soothe.core.events import (
     BRANCH_ANALYZED,
     BRANCH_CREATED,
@@ -22,6 +19,9 @@ from soothe.core.events import (
     ITERATION_COMPLETED,
     ITERATION_STARTED,
     LOOP_REATTACHED,
+)
+from soothe.core.loop.state.persistence.manager import (
+    AgentLoopCheckpointPersistenceManager,
 )
 
 logger = logging.getLogger(__name__)

@@ -12,13 +12,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.core.agent_loop.state.persistence.manager import (
-    AgentLoopCheckpointPersistenceManager,
-)
 from soothe.core.events import HISTORY_REPLAY_COMPLETE, LOOP_REATTACHED
 from soothe.core.events.replay import (
     enrich_events_with_coreagent_details,
     reconstruct_event_stream,
+)
+from soothe.core.loop.state.persistence.manager import (
+    AgentLoopCheckpointPersistenceManager,
 )
 
 logger = logging.getLogger(__name__)
