@@ -50,6 +50,41 @@ def encode(msg: dict[str, Any]) -> bytes:
     return (json.dumps(serialized) + "\n").encode()
 
 
+def encode_websocket_text(msg: dict[str, Any]) -> str:
+    """Encode a message as a single WebSocket text frame (no NDJSON newline).
+
+    Uses compact JSON (no extra whitespace) to reduce frame size and avoid
+    redundant UTF-8 encode/decode when sending via ``websockets``.
+
+    Args:
+        msg: Message dictionary to encode.
+
+    Returns:
+        JSON text suitable for ``Connection.send`` as a text frame.
+    """
+    serialized = _serialize_for_json(msg)
+    return json.dumps(serialized, separators=(",", ":"))
+
+
+def decode_websocket_text(text: str) -> dict[str, Any] | None:
+    """Decode JSON from a WebSocket text frame.
+
+    Args:
+        text: Raw frame payload (typically one JSON object).
+
+    Returns:
+        Parsed message dict, or None if empty or invalid.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return None
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        logger.debug("Invalid daemon WebSocket JSON: %s", preview_first(stripped, 120))
+        return None
+
+
 def decode(line: bytes) -> dict[str, Any] | None:
     """Decode a JSON line into a message dictionary.
 
@@ -76,4 +111,4 @@ def preview_first(text: str, max_len: int) -> str:
     return text[:max_len] + "..."
 
 
-__all__ = ["encode", "decode", "preview_first"]
+__all__ = ["decode", "decode_websocket_text", "encode", "encode_websocket_text", "preview_first"]

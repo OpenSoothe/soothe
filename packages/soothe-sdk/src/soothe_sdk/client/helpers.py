@@ -29,12 +29,22 @@ def websocket_url_from_config(cfg: SootheConfig) -> str:
     return f"ws://{host}:{port}"
 
 
-async def check_daemon_status(client: WebSocketClient, timeout: float = 5.0) -> dict:
+async def check_daemon_status(
+    client: WebSocketClient,
+    timeout: float = 5.0,
+    *,
+    min_interval_s: float = 1.0,
+) -> dict:
     """Check daemon status via RPC.
+
+    Uses ``WebSocketClient.fetch_daemon_status`` so rapid or overlapping polls
+    on the same connection coalesce into one wire request per ``min_interval_s``.
 
     Args:
         client: Connected WebSocketClient
         timeout: Request timeout in seconds
+        min_interval_s: Minimum seconds between real ``daemon_status`` RPCs; ``0``
+            always queries the daemon.
 
     Returns:
         Parsed `daemon_status_response` payload (typically includes `running`,
@@ -43,10 +53,7 @@ async def check_daemon_status(client: WebSocketClient, timeout: float = 5.0) -> 
     Raises:
         ConnectionError: If daemon not reachable
     """
-    response = await client.request_response(
-        {"type": "daemon_status"}, response_type="daemon_status_response", timeout=timeout
-    )
-    return response
+    return await client.fetch_daemon_status(timeout=timeout, min_interval_s=min_interval_s)
 
 
 def _daemon_status_indicates_live(status: dict) -> bool:

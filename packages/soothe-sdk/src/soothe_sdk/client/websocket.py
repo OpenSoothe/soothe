@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import time
 import uuid
 from collections import deque
 from collections.abc import AsyncGenerator
@@ -12,7 +14,7 @@ from typing import Any
 import websockets.asyncio.client
 import websockets.exceptions
 
-from soothe_sdk.client.protocol import decode, encode
+from soothe_sdk.client.protocol import decode_websocket_text, encode_websocket_text
 from soothe_sdk.core.types import VerbosityLevel
 
 logger = logging.getLogger(__name__)
@@ -58,6 +60,10 @@ class WebSocketClient:
         self._ws: websockets.asyncio.client.ClientConnection | None = None
         self._connected = False
         self._pending_events: deque[dict[str, Any]] = deque()
+        # Coalesce high-frequency daemon_status polls on a long-lived connection.
+        self._daemon_status_cache: tuple[float, dict[str, Any]] | None = None
+        self._daemon_status_lock = asyncio.Lock()
+        self._daemon_status_inflight: asyncio.Task[dict[str, Any]] | None = None
 
     async def connect(self) -> None:
         """Connect to the daemon.
@@ -83,6 +89,17 @@ class WebSocketClient:
 
     async def close(self) -> None:
         """Close the connection with timeout to prevent exit hangs."""
+        inflight: asyncio.Task[dict[str, Any]] | None = None
+        async with self._daemon_status_lock:
+            inflight = self._daemon_status_inflight
+            self._daemon_status_inflight = None
+            self._daemon_status_cache = None
+
+        if inflight is not None and not inflight.done():
+            inflight.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await inflight
+
         if self._ws:
             try:
                 # Wait up to 2s for close handshake to prevent indefinite hangs
@@ -110,10 +127,7 @@ class WebSocketClient:
             raise ConnectionError("Not connected to daemon")
 
         try:
-            data = encode(message)
-            # Remove newline for WebSocket (native framing)
-            data = data.rstrip(b"\n")
-            await self._ws.send(data.decode("utf-8"))
+            await self._ws.send(encode_websocket_text(message))
         except websockets.exceptions.ConnectionClosed as e:
             self._connected = False
             raise ConnectionError("Connection closed") from e
@@ -137,7 +151,7 @@ class WebSocketClient:
             async for message in self._ws:
                 try:
                     message_str = message.decode("utf-8") if isinstance(message, bytes) else message
-                    msg_dict = decode(message_str.encode("utf-8"))
+                    msg_dict = decode_websocket_text(message_str)
                     if msg_dict:
                         yield msg_dict
                 except Exception:
@@ -550,6 +564,68 @@ class WebSocketClient:
             timeout=timeout,
         )
 
+    async def fetch_daemon_status(
+        self,
+        *,
+        timeout: float = 5.0,
+        min_interval_s: float = 1.0,
+    ) -> dict[str, Any]:
+        """Fetch ``daemon_status_response`` with TTL cache and in-flight coalescing.
+
+        Pollers that call this several times per second only trigger one RPC per
+        ``min_interval_s`` window; concurrent callers share a single in-flight
+        request.
+
+        Args:
+            timeout: Per-request timeout passed to ``request_response``.
+            min_interval_s: Minimum seconds between real RPCs. Use ``0`` to
+                disable caching and always hit the daemon.
+
+        Returns:
+            Parsed daemon status response dict.
+
+        Raises:
+            Same as ``request_response`` (timeout, connection errors, etc.).
+        """
+        if min_interval_s <= 0:
+            return await self.request_response(
+                {"type": "daemon_status"},
+                response_type="daemon_status_response",
+                timeout=timeout,
+            )
+
+        async with self._daemon_status_lock:
+            now = time.monotonic()
+            if self._daemon_status_cache is not None:
+                ts, cached = self._daemon_status_cache
+                if now - ts < min_interval_s:
+                    return dict(cached)
+
+            if self._daemon_status_inflight is None:
+                self._daemon_status_inflight = asyncio.create_task(
+                    self.request_response(
+                        {"type": "daemon_status"},
+                        response_type="daemon_status_response",
+                        timeout=timeout,
+                    )
+                )
+            inflight = self._daemon_status_inflight
+
+        assert inflight is not None
+        try:
+            result = await inflight
+        except BaseException:
+            async with self._daemon_status_lock:
+                if self._daemon_status_inflight is inflight:
+                    self._daemon_status_inflight = None
+            raise
+
+        async with self._daemon_status_lock:
+            if self._daemon_status_inflight is inflight:
+                self._daemon_status_inflight = None
+                self._daemon_status_cache = (time.monotonic(), dict(result))
+        return dict(result)
+
     async def send_daemon_status(self, request_id: str | None = None) -> None:
         """Request daemon status check (IG-174 Phase 0).
 
@@ -661,7 +737,7 @@ class WebSocketClient:
             message = await self._ws.recv()
             if isinstance(message, bytes):
                 message = message.decode("utf-8")
-            return decode(message.encode("utf-8"))
+            return decode_websocket_text(message)
         except websockets.exceptions.ConnectionClosed:
             return None
         except Exception:
