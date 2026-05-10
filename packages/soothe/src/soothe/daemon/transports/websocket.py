@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import websockets.asyncio.server
 import websockets.exceptions
-from soothe_sdk.client.protocol import decode, encode
+from soothe_sdk.client.protocol import decode_websocket_text, encode_websocket_text
 
 from soothe.config.daemon_config import WebSocketConfig
 from soothe.daemon.protocol_v2 import create_error_response, validate_message
@@ -108,13 +108,11 @@ class WebSocketTransport(TransportServer):
         if not self._server:
             return
 
-        data = encode(message)
-        # Remove newline for WebSocket (native framing)
-        data = data.rstrip(b"\n")
+        text = encode_websocket_text(message)
 
         # IG-258: Parallel broadcast with timeout for scalability
         send_tasks = [
-            asyncio.create_task(self._send_with_timeout(client, data, timeout=1.0))
+            asyncio.create_task(self._send_with_timeout(client, text, timeout=1.0))
             for client in self._clients
         ]
 
@@ -133,12 +131,12 @@ class WebSocketTransport(TransportServer):
         for client in clients_to_remove:
             self._clients.pop(client, None)
 
-    async def _send_with_timeout(self, client: Any, data: bytes, timeout: float = 1.0) -> None:
-        """Send data to WebSocket client with timeout (IG-258).
+    async def _send_with_timeout(self, client: Any, text: str, timeout: float = 1.0) -> None:
+        """Send a text frame to WebSocket client with timeout (IG-258).
 
         Args:
             client: WebSocket ServerConnection object
-            data: Encoded message data
+            text: JSON payload for a single text frame
             timeout: Send timeout in seconds
 
         Raises:
@@ -146,7 +144,7 @@ class WebSocketTransport(TransportServer):
             Exception: If send fails
         """
         try:
-            await asyncio.wait_for(client.send(data.decode("utf-8")), timeout=timeout)
+            await asyncio.wait_for(client.send(text), timeout=timeout)
         except TimeoutError:
             logger.warning("WebSocket send timeout for client %s", client)
             raise
@@ -163,8 +161,7 @@ class WebSocketTransport(TransportServer):
             websockets.exceptions.ConnectionClosedOK: For normal disconnects (code 1000)
         """
         try:
-            data = encode(message)
-            await client.send(data)
+            await client.send(encode_websocket_text(message))
         except websockets.exceptions.ConnectionClosedOK as e:
             # Normal disconnect (code 1000) - expected behavior
             logger.debug("WebSocket client disconnected normally: %s", e)
@@ -277,7 +274,7 @@ class WebSocketTransport(TransportServer):
                 try:
                     handshake_msgs = self._handshake_callback(websocket)
                     for msg in handshake_msgs:
-                        await websocket.send(encode(msg).decode("utf-8").strip())
+                        await websocket.send(encode_websocket_text(msg))
                 except Exception:
                     logger.exception("Failed to send initial handshake to WebSocket client")
 
@@ -286,7 +283,7 @@ class WebSocketTransport(TransportServer):
                 try:
                     # Parse message
                     message_str = message.decode("utf-8") if isinstance(message, bytes) else message
-                    msg_dict = decode(message_str.encode("utf-8"))
+                    msg_dict = decode_websocket_text(message_str)
                     if msg_dict is None:
                         continue
 
@@ -298,7 +295,7 @@ class WebSocketTransport(TransportServer):
                             errors[0],
                             {"errors": errors},
                         )
-                        await websocket.send(encode(error_msg).decode("utf-8").strip())
+                        await websocket.send(encode_websocket_text(error_msg))
                         continue
 
                     # Pass message to handler with client_id
