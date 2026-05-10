@@ -6,6 +6,7 @@ Mocks multiprocessing components so no real subprocess is spawned.
 from __future__ import annotations
 
 import asyncio
+import multiprocessing
 import queue
 from types import SimpleNamespace
 from typing import Any
@@ -39,6 +40,12 @@ def _make_config() -> SootheConfig:
     return SootheConfig()
 
 
+def _make_cancel_event() -> multiprocessing.Event:
+    """Create a mock cancel_event for tests."""
+    ctx = multiprocessing.get_context("spawn")
+    return ctx.Event()
+
+
 class TestWorkerProcess:
     """WorkerProcess state management."""
 
@@ -50,6 +57,7 @@ class TestWorkerProcess:
             process=mock_process,
             request_queue=MagicMock(),
             response_queue=MagicMock(),
+            cancel_event=_make_cancel_event(),
             worker_id="worker-0",
         )
         worker.status = WorkerStatus.BUSY
@@ -68,6 +76,7 @@ class TestWorkerProcess:
             process=mock_process,
             request_queue=MagicMock(),
             response_queue=MagicMock(),
+            cancel_event=_make_cancel_event(),
             worker_id="worker-0",
         )
 
@@ -178,6 +187,7 @@ class TestWorkerPool:
             process=mock_process,
             request_queue=request_q,
             response_queue=result_q,
+            cancel_event=_make_cancel_event(),
             worker_id="worker-0",
             status=WorkerStatus.IDLE,
         )
@@ -231,6 +241,7 @@ class TestWorkerPool:
             process=mock_process,
             request_queue=request_q,
             response_queue=result_q,
+            cancel_event=_make_cancel_event(),
             worker_id="worker-0",
             status=WorkerStatus.IDLE,
         )
@@ -289,6 +300,7 @@ class TestWorkerPool:
             process=mock_process,
             request_queue=request_q,
             response_queue=queue.Queue(),
+            cancel_event=_make_cancel_event(),
             worker_id="worker-0",
             status=WorkerStatus.BUSY,
         )
@@ -338,6 +350,7 @@ class TestWorkerPool:
             process=mock_process,
             request_queue=request_q,
             response_queue=result_q,
+            cancel_event=_make_cancel_event(),
             worker_id="worker-0",
             status=WorkerStatus.IDLE,
         )
@@ -386,6 +399,7 @@ class TestWorkerPool:
                     process=mock_process,
                     request_queue=MagicMock(),
                     response_queue=empty_rq,
+                    cancel_event=_make_cancel_event(),
                     worker_id="worker-0",
                     status=WorkerStatus.IDLE,
                     requests_completed=5,
@@ -394,6 +408,7 @@ class TestWorkerPool:
                     process=mock_process,
                     request_queue=MagicMock(),
                     response_queue=empty_rq,
+                    cancel_event=_make_cancel_event(),
                     worker_id="worker-1",
                     status=WorkerStatus.BUSY,
                     requests_completed=3,
@@ -436,6 +451,7 @@ class TestPoolLoopRunner:
             process=mock_process,
             request_queue=request_q,
             response_queue=result_q,
+            cancel_event=_make_cancel_event(),
             worker_id="worker-0",
             status=WorkerStatus.IDLE,
         )
@@ -488,6 +504,7 @@ class TestPoolLoopRunner:
                     process=mock_process,
                     request_queue=MagicMock(),
                     response_queue=empty_rq,
+                    cancel_event=_make_cancel_event(),
                     worker_id="worker-0",
                     status=WorkerStatus.IDLE,
                 )

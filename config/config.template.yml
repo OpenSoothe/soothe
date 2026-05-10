@@ -230,6 +230,9 @@ daemon:
     pool_size: 4            # Number of pre-warmed worker processes (1-128)
     idle_timeout_seconds: 300    # Idle worker timeout before shutdown (60-3600)
     max_requests_per_worker: 100 # Max requests before worker respawn (prevents memory buildup)
+    request_timeout_seconds: 900 # Default per-request timeout (0 = no timeout, default 15 min)
+    heartbeat_interval_seconds: 30   # Worker heartbeat interval for stuck detection
+    stuck_worker_timeout_seconds: 180 # Time since last heartbeat before worker marked stuck
 
 # Subagents - Enabled by default (set enabled: false to disable)
 
