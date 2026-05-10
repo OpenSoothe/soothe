@@ -2,6 +2,7 @@
 
 > **Purpose**: Document how user queries flow through the Soothe system across different scenarios.
 > **Date**: 2026-05-10
+> **Updated**: 2026-05-10 (removed legacy input handler, added direct_execute optimization)
 > **Scope**: CLI → Daemon → Runner → AgentLoop → CoreAgent
 
 ---
@@ -14,6 +15,7 @@ Soothe routes queries through a multi-layer architecture with decision points at
 - **Intent handling**: Fast path (chitchat/quiz) vs. full AgentLoop
 - **Thread continuation**: New goal vs. resume from checkpoint
 - **Goal lifecycle**: Creation, execution, completion
+- **Early completion optimization**: Direct execute vs. goal completion synthesis
 
 ---
 
@@ -61,13 +63,14 @@ Transport receives message → _handle_transport_message()
 
 | Message Type | Handler | Description |
 |--------------|---------|-------------|
-| `input` | Reject with error | Legacy global input (deprecated) |
 | `command` | `/cancel`, `/exit`, `/quit` | Cancel loop or detach client |
 | `loop_subscribe` | `_handle_loop_subscribe` | Subscribe client to loop events |
 | `loop_new` | `_handle_loop_new` | Create new loop with UUID |
 | `loop_input` | `_handle_loop_input` | Queue input to loop's isolated queue |
 | `invoke_skill` | `_handle_invoke_skill` | Load skill markdown, enqueue composed prompt |
 | `loop_detach` | `_handle_loop_detach` | Unsubscribe while loop continues |
+
+> **Note**: Legacy global `input` message type was removed. All queries must use `loop_input` with a subscribed `loop_id`.
 
 ### 3.2 Loop Input Requirements (lines 1201-1269)
 
