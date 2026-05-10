@@ -42,6 +42,7 @@ class LoopRunnerActor:
                 autonomous=request.autonomous,
                 max_iterations=request.max_iterations,
                 preferred_subagent=request.preferred_subagent,
+                client_loop_id=request.loop_id,
             ):
                 if self._cancelled:
                     break

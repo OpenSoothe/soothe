@@ -201,6 +201,9 @@ daemon:
 
   max_concurrent_threads: 100  # RFC-402
   cancel_grace_seconds: 30
+  # HITL: seconds to wait for client resume_interrupts (0 = unlimited). On timeout, approve tools;
+  # ask_user uses the first listed choice per question (empty if no choices).
+  hitl_timeout_seconds: 30
   max_input_queue_size: 1000
   max_concurrent_dispatches: 50
   # EventBus JSON wire-size distribution (streaming histogram; constant memory)
@@ -423,6 +426,12 @@ protocols:
 
 persistence:
   default_backend: sqlite  # sqlite (development) | postgresql (production)
+
+  # PostgreSQL connection pool sizes (per OS process). Pool workers run one request at a time;
+  # defaults favor fewer total DB connections (workers × pools). Raise if parallel steps
+  # exhaust LangGraph checkpoint access or AgentLoop persistence.
+  # checkpointer_pool_size: 8   # LangGraph AsyncPostgresSaver pool max_size
+  # agentloop_pool_size: 12     # Shared AgentLoop tables pool max_size (checkpoints DB)
 
   # RFC-612: PostgreSQL multi-database architecture
   # Uncomment for postgresql production setup:

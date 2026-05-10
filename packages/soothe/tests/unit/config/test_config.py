@@ -272,6 +272,12 @@ class TestModelRouter:
         assert cfg.resolve_backend("postgresql") == "postgresql"
         assert cfg.resolve_backend("sqlite") == "sqlite"
 
+    def test_persistence_postgres_pool_size_defaults(self) -> None:
+        """Worker-oriented defaults for PostgreSQL pools (configurable per process)."""
+        p = PersistenceConfig(default_backend="postgresql")
+        assert p.checkpointer_pool_size == 8
+        assert p.agentloop_pool_size == 12
+
 
 class TestModelProvider:
     def test_find_provider(self) -> None:

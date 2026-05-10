@@ -609,7 +609,8 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                 yield _custom(emit_error_event(f"Exceeded {_MAX_HITL_ITERATIONS} HITL iterations"))
                 break
 
-            resolver = getattr(self, "_interrupt_resolver", None)
+            scope = (getattr(self, "_client_loop_id_for_stream", None) or "").strip()
+            resolver = self._interrupt_resolvers.get(scope) if scope else None
             if resolver is not None:
                 resume_payload = await resolver(pending_interrupts)
             else:
@@ -1048,6 +1049,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                     action_requests = value.get("action_requests", [])
                 decisions = [{"type": "approve"} for _ in (action_requests or [value])]
                 payload[iid] = {"decisions": decisions}
+        return payload
 
 
 # IG-273: ``generate_goal_completion_from_checkpoint`` (previously defined here)

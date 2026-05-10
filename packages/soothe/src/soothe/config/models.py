@@ -352,6 +352,27 @@ class PersistenceConfig(BaseModel):
 
     default_backend: Literal["postgresql", "sqlite"] = "sqlite"
 
+    checkpointer_pool_size: int = Field(
+        default=8,
+        ge=1,
+        le=64,
+        description=(
+            "LangGraph PostgreSQL checkpointer pool max_size per process. "
+            "Each worker holds one pool for the lifetime of a request; size parallel "
+            "checkpoint access within a single run (raise if DAG parallelism exhausts the pool)."
+        ),
+    )
+    agentloop_pool_size: int = Field(
+        default=12,
+        ge=1,
+        le=128,
+        description=(
+            "Shared AgentLoop persistence pool max_size per process (checkpoints DB). "
+            "Lower than historical 30: pool workers run one request at a time; scale via "
+            "daemon.worker_pool and this value, not oversized per-worker pools."
+        ),
+    )
+
     # IG-055: Unified SQLite architecture (metadata.db + soothe_checkpoints.db)
     metadata_sqlite_path: str | None = None  # None = $SOOTHE_DATA_DIR/metadata.db
     checkpoint_sqlite_path: str | None = (
