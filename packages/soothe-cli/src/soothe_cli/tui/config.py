@@ -251,8 +251,8 @@ class Glyphs:
     assistant: str  # AI/assistant icon
 
     # Expand/collapse icons
-    expand: str  # ▼ vs [+]
-    collapse: str  # ▶ vs [-]
+    expand: str  # ▶ vs [+] - shown when collapsed (click to expand)
+    collapse: str  # ▲ vs [^] - shown when expanded (click to collapse)
 
     # Box-drawing characters
     box_vertical: str  # │ vs |
@@ -286,8 +286,8 @@ UNICODE_GLYPHS = Glyphs(
     user="👤",  # User/human icon
     assistant="🤖",  # AI/assistant icon
     # Expand/collapse icons
-    expand="▼",
-    collapse="▶",
+    expand="▶",
+    collapse="▲",
     # Box-drawing characters
     box_vertical="│",
     box_horizontal="─",
@@ -318,7 +318,7 @@ ASCII_GLYPHS = Glyphs(
     assistant="[A]",  # AI/assistant icon (ASCII)
     # Expand/collapse icons
     expand="[+]",
-    collapse="[-]",
+    collapse="[^]",
     # Box-drawing characters
     box_vertical="|",
     box_horizontal="-",
