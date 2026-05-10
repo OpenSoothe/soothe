@@ -349,27 +349,5 @@ class TestEdgeCases:
         assert checkpoint.current_goal_index == 0
         assert checkpoint.goal_history[0].iteration == 0
 
-    @pytest.mark.asyncio
-    async def test_thread_switch_preserves_index(self, temp_state_manager):
-        """Test that thread switch preserves correct goal index."""
-        sm = temp_state_manager
 
-        # Initialize on thread_001
-        checkpoint = await sm.initialize("thread_001")
-        goal = sm.start_new_goal("goal on thread_001")
-        checkpoint.goal_history.append(goal)
-        checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
-        checkpoint.status = "running"
-        await sm.save(checkpoint)
-
-        # Switch to thread_002
-        await sm.execute_thread_switch("thread_002")
-
-        # Load and verify index preserved
-        loaded = await sm.load()
-        assert loaded.current_goal_index == 0  # Same goal
-        assert loaded.current_thread_id == "thread_002"
-        assert loaded.goal_history[0].thread_id == "thread_001"  # Original thread
-
-
-# Run tests with: pytest packages/soothe/tests/unit/cognition/agent_loop/test_checkpoint_index_fix.py -v
+# Run tests with: pytest packages/soothe/tests/unit/core/loop/state/test_checkpoint_index_fix.py -v

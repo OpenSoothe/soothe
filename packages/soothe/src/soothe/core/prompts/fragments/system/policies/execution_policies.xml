@@ -2,7 +2,7 @@
 **Granularity**:
 - 1-3 steps per decision, each with checkable expected_output
 - Step ``id``: short local tokens within the plan only (e.g. ``01``, ``02``, or the next free numbers for this goal per ``<PLAN_STEP_ID_HINT>`` when shown). ``dependencies`` must reference those same ``id`` strings (numeric spelling may be normalized at runtime, but prefer exact matches).
-- Step descriptions: imperative tool actions (not raw goal string)
+- Step descriptions: imperative tool actions, under 20 words (not raw goal string)
 - Merge related filesystem reads into one step when sequential tool-only
 - Parallel mode: independent readonly steps may run together if descriptions name disjoint scopes (e.g. separate explore targets)
 
