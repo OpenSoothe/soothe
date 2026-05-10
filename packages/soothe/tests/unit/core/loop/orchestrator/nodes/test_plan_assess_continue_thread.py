@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from soothe.core.loop.orchestrator.nodes.plan_assess import (
     build_continue_thread_bootstrap_plan,
-    continue_thread_bootstrap_allowed,
+    continue_thread_plan_bootstrap_allowed,
     seed_continue_thread_ledger_from_prior_goal,
 )
 from soothe.core.loop.state.checkpoint import (
@@ -45,7 +45,7 @@ def _goal_record(
 
 def test_bootstrap_allowed_fresh_continue_thread() -> None:
     state = LoopState(goal="follow up", thread_id="t1", iteration=0, step_results=[])
-    assert continue_thread_bootstrap_allowed(
+    assert continue_thread_plan_bootstrap_allowed(
         continue_thread_mode=True,
         state=state,
         recovery_valid_resume=False,
@@ -55,7 +55,7 @@ def test_bootstrap_allowed_fresh_continue_thread() -> None:
 
 def test_bootstrap_disallowed_without_continue_thread() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[])
-    assert not continue_thread_bootstrap_allowed(
+    assert not continue_thread_plan_bootstrap_allowed(
         continue_thread_mode=False,
         state=state,
         recovery_valid_resume=False,
@@ -65,7 +65,7 @@ def test_bootstrap_disallowed_without_continue_thread() -> None:
 
 def test_bootstrap_disallowed_when_iteration_nonzero() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=1, step_results=[])
-    assert not continue_thread_bootstrap_allowed(
+    assert not continue_thread_plan_bootstrap_allowed(
         continue_thread_mode=True,
         state=state,
         recovery_valid_resume=False,
@@ -82,7 +82,7 @@ def test_bootstrap_disallowed_when_step_results_present() -> None:
         thread_id="t1",
     )
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[sr])
-    assert not continue_thread_bootstrap_allowed(
+    assert not continue_thread_plan_bootstrap_allowed(
         continue_thread_mode=True,
         state=state,
         recovery_valid_resume=False,
@@ -92,7 +92,7 @@ def test_bootstrap_disallowed_when_step_results_present() -> None:
 
 def test_bootstrap_disallowed_recovery_with_reason_history() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[])
-    assert not continue_thread_bootstrap_allowed(
+    assert not continue_thread_plan_bootstrap_allowed(
         continue_thread_mode=True,
         state=state,
         recovery_valid_resume=True,
@@ -102,7 +102,7 @@ def test_bootstrap_disallowed_recovery_with_reason_history() -> None:
 
 def test_bootstrap_disallowed_recovery_with_act_history() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[])
-    assert not continue_thread_bootstrap_allowed(
+    assert not continue_thread_plan_bootstrap_allowed(
         continue_thread_mode=True,
         state=state,
         recovery_valid_resume=True,
@@ -112,7 +112,7 @@ def test_bootstrap_disallowed_recovery_with_act_history() -> None:
 
 def test_bootstrap_disallowed_recovery_iteration_advances() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[])
-    assert not continue_thread_bootstrap_allowed(
+    assert not continue_thread_plan_bootstrap_allowed(
         continue_thread_mode=True,
         state=state,
         recovery_valid_resume=True,
@@ -122,7 +122,7 @@ def test_bootstrap_disallowed_recovery_iteration_advances() -> None:
 
 def test_bootstrap_disallowed_recovery_goal_record_none() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[])
-    assert not continue_thread_bootstrap_allowed(
+    assert not continue_thread_plan_bootstrap_allowed(
         continue_thread_mode=True,
         state=state,
         recovery_valid_resume=True,
@@ -132,7 +132,7 @@ def test_bootstrap_disallowed_recovery_goal_record_none() -> None:
 
 def test_bootstrap_allowed_recovery_iteration_zero_clean_record() -> None:
     state = LoopState(goal="x", thread_id="t1", iteration=0, step_results=[])
-    assert continue_thread_bootstrap_allowed(
+    assert continue_thread_plan_bootstrap_allowed(
         continue_thread_mode=True,
         state=state,
         recovery_valid_resume=True,
