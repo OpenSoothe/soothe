@@ -763,7 +763,6 @@ class AgentLoopConfig(BaseModel):
         goal_context: Goal context injection for Plan/Execute phases (RFC-217).
         report_output: Goal report display and synthesis limits.
         output_streaming: Enable streaming mode for all AI outputs (true=stream, false=batch).
-        reject_done_at_iteration_zero: Guard against premature completion at iteration 0.
         goal_completion_mode: How planner completion (`require_goal_completion`) combines with
             execution heuristics when the goal is assessed as done (IG-298).
         plan_prompt_ledger: Ledger projection caps for Plan-phase LLM prompts (IG-380).
@@ -832,12 +831,6 @@ class AgentLoopConfig(BaseModel):
     output_streaming: bool = Field(
         default=True,
         description="Enable streaming mode for all AI outputs (true=stream chunks, false=batch final only)",
-    )
-
-    # Performance optimization fields (simplified - only essential user-facing controls)
-    reject_done_at_iteration_zero: bool = Field(
-        default=False,
-        description="Guard: Reject 'done' at iteration 0 with no execution (IG-053)",
     )
 
     loop_orchestrator_evidence_validate: bool = Field(

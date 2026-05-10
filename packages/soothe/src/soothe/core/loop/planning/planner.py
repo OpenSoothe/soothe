@@ -1065,10 +1065,8 @@ class LLMPlanner:
             )
 
         if assessment.status == "done":
-            guard_enabled = False
-            if self._config is not None:
-                guard_enabled = self._config.agent_loop.reject_done_at_iteration_zero
-            if guard_enabled and state.iteration == 0 and len(state.step_results) == 0:
+            # Guard: always reject premature 'done' at iteration 0 with no execution
+            if state.iteration == 0 and len(state.step_results) == 0:
                 logger.warning("[Guard] Reject 'done' at iter=0 no execution")
                 assessment.status = "replan"
                 assessment.goal_progress = "none"
@@ -1256,16 +1254,12 @@ class LLMPlanner:
                 plan_gen_ms = 0.0
                 llm_calls = 1
 
-                # Guard against false "done" at iteration 0
+                # Guard: always reject premature 'done' at iteration 0 with no execution
                 if assessment.status == "done":
-                    guard_enabled = False
-                    if self._config is not None:
-                        guard_enabled = self._config.agent_loop.reject_done_at_iteration_zero
-
-                    if guard_enabled and state.iteration == 0 and len(state.step_results) == 0:
+                    if state.iteration == 0 and len(state.step_results) == 0:
                         logger.warning("[Guard] Reject 'done' at iter=0 no execution")
                         assessment.status = "replan"
-                        assessment.goal_progress = "none"  # IG-399
+                        assessment.goal_progress = "none"
 
                 # Early completion: apply goal-completion policy (IG-298)
                 if assessment.status == "done":

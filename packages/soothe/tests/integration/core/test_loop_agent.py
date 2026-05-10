@@ -293,7 +293,6 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
     al.limits.max_parallel_tools = 5
     al.limits.max_parallel_subagents = 4
     # Goal completion / synthesis config
-    al.reject_done_at_iteration_zero = False
     al.goal_completion_mode = "llm_only"
     al.report_output.synthesis_max_chars = 10000
     al.report_output.synthesis_include_full_outputs = True
