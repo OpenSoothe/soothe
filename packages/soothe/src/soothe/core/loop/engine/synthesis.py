@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
-from soothe.core.loop.analysis.scenario_classifier import (
+from soothe.core.loop.engine.scenario_classifier import (
     ScenarioClassification,
     classify_synthesis_scenario,
 )
@@ -106,7 +106,7 @@ class SynthesisGenerator:
             return await classify_synthesis_scenario(goal, state, self.llm)
         except Exception:
             logger.warning("Classifier failed, using fallback", exc_info=True)
-            from soothe.core.loop.analysis.scenario_classifier import BUILTIN_SCENARIOS
+            from soothe.core.loop.engine.scenario_classifier import BUILTIN_SCENARIOS
 
             return ScenarioClassification(
                 scenario="general_summary",

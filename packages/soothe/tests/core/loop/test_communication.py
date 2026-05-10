@@ -3,10 +3,10 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from soothe.core.loop.utils.communication import GoalCommunicationHelper
 
 from soothe.core.goal_engine import Goal, GoalEngine
 from soothe.core.goal_engine.proposal_queue import ProposalQueue
-from soothe.core.loop.utils.communication import GoalCommunicationHelper
 
 
 def _make_goal(description: str, status: str = "pending") -> Goal:

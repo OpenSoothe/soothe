@@ -3,7 +3,6 @@
 Provides JSON utilities, reflection logic, and helper components.
 """
 
-from .communication import GoalCommunicationHelper
 from .events import LoopAgentReasonEvent
 from .json_parsing import _load_llm_json_dict
 from .messages import LoopHumanMessage
@@ -24,7 +23,6 @@ __all__ = [
     "reflect_heuristic",
     "reflect_with_llm",
     "_default_agent_decision",
-    "GoalCommunicationHelper",
     "LoopHumanMessage",
     "LoopAgentReasonEvent",
     "GoalCompletionAccumState",

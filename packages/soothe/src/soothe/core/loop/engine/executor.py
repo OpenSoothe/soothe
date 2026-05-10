@@ -16,7 +16,7 @@ from soothe.core.context.model_override import (
     attach_stream_model_override,
     reset_stream_model_override,
 )
-from soothe.core.loop.analysis.metadata_generator import (
+from soothe.core.loop.engine.metadata_generator import (
     PLANNER_OUTCOME_PREVIEW_CAP,
 )
 from soothe.core.loop.state.schemas import (
@@ -1263,7 +1263,7 @@ class Executor:
         """
         from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-        from soothe.core.loop.analysis.metadata_generator import (
+        from soothe.core.loop.engine.metadata_generator import (
             generate_outcome_metadata,
         )
         from soothe.core.loop.utils.stream_normalize import (
