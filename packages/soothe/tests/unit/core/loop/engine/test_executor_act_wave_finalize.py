@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.core.loop.engine.act_wave_finalize import (
+from soothe.core.loop.engine.executor import (
     compute_act_wave_finalize,
     provenance_is_task_delegate,
 )

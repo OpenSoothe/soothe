@@ -1,4 +1,19 @@
-"""Execute phase logic for AgentLoop (RFC-201)."""
+"""Execute phase logic for AgentLoop (RFC-201).
+
+Act-wave visible answer resolution is integrated here (IG-355, IG-356, IG-357).
+
+After each Execute wave, adaptive goal completion and headless replay use
+``LoopState.last_execute_assistant_text``. That string may come from:
+
+- **root_assistant_stream** — aggregated root-graph ``AIMessage`` / chunk text (same path as act
+  aggregation for the main graph).
+- **task_tool_aggregate** — ordered ``task`` ``ToolMessage`` bodies (delegate finals), including
+  parallel waves merged with ``\\n\\n---\\n\\n`` (IG-356).
+- **none** — no usable text (empty wave).
+
+``last_wave_answer_from_delegate_final`` on ``LoopState`` remains the boolean hook for runner
+replay (IG-355); it is True iff provenance is ``task_tool_aggregate``.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +23,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 
@@ -30,12 +45,6 @@ from soothe.middleware.tool_concurrency import init_tool_concurrency_for_thread
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, log_preview, preview, preview_first
 
-from .act_wave_finalize import (
-    DELEGATE_FINAL_WAVE_CAP,
-    compute_act_wave_finalize,
-    provenance_is_task_delegate,
-)
-
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
@@ -45,6 +54,66 @@ if TYPE_CHECKING:
     from .goal_context_manager import GoalContextManager
 
 logger = logging.getLogger(__name__)
+
+
+# --- Act-wave finalize resolution (merged from execute_wave_finalize.py) ---
+
+ActWaveAnswerProvenance = Literal["root_assistant_stream", "task_tool_aggregate", "none"]
+
+# Cap for joined delegate text and for root assistant text stored on state (memory bound).
+DELEGATE_FINAL_WAVE_CAP = 120_000
+
+
+@dataclass(frozen=True, slots=True)
+class ActWaveFinalizeSnapshot:
+    """Resolved user-visible text for the last Execute wave and how it was obtained."""
+
+    visible_text: str | None
+    provenance: ActWaveAnswerProvenance
+
+
+def compute_act_wave_finalize(
+    *,
+    parallel_multi_step: bool,
+    root_assistant_text: str,
+    delegate_final_text: str | None,
+    wave_text_cap: int = DELEGATE_FINAL_WAVE_CAP,
+) -> ActWaveFinalizeSnapshot:
+    """Compute visible assistant text and provenance for one Execute wave.
+
+    Args:
+        parallel_multi_step: Whether this wave ran multiple parallel steps.
+        root_assistant_text: Pre-aggregated root-graph assistant text (ignored when
+            ``parallel_multi_step`` is True except conceptually empty).
+        delegate_final_text: Joined ``task`` tool return bodies for this wave, if any.
+        wave_text_cap: Maximum stored length for delegate (and enforced consistently upstream).
+
+    Returns:
+        Snapshot with trimmed ``visible_text`` and ``provenance``.
+    """
+    delegate = (delegate_final_text or "").strip()
+    if parallel_multi_step:
+        if delegate:
+            text = delegate[:wave_text_cap] if len(delegate) > wave_text_cap else delegate
+            return ActWaveFinalizeSnapshot(text, "task_tool_aggregate")
+        return ActWaveFinalizeSnapshot(None, "none")
+
+    if delegate:
+        text = delegate[:wave_text_cap] if len(delegate) > wave_text_cap else delegate
+        return ActWaveFinalizeSnapshot(text, "task_tool_aggregate")
+
+    root = root_assistant_text.strip()
+    if root:
+        return ActWaveFinalizeSnapshot(root, "root_assistant_stream")
+    return ActWaveFinalizeSnapshot(None, "none")
+
+
+def provenance_is_task_delegate(snapshot: ActWaveFinalizeSnapshot) -> bool:
+    """True when visible text came from ``task`` tool returns (delegate finals)."""
+    return snapshot.provenance == "task_tool_aggregate"
+
+
+# --- Helper functions ---
 
 
 def _collect_related_exceptions(exc: BaseException) -> list[BaseException]:
@@ -276,7 +345,7 @@ class Executor:
     ) -> None:
         """Apply resolved Act-wave visible text to state (IG-199, IG-355, IG-357).
 
-        Resolution is centralized in :func:`~soothe.core.loop.execution.act_wave_finalize.compute_act_wave_finalize`.
+        Resolution is centralized in :func:`~soothe.core.loop.engine.executor.compute_act_wave_finalize`.
         """
         root_text = (
             ""
