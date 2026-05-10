@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.core.agent_loop.state.persistence.directory_manager import (
+from soothe.core.loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
 from soothe.daemon import SootheDaemon, WebSocketClient

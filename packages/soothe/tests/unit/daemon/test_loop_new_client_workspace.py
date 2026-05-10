@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 import soothe.config as soothe_config
-from soothe.core.agent_loop.state.persistence.manager import (
+from soothe.core.loop.state.persistence.manager import (
     AgentLoopCheckpointPersistenceManager,
 )
 from soothe.daemon.loop_isolation import bind_execution_thread_for_loop

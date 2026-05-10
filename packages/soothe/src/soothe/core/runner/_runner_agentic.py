@@ -9,12 +9,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
-from soothe.core.agent_loop import AgentLoop
-from soothe.core.agent_loop.utils.events import LoopAgentReasonEvent
-from soothe.core.agent_loop.utils.messages import (
-    loop_assistant_messages_chunk,
-    loop_message_assistant_output_phase,
-)
 from soothe.core.events import (
     AgenticLoopCompletedEvent,
     AgenticLoopStartedEvent,
@@ -22,6 +16,12 @@ from soothe.core.events import (
     AgenticStepStartedEvent,
 )
 from soothe.core.intention import build_loop_routing_classification
+from soothe.core.loop import AgentLoop
+from soothe.core.loop.utils.events import LoopAgentReasonEvent
+from soothe.core.loop.utils.messages import (
+    loop_assistant_messages_chunk,
+    loop_message_assistant_output_phase,
+)
 from soothe.core.runner._runner_shared import StreamChunk, _custom
 from soothe.utils.text_preview import preview_first
 

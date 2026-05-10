@@ -264,7 +264,7 @@ def test_calculate_retry_timeout_escalation(
 def test_executor_error_classification_enhanced_timeout() -> None:
     """Test executor classifies EnhancedTimeoutError as execution (retryable)."""
     from soothe.core.agent import CoreAgent
-    from soothe.core.agent_loop.engine.executor import Executor
+    from soothe.core.loop.engine.executor import Executor
 
     exc = EnhancedTimeoutError(
         timeout_seconds=480,
@@ -287,7 +287,7 @@ def test_executor_error_classification_enhanced_timeout() -> None:
 def test_executor_error_extraction_enhanced_timeout() -> None:
     """Test executor extracts EnhancedTimeoutError metadata."""
     from soothe.core.agent import CoreAgent
-    from soothe.core.agent_loop.engine.executor import Executor
+    from soothe.core.loop.engine.executor import Executor
 
     exc = EnhancedTimeoutError(
         timeout_seconds=480,

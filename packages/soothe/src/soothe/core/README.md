@@ -57,7 +57,7 @@ No transport or UI dependencies.
 | `resolver/` | Wires protocols from config: checkpointer, durability, goal engine, tools. |
 | `prompts/` | System prompt building — `PromptBuilder`, context XML generation, prompt template loading. |
 | `event_replay/` | Event replay and state reconstruction utilities. |
-| `agent_loop/` | Plan–execute AgentLoop (RFC-201), persistence, branching, planner. |
+| `loop/` | Plan–execute AgentLoop (RFC-201), persistence, branching, planner. |
 | `goal_engine/` | Autonomous goal lifecycle, proposals, webhooks, dreaming (RFC-200). |
 | `channel/` | In-process goal channel inbox/outbox (RFC-204). |
 | `intention/` | LLM intent classification for routing (RFC-217). |
