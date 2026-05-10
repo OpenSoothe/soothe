@@ -1,10 +1,14 @@
 <EXECUTION_POLICIES>
+**Milestone steps**: Plan steps are checkpoints the execute-phase agent owns end-to-end; it may use reasoning and local todos inside a step. Each ``description`` states the milestone only—fewer than 20 words—not a full procedure or tool script.
+
 **Granularity**:
-- 1-3 steps per decision, each with checkable expected_output
-- Step ``id``: short local tokens within the plan only (e.g. ``01``, ``02``, or the next free numbers for this goal per ``<PLAN_STEP_ID_HINT>`` when shown). ``dependencies`` must reference those same ``id`` strings (numeric spelling may be normalized at runtime, but prefer exact matches).
-- Step descriptions: imperative tool actions, under 20 words (not raw goal string)
-- Merge related filesystem reads into one step when sequential tool-only
-- Parallel mode: independent readonly steps may run together if descriptions name disjoint scopes (e.g. separate explore targets)
+- 1–3 steps per decision, each with checkable ``expected_output``
+- Step ``id``: short local tokens (e.g. ``01``, ``02``, or next free per ``<PLAN_STEP_ID_HINT>``). ``dependencies`` must reference those same ``id`` strings (runtime may normalize numeric spelling; prefer exact matches).
+- ``description``: imperative outcome/scope line, not the raw goal string
+- Merge related filesystem reads into one step when they are sequential tool-only work
+- ``parallel``: independent readonly steps only, with descriptions naming disjoint scopes (e.g. separate explore targets)
+
+**Progress-aware** (use assess ``Progress`` when present): ``high`` → favor 1–2 closing or verify steps; ``none`` / ``low`` / ``medium`` on non-trivial goals → use a staged arc within the step cap, not one bloated step.
 
 **Filesystem discovery**:
 - Do not fan out many parallel shallow ``list_files`` / ``glob`` calls on overlapping paths; prefer one reconnaissance step then sequential targeted ``read_file`` / ``grep``.
@@ -20,10 +24,5 @@
 - Subsequent iterations: 1-3 steps per decision as normal.
 - Rationale: reduces wasted work from incorrect assumptions; catches wrong approaches early.
 
-**Step consolidation**:
-- Before emitting steps, ask: "Can any two steps be merged into one?"
-- Merge sequential reads of related files into one step with multiple targets.
-- Merge discovery + analysis of a single topic into one step.
-- Only split when steps are truly independent parallel work or have different subagent requirements.
-- Goal: minimize total steps while preserving parallelism opportunities.
+**Step consolidation**: Merge sequential reads of related files or single-topic discovery+analysis into one milestone when they are not independent parallel work. Split only for true parallelism or different subagent needs.
 </EXECUTION_POLICIES>

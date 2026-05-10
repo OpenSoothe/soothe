@@ -97,6 +97,10 @@ class WorkerPoolConfig(BaseModel):
         request_timeout_seconds: Default per-request timeout (0 = no timeout).
         heartbeat_interval_seconds: Worker heartbeat interval for stuck detection.
         stuck_worker_timeout_seconds: Time since last heartbeat before marking worker stuck.
+        dispatch_wait_stats_enabled: Log periodic dispatch wait / queue-depth histograms.
+        dispatch_wait_stats_interval_seconds: Seconds between log emissions when enabled.
+        dispatch_wait_stats_idle_pause_seconds: Skip logging if no pool dispatch activity
+            for this many seconds (window discarded, like EventBus size stats).
     """
 
     enabled: bool = Field(
@@ -143,6 +147,22 @@ class WorkerPoolConfig(BaseModel):
         ge=60,
         le=600,
         description="Time since last heartbeat before marking worker as stuck (seconds)",
+    )
+    dispatch_wait_stats_enabled: bool = Field(
+        default=False,
+        description="Log periodic worker pool dispatch wait-time and wait-queue histograms",
+    )
+    dispatch_wait_stats_interval_seconds: int = Field(
+        default=60,
+        ge=5,
+        le=3600,
+        description="Interval for pool dispatch stats log lines (seconds)",
+    )
+    dispatch_wait_stats_idle_pause_seconds: int = Field(
+        default=120,
+        ge=1,
+        le=86400,
+        description="Discard stats window if no dispatch activity for this long (seconds)",
     )
 
     def get_effective_pool_size(self) -> int:
