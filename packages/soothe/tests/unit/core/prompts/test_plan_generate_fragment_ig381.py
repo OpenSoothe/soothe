@@ -6,7 +6,7 @@ from soothe.core.prompts.fragments import PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
 def test_plan_generate_uses_flattened_decision_fields() -> None:
     text = PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
     assert "plan_action, type, steps, execution_mode" in text
-    assert "decision fields" in text
+    assert "plan_action" in text and "StepAction" in text
     assert "supportive_evidence" not in text
 
 

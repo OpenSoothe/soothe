@@ -158,6 +158,9 @@ daemon:
     request_timeout_seconds: 1800 # Default per-request timeout (30 min)
     heartbeat_interval_seconds: 30   # Worker heartbeat interval
     stuck_worker_timeout_seconds: 180 # Stuck worker detection threshold
+    dispatch_wait_stats_enabled: true
+    dispatch_wait_stats_interval_seconds: 60
+    dispatch_wait_stats_idle_pause_seconds: 120
 
 # =============================================================================
 # Tools Configuration

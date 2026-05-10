@@ -1,24 +1,23 @@
 <PLAN_GENERATE>
-This call only produces the next execution plan. Status, goal_progress, and confidence were already decided in the prior assess call; the message appended after the ledger (`Status: …, Progress: …`) is authoritative. Use the goal and execute-iteration values in the <GOAL_PROGRESS> block in the following user message (after the ledger) for scope and iteration context.
+Schema-only output: plan_action, type, steps, execution_mode, reasoning, adaptive_granularity, next_action.
 
-Output MUST match the structured schema only: plan_action, type, steps, execution_mode, reasoning, adaptive_granularity, next_action.
+Assess already ran: the appended system line ``Status: …, Progress: …`` is authoritative. Goal text and execute iteration live in ``<GOAL_PROGRESS>`` in the user message after the ledger.
 
 **plan_action**
-- "keep": Reuse the in-flight plan; omit type/steps/execution_mode unless explicitly revising.
-- "new": Supply a fresh decision payload with 1–3 steps (see EXECUTION_POLICIES above). Each step: imperative description, expected_output, optional subagent/dependencies.
-  - When iteration is 1: produce 1-2 steps maximum. Validate approach before expanding.
-  - When prior steps have failed: propose a *different approach*, do not re-describe the same failed step.
+- ``keep``: Reuse the current plan; omit new type/steps/execution_mode unless you must adjust them.
+- ``new``: Fresh decision with 1–3 steps per EXECUTION_POLICIES (ids, modes, discovery rules, first-wave cap).
 
-**decision fields** (when plan_action="new")
-- type: "execute_steps" or "final" per goal state.
-- steps: list of StepAction objects to execute next.
-- execution_mode: "sequential" unless steps are independent readonly passes with disjoint scopes ("parallel"), or explicit DAG ("dependency").
-- For ``dependency`` mode: each step ``id`` must be a distinct local token (e.g. ``01``, ``02``, or the next indices for this goal — see ``<PLAN_STEP_ID_HINT>`` in the user message when present); every string in ``dependencies`` must be the ``id`` of another step in the same list (same spelling preferred). Runtime also renumbers new plans to the next free goal suffixes when the model restarts at ``01``.
-- reasoning: internal justification of the step set (third person, concise).
-- adaptive_granularity: optional ("atomic" or "semantic").
+**steps** — each ``StepAction`` uses ``description``, ``expected_output``, optional ``subagent``, optional ``dependencies``.
+- ``description``: One imperative line naming the **milestone** or scoped outcome for this execute turn. The CoreAgent that runs the step supplies reasoning and may use **local todos** for fine-grained work; do not encode that breakdown here. **Fewer than 20 words**; never paste the full goal as the description.
+- ``expected_output``: One short, checkable completion signal.
 
-**next_action**
-- First-person narration ONLY: "Let me [action]" or similar statements.
-- One concise sentence, max ~300 characters.
-- Reference concrete paths or findings from the ledger when relevant; avoid repeating the full goal verbatim.
+**Arc vs. one-shot**
+- When Progress is ``none``, ``low``, or ``medium``, or the goal is clearly multi-part: stage real phases inside the 1–3 step cap (e.g. narrow recon → main work → verify/deliver), not one step that tries to do everything.
+- When Progress is ``high``: bias to 1–2 tight steps (finish, verify, polish).
+- If prior steps failed (ledger or ``<PLAN_DAG_CONTEXT>``): propose a different approach; do not reissue the same failed step text.
+
+**execution_mode**: ``sequential`` unless EXECUTION_POLICIES allow ``parallel`` (readonly, disjoint scopes) or ``dependency`` (consistent local ``id`` / ``dependencies``).
+
+**reasoning**: Brief third-person justification of the step set.
+**next_action**: First person, one sentence, max ~300 characters; reference concrete ledger paths or findings when relevant.
 </PLAN_GENERATE>
