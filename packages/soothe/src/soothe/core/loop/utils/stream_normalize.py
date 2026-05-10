@@ -212,25 +212,34 @@ def resolve_goal_completion_text(state: GoalCompletionAccumState) -> str:
         text = state.final_ai_message_text
 
     # Split into lines, process, then rejoin
-    lines = text.split('\n')
-    result = []
-    empty_line_count = 0
+    lines = text.split("\n")
+    result: list[str] = []
+    empty_count = 0
+    have_content = False
 
     for line in lines:
-        if line == '':
-            empty_line_count += 1
+        if line == "":
+            empty_count += 1
         else:
-            # Output accumulated empty lines (max 1)
-            if empty_line_count > 0:
-                result.append('')
-                empty_line_count = 0
+            # Output collapsed blank lines before content
+            if empty_count > 0:
+                if not have_content:
+                    # Leading: 2 empty strings = 1 blank line in join representation
+                    result.append("")
+                    result.append("")
+                else:
+                    # Middle: 1 empty string = 1 blank line in join representation
+                    result.append("")
+            empty_count = 0
+            have_content = True
             result.append(line)
 
-    # Handle trailing empty lines
-    if empty_line_count > 0:
-        result.append('')
+    # Trailing: 2 empty strings = 1 blank line in join representation
+    if empty_count > 0:
+        result.append("")
+        result.append("")
 
-    return '\n'.join(result)
+    return "\n".join(result)
 
 
 __all__ = [
