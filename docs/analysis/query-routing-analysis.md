@@ -1,9 +1,61 @@
 # Query Routing Analysis Report
 
 > **Purpose**: Document how user queries flow through the Soothe system across different scenarios.
-> **Date**: 2026-05-10
-> **Updated**: 2026-05-10 (removed legacy input handler, added direct_execute optimization)
+> **Version**: 1.2.0
+> **Date**: 2026-05-11
 > **Scope**: CLI → Daemon → Runner → AgentLoop → CoreAgent
+
+---
+
+## Changelog
+
+### v1.2.0 (2026-05-11)
+
+#### Added
+- **RFC-604 Status Assessment Integration** (Section 11)
+  - Three-layer defense architecture for Plan phase robustness
+  - `StatusAssessment` schema with ~50-80 token footprint
+  - Conditional plan generation (skip when `status=done`)
+  - Integration with Goal Engine for early routing decisions
+  - Performance benefits: 50-65% token reduction per Plan phase
+
+- **RFC-399 Descriptive Progress Levels** (Section 10.2)
+  - Replaced numeric progress with descriptive levels: `none` | `low` | `medium` | `high` | `complete`
+  - Easier for LLMs to estimate accurately than percentages
+  - Reduces token usage in structured outputs
+  - Aligns with human intuitive understanding
+
+- **Error Propagation and Recovery Paths** (Section 17)
+  - Error classification: fatal, retryable, validation, timeout
+  - Fatal error propagation through `last_outcome` state
+  - Checkpoint recovery scenarios (running, ready_for_next_goal, other)
+  - Thread health metrics tracking
+  - Fallback strategies with three-tier defense
+  - Event propagation flow from Node → Runner → Daemon → Client
+
+- **Scenarios 10-11** (Section 12)
+  - Scenario 10: Error Recovery Flow - Complete error handling flow
+  - Scenario 11: Autonomous Mode Recovery - RFC-200 backoff reasoning with LLM-driven DAG restructuring
+
+- **IG-264 Minimal Fields Documentation**
+  - Section 6.5: Minimal fields in SootheRunner
+  - Section 9.4: Minimal fields in Loop Graph state transitions
+  - Section 11.5: Lightweight StatusAssessment checks
+  - Token reduction: ~60-97% vs full PlanResult schemas
+
+#### Updated
+- **Section 6: SootheRunner** - Refreshed with current selection logic
+  - Execution mode selection criteria (autonomous vs agentic)
+  - Fast path conditions with intent classification
+  - Direct execute optimization (`require_goal_completion=False`)
+  - Complete routing decision flow diagram
+  - Latency estimates for each path
+
+- **Section 13: Key Routing Decision Points**
+  - Added entries for Status assessment, Progress level, Fatal error routing, Checkpoint recovery
+
+- **Section 15: References**
+  - Added RFC-399, RFC-604 to references table
 
 ---
 
@@ -149,25 +201,151 @@ If valid, message is enqueued to `LoopInputDispatcher` for that `loop_id`.
 
 **File**: `packages/soothe/src/soothe/core/runner/__init__.py`
 
-### 6.1 Execution Mode Routing (lines 505-580)
+### 6.1 Execution Mode Selection (lines 505-598)
+
+The runner selects execution mode based on query characteristics:
 
 ```python
-async def astream(self, request):
-    if request.autonomous and self._goal_engine:
-        # Goal-driven iteration
-        return self._run_autonomous(request)
+async def astream(self, user_input, *, autonomous=False, ...):
+    # Mode selection logic
+    if autonomous and self._goal_engine:
+        # RFC-0007: Goal-driven autonomous iteration
+        async for chunk in self._run_autonomous(...):
+            yield chunk
     else:
-        # Default Reason→Act loop
-        return self._run_agentic_loop(request)
+        # RFC-0008/RFC-201: Agentic loop with Reason→Act
+        async for chunk in self._run_agentic_loop(...):
+            yield chunk
 ```
 
-### 6.2 Initialization (lines 84-199)
+**Selection Criteria**:
+
+| Mode | Condition | Use Case |
+|------|-----------|----------|
+| **Autonomous** | `autonomous=True` + `_goal_engine` | Complex multi-step tasks with explicit goal management |
+| **Agentic** | Default | Single goal with iterative Reason→Act refinement |
+
+### 6.2 Fast Path Conditions (lines 280-310)
+
+Early intent classification enables fast-path routing:
+
+```python
+# Intent classification for routing decision
+intent_classification = await self._intent_classifier.classify_intent(
+    user_input,
+    recent_messages=recent_for_classify,
+    active_goal_id=active_goal_id,
+    ...
+)
+
+# Fast path: skip AgentLoop entirely for chitchat
+if intent_classification.intent_type == "chitchat":
+    async for chunk in self._run_chitchat(user_input, ...):
+        yield chunk
+    return
+
+# Fast path: skip AgentLoop entirely for quiz
+if intent_classification.intent_type == "quiz":
+    async for chunk in self._run_quiz(user_input, ...):
+        yield chunk
+    return
+```
+
+**Fast Path Triggers**:
+
+| Intent Type | Fast Path | Latency |
+|-------------|-----------|---------|
+| `chitchat` | `_run_chitchat()` → CoreAgent | ~1-2s |
+| `quiz` | `_run_quiz()` → CoreAgent | ~1-2s |
+| `new_goal` | Full AgentLoop | ~5-30s |
+| `continue_thread` | Full AgentLoop | ~3-15s |
+
+### 6.3 Initialization (lines 84-199)
 
 Runner initializes:
 
 - `CoreAgent` via `create_soothe_agent()`
 - Checkpointer, memory, planner, policy, durability
 - `IntentClassifier` for unified intent classification
+- `ConcurrencyController` for hierarchical limits
+- HITL interrupt resolver for interactive pauses
+
+### 6.4 Current Selection Logic
+
+**File**: `_runner_agentic.py` (lines 280-350)
+
+Complete routing decision flow:
+
+```
+User Query
+    ↓
+IntentClassifier.classify_intent()
+    ↓
+┌─────────────────────────────────────────┐
+│ intent_type == "chitchat"               │
+│   → _run_chitchat()                     │
+│   → CoreAgent.astream() directly        │
+│   → FAST PATH (~1-2s)                   │
+└─────────────────────────────────────────┘
+    ↓ (not chitchat)
+┌─────────────────────────────────────────┐
+│ intent_type == "quiz"                   │
+│   → _run_quiz()                         │
+│   → CoreAgent.astream() directly        │
+│   → FAST PATH (~1-2s)                   │
+└─────────────────────────────────────────┘
+    ↓ (not quiz)
+┌─────────────────────────────────────────┐
+│ intent_type == "new_goal"               │
+│   → AgentLoop.run_with_progress()       │
+│   → Full Plan→Execute loop              │
+│   → AGENTIC PATH (~5-30s)               │
+└─────────────────────────────────────────┘
+    ↓
+Emit AgenticLoopStartedEvent
+    ↓
+AgentLoop execution with progress events
+```
+
+**Direct Execute Optimization**:
+
+When `require_goal_completion=False` (from StatusAssessment):
+- Skip extra LLM call for goal completion synthesis
+- Use last AIMessage from execution as final response
+- **Latency reduction**: ~500-1000ms saved per completion
+
+### 6.5 Minimal Fields Optimization (IG-264)
+
+The runner employs **minimal field schemas** for token-efficient execution:
+
+```python
+# StatusAssessment - only execution-critical fields
+class StatusAssessment(BaseModel):
+    status: Literal["continue", "replan", "done"]
+    goal_progress: Literal["none", "low", "medium", "high", "complete"]
+    assessment_reasoning: str = ""           # Brief only
+    require_goal_completion: bool = False    # Skip extra LLM call
+```
+
+**Token Reduction Strategy**:
+
+| Schema | Fields | Token Reduction |
+|--------|--------|-----------------|
+| Full PlanResult | 8+ fields | Baseline (~2000-3000 tokens) |
+| StatusAssessment | 4 fields | **60% reduction** (~50-80 tokens) |
+| PlanGeneration | 6 fields | **40-60% reduction** |
+
+**Execution-Critical Fields Only**:
+- `status` - Routing decision (continue/replan/done)
+- `goal_progress` - Progress estimation for user feedback
+- `require_goal_completion` - Optimization to skip unnecessary LLM calls
+- Removed: verbose reasoning, optional metadata, nested objects
+
+**Impact on Query Routing**:
+- Faster plan phase execution
+- Reduced truncation risk (smaller JSON)
+- Lower latency for routing decisions
+- Maintained decision quality with minimal context
 
 ---
 
@@ -267,6 +445,64 @@ START → init_or_resume → iteration_gate → iteration_start
 | `execute` | `nodes/execute.py` | Execute step via CoreAgent |
 | `goal_completion` | `nodes/goal_completion.py` | Synthesize results |
 
+### 9.4 Minimal Fields in State Transitions (IG-264)
+
+The Loop Graph uses **minimal field state** for efficient routing decisions:
+
+**State Schema Optimization**:
+
+```python
+# Minimal state for routing decisions (IG-264)
+class LoopState:
+    # Execution-critical only
+    iteration: int
+    goal: str
+    step_results: list[StepResult]  # Truncated evidence
+    
+    # Routing fields (minimal)
+    last_outcome: Literal["continue", "fatal", "max_iterations"]
+    intent_route: Literal["fast_path", "agent_loop"]
+    plan_route: Literal["PLAN_ROUTE_GOAL_DONE", "continue"]
+```
+
+**Routing Condition Efficiency**:
+
+| Routing Function | Minimal Check | Full State Access |
+|------------------|---------------|-------------------|
+| `route_after_init` | `state.get("intent_route")` | ❌ No full context needed |
+| `route_after_plan` | `state.get("plan_route")` | ❌ No plan details needed |
+| `route_after_execute` | `state.get("last_outcome")` | ❌ No step results needed |
+| `route_after_assess` | `state.get("assess_route")` | ❌ No assessment details needed |
+
+**State Transition Optimization**:
+
+```
+Node Execution
+    ↓
+Update minimal routing fields only
+    ↓
+┌─────────────────────────────────────────┐
+│ Before IG-264:                          │
+│   - Full state serialization            │
+│   - All fields checkpointed             │
+│   - ~500-1000 tokens per transition     │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ After IG-264:                           │
+│   - Minimal fields only                 │
+│   - Routing decisions: <50 tokens       │
+│   - Full state: lazy loaded             │
+│   - ~80% reduction in transition cost   │
+└─────────────────────────────────────────┘
+```
+
+**Impact on Graph Execution**:
+- Faster state transitions between nodes
+- Reduced checkpoint I/O
+- Lower memory footprint during routing
+- Maintained correctness with minimal context
+
 ---
 
 ## 10. Goal Engine (Autonomous Mode)
@@ -293,7 +529,24 @@ START → init_or_resume → iteration_gate → iteration_start
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 10.2 Backoff Reasoning (RFC-200, lines 430-447)
+### 10.2 Goal Progress Tracking (RFC-399, RFC-604)
+
+Goals track progress using **descriptive levels** (IG-399) instead of numeric values:
+
+| Level | Description | Typical Usage |
+|-------|-------------|---------------|
+| `none` | No progress yet | Goal just created |
+| `low` | Initial steps completed | Early execution phase |
+| `medium` | Significant work done | Mid-execution |
+| `high` | Near completion | Final steps |
+| `complete` | Goal achieved | Ready for completion |
+
+**Benefits**:
+- Easier for LLMs to estimate accurately than numeric percentages
+- Reduces token usage in structured outputs
+- Aligns with human intuitive understanding of progress
+
+### 10.3 Backoff Reasoning (RFC-200, lines 430-447)
 
 On failure, `GoalBackoffReasoner` suggests DAG restructuring:
 
@@ -303,11 +556,166 @@ On failure, `GoalBackoffReasoner` suggests DAG restructuring:
 
 ---
 
-## 11. CoreAgent Execution
+## 11. Status Assessment Integration (RFC-604)
+
+**File**: `packages/soothe/src/soothe/core/loop/state/schemas.py`
+
+### 11.1 Overview
+
+RFC-604 introduces a **three-layer defense** for Plan phase robustness, with StatusAssessment as the key lightweight component for query routing decisions.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Layer 1: Schema Diet                                   │
+│  - Simplified PlanResult schema                         │
+│  - max_length constraints                               │
+│  Token reduction: ~40-60%                               │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  Layer 2: Query Splitting (StatusAssessment)            │
+│  - Split: StatusAssessment + PlanGeneration             │
+│  - Conditional plan generation                          │
+│  Token reduction per call: ~50-65%                      │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  Layer 3: Fallback (Existing)                           │
+│  - 3 retry attempts                                     │
+│  - Manual JSON extraction                               │
+│  - Conservative defaults                                │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 11.2 StatusAssessment Schema
+
+**Purpose**: Lightweight progress/status check before plan generation
+
+```python
+class StatusAssessment(BaseModel):
+    """Lightweight schema for status assessment (~50-80 tokens)."""
+
+    status: Literal["continue", "replan", "done"]
+    goal_progress: Literal["none", "low", "medium", "high", "complete"] = "none"
+    assessment_reasoning: str = ""           # Brief justification
+    require_goal_completion: bool = False    # Skip extra LLM call optimization
+```
+
+**Fields**:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `status` | `continue\|replan\|done` | Routing decision for next phase |
+| `goal_progress` | Descriptive level | Progress estimation (RFC-399) |
+| `assessment_reasoning` | string | Brief status justification |
+| `require_goal_completion` | boolean | Optimization flag (skip extra LLM call) |
+
+### 11.3 Integration with Goal Engine
+
+StatusAssessment feeds into Goal Engine routing:
+
+```
+AgentLoop Plan Phase
+    ↓
+StatusAssessment LLM call (lightweight)
+    ↓
+┌─────────────────────────────────────────┐
+│ status="done" + goal_progress="complete" │
+│   → Goal completion synthesis           │
+│   → require_goal_completion?            │
+│      True  → Extra LLM call             │
+│      False → Use last AIMessage         │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ status="continue"                       │
+│   → PlanGeneration LLM call             │
+│   → Generate/update execution plan      │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ status="replan"                         │
+│   → PlanGeneration with fresh plan      │
+│   → Discard in-flight decision          │
+└─────────────────────────────────────────┘
+```
+
+### 11.4 Query Routing Impact
+
+StatusAssessment enables **early routing decisions**:
+
+| Assessment Result | Route | Action |
+|-------------------|-------|--------|
+| `status=done`, `progress=complete` | Goal Completion | Synthesize final response |
+| `status=continue`, `progress=high` | Plan Generation | Minimal steps to finish |
+| `status=replan`, `progress=low` | Plan Generation | Fresh plan, more steps |
+| `require_goal_completion=false` | Fast Path | Skip extra LLM call |
+
+**Performance Benefits**:
+- **Token efficiency**: 50-65% reduction per Plan phase call
+- **Latency**: Skip PlanGeneration when goal complete
+- **Reliability**: Smaller schema reduces truncation risk
+
+### 11.5 Lightweight Status Checks (IG-264)
+
+StatusAssessment implements **minimal field design** for lightweight status checks:
+
+**Minimal Schema Principle** (IG-264):
+```python
+class StatusAssessment(BaseModel):
+    """Minimal fields for 60% token reduction vs full PlanResult."""
+    
+    # Core routing decision (1 field)
+    status: Literal["continue", "replan", "done"]
+    
+    # Progress indicator (1 field, descriptive)
+    goal_progress: Literal["none", "low", "medium", "high", "complete"]
+    
+    # Brief context (optional, truncated)
+    assessment_reasoning: str = ""  # Brief only
+    
+    # Optimization flag (1 field)
+    require_goal_completion: bool = False
+```
+
+**Field Count Comparison**:
+
+| Schema | Total Fields | Required | Optional | Token Estimate |
+|--------|--------------|----------|----------|----------------|
+| Full PlanResult | 8+ | 5 | 3+ | ~2000-3000 |
+| StatusAssessment | 4 | 2 | 2 | **~50-80** |
+| **Reduction** | **50%** | **60%** | **33%** | **~97%** |
+
+**Why Minimal Fields Matter for Routing**:
+
+1. **Speed**: Faster LLM inference with smaller schema
+2. **Reliability**: Reduced JSON truncation risk
+3. **Cost**: Lower token usage per assessment call
+4. **Focus**: Only execution-critical information
+
+**Removed vs Retained**:
+
+| Removed (Non-Critical) | Retained (Critical) |
+|------------------------|---------------------|
+| `evidence_summary` (verbose) | `status` (routing) |
+| `confidence` (optional) | `goal_progress` (progress) |
+| `decision` (large object) | `require_goal_completion` (optimize) |
+| `full_output` (output) | `assessment_reasoning` (brief context) |
+| Nested schemas | Flat structure |
+
+**Query Routing Impact**:
+- StatusAssessment enables **early routing decisions** without heavy schema
+- 60% token reduction means faster plan phase execution
+- Minimal fields sufficient for `continue`/`replan`/`done` routing
+- Full PlanGeneration only when `status != done`
+
+---
+
+## 12. CoreAgent Execution
 
 **File**: `packages/soothe/src/soothe/core/agent/_core.py`
 
-### 11.1 astream() (lines 163-224)
+### 12.1 astream() (lines 163-224)
 
 CoreAgent normalizes input and delegates to LangGraph:
 
@@ -317,7 +725,7 @@ async def astream(self, input, config):
     return self._graph.astream(state, config)
 ```
 
-### 11.2 Layer 2 Hints in Config
+### 12.2 Layer 2 Hints in Config
 
 The `config.configurable` contains execution hints:
 
@@ -330,7 +738,7 @@ The `config.configurable` contains execution hints:
 
 ---
 
-## 12. Complete Routing Scenarios
+## 13. Complete Routing Scenarios
 
 ### Scenario 1: New Goal (Default)
 
@@ -474,6 +882,162 @@ Update checkpoint to "cancelled"
 Emit cancellation event to subscribed clients
 ```
 
+### Scenario 9: Status Assessment Routing (RFC-604)
+
+```
+AgentLoop enters Plan Phase
+    ↓
+StatusAssessment LLM call (lightweight, ~50-80 tokens)
+    ↓
+┌─────────────────────────────────────────┐
+│ status="done" + goal_progress="complete" │
+│   → Skip PlanGeneration                 │
+│   → Direct to goal_completion           │
+│   → require_goal_completion?            │
+│      True  → Extra LLM call for synthesis
+│      False → Use last AIMessage directly│
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ status="continue" or "replan"           │
+│   → PlanGeneration LLM call             │
+│   → Generate/update execution plan      │
+│   → Proceed to Execute phase            │
+└─────────────────────────────────────────┘
+```
+
+**Benefits**:
+- 50-65% token reduction per Plan phase
+- Skip unnecessary plan generation when goal complete
+- Faster routing decisions with lightweight schema
+
+### Scenario 10: Error Recovery Flow
+
+```
+Step Execution in Execute Phase
+    ↓
+Step encounters fatal error (tool failure, timeout, etc.)
+    ↓
+Executor captures StepResult with error_type="fatal"
+    ↓
+node_execute() detects fatal_errors in results
+    ↓
+┌─────────────────────────────────────────┐
+│ Update goal_record.status = "failed"    │
+│ Update checkpoint.thread_health_metrics │
+│   - consecutive_goal_failures += 1      │
+│   - last_goal_status = "failed"          │
+└─────────────────────────────────────────┘
+    ↓
+Set checkpoint.status = "ready_for_next_goal"
+    ↓
+await state_manager.save(checkpoint)      ← Persist recovery state
+    ↓
+Emit "fatal_error" event with error details
+    ↓
+Return {"last_outcome": "fatal"}
+    ↓
+route_after_execute() detects "fatal"
+    ↓
+Route to END (terminate graph execution)
+    ↓
+Runner receives fatal event
+    ↓
+Daemon broadcasts to subscribed clients
+    ↓
+CLI/TUI displays error to user
+    ↓
+┌─────────────────────────────────────────┐
+│ User can:                               │
+│   - Start new goal in same thread       │
+│   - Resume from checkpoint (if valid)   │
+│   - Cancel and start fresh              │
+└─────────────────────────────────────────┘
+```
+
+**Recovery Options**:
+
+| Error Scenario | Recovery Action | Checkpoint Status |
+|----------------|-----------------|-------------------|
+| Fatal step error | Goal marked failed | `ready_for_next_goal` |
+| Max iterations reached | Graceful termination | `completed` |
+| Validation failure | Fallback defaults | `running` (continue) |
+| Timeout | Step marked failed | `running` (continue) |
+
+### Scenario 11: Autonomous Mode Recovery (RFC-200)
+
+```
+User Query (autonomous=True, complex multi-step task)
+    ↓
+GoalEngine.create_goal() → Goal with dependencies
+    ↓
+AgentLoop.run_with_progress() executes goal
+    ↓
+┌─────────────────────────────────────────┐
+│ Step execution FAILS                    │
+│   - Tool error / Timeout / Validation   │
+│   - StepResult.error_type = "fatal"     │
+└─────────────────────────────────────────┘
+    ↓
+Goal marked failed in checkpoint
+    ↓
+GoalEngine detects failure
+    ↓
+┌─────────────────────────────────────────┐
+│ GoalBackoffReasoner.reason_backoff()    │
+│   - Analyze goal DAG state              │
+│   - Review dependency chain             │
+│   - Examine failure evidence            │
+│   - LLM decides WHERE to backoff        │
+└─────────────────────────────────────────┘
+    ↓
+BackoffDecision returned:
+    ↓
+┌─────────────────────────────────────────┐
+│ Option A: Retry Same Goal               │
+│   - Isolated failure                    │
+│   - Reset goal to "pending"             │
+│   - Increment retry_count               │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ Option B: Backoff to Parent             │
+│   - Dependency assumption failed        │
+│   - Reset parent + children             │
+│   - Re-evaluate prerequisites           │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ Option C: Create Corrective Goals       │
+│   - Systemic issue detected             │
+│   - new_directives creates new goals    │
+│   - Adjust DAG structure                │
+└─────────────────────────────────────────┘
+    ↓
+GoalEngine.next_goal() selects next ready goal
+    ↓
+Repeat until all goals terminal
+```
+
+**Backoff Decision Schema**:
+
+```python
+class BackoffDecision:
+    backoff_to_goal_id: str      # Where to resume in DAG
+    reason: str                   # LLM reasoning for decision
+    new_directives: list[Goal]   # Optional corrective goals
+    evidence_summary: str         # Condensed failure analysis
+```
+
+**Recovery Strategies**:
+
+| Failure Pattern | Backoff Action | DAG Impact |
+|-----------------|----------------|------------|
+| Isolated tool failure | Retry same goal | None |
+| Dependency invalid | Backoff to parent | Parent reset |
+| Systemic issue | Create corrective goals | DAG extended |
+| Max retries exceeded | Mark failed permanently | Goal terminal |
+
 ---
 
 ## 13. Key Routing Decision Points Summary
@@ -488,6 +1052,10 @@ Emit cancellation event to subscribed clients
 | 6 | Checkpoint status | `agent_loop.py` | 173-244 | Resume, new goal, fresh start |
 | 7 | Plan routing | `routing.py` | 12-67 | goal_completion, execute, END |
 | 8 | Goal completion | `plan_assess.py` | - | PLAN_ROUTE_GOAL_DONE signal |
+| 9 | Status assessment | `state/schemas.py` | 453-475 | continue, replan, done |
+| 10 | Progress level | `state/schemas.py` | 470 | none, low, medium, high, complete |
+| 11 | Fatal error routing | `routing.py` | 42-67 | END on fatal |
+| 12 | Checkpoint recovery | `agent_loop.py` | 170-244 | Resume, new goal, fresh |
 
 ---
 
@@ -526,8 +1094,10 @@ Per-loop queues ensure:
 | RFC-000 | System Conceptual Design |
 | RFC-200 | Agentic Goal Execution |
 | RFC-220 | Loop Graph topology |
+| RFC-399 | Descriptive Progress Levels |
 | RFC-400 | Daemon Communication Protocol |
 | RFC-221 | Loop Runner Architecture |
+| RFC-604 | Plan Phase Robustness (StatusAssessment) |
 
 ---
 
@@ -640,6 +1210,178 @@ Per-loop queues ensure:
 │                           RESPONSE TO USER                                │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 17. Error Propagation and Recovery Paths
+
+**Files**:
+- `packages/soothe/src/soothe/core/loop/orchestrator/routing.py`
+- `packages/soothe/src/soothe/core/loop/orchestrator/nodes/execute_steps.py`
+- `packages/soothe/src/soothe/core/loop/engine/agent_loop.py`
+- `packages/soothe/src/soothe/core/loop/state/manager.py`
+
+### 17.1 Error Classification
+
+The AgentLoop categorizes errors into distinct types for appropriate handling:
+
+| Error Type | Description | Handling Strategy |
+|------------|-------------|-------------------|
+| `fatal` | Unrecoverable execution failure | Abort loop, mark goal failed |
+| `retryable` | Transient failure, can retry | Retry with backoff |
+| `validation` | Schema/validation failure | Fallback to conservative defaults |
+| `timeout` | Execution timeout | Cancel step, report timeout |
+
+### 17.2 Fatal Error Propagation
+
+Fatal errors propagate through the Loop Graph via `last_outcome` state:
+
+```
+Execute Phase
+    ↓
+Step execution detects fatal error
+    ↓
+Set goal_record.status = "failed"
+    ↓
+Set checkpoint.status = "ready_for_next_goal"
+    ↓
+Update thread_health_metrics.consecutive_goal_failures += 1
+    ↓
+Emit "fatal_error" event
+    ↓
+Return {"last_outcome": "fatal"}
+    ↓
+Routing functions detect "fatal" → route to END
+```
+
+**Routing Functions** (from `routing.py`):
+
+| Function | Fatal Detection | Route on Fatal |
+|----------|-----------------|----------------|
+| `route_after_resolve_decision` | `state.get("last_outcome") == "fatal"` | END |
+| `route_after_validate_evidence` | `state.get("last_outcome") == "fatal"` | END |
+| `route_after_execute` | `state.get("last_outcome") == "fatal"` | END |
+
+### 17.3 Checkpoint Recovery Scenarios
+
+**File**: `agent_loop.py` (lines 170-244)
+
+The AgentLoop implements three checkpoint recovery scenarios:
+
+```
+Checkpoint Load
+    ↓
+┌─────────────────────────────────────────┐
+│ Status == "running"                     │
+│   → Valid resume scenario               │
+│   → Restore iteration count             │
+│   → Continue from saved state           │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ Status == "ready_for_next_goal"         │
+│   → Start new goal in same loop         │
+│   → Preserve thread history             │
+│   → Optional: seed from prior goal      │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ Status == "completed"/"failed"/other    │
+│   → Initialize fresh checkpoint         │
+│   → Start new goal execution            │
+└─────────────────────────────────────────┘
+```
+
+**Recovery Decision Logic**:
+
+```python
+if checkpoint.status == "running":
+    if valid_goal_index:
+        recovery_valid_resume = True
+        iteration = goal_record.iteration  # Resume
+    else:
+        # Invalid checkpoint, re-initialize
+        checkpoint = await state_manager.initialize(...)
+elif checkpoint.status == "ready_for_next_goal":
+    # Continue with new goal
+    goal_record = state_manager.start_new_goal(goal, max_iterations)
+else:
+    # Fresh start
+    checkpoint = await state_manager.initialize(...)
+```
+
+### 17.4 Thread Health Metrics
+
+**File**: `checkpoint.py` - `ThreadHealthMetrics`
+
+Track execution health for recovery decisions:
+
+| Metric | Purpose | Action Trigger |
+|--------|---------|----------------|
+| `consecutive_goal_failures` | Detect failure patterns | Backoff/restructure |
+| `last_goal_status` | Last execution outcome | Health assessment |
+| `iteration_count` | Progress tracking | Max iteration guard |
+
+### 17.5 Fallback Strategies
+
+#### Layer 3 Fallback (RFC-604)
+
+When StatusAssessment or PlanGeneration fails:
+
+```
+Structured Output Failure
+    ↓
+Tier 1: 3 retry attempts with structured output
+    ↓
+Tier 2: Regular model + manual JSON extraction/repair
+    ↓
+Tier 3: Conservative default PlanResult
+    ↓
+Continue execution with safe defaults
+```
+
+**Conservative Defaults**:
+- `status`: "replan"
+- `plan_action`: "new"
+- `goal_progress`: "none"
+- `next_action`: "I need to stop here before completion."
+
+### 17.6 Error Event Propagation
+
+Errors emit through the event stream for observability:
+
+| Event Type | Emitted When | Data |
+|------------|--------------|------|
+| `fatal_error` | Fatal step failure | error, step_id |
+| `step_failed` | Step execution failure | step_id, error |
+| `checkpoint_saved` | State persisted | status, iteration |
+| `goal_failed` | Goal marked failed | goal_id, reason |
+
+**Event Flow**:
+
+```
+Node Execution
+    ↓
+Error Detected
+    ↓
+await ctx.emit("fatal_error", {...})
+    ↓
+Event streamed to Runner
+    ↓
+Runner surfaces to Daemon
+    ↓
+Daemon broadcasts to subscribed clients
+    ↓
+CLI/TUI displays error to user
+```
+
+### 17.7 Recovery Best Practices
+
+1. **Always save checkpoint before fatal exit** - Ensures state is recoverable
+2. **Update health metrics on failure** - Enables pattern detection
+3. **Emit descriptive error events** - Aids debugging and user feedback
+4. **Use conservative defaults in fallback** - Prevents cascading failures
+5. **Validate checkpoint integrity on load** - Guards against corruption
 
 ---
 
