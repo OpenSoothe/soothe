@@ -6,8 +6,8 @@ import logging
 import time
 from typing import Any
 
-from soothe.core.loop.analysis.synthesis import SynthesisGenerator
 from soothe.core.loop.engine.fallback_summary import generate_user_fallback_summary
+from soothe.core.loop.engine.synthesis import SynthesisGenerator
 from soothe.core.loop.planning.manager import CompletionStrategy
 from soothe.core.loop.state.schemas import LoopState
 from soothe.core.loop.utils.messages import (

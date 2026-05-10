@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from soothe.core.loop.analysis.synthesis import SynthesisGenerator
+from soothe.core.loop.engine.synthesis import SynthesisGenerator
 from soothe.core.loop.orchestrator.nodes.goal_completion import node_goal_completion
 from soothe.core.loop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.core.loop.orchestrator.runtime_context import LoopRuntimeContext

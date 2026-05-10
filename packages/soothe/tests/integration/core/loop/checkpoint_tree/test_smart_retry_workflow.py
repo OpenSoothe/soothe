@@ -15,10 +15,10 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from soothe.core.loop.analysis.failure_analyzer import FailureAnalyzer
-from soothe.core.loop.engine.anchor_manager import CheckpointAnchorManager
 from soothe.core.loop.engine.branch_manager import FailedBranchManager
+from soothe.core.loop.engine.failure_analyzer import FailureAnalyzer
+
+from soothe.core.loop.engine.anchor_manager import CheckpointAnchorManager
 from soothe.core.loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )

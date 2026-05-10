@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.core.loop.analysis.scenario_classifier import ScenarioClassification
-from soothe.core.loop.analysis.synthesis import (
+from soothe.core.loop.engine.scenario_classifier import ScenarioClassification
+from soothe.core.loop.engine.synthesis import (
     SynthesisGenerator,
     synthesis_checkpoint_thread_id,
 )

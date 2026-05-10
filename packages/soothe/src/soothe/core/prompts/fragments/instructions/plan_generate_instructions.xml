@@ -18,6 +18,7 @@ Output MUST match the structured schema only: plan_action, type, steps, executio
 - adaptive_granularity: optional ("atomic" or "semantic").
 
 **next_action**
-- Short user-facing line, first person ("I will…"), max ~300 characters.
+- First-person narration ONLY: "Let me [action]" or similar statements.
+- One concise sentence, max ~300 characters.
 - Reference concrete paths or findings from the ledger when relevant; avoid repeating the full goal verbatim.
 </PLAN_GENERATE>
