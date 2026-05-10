@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe.core.agent_loop.analysis.failure_analyzer import FailureAnalyzer
-from soothe.core.agent_loop.branching.anchor_manager import CheckpointAnchorManager
-from soothe.core.agent_loop.branching.branch_manager import FailedBranchManager
+from soothe.core.agent_loop.engine.anchor_manager import CheckpointAnchorManager
+from soothe.core.agent_loop.engine.branch_manager import FailedBranchManager
 from soothe.core.agent_loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )

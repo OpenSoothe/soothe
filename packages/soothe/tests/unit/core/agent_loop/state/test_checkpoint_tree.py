@@ -16,9 +16,9 @@ from soothe.core.agent_loop.analysis.failure_analyzer import (
     FailureAnalyzer,
     extract_failure_context_from_exception,
 )
-from soothe.core.agent_loop.branching.anchor_manager import CheckpointAnchorManager
-from soothe.core.agent_loop.branching.branch_manager import FailedBranchManager
-from soothe.core.agent_loop.branching.smart_retry_manager import SmartRetryManager
+from soothe.core.agent_loop.engine.anchor_manager import CheckpointAnchorManager
+from soothe.core.agent_loop.engine.branch_manager import FailedBranchManager
+from soothe.core.agent_loop.engine.smart_retry_manager import SmartRetryManager
 
 
 @pytest.mark.asyncio

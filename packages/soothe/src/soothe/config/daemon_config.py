@@ -83,9 +83,15 @@ class WorkerPoolConfig(BaseModel):
     overhead (subprocess spawn + SootheRunner init). Workers create fresh
     SootheRunner instances per request, ensuring no user data leakage.
 
+    Pool sizing uses min/max for dynamic scaling:
+    - Starts with min_pool_size workers at daemon startup
+    - Grows up to max_pool_size when request load increases
+    - Shrinks back to min_pool_size when workers idle out
+
     Args:
         enabled: Enable persistent worker pool mode.
-        pool_size: Number of pre-warmed worker processes.
+        min_pool_size: Minimum workers to keep pooled (startup baseline).
+        max_pool_size: Maximum workers to scale up under load.
         idle_timeout_seconds: Idle worker timeout before graceful exit.
         max_requests_per_worker: Max requests before worker respawn (prevents memory buildup).
         request_timeout_seconds: Default per-request timeout (0 = no timeout).
@@ -97,11 +103,17 @@ class WorkerPoolConfig(BaseModel):
         default=True,
         description="Enable persistent worker pool (reduces ~8s spawn overhead)",
     )
-    pool_size: int = Field(
+    min_pool_size: int = Field(
+        default=2,
+        ge=1,
+        le=64,
+        description="Minimum workers to keep pooled (startup baseline)",
+    )
+    max_pool_size: int = Field(
         default=4,
         ge=1,
         le=128,
-        description="Number of pre-warmed worker processes",
+        description="Maximum workers to scale up under load",
     )
     idle_timeout_seconds: int = Field(
         default=300,
@@ -115,10 +127,10 @@ class WorkerPoolConfig(BaseModel):
         description="Max requests before worker respawn (prevents memory buildup)",
     )
     request_timeout_seconds: int = Field(
-        default=900,
+        default=1800,
         ge=0,
-        le=3600,
-        description="Default per-request timeout in seconds (0 = no timeout, default 15 min)",
+        le=7200,
+        description="Default per-request timeout in seconds (0 = no timeout, default 30 min)",
     )
     heartbeat_interval_seconds: int = Field(
         default=30,
@@ -132,6 +144,10 @@ class WorkerPoolConfig(BaseModel):
         le=600,
         description="Time since last heartbeat before marking worker as stuck (seconds)",
     )
+
+    def get_effective_pool_size(self) -> int:
+        """Get effective max pool size, ensuring max >= min."""
+        return max(self.min_pool_size, self.max_pool_size)
 
 
 class RayClusterConfig(BaseModel):

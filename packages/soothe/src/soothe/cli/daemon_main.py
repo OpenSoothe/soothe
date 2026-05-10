@@ -20,7 +20,7 @@ from soothe.daemon.server import SootheDaemon
 
 app = typer.Typer(
     name="soothed",
-    help="Soothe daemon management - start/stop/status/doctor",
+    help="Soothe daemon management - start/stop/status/doctor/warmup",
 )
 
 
@@ -238,6 +238,46 @@ def doctor(
     ):
         raise typer.Exit(code=1)
     if fail_key == "error" and _status_meets_or_exceeds(report.overall_status, CheckStatus.ERROR):
+        raise typer.Exit(code=1)
+
+
+@app.command("warmup")
+def warmup_cache(
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Show detailed progress."),
+    ] = False,
+) -> None:
+    """Pre-download embedding model cache for faster startup.
+
+    Downloads the sentence_transformers embedding model to
+    ~/.soothe/cache/huggingface/ for sharing across main daemon
+    and worker processes.
+
+    Run this before starting the daemon for faster first-query response.
+    """
+    from soothe.utils.similarity import _HF_CACHE_DIR, async_warmup_embedding_model
+
+    typer.echo(f"Warming up embedding model cache at {_HF_CACHE_DIR}...")
+
+    async def _warmup() -> bool:
+        return await async_warmup_embedding_model()
+
+    success = asyncio.run(_warmup())
+
+    if success:
+        typer.echo("Model cache warmed up successfully.")
+        if verbose:
+            typer.echo(f"Cache directory: {_HF_CACHE_DIR}")
+    else:
+        typer.echo(
+            "Model cache warmup failed (sentence_transformers may not be installed).",
+            err=True,
+        )
+        typer.echo(
+            "Install with: pip install 'soothe[semantic_similarity]'",
+            err=True,
+        )
         raise typer.Exit(code=1)
 
 
