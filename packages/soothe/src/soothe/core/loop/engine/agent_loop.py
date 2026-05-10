@@ -23,8 +23,8 @@ from soothe.core.loop.utils.reflection import _default_agent_decision
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.utils.text_preview import log_preview
 
+from ..orchestrator.nodes.plan_assess import seed_continue_thread_ledger_from_prior_goal
 from .anchor_manager import CheckpointAnchorManager
-from .continue_thread import seed_continue_thread_ledger_from_prior_goal
 from .goal_context_manager import GoalContextManager
 
 if TYPE_CHECKING:

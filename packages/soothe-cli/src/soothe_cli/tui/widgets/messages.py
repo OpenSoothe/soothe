@@ -3366,7 +3366,23 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
         self._plan_reasoning = plan_reasoning.strip()
 
     def _plan_header_content(self) -> Content:
-        body = self._next_action
+        # Concatenate plan_reasoning and next_action with proper separation
+        parts: list[str] = []
+        if self._plan_reasoning:
+            parts.append(self._plan_reasoning)
+        if self._next_action:
+            parts.append(self._next_action)
+        # Join with period and space if both present, ensuring proper sentence separation
+        if len(parts) == 2:
+            # Ensure plan_reasoning ends with period before adding next_action
+            pr = parts[0]
+            if not pr.endswith((".", "!", "?")):
+                pr = f"{pr}."
+            body = f"{pr} {parts[1]}"
+        elif parts:
+            body = parts[0]
+        else:
+            body = ""
         if self._plan_action in ("keep", "new"):
             body = f"{body} · {self._plan_action}"
         return _assemble_card_header(self, "💭 ", body)
