@@ -28,6 +28,8 @@ class LoopRunRequest:
     preferred_subagent: str | None = None
     model: str | None = None
     model_params: dict[str, Any] = field(default_factory=dict)
+    # Worker pool timeout and cancellation support
+    timeout_seconds: float | None = None
 
 
 class LoopRunnerProtocol(Protocol):

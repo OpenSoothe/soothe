@@ -10,14 +10,22 @@ Uses sentence_transformers when available, falls back to keyword matching.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     pass
+
+# Timeout for embedding model calls (seconds)
+_EMBEDDING_TIMEOUT_SECONDS = 30
+
+# Thread pool for embedding calls (to avoid blocking async loop)
+_embedding_executor: ThreadPoolExecutor | None = None
 
 # Check if sentence_transformers is available
 _has_sentence_transformers = False
@@ -95,6 +103,9 @@ def semantic_similarity(
     Uses sentence_transformers when available for accurate semantic matching.
     Falls back to keyword overlap when sentence_transformers is not installed.
 
+    WARNING: This function uses synchronous model.encode() which can block.
+    For async contexts, use async_semantic_similarity() which has timeout protection.
+
     Args:
         text1: First text.
         text2: Second text.
@@ -117,6 +128,64 @@ def semantic_similarity(
             embeddings = model.encode([text1, text2])
             similarity = cosine_similarity(embeddings[0].tolist(), embeddings[1].tolist())
             return max(0.0, min(1.0, similarity))
+        except Exception as e:
+            logger.debug("Embedding similarity failed: %s, falling back to keywords", e)
+
+    # Fallback: keyword overlap similarity
+    return keyword_similarity(text1, text2)
+
+
+async def async_semantic_similarity(
+    text1: str,
+    text2: str,
+    *,
+    max_length: int = 200,
+    timeout_seconds: float = _EMBEDDING_TIMEOUT_SECONDS,
+) -> float:
+    """Calculate semantic similarity with timeout protection for async contexts.
+
+    Wraps the blocking model.encode() call in a thread pool executor with timeout.
+    Falls back to keyword similarity on timeout or embedding failure.
+
+    Args:
+        text1: First text.
+        text2: Second text.
+        max_length: Maximum text length for embedding (truncation).
+        timeout_seconds: Timeout for embedding call (default: 30s).
+
+    Returns:
+        Similarity score in range [0, 1].
+    """
+    # Normalize and truncate
+    text1 = (text1 or "").strip()[:max_length]
+    text2 = (text2 or "").strip()[:max_length]
+
+    if not text1 or not text2:
+        return 0.0
+
+    # Try semantic similarity with transformers (async with timeout)
+    model = _get_transformer_model()
+    if model is not None:
+        try:
+            # Run blocking encode() in thread pool with timeout
+            global _embedding_executor
+            if _embedding_executor is None:
+                _embedding_executor = ThreadPoolExecutor(
+                    max_workers=1, thread_name_prefix="embedding"
+                )
+
+            async with asyncio.timeout(timeout_seconds):
+                embeddings = await asyncio.get_event_loop().run_in_executor(
+                    _embedding_executor,
+                    lambda: model.encode([text1, text2]),
+                )
+            similarity = cosine_similarity(embeddings[0].tolist(), embeddings[1].tolist())
+            return max(0.0, min(1.0, similarity))
+        except TimeoutError:
+            logger.warning(
+                "Embedding call timed out after %.1fs, falling back to keyword similarity",
+                timeout_seconds,
+            )
         except Exception as e:
             logger.debug("Embedding similarity failed: %s, falling back to keywords", e)
 
@@ -325,6 +394,99 @@ def rank_by_similarity(
     for item in items:
         content = str(item.get(content_key, "") or "")
         similarity = semantic_similarity(content[:200], target) if enable_semantic else 0.0
+        scored_items.append((similarity, item))
+
+    # Sort by similarity descending
+    scored_items.sort(key=lambda x: x[0], reverse=True)
+
+    return [item for _, item in scored_items]
+
+
+async def async_calculate_relevance_score(
+    finding: dict[str, Any],
+    search_target: str,
+    *,
+    enable_semantic: bool = True,
+    threshold_high: float = 0.7,
+    threshold_medium: float = 0.4,
+    timeout_seconds: float = _EMBEDDING_TIMEOUT_SECONDS,
+) -> str:
+    """Calculate relevance score with async semantic similarity and timeout.
+
+    Args:
+        finding: Finding dict with 'path' and 'snippet' keys.
+        search_target: Original search target text.
+        enable_semantic: Enable semantic similarity (requires sentence_transformers).
+        threshold_high: Threshold for "high" relevance.
+        threshold_medium: Threshold for "medium" relevance.
+        timeout_seconds: Timeout for embedding call.
+
+    Returns:
+        Relevance string: "high", "medium", or "low".
+    """
+    path = finding.get("path", "")
+    snippet = finding.get("snippet")
+
+    # Fast path: path-based heuristic
+    path_relevance = _path_heuristic_relevance(path, search_target)
+
+    # If high path match, return immediately (avoid expensive similarity)
+    if path_relevance == "high":
+        return "high"
+
+    # Medium path: check content similarity if snippet exists
+    if snippet and path_relevance == "medium" and enable_semantic:
+        try:
+            similarity = await async_semantic_similarity(
+                snippet[:200], search_target, timeout_seconds=timeout_seconds
+            )
+
+            if similarity >= threshold_high:
+                return "high"
+            elif similarity >= threshold_medium:
+                return "medium"
+            else:
+                return "low"
+        except Exception as e:
+            logger.debug("Similarity calculation failed: %s", e)
+            return path_relevance
+
+    # Low path: no snippet or semantic disabled
+    return path_relevance
+
+
+async def async_rank_by_similarity(
+    items: list[dict[str, Any]],
+    target: str,
+    *,
+    content_key: str = "snippet",
+    enable_semantic: bool = True,
+    timeout_seconds: float = _EMBEDDING_TIMEOUT_SECONDS,
+) -> list[dict[str, Any]]:
+    """Rank items by similarity to target text with async embedding calls.
+
+    Args:
+        items: List of dicts with content.
+        target: Target text to compare against.
+        content_key: Key in dict containing content (default: "snippet").
+        enable_semantic: Enable semantic similarity.
+        timeout_seconds: Timeout for each embedding call.
+
+    Returns:
+        Items sorted by relevance (highest first).
+    """
+    if not items:
+        return items
+
+    scored_items = []
+    for item in items:
+        content = str(item.get(content_key, "") or "")
+        if enable_semantic:
+            similarity = await async_semantic_similarity(
+                content[:200], target, timeout_seconds=timeout_seconds
+            )
+        else:
+            similarity = 0.0
         scored_items.append((similarity, item))
 
     # Sort by similarity descending
