@@ -52,6 +52,7 @@ class WorkerProcess:
     process: multiprocessing.Process
     request_queue: multiprocessing.Queue  # main → worker
     response_queue: multiprocessing.Queue  # worker → main
+    cancel_event: multiprocessing.Event  # cooperative cancellation signal (inherited at spawn)
     worker_id: str
     status: WorkerStatus = WorkerStatus.IDLE
     current_loop_id: str | None = None
@@ -59,6 +60,7 @@ class WorkerProcess:
     requests_completed: int = 0
     started_at: datetime = field(default_factory=datetime.now)
     last_activity: datetime = field(default_factory=datetime.now)
+    last_heartbeat_at: datetime | None = None  # timestamp of last heartbeat received
     #: True after we pushed a synthetic error for an unexpected process exit (poll loop).
     dead_failure_routed: bool = False
 
@@ -72,6 +74,7 @@ class WorkerProcess:
         self.current_loop_id = None
         self.current_request_id = None
         self.last_activity = datetime.now()
+        self.last_heartbeat_at = None
 
     def mark_busy(self, loop_id: str, request_id: str) -> None:
         """Mark worker as busy handling a request."""
@@ -79,6 +82,7 @@ class WorkerProcess:
         self.current_loop_id = loop_id
         self.current_request_id = request_id
         self.last_activity = datetime.now()
+        self.last_heartbeat_at = None  # Reset heartbeat tracking for new request
 
 
 @dataclass
@@ -110,8 +114,11 @@ def _pool_worker(
     worker_id: str,
     request_queue: multiprocessing.Queue,
     response_queue: multiprocessing.Queue,
+    cancel_event: multiprocessing.Event,
     idle_timeout_seconds: int,
     max_requests: int,
+    default_timeout_seconds: int,
+    heartbeat_interval_seconds: int,
 ) -> None:
     """Persistent worker process main loop.
 
@@ -119,6 +126,8 @@ def _pool_worker(
         - Wait for requests on request_queue (with idle timeout)
         - Create fresh SootheRunner per request (no user data leakage)
         - Execute request, stream results to response_queue
+        - Check cancel_event between chunks for cooperative cancellation
+        - Send heartbeat messages periodically for stuck worker detection
         - Exit on shutdown sentinel, idle timeout, or max requests
 
     Args:
@@ -126,8 +135,11 @@ def _pool_worker(
         worker_id: Unique worker identifier for logging.
         request_queue: Queue for receiving requests from main process.
         response_queue: Queue for sending responses to main process.
+        cancel_event: multiprocessing.Event for cooperative cancellation signaling.
         idle_timeout_seconds: Exit after this many seconds idle.
         max_requests: Exit after this many requests completed.
+        default_timeout_seconds: Default per-request timeout if not specified.
+        heartbeat_interval_seconds: Interval for sending heartbeat messages.
     """
     import asyncio as _asyncio
 
@@ -143,20 +155,82 @@ def _pool_worker(
         """Execute one request with fresh SootheRunner."""
         configure_loop_runner_worker_logging(config, req.loop_id)
 
+        # Clear cancel event at start of new request
+        cancel_event.clear()
+
+        # Determine timeout: use request-specific or default
+        timeout_seconds = (
+            req.timeout_seconds
+            if req.timeout_seconds and req.timeout_seconds > 0
+            else default_timeout_seconds
+        )
+        timeout_enabled = timeout_seconds > 0
+
         async def _execute() -> None:
             runner = SootheRunner(config)
+            start_time = loop.time()
+            last_heartbeat_time = start_time
+
             try:
-                async for chunk in runner.astream(
-                    req.user_input,
-                    thread_id=req.thread_id,
-                    workspace=req.workspace,
-                    autonomous=req.autonomous,
-                    max_iterations=req.max_iterations,
-                    preferred_subagent=req.preferred_subagent,
-                ):
-                    # Tag response with request_id for routing
-                    response_queue.put(("chunk", request_id, chunk))
-                response_queue.put(("done", request_id, None))
+                # Use asyncio.timeout for overall request timeout if enabled
+                timeout_ctx = _asyncio.timeout(timeout_seconds) if timeout_enabled else None
+
+                async def _stream():
+                    nonlocal last_heartbeat_time
+                    async for chunk in runner.astream(
+                        req.user_input,
+                        thread_id=req.thread_id,
+                        workspace=req.workspace,
+                        autonomous=req.autonomous,
+                        max_iterations=req.max_iterations,
+                        preferred_subagent=req.preferred_subagent,
+                    ):
+                        # COOPERATIVE CANCELLATION: Check cancel_event between chunks
+                        if cancel_event.is_set():
+                            logger.info(
+                                "Worker %s: cancellation requested for loop=%s request_id=%s",
+                                worker_id,
+                                req.loop_id,
+                                request_id,
+                            )
+                            response_queue.put(("cancelled", request_id, None))
+                            return
+
+                        # HEARTBEAT: Send periodic ping to main process
+                        now = loop.time()
+                        if now - last_heartbeat_time >= heartbeat_interval_seconds:
+                            elapsed = now - start_time
+                            response_queue.put(
+                                ("heartbeat", request_id, {"elapsed_seconds": elapsed})
+                            )
+                            last_heartbeat_time = now
+
+                        # Tag response with request_id for routing
+                        response_queue.put(("chunk", request_id, chunk))
+
+                    response_queue.put(("done", request_id, None))
+
+                if timeout_ctx:
+                    async with timeout_ctx:
+                        await _stream()
+                else:
+                    await _stream()
+
+            except TimeoutError:
+                logger.warning(
+                    "Worker %s: request timeout (%ds) for loop=%s request_id=%s",
+                    worker_id,
+                    timeout_seconds,
+                    req.loop_id,
+                    request_id,
+                )
+                response_queue.put(
+                    (
+                        "timeout",
+                        request_id,
+                        RuntimeError(f"Request exceeded {timeout_seconds}s timeout"),
+                    )
+                )
             except Exception as exc:
                 response_queue.put(("error", request_id, exc))
 
@@ -233,11 +307,17 @@ class WorkerPool:
         pool_size: int = 4,
         idle_timeout_seconds: int = 300,
         max_requests_per_worker: int = 100,
+        request_timeout_seconds: int = 900,
+        heartbeat_interval_seconds: int = 30,
+        stuck_worker_timeout_seconds: int = 180,
     ) -> None:
         self._config = config
         self._pool_size = pool_size
         self._idle_timeout_seconds = idle_timeout_seconds
         self._max_requests_per_worker = max_requests_per_worker
+        self._request_timeout_seconds = request_timeout_seconds
+        self._heartbeat_interval_seconds = heartbeat_interval_seconds
+        self._stuck_worker_timeout_seconds = stuck_worker_timeout_seconds
 
         self._ctx = multiprocessing.get_context("spawn")
         self._workers: dict[str, WorkerProcess] = {}
@@ -272,6 +352,9 @@ class WorkerPool:
                 pool_size=pool_config.pool_size,
                 idle_timeout_seconds=pool_config.idle_timeout_seconds,
                 max_requests_per_worker=pool_config.max_requests_per_worker,
+                request_timeout_seconds=pool_config.request_timeout_seconds,
+                heartbeat_interval_seconds=pool_config.heartbeat_interval_seconds,
+                stuck_worker_timeout_seconds=pool_config.stuck_worker_timeout_seconds,
             )
             await pool.start()
             cls._shared_pool = pool
@@ -314,10 +397,11 @@ class WorkerPool:
         )
 
     async def _spawn_worker(self, worker_id: str, config: SootheConfig) -> WorkerProcess:
-        """Spawn a single worker process with two queues."""
+        """Spawn a single worker process with two queues and cancel event."""
         # Create both queues at spawn time (inherited by worker)
         request_queue: Any = self._ctx.Queue()
         response_queue: Any = self._ctx.Queue()
+        cancel_event: Any = self._ctx.Event()
 
         process = self._ctx.Process(
             target=_pool_worker,
@@ -326,8 +410,11 @@ class WorkerPool:
                 worker_id,
                 request_queue,
                 response_queue,
+                cancel_event,
                 self._idle_timeout_seconds,
                 self._max_requests_per_worker,
+                self._request_timeout_seconds,
+                self._heartbeat_interval_seconds,
             ),
             daemon=True,
             name=worker_id,
@@ -338,6 +425,7 @@ class WorkerPool:
             process=process,
             request_queue=request_queue,
             response_queue=response_queue,
+            cancel_event=cancel_event,
             worker_id=worker_id,
             started_at=datetime.now(),
         )
@@ -389,6 +477,10 @@ class WorkerPool:
                 if msg_type == "chunk":
                     chunks_discarded += 1
                     continue
+                if msg_type == "heartbeat":
+                    # Update heartbeat timestamp but don't count as chunk
+                    worker.last_heartbeat_at = datetime.now()
+                    continue
                 if msg_type == "done":
                     worker.requests_completed += 1
                     logger.info(
@@ -408,6 +500,26 @@ class WorkerPool:
                         request_id,
                         chunks_discarded,
                         payload,
+                    )
+                    return
+                if msg_type == "timeout":
+                    worker.requests_completed += 1
+                    logger.info(
+                        "WorkerPool: client disconnected; worker %s request %s timed out "
+                        "after %d undelivered chunk(s)",
+                        worker.worker_id,
+                        request_id,
+                        chunks_discarded,
+                    )
+                    return
+                if msg_type == "cancelled":
+                    worker.requests_completed += 1
+                    logger.info(
+                        "WorkerPool: client disconnected; worker %s request %s cancelled "
+                        "after %d undelivered chunk(s)",
+                        worker.worker_id,
+                        request_id,
+                        chunks_discarded,
                     )
                     return
                 logger.debug(
@@ -470,6 +582,33 @@ class WorkerPool:
 
         while self._running:
             for worker_id, worker in list(self._workers.items()):
+                # STUCK WORKER DETECTION: Check if busy worker hasn't sent heartbeat
+                if worker.status == WorkerStatus.BUSY:
+                    now = datetime.now()
+                    if worker.last_heartbeat_at is not None:
+                        heartbeat_age = (now - worker.last_heartbeat_at).total_seconds()
+                        if heartbeat_age > self._stuck_worker_timeout_seconds:
+                            logger.warning(
+                                "WorkerPool: worker %s stuck (no heartbeat for %.0fs, request_id=%s)",
+                                worker_id,
+                                heartbeat_age,
+                                worker.current_request_id,
+                            )
+                            await self._handle_stuck_worker(worker)
+                            continue
+                    else:
+                        # No heartbeat yet but worker is busy - check elapsed time since dispatch
+                        elapsed = (now - worker.last_activity).total_seconds()
+                        if elapsed > self._stuck_worker_timeout_seconds * 2:
+                            logger.warning(
+                                "WorkerPool: worker %s never sent heartbeat (%.0fs since dispatch, request_id=%s)",
+                                worker_id,
+                                elapsed,
+                                worker.current_request_id,
+                            )
+                            await self._handle_stuck_worker(worker)
+                            continue
+
                 if not worker.is_alive():
                     await self._handle_dead_worker(worker)
                     continue
@@ -510,10 +649,54 @@ class WorkerPool:
                 # Parse: (msg_type, request_id, payload)
                 msg_type, request_id, payload = msg
 
-                # Route to pending response queue
+                # HEARTBEAT handling: Update worker heartbeat timestamp
+                if msg_type == "heartbeat":
+                    worker.last_heartbeat_at = datetime.now()
+                    logger.debug(
+                        "WorkerPool: heartbeat from worker=%s request_id=%s elapsed=%.1fs",
+                        worker_id,
+                        request_id,
+                        payload.get("elapsed_seconds", 0) if isinstance(payload, dict) else 0,
+                    )
+                    continue
+
+                # TIMEOUT handling: Worker exceeded request timeout
+                if msg_type == "timeout":
+                    response_queue = self._pending_responses.get(request_id)
+                    if response_queue is not None:
+                        await response_queue.put(("error", payload))
+                    worker.mark_idle()
+                    worker.last_heartbeat_at = None
+                    self._workers_by_loop_id.pop(worker.current_loop_id or "", None)
+                    self._pending_responses.pop(request_id, None)
+                    logger.warning(
+                        "WorkerPool: worker %s request %s timed out", worker_id, request_id
+                    )
+                    continue
+
+                # CANCELLED handling: Worker cooperatively cancelled
+                if msg_type == "cancelled":
+                    response_queue = self._pending_responses.get(request_id)
+                    if response_queue is not None:
+                        await response_queue.put(("error", asyncio.CancelledError()))
+                    worker.mark_idle()
+                    worker.last_heartbeat_at = None
+                    self._workers_by_loop_id.pop(worker.current_loop_id or "", None)
+                    self._pending_responses.pop(request_id, None)
+                    logger.info(
+                        "WorkerPool: worker %s request %s cancelled cooperatively",
+                        worker_id,
+                        request_id,
+                    )
+                    continue
+
+                # Route chunk/done/error to pending response queue
                 response_queue = self._pending_responses.get(request_id)
                 if response_queue is not None:
                     await response_queue.put((msg_type, payload))
+                    # Update heartbeat timestamp on any message from busy worker
+                    if worker.status == WorkerStatus.BUSY:
+                        worker.last_heartbeat_at = datetime.now()
                 else:
                     logger.debug(
                         "WorkerPool: no pending route for request_id=%s (%s); discarding",
@@ -523,6 +706,34 @@ class WorkerPool:
 
             # Short sleep to avoid busy polling
             await asyncio.sleep(0.05)
+
+    async def _handle_stuck_worker(self, worker: WorkerProcess) -> None:
+        """Handle a worker that hasn't sent heartbeat for too long."""
+        logger.warning(
+            "WorkerPool: terminating stuck worker %s (request_id=%s)",
+            worker.worker_id,
+            worker.current_request_id,
+        )
+
+        # Route failure to pending request
+        if worker.current_request_id:
+            await self._route_failure_for_dead_busy_worker(worker)
+
+        # Terminate stuck worker process
+        if worker.process.is_alive():
+            worker.process.terminate()
+            try:
+                await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: worker.process.join(timeout=5)
+                )
+            except Exception:
+                pass
+
+        # Respawn worker slot
+        try:
+            await self._respawn_worker(worker)
+        except Exception:
+            logger.exception("WorkerPool: failed to respawn stuck worker %s", worker.worker_id)
 
     async def _respawn_worker(self, dead_worker: WorkerProcess) -> None:
         """Replace a dead worker with a fresh one."""
@@ -544,6 +755,12 @@ class WorkerPool:
         """Submit request to pool, await available worker, stream results."""
         # Generate unique request_id for this request
         request_id = uuid.uuid4().hex[:16]
+
+        # Set timeout on request if not specified
+        if request.timeout_seconds is None or request.timeout_seconds <= 0:
+            request.timeout_seconds = (
+                self._request_timeout_seconds if self._request_timeout_seconds > 0 else None
+            )
 
         # Wait for available worker slot
         async with self._dispatch_semaphore:
@@ -610,18 +827,27 @@ class WorkerPool:
                 self._schedule_abandon_drain(worker, request.loop_id, request_id, response_queue)
 
     async def cancel_request(self, loop_id: str) -> None:
-        """Signal cancellation to worker handling this loop_id.
+        """Signal cooperative cancellation to worker handling this loop_id.
 
-        NOTE: Cooperative cancellation is not yet implemented for pool mode.
-        This method logs the intent but does not interrupt the worker.
+        Sets the worker's cancel_event to signal the worker process to stop
+        between stream chunks. The worker will send a "cancelled" message
+        back when it detects the signal.
         """
         worker_id = self._workers_by_loop_id.get(loop_id)
         if worker_id is None:
             logger.debug("WorkerPool: no active request for loop_id=%s", loop_id)
             return
 
+        worker = self._workers.get(worker_id)
+        if worker is None:
+            logger.debug("WorkerPool: worker %s not found for loop_id=%s", worker_id, loop_id)
+            return
+
+        # Set the cancellation Event (inherited by worker process at spawn)
+        worker.cancel_event.set()
+
         logger.info(
-            "WorkerPool: cancellation requested for loop_id=%s on worker=%s (not implemented)",
+            "WorkerPool: cancellation signal sent for loop_id=%s to worker=%s",
             loop_id,
             worker_id,
         )

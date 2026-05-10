@@ -1583,12 +1583,12 @@ class ToolCallMessage(Vertical):
 
         colors = theme.get_theme_colors(self)
         gutter = f"{get_glyphs().output_prefix} "
-        # Expand/collapse affordance: collapsed → expand glyph; expanded → collapse glyph.
+        # Expand/collapse affordance: collapsed → show right arrow (can expand); expanded → show down arrow (can collapse).
         has_collapsible = self._activity or (self._output or "").strip()
         g = get_glyphs()
         toggle_icon = ""
         if has_collapsible:
-            toggle_icon = f" {g.expand if self._card_collapsed else g.collapse}"
+            toggle_icon = f" {g.collapse if self._card_collapsed else g.expand}"
         line = f"{gutter}{frame} Running...{elapsed}{toggle_icon}"
         self._status_widget.update(Content.styled(line, colors.cognition))
         # Throttle expensive row re-rendering while keeping status spinner smooth.
@@ -1624,7 +1624,7 @@ class ToolCallMessage(Vertical):
         # Add expand/collapse icon at the end of status line
         has_collapsible = self._activity or (self._output or "").strip()
         if has_collapsible:
-            icon = get_glyphs().expand if self._card_collapsed else get_glyphs().collapse
+            icon = get_glyphs().collapse if self._card_collapsed else get_glyphs().expand
             line = f"{line} {icon}"
         w.update(Content(line))
         w.display = True

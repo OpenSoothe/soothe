@@ -151,6 +151,9 @@ daemon:
     pool_size: 8            # Number of pre-warmed worker processes
     idle_timeout_seconds: 300
     max_requests_per_worker: 100
+    request_timeout_seconds: 900 # Default per-request timeout (15 min)
+    heartbeat_interval_seconds: 30   # Worker heartbeat interval
+    stuck_worker_timeout_seconds: 180 # Stuck worker detection threshold
 
 # =============================================================================
 # Tools Configuration

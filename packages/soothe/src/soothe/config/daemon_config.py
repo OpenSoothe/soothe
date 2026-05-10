@@ -88,6 +88,9 @@ class WorkerPoolConfig(BaseModel):
         pool_size: Number of pre-warmed worker processes.
         idle_timeout_seconds: Idle worker timeout before graceful exit.
         max_requests_per_worker: Max requests before worker respawn (prevents memory buildup).
+        request_timeout_seconds: Default per-request timeout (0 = no timeout).
+        heartbeat_interval_seconds: Worker heartbeat interval for stuck detection.
+        stuck_worker_timeout_seconds: Time since last heartbeat before marking worker stuck.
     """
 
     enabled: bool = Field(
@@ -110,6 +113,24 @@ class WorkerPoolConfig(BaseModel):
         default=100,
         ge=1,
         description="Max requests before worker respawn (prevents memory buildup)",
+    )
+    request_timeout_seconds: int = Field(
+        default=900,
+        ge=0,
+        le=3600,
+        description="Default per-request timeout in seconds (0 = no timeout, default 15 min)",
+    )
+    heartbeat_interval_seconds: int = Field(
+        default=30,
+        ge=5,
+        le=120,
+        description="Worker heartbeat interval for stuck worker detection (seconds)",
+    )
+    stuck_worker_timeout_seconds: int = Field(
+        default=180,
+        ge=60,
+        le=600,
+        description="Time since last heartbeat before marking worker as stuck (seconds)",
     )
 
 
