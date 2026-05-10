@@ -264,27 +264,6 @@ async def test_non_cancel_command_still_enqueues() -> None:
 
 
 @pytest.mark.asyncio
-async def test_daemon_rejects_legacy_top_level_input_message() -> None:
-    """Clients must use ``loop_input``; bare ``input`` is rejected at the router."""
-    daemon = SootheDaemon(SootheConfig())
-
-    transport = SimpleNamespace(send=AsyncMock())
-    transport_client = SimpleNamespace()
-    session = SimpleNamespace(transport=transport, transport_client=transport_client)
-    daemon._session_manager = SimpleNamespace(get_session=AsyncMock(return_value=session))  # type: ignore[attr-defined]
-
-    await daemon._handle_client_message(
-        "client-1",
-        {"type": "input", "text": "crawl", "autonomous": True, "max_iterations": 12},
-    )
-
-    transport.send.assert_awaited()
-    err = transport.send.call_args[0][1]
-    assert err.get("type") == "error"
-    assert err.get("code") == "UNSUPPORTED_MESSAGE"
-
-
-@pytest.mark.asyncio
 async def test_websocket_client_send_input_includes_options() -> None:
     client = WebSocketClient()
     captured: list[dict] = []

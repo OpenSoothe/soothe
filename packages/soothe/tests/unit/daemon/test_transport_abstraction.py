@@ -19,20 +19,10 @@ from soothe.daemon.transports.websocket import WebSocketTransport
 
 
 class TestProtocolV2:
-    """Tests for protocol_v2 message validation."""
+    """Tests for protocol_v2 message validation.
 
-    def test_validate_input_message_valid(self) -> None:
-        """Valid input message passes validation."""
-        msg = {"type": "input", "text": "hello"}
-        errors = validate_message(msg)
-        assert errors == []
-
-    def test_validate_input_message_missing_text(self) -> None:
-        """Input message missing text field fails validation."""
-        msg = {"type": "input"}
-        errors = validate_message(msg)
-        assert len(errors) == 1
-        assert "text" in errors[0]
+    Legacy global "input" message type was removed in favor of loop_input.
+    """
 
     def test_validate_command_message_valid(self) -> None:
         """Valid command message passes validation."""
@@ -74,13 +64,13 @@ class TestProtocolV2:
 
     def test_validate_message_size_within_limit(self) -> None:
         """Message within size limit passes validation."""
-        msg = {"type": "input", "text": "hello" * 100}
+        msg = {"type": "loop_input", "loop_id": "test", "content": "hello" * 100}
         is_valid = validate_message_size(msg)
         assert is_valid is True
 
     def test_validate_message_size_exceeds_limit(self) -> None:
         """Message exceeding size limit fails validation."""
-        msg = {"type": "input", "text": "x" * (11 * 1024 * 1024)}  # 11MB
+        msg = {"type": "loop_input", "loop_id": "test", "content": "x" * (11 * 1024 * 1024)}  # 11MB
         is_valid = validate_message_size(msg)
         assert is_valid is False
 
