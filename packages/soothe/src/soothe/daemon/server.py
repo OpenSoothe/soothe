@@ -15,7 +15,7 @@ from soothe_sdk.client.protocol import encode
 
 from soothe.config import SootheConfig
 from soothe.core import resolve_daemon_workspace
-from soothe.core.agent_loop.state.persistence.manager import AgentLoopCheckpointPersistenceManager
+from soothe.core.loop.state.persistence.manager import AgentLoopCheckpointPersistenceManager
 from soothe.daemon._handlers import DaemonHandlersMixin
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus

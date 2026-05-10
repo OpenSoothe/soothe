@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.core.agent_loop import AgentLoop
-from soothe.core.agent_loop.state.schemas import (
+from soothe.core.loop import AgentLoop
+from soothe.core.loop.state.schemas import (
     AgentDecision,
     PlanResult,
     StatusAssessment,
@@ -55,7 +55,7 @@ class MockLoopPlanner:
 
     async def assess_status(self, goal: str, state, context: PlanContext):
         """Assess-only call for split graph flow."""
-        from soothe.core.agent_loop.state.schemas import StatusAssessment
+        from soothe.core.loop.state.schemas import StatusAssessment
 
         self._assess_count += 1
 

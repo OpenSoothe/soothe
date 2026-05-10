@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
-    from soothe.core.agent_loop.state.schemas import LoopState
+    from soothe.core.loop.state.schemas import LoopState
     from soothe.protocols.planner import PlanContext
 
 PlanPromptPhase = Literal["assess", "generate"]
@@ -103,7 +103,7 @@ class PromptBuilder:
             Messages to send to the plan LLM: system, ledger copies, prior thread messages,
             then optional plan-context human.
         """
-        from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
+        from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
         system_content = self._build_system_message(
             context,
@@ -355,7 +355,7 @@ class PromptBuilder:
         Returns:
             Formatted prompt string for the plan-context ``LoopHumanMessage``.
         """
-        from soothe.core.agent_loop.state.schemas import next_goal_local_step_id_start
+        from soothe.core.loop.state.schemas import next_goal_local_step_id_start
         from soothe.core.prompts.user_envelope import build_plan_context_envelope
 
         # Build step ID hint for generate phase

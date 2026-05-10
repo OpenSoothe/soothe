@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
-from soothe.core.agent_loop.utils.stream_normalize import extract_text_from_message_content
+from soothe.core.loop.utils.stream_normalize import extract_text_from_message_content
 
 if TYPE_CHECKING:
     from soothe.config.models import PlanPromptLedgerConfig
@@ -170,7 +170,7 @@ def project_loop_messages_for_core_agent(
     Returns:
         Filtered list with only execute_step Human/AI message pairs.
     """
-    from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
+    from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
     out: list[BaseMessage] = []
     for msg in loop_messages:

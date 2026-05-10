@@ -13,15 +13,15 @@ from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
-from soothe.core.agent_loop import AgentLoop
-from soothe.core.agent_loop.state.schemas import PlanResult
-from soothe.core.agent_loop.utils.messages import loop_assistant_messages_chunk
 from soothe.core.events import (
     GoalFailedEvent,
     LoopCompletedEvent,
     PlanCreatedEvent,
     PlanReflectedEvent,
 )
+from soothe.core.loop import AgentLoop
+from soothe.core.loop.state.schemas import PlanResult
+from soothe.core.loop.utils.messages import loop_assistant_messages_chunk
 from soothe.protocols.planner import StepResult
 
 from ._runner_goal_directives import GoalDirectivesMixin

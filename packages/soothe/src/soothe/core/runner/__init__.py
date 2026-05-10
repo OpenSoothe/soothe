@@ -276,7 +276,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         if self._config.persistence.default_backend != "postgresql":
             return None
 
-        from soothe.core.agent_loop.state.persistence.shared_pool import SharedPostgreSQLPool
+        from soothe.core.loop.state.persistence.shared_pool import SharedPostgreSQLPool
 
         self._agentloop_shared_pool = await SharedPostgreSQLPool.get_shared_instance(self._config)
         return self._agentloop_shared_pool
@@ -396,7 +396,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         # IG-406: Close shared AgentLoop PostgreSQL pool
         if self._agentloop_shared_pool is not None:
             try:
-                from soothe.core.agent_loop.state.persistence.shared_pool import (
+                from soothe.core.loop.state.persistence.shared_pool import (
                     SharedPostgreSQLPool,
                 )
 

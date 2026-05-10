@@ -5,7 +5,7 @@ from __future__ import annotations
 from langchain_core.messages import HumanMessage
 
 from soothe.config.models import PlanPromptLedgerConfig
-from soothe.core.agent_loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.core.prompts.plan_ledger_projection import project_loop_messages_for_plan
 
 

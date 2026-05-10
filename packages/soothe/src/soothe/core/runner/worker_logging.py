@@ -11,7 +11,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from soothe.config.settings import SootheConfig
-from soothe.core.agent_loop.state.persistence.directory_manager import PersistenceDirectoryManager
+from soothe.core.loop.state.persistence.directory_manager import PersistenceDirectoryManager
 from soothe.logging.setup import ThreadFormatter, _suppress_noisy_third_party
 
 _LOG = logging.getLogger(__name__)
