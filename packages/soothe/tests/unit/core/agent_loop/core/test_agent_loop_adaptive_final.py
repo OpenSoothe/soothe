@@ -47,7 +47,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.agent_loop.context.goal_context_manager.GoalContextManager",
+            "soothe.core.agent_loop.engine.goal_context_manager.GoalContextManager",
             return_value=mock_gcm,
         ),
     ):
@@ -110,7 +110,7 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.agent_loop.context.goal_context_manager.GoalContextManager",
+            "soothe.core.agent_loop.engine.goal_context_manager.GoalContextManager",
             return_value=mock_gcm,
         ),
     ):
@@ -167,7 +167,7 @@ async def test_completed_payload_for_summary_path() -> None:
             return_value=mock_sm,
         ),
         patch(
-            "soothe.core.agent_loop.context.goal_context_manager.GoalContextManager",
+            "soothe.core.agent_loop.engine.goal_context_manager.GoalContextManager",
             return_value=mock_gcm,
         ),
     ):

@@ -285,6 +285,12 @@ class WorkerPool:
     Workers execute requests with fresh SootheRunner instances and stream
     results tagged with request_id for routing to the correct pending request.
 
+    Dynamic Scaling (min/max pool size):
+        - Starts with min_pool_size workers at daemon startup
+        - Grows up to max_pool_size when all min workers are busy
+        - Workers beyond min_pool_size idle out after idle_timeout_seconds
+        - Shrinks back to min_pool_size when load decreases
+
     Architecture:
         Daemon → LoopRunnerFactory → WorkerPool (singleton)
                                          ↓
@@ -293,8 +299,9 @@ class WorkerPool:
             → response_queue (stream responses)
 
     Lifecycle:
-        - Startup: pre-warm N workers (configurable)
+        - Startup: pre-warm min_pool_size workers
         - Runtime: workers pull requests, execute, return to pool
+        - Scaling: spawn extra workers when needed, idle out when not
         - Shutdown: signal all workers to exit, wait, then force-kill
     """
 
@@ -304,15 +311,17 @@ class WorkerPool:
     def __init__(
         self,
         config: SootheConfig,
-        pool_size: int = 4,
+        min_pool_size: int = 2,
+        max_pool_size: int = 4,
         idle_timeout_seconds: int = 300,
         max_requests_per_worker: int = 100,
-        request_timeout_seconds: int = 900,
+        request_timeout_seconds: int = 1800,
         heartbeat_interval_seconds: int = 30,
         stuck_worker_timeout_seconds: int = 180,
     ) -> None:
         self._config = config
-        self._pool_size = pool_size
+        self._min_pool_size = min_pool_size
+        self._max_pool_size = max(min_pool_size, max_pool_size)  # Ensure max >= min
         self._idle_timeout_seconds = idle_timeout_seconds
         self._max_requests_per_worker = max_requests_per_worker
         self._request_timeout_seconds = request_timeout_seconds
@@ -332,6 +341,8 @@ class WorkerPool:
         self._poll_task: asyncio.Task | None = None
         # Client disconnect: finish routing worker stream until done/error
         self._abandon_drain_tasks: set[asyncio.Task[None]] = set()
+        # Next worker slot index for scaling up
+        self._next_worker_index: int = 0
 
     @classmethod
     async def get_shared_instance(cls, config: SootheConfig) -> WorkerPool:
@@ -349,7 +360,8 @@ class WorkerPool:
             pool_config = config.daemon.worker_pool
             pool = WorkerPool(
                 config=config,
-                pool_size=pool_config.pool_size,
+                min_pool_size=pool_config.min_pool_size,
+                max_pool_size=pool_config.get_effective_pool_size(),
                 idle_timeout_seconds=pool_config.idle_timeout_seconds,
                 max_requests_per_worker=pool_config.max_requests_per_worker,
                 request_timeout_seconds=pool_config.request_timeout_seconds,
@@ -377,21 +389,25 @@ class WorkerPool:
             cls._shared_pool = None
 
     async def start(self) -> None:
-        """Pre-warm all worker processes."""
-        self._dispatch_semaphore = asyncio.Semaphore(self._pool_size)
+        """Pre-warm min_pool_size worker processes."""
+        self._dispatch_semaphore = asyncio.Semaphore(self._max_pool_size)
         spawn_config = _spawn_safe_config(self._config)
 
-        for i in range(self._pool_size):
+        # Pre-warm only min_pool_size workers at startup
+        for i in range(self._min_pool_size):
             worker_id = f"worker-{i}"
             await self._spawn_worker(worker_id, spawn_config)
+            self._next_worker_index = i + 1
 
         self._running = True
         # Start background poll task to route responses
         self._poll_task = asyncio.create_task(self._poll_worker_responses())
 
         logger.info(
-            "WorkerPool: pre-warmed %d workers (idle_timeout=%ds, max_requests=%d)",
-            self._pool_size,
+            "WorkerPool: pre-warmed %d workers (min=%d, max=%d, idle_timeout=%ds, max_requests=%d)",
+            self._min_pool_size,
+            self._min_pool_size,
+            self._max_pool_size,
             self._idle_timeout_seconds,
             self._max_requests_per_worker,
         )
@@ -752,7 +768,11 @@ class WorkerPool:
         self._workers[dead_worker.worker_id] = new_worker
 
     async def submit(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk]:
-        """Submit request to pool, await available worker, stream results."""
+        """Submit request to pool, await available worker, stream results.
+
+        Dynamic scaling: If all min_pool_size workers are busy, spawns extra
+        workers up to max_pool_size. Extra workers idle out after idle_timeout.
+        """
         # Generate unique request_id for this request
         request_id = uuid.uuid4().hex[:16]
 
@@ -762,7 +782,7 @@ class WorkerPool:
                 self._request_timeout_seconds if self._request_timeout_seconds > 0 else None
             )
 
-        # Wait for available worker slot
+        # Wait for available worker slot (bounded by max_pool_size semaphore)
         async with self._dispatch_semaphore:
             # Find an idle worker
             worker = None
@@ -771,7 +791,23 @@ class WorkerPool:
                     worker = w
                     break
 
-            # If no idle worker, respawn a dead one or wait
+            # If no idle worker, check if we can scale up (spawn extra worker)
+            if worker is None:
+                active_count = sum(1 for w in self._workers.values() if w.is_alive())
+                if active_count < self._max_pool_size:
+                    # Scale up: spawn extra worker beyond min_pool_size
+                    worker_id = f"worker-{self._next_worker_index}"
+                    self._next_worker_index += 1
+                    spawn_config = _spawn_safe_config(self._config)
+                    logger.info(
+                        "WorkerPool: scaling up, spawning extra worker %s (active=%d, max=%d)",
+                        worker_id,
+                        active_count + 1,
+                        self._max_pool_size,
+                    )
+                    worker = await self._spawn_worker(worker_id, spawn_config)
+
+            # If still no worker, respawn a dead one
             if worker is None:
                 for w in self._workers.values():
                     if w.status == WorkerStatus.DEAD or not w.is_alive():
@@ -926,7 +962,7 @@ class WorkerPool:
             avg_latency = sum(self._metrics_latencies[-100:]) / len(self._metrics_latencies[-100:])
 
         return PoolMetrics(
-            total_workers=self._pool_size,
+            total_workers=self._max_pool_size,
             idle_workers=idle,
             busy_workers=busy,
             dead_workers=dead,
