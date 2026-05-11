@@ -483,7 +483,8 @@ class PlanGeneration(BaseModel):
     Attributes:
         plan_action: Reuse in-flight AgentDecision or supply a new one.
         type: Decision type for a new plan.
-        steps: New steps to execute (required when ``plan_action='new'``).
+        steps: Steps for a new plan. Required non-empty when ``plan_action='new'`` and
+            ``type='execute_steps'``. May be empty when ``type='final'`` (same as ``AgentDecision``).
         execution_mode: Execution mode for ``steps``.
         reasoning: Internal rationale for the decision.
         adaptive_granularity: Optional step granularity hint.
@@ -512,8 +513,10 @@ class PlanGeneration(BaseModel):
                 raise ValueError("plan_action 'new' requires type")
             if self.execution_mode is None:
                 raise ValueError("plan_action 'new' requires execution_mode")
-            if not self.steps:
-                raise ValueError("plan_action 'new' requires non-empty steps")
+            if self.type == "execute_steps" and not self.steps:
+                raise ValueError(
+                    "plan_action 'new' with type 'execute_steps' requires non-empty steps"
+                )
         return self
 
 
