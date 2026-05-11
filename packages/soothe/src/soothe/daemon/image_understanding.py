@@ -110,6 +110,8 @@ async def enrich_user_text_with_vision(
     config: Any,
     text: str,
     attachments: list[dict[str, str]],
+    *,
+    session_id: str | None = None,
 ) -> str:
     """Run the configured image-role model on images and merge output into user text.
 
@@ -117,6 +119,7 @@ async def enrich_user_text_with_vision(
         config: ``SootheConfig`` with providers for role ``image``.
         text: User text (may be empty).
         attachments: Normalized list from ``validate_and_normalize_image_attachments``.
+        session_id: Thread id for Langfuse session correlation.
 
     Returns:
         Text passed to ``SootheRunner.astream`` (user text plus vision block).
@@ -143,7 +146,9 @@ async def enrich_user_text_with_vision(
         )
 
     msg = HumanMessage(content=blocks)
-    response = await model.ainvoke([msg])
+
+    invoke_config = _build_vision_invoke_config(config, session_id=session_id)
+    response = await model.ainvoke([msg], config=invoke_config)
     summary = str(response.content).strip()
     if not summary:
         summary = "(Vision model returned empty content.)"
@@ -153,3 +158,20 @@ async def enrich_user_text_with_vision(
     if user_part:
         return f"{user_part}\n\n{vision_block}\n"
     return f"{vision_block}\n"
+
+
+def _build_vision_invoke_config(config: Any, *, session_id: str | None = None) -> dict[str, Any]:
+    """Build Langfuse-traced RunnableConfig for vision preflight."""
+    try:
+        from soothe.utils.observability.langfuse import build_traced_config
+
+        return build_traced_config(
+            config,
+            purpose="vision_preflight",
+            component="daemon.vision",
+            phase="pre-stream",
+            session_id=session_id,
+            run_name="soothe:vision-preflight",
+        )
+    except Exception:
+        return {}

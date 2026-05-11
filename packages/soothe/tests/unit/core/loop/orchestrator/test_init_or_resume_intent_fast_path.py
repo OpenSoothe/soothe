@@ -23,7 +23,7 @@ async def test_init_or_resume_routes_fast_path_for_chitchat() -> None:
         reuse_current_goal=False,
         goal_description=None,
         friendly_message=None,
-        task_complexity="chitchat",
+        task_complexity="minimal",
         chitchat_response="hello",
         quiz_response=None,
         reasoning="test",

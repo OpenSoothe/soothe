@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from soothe.core.intention import IntentClassification, IntentClassifier
+from soothe.core.intention import IntentClassification, IntentClassifier, TaskComplexity
 
 # ---------------------------------------------------------------------------
 # Pydantic model tests
@@ -21,13 +21,13 @@ class TestIntentClassification:
         """IntentClassification for chitchat query."""
         intent = IntentClassification(
             intent_type="chitchat",
-            task_complexity="chitchat",
+            task_complexity=TaskComplexity.MINIMAL,
             chitchat_response="Hello! How can I help?",
             reasoning="Greeting detected",
         )
 
         assert intent.intent_type == "chitchat"
-        assert intent.task_complexity == "chitchat"
+        assert intent.task_complexity == TaskComplexity.MINIMAL
         assert intent.chitchat_response == "Hello! How can I help?"
         assert not intent.reuse_current_goal
         assert intent.goal_description is None
@@ -101,7 +101,6 @@ class TestIntentClassifierIntent:
         )
 
         assert classifier._fast_model == mock_model
-        assert classifier._routing_model is not None
         assert classifier._intent_model is not None
 
     def test_init_without_model_intent_disabled(self) -> None:
@@ -111,7 +110,6 @@ class TestIntentClassifierIntent:
         )
 
         assert classifier._fast_model is None
-        assert classifier._routing_model is None
         assert classifier._intent_model is None
 
 
@@ -133,7 +131,7 @@ class TestIntentClassificationLLM:
         mock_intent_model.ainvoke = AsyncMock(
             return_value=IntentClassification(
                 intent_type="chitchat",
-                task_complexity="chitchat",
+                task_complexity=TaskComplexity.MINIMAL,
                 chitchat_response="你好! 我是 Soothe。有什么可以帮你的吗?",
                 reasoning="Chinese greeting detected",
             )
@@ -149,7 +147,7 @@ class TestIntentClassificationLLM:
         assert result.intent_type == "chitchat"
         assert result.chitchat_response is not None
         assert "你好" in result.chitchat_response
-        assert result.task_complexity == "chitchat"
+        assert result.task_complexity == TaskComplexity.MINIMAL
         assert not result.reuse_current_goal
 
     @pytest.mark.asyncio
@@ -266,7 +264,7 @@ class TestIntentClassificationLLM:
             return_value=IntentClassification(
                 intent_type="quiz",
                 quiz_response="Paris is the capital of France.",
-                task_complexity="quiz",
+                task_complexity=TaskComplexity.MINIMAL,
                 reasoning="Factual geography question, LLM knowledge sufficient",
             )
         )
@@ -279,7 +277,7 @@ class TestIntentClassificationLLM:
         assert result.intent_type == "quiz"
         assert result.quiz_response is not None
         assert "Paris" in result.quiz_response
-        assert result.task_complexity == "quiz"
+        assert result.task_complexity == TaskComplexity.MINIMAL
         assert not result.reuse_current_goal
         assert result.goal_description is None
 
@@ -294,7 +292,7 @@ class TestIntentClassificationLLM:
             return_value=IntentClassification(
                 intent_type="quiz",
                 quiz_response="William Shakespeare wrote Romeo and Juliet.",
-                task_complexity="quiz",
+                task_complexity=TaskComplexity.MINIMAL,
                 reasoning="Literature knowledge question",
             )
         )
@@ -305,7 +303,7 @@ class TestIntentClassificationLLM:
         quiz_result = await classifier.classify_intent("Who wrote Romeo and Juliet?")
         assert quiz_result.intent_type == "quiz"
         assert quiz_result.quiz_response is not None
-        assert quiz_result.task_complexity == "quiz"
+        assert quiz_result.task_complexity == TaskComplexity.MINIMAL
 
         # Tool-requiring task -> new_goal intent
         mock_intent_model.ainvoke = AsyncMock(
@@ -332,7 +330,7 @@ class TestIntentClassificationLLM:
             return_value=IntentClassification(
                 intent_type="quiz",
                 quiz_response="15 * 23 = 345",
-                task_complexity="quiz",
+                task_complexity=TaskComplexity.MINIMAL,
                 reasoning="Simple arithmetic, LLM can compute",
             )
         )
@@ -354,7 +352,7 @@ class TestIntentClassificationLLM:
         mock_intent_model.ainvoke = AsyncMock(
             return_value=IntentClassification(
                 intent_type="quiz",
-                task_complexity="quiz",
+                task_complexity=TaskComplexity.MINIMAL,
                 reasoning="Factual question detected",
                 quiz_response=None,  # Missing
             )
@@ -411,7 +409,7 @@ class TestIntentClassificationLLM:
         mock_intent_model.ainvoke = AsyncMock(
             return_value=IntentClassification(
                 intent_type="chitchat",
-                task_complexity="chitchat",
+                task_complexity=TaskComplexity.MINIMAL,
                 reasoning="Greeting detected",
                 chitchat_response=None,  # Missing
             )

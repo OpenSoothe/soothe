@@ -25,7 +25,7 @@ class _StubLLM:
     def __init__(self, content: object) -> None:
         self._content = content
 
-    async def ainvoke(self, _messages: list[object]) -> object:
+    async def ainvoke(self, _messages: list[object], **_kwargs: object) -> object:
         return SimpleNamespace(content=self._content)
 
 

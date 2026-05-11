@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -72,6 +72,8 @@ async def _evaluate_with_llm(
     description: str,
     priority: int,
     model: BaseChatModel,
+    *,
+    soothe_config: Any | None = None,
 ) -> tuple[str, list[str]]:
     """Evaluate goal criticality using an LLM.
 
@@ -87,7 +89,7 @@ async def _evaluate_with_llm(
     Returns:
         Tuple of (risk_level, reasons) where risk_level is "high", "medium", or "low".
     """
-    from soothe.middleware._utils import create_llm_call_metadata
+    from soothe.utils.observability.langfuse import build_traced_config
 
     prompt_text = (
         "You are evaluating whether a proposed autonomous agent task requires human approval.\n"
@@ -106,16 +108,14 @@ async def _evaluate_with_llm(
     )
 
     try:
-        response = await model.ainvoke(
-            prompt_text,
-            config={
-                "metadata": create_llm_call_metadata(
-                    purpose="criticality_assessment",
-                    component="cognition.criticality",
-                    phase="pre-goal",
-                )
-            },
+        invoke_config = build_traced_config(
+            soothe_config,
+            purpose="criticality_assessment",
+            component="cognition.criticality",
+            phase="pre-goal",
+            run_name="soothe:criticality-assess",
         )
+        response = await model.ainvoke(prompt_text, config=invoke_config)
         content = response.content.strip() if hasattr(response, "content") else ""
 
         risk_level = "medium"

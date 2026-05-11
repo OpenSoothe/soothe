@@ -103,7 +103,9 @@ class SynthesisGenerator:
             Fallback to general_summary on classification failure.
         """
         try:
-            return await classify_synthesis_scenario(goal, state, self.llm)
+            return await classify_synthesis_scenario(
+                goal, state, self.llm, soothe_config=self._soothe_config
+            )
         except Exception:
             logger.warning("Classifier failed, using fallback", exc_info=True)
             from soothe.core.loop.engine.scenario_classifier import BUILTIN_SCENARIOS

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -321,6 +321,8 @@ async def classify_synthesis_scenario(
     goal: str,
     state: LoopState,
     llm_client: BaseChatModel,
+    *,
+    soothe_config: Any | None = None,
 ) -> ScenarioClassification:
     """Classify synthesis scenario from goal + intent + execution pattern (IG-300).
 
@@ -331,6 +333,7 @@ async def classify_synthesis_scenario(
         goal: User's goal description.
         state: Loop state with intent classification and step results.
         llm_client: Fast model for classification (from config).
+        soothe_config: Optional SootheConfig for Langfuse tracing.
 
     Returns:
         ScenarioClassification with scenario, sections, focus, emphasis.
@@ -355,7 +358,17 @@ async def classify_synthesis_scenario(
     try:
         from langchain_core.messages import HumanMessage
 
-        response = await llm_client.ainvoke([HumanMessage(content=prompt)])
+        from soothe.utils.observability.langfuse import build_traced_config
+
+        invoke_config = build_traced_config(
+            soothe_config,
+            purpose="scenario_classify",
+            component="synthesis.scenario_classifier",
+            phase="post-loop",
+            session_id=getattr(state, "thread_id", None),
+            run_name="soothe:scenario-classify",
+        )
+        response = await llm_client.ainvoke([HumanMessage(content=prompt)], config=invoke_config)
 
         # Parse JSON response into ScenarioClassification
         classification = _parse_classification_response(response.content)

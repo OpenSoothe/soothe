@@ -8,8 +8,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.core.intention import build_loop_routing_classification
-
 from ..runtime_context import LoopRuntimeContext
 
 logger = logging.getLogger(__name__)
@@ -34,12 +32,6 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             observability_metadata=observability_metadata,
         )
         ctx.loop_state.intent = intent
-
-    if ctx.loop_state.routing_classification is None:
-        ctx.loop_state.routing_classification = build_loop_routing_classification(
-            intent,
-            ctx.preferred_subagent,
-        )
 
     if intent is not None:
         await ctx.emit(

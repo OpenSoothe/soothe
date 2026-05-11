@@ -15,16 +15,16 @@ from pydantic import BaseModel
 
 from soothe.utils.text_preview import preview_first
 
-from .models import IntentClassification, IntentHint, RoutingClassification
+from .models import IntentClassification, IntentHint, TaskComplexity
 from .prompts import (
     INTENT_CLASSIFICATION_PROMPT,
     INTENT_CLASSIFICATION_RETRY_PROMPT,
-    ROUTING_PROMPT,
-    ROUTING_RETRY_PROMPT,
 )
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
+
+    from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
 
@@ -52,25 +52,26 @@ class IntentClassifier:
         self,
         model: BaseChatModel | None,
         assistant_name: str = "Soothe",
+        soothe_config: SootheConfig | None = None,
     ) -> None:
         """Initialize intent classifier.
 
         Args:
             model: Fast LLM for classification.
             assistant_name: Name used in responses.
+            soothe_config: Soothe config for Langfuse tracing (optional).
         """
         self._fast_model = model
         self._assistant_name = assistant_name
+        self._soothe_config = soothe_config
 
-        # Pre-create structured output models for performance
+        # Pre-create structured output model for performance
         if model:
             self._intent_model = self._create_structured_model(model, IntentClassification)
-            self._routing_model = self._create_structured_model(model, RoutingClassification)
 
-            logger.info("[IntentClassifier] Initialized with structured output models")
+            logger.info("[IntentClassifier] Initialized with structured output model")
         else:
             self._intent_model = None
-            self._routing_model = None
             logger.warning("[IntentClassifier] No model provided, classification disabled")
 
     # -- Public API --------------------------------------------------------
@@ -171,50 +172,6 @@ class IntentClassifier:
 
         return result
 
-    async def classify_routing(
-        self,
-        query: str,
-        *,
-        recent_messages: list[Any] | None = None,
-    ) -> RoutingClassification:
-        """Routing classification for execution path selection.
-
-        Args:
-            query: User input text.
-            recent_messages: Conversation context.
-
-        Returns:
-            RoutingClassification with routing complexity.
-        """
-        if not self._fast_model or not self._routing_model:
-            return RoutingClassification(task_complexity="medium")
-
-        conversation_context = self._format_conversation_context(recent_messages)
-
-        result: RoutingClassification | None = None
-
-        for retry_mode in (False, True):
-            try:
-                result = await self._classify_routing_llm(
-                    query,
-                    conversation_context=conversation_context,
-                    retry_mode=retry_mode,
-                )
-                break
-            except Exception:
-                logger.warning("Routing classification failed, retrying...")
-
-        if result is None:
-            logger.warning("Routing classification failed, using default 'medium'")
-            return RoutingClassification(task_complexity="medium")
-
-        # Patch missing chitchat_response
-        if result.task_complexity == "chitchat" and not result.chitchat_response:
-            result.chitchat_response = self._generate_chitchat_response(query)
-
-        logger.debug("Routing classified: task_complexity=%s", result.task_complexity)
-        return result
-
     # -- Internal LLM calls ------------------------------------------------
 
     async def _classify_intent_llm(
@@ -242,15 +199,15 @@ class IntentClassifier:
             thread_id=thread_id,
         )
 
-        # Add tracing metadata
-        metadata = self._create_llm_metadata(
+        # Build traced config with Langfuse callbacks + metadata
+        config = self._build_invoke_config(
             "classify_intent",
             "intent.primary",
             observability_metadata=observability_metadata,
         )
 
         try:
-            result = await self._intent_model.ainvoke(prompt, config={"metadata": metadata})
+            result = await self._intent_model.ainvoke(prompt, config=config)
         except Exception:
             logger.exception("LLM intent classification call failed")
             raise
@@ -261,40 +218,6 @@ class IntentClassifier:
 
         if result.intent_type not in ("chitchat", "continue_thread", "new_goal", "quiz"):
             raise ValueError(f"Invalid intent_type from LLM: {result.intent_type!r}")
-
-        return result
-
-    async def _classify_routing_llm(
-        self,
-        query: str,
-        *,
-        conversation_context: str,
-        retry_mode: bool = False,
-    ) -> RoutingClassification:
-        """LLM routing classification with structured output."""
-        current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
-
-        prompt_template = ROUTING_RETRY_PROMPT if retry_mode else ROUTING_PROMPT
-        prompt = prompt_template.format(
-            query=query,
-            current_time=current_time,
-            assistant_name=self._assistant_name,
-            conversation_context=conversation_context if not retry_mode else "",
-        )
-
-        metadata = self._create_llm_metadata("classify_routing", "routing.primary")
-
-        try:
-            result = await self._routing_model.ainvoke(prompt, config={"metadata": metadata})
-        except Exception:
-            logger.exception("LLM routing classification call failed")
-            raise
-
-        if result is None:
-            raise ValueError("LLM routing returned None")
-
-        if result.task_complexity not in ("chitchat", "simple", "medium", "complex"):
-            raise ValueError(f"Invalid task_complexity: {result.task_complexity!r}")
 
         return result
 
@@ -419,7 +342,7 @@ class IntentClassifier:
                 intent_type="chitchat",
                 reuse_current_goal=False,
                 goal_description=None,
-                task_complexity="chitchat",
+                task_complexity=TaskComplexity.MINIMAL,
                 chitchat_response=chitchat_response,
                 reasoning=f"Intent hint bypass: {hint.value}",
             )
@@ -429,7 +352,7 @@ class IntentClassifier:
                 intent_type="quiz",
                 reuse_current_goal=False,
                 goal_description=None,
-                task_complexity="quiz",
+                task_complexity=TaskComplexity.MINIMAL,
                 quiz_response=None,  # Will be filled by _run_quiz with think model
                 reasoning=f"Intent hint bypass: {hint.value}",
             )
@@ -438,7 +361,7 @@ class IntentClassifier:
                 intent_type="continue_thread",
                 reuse_current_goal=True,
                 goal_description=query,
-                task_complexity="medium",
+                task_complexity=TaskComplexity.MEDIUM,
                 reasoning=f"Intent hint bypass: {hint.value}",
             )
         elif hint == IntentHint.NEW_GOAL:
@@ -446,7 +369,7 @@ class IntentClassifier:
                 intent_type="new_goal",
                 reuse_current_goal=False,
                 goal_description=query,
-                task_complexity="medium",
+                task_complexity=TaskComplexity.MEDIUM,
                 reasoning=f"Intent hint bypass: {hint.value}",
             )
         else:
@@ -473,7 +396,7 @@ class IntentClassifier:
             intent_type="new_goal",
             reuse_current_goal=False,
             goal_description=query,
-            task_complexity="medium",
+            task_complexity=TaskComplexity.MEDIUM,
             reasoning=f"Fallback: {error_msg}",
         )
 
@@ -552,40 +475,42 @@ class IntentClassifier:
         # This is only used if LLM classification fails to provide friendly_message
         return f"I will work on: {query}"
 
-    def _create_llm_metadata(
+    def _build_invoke_config(
         self,
         purpose: str,
         component: str,
         *,
         observability_metadata: dict[str, str] | None = None,
-    ) -> dict[str, str]:
-        """Create metadata for LLM tracing.
+    ) -> dict[str, Any]:
+        """Build RunnableConfig with Langfuse tracing and call metadata.
 
         Args:
-            purpose: Classification purpose (classify_intent/classify_routing).
+            purpose: Classification purpose (classify_intent).
             component: Component identifier.
+            observability_metadata: Extra metadata from caller.
 
         Returns:
-            Metadata dict for LLM call config.
+            RunnableConfig dict for ``model.ainvoke(..., config=)``.
         """
         try:
+            from soothe.utils.observability.langfuse import build_traced_config
+
+            return build_traced_config(
+                self._soothe_config,
+                purpose=purpose,
+                component=f"classifier.{component}",
+                phase="pre-stream",
+                run_name="soothe:intent-classify",
+                extra_metadata=observability_metadata,
+            )
+        except Exception:
             from soothe.middleware._utils import create_llm_call_metadata
 
-            base = create_llm_call_metadata(
+            metadata = create_llm_call_metadata(
                 purpose=purpose,
                 component=f"classifier.{component}",
                 phase="pre-stream",
             )
             if observability_metadata:
-                base.update(observability_metadata)
-            return base
-        except Exception:
-            # Fallback if middleware utils unavailable
-            metadata = {
-                "purpose": purpose,
-                "component": component,
-                "phase": "pre-stream",
-            }
-            if observability_metadata:
                 metadata.update(observability_metadata)
-            return metadata
+            return {"metadata": metadata}
