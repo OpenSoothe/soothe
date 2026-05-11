@@ -74,7 +74,7 @@ In short, Soothe shifts the paradigm from *human-in-the-loop* to **agent-in-the-
 ## Milestones
 
 - ✅ **Single-Session Autonomy** — Solve a complex goal end-to-end within a single session, fully out of the human loop  
-- ⏳ **Cross-Session Continuity** — Sustain and complete complex tasks across multiple sessions with persistent context  
+- ✅ **Cross-Thread Continuity** — Sustain and complete complex tasks across multiple threads with persistent context  
 - ⏳ **Multi-Goal Orchestration** — Handle multiple interdependent goals over long-horizon workflows  
 - ⏳ **Benchmark Reproduction** — Reproduce the Anthropic C Compiler [experiment](https://github.com/anthropics/claudes-c-compiler)  
 
