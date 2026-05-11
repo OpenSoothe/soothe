@@ -1084,6 +1084,17 @@ class ToolCallMessage(Vertical):
     def _is_task_tool_card(self) -> bool:
         return _normalize_tool_name_for_arg_map(self._tool_name) == "task"
 
+    def _has_whole_card_collapse_affordance(self) -> bool:
+        """True when the card body can be collapsed/expanded.
+
+        Must stay aligned with :meth:`on_click` (whole-card toggle branch).
+        """
+        return bool(
+            self._activity
+            or (self._output or "").strip()
+            or self._status in ("success", "error")
+        )
+
     def _maybe_auto_collapse_task_card(self) -> None:
         """Collapse task cards when activity rows exceed the shared threshold."""
         if not self._is_task_tool_card():
@@ -1586,10 +1597,9 @@ class ToolCallMessage(Vertical):
         colors = theme.get_theme_colors(self)
         gutter = f"{get_glyphs().output_prefix} "
         # Expand/collapse affordance: collapsed → show right arrow (can expand); expanded → show down arrow (can collapse).
-        has_collapsible = self._activity or (self._output or "").strip()
         g = get_glyphs()
         toggle_icon = ""
-        if has_collapsible:
+        if self._has_whole_card_collapse_affordance():
             toggle_icon = f" {g.expand if self._card_collapsed else g.collapse}"
         line = f"{gutter}{frame} Running...{elapsed}{toggle_icon}"
         self._status_widget.update(Content.styled(line, colors.cognition))
@@ -1624,8 +1634,7 @@ class ToolCallMessage(Vertical):
             gutter = f"{get_glyphs().output_prefix} "
             line = f"{gutter}{line}"
         # Add expand/collapse icon at the end of status line
-        has_collapsible = self._activity or (self._output or "").strip()
-        if has_collapsible:
+        if self._has_whole_card_collapse_affordance():
             icon = get_glyphs().expand if self._card_collapsed else get_glyphs().collapse
             line = f"{line} {icon}"
         w.update(Content(line))
@@ -1764,10 +1773,7 @@ class ToolCallMessage(Vertical):
             self._refresh_activity_display()
             return
         # Priority 2: Card-level collapse when there's content to collapse
-        has_collapsible_content = (
-            self._activity or (self._output or "").strip() or self._status in ("success", "error")
-        )
-        if has_collapsible_content:
+        if self._has_whole_card_collapse_affordance():
             self.toggle_collapse()
             return
         # Priority 3: Toggle output expansion
