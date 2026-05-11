@@ -35,7 +35,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Keys to merge into the internal queue payload: ``autonomous``,
         ``max_iterations``, ``preferred_subagent``, ``interactive``, ``model``,
-        ``model_params``.
+        ``model_params``, ``intent_hint``.
     """
     max_iterations = msg.get("max_iterations")
     parsed_max: int | None = (
@@ -49,6 +49,8 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
     model = raw_model.strip() if isinstance(raw_model, str) and raw_model.strip() else None
     raw_params = msg.get("model_params")
     model_params = raw_params if isinstance(raw_params, dict) else None
+    raw_hint = msg.get("intent_hint")
+    intent_hint = raw_hint.strip() if isinstance(raw_hint, str) and raw_hint.strip() else None
     return {
         "autonomous": bool(msg.get("autonomous", False)),
         "max_iterations": parsed_max,
@@ -56,6 +58,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         "interactive": bool(msg.get("interactive", False)),
         "model": model,
         "model_params": model_params,
+        "intent_hint": intent_hint,
     }
 
 

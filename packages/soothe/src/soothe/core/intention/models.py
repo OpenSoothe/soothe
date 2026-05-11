@@ -8,9 +8,25 @@ Models for LLM-driven query intent classification with three-tier system:
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+
+class IntentHint(StrEnum):
+    """Suggested intent hint to bypass LLM classification.
+
+    When provided, the classifier may use this hint directly without
+    invoking an LLM call, enabling faster routing for known intent types.
+
+    Values match ``IntentClassification.intent_type`` literal values.
+    """
+
+    CHITCHAT = "chitchat"
+    QUIZ = "quiz"
+    CONTINUE_THREAD = "continue_thread"
+    NEW_GOAL = "new_goal"
 
 
 class RoutingClassification(BaseModel):

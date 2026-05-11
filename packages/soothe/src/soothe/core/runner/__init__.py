@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
+from soothe.core.intention import IntentHint
 from soothe.core.workspace import resolve_workspace_for_stream
 from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
@@ -48,6 +49,7 @@ from .local_runner import LocalLoopRunner, SubprocessLoopError
 
 # Re-export types
 __all__ = [
+    "IntentHint",
     "LoopRunnerFactory",
     "LocalLoopRunner",
     "SootheRunner",
@@ -514,6 +516,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         max_iterations: int | None = None,
         preferred_subagent: str | None = None,
         client_loop_id: str | None = None,
+        intent_hint: IntentHint | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
@@ -537,6 +540,8 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             client_loop_id: Daemon client loop scope for interactive HITL (RFC-221); when set
                 with a matching ``set_interrupt_resolver`` entry, CoreAgent interrupts pause
                 until the client sends ``resume_interrupts``.
+            intent_hint: Suggested intent to bypass LLM classification. When provided for
+                chitchat or quiz, skips the intent classification LLM call entirely.
         """
         # Update thread_id for logging if one is provided
         from soothe.core.loop.engine.hitl_scope import (
@@ -579,6 +584,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
                     thread_id=thread_id,
                     workspace=effective_workspace,
                     max_iterations=max_iterations or self._config.autonomous.max_iterations,
+                    intent_hint=intent_hint,
                 ):
                     yield chunk
                 return
@@ -590,6 +596,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
                 workspace=effective_workspace,
                 max_iterations=max_iterations or self._config.agent_loop.max_iterations,
                 preferred_subagent=preferred_subagent,
+                intent_hint=intent_hint,
             ):
                 yield chunk
         finally:

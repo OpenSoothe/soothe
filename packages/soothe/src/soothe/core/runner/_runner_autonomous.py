@@ -19,6 +19,7 @@ from soothe.core.events import (
     PlanCreatedEvent,
     PlanReflectedEvent,
 )
+from soothe.core.intention import IntentHint
 from soothe.core.loop import AgentLoop
 from soothe.core.loop.state.schemas import PlanResult
 from soothe.core.loop.utils.messages import loop_assistant_messages_chunk
@@ -86,6 +87,7 @@ class AutonomousMixin(GoalDirectivesMixin):
         thread_id: str | None = None,
         workspace: str | None = None,
         max_iterations: int = 10,
+        intent_hint: IntentHint | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Autonomous iteration loop with DAG-based goal scheduling (RFC-0007, RFC-0009, IG-155).
 
@@ -94,6 +96,13 @@ class AutonomousMixin(GoalDirectivesMixin):
         Independent goals can run in parallel with isolated threads.
 
         IG-155: When user_input is empty, discovers goals from autopilot directory.
+
+        Args:
+            user_input: Goal description to execute.
+            thread_id: Thread context for execution.
+            workspace: Thread-specific workspace path.
+            max_iterations: Maximum loop iterations.
+            intent_hint: Suggested intent to bypass LLM classification.
         """
         import asyncio
 
@@ -145,6 +154,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                 active_goal_id=active_goal_id,
                 active_goal_description=active_goal_description,
                 thread_id=thread_id_for_context,
+                intent_hint=intent_hint,
             )
 
             logger.info(

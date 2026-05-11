@@ -38,6 +38,7 @@ def test_queue_options_from_daemon_message_defaults() -> None:
         "interactive": False,
         "model": None,
         "model_params": None,
+        "intent_hint": None,
     }
 
 

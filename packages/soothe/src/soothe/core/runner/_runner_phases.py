@@ -147,8 +147,8 @@ class PhasesMixin:
     ) -> AsyncGenerator[StreamChunk]:
         """Fast path for quiz/trivia queries (IG-250).
 
-        Uses piggybacked quiz_response from classification when available.
-        Falls back to fast LLM call if classification didn't provide response.
+        Uses piggybacked quiz_response from classification (fast model) when available.
+        Falls back to think model for deeper reasoning on factual accuracy.
 
         Args:
             user_input: Quiz/trivia question.
@@ -172,18 +172,14 @@ class PhasesMixin:
             await self._save_quiz_to_state(user_input, piggybacked, thread_id)
             return
 
-        # Fallback: spawn fast LLM call for quiz response
+        # Fallback: spawn think model for quiz response (deeper reasoning for factual accuracy)
         # This should rarely happen if classification post-processing works correctly
         logger.warning("Quiz classification missing piggybacked quiz_response, spawning LLM call")
 
-        # Get fast model from intent classifier
-        fast_model = (
-            getattr(self._intent_classifier, "_fast_model", None)
-            if self._intent_classifier
-            else None
-        )
-        if not fast_model:
-            # No fast model available, use placeholder
+        # Use think model for quiz - requires deeper reasoning for factual accuracy
+        think_model = getattr(self, "_model", None)
+        if not think_model:
+            # No think model available, use placeholder
             fallback_response = f"I'll answer that question: {user_input}"
             yield loop_assistant_messages_chunk(
                 content=fallback_response,
@@ -193,15 +189,15 @@ class PhasesMixin:
             logger.debug("Quiz completed (no model fallback): %s", user_input[:50])
             return
 
-        # Spawn fast LLM call
-        quiz_prompt = f"""Answer this question concisely and accurately:
+        # Spawn think model for accurate quiz response
+        quiz_prompt = f"""Answer this question accurately and thoroughly:
 
 Question: {user_input}
 
-Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
+Provide a factual, well-reasoned answer. If the question involves facts, dates, or specific knowledge, ensure accuracy. Do not use tools or search."""
 
         try:
-            response = await fast_model.ainvoke(quiz_prompt)
+            response = await think_model.ainvoke(quiz_prompt)
             answer = response.content if hasattr(response, "content") else str(response)
 
             yield loop_assistant_messages_chunk(
@@ -209,7 +205,7 @@ Provide a brief factual answer (1-3 sentences). Do not use tools or search."""
                 phase="quiz",
                 thread_id=thread_id,
             )
-            logger.debug("Quiz completed (LLM fallback): %s", user_input[:50])
+            logger.debug("Quiz completed (think model fallback): %s", user_input[:50])
             await self._save_quiz_to_state(user_input, answer, thread_id)
         except Exception:
             logger.exception("Quiz LLM call failed")

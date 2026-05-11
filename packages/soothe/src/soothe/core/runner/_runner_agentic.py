@@ -15,7 +15,7 @@ from soothe.core.events import (
     AgenticStepCompletedEvent,
     AgenticStepStartedEvent,
 )
-from soothe.core.intention import build_loop_routing_classification
+from soothe.core.intention import IntentHint, build_loop_routing_classification
 from soothe.core.loop import AgentLoop
 from soothe.core.loop.utils.events import LoopAgentReasonEvent
 from soothe.core.loop.utils.messages import (
@@ -234,6 +234,7 @@ class AgenticMixin:
         workspace: str | None = None,
         max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
         preferred_subagent: str | None = None,
+        intent_hint: IntentHint | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Run Layer 2: Agentic Goal Execution Loop (RFC-0008).
 
@@ -244,6 +245,8 @@ class AgenticMixin:
             thread_id: Thread context for execution
             workspace: Thread-specific workspace path (RFC-103)
             max_iterations: Maximum loop iterations (default: 8)
+            preferred_subagent: Optional subagent hint for routing
+            intent_hint: Suggested intent to bypass LLM classification
 
         Yields:
             StreamChunk events during execution
@@ -285,6 +288,7 @@ class AgenticMixin:
                 active_goal_id=active_goal_id,
                 active_goal_description=active_goal_description,
                 thread_id=tid,
+                intent_hint=intent_hint,
             )
 
             logger.info(
