@@ -84,7 +84,7 @@ hitl:
 7. Graph continues with approved/rejected tool
 
 **Files**:
-- Config: `config/config.template.yml` → `hitl:` section
+- Config: `config/config.template.yml` → `hitl:` (defaults match `HitlApprovalConfig` in `packages/soothe/src/soothe/config/models.py`)
 - Model: `packages/soothe/src/soothe/config/models.py` → `HitlApprovalConfig`
 - Builder: `packages/soothe/src/soothe/core/agent/_builder.py` → `_resolve_interrupt_on()`
 - TUI: `packages/soothe-cli/src/soothe_cli/tui/widgets/approval.py` → `ApprovalMenu`

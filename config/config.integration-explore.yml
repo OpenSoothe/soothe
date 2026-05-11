@@ -1,8 +1,10 @@
-# Local development defaults (DashScope / coding-plan routers, Docker Postgres + Langfuse).
-# Unlisted keys use Soothe Pydantic defaults. Full default-aligned reference: config/config.template.yml.
+# Explore-focused integration/CI profile: PostgreSQL + Langfuse (same stack as dev).
+# Turns off browser, claude, and research subagents so runs focus on explore.
 #
-# Docker (repo root): docker compose up -d  → Postgres + pgvector on localhost:6432, Langfuse on :3300
-# Keys: pk-lf-soothe-local / sk-lf-soothe-local (see docker-compose LANGFUSE_INIT_*). Export DASHSCOPE_*.
+#   SOOTHE_INTEGRATION_BASE_CONFIG=/abs/path/config.integration-explore.yml pytest ... --run-integration
+#
+# Docker: Postgres with pgvector on host port 6432; Langfuse UI at http://localhost:3300
+# (see repo docker-compose.yml). Export DASHSCOPE_* and optional TAVILY_API_KEY as for dev.
 
 providers:
   - name: dashscope
@@ -88,6 +90,10 @@ tools:
 
 subagents:
   browser:
+    enabled: false
+  claude:
+    enabled: false
+  research:
     enabled: false
   explore:
     enabled: true
