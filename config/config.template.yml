@@ -98,6 +98,13 @@ subagents:
       tool_call_limit_thread: null
       tool_call_limit_run: null
     runtime_dir: ''
+  plan:
+    enabled: true
+    model: null
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
   research:
     enabled: true
     model: null
