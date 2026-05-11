@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 # when the daemon streams larger JSON events to the client.
 _DEFAULT_MAX_FRAME_SIZE = 10 * 1024 * 1024
 
+# RFC-450: clients must wait (bounded) while the daemon is still starting; it does not
+# necessarily push another ``daemon_ready`` when transitioning to ready, so we re-request.
+_TRANSITIONAL_DAEMON_READY_STATES = frozenset({"starting", "warming"})
+_DAEMON_READY_POLL_INTERVAL_S = 0.05
+
 
 class WebSocketClient:
     """WebSocket client for communicating with Soothe daemon.
@@ -684,7 +689,8 @@ class WebSocketClient:
             The daemon_ready event on success.
 
         Raises:
-            RuntimeError: If daemon is not in ready state.
+            RuntimeError: If daemon reports ``error``, ``degraded``, or another non-ready
+                terminal state.
             TimeoutError: If timeout expires.
         """
         async with asyncio.timeout(ready_timeout_s):
@@ -704,6 +710,16 @@ class WebSocketClient:
                 state = event.get("state")
                 if state == "ready":
                     return event
+                if state == "error":
+                    message = event.get("message") or "Daemon startup failed"
+                    raise RuntimeError(str(message))
+                if state == "degraded":
+                    message = event.get("message") or "Daemon is degraded"
+                    raise RuntimeError(str(message))
+                if state in _TRANSITIONAL_DAEMON_READY_STATES:
+                    await asyncio.sleep(_DAEMON_READY_POLL_INTERVAL_S)
+                    await self.request_daemon_ready()
+                    continue
                 message = event.get("message") or f"Daemon state is {state}"
                 raise RuntimeError(str(message))
 

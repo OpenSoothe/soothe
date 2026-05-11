@@ -24,18 +24,22 @@ def run_impl(
     streaming_enabled: bool | None = None,
     streaming_mode: str | None = None,
     *,
+    tui_with_prompt: bool = False,
     config_path: str | None = None,
 ) -> None:
     """Core implementation for running Soothe agent.
 
     Args:
-        prompt: Optional prompt for headless mode
+        prompt: Optional user message; non-empty prompt defaults to a headless
+            one-shot run unless ``tui_with_prompt`` is set or a loop is being
+            resumed (``resume_loop_id``).
         resume_loop_id: Existing loop id to attach to (optional)
-        no_tui: Force headless mode
+        no_tui: Require headless mode (must include a non-empty prompt)
         autonomous: Enable autonomous iteration mode
         max_iterations: Max iterations for autonomous mode
         streaming_enabled: Override daemon streaming enabled setting (RFC-614)
         streaming_mode: Override daemon streaming mode ('streaming' or 'batch')
+        tui_with_prompt: When True with a prompt, open the TUI instead of headless.
     """
     startup_start = time.perf_counter()
 
@@ -62,17 +66,31 @@ def run_impl(
 
         run_start = time.perf_counter()
 
-        if no_tui:
-            # Headless mode (force no TUI)
+        has_prompt = bool(prompt and str(prompt).strip())
+        attaching_loop = bool(resume_loop_id and str(resume_loop_id).strip())
+
+        if tui_with_prompt and has_prompt:
+            use_headless = False
+        elif no_tui and not has_prompt:
+            typer.echo(
+                "Error: --no-tui requires a non-empty --prompt (-p).",
+                err=True,
+            )
+            sys.exit(1)
+        elif no_tui:
+            use_headless = True
+        else:
+            use_headless = has_prompt and not attaching_loop
+
+        if use_headless:
             run_headless(
                 cfg,
-                prompt or "",
+                str(prompt).strip(),
                 resume_loop_id=resume_loop_id,
                 autonomous=autonomous,
                 max_iterations=max_iterations,
             )
         else:
-            # TUI mode (with optional initial prompt)
             run_tui(cfg, resume_loop_id=resume_loop_id, initial_prompt=prompt)
 
         run_elapsed_s = time.perf_counter() - run_start
