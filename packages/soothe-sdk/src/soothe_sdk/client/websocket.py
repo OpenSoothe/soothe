@@ -207,8 +207,23 @@ class WebSocketClient:
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
         attachments: list[dict[str, str]] | None = None,
+        intent_hint: str | None = None,
     ) -> None:
-        """Send user input to the daemon for a subscribed loop (``loop_input``)."""
+        """Send user input to the daemon for a subscribed loop (``loop_input``).
+
+        Args:
+            loop_id: Loop identifier for the subscribed loop.
+            text: User input text.
+            autonomous: Enable autonomous iteration mode.
+            max_iterations: Maximum iterations for autonomous mode.
+            preferred_subagent: Preferred subagent hint for routing.
+            interactive: Enable interactive HITL mode.
+            model: Provider:model override string.
+            model_params: Additional model parameters.
+            attachments: Image attachments (mime_type + base64 data).
+            intent_hint: Suggested intent to bypass LLM classification
+                (one of: chitchat, quiz, continue_thread, new_goal).
+        """
         payload: dict[str, Any] = {
             "type": "loop_input",
             "loop_id": loop_id,
@@ -228,6 +243,8 @@ class WebSocketClient:
             payload["model_params"] = model_params
         if attachments:
             payload["attachments"] = attachments
+        if intent_hint:
+            payload["intent_hint"] = intent_hint
         await self.send(payload)
 
     async def send_command(self, cmd: str) -> None:

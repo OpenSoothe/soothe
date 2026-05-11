@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from soothe.core.events import ERROR
+from soothe.core.intention import IntentHint
 from soothe.core.workspace import resolve_workspace_for_stream
 from soothe.daemon.image_understanding import enrich_user_text_with_vision
 from soothe.foundation import extract_text_from_ai_message
@@ -94,9 +95,18 @@ class QueryEngine:
         model_params: dict[str, Any] | None = None,
         attachments: list[dict[str, str]] | None = None,
         checkpoint_thread_id: str | None = None,
+        intent_hint: str | None = None,
     ) -> None:
         """Stream a query through ``SootheRunner`` and broadcast events."""
         d = self._daemon
+
+        # Parse intent_hint string to IntentHint enum
+        parsed_intent_hint: IntentHint | None = None
+        if intent_hint:
+            try:
+                parsed_intent_hint = IntentHint(intent_hint)
+            except ValueError:
+                logger.warning("Invalid intent_hint value: %s", intent_hint)
 
         if d._thread_executor:
             await self.run_query_multithreaded(
@@ -111,6 +121,7 @@ class QueryEngine:
                 model_params=model_params,
                 attachments=attachments,
                 checkpoint_thread_id=checkpoint_thread_id,
+                intent_hint=intent_hint,
             )
             return
 
@@ -332,6 +343,7 @@ class QueryEngine:
                             max_iterations=stream_kwargs.get("max_iterations"),
                             preferred_subagent=stream_kwargs.get("preferred_subagent"),
                             client_loop_id=effective_loop_id,
+                            intent_hint=parsed_intent_hint,
                         ):
                             yield chunk
 
@@ -348,6 +360,7 @@ class QueryEngine:
                         preferred_subagent=stream_kwargs.get("preferred_subagent"),
                         model=model,
                         model_params=model_params or {},
+                        intent_hint=intent_hint,
                     )
                     loop_runner = d._runner_factory.create_runner(_runner_key)
                     self._active_runners[_runner_key] = loop_runner
@@ -597,6 +610,7 @@ class QueryEngine:
         model_params: dict[str, Any] | None = None,
         attachments: list[dict[str, str]] | None = None,
         checkpoint_thread_id: str | None = None,
+        intent_hint: str | None = None,
     ) -> None:
         """Execute query using ``ThreadExecutor``.
 

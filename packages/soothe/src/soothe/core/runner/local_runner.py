@@ -12,6 +12,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from soothe.config.settings import SootheConfig
+from soothe.core.intention import IntentHint
 from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
 
 if TYPE_CHECKING:
@@ -47,6 +48,24 @@ def _spawn_safe_request(request: LoopRunRequest) -> LoopRunRequest:
     return replace(request, model_params=safe_params)
 
 
+def _parse_intent_hint(intent_hint: str | None) -> IntentHint | None:
+    """Parse intent_hint string to IntentHint enum.
+
+    Args:
+        intent_hint: String intent hint value.
+
+    Returns:
+        IntentHint enum or None if invalid/empty.
+    """
+    if not intent_hint:
+        return None
+    try:
+        return IntentHint(intent_hint)
+    except ValueError:
+        logger.warning("Invalid intent_hint value: %s", intent_hint)
+        return None
+
+
 def _loop_worker(
     config: SootheConfig,
     request: LoopRunRequest,
@@ -66,6 +85,7 @@ def _loop_worker(
 
     async def _run() -> None:
         runner = SootheRunner(config)
+        intent_hint = _parse_intent_hint(request.intent_hint)
         try:
             try:
                 async for chunk in runner.astream(
@@ -76,6 +96,7 @@ def _loop_worker(
                     max_iterations=request.max_iterations,
                     preferred_subagent=request.preferred_subagent,
                     client_loop_id=request.loop_id,
+                    intent_hint=intent_hint,
                 ):
                     queue.put(("chunk", chunk))
             except Exception as exc:  # noqa: BLE001

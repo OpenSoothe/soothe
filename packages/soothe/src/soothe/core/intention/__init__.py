@@ -9,6 +9,7 @@ This module provides:
 - IntentClassification: Primary intent classification model
 - IntentClassifier: LLM-driven classifier with conversation context
 - RoutingClassification: Routing complexity classification for execution path selection
+- IntentHint: Enum for suggested intent to bypass LLM classification
 
 Architecture:
 - Pure LLM-driven classification (no keyword heuristics)
@@ -16,6 +17,7 @@ Architecture:
 - Active goal context for thread continuation
 - Robust fallbacks to safe defaults
 - Single structured LLM call (~2-4s latency)
+- Intent hint support for caller-suggested routing
 
 Related RFCs: RFC-201, RFC-217, RFC-200, RFC-0016
 """
@@ -23,12 +25,13 @@ Related RFCs: RFC-201, RFC-217, RFC-200, RFC-0016
 from __future__ import annotations
 
 from .classifier import IntentClassifier
-from .models import IntentClassification, RoutingClassification
+from .models import IntentClassification, IntentHint, RoutingClassification
 from .routing_merge import build_loop_routing_classification
 
 __all__ = [
     "IntentClassifier",
     "IntentClassification",
+    "IntentHint",
     "RoutingClassification",
     "build_loop_routing_classification",
 ]
