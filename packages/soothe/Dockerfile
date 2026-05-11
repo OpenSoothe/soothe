@@ -13,7 +13,8 @@
 # or uv.lock change, not on every source commit.
 
 # ---- Builder: install Python deps + Playwright browsers ----
-FROM registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm AS builder
+ARG PYTHON_BASE=registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
+FROM ${PYTHON_BASE} AS builder
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -57,7 +58,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Overwrites the stubs; workspace packages rebuilt quickly because all
 # third-party deps are already in .venv.
 COPY packages ./packages
-COPY scripts/warmup_semantic.py ./scripts/warmup_semantic.py
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --force-reinstall --no-deps \
@@ -65,11 +65,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         ./packages/soothe-cli \
         './packages/soothe[all]'
 
-# Warmup semantic similarity model to avoid latency on first use
-RUN .venv/bin/python scripts/warmup_semantic.py
+# Match runtime layout so the embedding cache is copied into the final image.
+ENV SOOTHE_HOME=/var/lib/soothe
+RUN mkdir -p /var/lib/soothe/data \
+    && .venv/bin/soothed warmup
 
 # ---- Runtime: minimal image with .venv + browsers ----
-FROM registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
+ARG PYTHON_BASE=registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
+FROM ${PYTHON_BASE}
 
 LABEL org.opencontainers.image.title="Soothe Daemon" \
     org.opencontainers.image.description="Soothe agent orchestration daemon (full optional extras)" \
@@ -92,6 +95,7 @@ WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /opt/ms-playwright /opt/ms-playwright
+COPY --from=builder /var/lib/soothe/data/cache /var/lib/soothe/data/cache
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
