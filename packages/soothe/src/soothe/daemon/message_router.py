@@ -12,6 +12,7 @@ from typing import Any
 from soothe_sdk.client.protocol import _serialize_for_json
 
 from soothe.core.workspace import resolve_loop_daemon_workspace
+from soothe.daemon.image_understanding import validate_and_normalize_image_attachments
 from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
@@ -1234,21 +1235,42 @@ class MessageRouter:
             )
             return
 
+        raw_attachments = msg.get("attachments")
+        if raw_attachments is not None:
+            normalized_attachments, attachment_error = validate_and_normalize_image_attachments(
+                raw_attachments
+            )
+            if attachment_error is not None:
+                await d._send_client_message(
+                    client_id,
+                    {
+                        "type": "error",
+                        "code": "INVALID_MESSAGE",
+                        "message": attachment_error,
+                        "request_id": request_id,
+                    },
+                )
+                return
+            attachments_for_queue = normalized_attachments or None
+        else:
+            attachments_for_queue = None
+
         logger.info(
             "Queueing input for loop %s: %s",
             loop_id,
             preview_first(prompt_text, 50),
         )
 
-        await d._loop_input_dispatcher.enqueue(
-            loop_id,
-            {
-                "type": "input",
-                "text": prompt_text,
-                "client_id": client_id,
-                **_queue_options_from_daemon_message(msg),
-            },
-        )
+        queue_payload: dict[str, Any] = {
+            "type": "input",
+            "text": prompt_text,
+            "client_id": client_id,
+            **_queue_options_from_daemon_message(msg),
+        }
+        if attachments_for_queue:
+            queue_payload["attachments"] = attachments_for_queue
+
+        await d._loop_input_dispatcher.enqueue(loop_id, queue_payload)
 
         await d._send_client_message(
             client_id,
