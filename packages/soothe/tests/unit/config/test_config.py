@@ -47,6 +47,7 @@ class TestSootheConfig:
         assert "browser" in cfg.subagents
         assert "claude" in cfg.subagents
         assert "explore" in cfg.subagents
+        assert "plan" in cfg.subagents
         assert "research" in cfg.subagents
         # skillify and weaver are community plugins, not built-in
         assert "scout" not in cfg.subagents
