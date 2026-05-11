@@ -8,7 +8,7 @@ Provides reusable similarity calculation for:
 Uses sentence_transformers when available, falls back to keyword matching.
 
 Model Cache:
-- Models are cached under ``$SOOTHE_DATA_DIR/cache/huggingface`` (default ``$SOOTHE_HOME/data/cache/huggingface``)
+- Models are cached under ``~/.cache/soothe/models/huggingface``
 - Use warmup_embedding_model() to pre-download models at daemon startup
 """
 
@@ -36,11 +36,9 @@ _embedding_executor: ThreadPoolExecutor | None = None
 def hf_embedding_cache_dir() -> Path:
     """HuggingFace cache directory for the embedding model (shared across processes).
 
-    Uses ``SOOTHE_DATA_DIR`` from the SDK (defaults to ``SOOTHE_HOME/data``).
+    Default: ``~/.cache/soothe/models/huggingface``.
     """
-    from soothe_sdk.client.config import SOOTHE_DATA_DIR
-
-    return Path(SOOTHE_DATA_DIR) / "cache" / "huggingface"
+    return Path.home() / ".cache" / "soothe" / "models" / "huggingface"
 
 
 # Check if sentence_transformers is available
@@ -63,7 +61,7 @@ def _get_transformer_model() -> SentenceTransformer | None:
 
     Uses synchronous loading to avoid async client closure issues.
     The model is loaded on first actual use, not at import time.
-    Models are cached under ``SOOTHE_DATA_DIR/cache/huggingface``.
+    Models are cached under ``~/.cache/soothe/models/huggingface``.
     """
     global _transformer_model, _has_sentence_transformers, _model_loading_attempted
 
