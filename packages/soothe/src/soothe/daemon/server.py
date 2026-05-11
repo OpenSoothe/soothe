@@ -141,8 +141,6 @@ class SootheDaemon(DaemonHandlersMixin):
             cancel_callback=self._cancel_loop_for_session,
             dispatch_cleanup_callback=self._cleanup_dispatch_tasks,  # IG-258
         )
-        # Multi-threading support (RFC-402)
-        self._thread_executor: Any = None  # ThreadExecutor instance
         # Keys: LangGraph checkpoint id (``configurable.thread_id``), not ``loop_id``.
         self._active_threads: dict[str, asyncio.Task] = {}
         self._pending_interrupt_responses: dict[str, asyncio.Future[dict[str, Any]]] = {}
@@ -251,11 +249,6 @@ class SootheDaemon(DaemonHandlersMixin):
 
             self._stop_event = asyncio.Event()
             self._running = True
-
-            # RFC-221: ThreadExecutor disabled — all loop execution goes through LoopRunnerFactory.
-            # The if d._thread_executor: guard in QueryEngine.run_query() falls through
-            # to the new runner.run(request) path.
-            self._thread_executor = None
 
             self._transport_manager = TransportManager(
                 self._config.daemon,

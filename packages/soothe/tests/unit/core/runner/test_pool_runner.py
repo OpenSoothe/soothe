@@ -46,6 +46,12 @@ def _make_cancel_event() -> multiprocessing.Event:
     return ctx.Event()
 
 
+def _make_interrupt_queue() -> multiprocessing.Queue:
+    """Create a mock interrupt_queue for tests."""
+    ctx = multiprocessing.get_context("spawn")
+    return ctx.Queue()
+
+
 class TestWorkerProcess:
     """WorkerProcess state management."""
 
@@ -58,6 +64,7 @@ class TestWorkerProcess:
             request_queue=MagicMock(),
             response_queue=MagicMock(),
             cancel_event=_make_cancel_event(),
+            interrupt_queue=_make_interrupt_queue(),
             worker_id="worker-0",
         )
         worker.status = WorkerStatus.BUSY
@@ -77,6 +84,7 @@ class TestWorkerProcess:
             request_queue=MagicMock(),
             response_queue=MagicMock(),
             cancel_event=_make_cancel_event(),
+            interrupt_queue=_make_interrupt_queue(),
             worker_id="worker-0",
         )
 
@@ -188,6 +196,7 @@ class TestWorkerPool:
             request_queue=request_q,
             response_queue=result_q,
             cancel_event=_make_cancel_event(),
+            interrupt_queue=_make_interrupt_queue(),
             worker_id="worker-0",
             status=WorkerStatus.IDLE,
         )
@@ -249,6 +258,7 @@ class TestWorkerPool:
             request_queue=request_q1,
             response_queue=result_q1,
             cancel_event=_make_cancel_event(),
+            interrupt_queue=_make_interrupt_queue(),
             worker_id="worker-0",
             status=WorkerStatus.BUSY,
         )
@@ -258,6 +268,7 @@ class TestWorkerPool:
             request_queue=request_q2,
             response_queue=queue.Queue(),
             cancel_event=_make_cancel_event(),
+            interrupt_queue=_make_interrupt_queue(),
             worker_id="worker-1",
             status=WorkerStatus.BUSY,
         )
@@ -323,6 +334,7 @@ class TestWorkerPool:
             request_queue=request_q,
             response_queue=result_q,
             cancel_event=_make_cancel_event(),
+            interrupt_queue=_make_interrupt_queue(),
             worker_id="worker-0",
             status=WorkerStatus.IDLE,
         )
@@ -382,6 +394,7 @@ class TestWorkerPool:
             request_queue=request_q,
             response_queue=queue.Queue(),
             cancel_event=_make_cancel_event(),
+            interrupt_queue=_make_interrupt_queue(),
             worker_id="worker-0",
             status=WorkerStatus.BUSY,
         )
@@ -432,6 +445,7 @@ class TestWorkerPool:
             request_queue=request_q,
             response_queue=result_q,
             cancel_event=_make_cancel_event(),
+            interrupt_queue=_make_interrupt_queue(),
             worker_id="worker-0",
             status=WorkerStatus.IDLE,
         )
@@ -481,6 +495,7 @@ class TestWorkerPool:
                     request_queue=MagicMock(),
                     response_queue=empty_rq,
                     cancel_event=_make_cancel_event(),
+                    interrupt_queue=_make_interrupt_queue(),
                     worker_id="worker-0",
                     status=WorkerStatus.IDLE,
                     requests_completed=5,
@@ -490,6 +505,7 @@ class TestWorkerPool:
                     request_queue=MagicMock(),
                     response_queue=empty_rq,
                     cancel_event=_make_cancel_event(),
+                    interrupt_queue=_make_interrupt_queue(),
                     worker_id="worker-1",
                     status=WorkerStatus.BUSY,
                     requests_completed=3,
@@ -534,6 +550,7 @@ class TestPoolLoopRunner:
             request_queue=request_q,
             response_queue=result_q,
             cancel_event=_make_cancel_event(),
+            interrupt_queue=_make_interrupt_queue(),
             worker_id="worker-0",
             status=WorkerStatus.IDLE,
         )
@@ -587,6 +604,7 @@ class TestPoolLoopRunner:
                     request_queue=MagicMock(),
                     response_queue=empty_rq,
                     cancel_event=_make_cancel_event(),
+                    interrupt_queue=_make_interrupt_queue(),
                     worker_id="worker-0",
                     status=WorkerStatus.IDLE,
                 )

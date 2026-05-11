@@ -81,17 +81,6 @@ class _SlowCancelRunner(_FakeRunner):
             raise
 
 
-class _DelegatingThreadExecutor:
-    """Routes multithreaded ``execute_thread`` to ``runner.astream``."""
-
-    def __init__(self, runner: _SlowCancelRunner) -> None:
-        self._runner = runner
-
-    async def execute_thread(self, thread_id: str, text: str, **kwargs: Any):
-        async for chunk in self._runner.astream(text, thread_id=thread_id, **kwargs):
-            yield chunk
-
-
 class _FakeThreadRegistry:
     def get(self, _thread_id: str) -> None:
         return None
@@ -119,7 +108,6 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
 
     runner = _FakeRunner()
     daemon = SimpleNamespace(
-        _thread_executor=None,
         _runner=runner,
         _runner_factory=_FakeRunnerFactory(runner),
         _query_state_lock=asyncio.Lock(),
@@ -179,14 +167,12 @@ def _daemon_factory(
     *,
     runner: Any,
     broadcasts: list[dict[str, Any]],
-    multithreaded: bool = False,
     cancel_grace_seconds: int = 30,
 ) -> SimpleNamespace:
     async def _broadcast(msg: dict[str, Any]) -> None:
         broadcasts.append(msg)
 
     return SimpleNamespace(
-        _thread_executor=_DelegatingThreadExecutor(runner) if multithreaded else None,
         _runner=runner,
         _runner_factory=_FakeRunnerFactory(runner),
         _query_state_lock=asyncio.Lock(),
@@ -307,35 +293,6 @@ async def test_cancel_grace_timeout_keeps_task_then_drains(
 
 
 @pytest.mark.asyncio
-async def test_cancel_multithreaded_path_matches_single_thread() -> None:
-    """Multithreaded run_query uses same cancel bookkeeping rules."""
-    broadcasts: list[dict[str, Any]] = []
-    runner = _SlowCancelRunner(unwind_delay=0.04)
-    daemon = _daemon_factory(
-        runner=runner,
-        broadcasts=broadcasts,
-        multithreaded=True,
-        cancel_grace_seconds=60,
-    )
-    engine = QueryEngine(daemon)
-
-    await engine.run_query("mt slow cancel", loop_id="loop-cancel")
-    task = daemon._current_query_task
-    assert task is not None
-
-    await engine.cancel_current_query()
-
-    contents = [
-        str(m.get("content", "")) for m in broadcasts if m.get("type") == "command_response"
-    ]
-    assert any("Cancellation requested" in c for c in contents)
-    assert not any("Query cancelled successfully" in c for c in contents)
-
-    with suppress(asyncio.CancelledError):
-        await task
-
-
-@pytest.mark.asyncio
 async def test_cancel_loop_noop_when_loop_id_empty() -> None:
     """Empty loop_id must not cancel threads or match unscoped registry entries."""
     broadcasts: list[dict[str, Any]] = []
@@ -345,7 +302,6 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
 
     runner = _SlowCancelRunner(unwind_delay=0.04)
     daemon = SimpleNamespace(
-        _thread_executor=None,
         _runner=runner,
         _runner_factory=_FakeRunnerFactory(runner),
         _query_state_lock=asyncio.Lock(),

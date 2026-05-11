@@ -30,7 +30,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from soothe.config.settings import SootheConfig
-from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
+from soothe.protocols.runner import InterruptPending, LoopRunnerProtocol, LoopRunRequest
 
 if TYPE_CHECKING:
     from soothe.core.runner._runner_shared import StreamChunk
@@ -55,6 +55,7 @@ class WorkerProcess:
     request_queue: multiprocessing.Queue  # main → worker
     response_queue: multiprocessing.Queue  # worker → main
     cancel_event: multiprocessing.Event  # cooperative cancellation signal (inherited at spawn)
+    interrupt_queue: multiprocessing.Queue  # main → worker (HITL resume payloads)
     worker_id: str
     status: WorkerStatus = WorkerStatus.IDLE
     current_loop_id: str | None = None
@@ -294,6 +295,7 @@ def _pool_worker(
     request_queue: multiprocessing.Queue,
     response_queue: multiprocessing.Queue,
     cancel_event: multiprocessing.Event,
+    interrupt_queue: multiprocessing.Queue,
     idle_timeout_seconds: int,
     max_requests: int,
     default_timeout_seconds: int,
@@ -315,6 +317,7 @@ def _pool_worker(
         request_queue: Queue for receiving requests from main process.
         response_queue: Queue for sending responses to main process.
         cancel_event: multiprocessing.Event for cooperative cancellation signaling.
+        interrupt_queue: Queue for receiving HITL resume payloads from main process.
         idle_timeout_seconds: Exit after this many seconds idle.
         max_requests: Exit after this many requests completed.
         default_timeout_seconds: Default per-request timeout if not specified.
@@ -323,6 +326,7 @@ def _pool_worker(
     import asyncio as _asyncio
 
     from soothe.core.runner import SootheRunner
+    from soothe.core.runner.local_runner import _parse_intent_hint
     from soothe.core.runner.worker_logging import configure_loop_runner_worker_logging
 
     loop = _asyncio.new_event_loop()
@@ -336,6 +340,12 @@ def _pool_worker(
 
         # Clear cancel event at start of new request
         cancel_event.clear()
+        # Drain stale interrupt payloads from a previous request
+        while not interrupt_queue.empty():
+            try:
+                interrupt_queue.get_nowait()
+            except Exception:  # noqa: BLE001
+                break
 
         # Determine timeout: use request-specific or default
         timeout_seconds = (
@@ -354,6 +364,19 @@ def _pool_worker(
 
             try:
                 runner = SootheRunner(config)
+
+                if req.interactive:
+
+                    async def _interrupt_resolver(
+                        pending_interrupts: dict[str, Any],
+                    ) -> dict[str, Any]:
+                        """Send interrupt to daemon and block until resume payload arrives."""
+                        response_queue.put(("interrupt_pending", request_id, pending_interrupts))
+                        payload = await loop.run_in_executor(None, interrupt_queue.get)
+                        return payload
+
+                    runner.set_interrupt_resolver(req.loop_id, _interrupt_resolver)
+
                 start_time = loop.time()
                 last_heartbeat_time = start_time
 
@@ -370,6 +393,7 @@ def _pool_worker(
                         max_iterations=req.max_iterations,
                         preferred_subagent=req.preferred_subagent,
                         client_loop_id=req.loop_id,
+                        intent_hint=_parse_intent_hint(req.intent_hint),
                     ):
                         # COOPERATIVE CANCELLATION: Check cancel_event between chunks
                         if cancel_event.is_set():
@@ -681,11 +705,11 @@ class WorkerPool:
         )
 
     async def _spawn_worker(self, worker_id: str, config: SootheConfig) -> WorkerProcess:
-        """Spawn a single worker process with two queues and cancel event."""
-        # Create both queues at spawn time (inherited by worker)
+        """Spawn a single worker process with queues, cancel event, and interrupt queue."""
         request_queue: Any = self._ctx.Queue()
         response_queue: Any = self._ctx.Queue()
         cancel_event: Any = self._ctx.Event()
+        interrupt_queue: Any = self._ctx.Queue()
 
         process = self._ctx.Process(
             target=_pool_worker,
@@ -695,6 +719,7 @@ class WorkerPool:
                 request_queue,
                 response_queue,
                 cancel_event,
+                interrupt_queue,
                 self._idle_timeout_seconds,
                 self._max_requests_per_worker,
                 self._request_timeout_seconds,
@@ -710,6 +735,7 @@ class WorkerPool:
             request_queue=request_queue,
             response_queue=response_queue,
             cancel_event=cancel_event,
+            interrupt_queue=interrupt_queue,
             worker_id=worker_id,
             started_at=datetime.now(),
         )
@@ -957,6 +983,20 @@ class WorkerPool:
                     )
                     continue
 
+                # INTERRUPT_PENDING: Worker hit HITL interrupt, needs resume payload
+                if msg_type == "interrupt_pending":
+                    response_queue = self._pending_responses.get(request_id)
+                    if response_queue is not None:
+                        await response_queue.put(("interrupt_pending", payload))
+                    worker.last_heartbeat_at = datetime.now()
+                    logger.info(
+                        "WorkerPool: worker %s request %s awaiting interrupt resume (loop=%s)",
+                        worker_id,
+                        request_id,
+                        worker.current_loop_id or "?",
+                    )
+                    continue
+
                 # TIMEOUT handling: Worker exceeded request timeout
                 if msg_type == "timeout":
                     response_queue = self._pending_responses.get(request_id)
@@ -1178,6 +1218,15 @@ class WorkerPool:
                     self._pending_responses.pop(request_id, None)
                     raise payload
 
+                if msg_type == "interrupt_pending":
+                    from soothe.protocols.runner import InterruptPending
+
+                    yield InterruptPending(
+                        loop_id=request.loop_id,
+                        pending_interrupts=payload,
+                    )
+                    continue
+
                 # msg_type == "chunk"
                 yield payload
         except asyncio.CancelledError:
@@ -1214,6 +1263,36 @@ class WorkerPool:
             "WorkerPool: cancellation signal sent for loop_id=%s to worker=%s",
             loop_id,
             worker_id,
+        )
+
+    async def forward_interrupt_resume(self, loop_id: str, payload: dict[str, Any]) -> None:
+        """Deliver an HITL resume payload to the worker blocked on ``interrupt_queue``.
+
+        Args:
+            loop_id: Loop whose worker is awaiting the resume.
+            payload: The ``resume_payload`` dict from the client.
+        """
+        worker_id = self._workers_by_loop_id.get(loop_id)
+        if worker_id is None:
+            logger.warning(
+                "WorkerPool: no active worker for loop_id=%s on interrupt resume", loop_id
+            )
+            return
+
+        worker = self._workers.get(worker_id)
+        if worker is None:
+            logger.warning(
+                "WorkerPool: worker %s not found for loop_id=%s on interrupt resume",
+                worker_id,
+                loop_id,
+            )
+            return
+
+        worker.interrupt_queue.put(payload)
+        logger.info(
+            "WorkerPool: forwarded interrupt resume to worker=%s (loop=%s)",
+            worker_id,
+            loop_id,
         )
 
     async def shutdown(self) -> None:
@@ -1324,7 +1403,7 @@ class PoolLoopRunner:
         self._config = config
         self._pool: WorkerPool | None = None
 
-    async def run(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk]:
+    async def run(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk | InterruptPending]:
         """Delegate to shared pool, stream results."""
         pool = await WorkerPool.get_shared_instance(self._config)
         self._pool = pool
@@ -1336,6 +1415,11 @@ class PoolLoopRunner:
         """Request cancellation."""
         if self._pool is not None:
             await self._pool.cancel_request(self._loop_id)
+
+    async def forward_interrupt_resume(self, loop_id: str, payload: dict[str, Any]) -> None:
+        """Forward HITL resume payload to the worker subprocess."""
+        if self._pool is not None:
+            await self._pool.forward_interrupt_resume(loop_id, payload)
 
 
 # Verify structural compliance at import time (no overhead at runtime).
