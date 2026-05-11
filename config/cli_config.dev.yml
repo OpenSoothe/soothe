@@ -9,7 +9,7 @@
 # a fixed bootstrap level. Theme and other UI prefs live in ~/.soothe/config/config.yml (ui.theme).
 # WebSocket connect retries/timeouts are fixed in the SDK (soothe_sdk.client.session).
 
-# Python logging level for ~/.soothe/logs/soothe-cli.log. SOOTHE_LOG_LEVEL overrides when set.
+# Python logging level for ~/.soothe/logs/cli.log. SOOTHE_LOG_LEVEL overrides when set.
 logging_level: DEBUG
 
 daemon:

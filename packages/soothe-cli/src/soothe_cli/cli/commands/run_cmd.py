@@ -42,7 +42,7 @@ def run_impl(
     try:
         cfg = load_config(config_path)
         log_level = resolve_cli_log_level(logging_level=cfg.logging_level)
-        log_file = Path(SOOTHE_HOME) / "logs" / "soothe-cli.log"
+        log_file = Path(SOOTHE_HOME) / "logs" / "cli.log"
         setup_logging(log_level, log_file=log_file)
 
         # PostgreSQL availability check (requires daemon-side config)
