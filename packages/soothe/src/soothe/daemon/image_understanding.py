@@ -83,10 +83,27 @@ def validate_and_normalize_image_attachments(raw: Any) -> tuple[list[dict[str, s
     return out, None
 
 
-_VISION_INSTRUCTION = (
-    "Describe the attached image(s) concisely for another assistant that will "
-    "handle the user's request. Focus on visible objects, text, charts, and intent."
+_VISION_INSTRUCTION_SINGLE = (
+    "Describe this image concisely for another assistant that will handle the user's "
+    "request. Focus on: visible objects, text content, charts/diagrams, and the likely "
+    "user intent. Be specific about any text, numbers, or labels visible in the image."
 )
+
+_VISION_INSTRUCTION_MULTI = (
+    "You have {count} images attached. Describe each image separately using this format:\n\n"
+    "**Image {i}:** [Description]\n\n"
+    "For each image, focus on: visible objects, text content, charts/diagrams, and "
+    "labels. Be specific about any text, numbers, or distinguishing features. "
+    "If the images appear related (e.g., before/after, comparison, sequence), "
+    "note the relationship in a final **Relationship:** section."
+)
+
+
+def _build_vision_instruction(attachment_count: int) -> str:
+    """Build appropriate vision instruction based on image count."""
+    if attachment_count == 1:
+        return _VISION_INSTRUCTION_SINGLE
+    return _VISION_INSTRUCTION_MULTI.format(count=attachment_count)
 
 
 async def enrich_user_text_with_vision(
@@ -111,8 +128,9 @@ async def enrich_user_text_with_vision(
         return text
 
     model = config.create_chat_model("image")
+    instruction = _build_vision_instruction(len(attachments))
     blocks: list[str | dict[str, Any]] = [
-        {"type": "text", "text": _VISION_INSTRUCTION},
+        {"type": "text", "text": instruction},
     ]
     for att in attachments:
         mime = att["mime_type"]
