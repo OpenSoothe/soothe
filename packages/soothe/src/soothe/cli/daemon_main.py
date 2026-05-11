@@ -256,9 +256,10 @@ def warmup_cache(
 
     Run this before starting the daemon for faster first-query response.
     """
-    from soothe.utils.similarity import _HF_CACHE_DIR, async_warmup_embedding_model
+    from soothe.utils.similarity import async_warmup_embedding_model, hf_embedding_cache_dir
 
-    typer.echo(f"Warming up embedding model cache at {_HF_CACHE_DIR}...")
+    cache_dir = hf_embedding_cache_dir()
+    typer.echo(f"Warming up embedding model cache at {cache_dir}...")
 
     async def _warmup() -> bool:
         return await async_warmup_embedding_model()
@@ -268,7 +269,7 @@ def warmup_cache(
     if success:
         typer.echo("Model cache warmed up successfully.")
         if verbose:
-            typer.echo(f"Cache directory: {_HF_CACHE_DIR}")
+            typer.echo(f"Cache directory: {cache_dir}")
     else:
         typer.echo(
             "Model cache warmup failed (sentence_transformers may not be installed).",
