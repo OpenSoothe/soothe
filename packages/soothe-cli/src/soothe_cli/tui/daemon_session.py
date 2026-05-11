@@ -249,10 +249,15 @@ class TuiDaemonSession:
             return await self._rpc_client.list_models(timeout=15.0)
 
     async def invoke_skill(self, skill: str, args: str = "") -> dict[str, Any]:
-        """Resolve ``SKILL.md`` on the daemon and receive UI echo before the turn streams."""
-        async with self._rpc_lock:
-            await self._ensure_rpc_connected()
-            return await self._rpc_client.invoke_skill(skill, args, timeout=120.0)
+        """Resolve ``SKILL.md`` on the daemon and receive UI echo before the turn streams.
+
+        Uses the loop WebSocket (``_client``), not the metadata RPC socket. The daemon
+        enqueues the composed prompt on ``_client_subscribed_loop_id``; the RPC-only
+        connection never receives ``loop_subscribe``, so skill turns would otherwise
+        never start (no ``loop_input`` queue entry).
+        """
+        async with self._read_lock:
+            return await self._client.invoke_skill(skill, args, timeout=120.0)
 
     async def _ensure_rpc_connected(self) -> None:
         """Ensure dedicated RPC client is connected."""

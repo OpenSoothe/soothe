@@ -410,6 +410,19 @@ class MessageRouter:
             )
             return
 
+        active_loop = await self._client_subscribed_loop_id(client_id)
+        if not active_loop:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "NO_LOOP_SUBSCRIPTION",
+                    "message": "loop_subscribe required before invoke_skill",
+                    "request_id": msg.get("request_id"),
+                },
+            )
+            return
+
         envelope = build_skill_invocation_envelope(meta, md, args)
         echo = {
             "skill_name": meta["name"],
@@ -427,19 +440,6 @@ class MessageRouter:
                 "echo": echo,
             },
         )
-
-        active_loop = await self._client_subscribed_loop_id(client_id)
-        if not active_loop:
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "NO_LOOP_SUBSCRIPTION",
-                    "message": "loop_subscribe required before invoke_skill",
-                    "request_id": msg.get("request_id"),
-                },
-            )
-            return
 
         await d._loop_input_dispatcher.enqueue(
             active_loop,
