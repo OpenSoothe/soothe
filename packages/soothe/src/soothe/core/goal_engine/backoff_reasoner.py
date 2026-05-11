@@ -84,6 +84,7 @@ class GoalBackoffReasoner:
             config: SootheConfig with model provider settings
         """
         self._model: BaseChatModel = config.create_chat_model("think")
+        self._soothe_config = config
         self._prompt_template: str = BACKOFF_REASONING_PROMPT
 
     async def reason_backoff(
@@ -143,7 +144,16 @@ class GoalBackoffReasoner:
             HumanMessage(content=prompt),
         ]
 
-        response = await self._model.ainvoke(messages)
+        from soothe.utils.observability.langfuse import build_traced_config
+
+        invoke_config = build_traced_config(
+            self._soothe_config,
+            purpose="backoff_reasoning",
+            component="goal_engine.backoff_reasoner",
+            phase="post-loop",
+            run_name="soothe:backoff-reason",
+        )
+        response = await self._model.ainvoke(messages, config=invoke_config)
 
         # Parse response
         response_text = response.content

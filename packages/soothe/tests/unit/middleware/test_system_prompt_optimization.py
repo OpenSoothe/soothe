@@ -74,7 +74,7 @@ def test_simple_query_gets_minimal_prompt():
 
     # LLM classified this as "chitchat"
     classification = RoutingClassification(
-        task_complexity="chitchat",
+        task_complexity="minimal",
         reasoning="Greeting/quick question",
     )
 
@@ -226,7 +226,7 @@ def test_all_prompts_do_not_include_date():
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
     # Test all complexity levels - none should have date in system prompt
-    for complexity in ["chitchat", "simple", "medium", "complex"]:
+    for complexity in ["minimal", "simple", "medium", "complex"]:
         classification = RoutingClassification(
             task_complexity=complexity,
             reasoning="Test",
@@ -248,7 +248,7 @@ def test_chitchat_query_treated_as_chitchat():
 
     # Chitchat complexity maps to simple prompt
     classification = RoutingClassification(
-        task_complexity="chitchat",
+        task_complexity="minimal",
         reasoning="Chitchat greeting",
     )
 

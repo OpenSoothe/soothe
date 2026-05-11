@@ -60,19 +60,16 @@ class GoalDirectivesMixin:
         )
 
         try:
-            # IG-143: Add metadata for tracing
-            from soothe.middleware._utils import create_llm_call_metadata
+            from soothe.utils.observability.langfuse import build_traced_config
 
-            response = await model.ainvoke(
-                [HumanMessage(content=prompt)],
-                config={
-                    "metadata": create_llm_call_metadata(
-                        purpose="goal_alignment",
-                        component="runner.goal_directives",
-                        phase="layer2",
-                    )
-                },
+            invoke_config = build_traced_config(
+                self._config,
+                purpose="goal_alignment",
+                component="runner.goal_directives",
+                phase="post-loop",
+                run_name="soothe:continuation-synthesis",
             )
+            response = await model.ainvoke([HumanMessage(content=prompt)], config=invoke_config)
             return str(response.content).strip() or original_goal
         except Exception:
             logger.debug("Continuation synthesis failed, reusing original goal", exc_info=True)

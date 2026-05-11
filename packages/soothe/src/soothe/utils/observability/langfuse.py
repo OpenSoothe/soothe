@@ -189,6 +189,53 @@ def _langfuse_handler_from_runnable_config(config: dict[str, Any]) -> Any | None
     return None
 
 
+def build_traced_config(
+    soothe_config: SootheConfig | None,
+    *,
+    purpose: str,
+    component: str,
+    phase: str = "pre-stream",
+    session_id: str | None = None,
+    run_name: str | None = None,
+    extra_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a RunnableConfig with Langfuse callbacks and standardized call metadata.
+
+    Combines ``merge_langfuse_runnable_config`` with ``create_llm_call_metadata`` so
+    non-agentloop LLM call sites get both observability metadata and Langfuse tracing
+    in a single call.
+
+    Args:
+        soothe_config: Active Soothe configuration (None disables Langfuse merge).
+        purpose: Call purpose (classify, vision_preflight, reflection, etc.).
+        component: Component identifier (classifier.intent, daemon.vision, etc.).
+        phase: Execution phase (pre-stream, post-loop, etc.).
+        session_id: Thread id for Langfuse session correlation.
+        run_name: Trace display name (e.g. ``soothe:intent-classify``).
+        extra_metadata: Additional metadata fields to merge.
+
+    Returns:
+        RunnableConfig dict with callbacks and metadata ready for ``model.ainvoke(..., config=)``.
+    """
+    from soothe.middleware._utils import create_llm_call_metadata
+
+    metadata = create_llm_call_metadata(purpose=purpose, component=component, phase=phase)
+    if extra_metadata:
+        metadata.update(extra_metadata)
+
+    base: dict[str, Any] = {"metadata": metadata}
+
+    if soothe_config is None:
+        return base
+
+    return merge_langfuse_runnable_config(
+        base,
+        soothe_config,
+        session_id=session_id,
+        run_name=run_name,
+    )
+
+
 def loop_graph_langfuse_run_display_name(trace_name: str | None) -> str:
     """Same root run label as ``build_loop_graph_invoke_config`` / LangGraph ``run_name``."""
     tn = (trace_name or "").strip()

@@ -25,13 +25,19 @@ Related RFCs: RFC-201, RFC-217, RFC-200, RFC-0016
 from __future__ import annotations
 
 from .classifier import IntentClassifier
-from .models import IntentClassification, IntentHint, RoutingClassification
-from .routing_merge import build_loop_routing_classification
+from .models import (
+    IntentClassification,
+    IntentHint,
+    RoutingClassification,
+    TaskComplexity,
+    build_loop_routing_classification,
+)
 
 __all__ = [
     "IntentClassifier",
     "IntentClassification",
     "IntentHint",
     "RoutingClassification",
+    "TaskComplexity",
     "build_loop_routing_classification",
 ]
