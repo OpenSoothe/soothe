@@ -148,7 +148,8 @@ tui_debug: false
 ui:
   theme: null
 update:
-  auto_update: false
+  check: true
+  auto_update: true
 persistence:
   postgres_base_dsn: null
   postgres_databases:

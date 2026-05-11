@@ -29,7 +29,7 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 
 AUTO_UPDATE = "SOOTHE_CLI_AUTO_UPDATE"
-"""Enable automatic CLI updates ('1', 'true', or 'yes')."""
+"""Override automatic CLI updates: '1'/'true'/'yes' on, '0'/'false'/'no' off. On by default when unset."""
 
 DEBUG = "SOOTHE_CLI_DEBUG"
 """Enable verbose debug logging to a file."""
@@ -44,7 +44,7 @@ NO_UPDATE_CHECK = "SOOTHE_CLI_NO_UPDATE_CHECK"
 """Disable automatic update checking when set."""
 
 UPDATE_CHECK = "SOOTHE_CLI_UPDATE_CHECK"
-"""Enable startup PyPI update checks ('1', 'true', or 'yes'). Off by default."""
+"""Force-enable startup PyPI update checks ('1', 'true', or 'yes'). On by default."""
 
 SERVER_ENV_PREFIX = "SOOTHE_CLI_SERVER_"
 """Environment variable prefix used to pass CLI config to the server subprocess."""
