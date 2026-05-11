@@ -273,7 +273,7 @@ async def enrich_events_with_coreagent_details(
 | `ITERATION_STARTED` | `CognitionGoalTreeMessage` subtree | ✅ Reuse |
 | `AGENT_LOOP_STEP_STARTED` | `CognitionStepMessage` | ✅ Reuse |
 | `AGENT_LOOP_STEP_COMPLETED` | `CognitionStepMessage` | ✅ Reuse |
-| `PLAN_STEP_STARTED` | `CognitionPlanReasonMessage` | ✅ Reuse |
+| `PLAN_STEP_STARTED` | `CognitionReasonMessage` | ✅ Reuse |
 | Tool messages (from CoreAgent) | `ToolCallMessage` | ✅ Reuse |
 
 ---

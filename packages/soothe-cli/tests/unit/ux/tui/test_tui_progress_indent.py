@@ -52,10 +52,9 @@ def test_tui_progress_preserves_hierarchy_indent() -> None:
         (),
         pipeline=pipeline,
     )
-    assert len(reason) >= 3
+    assert len(reason) >= 2
     assert not reason[0].startswith(" ")  # Judgement line (level=2)
-    assert not reason[1].startswith(" ")  # Assessment line (level=2, IG-225)
-    assert not reason[2].startswith(" ")  # Plan line (level=2, IG-225)
+    assert not reason[1].startswith(" ")  # Plan line (level=2, IG-225)
 
     sub_start = _format_progress_event_lines_for_tui(
         {

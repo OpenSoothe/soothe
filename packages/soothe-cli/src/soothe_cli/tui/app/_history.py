@@ -438,10 +438,10 @@ class _HistoryMixin:
                     # (``phase=goal_completion``); avoid duplicate app-line noise.
                     return None
                 if event_type == "soothe.cognition.agent_loop.reasoned":
-                    plan_action_raw = str(event_data.get("plan_action") or "new").strip()
-                    plan_action = plan_action_raw if plan_action_raw in {"keep", "new"} else "new"
+                    plan_action_raw = str(event_data.get("plan_action") or "").strip()
+                    plan_action = plan_action_raw if plan_action_raw in {"keep", "new"} else ""
                     return MessageData(
-                        type=MessageType.COGNITION_PLAN,
+                        type=MessageType.COGNITION_REASON,
                         content="",
                         timestamp=event_timestamp,
                         cognition_plan_next_action=str(event_data.get("next_action") or ""),
@@ -541,7 +541,7 @@ class _HistoryMixin:
             if msg_data is None:
                 continue
             if msg_data.type not in (
-                MessageType.COGNITION_PLAN,
+                MessageType.COGNITION_REASON,
                 MessageType.COGNITION_GOAL_TREE,
                 MessageType.STEP_PROGRESS,
             ):

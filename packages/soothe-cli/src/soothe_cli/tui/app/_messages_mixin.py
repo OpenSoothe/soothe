@@ -28,7 +28,7 @@ from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
     CognitionGoalTreeMessage,
-    CognitionPlanReasonMessage,
+    CognitionReasonMessage,
     CognitionStepMessage,
     ErrorMessage,
     QueuedUserMessage,
@@ -153,7 +153,7 @@ class _MessagesMixin:
         | ToolCallMessage
         | SkillMessage
         | CognitionStepMessage
-        | CognitionPlanReasonMessage
+        | CognitionReasonMessage
         | CognitionGoalTreeMessage,
     ) -> None:
         """Mount a message widget to the messages area.

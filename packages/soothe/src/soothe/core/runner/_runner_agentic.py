@@ -379,6 +379,15 @@ class AgenticMixin:
                 )
                 if isinstance(friendly, str) and friendly.strip():
                     display_goal = friendly.strip()
+                    yield _custom(
+                        LoopAgentReasonEvent(
+                            status="",
+                            progress="",
+                            next_action=display_goal,
+                            iteration=0,
+                            plan_action="",
+                        ).to_dict()
+                    )
                 logger.info(
                     "[Intent] Classified in graph as %s",
                     event_data.get("intent_type") if isinstance(event_data, dict) else "unknown",
@@ -441,6 +450,20 @@ class AgenticMixin:
                 # IG-330: Forward full ``messages`` stream for AI + tool payloads (no strip).
                 if _forward_messages_chunk_for_tool_ui(event_data):
                     yield event_data
+
+            elif event_type == "assess":
+                reasoning = str(event_data.get("assessment_reasoning", "")).strip()
+                if reasoning:
+                    yield _custom(
+                        LoopAgentReasonEvent(
+                            status="",
+                            progress="",
+                            next_action="",
+                            assessment_reasoning=reasoning,
+                            iteration=int(event_data.get("iteration", 0)),
+                            plan_action="",
+                        ).to_dict()
+                    )
 
             elif event_type == "plan":
                 status = str(event_data.get("status", ""))
