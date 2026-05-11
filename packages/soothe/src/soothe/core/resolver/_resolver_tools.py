@@ -38,12 +38,14 @@ def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubA
     from soothe.subagents.browser import create_browser_subagent
     from soothe.subagents.claude import create_claude_subagent
     from soothe.subagents.explore import create_explore_subagent
+    from soothe.subagents.plan import create_plan_subagent
     from soothe.subagents.research import create_research_subagent
 
     return {
         "browser": create_browser_subagent,
         "claude": create_claude_subagent,
         "explore": create_explore_subagent,
+        "plan": create_plan_subagent,
         "research": create_research_subagent,
     }
 
@@ -600,13 +602,15 @@ def resolve_subagents(
             logger.warning("Unknown subagent '%s', skipping.", name)
             continue
 
-        model_override = (
-            None
-            if name == "claude"
-            else sub_cfg.model or config.create_chat_model("fast")
-            if name == "explore"
-            else sub_cfg.model or default_model or config.resolve_model("default")
-        )
+        if name == "claude":
+            model_override = None
+        elif name == "explore":
+            model_override = sub_cfg.model or config.create_chat_model("fast")
+        elif name == "plan":
+            # Built-in: always the router ``think`` role (ignore ``subagents.plan.model``).
+            model_override = config.create_chat_model("think")
+        else:
+            model_override = sub_cfg.model or default_model or config.resolve_model("default")
 
         if resolved_via_plugin:
             from soothe.plugin.context import create_plugin_context
@@ -638,6 +642,10 @@ def resolve_subagents(
             # Explore YAML options live in ``config.subagents["explore"].config`` only.
             # Do not spread them as kwargs — ``create_explore_subagent`` accepts ``model``,
             # ``SootheConfig``, and ``context`` only.
+            extra_kwargs.clear()
+            extra_kwargs["config"] = config
+            extra_kwargs["context"] = {"work_dir": resolved_cwd}
+        elif name == "plan":
             extra_kwargs.clear()
             extra_kwargs["config"] = config
             extra_kwargs["context"] = {"work_dir": resolved_cwd}

@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-05-09
-**Total RFCs**: 51
+**Last Updated**: 2026-05-11
+**Total RFCs**: 52
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -211,6 +211,11 @@ This index reflects the canonical RFC set and defines which files are active for
   - Status: Draft
   - Created: 2026-04-24
 
+- **RFC-618**: [Plan Subagent — Structured Planning with Explore Delegation](RFC-618*.md)
+  - Status: Draft
+  - Created: 2026-05-11
+  - Depends on: RFC-613, RFC-601, RFC-600
+
 - **RFC-606**: [DeepAgents CLI TUI Migration Specification](RFC-606*.md)
   - Status: Draft
   - Created: 2026-04-13
@@ -233,6 +238,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 ## Recently Added
 
+- RFC-618: Plan Subagent — Structured planning delegate with direct explore runnable invokes (2026-05-11; RFC-618)
 - RFC-221: LoopRunnerProtocol — Unified Subprocess-Isolated Agent Loop Execution (2026-05-09; one subprocess per loop_id via multiprocessing or Ray actor; fixes SootheRunner singleton data race; removes daemon._runner; renumbered into 2xx AgentLoop series)
 - RFC-617: OperationSecurityProtocol — Unified Workspace and Tool Operation Security (2026-04-30)
 - RFC-616: Scenario-Driven Goal Completion Synthesis (2026-04-28; refactors goal completion from keyword-driven to scenario-driven adaptive synthesis)
