@@ -308,7 +308,7 @@ def _pool_worker(
         - Create fresh SootheRunner per request (no user data leakage)
         - Execute request, stream results to response_queue
         - Check cancel_event between chunks for cooperative cancellation
-        - Send heartbeat messages periodically for stuck worker detection
+        - Send heartbeat messages on a timer task (independent of chunk cadence)
         - Exit on shutdown sentinel, idle timeout, or max requests
 
     Args:
@@ -360,7 +360,6 @@ def _pool_worker(
             # not a silent worker process exit (BaseException would bypass except Exception).
             runner: SootheRunner | None = None
             start_time = 0.0
-            last_heartbeat_time = 0.0
 
             try:
                 runner = SootheRunner(config)
@@ -378,13 +377,36 @@ def _pool_worker(
                     runner.set_interrupt_resolver(req.loop_id, _interrupt_resolver)
 
                 start_time = loop.time()
-                last_heartbeat_time = start_time
 
                 # Use asyncio.timeout for overall request timeout if enabled
                 timeout_ctx = _asyncio.timeout(timeout_seconds) if timeout_enabled else None
 
-                async def _stream():
-                    nonlocal last_heartbeat_time
+                stream_finished = _asyncio.Event()
+
+                async def _periodic_heartbeat() -> None:
+                    """Ping main process on a timer while the stream is in flight.
+
+                    Heartbeats must not be tied to chunk delivery: `runner.astream` can go
+                    long periods without yielding while awaiting model/tool work. A
+                    separate task keeps stuck-worker detection accurate as long as this
+                    process's event loop is not blocked by synchronous work.
+                    """
+                    try:
+                        while not stream_finished.is_set():
+                            await _asyncio.sleep(heartbeat_interval_seconds)
+                            if stream_finished.is_set():
+                                break
+                            response_queue.put(
+                                (
+                                    "heartbeat",
+                                    request_id,
+                                    {"elapsed_seconds": loop.time() - start_time},
+                                )
+                            )
+                    except _asyncio.CancelledError:
+                        raise
+
+                async def _stream() -> None:
                     async for chunk in runner.astream(
                         req.user_input,
                         thread_id=req.thread_id,
@@ -406,25 +428,32 @@ def _pool_worker(
                             response_queue.put(("cancelled", request_id, None))
                             return
 
-                        # HEARTBEAT: Send periodic ping to main process
-                        now = loop.time()
-                        if now - last_heartbeat_time >= heartbeat_interval_seconds:
-                            elapsed = now - start_time
-                            response_queue.put(
-                                ("heartbeat", request_id, {"elapsed_seconds": elapsed})
-                            )
-                            last_heartbeat_time = now
-
                         # Tag response with request_id for routing
                         response_queue.put(("chunk", request_id, chunk))
 
                     response_queue.put(("done", request_id, None))
 
+                async def _stream_with_heartbeat() -> None:
+                    # Prime stuck-detection so busy workers are not flagged before first sleep.
+                    response_queue.put(
+                        ("heartbeat", request_id, {"elapsed_seconds": 0.0}),
+                    )
+                    hb_task = _asyncio.create_task(_periodic_heartbeat())
+                    try:
+                        await _stream()
+                    finally:
+                        stream_finished.set()
+                        hb_task.cancel()
+                        try:
+                            await hb_task
+                        except _asyncio.CancelledError:
+                            pass
+
                 if timeout_ctx:
                     async with timeout_ctx:
-                        await _stream()
+                        await _stream_with_heartbeat()
                 else:
-                    await _stream()
+                    await _stream_with_heartbeat()
 
             except _asyncio.CancelledError:
                 # Since Python 3.8 CancelledError does not inherit Exception; uncaught it
