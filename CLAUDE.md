@@ -390,7 +390,7 @@ Use single backticks for inline code in docstrings (not Sphinx double backticks)
 
 | File | Purpose |
 |------|---------|
-| [config/config.template.yml](config/config.template.yml) | Full YAML template (`${ENV}` for secrets) |
+| [config/config.template.yml](config/config.template.yml) | Full YAML template aligned with `soothe.config` defaults (`${ENV}` for secrets; OpenAI + sqlite_vec examples) |
 | [config/config.dev.yml](config/config.dev.yml) | Local development defaults |
 | [docs/user_guide.md](docs/user_guide.md) | End-user guide |
 

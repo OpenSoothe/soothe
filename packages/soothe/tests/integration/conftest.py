@@ -131,15 +131,29 @@ def alloc_ephemeral_port() -> int:
 
 
 def get_base_config() -> SootheConfig:
-    """Get base config, loading from file once and caching the result."""
+    """Get base config, loading from file once and caching the result.
+
+    Resolution order:
+        1. ``SOOTHE_INTEGRATION_BASE_CONFIG`` — explicit path (e.g. explore-only YAML).
+        2. Repo ``config/config.dev.yml`` (monorepo root = parents[4] of this file).
+        3. Empty :class:`SootheConfig` if no file exists.
+    """
     global _CACHED_BASE_CONFIG
     if _CACHED_BASE_CONFIG is None:
-        config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
-        _CACHED_BASE_CONFIG = (
-            SootheConfig.from_yaml_file(str(config_path))
-            if config_path.exists()
-            else SootheConfig()
-        )
+        env_path = os.environ.get("SOOTHE_INTEGRATION_BASE_CONFIG", "").strip()
+        if env_path:
+            p = Path(env_path).expanduser()
+            _CACHED_BASE_CONFIG = (
+                SootheConfig.from_yaml_file(str(p)) if p.is_file() else SootheConfig()
+            )
+        else:
+            repo_root = Path(__file__).resolve().parents[4]
+            config_path = repo_root / "config" / "config.dev.yml"
+            _CACHED_BASE_CONFIG = (
+                SootheConfig.from_yaml_file(str(config_path))
+                if config_path.is_file()
+                else SootheConfig()
+            )
     return _CACHED_BASE_CONFIG
 
 
@@ -330,15 +344,8 @@ def _has_valid_api_key() -> bool:
 
 @pytest.fixture
 def test_config() -> SootheConfig:
-    """Load config from config.dev.yml if available, otherwise use defaults.
-
-    Returns:
-        SootheConfig instance without test-specific overrides
-    """
-    config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
-    if config_path.exists():
-        return SootheConfig.from_yaml_file(str(config_path))
-    return SootheConfig()
+    """Deep copy of base integration config so per-test mutations cannot poison the cache."""
+    return get_base_config().model_copy(deep=True)
 
 
 @pytest.fixture

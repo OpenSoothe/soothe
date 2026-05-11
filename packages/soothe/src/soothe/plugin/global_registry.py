@@ -7,6 +7,7 @@ during agent creation and accessed by resolvers.
 import logging
 from typing import TYPE_CHECKING
 
+from soothe.plugin.cache import clear_plugin_cache
 from soothe.plugin.lifecycle import PluginLifecycleManager
 from soothe.plugin.registry import PluginRegistry
 
@@ -85,6 +86,7 @@ async def shutdown_plugins() -> None:
 
     _global_registry = None
     _global_lifecycle_manager = None
+    clear_plugin_cache()
 
     logger.info("Plugins shutdown complete")
 
