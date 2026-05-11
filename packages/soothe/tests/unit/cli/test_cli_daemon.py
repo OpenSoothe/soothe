@@ -460,6 +460,36 @@ async def test_websocket_client_wait_for_daemon_ready_raises_on_error_state() ->
 
 
 @pytest.mark.asyncio
+async def test_websocket_client_wait_for_daemon_ready_waits_through_warming(monkeypatch) -> None:
+    """RFC-450: retry while daemon reports starting/warming instead of failing immediately."""
+    seq = _SequencedClient(
+        events=[
+            {"type": "daemon_ready", "state": "warming"},
+            {"type": "daemon_ready", "state": "ready"},
+        ]
+    )
+    client = WebSocketClient()
+    client._connected = True
+    client.read_event = seq.read_event  # type: ignore[method-assign]
+    repoll_calls = {"n": 0}
+
+    async def _request_daemon_ready() -> None:
+        repoll_calls["n"] += 1
+
+    client.request_daemon_ready = _request_daemon_ready  # type: ignore[method-assign]
+
+    async def _no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+
+    event = await client.wait_for_daemon_ready(ready_timeout_s=0.5)
+
+    assert event == {"type": "daemon_ready", "state": "ready"}
+    assert repoll_calls["n"] == 1
+
+
+@pytest.mark.asyncio
 async def test_daemon_initial_status_no_thread_leak() -> None:
     """Test that daemon initial status doesn't leak cached thread_id to new clients."""
     daemon = SootheDaemon(SootheConfig())

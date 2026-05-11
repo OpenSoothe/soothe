@@ -90,6 +90,8 @@ class WelcomeBanner(Static):
         self._failed = False
         self._failure_error: str = ""
         self._tip: str = random.choice(_TIPS)  # noqa: S311
+        self._update_latest: str | None = None
+        """PyPI version string when an update is available; drives banner line only."""
 
         super().__init__(self._build_banner(), **kwargs)
 
@@ -122,6 +124,16 @@ class WelcomeBanner(Static):
         self._connecting = False
         self._failed = True
         self._failure_error = error
+        self.update(self._build_banner())
+
+    def set_update_notice(self, latest: str | None) -> None:
+        """Show or hide the \"update available\" line in the welcome area.
+
+        Args:
+            latest: Newer version from PyPI, or ``None`` to remove the line.
+        """
+        cleaned = str(latest).strip() if latest else ""
+        self._update_latest = cleaned or None
         self.update(self._build_banner())
 
     def on_click(self, event: Click) -> None:  # noqa: PLR6301  # Textual event handler
@@ -185,6 +197,17 @@ class WelcomeBanner(Static):
             parts.append((f"{get_glyphs().checkmark} ", success_color))
             label = "MCP tool" if self._mcp_tool_count == 1 else "MCP tools"
             parts.append(f"Loaded {self._mcp_tool_count} {label}\n")
+
+        if self._update_latest and not self._failed:
+            from soothe_cli.tui.update_check import upgrade_command
+
+            cmd = upgrade_command()
+            update_line = (
+                f"Update available: v{self._update_latest} (current: v{__version__}). "
+                f"Run: {cmd}  — or /auto-update\n"
+            )
+            update_style = "yellow" if ansi else colors.warning
+            parts.append((update_line, update_style))
 
         if tip_line is not None:
             parts.append((tip_line, "dim"))

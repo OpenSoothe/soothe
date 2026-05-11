@@ -153,8 +153,9 @@ class _StartupMixin:
             group="daemon-connect",
         )
 
-        # Background update check and what's-new banner
-        # (opt-out via env var or config.yml [update].check)
+        # Background update check and what's-new banner (off by default; opt-in via
+        # SOOTHE_CLI_UPDATE_CHECK or config.yml [update].check, opt-out via
+        # SOOTHE_CLI_NO_UPDATE_CHECK)
         from soothe_cli.tui.update_check import is_update_check_enabled
 
         if is_update_check_enabled():
@@ -603,14 +604,13 @@ class _StartupMixin:
                 return
 
             self._update_available = (True, latest)
+            self.call_after_refresh(lambda v=latest: self._apply_welcome_update_notice(v))
         except Exception:
             logger.debug("Background update check failed", exc_info=True)
             return
 
-        # Phase 2: auto-update or notify (failures surfaced to user)
+        # Phase 2: optional auto-update (version notice lives on the welcome banner only)
         try:
-            from soothe_cli.tui._version import __version__ as cli_version
-
             if is_auto_update_enabled():
                 from soothe_cli.tui.update_check import perform_upgrade
 
@@ -626,6 +626,7 @@ class _StartupMixin:
                         severity="information",
                         timeout=10,
                     )
+                    self.call_after_refresh(lambda: self._apply_welcome_update_notice(None))
                 else:
                     cmd = upgrade_command()
                     self.notify(
@@ -634,16 +635,6 @@ class _StartupMixin:
                         timeout=15,
                         markup=False,
                     )
-            else:
-                cmd = upgrade_command()
-                self.notify(
-                    f"Update available: v{latest} (current: v{cli_version}). "
-                    f"Run: {cmd}\n\n"
-                    f"Enable auto-updates: /auto-update",
-                    severity="information",
-                    timeout=15,
-                    markup=False,
-                )
         except Exception:
             logger.warning("Auto-update failed unexpectedly", exc_info=True)
             self.notify(
@@ -651,6 +642,14 @@ class _StartupMixin:
                 severity="warning",
                 timeout=10,
             )
+
+    def _apply_welcome_update_notice(self, latest: str | None) -> None:
+        """Show or hide the welcome-banner update line (must run on the UI thread)."""
+        try:
+            banner = self.query_one("#welcome-banner", WelcomeBanner)
+            banner.set_update_notice(latest)
+        except NoMatches:
+            logger.debug("Welcome banner not found while applying update notice")
 
     async def _show_whats_new(self) -> None:
         """Show a 'what's new' banner on the first launch after an upgrade."""
@@ -698,17 +697,22 @@ class _StartupMixin:
             await self._mount_message(AppMessage("Checking for updates..."))
             available, latest = await asyncio.to_thread(is_update_available, bypass_cache=True)
             if not available:
+                self._update_available = (False, None)
+                self._apply_welcome_update_notice(None)
                 await self._mount_message(AppMessage("Already on the latest version."))
                 return
 
             from soothe_cli.tui._version import __version__ as cli_version
 
+            self._update_available = (True, latest)
+            self._apply_welcome_update_notice(latest)
             await self._mount_message(
                 AppMessage(f"Update available: v{latest} (current: v{cli_version}). Upgrading...")
             )
             success, output = await perform_upgrade()
             if success:
                 self._update_available = (False, None)
+                self._apply_welcome_update_notice(None)
                 await self._mount_message(
                     AppMessage(f"Updated to v{latest}. Restart to use the new version.")
                 )
