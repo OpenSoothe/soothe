@@ -32,6 +32,22 @@ class LoopRunRequest:
     timeout_seconds: float | None = None
     # Intent hint to bypass LLM classification
     intent_hint: str | None = None
+    # When True, the worker sets up an interrupt resolver that forwards
+    # pending interrupts back to the daemon for interactive HITL resolution.
+    interactive: bool = False
+
+
+@dataclass
+class InterruptPending:
+    """Marker yielded by a loop runner when the worker hits an HITL interrupt.
+
+    The daemon creates an ``asyncio.Future`` keyed by ``loop_id``, waits for
+    the client to send ``resume_interrupts``, then forwards the payload back
+    to the worker via ``forward_interrupt_resume``.
+    """
+
+    loop_id: str
+    pending_interrupts: dict[str, Any]
 
 
 class LoopRunnerProtocol(Protocol):
@@ -42,13 +58,23 @@ class LoopRunnerProtocol(Protocol):
     actor) — is selected by ``LoopRunnerFactory`` based on daemon config.
     """
 
-    async def run(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk]:
-        """Execute the loop; yield ``StreamChunk`` tuples until completion."""
+    async def run(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk | InterruptPending]:
+        """Execute the loop; yield ``StreamChunk`` tuples until completion.
+
+        When the worker hits an HITL interrupt and the request is interactive,
+        yields an ``InterruptPending`` marker. The consumer must call
+        ``forward_interrupt_resume`` with the resolved payload so the worker
+        can continue.
+        """
         ...
 
     async def cancel(self) -> None:
         """Request cancellation of the running loop."""
         ...
 
+    async def forward_interrupt_resume(self, loop_id: str, payload: dict[str, Any]) -> None:
+        """Deliver an interrupt resume payload to the worker handling ``loop_id``."""
+        ...
 
-__all__ = ["LoopRunRequest", "LoopRunnerProtocol"]
+
+__all__ = ["InterruptPending", "LoopRunRequest", "LoopRunnerProtocol"]
