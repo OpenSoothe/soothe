@@ -253,6 +253,8 @@ class DaemonConfig(BaseModel):
         auto_cancel_on_startup: Cancel very old incomplete threads on daemon start.
         max_input_queue_size: Maximum pending input messages (0 = unlimited, IG-258).
         max_concurrent_dispatches: Maximum concurrent message handlers (IG-258).
+        max_concurrent_vision_preflight: Maximum concurrent daemon vision preflight LLM
+            calls (image attachments). 0 = unlimited.
         distributed: Distributed loop execution configuration (RFC-221).
         worker_pool: Persistent worker pool configuration (RFC-221 enhancement).
     """
@@ -296,6 +298,14 @@ class DaemonConfig(BaseModel):
     )
     max_concurrent_dispatches: int = Field(
         default=50, ge=1, description="Maximum concurrent message handlers"
+    )
+    max_concurrent_vision_preflight: int = Field(
+        default=8,
+        ge=0,
+        description=(
+            "Maximum concurrent vision preflight calls on the daemon (0 = unlimited). "
+            "Caps parallel image-role LLM requests before loop execution."
+        ),
     )
     # EventBus wire-size distribution (IG-403): streaming histogram, constant memory
     event_size_stats_enabled: bool = Field(

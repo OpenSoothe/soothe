@@ -50,6 +50,17 @@ class QueryEngine:
         out.pop("thread_id", None)
         return out
 
+    async def _enrich_with_vision_throttled(
+        self, config: Any, text: str, attachments: list[dict[str, str]]
+    ) -> str:
+        """Run vision preflight under daemon-wide concurrency cap when configured."""
+        d = self._daemon
+        sem = getattr(d, "_vision_preflight_semaphore", None)
+        if sem is None:
+            return await enrich_user_text_with_vision(config, text, attachments)
+        async with sem:
+            return await enrich_user_text_with_vision(config, text, attachments)
+
     def _workspace_str_for_thread(self, thread_id: str) -> str:
         """Workspace path for ``runner.astream`` via unified resolution (IG-116)."""
         d = self._daemon
@@ -211,7 +222,9 @@ class QueryEngine:
         effective_text = text
         if attachments:
             try:
-                effective_text = await enrich_user_text_with_vision(d._config, text, attachments)
+                effective_text = await self._enrich_with_vision_throttled(
+                    d._config, text, attachments
+                )
             except Exception as exc:
                 logger.exception(
                     "Vision preflight failed (loop=%s checkpoint=%s)",
@@ -701,7 +714,9 @@ class QueryEngine:
         effective_text = text
         if attachments:
             try:
-                effective_text = await enrich_user_text_with_vision(d._config, text, attachments)
+                effective_text = await self._enrich_with_vision_throttled(
+                    d._config, text, attachments
+                )
             except Exception as exc:
                 logger.exception(
                     "Vision preflight failed multithreaded (loop=%s checkpoint=%s)",

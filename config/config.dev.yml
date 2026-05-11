@@ -73,6 +73,7 @@ observability:
 
 daemon:
   event_size_stats_enabled: true
+  max_concurrent_vision_preflight: 8
   transports:
     http_rest:
       enabled: true
