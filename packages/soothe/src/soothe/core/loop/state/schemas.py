@@ -485,7 +485,8 @@ class PlanGeneration(BaseModel):
         type: Decision type for a new plan.
         steps: Steps for a new plan. Required non-empty when ``plan_action='new'`` and
             ``type='execute_steps'``. May be empty when ``type='final'`` (same as ``AgentDecision``).
-        execution_mode: Execution mode for ``steps``.
+        execution_mode: Execution mode for ``steps``. When ``plan_action='new'`` and ``type`` is set
+            but the model omits this field, it defaults to ``sequential``.
         reasoning: Internal rationale for the decision.
         adaptive_granularity: Optional step granularity hint.
         next_action: User-facing next step (plan-specific, max 300 chars).
@@ -501,6 +502,24 @@ class PlanGeneration(BaseModel):
     next_action: str = Field(default="", max_length=300)
     """User-facing next step (plan-specific)."""
 
+    @model_validator(mode="before")
+    @classmethod
+    def _default_execution_mode_when_new(cls, data: Any) -> Any:
+        """Default execution_mode for plan_action=new when the LLM omits it.
+
+        Pydantic does not allow returning a copied model from an ``after`` validator
+        during normal ``__init__`` validation; inject via ``before`` instead.
+        """
+        if not isinstance(data, dict):
+            return data
+        if data.get("plan_action", "new") != "new":
+            return data
+        if data.get("type") is None:
+            return data
+        if data.get("execution_mode") is None:
+            return {**data, "execution_mode": "sequential"}
+        return data
+
     @model_validator(mode="after")
     def _validate_plan_action(self) -> PlanGeneration:
         """Ensure keep/new and decision align.
@@ -511,8 +530,6 @@ class PlanGeneration(BaseModel):
         if self.plan_action == "new":
             if self.type is None:
                 raise ValueError("plan_action 'new' requires type")
-            if self.execution_mode is None:
-                raise ValueError("plan_action 'new' requires execution_mode")
             if self.type == "execute_steps" and not self.steps:
                 raise ValueError(
                     "plan_action 'new' with type 'execute_steps' requires non-empty steps"
