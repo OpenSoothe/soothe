@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 
 from soothe.core.events import ERROR
-from soothe.core.intention import IntentHint
 from soothe.core.workspace import resolve_workspace_for_stream
 from soothe.daemon.image_understanding import enrich_user_text_with_vision
 from soothe.foundation import extract_text_from_ai_message
@@ -117,33 +116,8 @@ class QueryEngine:
         checkpoint_thread_id: str | None = None,
         intent_hint: str | None = None,
     ) -> None:
-        """Stream a query through ``SootheRunner`` and broadcast events."""
+        """Stream a query through subprocess workers and broadcast events."""
         d = self._daemon
-
-        # Parse intent_hint string to IntentHint enum
-        parsed_intent_hint: IntentHint | None = None
-        if intent_hint:
-            try:
-                parsed_intent_hint = IntentHint(intent_hint)
-            except ValueError:
-                logger.warning("Invalid intent_hint value: %s", intent_hint)
-
-        if d._thread_executor:
-            await self.run_query_multithreaded(
-                text,
-                loop_id=loop_id,
-                autonomous=autonomous,
-                max_iterations=max_iterations,
-                preferred_subagent=preferred_subagent,
-                client_id=client_id,
-                interactive=interactive,
-                model=model,
-                model_params=model_params,
-                attachments=attachments,
-                checkpoint_thread_id=checkpoint_thread_id,
-                intent_hint=intent_hint,
-            )
-            return
 
         thread_id = await self._resolve_query_checkpoint_thread_id(
             checkpoint_thread_id=checkpoint_thread_id,
@@ -336,140 +310,78 @@ class QueryEngine:
                 if preferred_subagent is not None:
                     stream_kwargs["preferred_subagent"] = preferred_subagent
 
-                # RFC-221: interactive HITL uses the daemon's ``SootheRunner`` in-process so
-                # ``set_interrupt_resolver`` and ContextVar-bound CoreAgent streams share one
-                # process. Non-interactive queries keep subprocess / pool isolation.
-                interrupt_resolver = (
-                    self._await_interrupt_resume(
-                        thread_id,
-                        client_id,
-                        effective_loop_id,
-                    )
-                    if interactive and client_id is not None and effective_loop_id
-                    else None
-                )
-                if hasattr(d._runner, "set_interrupt_resolver") and effective_loop_id:
-                    d._runner.set_interrupt_resolver(effective_loop_id, interrupt_resolver)
-
+                # All queries (interactive and non-interactive) use subprocess
+                # isolation via the runner factory. Interactive HITL is supported
+                # through interrupt_queue IPC on the pool worker.
                 _runner_key = effective_loop_id or thread_id
-                use_inproc_hitl = bool(interactive and client_id and effective_loop_id)
 
-                if use_inproc_hitl:
+                from soothe.protocols.runner import InterruptPending, LoopRunRequest
 
-                    async def _stream_chunks() -> Any:
-                        async for chunk in d._runner.astream(
-                            effective_text,
-                            thread_id=thread_id,
-                            workspace=stream_kwargs.get("workspace"),
-                            autonomous=stream_kwargs.get("autonomous", False),
-                            max_iterations=stream_kwargs.get("max_iterations"),
-                            preferred_subagent=stream_kwargs.get("preferred_subagent"),
-                            client_loop_id=effective_loop_id,
-                            intent_hint=parsed_intent_hint,
-                        ):
-                            yield chunk
+                run_request = LoopRunRequest(
+                    loop_id=effective_loop_id or thread_id,
+                    thread_id=thread_id,
+                    user_input=effective_text,
+                    workspace=stream_kwargs.get("workspace"),
+                    autonomous=stream_kwargs.get("autonomous", False),
+                    max_iterations=stream_kwargs.get("max_iterations"),
+                    preferred_subagent=stream_kwargs.get("preferred_subagent"),
+                    model=model,
+                    model_params=model_params or {},
+                    intent_hint=intent_hint,
+                    interactive=bool(interactive and client_id and effective_loop_id),
+                )
+                loop_runner = d._runner_factory.create_runner(_runner_key)
+                self._active_runners[_runner_key] = loop_runner
 
-                else:
-                    from soothe.protocols.runner import LoopRunRequest
+                async def _stream_chunks() -> Any:
+                    async for item in loop_runner.run(run_request):
+                        yield item
 
-                    run_request = LoopRunRequest(
-                        loop_id=effective_loop_id or thread_id,
-                        thread_id=thread_id,
-                        user_input=effective_text,
-                        workspace=stream_kwargs.get("workspace"),
-                        autonomous=stream_kwargs.get("autonomous", False),
-                        max_iterations=stream_kwargs.get("max_iterations"),
-                        preferred_subagent=stream_kwargs.get("preferred_subagent"),
-                        model=model,
-                        model_params=model_params or {},
-                        intent_hint=intent_hint,
-                    )
-                    loop_runner = d._runner_factory.create_runner(_runner_key)
-                    self._active_runners[_runner_key] = loop_runner
+                async def _process_stream() -> None:
+                    nonlocal chunk_count, warning_sent
 
-                    async def _stream_chunks() -> Any:
-                        async for chunk in loop_runner.run(run_request):
-                            yield chunk
-
-                if timeout_enabled:
-                    async with asyncio.timeout(timeout_seconds):
-                        async for chunk in _stream_chunks():
-                            # IG-157: Check for task cancellation from cancel_current_query()
-                            if d._current_query_task and d._current_query_task.done():
-                                logger.info("Stream loop detected cancelled task, stopping")
-                                break
-
-                            chunk_count += 1
-
-                            # Check for warning threshold (80% of timeout)
-                            if not warning_sent and warning_threshold:
-                                elapsed = asyncio.get_event_loop().time() - start_time
-                                if elapsed >= warning_threshold:
-                                    warning_sent = True
-                                    remaining = timeout_seconds - elapsed
-                                    logger.warning(
-                                        "Query approaching timeout (loop=%s checkpoint=%s, %.1fs left)",
-                                        effective_loop_id or "?",
-                                        thread_id[:16] if thread_id else "?",
-                                        remaining,
-                                    )
-                                    if effective_loop_id:
-                                        await d._broadcast(
-                                            self._loop_scoped_client_message(
-                                                effective_loop_id,
-                                                {
-                                                    "type": "event",
-                                                    "namespace": [],
-                                                    "mode": "custom",
-                                                    "data": {
-                                                        "type": "query_timeout_warning",
-                                                        "message": f"Query will timeout in {remaining:.0f} seconds",
-                                                        "remaining_seconds": remaining,
-                                                    },
-                                                },
-                                            )
-                                        )
-
-                            # Process chunk
-                            if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
-                                logger.debug(
-                                    "Skipping invalid chunk #%d: type=%s",
-                                    chunk_count,
-                                    type(chunk).__name__,
-                                )
-                                continue
-                            namespace, mode, data = chunk
-
-                            thread_logger.log(tuple(namespace), mode, data)
-
-                            is_msg_pair = (
-                                isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
-                            )
-                            if not namespace and mode == "messages" and is_msg_pair:
-                                msg, _metadata = data
-                                full_response.extend(extract_text_from_ai_message(msg))
-
-                            if effective_loop_id:
-                                event_msg = self._loop_scoped_client_message(
-                                    effective_loop_id,
-                                    {
-                                        "type": "event",
-                                        "namespace": list(namespace),
-                                        "mode": mode,
-                                        "data": data,
-                                    },
-                                )
-                                await d._broadcast(event_msg)
-                        logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
-                else:
-                    # No timeout — use per-loop subprocess runner (RFC-221)
                     async for chunk in _stream_chunks():
-                        # IG-157: Check for task cancellation from cancel_current_query()
                         if d._current_query_task and d._current_query_task.done():
                             logger.info("Stream loop detected cancelled task, stopping")
                             break
 
+                        # Handle HITL interrupt from subprocess worker
+                        if isinstance(chunk, InterruptPending):
+                            await self._bridge_subprocess_interrupt(
+                                d, chunk, loop_runner, thread_id, client_id, effective_loop_id
+                            )
+                            continue
+
                         chunk_count += 1
+
+                        if timeout_enabled and not warning_sent and warning_threshold:
+                            elapsed = asyncio.get_event_loop().time() - start_time
+                            if elapsed >= warning_threshold:
+                                warning_sent = True
+                                remaining = timeout_seconds - elapsed
+                                logger.warning(
+                                    "Query approaching timeout (loop=%s checkpoint=%s, %.1fs left)",
+                                    effective_loop_id or "?",
+                                    thread_id[:16] if thread_id else "?",
+                                    remaining,
+                                )
+                                if effective_loop_id:
+                                    await d._broadcast(
+                                        self._loop_scoped_client_message(
+                                            effective_loop_id,
+                                            {
+                                                "type": "event",
+                                                "namespace": [],
+                                                "mode": "custom",
+                                                "data": {
+                                                    "type": "query_timeout_warning",
+                                                    "message": f"Query will timeout in {remaining:.0f} seconds",
+                                                    "remaining_seconds": remaining,
+                                                },
+                                            },
+                                        )
+                                    )
+
                         if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
                             logger.debug(
                                 "Skipping invalid chunk #%d: type=%s",
@@ -499,7 +411,14 @@ class QueryEngine:
                                 },
                             )
                             await d._broadcast(event_msg)
+
                     logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
+
+                if timeout_enabled:
+                    async with asyncio.timeout(timeout_seconds):
+                        await _process_stream()
+                else:
+                    await _process_stream()
 
             except TimeoutError:
                 # Query exceeded maximum duration
@@ -555,8 +474,6 @@ class QueryEngine:
                     )
             finally:
                 reset_stream_model_override(override_token)
-                if hasattr(d._runner, "set_interrupt_resolver") and effective_loop_id:
-                    d._runner.set_interrupt_resolver(effective_loop_id, None)
                 d._query_running = False
                 d._active_threads.pop(thread_id, None)
                 # RFC-221: clean up the per-loop runner
@@ -611,337 +528,6 @@ class QueryEngine:
             raise
         except Exception:
             logger.exception("Failed to create query task")
-            d._query_running = False
-            if thread_id in d._active_threads:
-                d._active_threads.pop(thread_id, None)
-            if client_id:
-                await d._session_manager.release_loop_ownership(client_id)
-            raise
-
-    async def run_query_multithreaded(
-        self,
-        text: str,
-        *,
-        loop_id: str | None = None,
-        autonomous: bool = False,
-        max_iterations: int | None = None,
-        preferred_subagent: str | None = None,
-        client_id: str | None = None,
-        interactive: bool = False,
-        model: str | None = None,
-        model_params: dict[str, Any] | None = None,
-        attachments: list[dict[str, str]] | None = None,
-        checkpoint_thread_id: str | None = None,
-        intent_hint: str | None = None,
-    ) -> None:
-        """Execute query using ``ThreadExecutor``.
-
-        Wraps the streaming work in its own ``asyncio.Task`` so that
-        cancellation targets the query — **not** the ``_input_loop`` task.
-        """
-        d = self._daemon
-        thread_id = await self._resolve_query_checkpoint_thread_id(
-            checkpoint_thread_id=checkpoint_thread_id,
-            client_id=client_id,
-        )
-
-        lid_in = str(loop_id or "").strip()
-        if client_id and not lid_in:
-            logger.warning(
-                "[Query] Rejecting client %s (multithreaded): missing loop_id",
-                client_id[:8],
-            )
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "NO_LOOP_ID",
-                    "message": "loop_id is required; subscribe to a loop before sending input",
-                },
-            )
-            return
-
-        effective_loop_id = (
-            lid_in or str(d._thread_registry.get_thread_loop(thread_id) or "").strip()
-        )
-
-        st = d._thread_registry.get(thread_id)
-        if st and st.is_draft:
-            await d._runner.create_persisted_thread(thread_id=st.thread_id)
-            logger.info("Persisted draft thread %s", st.thread_id)
-            st.is_draft = False
-
-        if not d._thread_logger or d._thread_logger._thread_id != thread_id:
-            d._thread_logger = ThreadLogger(
-                thread_id=thread_id,
-                retention_days=d._config.observability.thread_logging_retention_days,
-                max_size_mb=d._config.observability.thread_logging_max_size_mb,
-            )
-        thread_logger = d._thread_logger  # local ref — safe against concurrent overwrites
-
-        max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
-        async with d._query_state_lock:
-            at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
-        if at_capacity:
-            logger.warning(
-                "Daemon at capacity (%d/%d queries), rejecting multithreaded (loop=%s checkpoint=%s)",
-                len(d._active_threads),
-                max_concurrent,
-                effective_loop_id or "?",
-                thread_id[:16] if thread_id else "?",
-            )
-
-            if effective_loop_id:
-                await d._broadcast(
-                    self._loop_scoped_client_message(
-                        effective_loop_id,
-                        {
-                            "type": "event",
-                            "namespace": [],
-                            "mode": "custom",
-                            "data": {
-                                "type": ERROR,
-                                "error": (
-                                    f"Daemon has reached its concurrent query limit ({max_concurrent}). "
-                                    "Wait for a query to finish or cancel one before starting a new one."
-                                ),
-                                "code": "DAEMON_BUSY",
-                            },
-                        },
-                    )
-                )
-                await d._broadcast(
-                    self._loop_scoped_client_message(
-                        effective_loop_id,
-                        {"type": "status", "state": "idle"},
-                    )
-                )
-            if client_id:
-                await d._session_manager.release_loop_ownership(client_id)
-            return
-
-        effective_text = text
-        if attachments:
-            try:
-                effective_text = await self._enrich_with_vision_throttled(
-                    d._config, text, attachments, session_id=thread_id
-                )
-            except Exception as exc:
-                logger.exception(
-                    "Vision preflight failed multithreaded (loop=%s checkpoint=%s)",
-                    effective_loop_id or "?",
-                    thread_id[:16] if thread_id else "?",
-                )
-                if effective_loop_id:
-                    await d._broadcast(
-                        self._loop_scoped_client_message(
-                            effective_loop_id,
-                            {
-                                "type": "event",
-                                "namespace": [],
-                                "mode": "custom",
-                                "data": emit_error_event(exc),
-                            },
-                        )
-                    )
-                    await d._broadcast(
-                        self._loop_scoped_client_message(
-                            effective_loop_id,
-                            {"type": "status", "state": "idle"},
-                        )
-                    )
-                if client_id:
-                    await d._session_manager.release_loop_ownership(client_id)
-                return
-
-        thread_logger.log_user_input(effective_text)
-
-        await d._runner.touch_thread_activity_timestamp(thread_id)
-
-        st_activity = d._thread_registry.get(thread_id)
-        if st_activity:
-            st_activity.last_activity = datetime.now(UTC)
-
-        # Add to global cross-thread input history
-        if d._global_history:
-            metadata = {
-                "workspace": str(
-                    d._thread_registry.get_workspace(thread_id) or d._daemon_workspace
-                ),
-                "autonomous": autonomous,
-                "preferred_subagent": preferred_subagent,
-            }
-            d._global_history.add(effective_text, thread_id=thread_id, metadata=metadata)
-
-        if client_id and effective_loop_id:
-            await d._session_manager.claim_loop_ownership(client_id, effective_loop_id)
-            subscribed = await d._session_manager.subscribe_loop(client_id, effective_loop_id)
-            if not subscribed:
-                logger.warning(
-                    "Client %s not found for multithreaded loop %s subscription - query will run without client notifications",
-                    client_id[:8],
-                    effective_loop_id[:8],
-                )
-
-        async with d._query_state_lock:
-            d._query_running = True
-        if effective_loop_id:
-            await d._broadcast(
-                self._loop_scoped_client_message(
-                    effective_loop_id,
-                    {"type": "status", "state": "running"},
-                )
-            )
-
-        full_response: list[str] = []
-
-        async def _run_stream() -> None:
-            from soothe.core.context.model_override import (
-                attach_stream_model_override,
-                reset_stream_model_override,
-            )
-
-            if effective_loop_id:
-                d._active_stream_loop_ids.add(effective_loop_id)  # Bug 4.3: set-based tracking
-            m_clean = model.strip() if isinstance(model, str) and model.strip() else None
-            override_token = attach_stream_model_override(m_clean, model_params)
-            try:
-                stream_kwargs: dict[str, Any] = {
-                    "workspace": self._workspace_str_for_thread(thread_id)
-                }
-                if autonomous:
-                    stream_kwargs["autonomous"] = True
-                    if max_iterations is not None:
-                        stream_kwargs["max_iterations"] = max_iterations
-                if preferred_subagent is not None:
-                    stream_kwargs["preferred_subagent"] = preferred_subagent
-                if interactive:
-                    logger.debug(
-                        "Interactive HITL continuation is not supported in multithreaded mode; running auto-approve"
-                    )
-
-                stream_tuple_length = 3
-                msg_pair_length = 2
-                async for chunk in d._thread_executor.execute_thread(
-                    thread_id, effective_text, **stream_kwargs
-                ):
-                    # IG-157: Check for task cancellation from cancel_current_query()
-                    if d._current_query_task and d._current_query_task.done():
-                        logger.info("Multithreaded stream loop detected cancelled task, stopping")
-                        break
-
-                    if not isinstance(chunk, tuple) or len(chunk) != stream_tuple_length:
-                        continue
-                    namespace, mode, data = chunk
-
-                    thread_logger.log(tuple(namespace), mode, data)
-
-                    is_msg_pair = isinstance(data, (tuple, list)) and len(data) == msg_pair_length
-                    if not namespace and mode == "messages" and is_msg_pair:
-                        msg, _metadata = data
-                        full_response.extend(extract_text_from_ai_message(msg))
-
-                    if effective_loop_id:
-                        event_msg = self._loop_scoped_client_message(
-                            effective_loop_id,
-                            {
-                                "type": "event",
-                                "namespace": list(namespace),
-                                "mode": mode,
-                                "data": data,
-                            },
-                        )
-                        await d._broadcast(event_msg)
-
-            except asyncio.CancelledError:
-                logger.info(
-                    "Query cancelled by user (loop=%s checkpoint=%s)",
-                    effective_loop_id or "?",
-                    thread_id[:16] if thread_id else "?",
-                )
-                from soothe.core import FrameworkFilesystem
-
-                FrameworkFilesystem.clear_current_workspace()
-                raise
-            except Exception as exc:
-                logger.exception(
-                    "Multi-threaded query error (loop=%s checkpoint=%s)",
-                    effective_loop_id or "?",
-                    thread_id[:16] if thread_id else "?",
-                )
-                if effective_loop_id:
-                    await d._broadcast(
-                        self._loop_scoped_client_message(
-                            effective_loop_id,
-                            {
-                                "type": "event",
-                                "namespace": [],
-                                "mode": "custom",
-                                "data": emit_error_event(exc),
-                            },
-                        )
-                    )
-            finally:
-                reset_stream_model_override(override_token)
-                d._query_running = False
-                d._active_threads.pop(thread_id, None)
-                if effective_loop_id:  # Flaw 4.8: guard against None key
-                    d._pending_interrupt_responses.pop(effective_loop_id, None)
-                if effective_loop_id:
-                    d._active_stream_loop_ids.discard(effective_loop_id)  # Bug 4.3
-
-                # IG-054: Moved post-query logic here since we don't await task
-                final_thread_id = d._runner.current_thread_id or ""
-                if final_thread_id and final_thread_id != thread_id:
-                    final_logger = ThreadLogger(
-                        thread_id=final_thread_id,
-                        retention_days=d._config.observability.thread_logging_retention_days,
-                        max_size_mb=d._config.observability.thread_logging_max_size_mb,
-                    )
-                    final_logger.log_user_input(effective_text)
-                    if full_response:
-                        final_logger.log_assistant_response("".join(full_response))
-                elif full_response:
-                    thread_logger.log_assistant_response("".join(full_response))
-
-                if final_thread_id:
-                    await d._runner.touch_thread_activity_timestamp(final_thread_id)
-
-                if effective_loop_id:
-                    await d._broadcast(
-                        self._loop_scoped_client_message(
-                            effective_loop_id,
-                            {"type": "status", "state": "idle"},
-                        )
-                    )
-
-                if client_id:
-                    await d._session_manager.release_loop_ownership(client_id)
-                d._current_query_task = None
-
-        try:
-            task = asyncio.create_task(_run_stream())
-            d._current_query_task = task
-            d._active_threads[thread_id] = task
-            # Yield once so _run_stream begins before run_query returns (see single-thread path).
-            await asyncio.sleep(0)
-            # IG-054: DO NOT await task - let it run in background
-            # This allows the input loop to process concurrent queries
-            # The task's internal finally block handles cleanup
-        except asyncio.CancelledError:
-            logger.info(
-                "Query task cancelled during creation (loop=%s checkpoint=%s)",
-                effective_loop_id or "?",
-                thread_id[:16] if thread_id else "?",
-            )
-            d._runner.set_current_thread_id(None)
-            raise
-        except Exception:
-            logger.exception(
-                "Failed to create multithreaded query task (loop=%s checkpoint=%s)",
-                effective_loop_id or "?",
-                thread_id[:16] if thread_id else "?",
-            )
             d._query_running = False
             if thread_id in d._active_threads:
                 d._active_threads.pop(thread_id, None)
@@ -1130,43 +716,67 @@ class QueryEngine:
         d._thread_registry.set_workspace(tid, Path(d._daemon_workspace))
         return tid
 
-    def _await_interrupt_resume(
+    async def _bridge_subprocess_interrupt(
         self,
-        checkpoint_thread_id: str,
+        d: Any,
+        marker: Any,
+        loop_runner: Any,
+        thread_id: str,
         client_id: str | None,
-        loop_id: str,
-    ) -> Any:
-        """Return a resolver that waits for daemon-side interrupt continuation."""
+        loop_id: str | None,
+    ) -> None:
+        """Bridge an HITL interrupt from a subprocess worker to the client.
 
-        async def _resolver(_pending_interrupts: dict[str, Any]) -> dict[str, Any]:
-            from soothe.core.loop.engine.hitl_scope import timeout_default_hitl_resume_payload
+        Creates an ``asyncio.Future`` for the interrupt. When the client sends
+        ``resume_interrupts``, the future resolves and the payload is forwarded
+        to the subprocess worker through ``loop_runner.forward_interrupt_resume``.
 
-            loop = asyncio.get_running_loop()
-            future: asyncio.Future[dict[str, Any]] = loop.create_future()
-            self._daemon._pending_interrupt_responses[loop_id] = future
-            timeout_s = int(getattr(self._daemon._config.daemon, "hitl_timeout_seconds", 0) or 0)
-            logger.debug(
-                "Waiting for interactive resume (loop=%s checkpoint=%s client=%s hitl_timeout=%s)",
-                loop_id[:16],
-                checkpoint_thread_id[:16],
-                client_id,
-                timeout_s if timeout_s > 0 else "unlimited",
-            )
-            try:
-                if timeout_s > 0:
-                    try:
-                        return await asyncio.wait_for(future, timeout=float(timeout_s))
-                    except TimeoutError:
-                        logger.warning(
-                            "HITL timed out after %ds (loop=%s); resuming with default-first choices",
-                            timeout_s,
-                            loop_id[:16],
-                        )
-                        if not future.done():
-                            future.cancel()
-                        return timeout_default_hitl_resume_payload(_pending_interrupts)
-                return await future
-            finally:
-                self._daemon._pending_interrupt_responses.pop(loop_id, None)
+        Args:
+            d: The daemon instance.
+            marker: The ``InterruptPending`` marker yielded by the runner.
+            loop_runner: The loop runner that can forward the resume payload.
+            thread_id: Checkpoint thread identifier.
+            client_id: Connected client identifier.
+            loop_id: Active loop identifier.
+        """
+        from soothe.core.loop.engine.hitl_scope import timeout_default_hitl_resume_payload
 
-        return _resolver
+        if not loop_id:
+            from soothe.core.loop.engine.hitl_scope import auto_approve_interrupt_resume_payload
+
+            payload = auto_approve_interrupt_resume_payload(marker.pending_interrupts)
+            await loop_runner.forward_interrupt_resume(marker.loop_id, payload)
+            return
+
+        event_loop = asyncio.get_running_loop()
+        future: asyncio.Future[dict[str, Any]] = event_loop.create_future()
+        d._pending_interrupt_responses[loop_id] = future
+        timeout_s = int(getattr(d._config.daemon, "hitl_timeout_seconds", 0) or 0)
+
+        logger.debug(
+            "Subprocess interrupt pending (loop=%s checkpoint=%s client=%s hitl_timeout=%s)",
+            loop_id[:16],
+            thread_id[:16] if thread_id else "?",
+            client_id,
+            timeout_s if timeout_s > 0 else "unlimited",
+        )
+
+        try:
+            if timeout_s > 0:
+                try:
+                    resume_payload = await asyncio.wait_for(future, timeout=float(timeout_s))
+                except TimeoutError:
+                    logger.warning(
+                        "HITL timed out after %ds (loop=%s); resuming with default-first choices",
+                        timeout_s,
+                        loop_id[:16],
+                    )
+                    if not future.done():
+                        future.cancel()
+                    resume_payload = timeout_default_hitl_resume_payload(marker.pending_interrupts)
+            else:
+                resume_payload = await future
+        finally:
+            d._pending_interrupt_responses.pop(loop_id, None)
+
+        await loop_runner.forward_interrupt_resume(marker.loop_id, resume_payload)

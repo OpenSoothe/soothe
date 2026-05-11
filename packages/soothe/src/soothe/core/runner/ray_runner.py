@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import ray
 from ray.util.queue import Queue
@@ -85,6 +85,10 @@ class RayLoopRunner:
         except Exception:  # noqa: BLE001
             pass
         self._actor = None
+
+    async def forward_interrupt_resume(self, loop_id: str, payload: dict[str, Any]) -> None:
+        """Not supported for Ray runner."""
+        logger.warning("RayLoopRunner: interrupt resume not supported (loop=%s)", loop_id)
 
 
 # Structural protocol check.
