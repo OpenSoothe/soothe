@@ -18,7 +18,7 @@ class LoopAgentReasonEvent(ProtocolEvent):
     next_action: str
     assessment_reasoning: str = ""
     plan_reasoning: str = ""
-    plan_action: Literal["keep", "new"] = "new"
+    plan_action: Literal["keep", "new", ""] = "new"
     iteration: int
 
 

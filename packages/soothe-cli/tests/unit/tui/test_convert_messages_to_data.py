@@ -157,7 +157,7 @@ def test_resume_skips_internal_loop_checkpoint_when_cognition_replay_provided() 
     """Loop continue should drop internal-phase AI/tools and inject cognition cards."""
     cognition = [
         MessageData(
-            type=MessageType.COGNITION_PLAN,
+            type=MessageType.COGNITION_REASON,
             content="",
             cognition_plan_next_action="Inspect outputs",
             cognition_plan_status="continue",
@@ -186,7 +186,7 @@ def test_resume_skips_internal_loop_checkpoint_when_cognition_replay_provided() 
     assert MessageType.TOOL not in types
     assert MessageType.USER in types
     assert MessageType.ASSISTANT in types
-    assert MessageType.COGNITION_PLAN in types
+    assert MessageType.COGNITION_REASON in types
 
 
 def test_agent_loop_completed_event_yields_no_message_data() -> None:
@@ -251,7 +251,7 @@ def test_convert_loop_events_maps_cognition_events_to_specialized_cards() -> Non
 
     assert [m.type for m in data] == [
         MessageType.COGNITION_GOAL_TREE,
-        MessageType.COGNITION_PLAN,
+        MessageType.COGNITION_REASON,
         MessageType.STEP_PROGRESS,
     ]
     assert data[1].cognition_plan_next_action == "I will inspect tool outputs."

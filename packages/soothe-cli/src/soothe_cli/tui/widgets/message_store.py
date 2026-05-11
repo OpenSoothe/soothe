@@ -53,7 +53,7 @@ class MessageType(StrEnum):
     APP = "app"
     SUMMARIZATION = "summarization"
     STEP_PROGRESS = "step_progress"
-    COGNITION_PLAN = "cognition_plan"
+    COGNITION_REASON = "cognition_reason"
     COGNITION_GOAL_TREE = "cognition_goal_tree"
     DIFF = "diff"
 
@@ -163,22 +163,22 @@ class MessageData:
     """JSON list of tool rows from ``CognitionStepMessage.snapshot_tool_rows()`` (IG-402)."""
 
     cognition_plan_next_action: str | None = None
-    """User-facing next step (COGNITION_PLAN only)."""
+    """User-facing next step (COGNITION_REASON only)."""
 
     cognition_plan_status: str | None = None
-    """Plan status: continue, replan, done (COGNITION_PLAN only)."""
+    """Plan status: continue, replan, done (COGNITION_REASON only)."""
 
     cognition_plan_iteration: int | None = None
-    """Agent-loop iteration (COGNITION_PLAN only)."""
+    """Agent-loop iteration (COGNITION_REASON only)."""
 
     cognition_plan_action: str | None = None
-    """``keep`` or ``new`` (COGNITION_PLAN only)."""
+    """``keep`` or ``new`` (COGNITION_REASON only)."""
 
     cognition_plan_assessment: str | None = None
-    """Phase-1 assessment text (COGNITION_PLAN only)."""
+    """Phase-1 assessment text (COGNITION_REASON only)."""
 
     cognition_plan_strategy: str | None = None
-    """Phase-2 plan reasoning (COGNITION_PLAN only)."""
+    """Phase-2 plan reasoning (COGNITION_REASON only)."""
 
     cognition_goal_snapshot_json: str | None = None
     """JSON blob from ``CognitionGoalTreeMessage.snapshot_dict()`` (COGNITION_GOAL_TREE only)."""
@@ -227,7 +227,7 @@ class MessageData:
             AppMessage,
             AssistantMessage,
             CognitionGoalTreeMessage,
-            CognitionPlanReasonMessage,
+            CognitionReasonMessage,
             CognitionStepMessage,
             DiffMessage,
             ErrorMessage,
@@ -329,12 +329,12 @@ class MessageData:
                     )
                 return w
 
-            case MessageType.COGNITION_PLAN:
-                return CognitionPlanReasonMessage(
+            case MessageType.COGNITION_REASON:
+                return CognitionReasonMessage(
                     next_action=self.cognition_plan_next_action or "",
                     status=self.cognition_plan_status or "",
                     iteration=int(self.cognition_plan_iteration or 0),
-                    plan_action=self.cognition_plan_action or "new",
+                    plan_action=self.cognition_plan_action or "",
                     assessment_reasoning=self.cognition_plan_assessment or "",
                     plan_reasoning=self.cognition_plan_strategy or "",
                     id=self.id,
@@ -386,7 +386,7 @@ class MessageData:
             AppMessage,
             AssistantMessage,
             CognitionGoalTreeMessage,
-            CognitionPlanReasonMessage,
+            CognitionReasonMessage,
             CognitionStepMessage,
             DiffMessage,
             ErrorMessage,
@@ -414,9 +414,9 @@ class MessageData:
                 cognition_goal_snapshot_json=json.dumps(widget.snapshot_dict()),
             )
 
-        if isinstance(widget, CognitionPlanReasonMessage):
+        if isinstance(widget, CognitionReasonMessage):
             return cls(
-                type=MessageType.COGNITION_PLAN,
+                type=MessageType.COGNITION_REASON,
                 content="",
                 id=widget_id,
                 cognition_plan_next_action=widget._next_action,

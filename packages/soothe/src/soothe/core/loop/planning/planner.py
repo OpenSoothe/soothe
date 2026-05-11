@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from soothe.core.loop.state.schemas import (
     AgentDecision,
     LoopState,
+    PlanGeneration,
     StepAction,
     renumber_decision_local_step_ids_for_goal_continuation,
 )
@@ -1183,6 +1184,21 @@ class LLMPlanner:
             state.iteration,
             thread_id=state.thread_id,
         )
+
+        # Guard: reject premature type="final" at iteration 0 with no execution
+        if plan_result.plan_action == "new" and plan_result.type == "final":
+            if state.iteration == 0 and len(state.step_results) == 0:
+                logger.warning(
+                    "[Guard] Reject 'final' type at iter=0 no execution; forcing execute_steps"
+                )
+                plan_result = PlanGeneration(
+                    plan_action="new",
+                    type="execute_steps",
+                    execution_mode="sequential",
+                    reasoning="Initial execution to gather evidence for goal assessment",
+                    steps=_default_agent_decision(goal, state.iteration).steps,
+                    next_action=f"I'll proceed with analyzing: {preview_first(goal, 80)}",
+                )
 
         # RFC-214: Record plan-generate pair in ledger (not injected into CoreAgent)
         human_msg = None

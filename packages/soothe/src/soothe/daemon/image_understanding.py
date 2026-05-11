@@ -91,7 +91,7 @@ _VISION_INSTRUCTION_SINGLE = (
 
 _VISION_INSTRUCTION_MULTI = (
     "You have {count} images attached. Describe each image separately using this format:\n\n"
-    "**Image {i}:** [Description]\n\n"
+    "**Image {{i}}:** [Description]\n\n"
     "For each image, focus on: visible objects, text content, charts/diagrams, and "
     "labels. Be specific about any text, numbers, or distinguishing features. "
     "If the images appear related (e.g., before/after, comparison, sequence), "

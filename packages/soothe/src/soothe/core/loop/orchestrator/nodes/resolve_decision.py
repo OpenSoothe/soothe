@@ -5,7 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.core.loop.state.schemas import allocate_plan_id, assign_plan_step_ids
+from soothe.core.loop.state.schemas import (
+    AgentDecision,
+    StepAction,
+    allocate_plan_id,
+    assign_plan_step_ids,
+)
 from soothe.utils.text_preview import preview_first
 
 from ..runtime_context import LoopRuntimeContext
@@ -29,12 +34,27 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
 
     decision = agent_loop._resolve_decision(plan_result, state)
     if decision is None:
-        logger.error("[Reason] No executable decision after reason phase; aborting loop")
-        await ctx.emit(
-            "fatal_error",
-            {"error": "Reason phase returned no executable plan", "step_id": ""},
-        )
-        return {"last_outcome": "fatal"}
+        # Guard: create fallback decision when LLM returned type="final" at iteration 0
+        if state.iteration == 0 and len(state.step_results) == 0:
+            logger.warning("[Guard] No decision at iter=0; creating fallback execute plan")
+            decision = AgentDecision(
+                type="execute_steps",
+                steps=[
+                    StepAction(
+                        id="01",
+                        description=state.goal or "Execute task",
+                    )
+                ],
+                execution_mode="sequential",
+                reasoning="Initial execution to gather evidence for goal assessment",
+            )
+        else:
+            logger.error("[Reason] No executable decision after reason phase; aborting loop")
+            await ctx.emit(
+                "fatal_error",
+                {"error": "Reason phase returned no executable plan", "step_id": ""},
+            )
+            return {"last_outcome": "fatal"}
 
     if plan_result.plan_action == "new":
         reserved = set(state.dependency_completion_ids())

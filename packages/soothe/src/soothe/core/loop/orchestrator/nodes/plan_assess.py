@@ -189,7 +189,6 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
                 "status": plan_result.status,
                 "progress": plan_result.goal_progress,
                 "next_action": plan_result.next_action,
-                "assessment_reasoning": plan_result.assessment_reasoning,
                 "plan_reasoning": plan_result.plan_reasoning,
                 "plan_action": plan_result.plan_action,
             },
@@ -202,6 +201,15 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         context=context,
     )
     ctx.scratch.plan_assessment = assessment
+
+    if assessment.assessment_reasoning:
+        await ctx.emit(
+            "assess",
+            {
+                "assessment_reasoning": assessment.assessment_reasoning,
+                "iteration": state.iteration,
+            },
+        )
 
     if assessment.status == "done":
         if state.has_remaining_steps():
@@ -245,7 +253,6 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
                 "status": plan_result.status,
                 "progress": plan_result.goal_progress,
                 "next_action": plan_result.next_action,
-                "assessment_reasoning": plan_result.assessment_reasoning,
                 "plan_reasoning": plan_result.plan_reasoning,
                 "plan_action": plan_result.plan_action,
             },
@@ -271,7 +278,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         plan_result = PlanResult(
             status=assessment.status,
             goal_progress=assessment.goal_progress,
-            assessment_reasoning=assessment.assessment_reasoning or "",
+            assessment_reasoning="",
             plan_reasoning="",
             plan_action="keep",
             decision=None,
@@ -292,7 +299,6 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
                 "status": plan_result.status,
                 "progress": plan_result.goal_progress,
                 "next_action": plan_result.next_action,
-                "assessment_reasoning": plan_result.assessment_reasoning,
                 "plan_reasoning": plan_result.plan_reasoning,
                 "plan_action": plan_result.plan_action,
             },
