@@ -18,7 +18,7 @@ help:
 	@echo ""
 	@echo "Setup:"
 	@echo "  make setup            - Sync workspace dependencies (creates .venv if needed)"
-	@echo "  make reset-the-world  - Reset all state: docker compose down -v + clean ~/.soothe/ (keeps config)"
+	@echo "  make reset-the-world  - Reset all state: docker compose down -v + clean ~/.soothe/ (keeps config) + restart"
 	@echo ""
 	@echo "Multi-Package Targets (all packages, auto-syncs first):"
 	@echo "  make sync             - Sync all packages with all extras"
@@ -72,7 +72,7 @@ setup:
 	uv sync --all-extras
 	@echo "Workspace ready (.venv created if needed)"
 
-# Reset all state: docker volumes + ~/.soothe/ (keeps config)
+# Reset all state: docker volumes + ~/.soothe/ (keeps config), then restart services
 reset-the-world:
 	@echo "Resetting the world..."
 	@echo "Stopping docker containers and removing volumes..."
@@ -81,6 +81,8 @@ reset-the-world:
 	@if [ -d ~/.soothe ]; then \
 		find ~/.soothe -mindepth 1 -maxdepth 1 ! -name config -exec rm -rf {} + 2>/dev/null || true; \
 	fi
+	@echo "Starting docker containers..."
+	docker compose up -d 2>/dev/null || echo "No docker compose services to start"
 	@echo "World reset complete"
 
 # ============================================================================
