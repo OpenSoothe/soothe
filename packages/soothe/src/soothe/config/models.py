@@ -802,7 +802,7 @@ class AgentLoopConfig(BaseModel):
         default=10,
         description="Maximum agent loop iterations",
         ge=1,
-        le=50,
+        le=500,
     )
 
     max_subagent_tasks_per_wave: int = Field(
