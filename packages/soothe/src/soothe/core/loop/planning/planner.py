@@ -8,6 +8,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage
+from pydantic import ValidationError
 
 from soothe.core.loop.state.schemas import (
     AgentDecision,
@@ -903,17 +904,28 @@ class LLMPlanner:
 
         except asyncio.CancelledError:
             raise
+        except ValidationError as e:
+            err_parts: list[str] = []
+            for err in e.errors()[:3]:
+                loc = ".".join(str(p) for p in err.get("loc", ()))
+                msg = str(err.get("msg", ""))
+                if loc:
+                    err_parts.append(f"{loc}: {msg}")
+                else:
+                    err_parts.append(msg)
+            detail = "; ".join(err_parts) if err_parts else str(e)
+            logger.warning("[LLMPlanner] PlanGeneration validation failed: %s", detail[:240])
         except Exception as e:
             logger.warning("[LLMPlanner] PlanGeneration failed: %s", str(e)[:200])
-            # Fallback: return default plan with LLM-like message
-            return PlanGeneration(
-                plan_action="new",
-                type="execute_steps",
-                execution_mode="sequential",
-                reasoning="Fallback default plan after plan generation failure.",
-                steps=_default_agent_decision(goal, iteration).steps,
-                next_action="I'll proceed with a default plan.",
-            ), None
+        # Fallback after validation or other plan-generate failures
+        return PlanGeneration(
+            plan_action="new",
+            type="execute_steps",
+            execution_mode="sequential",
+            reasoning="Fallback default plan after plan generation failure.",
+            steps=_default_agent_decision(goal, iteration).steps,
+            next_action="I'll proceed with a default plan.",
+        ), None
 
     @staticmethod
     def _plan_generation_to_decision(plan_result: Any) -> AgentDecision | None:
@@ -924,8 +936,9 @@ class LLMPlanner:
             plan_result.type is None
             or plan_result.execution_mode is None
             or not isinstance(plan_result.steps, list)
-            or not plan_result.steps
         ):
+            return None
+        if plan_result.type == "execute_steps" and not plan_result.steps:
             return None
         return AgentDecision(
             type=plan_result.type,
