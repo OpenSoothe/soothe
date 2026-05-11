@@ -1249,6 +1249,8 @@ async def execute_task_textual(
                             error_text = str(
                                 data.get("error") or data.get("message") or "Agent error"
                             )
+                            adapter.finalize_pending_tools_with_error(error_text)
+                            adapter.finalize_pending_steps_with_error(error_text)
                             await adapter._mount_message(AppMessage(error_text))
                             if adapter._set_spinner:
                                 await adapter._set_spinner(None)
@@ -1508,6 +1510,13 @@ async def execute_task_textual(
                     len(adapter._pending_main_tools),
                 )
             adapter._pending_main_tools.clear()
+
+            # Safety net: finalize any steps/tools still in-flight (e.g. worker
+            # crash sent a soothe.error.* event but step_completed was never
+            # emitted, or stream ended before matching results arrived).
+            if adapter._current_step_messages or adapter._current_tool_messages:
+                adapter.finalize_pending_tools_with_error("Stream ended unexpectedly")
+                adapter.finalize_pending_steps_with_error("Stream ended unexpectedly")
 
             # Handle HITL after stream completes
             if interrupt_occurred:
