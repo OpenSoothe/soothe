@@ -346,11 +346,17 @@ def _pool_worker(
         timeout_enabled = timeout_seconds > 0
 
         async def _execute() -> None:
-            runner = SootheRunner(config)
-            start_time = loop.time()
-            last_heartbeat_time = start_time
+            # SootheRunner inside try so constructor failures surface as protocol errors,
+            # not a silent worker process exit (BaseException would bypass except Exception).
+            runner: SootheRunner | None = None
+            start_time = 0.0
+            last_heartbeat_time = 0.0
 
             try:
+                runner = SootheRunner(config)
+                start_time = loop.time()
+                last_heartbeat_time = start_time
+
                 # Use asyncio.timeout for overall request timeout if enabled
                 timeout_ctx = _asyncio.timeout(timeout_seconds) if timeout_enabled else None
 
@@ -396,6 +402,16 @@ def _pool_worker(
                 else:
                     await _stream()
 
+            except _asyncio.CancelledError:
+                # Since Python 3.8 CancelledError does not inherit Exception; uncaught it
+                # would abort this worker process and strand the parent on a dead worker.
+                logger.warning(
+                    "Worker %s: asyncio.CancelledError during request loop=%s request_id=%s",
+                    worker_id,
+                    req.loop_id,
+                    request_id,
+                )
+                response_queue.put(("cancelled", request_id, None))
             except TimeoutError:
                 logger.warning(
                     "Worker %s: request timeout (%ds) for loop=%s request_id=%s",
@@ -416,8 +432,17 @@ def _pool_worker(
             finally:
                 # Per-request runners own PostgreSQL checkpointer pools; without cleanup,
                 # connections accumulate across requests and PoolTimeout can occur.
+                if runner is None:
+                    return
                 try:
                     await runner.cleanup()
+                except _asyncio.CancelledError:
+                    logger.debug(
+                        "Worker %s: runner cleanup cancelled (loop=%s request_id=%s)",
+                        worker_id,
+                        req.loop_id,
+                        request_id,
+                    )
                 except Exception:
                     logger.debug(
                         "Worker %s: runner cleanup failed (loop=%s request_id=%s)",
@@ -427,7 +452,39 @@ def _pool_worker(
                         exc_info=True,
                     )
 
-        loop.run_until_complete(_execute())
+        try:
+            loop.run_until_complete(_execute())
+        except _asyncio.CancelledError:
+            logger.warning(
+                "Worker %s: run_until_complete raised CancelledError loop=%s request_id=%s",
+                worker_id,
+                req.loop_id,
+                request_id,
+            )
+            try:
+                response_queue.put(("cancelled", request_id, None))
+            except Exception:
+                logger.exception(
+                    "Worker %s: failed to enqueue cancelled after CancelledError request_id=%s",
+                    worker_id,
+                    request_id,
+                )
+        except Exception as exc:
+            # Last-resort: anything that escaped _execute (e.g. sync code after await chain).
+            logger.exception(
+                "Worker %s: uncaught exception in run_until_complete loop=%s request_id=%s",
+                worker_id,
+                req.loop_id,
+                request_id,
+            )
+            try:
+                response_queue.put(("error", request_id, exc))
+            except Exception:
+                logger.exception(
+                    "Worker %s: failed to enqueue error after fatal failure request_id=%s",
+                    worker_id,
+                    request_id,
+                )
 
     while requests_completed < max_requests:
         try:
@@ -781,9 +838,15 @@ class WorkerPool:
             return
 
         worker.dead_failure_routed = True
+        exitcode = worker.process.exitcode
+        exit_hint = (
+            f" (worker exit code: {exitcode})"
+            if exitcode is not None
+            else " (worker exit code: unknown)"
+        )
         err = RuntimeError(
             "Worker subprocess exited unexpectedly during query execution; "
-            "check daemon logs for worker or model errors."
+            "check daemon logs for worker or model errors." + exit_hint
         )
         try:
             await aio_q.put(("error", err))
@@ -796,6 +859,13 @@ class WorkerPool:
 
     async def _handle_dead_worker(self, worker: WorkerProcess) -> None:
         """Recover from a dead OS process: fail in-flight work and respawn the slot."""
+        logger.warning(
+            "WorkerPool: worker %s OS process ended (exitcode=%s, busy=%s, request_id=%s)",
+            worker.worker_id,
+            worker.process.exitcode,
+            worker.status == WorkerStatus.BUSY,
+            worker.current_request_id,
+        )
         if worker.current_request_id is not None:
             await self._route_failure_for_dead_busy_worker(worker)
         try:
