@@ -2,6 +2,7 @@
 
 LLM-driven query intent classifier with conversation context awareness.
 Pure LLM-driven classification - no keyword heuristics.
+Supports intent_hint parameter to bypass LLM for known intent types.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from pydantic import BaseModel
 
 from soothe.utils.text_preview import preview_first
 
-from .models import IntentClassification, RoutingClassification
+from .models import IntentClassification, IntentHint, RoutingClassification
 from .prompts import (
     INTENT_CLASSIFICATION_PROMPT,
     INTENT_CLASSIFICATION_RETRY_PROMPT,
@@ -83,11 +84,15 @@ class IntentClassifier:
         active_goal_description: str | None = None,
         thread_id: str | None = None,
         observability_metadata: dict[str, str] | None = None,
+        intent_hint: IntentHint | None = None,
     ) -> IntentClassification:
         """Unified intent classification with goal awareness.
 
         Single LLM call determines intent, goal handling, and routing complexity.
         Uses conversation context to detect thread continuation queries.
+
+        When ``intent_hint`` is provided for fast-path intents (chitchat, quiz),
+        bypasses LLM classification entirely and returns a pre-built classification.
 
         Args:
             query: User input text.
@@ -95,10 +100,20 @@ class IntentClassifier:
             active_goal_id: Current active goal ID in thread (if any).
             active_goal_description: Description of active goal.
             thread_id: Thread context for state awareness.
+            observability_metadata: Optional metadata for observability.
+            intent_hint: Suggested intent to bypass LLM classification.
 
         Returns:
             IntentClassification with intent type and routing attributes.
         """
+        # Fast-path bypass when hint provided for chitchat/quiz
+        if intent_hint in (IntentHint.CHITCHAT, IntentHint.QUIZ):
+            logger.info(
+                "Intent hint bypass: using suggested intent_type=%s",
+                intent_hint.value,
+            )
+            return self._build_intent_from_hint(query, intent_hint)
+
         # Fallback when classifier disabled
         if not self._fast_model or not self._intent_model:
             return self._fallback_intent(query)
@@ -379,6 +394,64 @@ class IntentClassifier:
             return f"{goal_id} (active)"
         else:
             return "None (no active goal in thread)"
+
+    def _build_intent_from_hint(
+        self,
+        query: str,
+        hint: IntentHint,
+    ) -> IntentClassification:
+        """Build intent classification from hint (bypasses LLM).
+
+        Used when caller provides intent_hint for fast-path intents
+        (chitchat, quiz) to skip LLM classification entirely.
+
+        Args:
+            query: Original user query.
+            hint: Suggested intent type.
+
+        Returns:
+            IntentClassification with the hinted intent type.
+        """
+        if hint == IntentHint.CHITCHAT:
+            # Generate a simple chitchat response
+            chitchat_response = self._generate_chitchat_response(query)
+            return IntentClassification(
+                intent_type="chitchat",
+                reuse_current_goal=False,
+                goal_description=None,
+                task_complexity="chitchat",
+                chitchat_response=chitchat_response,
+                reasoning=f"Intent hint bypass: {hint.value}",
+            )
+        elif hint == IntentHint.QUIZ:
+            # Quiz uses think model for deeper reasoning - no pre-generated response
+            return IntentClassification(
+                intent_type="quiz",
+                reuse_current_goal=False,
+                goal_description=None,
+                task_complexity="quiz",
+                quiz_response=None,  # Will be filled by _run_quiz with think model
+                reasoning=f"Intent hint bypass: {hint.value}",
+            )
+        elif hint == IntentHint.CONTINUE_THREAD:
+            return IntentClassification(
+                intent_type="continue_thread",
+                reuse_current_goal=True,
+                goal_description=query,
+                task_complexity="medium",
+                reasoning=f"Intent hint bypass: {hint.value}",
+            )
+        elif hint == IntentHint.NEW_GOAL:
+            return IntentClassification(
+                intent_type="new_goal",
+                reuse_current_goal=False,
+                goal_description=query,
+                task_complexity="medium",
+                reasoning=f"Intent hint bypass: {hint.value}",
+            )
+        else:
+            # Fallback for unknown hint (should not happen with enum)
+            return self._fallback_intent(query)
 
     def _fallback_intent(
         self,

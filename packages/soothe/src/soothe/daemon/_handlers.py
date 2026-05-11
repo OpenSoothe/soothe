@@ -189,6 +189,10 @@ class DaemonHandlersMixin:
                     model_kw = raw_m.strip() if isinstance(raw_m, str) and raw_m.strip() else None
                     raw_att = msg.get("attachments")
                     attachments = raw_att if isinstance(raw_att, list) and raw_att else None
+                    raw_hint = msg.get("intent_hint")
+                    intent_hint = (
+                        raw_hint if isinstance(raw_hint, str) and raw_hint.strip() else None
+                    )
                     await self._query_engine.run_query(
                         text,
                         loop_id=loop_id,
@@ -201,6 +205,7 @@ class DaemonHandlersMixin:
                         model_params=model_params,
                         attachments=attachments,
                         checkpoint_thread_id=checkpoint_thread_id,
+                        intent_hint=intent_hint,
                     )
         except Exception:
             logger.exception("Daemon loop input handler error")

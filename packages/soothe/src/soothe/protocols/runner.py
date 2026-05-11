@@ -30,6 +30,8 @@ class LoopRunRequest:
     model_params: dict[str, Any] = field(default_factory=dict)
     # Worker pool timeout and cancellation support
     timeout_seconds: float | None = None
+    # Intent hint to bypass LLM classification
+    intent_hint: str | None = None
 
 
 class LoopRunnerProtocol(Protocol):
