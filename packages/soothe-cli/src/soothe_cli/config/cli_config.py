@@ -24,7 +24,7 @@ class CLIConfig:
     daemon_host: str = "127.0.0.1"
     daemon_port: int = 8765
 
-    # logging_level: DEBUG/INFO/… for ~/.soothe/logs/soothe-cli.log; None = default INFO.
+    # logging_level: DEBUG/INFO/… for ~/.soothe/logs/cli.log; None = default INFO.
     logging_level: str | None = None
 
     # Output streaming overrides (RFC-614)
