@@ -387,6 +387,8 @@ daemon:
   auto_cancel_on_startup: true
   max_input_queue_size: 1000
   max_concurrent_dispatches: 50
+  # Cap parallel image-role vision preflight on the daemon (0 = unlimited).
+  max_concurrent_vision_preflight: 8
   event_size_stats_enabled: false
   event_size_stats_interval_seconds: 60
   event_size_stats_idle_pause_seconds: 120

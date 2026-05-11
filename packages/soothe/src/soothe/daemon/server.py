@@ -122,6 +122,10 @@ class SootheDaemon(DaemonHandlersMixin):
         self._dispatch_semaphore: asyncio.Semaphore = asyncio.Semaphore(
             self._config.daemon.max_concurrent_dispatches
         )
+        _vmax = int(getattr(self._config.daemon, "max_concurrent_vision_preflight", 8) or 0)
+        self._vision_preflight_semaphore: asyncio.Semaphore | None = (
+            asyncio.Semaphore(_vmax) if _vmax > 0 else None
+        )
         self._dispatch_tasks: dict[str, asyncio.Task] = {}  # client_id -> Task
         self._thread_logger: ThreadLogger | None = None
         self._pid_lock_fd: int | None = None
