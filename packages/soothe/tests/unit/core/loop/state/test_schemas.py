@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from soothe.core.loop.state import schemas as schemas_mod
 from soothe.core.loop.state.schemas import (
@@ -388,8 +389,31 @@ class TestPlanGeneration:
 
     def test_new_requires_flattened_fields(self) -> None:
         """plan_action=new requires top-level decision fields."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError):
             PlanGeneration(plan_action="new", next_action="test")
+
+    def test_new_final_allows_empty_steps(self) -> None:
+        """type=final matches AgentDecision: no execute steps required."""
+        out = PlanGeneration(
+            plan_action="new",
+            type="final",
+            execution_mode="sequential",
+            steps=[],
+            next_action="Wrapping up.",
+        )
+        assert out.type == "final"
+        assert out.steps == []
+
+    def test_new_execute_steps_requires_steps(self) -> None:
+        """type=execute_steps still requires at least one step."""
+        with pytest.raises(ValidationError):
+            PlanGeneration(
+                plan_action="new",
+                type="execute_steps",
+                execution_mode="sequential",
+                steps=[],
+                next_action="x",
+            )
 
     def test_keep_can_omit_decision_fields(self) -> None:
         """plan_action=keep does not require decision fields."""
