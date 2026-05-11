@@ -415,6 +415,27 @@ class TestPlanGeneration:
                 next_action="x",
             )
 
+    def test_new_defaults_execution_mode_when_omitted(self) -> None:
+        """Omitted execution_mode defaults to sequential (common LLM omission for type=final)."""
+        out = PlanGeneration(
+            plan_action="new",
+            type="final",
+            steps=[],
+            next_action="Done.",
+        )
+        assert out.execution_mode == "sequential"
+
+    def test_new_execute_steps_defaults_execution_mode(self) -> None:
+        """execute_steps accepts omitted execution_mode; steps are still required."""
+        step = StepAction(description="Do work", expected_output="ok")
+        out = PlanGeneration(
+            plan_action="new",
+            type="execute_steps",
+            steps=[step],
+            next_action="Running.",
+        )
+        assert out.execution_mode == "sequential"
+
     def test_keep_can_omit_decision_fields(self) -> None:
         """plan_action=keep does not require decision fields."""
         out = PlanGeneration(plan_action="keep", next_action="I will continue.")
