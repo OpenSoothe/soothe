@@ -251,7 +251,7 @@ def warmup_cache(
     """Pre-download embedding model cache for faster startup.
 
     Downloads the sentence_transformers embedding model to
-    ~/.soothe/cache/huggingface/ for sharing across main daemon
+    ~/.cache/soothe/models/huggingface/ for sharing across main daemon
     and worker processes.
 
     Run this before starting the daemon for faster first-query response.
