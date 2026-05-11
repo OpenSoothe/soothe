@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pydantic_core import PydanticUndefined
+
 from soothe_sdk.core.events import SootheEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 
@@ -71,18 +73,24 @@ def register_event(
     Raises:
         ValueError: If event_class doesn't have a `type` field with default value.
     """
-    # Extract type string from the model's `type` field default
-    if not hasattr(event_class, "type"):
+    # Pydantic v2 does not mirror fields as class attributes; use model_fields only.
+    model_fields = getattr(event_class, "model_fields", None)
+    if model_fields is None:
+        raise ValueError(
+            f"Event class {event_class.__name__} must be a Pydantic v2 model with a 'type' field"
+        )
+
+    type_field = model_fields.get("type")
+    if type_field is None:
         raise ValueError(f"Event class {event_class.__name__} must have a 'type' field")
 
-    # Get the default value of the type field
-    type_field = event_class.model_fields.get("type")
-    if type_field is None or type_field.default is None:
+    type_default = type_field.default
+    if type_default is PydanticUndefined or type_default is None:
         raise ValueError(
             f"Event class {event_class.__name__} must have a 'type' field with a default value"
         )
 
-    type_string = type_field.default
+    type_string = type_default
 
     # Normalize verbosity to VerbosityTier
     if verbosity is None:
