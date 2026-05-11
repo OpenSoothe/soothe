@@ -35,6 +35,10 @@ from soothe.daemon._rpc_handlers import (
     _handle_command_request,
     _send_command_response,
 )
+from soothe.daemon.message_router import (
+    _coerce_loop_input_text,
+    _queue_options_from_daemon_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +144,13 @@ class DaemonHandlersMixin:
         await self._message_router.dispatch(client_id, msg)
 
     async def _process_loop_input_message(self, loop_id: str, msg: dict[str, Any]) -> None:
-        """Process one loop-scoped message from ``LoopInputDispatcher`` (IG-408)."""
+        """Process one loop-scoped message from ``LoopInputDispatcher`` (IG-408).
+
+        Supported ``msg["type"]`` values for user turns: ``input`` (normalized queue
+        payload from ``loop_input`` RPC) or ``loop_input`` (wire-shaped dict with
+        ``content``). Other types are ignored with a warning except ``command`` and
+        ``command_request``, which are handled above.
+        """
         from soothe.daemon.loop_isolation import bind_execution_thread_for_loop
 
         msg_type = msg.get("type", "")
@@ -180,33 +190,53 @@ class DaemonHandlersMixin:
                 req.setdefault("loop_id", loop_id)
                 await self._handle_command_request(req)
                 return
-            if msg_type == "input":
-                text = msg["text"]
-                if self._query_engine is not None:
-                    mp = msg.get("model_params")
-                    model_params = mp if isinstance(mp, dict) else None
-                    raw_m = msg.get("model")
-                    model_kw = raw_m.strip() if isinstance(raw_m, str) and raw_m.strip() else None
-                    raw_att = msg.get("attachments")
-                    attachments = raw_att if isinstance(raw_att, list) and raw_att else None
-                    raw_hint = msg.get("intent_hint")
-                    intent_hint = (
-                        raw_hint if isinstance(raw_hint, str) and raw_hint.strip() else None
+            if msg_type not in ("input", "loop_input"):
+                logger.warning(
+                    "Loop worker ignoring unsupported queue message type=%r loop_id=%s",
+                    msg_type,
+                    loop_id[:16] if loop_id else "?",
+                )
+                return
+
+            if msg_type == "loop_input":
+                prompt_text = _coerce_loop_input_text(msg.get("content"))
+                if prompt_text is None:
+                    logger.warning(
+                        "Loop worker loop_input missing usable content loop_id=%s",
+                        loop_id[:16] if loop_id else "?",
                     )
-                    await self._query_engine.run_query(
-                        text,
-                        loop_id=loop_id,
-                        autonomous=bool(msg.get("autonomous", False)),
-                        max_iterations=msg.get("max_iterations"),
-                        preferred_subagent=msg.get("preferred_subagent"),
-                        client_id=msg.get("client_id"),
-                        interactive=bool(msg.get("interactive", False)),
-                        model=model_kw,
-                        model_params=model_params,
-                        attachments=attachments,
-                        checkpoint_thread_id=checkpoint_thread_id,
-                        intent_hint=intent_hint,
+                    return
+            else:
+                raw_text = msg.get("text")
+                if not isinstance(raw_text, str):
+                    logger.warning(
+                        "Loop worker input missing str text loop_id=%s",
+                        loop_id[:16] if loop_id else "?",
                     )
+                    return
+                prompt_text = raw_text
+
+            if self._query_engine is not None:
+                qo = _queue_options_from_daemon_message(msg)
+                model_params = qo["model_params"]
+                model_kw = qo["model"]
+                intent_hint = qo["intent_hint"]
+                raw_att = msg.get("attachments")
+                attachments = raw_att if isinstance(raw_att, list) and raw_att else None
+                await self._query_engine.run_query(
+                    prompt_text,
+                    loop_id=loop_id,
+                    autonomous=qo["autonomous"],
+                    max_iterations=qo["max_iterations"],
+                    preferred_subagent=qo["preferred_subagent"],
+                    client_id=msg.get("client_id"),
+                    interactive=qo["interactive"],
+                    model=model_kw,
+                    model_params=model_params,
+                    attachments=attachments,
+                    checkpoint_thread_id=checkpoint_thread_id,
+                    intent_hint=intent_hint,
+                )
         except Exception:
             logger.exception("Daemon loop input handler error")
             self._query_running = False
