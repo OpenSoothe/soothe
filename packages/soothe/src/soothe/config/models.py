@@ -309,6 +309,32 @@ class ToolsConfig(BaseModel):
     http_requests: HttpRequestsToolsConfig = Field(default_factory=HttpRequestsToolsConfig)
 
 
+class HitlApprovalConfig(BaseModel):
+    """Human-in-the-loop tool approval configuration.
+
+    When enabled, the agent interrupts before executing configured tools and
+    waits for user approval via the TUI ApprovalMenu (approve/reject/auto-approve-all).
+
+    Args:
+        enabled: Master switch for HITL approval. When False, all tools execute directly.
+        tools: List of tool names requiring approval before execution.
+            Supports: execute (shell), write_file, edit_file, delete_file, etc.
+            Shell tool aliases (bash, shell) are normalized to "execute".
+
+    Note: The ApprovalMenu widget already handles approve (y), reject (n),
+    and auto-approve-all (a) decisions. No TUI changes needed.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable human-in-the-loop approval for tool calls",
+    )
+    tools: list[str] = Field(
+        default_factory=list,
+        description="Tool names requiring approval (e.g., execute, write_file, edit_file)",
+    )
+
+
 class PersistenceConfig(BaseModel):
     """Unified persistence settings for protocol backends.
 

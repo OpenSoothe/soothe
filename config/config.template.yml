@@ -407,6 +407,22 @@ security:
   denied_file_types: []
   require_approval_for_file_types: [".env", ".pem", ".key", ".p12", ".pfx", ".crt"]
 
+# Human-in-the-Loop (HITL) Configuration
+# Require user approval before executing specific tool calls.
+# When enabled, the agent interrupts and shows an approval menu (approve/reject/auto-approve-all).
+
+hitl:
+  enabled: false  # Master switch for HITL approval (default: disabled)
+
+  # Tool names requiring approval before execution.
+  # Supported tools: execute (shell), write_file, edit_file, edit_file_lines, delete_file
+  # Shell aliases (bash, shell) are normalized to "execute".
+  # Add any MCP tool name or custom tool name.
+  tools: []
+
+  # Example: Require approval for shell commands and file writes
+  # tools: ["execute", "write_file", "edit_file", "delete_file"]
+
 protocols:
   planner:
     routing: auto  # auto | always_direct | always_planner | always_claude
