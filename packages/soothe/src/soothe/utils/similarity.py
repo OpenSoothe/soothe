@@ -8,7 +8,7 @@ Provides reusable similarity calculation for:
 Uses sentence_transformers when available, falls back to keyword matching.
 
 Model Cache:
-- Models are cached at ~/.soothe/cache/huggingface/ for sharing across processes
+- Models are cached under ``$SOOTHE_DATA_DIR/cache/huggingface`` (default ``$SOOTHE_HOME/data/cache/huggingface``)
 - Use warmup_embedding_model() to pre-download models at daemon startup
 """
 
@@ -17,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
-import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -33,10 +32,16 @@ _EMBEDDING_TIMEOUT_SECONDS = 30
 # Thread pool for embedding calls (to avoid blocking async loop)
 _embedding_executor: ThreadPoolExecutor | None = None
 
-# Model cache directory - shared across main and worker processes
-_HF_CACHE_DIR = (
-    Path(os.environ.get("SOOTHE_DATA_DIR", Path.home() / ".soothe")) / "cache" / "huggingface"
-)
+
+def hf_embedding_cache_dir() -> Path:
+    """HuggingFace cache directory for the embedding model (shared across processes).
+
+    Uses ``SOOTHE_DATA_DIR`` from the SDK (defaults to ``SOOTHE_HOME/data``).
+    """
+    from soothe_sdk.client.config import SOOTHE_DATA_DIR
+
+    return Path(SOOTHE_DATA_DIR) / "cache" / "huggingface"
+
 
 # Check if sentence_transformers is available
 _has_sentence_transformers = False
@@ -58,7 +63,7 @@ def _get_transformer_model() -> SentenceTransformer | None:
 
     Uses synchronous loading to avoid async client closure issues.
     The model is loaded on first actual use, not at import time.
-    Models are cached at ~/.soothe/cache/huggingface/ for sharing across processes.
+    Models are cached under ``SOOTHE_DATA_DIR/cache/huggingface``.
     """
     global _transformer_model, _has_sentence_transformers, _model_loading_attempted
 
@@ -71,18 +76,18 @@ def _get_transformer_model() -> SentenceTransformer | None:
 
     _model_loading_attempted = True
     try:
-        # Ensure cache directory exists
-        _HF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_dir = hf_embedding_cache_dir()
+        cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Load model with shared cache folder
         _transformer_model = SentenceTransformer(
             _transformer_model_name,
-            cache_folder=str(_HF_CACHE_DIR),
+            cache_folder=str(cache_dir),
         )
         logger.info(
             "Loaded sentence_transformers model: %s (cache: %s)",
             _transformer_model_name,
-            _HF_CACHE_DIR,
+            cache_dir,
         )
     except Exception as e:
         logger.warning("Failed to load sentence_transformers model: %s", e)
@@ -529,7 +534,7 @@ def warmup_embedding_model() -> bool:
     Returns:
         True if model was successfully downloaded/loaded, False otherwise.
     """
-    logger.info("Warming up embedding model cache at %s", _HF_CACHE_DIR)
+    logger.info("Warming up embedding model cache at %s", hf_embedding_cache_dir())
 
     if not _has_sentence_transformers:
         logger.warning("sentence_transformers not available, skipping warmup")
