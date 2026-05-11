@@ -19,13 +19,17 @@ class UIConfig(BaseModel):
 
 
 class UpdateConfig(BaseModel):
-    """Configuration for auto-update preferences.
+    """Configuration for CLI update and auto-update preferences.
 
     Args:
-        auto_update: Whether auto-update is enabled.
+        check: Whether to run a PyPI version check on startup (CLI).
+        auto_update: Whether auto-update is enabled when an update is available.
     """
 
-    auto_update: bool = False
+    check: bool = True
+    """Run version check on CLI startup."""
+
+    auto_update: bool = True
     """Auto-update preference."""
 
 
