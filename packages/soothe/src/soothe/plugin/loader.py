@@ -265,6 +265,7 @@ class PluginLoader:
                     "Library %s version %s does not satisfy %s", req.name, version, req.specifier
                 )
                 return False
+            return True
 
         except importlib.metadata.PackageNotFoundError:
             logger.debug("Library not installed: %s", dep_string)

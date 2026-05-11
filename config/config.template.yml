@@ -1,24 +1,25 @@
 # Soothe Configuration Template
 # ------------------------------------------------------------------------------
+# Full YAML aligned with Pydantic defaults in ``packages/soothe/src/soothe/config/``
+# (``models.py``, ``daemon_config.py``, ``settings.py``). Values match those defaults
+# except documented examples: OpenAI ``providers`` sample, ``sqlite_vec`` store + router,
+# and explicit ``subagents.*.config`` blocks (same as ``BrowserSubagentConfig`` /
+# ``ExploreSubagentConfig`` defaults; optional router roles are null and inherit ``default``).
+#
 # Usage: soothe --config /path/to/this-file.yaml
-# Local dev: start from config/config.dev.yml (repo root) and adjust providers.
-# Secrets: use "${ENV_VAR}" under providers/tools; export those variables from your shell
-#   or CI (e.g. OPENAI_API_KEY, ANTHROPIC_API_KEY, DASHSCOPE_API_KEY).
-# Optional tool keys: TAVILY_API_KEY, JINA_API_KEY, SERPER_API_KEY, GITHUB_TOKEN (see tools.*).
-# Langfuse: observability.langfuse block below; local Docker defaults in docker-compose.yml.
-# Infra env for compose (Postgres, etc.): see docker-compose.yml at repo root.
-
-# Model Providers - Define LLM providers with API keys (supports ${ENV_VAR} syntax)
+# Local dev: start from config/config.dev.yml and adjust providers.
+# Secrets: use ``${ENV_VAR}`` under providers; export OPENAI_API_KEY, etc.
+# Optional tool env: TAVILY_API_KEY, JINA_API_KEY, SERPER_API_KEY, GITHUB_TOKEN.
 
 providers:
-  - name: openai
-    provider_type: openai
-    api_key: "${OPENAI_API_KEY}"
-    # api_base_url: https://api.openai.com/v1
-    models:
-      - gpt-4o
-      - gpt-4o-mini
-      - o3-mini
+- name: openai
+  provider_type: openai
+  api_key: ${OPENAI_API_KEY}
+  api_base_url: null
+  models:
+  - gpt-4o
+  - gpt-4o-mini
+  - o3-mini
 
   # OpenAI-compatible (DashScope, OpenRouter, vLLM):
   # - name: dashscope
@@ -27,7 +28,7 @@ providers:
   #   api_key: "${DASHSCOPE_API_KEY}"
   #   models: [qwen-max]
 
-  # LMStudio/Ollama (local models) - Limited tool_choice support, use provider_type: limited_openai
+  # LMStudio / Ollama — use provider_type: limited_openai
   # - name: lmstudio
   #   provider_type: limited_openai
   #   api_base_url: http://localhost:1234/v1
@@ -40,454 +41,397 @@ providers:
   #   api_key: "${ANTHROPIC_API_KEY}"
   #   models: [claude-sonnet-4-20250514]
 
-# Model Router - Maps purpose roles to "provider:model" (unset roles inherit from "default")
-
 router:
-  default: "openai:gpt-4o-mini"
-  fast: "openai:gpt-4o-mini"
-  think: "openai:o3-mini"
-  image: "openai:gpt-4o"
-  embedding: "openai:text-embedding-3-small"
-
-# Autonomous Operation - Requires explicit user activation per thread (default: disabled)
-
-autonomous:
-  enabled_by_default: false
-  max_iterations: 10
-  max_retries: 2
-  max_total_goals: 50        # RFC-0007 §5.6
-  max_goal_depth: 5          # RFC-0007 §5.6
-  enable_dynamic_goals: true # RFC-0007 §5.4
-
-# Agent Loop Configuration (IG-407: unified config for RFC-201, RFC-220)
-# Behavior fields directly under agent_loop.* (max 2 levels nesting)
-# Infrastructure limits grouped in agent_loop.limits.* subsection
-
-agent_loop:
-  # === BEHAVIOR FIELDS (Layer 2: Algorithmic Control) ===
-  max_iterations: 10                      # Plan→Execute loop iterations
-  max_subagent_tasks_per_wave: 16         # Task cap per Execute wave (0 = unlimited)
-  agent_loop_output_contract_enabled: true
-  final_response: adaptive                # adaptive | always_synthesize
-  goal_completion_mode: llm_only          # llm_only | heuristic_only | hybrid
-  prior_conversation_limit: 10
-  context_window_limit: 200000
-
-  output_streaming: true
-
-  loop_orchestrator_evidence_validate: true
-
-  # Nested configs (unchanged structure)
-  goal_context:
-    plan_limit: 10
-    execute_limit: 10
-    enabled: true
-
-  working_memory:
-    enabled: false
-    max_inline_chars: 2000
-    max_entry_chars_before_spill: 4000
-
-  report_output:
-    display_threshold: 20000
-    preview_chars: 500
-    synthesis_max_chars: 0  # 0 = unlimited
-
-  plan_prompt_ledger:  # Caps for plan prompts; 0 = no cap
-    plan_ledger_max_messages: 0
-    plan_ledger_max_total_chars: 0
-    plan_ledger_max_message_chars: 0
-
-  # === INFRASTRUCTURE LIMITS (Layer 1: Runtime Constraints) ===
-  limits:
-    # Concurrency controls (0 = unlimited)
-    max_parallel_goals: 1         # Autonomous goal parallelism
-    max_parallel_steps: 2         # Max plan steps concurrent per batch; executor runs extra batches until done
-    max_parallel_subagents: 4     # Subagent task parallelism
-    max_parallel_tools: 5         # Concurrent tool calls per thread (bounds asyncio.gather)
-    global_max_llm_calls: 5       # Global LLM call cap
-    step_parallelism: dependency  # sequential | dependency | max
-
-    # Rate limiting
-    llm_rpm_limit: 120
-    llm_concurrent_limit: 10
-
-    # Timeout controls
-    llm_call_timeout_seconds: 120
-    llm_call_timeout_max_seconds: 240  # Fail fast on pathological long calls
-    llm_call_timeout_adaptive: true
-    llm_retry_on_timeout: true          # Retry with timeout escalation
-    llm_max_timeout_retries: 2
-    llm_timeout_retry_multiplier: 2.0
-
-    # Tool call limits (ToolCallLimitMiddleware; explore batches many fs tools)
-    tool_call_limit:
-      global_thread_limit: 150  # Cap across a thread (explore + multi-turn search)
-      global_run_limit: 56      # Cap per single agent invocation (parallel glob/ls)
-      tool_specific_limits:     # Tool-specific overrides for web search tools
-        wizsearch_search: {thread_limit: 5, run_limit: 3}
-        wizsearch_crawl: {thread_limit: 5, run_limit: 3}
-        web_search: {thread_limit: 5, run_limit: 3}
-        fetch_url: {thread_limit: 5, run_limit: 3}
-        search: {thread_limit: 5, run_limit: 3}
-
-    # Tool retry config (ToolRetryMiddleware)
-    tool_retry:
-      max_retries: 3
-      backoff_factor: 2.0
-      initial_delay: 1.0
-
-    # Recovery settings
-    recovery:
-      progressive_checkpoints: true  # RFC-0010
-      auto_resume_on_start: false
-
-# Observability Configuration - Unified debugging and monitoring settings
-
-observability:
-  log_file_level: INFO  # Logging level for file output (DEBUG, INFO, WARNING, ERROR)
-  log_file_path: null  # Log file path (empty = SOOTHE_HOME/logs/soothed.log)
-  log_file_max_bytes: 5242880  # 5 MB - Maximum file size before rotation
-  log_file_backup_count: 3  # Number of rotating backup files
-
-  console:
-    enabled: false
-    level: WARNING
-    stream: stderr
-    format: "%(level_short)s %(name)s %(message)s"
-
-  global_history:
-    enabled: true
-    max_size: 5000
-    dedup_window: 10
-    retention_days: 90
-
-  verbosity: normal  # Verbosity level: quiet, normal, debug
-
-  thread_logging_enabled: true  # Whether thread-specific logging is enabled
-  thread_logging_retention_days: 30  # Days to retain thread logs before cleanup
-  thread_logging_max_size_mb: 100  # Maximum total size for thread logs directory
-
-  # Langfuse LLM observability (optional: pip install 'soothe[langfuse]')
-  langfuse:
-    enabled: false
-    public_key: null  # or "${LANGFUSE_PUBLIC_KEY}"
-    secret_key: null  # or "${LANGFUSE_SECRET_KEY}"
-    host: null  # default cloud host; set for self-hosted (e.g. https://langfuse.example.com)
-    environment: null  # e.g. production, staging
-    release: null  # deployment release label
-    sample_rate: null  # optional 0.0–1.0 client sampling
-    trace_name: null  # optional RunnableConfig run_name for root graph runs
-    tags: null  # optional list e.g. [soothe, production] → Langfuse trace tags (Cost Dashboard filters)
-    user_id: null  # optional Langfuse user id; supports ${ENV} (maps to langfuse_user_id metadata)
-
-# Daemon Multi-Transport Configuration (RFC-0013) - WebSocket (required) + HTTP REST (optional)
-
-daemon:
-  transports:
-    websocket:
-      enabled: true
-      host: "127.0.0.1"
-      port: 8765
-      tls_enabled: false
-      cors_origins: ["http://localhost:*", "http://127.0.0.1:*"]
-      max_frame_size: 10485760  # 10MB
-    http_rest:
-      enabled: false
-      host: "127.0.0.1"
-      port: 8766
-      tls_enabled: false
-      cors_origins: ["http://localhost:*", "http://127.0.0.1:*"]
-
-  max_concurrent_threads: 100  # RFC-402
-  cancel_grace_seconds: 30
-  # HITL: seconds to wait for client resume_interrupts (0 = unlimited). On timeout, approve tools;
-  # ask_user uses the first listed choice per question (empty if no choices).
-  hitl_timeout_seconds: 30
-  max_input_queue_size: 1000
-  max_concurrent_dispatches: 50
-  # EventBus JSON wire-size distribution (streaming histogram; constant memory)
-  event_size_stats_enabled: false
-  event_size_stats_interval_seconds: 60
-  event_size_stats_idle_pause_seconds: 120
-
-  # RFC-221: Distributed loop execution configuration
-  # distributed: Controls subprocess isolation (local multiprocessing or Ray actors)
-  distributed:
-    enabled: false          # Enable distributed mode (Ray actors). Set SOOTHE_DISTRIBUTED=true.
-    ray:
-      address: null         # null = start local cluster, 'auto' = connect to existing
-      num_cpus: 0           # CPUs per actor (0 = auto)
-      object_store_memory: 0    # Object store memory per actor (bytes, 0 = auto)
-      max_concurrent_actors: 10 # Maximum concurrent loop actors
-      actor_lifetime: detached  # 'detached' (survives driver) or 'non_detached'
-      log_to_driver: true       # Route actor logs to driver process
-
-  # RFC-221 enhancement: Persistent worker pool (reduces ~8s spawn overhead)
-  # Pre-warms N worker processes at daemon startup. Workers create fresh SootheRunner
-  # per request (Option A) ensuring no user data leakage across requests.
-  # Used when distributed.enabled=false.
-  # Pool sizing: starts with min_pool_size, scales up to max_pool_size under load.
-  worker_pool:
-    enabled: true           # Enable persistent worker pool mode
-    min_pool_size: 2        # Minimum workers to keep pooled (startup baseline, 1-64)
-    max_pool_size: 4        # Maximum workers to scale up under load (1-128)
-    idle_timeout_seconds: 300    # Idle worker timeout before shutdown (60-3600)
-    max_requests_per_worker: 100 # Max requests before worker respawn (prevents memory buildup)
-    request_timeout_seconds: 1800 # Default per-request timeout (0 = no timeout, default 30 min)
-    heartbeat_interval_seconds: 30   # Worker heartbeat interval for stuck detection
-    stuck_worker_timeout_seconds: 180 # Time since last heartbeat before worker marked stuck
-    # Dispatch wait stats (histograms, similar to event_size_stats on the EventBus)
-    dispatch_wait_stats_enabled: false
-    dispatch_wait_stats_interval_seconds: 60
-    dispatch_wait_stats_idle_pause_seconds: 120
-
-# Subagents - Enabled by default (set enabled: false to disable)
-
+  default: openai:gpt-4o-mini
+  think: null
+  fast: null
+  image: null
+  embedding: null
+embedding_dims: 1536
+assistant_name: Soothe
+system_prompt: null
 subagents:
   browser:
-    enabled: false
+    enabled: true
+    model: null
+    transport: local
+    url: null
     config:
-      max_steps: 10  # Browser-use agent loop limit per delegated task
-      runtime_dir: ""  # Empty = use SOOTHE_HOME/agents/browser/
-      downloads_dir: ""  # Empty = runtime_dir/downloads/
-      user_data_dir: ""  # Empty = runtime_dir/profiles/default/
-      extensions_dir: ""  # Empty = runtime_dir/extensions/
-      cleanup_on_exit: true  # Clean temp files on session end
-      disable_extensions: true  # Disable uBlock Origin, cookie handler, ClearURLs
-      disable_cloud: true  # Disable browser-use cloud service
-      disable_telemetry: true  # Disable anonymous usage telemetry
-      enable_existing_browser: true  # Allow connecting to existing Chrome via CDP
-      profile_mode: ephemeral  # for concurrent browser tasks
-
+      max_steps: 10
+      runtime_dir: ''
+      downloads_dir: ''
+      user_data_dir: ''
+      extensions_dir: ''
+      cleanup_on_exit: true
+      disable_extensions: true
+      disable_cloud: true
+      disable_telemetry: true
+      enable_existing_browser: true
+      browser_start_timeout: 90
+      profile_mode: ephemeral
+    runtime_dir: ''
   claude:
     enabled: true
-    # Claude subagent uses ANTHROPIC_API_KEY and model from environment
-    # Set environment variables: ANTHROPIC_API_KEY, ANTHROPIC_MODEL (optional)
-    # No model configuration needed here
-
-  research:
-    enabled: true
-    # Research subagent for deep multi-source iterative research
-    # Uses the InquiryEngine for comprehensive investigation
-    # No additional configuration needed - uses wizsearch tool settings
-
+    model: null
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
   explore:
     enabled: true
-    # Explore subagent uses router fast role by default
-    # Explore subagent for targeted filesystem search (RFC-613)
-    # Uses LLM-orchestrated iterative search with configurable thoroughness
+    model: null
+    transport: local
+    url: null
     config:
-      thoroughness: "medium"  # quick (6), medium (10), thorough (16) model-turn cap
+      thoroughness: medium
       max_iterations:
-        quick: 6
-        medium: 10
-        thorough: 16
-      max_read_lines: 50  # Max lines per read_file call
-      max_matches_returned: 5  # Max matches in final result
-      max_history_messages_for_model: 8  # Keep only recent N message turns
-      max_tool_output_chars_per_turn: 2000  # Truncate oversized tool outputs
-      early_stop_no_new_findings_turns: 2  # Force synthesis when findings stall
-      # Explore uses execution.tool_call_limit (ToolCallLimitMiddleware). Optional overrides:
-      # tool_call_limit_run, tool_call_limit_thread (see ExploreSubagentConfig).
-
-# =============================================================================
-# Tools Configuration
-# =============================================================================
-# Enable/disable tool groups and configure their settings.
-# Each tool group can be enabled/disabled via the 'enabled' flag.
-
+        quick: 12
+        medium: 24
+        thorough: 48
+      max_read_lines: 50
+      max_matches_returned: 5
+      max_history_messages_for_model: 8
+      max_tool_output_chars_per_turn: 2000
+      early_stop_no_new_findings_turns: 2
+      max_findings_for_synthesis: 20
+      enable_semantic_similarity: true
+      tool_call_limit_thread: null
+      tool_call_limit_run: null
+    runtime_dir: ''
+  research:
+    enabled: true
+    model: null
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
 tools:
-  # Consolidated execution tools
   execution:
-    enabled: true       # run_command, run_python, run_background, kill_process
-
-  # Consolidated file operations (merged with surgical editing)
+    enabled: true
   file_ops:
-    enabled: true       # delete_file, file_info, edit_file_lines, insert_lines, delete_lines, apply_diff
-    # NOTE: read_file, write_file, search_files, list_files are provided by deepagents FilesystemMiddleware
-
-  # Data operations
+    enabled: true
   datetime:
-    enabled: true       # Current date/time for time-awareness
+    enabled: true
   data:
-    enabled: true       # Inspect tabular data (CSV, Excel) and documents (PDF, DOCX)
-
-  # Enhanced multi-engine search (formerly web_search, now wizsearch)
+    enabled: true
   wizsearch:
-    enabled: true       # wizsearch_search, wizsearch_crawl
+    enabled: true
     default_engines:
-      - tavily          # Requires TAVILY_API_KEY (tavily-only default)
+    - tavily
     max_results_per_engine: 10
     timeout: 30
-
-  # Optional tools (require API keys or external services):
   image:
-    enabled: false   # Image analysis (OpenAI GPT-4o)
+    enabled: true
   audio:
-    enabled: false   # Audio transcription (OpenAI Whisper)
+    enabled: true
   video:
-    enabled: false   # Video analysis (Google Gemini)
-
-  # LangChain Community RequestsToolkit (GET/POST/PATCH/PUT/DELETE)
+    enabled: true
   http_requests:
     enabled: true
     allow_dangerous_requests: true
+    headers: {}
     verify_ssl: true
-    # headers: {}
-    # Example:
-    # headers:
-    #   Authorization: "Bearer ${MY_API_TOKEN}"
-
-# =============================================================================
-# MCP Servers
-# =============================================================================
-
 mcp_servers: []
-  # - command: npx
-  #   args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
-  #   transport: stdio
-  # - url: http://localhost:3000/mcp
-  #   transport: sse
-
-# Plugins - Load via entry points, config declaration, or filesystem (~/.soothe/plugins/)
-
 plugins: []
-  # Example: Load a plugin via config declaration
-  # - name: my-plugin
-  #   enabled: true
-  #   module: "my_package:MyPlugin"
-  #   config:
-  #     api_key: "${MY_API_KEY}"
-  #     max_results: 10
-
-  # Example: Disable a built-in plugin
-  # - name: execution
-  #   enabled: false
-
-# Skills & Memory
-
 skills: []
 memory: []
-
-# Agent filesystem root (file tools, default working tree). Built-in default:
-# $SOOTHE_HOME/Workspace (created when the daemon starts). Override with SOOTHE_WORKSPACE
-# or set workspace_dir to an explicit path.
-# workspace_dir: "/path/to/your/project"
-
-# Security Configuration - Filesystem access control and security policies
-
-security:
-  # Enable sandboxed execution for command tools (execute, run_command, run_python, run_background).
-  # When false, these tools are filtered out to avoid "SandboxBackendProtocol" errors.
-  # Default: false
-  sandbox: false
-
-  allow_paths_outside_workspace: false
-  require_approval_for_outside_paths: true
-
-  # Path-based access control (glob patterns) - Evaluation: denied_paths > allowed_paths > workspace
-  denied_paths:
-    - "/etc/**"
-    - "/bin/**"
-    - "/sbin/**"
-    - "/usr/**"
-    - "/System/**"
-    - "/Library/**"
-    - "/private/etc/**"
-    - "~/.ssh/**"
-    - "~/.gnupg/**"
-    - "~/.aws/**"
-    - "**/.env"
-    - "**/credentials.json"
-    - "**/secrets.json"
-  allowed_paths:
-    - "**"  # Allow all (restrict for tighter security)
-
-  denied_file_types: []
-  require_approval_for_file_types: [".env", ".pem", ".key", ".p12", ".pfx", ".crt"]
-
-# Human-in-the-Loop (HITL) Configuration
-# Require user approval before executing specific tool calls.
-# When enabled, the agent interrupts and shows an approval menu (approve/reject/auto-approve-all).
-
-hitl:
-  enabled: false  # Master switch for HITL approval (default: disabled)
-
-  # Tool names requiring approval before execution.
-  # Supported tools: execute (shell), write_file, edit_file, edit_file_lines, delete_file
-  # Shell aliases (bash, shell) are normalized to "execute".
-  # Add any MCP tool name or custom tool name.
-  tools: []
-
-  # Example: Require approval for shell commands and file writes
-  # tools: ["execute", "write_file", "edit_file", "delete_file"]
-
+debug: false
+activity_max_lines: 300
+tui_debug: false
+ui:
+  theme: null
+update:
+  auto_update: false
+persistence:
+  postgres_base_dsn: null
+  postgres_databases:
+    checkpoints: soothe_checkpoints
+    metadata: soothe_metadata
+    vectors: soothe_vectors
+    memory: soothe_memory
+  soothe_postgres_dsn: postgresql://postgres:postgres@localhost:5432/soothe
+  default_backend: sqlite
+  checkpointer_pool_size: 8
+  agentloop_pool_size: 12
+  metadata_sqlite_path: null
+  checkpoint_sqlite_path: null
 protocols:
-  planner:
-    routing: auto  # auto | always_direct | always_planner | always_claude
-
-  policy:
-    profile: standard
-
   memory:
     enabled: true
-    persist_dir: ""  # Empty = ~/.soothe/memory/
+    persist_dir: null
     llm_chat_role: fast
     llm_embed_role: embedding
     enable_embeddings: true
     enable_auto_categorization: true
     enable_category_summaries: true
-
+    memory_categories:
+    - name: personal_info
+      description: Personal information
+    - name: preferences
+      description: User preferences and interests
+    - name: knowledge
+      description: Facts and learned information
+    - name: experiences
+      description: Past experiences and events
+    - name: goals
+      description: Goals and objectives
+  planner:
+    model: think
+    use_fast_model: true
+    routing: auto
+    planner_model: think
+  policy:
+    profile: standard
   durability:
+    backend: default
+    checkpointer: default
+    persist_dir: null
     thread_inactivity_timeout_hours: 72
+autonomous:
+  enabled_by_default: false
+  max_iterations: 10
+  max_retries: 2
+  max_total_goals: 50
+  max_goal_depth: 5
+  enable_dynamic_goals: true
+agent_loop:
+  enabled: true
+  max_iterations: 10
+  max_subagent_tasks_per_wave: 16
+  agent_loop_output_contract_enabled: true
+  final_response: adaptive
+  goal_completion_mode: llm_only
+  prior_conversation_limit: 10
+  context_window_limit: 200000
+  output_streaming: true
+  loop_orchestrator_evidence_validate: true
+  planning:
+    simple_max_tokens: 50
+    medium_max_steps: 3
+    complexity_threshold: 160
+    force_keywords:
+    - plan for
+    - create a plan
+    - steps to
+    adaptive_escalation: true
+  early_termination:
+    enabled: true
+    completion_signals:
+    - task complete
+    - done
+    - finished successfully
+    error_threshold: 3
+  working_memory:
+    enabled: true
+    max_inline_chars: 4000
+    max_entry_chars_before_spill: 1500
+  goal_context:
+    plan_limit: 10
+    execute_limit: 10
+    enabled: true
+  report_output:
+    display_threshold: 20000
+    preview_chars: 500
+    synthesis_max_chars: 0
+  plan_prompt_ledger:
+    plan_ledger_max_messages: 0
+    plan_ledger_max_total_chars: 0
+    plan_ledger_max_message_chars: 0
+  limits:
+    max_parallel_goals: 1
+    max_parallel_steps: 2
+    max_parallel_subagents: 4
+    global_max_llm_calls: 5
+    step_parallelism: dependency
+    max_parallel_tools: 5
+    llm_rpm_limit: 120
+    llm_concurrent_limit: 10
+    llm_call_timeout_seconds: 120
+    llm_call_timeout_adaptive: true
+    llm_call_timeout_max_seconds: 900
+    llm_retry_on_timeout: true
+    llm_max_timeout_retries: 2
+    llm_timeout_retry_multiplier: 2.0
+    recovery:
+      progressive_checkpoints: true
+      auto_resume_on_start: false
+    tool_call_limit:
+      global_thread_limit: 150
+      global_run_limit: 56
+      tool_specific_limits:
+        wizsearch_search:
+          thread_limit: 5
+          run_limit: 3
+        wizsearch_crawl:
+          thread_limit: 5
+          run_limit: 3
+        web_search:
+          thread_limit: 5
+          run_limit: 3
+        fetch_url:
+          thread_limit: 5
+          run_limit: 3
+        search:
+          thread_limit: 5
+          run_limit: 3
+    tool_retry:
+      max_retries: 3
+      backoff_factor: 2.0
+      initial_delay: 1.0
+observability:
+  log_file_level: INFO
+  log_file_path: null
+  log_file_max_bytes: 5242880
+  log_file_backup_count: 3
+  console:
+    enabled: false
+    level: WARNING
+    stream: stderr
+    format: '%(level_short)s %(name)s %(message)s'
+  global_history:
+    enabled: true
+    max_size: 5000
+    dedup_window: 10
+    retention_days: 90
+  verbosity: normal
+  thread_logging_enabled: true
+  thread_logging_retention_days: 30
+  thread_logging_max_size_mb: 100
+  langfuse:
+    enabled: false
+    public_key: null
+    secret_key: null
+    host: null
+    environment: null
+    release: null
+    sample_rate: null
+    trace_name: null
+    tags: null
+    user_id: null
+security:
+  sandbox: false
+  allow_paths_outside_workspace: false
+  require_approval_for_outside_paths: true
+  denied_paths:
+  - /etc/**
+  - /bin/**
+  - /sbin/**
+  - /usr/**
+  - /System/**
+  - /Library/**
+  - /private/etc/**
+  - ~/.ssh/**
+  - ~/.gnupg/**
+  - ~/.aws/**
+  - '**/.env'
+  - '**/credentials.json'
+  - '**/secrets.json'
+  allowed_paths:
+  - '**'
+  denied_file_types: []
+  require_approval_for_file_types:
+  - .env
+  - .pem
+  - .key
+  - .p12
+  - .pfx
+  - .crt
+  whitelist_paths_bypass: []
+  whitelist_commands_bypass: []
+hitl:
+  enabled: false
+  tools: []
+filesystem_middleware:
+  backup_enabled: true
+  backup_dir: null
+  workspace_root: null
+  virtual_mode: false
+  max_file_size_mb: 10
+  tool_token_limit_before_evict: 20000
+daemon:
+  transports:
+    websocket:
+      enabled: true
+      host: 127.0.0.1
+      port: 8765
+      tls_enabled: false
+      tls_cert: null
+      tls_key: null
+      cors_origins:
+      - http://localhost:*
+      - http://127.0.0.1:*
+      max_frame_size: 10485760
+    http_rest:
+      enabled: false
+      host: 127.0.0.1
+      port: 8766
+      tls_enabled: false
+      tls_cert: null
+      tls_key: null
+      cors_origins:
+      - http://localhost:*
+      - http://127.0.0.1:*
+  max_concurrent_threads: 100
+  max_query_duration_minutes: 60
+  cancel_grace_seconds: 30
+  hitl_timeout_seconds: 30
+  query_timeout_action: cancel
+  thread_max_age_hours: 24
+  auto_cancel_on_startup: true
+  max_input_queue_size: 1000
+  max_concurrent_dispatches: 50
+  event_size_stats_enabled: false
+  event_size_stats_interval_seconds: 60
+  event_size_stats_idle_pause_seconds: 120
+  distributed:
+    enabled: false
+    ray:
+      address: null
+      num_cpus: 0.0
+      object_store_memory: 0
+      max_concurrent_actors: 10
+      actor_lifetime: detached
+      log_to_driver: true
+  worker_pool:
+    enabled: true
+    min_pool_size: 2
+    max_pool_size: 4
+    idle_timeout_seconds: 300
+    max_requests_per_worker: 100
+    request_timeout_seconds: 1800
+    heartbeat_interval_seconds: 30
+    stuck_worker_timeout_seconds: 180
+    dispatch_wait_stats_enabled: false
+    dispatch_wait_stats_interval_seconds: 60
+    dispatch_wait_stats_idle_pause_seconds: 120
+autopilot:
+  max_iterations: 50
+  max_send_backs: 3
+  max_parallel_goals: 3
+  dreaming_enabled: true
+  dreaming_consolidation_interval: 300
+  dreaming_health_check_interval: 60
+  checkpoint_interval: 10
+  scheduler_enabled: true
+  max_scheduled_tasks: 100
+  webhooks: {}
 
-# Persistence Configuration - Unified settings for protocol backends (RFC-612 multi-database architecture)
-
-persistence:
-  default_backend: sqlite  # sqlite (development) | postgresql (production)
-
-  # PostgreSQL connection pool sizes (per OS process). Pool workers run one request at a time;
-  # defaults favor fewer total DB connections (workers × pools). Raise if parallel steps
-  # exhaust LangGraph checkpoint access or AgentLoop persistence.
-  # checkpointer_pool_size: 8   # LangGraph AsyncPostgresSaver pool max_size
-  # agentloop_pool_size: 12     # Shared AgentLoop tables pool max_size (checkpoints DB)
-
-  # RFC-612: PostgreSQL multi-database architecture
-  # Uncomment for postgresql production setup:
-  # postgres_base_dsn: "postgresql://user:pass@host:port"
-  # postgres_databases:
-  #   checkpoints: soothe_checkpoints  # LangGraph + AgentLoop checkpoints
-  #   metadata: soothe_metadata        # DurabilityProtocol ThreadInfo
-  #   vectors: soothe_vectors          # pgvector embeddings
-  #   memory: soothe_memory            # MemU long-term memory
-
-  # SQLite paths (used when default_backend: sqlite)
-  # metadata_sqlite_path: ""   # Empty = $SOOTHE_DATA_DIR/metadata.db
-  # checkpoint_sqlite_path: "" # Empty = $SOOTHE_DATA_DIR/checkpoints.db
-
-# Vector Store Providers - Named backends for VectorContext (similar to LLM providers)
-# Supports multiple providers: sqlite_vec (default), pgvector (production), weaviate
+# Default example: sqlite_vec (empty list is the code default; this block is illustrative).
+# PostgreSQL + pgvector alternative:
+# vector_stores:
+#   - name: pgvector_default
+#     provider_type: pgvector
+#     dsn: "postgresql://postgres:postgres@localhost:5432/soothe_vectors"
+#     pool_size: 5
+#     index_type: hnsw
+# vector_store_router:
+#   default: "pgvector_default:soothe_default"
 
 vector_stores:
-  # SQLite with sqlite-vec extension (default). Paths/dimensions use backend defaults unless
-  # extended in VectorStoreProviderConfig / settings wiring.
-  - name: sqlite_vec_default
-    provider_type: sqlite_vec
-
-  # PostgreSQL with pgvector extension (alternative for high-scale production)
-  # - name: pgvector_default
-  #   provider_type: pgvector
-  #   dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"  # Required for pgvector
-  #   pool_size: 5
-  #   index_type: hnsw  # hnsw or ivfflat
-
-  # Weaviate vector database (alternative, cloud or self-hosted)
-  # - name: weaviate_default
-  #   provider_type: weaviate
-  #   url: "http://localhost:8080"  # Weaviate server URL
-  #   api_key: ""  # Optional: For Weaviate Cloud
-  #   grpc_port: 50051  # gRPC port for better performance
-
+- name: sqlite_vec_default
+  provider_type: sqlite_vec
 vector_store_router:
-  default: sqlite_vec_default:soothe_default  # Format: "provider_name:collection_name"
+  default: sqlite_vec_default:soothe_default
+
+# workspace_dir defaults to $SOOTHE_HOME/Workspace — override if needed:
+# workspace_dir: "/path/to/your/project"

@@ -11,12 +11,14 @@ import importlib.metadata
 import logging
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from soothe.config.settings import SootheConfig
 
 logger = logging.getLogger(__name__)
+
+PluginDiscoverySource = Literal["built-in", "entry_point", "config", "filesystem"]
 
 
 def _try_extract_plugin_name(module_path: str) -> str | None:
@@ -191,27 +193,29 @@ def discover_filesystem(base_dir: Path | None = None) -> list[str]:
     return plugins
 
 
-def discover_all_plugins(config: "SootheConfig") -> dict[str, tuple[str, dict]]:
+def discover_all_plugins(
+    config: "SootheConfig",
+) -> dict[str, tuple[str, dict, PluginDiscoverySource]]:
     """Run all discovery mechanisms and return plugin module paths.
 
     This function runs all discovery mechanisms and returns a dict
-    mapping plugin names to (module_path, config_dict) tuples. Duplicate
+    mapping plugin names to (module_path, config_dict, source) tuples. Duplicate
     names are resolved later by the registry based on priority.
 
     Args:
         config: Soothe configuration.
 
     Returns:
-        Dict mapping unique identifiers to (module_path, config_dict) tuples.
+        Dict mapping unique identifiers to (module_path, config_dict, source) tuples.
         The identifier is the plugin name when discoverable from manifest,
         or the module path for config-declared plugins.
     """
-    discovered = {}
+    discovered: dict[str, tuple[str, dict, PluginDiscoverySource]] = {}
 
     # Built-in subagent plugins (new module structure)
     for subagent_name in ["browser", "claude", "explore", "research"]:
         module_path = f"soothe.subagents.{subagent_name}"
-        discovered[subagent_name] = (module_path, {})
+        discovered[subagent_name] = (module_path, {}, "built-in")
         logger.debug("Discovered built-in subagent plugin: %s", subagent_name)
 
     # Built-in tool plugins (new module structure)
@@ -228,22 +232,22 @@ def discover_all_plugins(config: "SootheConfig") -> dict[str, tuple[str, dict]]:
         "video",
     ]:
         module_path = f"soothe.toolkits.{tool_name}"
-        discovered[tool_name] = (module_path, {})
+        discovered[tool_name] = (module_path, {}, "built-in")
         logger.debug("Discovered built-in tool plugin: %s", tool_name)
 
     # Entry points (no config available)
     for module_path in discover_entry_points():
         name = _try_extract_plugin_name(module_path) or module_path
-        discovered[name] = (module_path, {})
+        discovered[name] = (module_path, {}, "entry_point")
 
     # Config-declared (has config)
     for module_path, plugin_config in discover_config_declared(config):
-        discovered[module_path] = (module_path, plugin_config)
+        discovered[module_path] = (module_path, plugin_config, "config")
 
     # Filesystem (no config available)
     for module_path in discover_filesystem():
         name = _try_extract_plugin_name(f"{module_path}:Plugin") or module_path
-        discovered[name] = (module_path, {})
+        discovered[name] = (module_path, {}, "filesystem")
 
     logger.info("Discovered %s total plugins", len(discovered))
     return discovered

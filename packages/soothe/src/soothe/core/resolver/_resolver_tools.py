@@ -83,6 +83,35 @@ class _SubagentFactoriesAccessor:
 SUBAGENT_FACTORIES = _SubagentFactoriesAccessor()
 
 
+def _call_subagent_factory(factory: Any, kwargs: dict[str, Any]) -> Any:
+    """Invoke a subagent factory and return its spec (dict or agent object).
+
+    Plugin factories from ``@subagent`` are async; built-in factories are sync.
+    When no event loop is running, coroutine results are driven with
+    :func:`asyncio.run` (AgentBuilder runs in a synchronous context).
+    When a loop is already running (e.g. async tests or nested async), the
+    coroutine is completed on a worker thread with its own loop so we never
+    call :func:`asyncio.run` from inside a running loop.
+    """
+    import asyncio
+    import inspect
+    from concurrent.futures import ThreadPoolExecutor
+
+    result = factory(**kwargs)
+    if not inspect.iscoroutine(result):
+        return result
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(result)
+
+    def _run_coro_on_fresh_loop(coro: Any) -> Any:
+        return asyncio.run(coro)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(_run_coro_on_fresh_loop, result).result()
+
+
 # ---------------------------------------------------------------------------
 # Tool resolution
 # ---------------------------------------------------------------------------
@@ -549,20 +578,21 @@ def resolve_subagents(
         if not sub_cfg.enabled:
             continue
 
-        # Try plugin registry first
         factory = None
+        resolved_via_plugin = False
         try:
             from soothe.plugin.global_registry import get_plugin_registry, is_plugins_loaded
 
             if is_plugins_loaded():
                 registry = get_plugin_registry()
-                factory = registry.get_subagent_factory(name)
-                if factory:
+                reg_factory = registry.get_subagent_factory(name)
+                if reg_factory is not None:
+                    factory = reg_factory
+                    resolved_via_plugin = True
                     logger.debug("Resolved subagent '%s' from plugin registry", name)
         except RuntimeError:
             logger.debug("Plugin registry not loaded, using fallback for '%s'", name)
 
-        # Fallback to SUBAGENT_FACTORIES
         if factory is None:
             factory = SUBAGENT_FACTORIES.get(name)
 
@@ -577,6 +607,23 @@ def resolve_subagents(
             if name == "explore"
             else sub_cfg.model or default_model or config.resolve_model("default")
         )
+
+        if resolved_via_plugin:
+            from soothe.plugin.context import create_plugin_context
+
+            plugin_instance = factory.__self__
+            pname = plugin_instance.manifest.name
+            plugin_ctx = create_plugin_context(
+                plugin_name=pname,
+                config=dict(sub_cfg.config),
+                soothe_config=config,
+            )
+            call_kwargs = dict(sub_cfg.config)
+            call_kwargs["model"] = model_override
+            call_kwargs["config"] = config
+            call_kwargs["context"] = plugin_ctx
+            pending.append((name, factory, call_kwargs))
+            continue
 
         extra_kwargs: dict = dict(sub_cfg.config)
         if name in cwd_subagents and "cwd" not in extra_kwargs:
@@ -623,7 +670,7 @@ def _resolve_subagents_sequential(
     for name, factory, kwargs in pending:
         start = time.perf_counter()
         try:
-            spec = factory(**kwargs)
+            spec = _call_subagent_factory(factory, kwargs)
             elapsed_ms = (time.perf_counter() - start) * 1000
             logger.info("Loaded subagent '%s' in %.1fms", name, elapsed_ms)
             subagents.append(spec)
@@ -644,7 +691,7 @@ def _resolve_subagents_parallel(
     def _build(entry: tuple[str, Callable, dict]) -> SubAgent | CompiledSubAgent:
         name, factory, kwargs = entry
         start = time.perf_counter()
-        spec = factory(**kwargs)
+        spec = _call_subagent_factory(factory, kwargs)
         elapsed_ms = (time.perf_counter() - start) * 1000
         logger.info("Loaded subagent '%s' in %.1fms", name, elapsed_ms)
         return spec

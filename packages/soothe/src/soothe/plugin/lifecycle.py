@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.plugin.cache import cache_plugin, get_cached_plugin
 from soothe.plugin.context import create_plugin_context
-from soothe.plugin.discovery import discover_all_plugins
+from soothe.plugin.discovery import PluginDiscoverySource, discover_all_plugins
 from soothe.plugin.events import (
     PluginFailedEvent,
     PluginHealthCheckedEvent,
@@ -173,7 +173,7 @@ class PluginLifecycleManager:
 
     def _build_dependency_graph(
         self,
-        discovered: dict[str, tuple[str, dict]],
+        discovered: dict[str, tuple[str, dict, PluginDiscoverySource]],
     ) -> dict[str, set[str]]:
         """Build plugin dependency graph from manifests.
 
@@ -203,7 +203,7 @@ class PluginLifecycleManager:
     async def _load_plugins_parallel(
         self,
         graph: dict[str, set[str]],
-        discovered: dict[str, tuple[str, dict]],
+        discovered: dict[str, tuple[str, dict, PluginDiscoverySource]],
         config: "SootheConfig",
         lazy_plugins: list[str] | None = None,
     ) -> None:
@@ -244,6 +244,7 @@ class PluginLifecycleManager:
                         discovered[name][0],
                         config,
                         discovered[name][1],
+                        discovered[name][2],
                     )
                     for name in eager
                 ]
@@ -273,6 +274,7 @@ class PluginLifecycleManager:
         module_path: str,
         config: "SootheConfig",
         plugin_config: dict[str, Any],
+        source: PluginDiscoverySource,
     ) -> None:
         """Load a single plugin from module path with caching.
 
@@ -280,6 +282,7 @@ class PluginLifecycleManager:
             module_path: Python import path.
             config: Soothe configuration.
             plugin_config: Plugin-specific configuration.
+            source: Discovery source (used for registry priority when registering).
         """
         # Extract plugin name from module_path for caching
         plugin_name_guess = (
@@ -326,9 +329,18 @@ class PluginLifecycleManager:
             tools = self._extract_tools(plugin_instance)
             subagents = self._extract_subagents(plugin_instance)
 
-            # Update registry entry
+            # Ensure registry entry exists (discovery does not pre-register manifests).
             entry = self.registry.get(name)
-            if entry:
+            if entry is None:
+                self.registry.register(manifest, source=source)
+                entry = self.registry.get(name)
+
+            if entry is None:
+                logger.error(
+                    "Plugin '%s' loaded but could not be registered; tools/subagents not exposed",
+                    name,
+                )
+            else:
                 entry.plugin_instance = plugin_instance
                 entry.tools = tools
                 entry.subagents = subagents
