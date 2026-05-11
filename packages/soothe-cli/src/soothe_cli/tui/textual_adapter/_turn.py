@@ -91,7 +91,7 @@ from soothe_cli.tui.textual_adapter._turn_helpers import (
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
-    CognitionPlanReasonMessage,
+    CognitionReasonMessage,
     CognitionStepMessage,
     DiffMessage,
     SummarizationMessage,
@@ -1395,9 +1395,9 @@ async def execute_task_textual(
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
-                            pa_raw = data.get("plan_action", "new")
-                            plan_action = pa_raw if pa_raw in ("keep", "new") else "new"
-                            plan_widget = CognitionPlanReasonMessage(
+                            pa_raw = data.get("plan_action", "")
+                            plan_action = pa_raw if pa_raw in ("keep", "new") else ""
+                            plan_widget = CognitionReasonMessage(
                                 next_action=str(data.get("next_action", "")),
                                 status=str(data.get("status", "")),
                                 iteration=int(data.get("iteration", 0)),

@@ -1074,6 +1074,8 @@ class ToolCallMessage(Vertical):
         """Whether the entire card body is collapsed (header remains visible)."""
         self._collapse_hint_widget: Static | None = None
         """Widget showing expand/collapse hint text."""
+        self._final_duration_ms: int | None = None
+        """Frozen duration at completion; prevents drift when re-rendering."""
         self._task_card_user_expanded: bool = False
         """If True, do not auto-collapse the task card (user expanded the body)."""
         self._task_activity_list_user_expanded: bool = False
@@ -1641,6 +1643,7 @@ class ToolCallMessage(Vertical):
         self._invalidate_output_render_cache()
         self._expanded = False
         duration_ms = self._duration_ms_since_start()
+        self._final_duration_ms = duration_ms
         line = _TOOL_CARD_PRESENTATION.format_tool_result_status_line(
             self._tool_name,
             self._output,
@@ -1671,6 +1674,7 @@ class ToolCallMessage(Vertical):
         self._invalidate_output_render_cache()
         self._expanded = False
         duration_ms = self._duration_ms_since_start()
+        self._final_duration_ms = duration_ms
         line = _TOOL_CARD_PRESENTATION.format_tool_result_status_line(
             self._tool_name,
             error,
@@ -1804,8 +1808,12 @@ class ToolCallMessage(Vertical):
         if self._status == "running":
             self._update_running_animation()
         elif self._status in ("success", "error") and self._result_summary_widget:
-            # Re-apply result summary with updated icon
-            duration_ms = self._duration_ms_since_start()
+            # Re-apply result summary with updated icon using frozen duration
+            duration_ms = (
+                self._final_duration_ms
+                if self._final_duration_ms is not None
+                else self._duration_ms_since_start()
+            )
             line = _TOOL_CARD_PRESENTATION.format_tool_result_status_line(
                 self._tool_name,
                 self._output,
@@ -3301,7 +3309,7 @@ class CognitionStepMessage(Vertical):
             self._detail_widget.display = False
 
 
-class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
+class CognitionReasonMessage(_TimestampClickMixin, Vertical):
     """Single card for plan assessment, plan reasoning, and next action (keep/new).
 
     Header uses the same cognition-colored label plus foreground body as ``CognitionStepMessage``.
@@ -3310,7 +3318,7 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
     can_select = True
 
     DEFAULT_CSS = """
-    CognitionPlanReasonMessage {
+    CognitionReasonMessage {
         height: auto;
         padding: 0 1;
         margin: 0 0 1 0;
@@ -3318,19 +3326,19 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
         border-left: wide $cognition;
     }
 
-    CognitionPlanReasonMessage .cognition-plan-header {
+    CognitionReasonMessage .cognition-plan-header {
         height: auto;
         margin: 0;
         color: $foreground;
     }
 
-    CognitionPlanReasonMessage .plan-section-line {
+    CognitionReasonMessage .plan-section-line {
         height: auto;
         margin-left: 3;
         color: $text-muted;
     }
 
-    CognitionPlanReasonMessage:hover {
+    CognitionReasonMessage:hover {
         border-left: wide $cognition-hover;
     }
     """
@@ -3361,11 +3369,15 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
         self._next_action = next_action.strip()
         self._status = status
         self._iteration = iteration
-        self._plan_action = plan_action if plan_action in ("keep", "new") else "new"
+        self._plan_action = plan_action if plan_action in ("keep", "new") else ""
         self._assessment_reasoning = assessment_reasoning.strip()
         self._plan_reasoning = plan_reasoning.strip()
 
     def _plan_header_content(self) -> Content:
+        # Assess-only card: only assessment_reasoning populated
+        if self._assessment_reasoning and not self._plan_reasoning and not self._next_action:
+            return _assemble_card_header(self, "💭 ", self._assessment_reasoning)
+
         # Concatenate plan_reasoning and next_action with proper separation
         parts: list[str] = []
         if self._plan_reasoning:
@@ -3437,7 +3449,7 @@ class _StepLineState:
 class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
     """Two-level Goal → steps tree; one aggregate block updates in place.
 
-    Title line matches ``CognitionStepMessage`` / ``CognitionPlanReasonMessage``:
+    Title line matches ``CognitionStepMessage`` / ``CognitionReasonMessage``:
     ``{prefix} 📍 …`` with optional ``· iter<=N`` when ``max_iterations`` is set.
     """
 

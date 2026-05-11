@@ -1,12 +1,12 @@
-"""Round-trip tests for CognitionPlanReasonMessage in the message store."""
+"""Round-trip tests for CognitionReasonMessage in the message store."""
 
 from soothe_cli.tui.widgets.message_store import MessageData, MessageType
-from soothe_cli.tui.widgets.messages import CognitionPlanReasonMessage
+from soothe_cli.tui.widgets.messages import CognitionReasonMessage
 
 
 def test_cognition_plan_message_store_round_trip() -> None:
     """Serialize and restore a cognition plan card."""
-    w = CognitionPlanReasonMessage(
+    w = CognitionReasonMessage(
         next_action="Read src/foo.py",
         status="continue",
         iteration=2,
@@ -16,7 +16,7 @@ def test_cognition_plan_message_store_round_trip() -> None:
         id="msg-plan-01",
     )
     md = MessageData.from_widget(w)
-    assert md.type == MessageType.COGNITION_PLAN
+    assert md.type == MessageType.COGNITION_REASON
     assert md.cognition_plan_next_action == "Read src/foo.py"
     assert md.cognition_plan_status == "continue"
     assert md.cognition_plan_iteration == 2
@@ -25,6 +25,52 @@ def test_cognition_plan_message_store_round_trip() -> None:
     assert md.cognition_plan_strategy == "Need to verify imports."
 
     restored = md.to_widget()
-    assert isinstance(restored, CognitionPlanReasonMessage)
+    assert isinstance(restored, CognitionReasonMessage)
     assert restored._next_action == "Read src/foo.py"
     assert restored._plan_reasoning == "Need to verify imports."
+
+
+def test_assess_only_card_round_trip() -> None:
+    """Assess-only card stores and restores assessment_reasoning."""
+    w = CognitionReasonMessage(
+        next_action="",
+        status="",
+        iteration=1,
+        plan_action="",
+        assessment_reasoning="Evidence is accumulating.",
+        plan_reasoning="",
+        id="msg-assess-01",
+    )
+    md = MessageData.from_widget(w)
+    assert md.type == MessageType.COGNITION_REASON
+    assert md.cognition_plan_assessment == "Evidence is accumulating."
+    assert md.cognition_plan_next_action == ""
+    assert md.cognition_plan_action == ""
+
+    restored = md.to_widget()
+    assert isinstance(restored, CognitionReasonMessage)
+    assert restored._assessment_reasoning == "Evidence is accumulating."
+    assert restored._next_action == ""
+    assert restored._plan_action == ""
+
+
+def test_intent_only_card_round_trip() -> None:
+    """Intent card stores and restores friendly_message via next_action."""
+    w = CognitionReasonMessage(
+        next_action="I'll help you refactor the module.",
+        status="",
+        iteration=0,
+        plan_action="",
+        assessment_reasoning="",
+        plan_reasoning="",
+        id="msg-intent-01",
+    )
+    md = MessageData.from_widget(w)
+    assert md.type == MessageType.COGNITION_REASON
+    assert md.cognition_plan_next_action == "I'll help you refactor the module."
+    assert md.cognition_plan_action == ""
+
+    restored = md.to_widget()
+    assert isinstance(restored, CognitionReasonMessage)
+    assert restored._next_action == "I'll help you refactor the module."
+    assert restored._plan_action == ""
