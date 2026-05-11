@@ -43,6 +43,9 @@ EXTRA_SKILLS_DIRS = "SOOTHE_CLI_EXTRA_SKILLS_DIRS"
 NO_UPDATE_CHECK = "SOOTHE_CLI_NO_UPDATE_CHECK"
 """Disable automatic update checking when set."""
 
+UPDATE_CHECK = "SOOTHE_CLI_UPDATE_CHECK"
+"""Enable startup PyPI update checks ('1', 'true', or 'yes'). Off by default."""
+
 SERVER_ENV_PREFIX = "SOOTHE_CLI_SERVER_"
 """Environment variable prefix used to pass CLI config to the server subprocess."""
 

@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 _CLIENT_LABEL_LEN = 8
 
+# Client messages logged at DEBUG on every dispatch; skip types that poll frequently.
+_SKIP_PER_MESSAGE_DEBUG_TYPES = frozenset({"daemon_ready", "daemon_status"})
+
 
 def _client_label(client_id: Any) -> str:
     """Short label for logs when ``client_id`` may be a legacy connection object."""
@@ -124,11 +127,12 @@ class MessageRouter:
         """Handle a single client message."""
         d = self._daemon
         msg_type = msg.get("type", "")
-        logger.debug(
-            "[MsgRouter] Received message type=%s from client=%s",
-            msg_type,
-            _client_label(client_id),
-        )
+        if msg_type not in _SKIP_PER_MESSAGE_DEBUG_TYPES:
+            logger.debug(
+                "[MsgRouter] Received message type=%s from client=%s",
+                msg_type,
+                _client_label(client_id),
+            )
 
         if msg_type == "command":
             cmd = msg.get("cmd", "")

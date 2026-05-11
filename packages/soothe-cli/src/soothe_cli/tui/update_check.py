@@ -316,16 +316,20 @@ async def perform_upgrade() -> tuple[bool, str]:
 
 
 def is_update_check_enabled() -> bool:
-    """Return whether update checks are enabled.
+    """Return whether startup update checks are enabled.
 
-    Checks `SOOTHE_NO_UPDATE_CHECK` env var and the `[update].check` key
-    in `config.yml`.
-
-    Defaults to enabled.
+    Disabled when `SOOTHE_CLI_NO_UPDATE_CHECK` or legacy `SOOTHE_NO_UPDATE_CHECK`
+    is set. Enabled when `SOOTHE_CLI_UPDATE_CHECK` is ``1``/``true``/``yes``, or
+    when ``[update].check: true`` in ``config.yml``. Defaults to off; use
+    ``/update`` to check manually.
     """
-    if os.environ.get("SOOTHE_NO_UPDATE_CHECK"):
+    from soothe_cli.tui._env_vars import NO_UPDATE_CHECK, UPDATE_CHECK
+
+    if os.environ.get("SOOTHE_NO_UPDATE_CHECK") or os.environ.get(NO_UPDATE_CHECK):
         return False
-    return _read_update_config().get("check", True)
+    if os.environ.get(UPDATE_CHECK, "").lower() in {"1", "true", "yes"}:
+        return True
+    return _read_update_config().get("check", False)
 
 
 def is_auto_update_enabled() -> bool:

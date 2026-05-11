@@ -55,12 +55,24 @@ def main(
     prompt: Annotated[
         str | None,
         typer.Option(
-            "--prompt", "-p", help="Prompt to send as user message (headless single-shot mode)."
+            "--prompt",
+            "-p",
+            help="User message; runs a one-shot headless query by default (use --tui for TUI).",
         ),
     ] = None,
     no_tui: Annotated[  # noqa: FBT002
         bool,
-        typer.Option("--no-tui", help="Disable TUI; run single prompt and exit."),
+        typer.Option(
+            "--no-tui",
+            help="Headless mode (requires --prompt). Same as default when -p is set.",
+        ),
+    ] = False,
+    tui_with_prompt: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option(
+            "--tui",
+            help="With --prompt/-p, open the interactive TUI and auto-submit the prompt.",
+        ),
     ] = False,
     streaming: Annotated[
         bool | None,
@@ -81,13 +93,15 @@ def main(
 ) -> None:
     """Soothe CLI - Intelligent AI assistant client.
 
-    Run without arguments for interactive TUI mode, or provide a prompt via --prompt/-p option.
+    Run without arguments for interactive TUI mode, or pass --prompt for a one-shot
+    headless query (stdout, then exit).
 
     Note: This is the CLI client. Use 'soothed' command to manage the daemon server.
 
     Examples:
         soothe                           # Interactive TUI mode
-        soothe -p "Research AI advances" # Headless single-prompt mode
+        soothe -p "Research AI advances" # One-shot headless (non-TUI) query
+        soothe -p "Hello" --tui         # TUI with an auto-submitted prompt
         soothe loop list                 # List AgentLoop instances
     """
     # Handle -h/--help flag
@@ -112,6 +126,7 @@ def main(
             max_iterations=None,
             streaming_enabled=streaming,
             streaming_mode=streaming_mode,
+            tui_with_prompt=tui_with_prompt,
         )
 
 
