@@ -29,18 +29,34 @@ class IntentHint(StrEnum):
     NEW_GOAL = "new_goal"
 
 
+class TaskComplexity(StrEnum):
+    """Unified task complexity levels for routing decisions.
+
+    Used by both IntentClassification and RoutingClassification.
+    - minimal: No tools needed (fast-path: chitchat/quiz intents)
+    - simple: Single focused step
+    - medium: Multi-step with moderate tool use
+    - complex: Architecture, migration, deep multi-phase work
+    """
+
+    MINIMAL = "minimal"
+    SIMPLE = "simple"
+    MEDIUM = "medium"
+    COMPLEX = "complex"
+
+
 class RoutingClassification(BaseModel):
     """Routing complexity classification for execution path selection.
 
     Args:
-        task_complexity: Routing complexity (chitchat | simple | medium | complex).
+        task_complexity: Routing complexity level.
         chitchat_response: Direct response for chitchat queries.
         preferred_subagent: Wire or classifier hint for which subagent to prefer in AgentLoop.
         routing_hint: Routing strategy hint.
     """
 
-    task_complexity: Literal["chitchat", "simple", "medium", "complex"] = Field(
-        description="Routing complexity level: chitchat (direct reply), simple (single-step), medium, or complex"
+    task_complexity: TaskComplexity = Field(
+        description="Routing complexity: minimal (no tools), simple, medium, or complex"
     )
     chitchat_response: str | None = Field(
         default=None,
@@ -66,7 +82,8 @@ class IntentClassification(BaseModel):
         reuse_current_goal: Whether to reuse active goal in current thread.
         goal_description: Normalized goal description for GoalEngine.
         friendly_message: User-friendly reinterpretation for display (IG-287).
-        task_complexity: Secondary routing complexity level.
+        task_complexity: Routing complexity level (minimal | simple | medium | complex).
+            For chitchat/quiz intents, task_complexity is always "minimal".
         chitchat_response: Direct response for chitchat queries.
         quiz_response: Direct response for quiz/trivia queries.
         reasoning: LLM reasoning for classification decision.
@@ -87,8 +104,8 @@ class IntentClassification(BaseModel):
         default=None,
         description="User-friendly task reinterpretation for display (new_goal only, IG-287)",
     )
-    task_complexity: Literal["chitchat", "quiz", "simple", "medium", "complex"] = Field(
-        description="Secondary routing complexity level for execution path refinement"
+    task_complexity: TaskComplexity = Field(
+        description="Routing complexity: minimal (chitchat/quiz), simple, medium, or complex"
     )
     chitchat_response: str | None = Field(
         default=None,
@@ -106,11 +123,44 @@ class IntentClassification(BaseModel):
         Returns:
             RoutingClassification with routing attributes from intent.
         """
-        tc = self.task_complexity
-        if tc == "quiz":
-            tc = "chitchat"
         return RoutingClassification(
-            task_complexity=tc,
+            task_complexity=self.task_complexity,
             chitchat_response=self.chitchat_response,
             routing_hint="intent_based",
         )
+
+
+def build_loop_routing_classification(
+    intent: IntentClassification | None,
+    preferred_subagent: str | None,
+) -> RoutingClassification | None:
+    """Build routing classification consumed by AgentLoop Plan/Execute.
+
+    Args:
+        intent: IntentClassification from classifier.
+        preferred_subagent: Optional subagent hint (e.g., 'browser', 'claude').
+
+    Returns:
+        RoutingClassification for middleware/planner consumption.
+    """
+    if intent is None:
+        if preferred_subagent:
+            return RoutingClassification(
+                task_complexity=TaskComplexity.MEDIUM,
+                preferred_subagent=preferred_subagent,
+                routing_hint="subagent",
+            )
+        return None
+
+    # intent.task_complexity is already TaskComplexity enum
+    base = RoutingClassification(
+        task_complexity=intent.task_complexity,
+        chitchat_response=intent.chitchat_response,
+        preferred_subagent=None,
+        routing_hint="intent_based",
+    )
+    if preferred_subagent:
+        return base.model_copy(
+            update={"preferred_subagent": preferred_subagent, "routing_hint": "subagent"}
+        )
+    return base

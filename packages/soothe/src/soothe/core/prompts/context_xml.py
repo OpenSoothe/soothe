@@ -212,12 +212,12 @@ def build_shared_environment_workspace_prefix(
 def build_context_sections_for_complexity(
     *,
     config: SootheConfig,
-    complexity: Literal["chitchat", "simple", "medium", "complex"],
+    complexity: Literal["minimal", "simple", "medium", "complex"],
     state: dict[str, Any],
     include_workspace_extras: bool = False,
 ) -> list[str]:
     """Ordered XML blocks for system prompt (excludes static base prompt and date line)."""
-    if complexity == "chitchat":
+    if complexity == "minimal":
         return []
     model = config.resolve_model("default")
     sections: list[str] = [build_soothe_environment_section(model=model)]

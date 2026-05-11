@@ -19,7 +19,9 @@ async def test_enrich_with_vision_throttled_respects_semaphore(monkeypatch: Any)
     peak = 0
     gate = asyncio.Lock()
 
-    async def fake_enrich(_config: Any, _text: str, _attachments: list[dict[str, str]]) -> str:
+    async def fake_enrich(
+        _config: Any, _text: str, _attachments: list[dict[str, str]], **_kw: Any
+    ) -> str:
         nonlocal concurrent, peak
         async with gate:
             concurrent += 1
@@ -52,7 +54,9 @@ async def test_enrich_with_vision_throttled_unlimited_when_no_semaphore(
     peak = 0
     gate = asyncio.Lock()
 
-    async def fake_enrich(_config: Any, _text: str, _attachments: list[dict[str, str]]) -> str:
+    async def fake_enrich(
+        _config: Any, _text: str, _attachments: list[dict[str, str]], **_kw: Any
+    ) -> str:
         nonlocal concurrent, peak
         async with gate:
             concurrent += 1

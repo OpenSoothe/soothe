@@ -197,7 +197,17 @@ Question: {user_input}
 Provide a factual, well-reasoned answer. If the question involves facts, dates, or specific knowledge, ensure accuracy. Do not use tools or search."""
 
         try:
-            response = await think_model.ainvoke(quiz_prompt)
+            from soothe.utils.observability.langfuse import build_traced_config
+
+            quiz_config = build_traced_config(
+                self._config,
+                purpose="quiz_answer",
+                component="runner.quiz",
+                phase="pre-stream",
+                session_id=thread_id,
+                run_name="soothe:quiz",
+            )
+            response = await think_model.ainvoke(quiz_prompt, config=quiz_config)
             answer = response.content if hasattr(response, "content") else str(response)
 
             yield loop_assistant_messages_chunk(

@@ -51,15 +51,24 @@ class QueryEngine:
         return out
 
     async def _enrich_with_vision_throttled(
-        self, config: Any, text: str, attachments: list[dict[str, str]]
+        self,
+        config: Any,
+        text: str,
+        attachments: list[dict[str, str]],
+        *,
+        session_id: str | None = None,
     ) -> str:
         """Run vision preflight under daemon-wide concurrency cap when configured."""
         d = self._daemon
         sem = getattr(d, "_vision_preflight_semaphore", None)
         if sem is None:
-            return await enrich_user_text_with_vision(config, text, attachments)
+            return await enrich_user_text_with_vision(
+                config, text, attachments, session_id=session_id
+            )
         async with sem:
-            return await enrich_user_text_with_vision(config, text, attachments)
+            return await enrich_user_text_with_vision(
+                config, text, attachments, session_id=session_id
+            )
 
     def _workspace_str_for_thread(self, thread_id: str) -> str:
         """Workspace path for ``runner.astream`` via unified resolution (IG-116)."""
@@ -223,7 +232,7 @@ class QueryEngine:
         if attachments:
             try:
                 effective_text = await self._enrich_with_vision_throttled(
-                    d._config, text, attachments
+                    d._config, text, attachments, session_id=thread_id
                 )
             except Exception as exc:
                 logger.exception(
@@ -715,7 +724,7 @@ class QueryEngine:
         if attachments:
             try:
                 effective_text = await self._enrich_with_vision_throttled(
-                    d._config, text, attachments
+                    d._config, text, attachments, session_id=thread_id
                 )
             except Exception as exc:
                 logger.exception(

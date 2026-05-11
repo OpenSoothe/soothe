@@ -29,11 +29,11 @@ CRITICAL OUTPUT RULES:
 Intent classification criteria:
 - chitchat: Greetings, thanks, fillers, conversational pleasantries needing no action
   → chitchat_response required in detected user language
-  → task_complexity=chitchat
+  → task_complexity=minimal
 
 - quiz: Factual knowledge questions, trivia, definitions, simple math
   → quiz_response required (brief factual answer, 1-3 sentences)
-  → task_complexity=quiz
+  → task_complexity=minimal
 
 - continue_thread: References prior conversation/results, follow-up actions, refinements
   → reuse_current_goal=true if active_goal exists, false otherwise
@@ -42,7 +42,8 @@ Intent classification criteria:
 - new_goal: Standalone tasks requiring tools (file ops, web search, analysis, coding)
   → goal_description required (normalized task description, 5-15 words)
   → friendly_message required (friendly, action-oriented, 1-2 sentences)
-  → task_complexity: simple | medium | complex
+  → task_complexity: minimal | simple | medium | complex
+     - minimal: one direct answer, no tools needed
      - simple: one focused execute step should finish (e.g., count all README files)
      - medium: several steps, moderate exploration or tool use
      - complex: architecture, migration, broad refactor, or deep multi-phase work
@@ -65,7 +66,7 @@ Required JSON shape:
   "reuse_current_goal": boolean,
   "goal_description": string|null,
   "friendly_message": string|null,
-  "task_complexity": "chitchat"|"quiz"|"simple"|"medium"|"complex",
+  "task_complexity": "minimal"|"simple"|"medium"|"complex",
   "chitchat_response": string|null,
   "quiz_response": string|null,
   "reasoning": string
@@ -100,7 +101,7 @@ CRITICAL OUTPUT RULES:
 - For "quiz": set quiz_response (brief factual answer)
 - For "continue_thread": set reuse_current_goal based on active_goal
 - For "new_goal": set goal_description AND friendly_message (action-oriented reinterpretation)
-- "task_complexity": chitchat | quiz | simple | medium | complex
+- "task_complexity": minimal | simple | medium | complex
 - "reasoning" is REQUIRED
 
 Intent precedence:
@@ -116,7 +117,7 @@ Required JSON shape:
   "reuse_current_goal": boolean,
   "goal_description": string|null,
   "friendly_message": string|null,
-  "task_complexity": "chitchat"|"quiz"|"simple"|"medium"|"complex",
+  "task_complexity": "minimal"|"simple"|"medium"|"complex",
   "chitchat_response": string|null,
   "quiz_response": string|null,
   "reasoning": string
@@ -131,45 +132,4 @@ Required JSON shape:
 </current_query>
 </intent_inputs>
 </intent_classification>
-"""
-
-# Routing classification prompt
-ROUTING_PROMPT = """\
-You are {assistant_name}. Classify this request.
-Current time: {current_time}
-{conversation_context}
-Request: {query}
-
-CRITICAL OUTPUT RULES:
-- Return ONLY valid JSON.
-- "task_complexity" MUST be exactly one of: "chitchat", "simple", "medium", "complex".
-- For "chitchat", provide a short friendly "chitchat_response" string in detected user language.
-- For "simple", "medium", or "complex", set "chitchat_response" to null.
-- Do not output placeholders, punctuation, comments, markdown, or extra keys.
-
-Required JSON shape:
-{{"task_complexity": "chitchat"|"simple"|"medium"|"complex", "chitchat_response": string|null}}
-
-Classification rules:
-- chitchat: Greetings, thanks, fillers needing no action. Set chitchat_response in detected language.
-- simple: One focused step should complete the request.
-- medium: Multi-step task with moderate tool use. DEFAULT when uncertain.
-- complex: Architecture design, large migrations, major refactoring.
-"""
-
-ROUTING_RETRY_PROMPT = """\
-You are {assistant_name}. Re-classify this request.
-Current time: {current_time}
-
-Request: {query}
-
-CRITICAL OUTPUT RULES:
-- Return ONLY valid JSON.
-- "task_complexity" MUST be exactly one of: "chitchat", "simple", "medium", "complex".
-- For "chitchat", provide a short friendly "chitchat_response" string.
-- For "simple", "medium", or "complex", set "chitchat_response" to null.
-- Do not output placeholders, punctuation, comments, markdown, or extra keys.
-
-Required JSON shape:
-{{"task_complexity": "chitchat"|"simple"|"medium"|"complex", "chitchat_response": string|null}}
 """

@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 _TASK_TOOL_NAME = "task"
 # Layer 2 ``ExecutionHintsMiddleware`` appends using this prefix (must stay in sync).
 _EXECUTION_HINTS_MARKER = "\n\nExecution hints:"
-_VALID_TASK_COMPLEXITY = frozenset({"chitchat", "simple", "medium", "complex"})
+_VALID_TASK_COMPLEXITY = frozenset({"minimal", "simple", "medium", "complex"})
 
 
 def _configurable_step_subagent() -> str | None:
@@ -252,11 +252,14 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             _SIMPLE_SYSTEM_PROMPT,
         )
 
-        if complexity == "chitchat":
+        # Handle both enum and string values
+        complexity_str = str(complexity) if hasattr(complexity, "value") else complexity
+
+        if complexity_str == "minimal":
             return _SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
-        if complexity == "simple":
+        if complexity_str == "simple":
             return _SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
-        if complexity == "medium":
+        if complexity_str == "medium":
             return _MEDIUM_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
         if self._config.system_prompt:
             return self._config.system_prompt.format(assistant_name=self._config.assistant_name)
@@ -290,7 +293,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         - Per-turn recalled memories → <RETRIEVED_KNOWLEDGE><MEMORY>
 
         Args:
-            complexity: One of "chitchat", "simple", "medium", "complex".
+            complexity: One of "minimal", "simple", "medium", "complex".
             state: Request state with context information.
 
         Returns:
@@ -300,8 +303,9 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
 
         base_core = self._get_base_prompt_core(complexity)
 
-        # Chitchat: only base + ENVIRONMENT (no date line — date is in user envelope)
-        if complexity == "chitchat":
+        # Minimal: only base + ENVIRONMENT (no date line — date is in user envelope)
+        complexity_str = str(complexity) if hasattr(complexity, "value") else complexity
+        if complexity_str == "minimal":
             env_section = self._build_environment_section()
             return f"{base_core}\n\n{env_section}"
 

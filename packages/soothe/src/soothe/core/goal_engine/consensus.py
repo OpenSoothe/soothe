@@ -48,22 +48,20 @@ async def evaluate_goal_completion(
     if model is None:
         return _heuristic_evaluation(response_text, evidence_summary, success_criteria)
 
-    from soothe.middleware._utils import create_llm_call_metadata
+    from soothe.utils.observability.langfuse import build_traced_config
 
     prompt = _build_consensus_prompt(
         goal_description, response_text, evidence_summary, success_criteria
     )
     try:
-        response = await model.ainvoke(
-            prompt,
-            config={
-                "metadata": create_llm_call_metadata(
-                    purpose="consensus_vote",
-                    component="cognition.consensus",
-                    phase="layer3",
-                )
-            },
+        invoke_config = build_traced_config(
+            None,
+            purpose="consensus_vote",
+            component="cognition.consensus",
+            phase="post-loop",
+            run_name="soothe:consensus-vote",
         )
+        response = await model.ainvoke(prompt, config=invoke_config)
         content = response.content.strip().lower() if hasattr(response, "content") else ""
 
         if "send_back" in content:

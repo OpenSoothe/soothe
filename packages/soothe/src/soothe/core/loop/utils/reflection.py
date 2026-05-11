@@ -161,6 +161,8 @@ async def reflect_with_llm(
     plan: Plan,
     step_results: list[StepResult],
     goal_context: GoalContext | None = None,
+    *,
+    soothe_config: Any | None = None,
 ) -> Reflection:
     """LLM-assisted reflection for deeper failure analysis (RFC-0007 §5.4).
 
@@ -175,6 +177,7 @@ async def reflect_with_llm(
         plan: The executed plan.
         step_results: Results from each step.
         goal_context: Optional goal state for directive generation.
+        soothe_config: Optional SootheConfig for Langfuse tracing.
 
     Returns:
         Reflection with LLM-generated assessment and directives.
@@ -190,20 +193,17 @@ async def reflect_with_llm(
         )
 
     try:
-        # IG-143: Add metadata for tracing
-        from soothe.middleware._utils import create_llm_call_metadata
+        from soothe.utils.observability.langfuse import build_traced_config
 
         prompt = _build_reflection_prompt(plan, step_results, goal_context)
-        response = await model.ainvoke(
-            prompt,
-            config={
-                "metadata": create_llm_call_metadata(
-                    purpose="reflection",
-                    component="planning._shared",
-                    phase="post-loop",
-                )
-            },
+        invoke_config = build_traced_config(
+            soothe_config,
+            purpose="reflection",
+            component="planning._shared",
+            phase="post-loop",
+            run_name="soothe:reflection",
         )
+        response = await model.ainvoke(prompt, config=invoke_config)
         content = response.content if hasattr(response, "content") else str(response)
         return _parse_reflection_response(content, plan, step_results, goal_context)
     except Exception:

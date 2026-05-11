@@ -126,6 +126,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             self._intent_classifier = IntentClassifier(
                 model=fast_model,
                 assistant_name=self._config.assistant_name,
+                soothe_config=self._config,
             )
             logger.info("[IntentClassifier] Initialized in LLM mode")
         else:
