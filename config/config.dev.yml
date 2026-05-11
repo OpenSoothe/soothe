@@ -111,3 +111,7 @@ vector_stores:
 
 vector_store_router:
   default: pgvector_dev:soothe_default
+
+update:
+  check: true
+  auto_update: true

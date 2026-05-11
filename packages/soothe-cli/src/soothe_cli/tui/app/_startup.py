@@ -153,9 +153,9 @@ class _StartupMixin:
             group="daemon-connect",
         )
 
-        # Background update check and what's-new banner (off by default; opt-in via
-        # SOOTHE_CLI_UPDATE_CHECK or config.yml [update].check, opt-out via
-        # SOOTHE_CLI_NO_UPDATE_CHECK)
+        # Background update check and what's-new banner (on by default; opt-out via
+        # SOOTHE_CLI_NO_UPDATE_CHECK or [update].check: false; SOOTHE_CLI_UPDATE_CHECK
+        # forces on if config disables)
         from soothe_cli.tui.update_check import is_update_check_enabled
 
         if is_update_check_enabled():

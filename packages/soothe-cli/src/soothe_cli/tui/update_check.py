@@ -319,9 +319,10 @@ def is_update_check_enabled() -> bool:
     """Return whether startup update checks are enabled.
 
     Disabled when `SOOTHE_CLI_NO_UPDATE_CHECK` or legacy `SOOTHE_NO_UPDATE_CHECK`
-    is set. Enabled when `SOOTHE_CLI_UPDATE_CHECK` is ``1``/``true``/``yes``, or
-    when ``[update].check: true`` in ``config.yml``. Defaults to off; use
-    ``/update`` to check manually.
+    is set. When `SOOTHE_CLI_UPDATE_CHECK` is ``1``/``true``/``yes``, checks are
+    enabled (including when ``[update].check: false`` would otherwise turn them
+    off). Otherwise, respects ``[update].check`` in ``config.yml`` when
+    present; defaults to on. Use ``/update`` to check manually any time.
     """
     from soothe_cli.tui._env_vars import NO_UPDATE_CHECK, UPDATE_CHECK
 
@@ -329,26 +330,52 @@ def is_update_check_enabled() -> bool:
         return False
     if os.environ.get(UPDATE_CHECK, "").lower() in {"1", "true", "yes"}:
         return True
-    return _read_update_config().get("check", False)
+    cfg = _read_update_config()
+    if "check" in cfg:
+        return bool(cfg["check"])
+    return True
+
+
+def _auto_update_env_override() -> bool | None:
+    """Return env-forced auto-update flag, or ``None`` if unset.
+
+    ``SOOTHE_CLI_AUTO_UPDATE`` (and legacy ``SOOTHE_AUTO_UPDATE``) may be
+    ``1``/``true``/``yes`` to force on or ``0``/``false``/``no`` to force off.
+    """
+    from soothe_cli.tui._env_vars import AUTO_UPDATE
+
+    for key in (AUTO_UPDATE, "SOOTHE_AUTO_UPDATE"):
+        raw = os.environ.get(key)
+        if raw is None or not str(raw).strip():
+            continue
+        lv = str(raw).strip().lower()
+        if lv in {"1", "true", "yes"}:
+            return True
+        if lv in {"0", "false", "no"}:
+            return False
+    return None
 
 
 def is_auto_update_enabled() -> bool:
     """Return whether auto-update is enabled.
 
-    Opt-in via `SOOTHE_AUTO_UPDATE=1` env var or
-    `[update].auto_update = true` in `config.yml`.
-
-    Defaults to `False`.
-
     Always disabled for editable installs.
+
+    Otherwise, ``SOOTHE_CLI_AUTO_UPDATE`` (or legacy ``SOOTHE_AUTO_UPDATE``)
+    forces on or off when set. When unset, ``[update].auto_update`` in
+    ``config.yml`` is used if present; defaults to on.
     """
     from soothe_cli.tui.config import _is_editable_install
 
     if _is_editable_install():
         return False
-    if os.environ.get("SOOTHE_AUTO_UPDATE", "").lower() in {"1", "true", "yes"}:
-        return True
-    return _read_update_config().get("auto_update", False)
+    env_val = _auto_update_env_override()
+    if env_val is not None:
+        return env_val
+    cfg = _read_update_config()
+    if "auto_update" in cfg:
+        return bool(cfg["auto_update"])
+    return True
 
 
 def set_auto_update(enabled: bool) -> None:
