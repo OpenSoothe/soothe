@@ -44,7 +44,7 @@ def hf_embedding_cache_dir() -> Path:
 # Check if sentence_transformers is available
 _has_sentence_transformers = False
 _transformer_model = None
-_transformer_model_name = "all-MiniLM-L6-v2"
+EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 _model_loading_attempted = False
 
 try:
@@ -79,12 +79,12 @@ def _get_transformer_model() -> SentenceTransformer | None:
 
         # Load model with shared cache folder
         _transformer_model = SentenceTransformer(
-            _transformer_model_name,
+            EMBEDDING_MODEL_NAME,
             cache_folder=str(cache_dir),
         )
         logger.info(
             "Loaded sentence_transformers model: %s (cache: %s)",
-            _transformer_model_name,
+            EMBEDDING_MODEL_NAME,
             cache_dir,
         )
     except Exception as e:
@@ -541,7 +541,7 @@ def warmup_embedding_model() -> bool:
     # Try loading the model to trigger download
     model = _get_transformer_model()
     if model is not None:
-        logger.info("Embedding model warmup successful: %s", _transformer_model_name)
+        logger.info("Embedding model warmup successful: %s", EMBEDDING_MODEL_NAME)
         return True
     else:
         logger.warning("Embedding model warmup failed")

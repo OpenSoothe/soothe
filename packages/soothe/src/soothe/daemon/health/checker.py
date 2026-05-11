@@ -53,6 +53,7 @@ class HealthChecker:
             "vector_stores",
             "providers",
             "mcp_servers",
+            "models",
             "external_apis",
             "observability",
         ]
@@ -72,6 +73,7 @@ class HealthChecker:
             "vector_stores": self.check_vector_stores,
             "providers": self.check_providers,
             "mcp_servers": self.check_mcp_servers,
+            "models": self.check_models,
             "external_apis": self.check_external_apis,
             "observability": self.check_observability,
         }
@@ -197,6 +199,16 @@ class HealthChecker:
         from soothe.daemon.health.checks.mcp_check import check_mcp_servers
 
         return await check_mcp_servers(self.config)
+
+    async def check_models(self) -> CategoryResult:
+        """Check local model caches (embedding warmup).
+
+        Returns:
+            CategoryResult with model cache check results
+        """
+        from soothe.daemon.health.checks.embedding_warmup_check import check_embedding_warmup
+
+        return await check_embedding_warmup(self.config)
 
     async def check_external_apis(self) -> CategoryResult:
         """Check external API connectivity.
