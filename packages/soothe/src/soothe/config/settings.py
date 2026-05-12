@@ -673,7 +673,7 @@ class SootheConfig(BaseSettings):
         provider_type, kwargs = self._provider_kwargs(provider_name)
         init_str = f"{provider_type}:{model_name}" if provider_name else model_str
 
-        model = init_chat_model(init_str, streaming=True, **kwargs)
+        model = init_chat_model(init_str, streaming=True, stream_usage=True, **kwargs)
 
         # Check if this is a limited OpenAI provider (limited API compatibility)
         if provider_name:
@@ -746,7 +746,7 @@ class SootheConfig(BaseSettings):
         init_str = f"{provider_type}:{model_name}" if provider_name else model_str
         merged_kwargs = {**kwargs, **merged_params}
 
-        model = init_chat_model(init_str, streaming=True, **merged_kwargs)
+        model = init_chat_model(init_str, streaming=True, stream_usage=True, **merged_kwargs)
 
         # Check if this is a limited OpenAI provider (limited API compatibility)
         if provider_name:
