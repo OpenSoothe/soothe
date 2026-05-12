@@ -19,7 +19,8 @@ FROM ${PYTHON_BASE} AS builder
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
-    PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+    PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+    SOOTHE_HOME=/var/lib/soothe
 
 RUN echo "deb http://mirrors.aliyun.com/debian/ bookworm main contrib non-free" > /etc/apt/sources.list \
     && echo "deb http://mirrors.aliyun.com/debian/ bookworm-updates main contrib non-free" >> /etc/apt/sources.list \
@@ -65,8 +66,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         ./packages/soothe-cli \
         './packages/soothe[all]'
 
-# Match runtime layout so the embedding cache is copied into the final image.
-ENV SOOTHE_HOME=/var/lib/soothe
+# Warmup embedding model cache (writes to ~/.cache/soothe/models/huggingface as root)
 RUN mkdir -p /var/lib/soothe/data \
     && .venv/bin/soothed warmup
 
@@ -95,7 +95,6 @@ WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /opt/ms-playwright /opt/ms-playwright
-COPY --from=builder /var/lib/soothe/data/cache /var/lib/soothe/data/cache
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
@@ -105,9 +104,14 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
+# Create soothe user and set up directories
 RUN useradd --create-home --system soothe \
     && mkdir -p /var/lib/soothe \
-    && chown -R soothe:soothe /var/lib/soothe /opt/ms-playwright
+    && mkdir -p /home/soothe/.cache/soothe/models \
+    && chown -R soothe:soothe /var/lib/soothe /opt/ms-playwright /home/soothe/.cache
+
+# Copy embedding model cache from builder to soothe user's home
+COPY --from=builder --chown=soothe:soothe /root/.cache/soothe/models/huggingface /home/soothe/.cache/soothe/models/huggingface
 
 USER soothe
 WORKDIR /var/lib/soothe
