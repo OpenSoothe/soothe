@@ -1090,9 +1090,7 @@ class ToolCallMessage(Vertical):
         Must stay aligned with :meth:`on_click` (whole-card toggle branch).
         """
         return bool(
-            self._activity
-            or (self._output or "").strip()
-            or self._status in ("success", "error")
+            self._activity or (self._output or "").strip() or self._status in ("success", "error")
         )
 
     def _maybe_auto_collapse_task_card(self) -> None:
