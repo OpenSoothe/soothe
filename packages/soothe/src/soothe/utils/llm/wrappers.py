@@ -53,19 +53,19 @@ class JsonSchemaModelWrapper(Runnable):
         self._response_format = response_format
         self._schema = schema
 
-    def invoke(self, input: Any, config: Any = None, **kwargs: Any) -> Any:  # noqa: ARG002
+    def invoke(self, input: Any, config: Any = None, **kwargs: Any) -> Any:
         """Inject response_format, invoke model, and parse JSON response.
 
         Args:
             input: Messages or prompt to send.
-            config: Runnable config (unused).
+            config: Runnable config (callbacks, metadata, Langfuse, etc.).
             **kwargs: Additional invoke parameters.
 
         Returns:
             Parsed Pydantic object from the JSON response.
         """
         kwargs["response_format"] = self._response_format
-        response = self._model.invoke(input, **kwargs)
+        response = self._model.invoke(input, config=config, **kwargs)
 
         # Extract JSON content from AIMessage and parse into Pydantic object
         try:
@@ -135,19 +135,19 @@ class JsonSchemaModelWrapper(Runnable):
             )
             raise
 
-    async def ainvoke(self, input: Any, config: Any = None, **kwargs: Any) -> Any:  # noqa: ARG002
+    async def ainvoke(self, input: Any, config: Any = None, **kwargs: Any) -> Any:
         """Async version of invoke with response_format injection and JSON parsing.
 
         Args:
             input: Messages or prompt to send.
-            config: Runnable config (unused).
+            config: Runnable config (callbacks, metadata, Langfuse, etc.).
             **kwargs: Additional invoke parameters.
 
         Returns:
             Parsed Pydantic object from the JSON response.
         """
         kwargs["response_format"] = self._response_format
-        response = await self._model.ainvoke(input, **kwargs)
+        response = await self._model.ainvoke(input, config=config, **kwargs)
 
         # Extract and parse JSON
         try:

@@ -687,6 +687,10 @@ class SootheConfig(BaseSettings):
 
                 model = LimitedProviderModelWrapper(model, provider_name)
 
+        from soothe.utils.observability.llm_token_observability import bind_llm_token_observability
+
+        model = bind_llm_token_observability(model)
+
         self._model_cache[cache_key] = model
         logger.debug("Created and cached model for '%s'", model_str)
 
@@ -755,6 +759,10 @@ class SootheConfig(BaseSettings):
                 from soothe.utils.llm.wrappers import LimitedProviderModelWrapper
 
                 model = LimitedProviderModelWrapper(model, provider_name)
+
+        from soothe.utils.observability.llm_token_observability import bind_llm_token_observability
+
+        model = bind_llm_token_observability(model)
 
         self._model_cache[cache_key] = model
         logger.debug("Created model for explicit spec '%s'", model_str)
