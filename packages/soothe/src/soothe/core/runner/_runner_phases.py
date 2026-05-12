@@ -172,14 +172,14 @@ class PhasesMixin:
             await self._save_quiz_to_state(user_input, piggybacked, thread_id)
             return
 
-        # Fallback: spawn think model for quiz response (deeper reasoning for factual accuracy)
-        # This should rarely happen if classification post-processing works correctly
+        # Fallback: spawn LLM for quiz response. Prefer fast model (lower latency)
+        # over think model; the intent_hint=quiz path skips classification so there
+        # is no piggybacked response, but the answer rarely needs deep reasoning.
         logger.warning("Quiz classification missing piggybacked quiz_response, spawning LLM call")
 
-        # Use think model for quiz - requires deeper reasoning for factual accuracy
-        think_model = getattr(self, "_model", None)
-        if not think_model:
-            # No think model available, use placeholder
+        quiz_model = getattr(self, "_fast_model", None) or getattr(self, "_model", None)
+        model_label = "fast" if getattr(self, "_fast_model", None) else "think"
+        if not quiz_model:
             fallback_response = f"I'll answer that question: {user_input}"
             yield loop_assistant_messages_chunk(
                 content=fallback_response,
@@ -189,12 +189,11 @@ class PhasesMixin:
             logger.debug("Quiz completed (no model fallback): %s", user_input[:50])
             return
 
-        # Spawn think model for accurate quiz response
-        quiz_prompt = f"""Answer this question accurately and thoroughly:
+        quiz_prompt = f"""Answer this question accurately and concisely:
 
 Question: {user_input}
 
-Provide a factual, well-reasoned answer. If the question involves facts, dates, or specific knowledge, ensure accuracy. Do not use tools or search."""
+Provide a direct, factual answer. Do not use tools or search."""
 
         try:
             from soothe.utils.observability.langfuse import build_traced_config
@@ -207,7 +206,7 @@ Provide a factual, well-reasoned answer. If the question involves facts, dates, 
                 session_id=thread_id,
                 run_name="soothe:quiz",
             )
-            response = await think_model.ainvoke(quiz_prompt, config=quiz_config)
+            response = await quiz_model.ainvoke(quiz_prompt, config=quiz_config)
             answer = response.content if hasattr(response, "content") else str(response)
 
             yield loop_assistant_messages_chunk(
@@ -215,7 +214,7 @@ Provide a factual, well-reasoned answer. If the question involves facts, dates, 
                 phase="quiz",
                 thread_id=thread_id,
             )
-            logger.debug("Quiz completed (think model fallback): %s", user_input[:50])
+            logger.debug("Quiz completed (%s model): %s", model_label, user_input[:50])
             await self._save_quiz_to_state(user_input, answer, thread_id)
         except Exception:
             logger.exception("Quiz LLM call failed")
