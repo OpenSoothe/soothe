@@ -188,6 +188,7 @@ TASK:
 2. If novel situation not covered above → return "custom" scenario with designed sections
 3. Generate 2-3 contextual_focus areas specific to THIS goal (not generic)
 4. Generate evidence_emphasis instruction for how to use execution results effectively
+5. When the goal is written in a non-English language, phrase contextual_focus and evidence_emphasis in that language so the final synthesis stays aligned with the user's locale
 
 OUTPUT FORMAT (JSON):
 {{

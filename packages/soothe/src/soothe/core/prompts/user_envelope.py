@@ -1,7 +1,7 @@
 """User message envelope builder for execute-step (RFC-214).
 
 Builds the XML envelope that wraps per-turn dynamic content:
-- <DYNAMIC_CONTEXT>: goal context, execution hints, timestamp
+- <DYNAMIC_CONTEXT>: goal context, execution hints, timestamp, response-language hint
 - <RETRIEVED_KNOWLEDGE>: per-turn memories, RAG docs (optional)
 - <USER_QUERY>: actual step instruction
 
@@ -12,6 +12,14 @@ maximizing prompt cache hits.
 from __future__ import annotations
 
 import datetime as dt
+
+# User-visible prose should track the goal's language (execute + plan envelopes, RFC-214).
+_RESPONSE_LANGUAGE_HINT = (
+    "<response_language_hint>"
+    "Prefer the same natural language as the user's goal in this turn for explanations, "
+    "summaries, and conclusions; keep code, file paths, identifiers, and quoted literals unchanged."
+    "</response_language_hint>"
+)
 
 
 def build_execute_step_envelope(
@@ -61,6 +69,7 @@ def build_execute_step_envelope(
     context_info_parts = [
         f"<timestamp>{timestamp}</timestamp>",
         f"<date>{date_str}</date>",
+        _RESPONSE_LANGUAGE_HINT,
     ]
     if workspace_state:
         context_info_parts.append(f"<workspace_state>{workspace_state}</workspace_state>")
@@ -122,6 +131,7 @@ def build_plan_context_envelope(
         "<CONTEXT_INFO>\n"
         f"<timestamp>{timestamp}</timestamp>\n"
         f"<date>{date_str}</date>\n"
+        f"{_RESPONSE_LANGUAGE_HINT}\n"
         "</CONTEXT_INFO>"
     )
 
