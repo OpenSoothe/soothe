@@ -391,4 +391,5 @@ INSTRUCTIONS:
 3. Focus on the contextual areas identified above.
 4. Extract and present actual content reflected in that history (file contents, search results, tool outcomes, etc.).
 5. Be concrete and actionable - show findings, not just confirmations.
-6. If prior turns are missing or sparse, state what is unknown rather than inventing execution detail."""
+6. If prior turns are missing or sparse, state what is unknown rather than inventing execution detail.
+7. Write all user-facing text (headings, narrative, lists) in the same primary natural language as the goal above; if the goal explicitly requests a language, follow it. Keep code, file paths, identifiers, and quoted literals unchanged."""
