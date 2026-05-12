@@ -64,6 +64,7 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
         cfg,
         session_id=ctx.loop_state.thread_id,
         run_name=run_name,
+        loop_id=loop_id,
     )
     out = dict(merged)
     meta = dict(out.get("metadata") or {})
@@ -88,6 +89,11 @@ async def invoke_agent_loop_graph(ctx: LoopRuntimeContext) -> None:
     Args:
         ctx: Fully initialized runtime context including ``emit``.
     """
+    loop_id = ctx.state_manager.loop_id
+    planner = ctx.agent_loop.plan_phase._loop_planner
+    if hasattr(planner, "_loop_id"):
+        planner._loop_id = loop_id
+
     compiled = build_agent_loop_graph(ctx)
     config = build_loop_graph_invoke_config(ctx)
     await compiled.ainvoke({"last_outcome": None}, config=config)

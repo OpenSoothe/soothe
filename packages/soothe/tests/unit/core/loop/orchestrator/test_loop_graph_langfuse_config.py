@@ -65,6 +65,7 @@ def test_build_loop_graph_invoke_config_passes_conversation_thread_to_langfuse_m
     m_merge.assert_called_once()
     _args, kwargs = m_merge.call_args
     assert kwargs["session_id"] == "conv-thread-9"
+    assert kwargs["loop_id"] == "loop-1"
     assert (
         kwargs["run_name"].endswith(":agent-loop-graph") or kwargs["run_name"] == "agent-loop-graph"
     )

@@ -236,17 +236,21 @@ class LLMPlanner:
         self,
         model: Any,
         config: SootheConfig | None = None,
+        *,
+        loop_id: str | None = None,
     ) -> None:
         """Initialize LLMPlanner.
 
         Args:
             model: Langchain BaseChatModel supporting structured output.
             config: Optional configuration for shared context XML in prompts.
+            loop_id: Optional loop identifier for Langfuse trace correlation.
         """
         from soothe.core.prompts import PromptBuilder
 
         self._model = model
         self._config = config
+        self._loop_id = loop_id
         self._prompt_builder = PromptBuilder(config)
 
     def _planner_langfuse_run_config(
@@ -266,6 +270,7 @@ class LLMPlanner:
             self._config,
             session_id=thread_id,
             run_name=run_name,
+            loop_id=self._loop_id,
         )
         if merged is base:
             return None
