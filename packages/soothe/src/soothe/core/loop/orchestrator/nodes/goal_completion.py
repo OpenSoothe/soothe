@@ -128,7 +128,10 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     )
 
     synthesis_gen = SynthesisGenerator(
-        agent_loop.loop_planner._model, agent_loop.core_agent, agent_loop.config
+        agent_loop.loop_planner._model,
+        agent_loop.core_agent,
+        agent_loop.config,
+        loop_id=ctx.state_manager.loop_id,
     )
 
     action = plan_manager.determine_completion_strategy(

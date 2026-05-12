@@ -231,6 +231,7 @@ class Executor:
         max_parallel_steps: int = 16,
         config: SootheConfig | None = None,
         goal_context_manager: GoalContextManager | None = None,
+        loop_id: str | None = None,
     ) -> None:
         """Initialize Execute phase.
 
@@ -241,11 +242,13 @@ class Executor:
                 ``0`` means unlimited (RFC-201 / concurrency).
             config: Optional Soothe config for Act wave caps (IG-130).
             goal_context_manager: Optional GoalContextManager for goal briefing injection (RFC-217).
+            loop_id: Optional loop identifier for Langfuse trace correlation.
         """
         self.core_agent = core_agent
         self._max_parallel_steps = max_parallel_steps
         self._config = config
         self._goal_context_manager = goal_context_manager
+        self._loop_id = loop_id
 
     def _executor_langfuse_merge_for_stream(
         self, base: dict[str, Any], *, thread_id: str | None
@@ -260,6 +263,7 @@ class Executor:
             self._config,
             session_id=thread_id,
             run_name=run_name,
+            loop_id=self._loop_id,
         )
 
     async def _claude_runner_config_extras(self, thread_id: str) -> dict[str, Any]:

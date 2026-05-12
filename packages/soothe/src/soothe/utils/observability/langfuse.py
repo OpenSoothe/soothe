@@ -110,6 +110,7 @@ def merge_langfuse_runnable_config(
     *,
     session_id: str | None = None,
     run_name: str | None = None,
+    loop_id: str | None = None,
 ) -> dict[str, Any]:
     """Return Runnable config like ``base`` with Langfuse callbacks and session metadata merged in.
 
@@ -122,6 +123,7 @@ def merge_langfuse_runnable_config(
         session_id: Optional thread id stored as ``langfuse_session_id`` metadata.
         run_name: Optional root run name (e.g. ``soothe-dev:plan-assess``, ``soothe-dev:execute-step``). When omitted,
             uses ``observability.langfuse.trace_name`` when set.
+        loop_id: Optional loop identifier for trace correlation across sub-traces.
 
     When ``observability.langfuse.tags`` / ``user_id`` are set, merges ``langfuse_tags`` /
     ``langfuse_user_id`` into metadata if those keys are not already present (Langfuse
@@ -143,6 +145,8 @@ def merge_langfuse_runnable_config(
     meta = dict(out.get("metadata") or {})
     if session_id:
         meta.setdefault("langfuse_session_id", session_id)
+    if loop_id:
+        meta.setdefault("loop_id", loop_id)
     tags_cfg = _resolved_langfuse_tags(soothe_config)
     if tags_cfg is not None and "langfuse_tags" not in meta:
         meta["langfuse_tags"] = tags_cfg
@@ -198,6 +202,7 @@ def build_traced_config(
     session_id: str | None = None,
     run_name: str | None = None,
     extra_metadata: dict[str, Any] | None = None,
+    loop_id: str | None = None,
 ) -> dict[str, Any]:
     """Build a RunnableConfig with Langfuse callbacks and standardized call metadata.
 
@@ -213,6 +218,7 @@ def build_traced_config(
         session_id: Thread id for Langfuse session correlation.
         run_name: Trace display name (e.g. ``soothe:intent-classify``).
         extra_metadata: Additional metadata fields to merge.
+        loop_id: Optional loop identifier for trace correlation across sub-traces.
 
     Returns:
         RunnableConfig dict with callbacks and metadata ready for ``model.ainvoke(..., config=)``.
@@ -233,6 +239,7 @@ def build_traced_config(
         soothe_config,
         session_id=session_id,
         run_name=run_name,
+        loop_id=loop_id,
     )
 
 
