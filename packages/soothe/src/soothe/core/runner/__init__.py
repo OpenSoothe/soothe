@@ -122,6 +122,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             )
             fast_model = None
 
+        self._fast_model: Any | None = fast_model
         if fast_model:
             self._intent_classifier = IntentClassifier(
                 model=fast_model,
