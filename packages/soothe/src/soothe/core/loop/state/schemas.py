@@ -9,7 +9,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import AliasChoices, BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -732,7 +732,6 @@ class LoopState(BaseModel):
     intent: Any | None = None  # IG-268: Intent classification for response length intelligence
     routing_classification: Any | None = Field(
         default=None,
-        validation_alias=AliasChoices("routing_classification", "unified_classification"),
         description="RoutingClassification for Plan + Execute (IG-349, IG-383).",
     )
 
