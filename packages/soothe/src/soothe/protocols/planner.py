@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Protocol, runtime_checkable
 
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import BaseModel, Field
 
 from soothe.protocols.concurrency import ConcurrencyPolicy
 
@@ -160,10 +160,7 @@ class PlanContext(BaseModel):
     recent_messages: list[str] = Field(default_factory=list)
     available_capabilities: list[str] = Field(default_factory=list)
     completed_steps: list[StepResult] = Field(default_factory=list)
-    routing_classification: Any | None = Field(
-        default=None,
-        validation_alias=AliasChoices("routing_classification", "unified_classification"),
-    )
+    routing_classification: Any | None = Field(default=None)
     workspace: str | None = None  # Current workspace directory
     git_status: dict[str, Any] | None = None
     working_memory_excerpt: str | None = None
