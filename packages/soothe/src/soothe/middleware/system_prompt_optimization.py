@@ -109,8 +109,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
     - complex: Full prompt with all context
 
     This middleware expects ``routing_classification`` in agent state before the
-    first model call (runner / AgentLoop inject). Legacy key ``unified_classification``
-    is still read as a fallback.
+    first model call (runner / AgentLoop inject).
 
     Args:
         config: Soothe configuration for resolving prompt templates.
@@ -425,9 +424,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             elif scen == "research_synthesis":
                 goal_type = "research_synthesis"
 
-            classification = state.get("routing_classification") or state.get(
-                "unified_classification"
-            )
+            classification = state.get("routing_classification")
             if not intent_type and classification:
                 if isinstance(classification, dict):
                     intent_type = (classification.get("intent_type") or "").strip()
@@ -617,7 +614,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         """
         classification: RoutingClassification | dict | None = request.state.get(
             "routing_classification"
-        ) or request.state.get("unified_classification")
+        )
 
         complexity: str
         routing_hint: str | None
