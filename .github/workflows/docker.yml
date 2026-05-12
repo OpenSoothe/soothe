@@ -24,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # Required for docker/build-push-action cache type=gha (read/write cache API).
+      actions: write
 
     steps:
       - name: Checkout
@@ -35,7 +37,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Fail if release requires registry secrets
+        if: ${{ github.event_name == 'release' && (secrets.ALIYUN_REGISTRY_USERNAME == '' || secrets.ALIYUN_REGISTRY_PASSWORD == '') }}
+        run: |
+          echo "::error::Configure repository secrets ALIYUN_REGISTRY_USERNAME and ALIYUN_REGISTRY_PASSWORD to push images on release."
+          exit 1
+
       - name: Login to Aliyun Container Registry
+        if: ${{ (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.push_image == 'true')) && secrets.ALIYUN_REGISTRY_USERNAME != '' && secrets.ALIYUN_REGISTRY_PASSWORD != '' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -59,7 +68,7 @@ jobs:
           context: .
           file: packages/soothe/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name == 'release' || github.event.inputs.push_image == 'true' }}
+          push: ${{ (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.push_image == 'true')) && secrets.ALIYUN_REGISTRY_USERNAME != '' && secrets.ALIYUN_REGISTRY_PASSWORD != '' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
