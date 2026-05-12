@@ -224,7 +224,10 @@ class SootheTokenUsageChatModel(BaseChatModel):
         **kwargs: Any,
     ) -> Any:
         _prepend_token_usage_handler(run_manager)
-        return await self._model._astream(messages, stop=stop, run_manager=run_manager, **kwargs)
+        async for chunk in self._model._astream(
+            messages, stop=stop, run_manager=run_manager, **kwargs
+        ):
+            yield chunk
 
     @property
     def _llm_type(self) -> str:
