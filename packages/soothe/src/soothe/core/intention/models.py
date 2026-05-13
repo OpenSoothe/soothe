@@ -86,7 +86,6 @@ class IntentClassification(BaseModel):
             For chitchat/quiz intents, task_complexity is always "minimal".
         chitchat_response: Direct response for chitchat queries.
         quiz_response: Direct response for quiz/trivia queries.
-        reasoning: LLM reasoning for classification decision.
     """
 
     intent_type: Literal["chitchat", "continue_thread", "new_goal", "quiz"] = Field(
@@ -115,7 +114,6 @@ class IntentClassification(BaseModel):
         default=None,
         description="Direct response for quiz/trivia queries (piggybacked from classification)",
     )
-    reasoning: str = Field(description="LLM reasoning explaining classification decision")
 
     def to_routing_classification(self) -> RoutingClassification:
         """Convert to RoutingClassification for execution path selection.

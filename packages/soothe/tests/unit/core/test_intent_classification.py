@@ -23,7 +23,6 @@ class TestIntentClassification:
             intent_type="chitchat",
             task_complexity=TaskComplexity.MINIMAL,
             chitchat_response="Hello! How can I help?",
-            reasoning="Greeting detected",
         )
 
         assert intent.intent_type == "chitchat"
@@ -38,7 +37,6 @@ class TestIntentClassification:
             intent_type="continue_thread",
             reuse_current_goal=True,
             task_complexity="medium",
-            reasoning="Query references prior result",
         )
 
         assert intent.intent_type == "continue_thread"
@@ -53,7 +51,6 @@ class TestIntentClassification:
             intent_type="new_goal",
             goal_description="Count all readme files in the workspace",
             task_complexity="medium",
-            reasoning="Standalone task detected",
         )
 
         assert intent.intent_type == "new_goal"
@@ -65,7 +62,8 @@ class TestIntentClassification:
     def test_model_defaults(self) -> None:
         """IntentClassification default values."""
         intent = IntentClassification(
-            intent_type="new_goal", task_complexity="medium", reasoning="Default test"
+            intent_type="new_goal",
+            task_complexity="medium",
         )
 
         assert not intent.reuse_current_goal
@@ -78,7 +76,6 @@ class TestIntentClassification:
             intent_type="new_goal",
             goal_description="Count README files in workspace",
             task_complexity="simple",
-            reasoning="One focused step is sufficient",
         )
         assert intent.task_complexity == "simple"
 
@@ -133,7 +130,6 @@ class TestIntentClassificationLLM:
                 intent_type="chitchat",
                 task_complexity=TaskComplexity.MINIMAL,
                 chitchat_response="你好! 我是 Soothe。有什么可以帮你的吗?",
-                reasoning="Chinese greeting detected",
             )
         )
 
@@ -168,7 +164,6 @@ class TestIntentClassificationLLM:
                 intent_type="continue_thread",
                 reuse_current_goal=True,
                 task_complexity="medium",
-                reasoning="Query references prior conversation result",
             )
         )
 
@@ -202,7 +197,6 @@ class TestIntentClassificationLLM:
                 intent_type="continue_thread",
                 reuse_current_goal=False,  # No active goal
                 task_complexity="medium",
-                reasoning="Follow-up action but no active goal in thread",
             )
         )
 
@@ -232,7 +226,6 @@ class TestIntentClassificationLLM:
                 intent_type="new_goal",
                 goal_description="Count all readme files in the project",
                 task_complexity="medium",
-                reasoning="Standalone task requiring new goal",
             )
         )
 
@@ -265,7 +258,6 @@ class TestIntentClassificationLLM:
                 intent_type="quiz",
                 quiz_response="Paris is the capital of France.",
                 task_complexity=TaskComplexity.MINIMAL,
-                reasoning="Factual geography question, LLM knowledge sufficient",
             )
         )
 
@@ -293,7 +285,6 @@ class TestIntentClassificationLLM:
                 intent_type="quiz",
                 quiz_response="William Shakespeare wrote Romeo and Juliet.",
                 task_complexity=TaskComplexity.MINIMAL,
-                reasoning="Literature knowledge question",
             )
         )
 
@@ -311,7 +302,6 @@ class TestIntentClassificationLLM:
                 intent_type="new_goal",
                 goal_description="Count all readme files in the workspace",
                 task_complexity="medium",
-                reasoning="Requires file system tools",
             )
         )
 
@@ -331,7 +321,6 @@ class TestIntentClassificationLLM:
                 intent_type="quiz",
                 quiz_response="15 * 23 = 345",
                 task_complexity=TaskComplexity.MINIMAL,
-                reasoning="Simple arithmetic, LLM can compute",
             )
         )
 
@@ -353,7 +342,6 @@ class TestIntentClassificationLLM:
             return_value=IntentClassification(
                 intent_type="quiz",
                 task_complexity=TaskComplexity.MINIMAL,
-                reasoning="Factual question detected",
                 quiz_response=None,  # Missing
             )
         )
@@ -378,7 +366,6 @@ class TestIntentClassificationLLM:
         assert result.intent_type == "new_goal"
         assert result.goal_description == "hello there"
         assert result.task_complexity == "medium"
-        assert "classification disabled" in result.reasoning.lower()
 
     @pytest.mark.asyncio
     async def test_fallback_on_llm_failure(self) -> None:
@@ -397,7 +384,6 @@ class TestIntentClassificationLLM:
         assert result.intent_type == "new_goal"
         assert result.goal_description == "some query"
         assert result.task_complexity == "medium"
-        assert "Fallback" in result.reasoning
 
     @pytest.mark.asyncio
     async def test_patching_missing_chitchat_response(self) -> None:
@@ -410,7 +396,6 @@ class TestIntentClassificationLLM:
             return_value=IntentClassification(
                 intent_type="chitchat",
                 task_complexity=TaskComplexity.MINIMAL,
-                reasoning="Greeting detected",
                 chitchat_response=None,  # Missing
             )
         )
@@ -435,7 +420,6 @@ class TestIntentClassificationLLM:
             return_value=IntentClassification(
                 intent_type="new_goal",
                 task_complexity="medium",
-                reasoning="New task detected",
                 goal_description=None,  # Missing
             )
         )
@@ -493,7 +477,6 @@ class TestIntentClassificationEdgeCases:
                 intent_type="continue_thread",
                 reuse_current_goal=True,
                 task_complexity="medium",
-                reasoning="Follow-up detected",
             )
         )
 
@@ -517,7 +500,6 @@ class TestIntentClassificationEdgeCases:
                 intent_type="new_goal",
                 goal_description="Design authentication system architecture",
                 task_complexity="complex",
-                reasoning="Architecture design requires complex planning",
             )
         )
 
