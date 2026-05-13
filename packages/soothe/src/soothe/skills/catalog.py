@@ -245,6 +245,61 @@ class SkillInvocationEnvelope:
     message_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
+def format_slash_skill_invoke_line(skill_name: str, args: str | None = None) -> str:
+    """Build the canonical user query line for a skill turn (no SKILL.md body).
+
+    Daemon and TUI submit this plain string as loop input; the runner expands it
+    into the full skill envelope before the model sees the turn.
+
+    Args:
+        skill_name: Resolved skill name (e.g. frontmatter ``name``).
+        args: Optional user text after the skill selector.
+
+    Returns:
+        ``/skill:<name>`` or ``/skill:<name> <args>`` with a single space before args.
+
+    Raises:
+        ValueError: If ``skill_name`` is empty after stripping.
+    """
+    name = str(skill_name or "").strip()
+    if not name:
+        msg = "skill_name is required for format_slash_skill_invoke_line"
+        raise ValueError(msg)
+    tail = str(args or "").strip()
+    if tail:
+        return f"/skill:{name} {tail}"
+    return f"/skill:{name}"
+
+
+def parse_slash_skill_user_line(text: str) -> tuple[str, str] | None:
+    """Parse a user line that selects a skill via ``/skill:<name>``.
+
+    The prefix match is case-insensitive. The skill token is normalized to
+    lowercase so it matches wire/catalog names consistently with the CLI TUI.
+
+    Args:
+        text: Full user input (typically one logical line).
+
+    Returns:
+        ``(skill_name_lower, trailing_args)`` when the trimmed text begins with
+        ``/skill:`` and a non-empty name follows; otherwise ``None``.
+    """
+    s = text.strip()
+    if len(s) < len("/skill:") + 1:
+        return None
+    if s[: len("/skill:")].lower() != "/skill:":
+        return None
+    rest = s[len("/skill:") :].strip()
+    if not rest:
+        return None
+    parts = rest.split(maxsplit=1)
+    if not parts[0]:
+        return None
+    skill_token = parts[0].lower()
+    tail = parts[1] if len(parts) > 1 else ""
+    return (skill_token, tail)
+
+
 def build_skill_invocation_envelope(
     meta: dict[str, Any],
     markdown: str,
@@ -255,7 +310,8 @@ def build_skill_invocation_envelope(
     Args:
         meta: Skill metadata dict (``name``, ``description``, etc.).
         markdown: Full SKILL.md content (frontmatter + body).
-        args: Optional user arguments appended to the prompt.
+        args: Optional trailing user text after ``/skill:``; placed first in the composed
+            prompt so short instructions are not buried after SKILL.md content.
 
     Returns:
         ``SkillInvocationEnvelope`` with composed prompt and message kwargs.
@@ -264,17 +320,28 @@ def build_skill_invocation_envelope(
     name = meta.get("name", "")
     description = meta.get("description", "")
 
-    parts: list[str] = []
+    reference_parts: list[str] = []
     if name:
-        parts.append(f"Skill: {name}")
+        reference_parts.append(f"Skill: {name}")
     if description:
-        parts.append(f"Description: {description}")
+        reference_parts.append(f"Description: {description}")
     if body.strip():
-        parts.append(body.strip())
-    if args:
-        parts.append(f"Arguments: {args}")
+        reference_parts.append(body.strip())
+    reference_text = "\n\n".join(reference_parts)
 
-    prompt = "\n\n".join(parts)
+    user_instruction = (args or "").strip()
+    composed: list[str] = []
+    if user_instruction:
+        composed.append(
+            "User instruction (short — prioritize this over long skill reference text):\n"
+            f"{user_instruction}"
+        )
+    if reference_text:
+        composed.append(
+            "Skill reference (instructions, constraints, workflow — use to carry out "
+            "the user instruction):\n" + reference_text
+        )
+    prompt = "\n\n".join(composed) if composed else reference_text
 
     message_kwargs = {
         "additional_kwargs": {
@@ -283,3 +350,33 @@ def build_skill_invocation_envelope(
     }
 
     return SkillInvocationEnvelope(prompt=prompt, message_kwargs=message_kwargs)
+
+
+def try_expand_slash_skill_user_line(
+    text: str,
+    config: SootheConfig,
+) -> SkillInvocationEnvelope | None:
+    """If ``text`` is a ``/skill:`` line, resolve the skill and build the model envelope.
+
+    When resolution fails (unknown skill, unreadable SKILL.md), returns ``None``
+    so callers can fall back to treating ``text`` as a normal user message.
+
+    Args:
+        text: Raw user input.
+        config: Active ``SootheConfig`` for skill path resolution.
+
+    Returns:
+        A populated ``SkillInvocationEnvelope``, or ``None`` when not a slash-skill
+        line or when the skill cannot be loaded.
+    """
+    parsed = parse_slash_skill_user_line(text)
+    if parsed is None:
+        return None
+    skill_name, args = parsed
+    meta = resolve_skill_directory(config, skill_name)
+    if meta is None:
+        return None
+    md = read_skill_markdown(meta)
+    if md is None or not str(md).strip():
+        return None
+    return build_skill_invocation_envelope(meta, md, args)

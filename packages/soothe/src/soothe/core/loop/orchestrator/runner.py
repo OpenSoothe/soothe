@@ -101,9 +101,10 @@ async def invoke_agent_loop_graph(ctx: LoopRuntimeContext) -> None:
     cfg = ctx.agent_loop.config
     if cfg.observability.langfuse.enabled:
         pub = resolve_langfuse_config_str(cfg.observability.langfuse.public_key)
+        trace_goal = ctx.loop_state.goal_user_submission or ctx.loop_state.goal
         patch_langfuse_trace_goal_io(
             config,
-            goal_text=ctx.loop_state.goal,
+            goal_text=trace_goal,
             output_text=_langfuse_goal_output_text(ctx),
             trace_display_name=loop_graph_langfuse_run_display_name(
                 cfg.observability.langfuse.trace_name

@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
 from soothe.config import SootheConfig
 from soothe.core.artifacts import RunArtifactStore
 from soothe.core.runner import SootheRunner
-from soothe.core.runner._runner_autonomous import AutonomousMixin
 from soothe.core.runner._types import RunnerState
 from soothe.protocols.planner import Plan, PlanStep
 
@@ -111,145 +109,3 @@ class TestCheckpointEventEmission:
 
         # IG-271: No events emitted in normal execution (replaced with logging)
         assert len(events) == 0
-
-
-class TestStepObservationReuse:
-    """Test that step execution reuses query-scoped observation."""
-
-    @pytest.mark.asyncio
-    async def test_execute_step_inherits_parent_observation(self) -> None:
-        runner = object.__new__(SootheRunner)
-        runner._memory = MagicMock()
-        runner._context = MagicMock()
-        runner._current_plan = None
-        runner._concurrency = SimpleNamespace(acquire_llm_call=_noop_acquire_llm_call)
-
-        observed: dict[str, object] = {}
-
-        async def _fake_stream_phase(step_input: str, step_state: RunnerState, **_kw: object):
-            observed["step_input"] = step_input
-            observed["context_projection"] = step_state.context_projection
-            observed["recalled_memories"] = list(step_state.recalled_memories)
-            observed["observation_scope_key"] = step_state.observation_scope_key
-            step_state.full_response.append("step complete")
-            if False:
-                yield ()
-
-        runner._stream_phase = _fake_stream_phase  # type: ignore[method-assign]
-
-        parent_state = RunnerState(
-            thread_id="thread-1",
-            context_projection=SimpleNamespace(
-                entries=[SimpleNamespace(source="ctx", content="data")]
-            ),
-            recalled_memories=[SimpleNamespace(source_thread="thread-0", content="memo")],
-            observation_scope_key="analyze project structure",
-        )
-        step = PlanStep(id="S_1", description="Inspect repository layout")
-
-        chunks = [
-            chunk
-            async for chunk in runner._execute_step(
-                step,
-                goal_description="Analyze project structure",
-                dependency_results=[],
-                thread_id="thread-1__step_S_1",
-                state=parent_state,
-                batch_index=0,
-            )
-        ]
-
-        assert chunks[0][2]["type"] == "soothe.cognition.plan.step.started"
-        assert chunks[-1][2]["type"] == "soothe.cognition.plan.step.completed"
-        assert observed["context_projection"] is parent_state.context_projection
-        assert observed["recalled_memories"] == parent_state.recalled_memories
-        assert observed["observation_scope_key"] == "analyze project structure"
-        runner._memory.recall.assert_not_called()
-        runner._context.project.assert_not_called()
-
-
-def _noop_acquire_llm_call() -> _NoopAsyncContext:
-    return _NoopAsyncContext()
-
-
-async def _empty_async_generator(*args, **kwargs):
-    if False:
-        yield args, kwargs
-
-
-class TestAutonomousObservationReuse:
-    """Test autonomous goal execution reuses parent observation."""
-
-    @pytest.mark.asyncio
-    async def test_execute_autonomous_goal_inherits_parent_observation(self) -> None:
-        runner = object.__new__(SootheRunner)
-        runner._memory = MagicMock()
-        runner._context = MagicMock()
-        runner._planner = None
-        runner._goal_engine = AsyncMock()
-        runner._model = None  # Required for consensus validation check (line 778)
-        runner._artifact_store = None
-        runner._current_plan = None
-        runner._config = SootheConfig()
-        runner._concurrency = SimpleNamespace(acquire_llm_call=_noop_acquire_llm_call)
-        runner._store_iteration_record = AsyncMock()
-        runner._save_checkpoint = _empty_async_generator
-
-        observed: dict[str, object] = {}
-
-        async def _fake_stream_phase(step_input: str, step_state: RunnerState, **_kw: object):
-            observed["step_input"] = step_input
-            observed["context_projection"] = step_state.context_projection
-            observed["recalled_memories"] = list(step_state.recalled_memories)
-            observed["observation_scope_key"] = step_state.observation_scope_key
-            step_state.full_response.append("goal complete")
-            if False:
-                yield ()
-
-        runner._stream_phase = _fake_stream_phase  # type: ignore[method-assign]
-        runner._synthesize_root_goal_report = MagicMock(return_value="summary")
-
-        parent_state = RunnerState(
-            thread_id="thread-1",
-            context_projection=SimpleNamespace(
-                entries=[SimpleNamespace(source="ctx", content="data")]
-            ),
-            recalled_memories=[SimpleNamespace(source_thread="thread-0", content="memo")],
-            observation_scope_key="analyze project structure",
-        )
-        goal = SimpleNamespace(
-            id="G_1",
-            description="Inspect repository layout",
-            plan_count=0,
-            depends_on=[],
-            report=None,
-        )
-
-        # Execute the autonomous goal generator to completion
-        async for _ in AutonomousMixin._execute_autonomous_goal(
-            runner,
-            goal,
-            parent_state=parent_state,
-            thread_id="thread-1__goal_G_1",
-            user_input="analyze project structure",
-            iteration_records=[],
-            total_iterations=0,
-            parallel_goals=1,
-        ):
-            pass
-
-        # IG-271: Iteration events removed, replaced with logging
-        # Verify observation reuse without checking for iteration events
-        assert observed["context_projection"] is parent_state.context_projection
-        assert observed["recalled_memories"] == parent_state.recalled_memories
-        assert observed["observation_scope_key"] == "analyze project structure"
-        runner._memory.recall.assert_not_called()
-        runner._context.project.assert_not_called()
-
-
-class _NoopAsyncContext:
-    async def __aenter__(self) -> None:
-        return None
-
-    async def __aexit__(self, exc_type, exc, tb) -> bool:
-        return False

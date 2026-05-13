@@ -318,8 +318,8 @@ class Executor:
         """Run ``CoreAgent.astream`` with LangGraph HITL interrupt / resume loop.
 
         When a daemon client registers an interrupt resolver (interactive TUI),
-        pauses until ``resume_interrupts`` delivers the payload; otherwise
-        auto-approves like ``SootheRunner._stream_phase``.
+        pauses until ``resume_interrupts`` delivers the payload; otherwise uses
+        ``auto_approve_interrupt_resume_payload`` from ``hitl_scope``.
         """
         hitl_iterations = 0
         current_input: dict[str, Any] | Command = stream_input
@@ -390,7 +390,7 @@ class Executor:
         intent_type: str | None = None,
         synthesis_scenario: str | None = None,
     ) -> dict[str, Any]:
-        """Build LangGraph input for execute waves (mirrors runner ``_stream_phase`` keys; IG-349, IG-383)."""
+        """Build LangGraph input for execute waves (IG-349, IG-383)."""
         out: dict[str, Any] = {"messages": messages}
         if routing_classification is not None:
             out["routing_classification"] = routing_classification
@@ -1290,6 +1290,7 @@ class Executor:
                 goal=goal_for_envelope,
                 step_description=step.description,
                 execution_hints=execution_hints,
+                goal_user_submission=loop_state.goal_user_submission if loop_state else None,
             )
             logger.debug("[Human Message Envelope] %s", log_preview(envelope, chars=150))
             human_msg = LoopHumanMessage(
@@ -1678,6 +1679,7 @@ class Executor:
                 goal=state.goal,
                 step_description=step.description,
                 execution_hints=execution_hints,
+                goal_user_submission=state.goal_user_submission,
             )
             msg = LoopHumanMessage(
                 content=envelope,

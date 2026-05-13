@@ -551,10 +551,22 @@ class TestLoopState:
 
         assert state.goal == "Test goal"
         assert state.thread_id == "thread_1"
+        assert state.goal_user_submission is None
         assert state.iteration == 0
         assert state.max_iterations == 10  # DEFAULT_AGENT_LOOP_MAX_ITERATIONS
         assert state.current_decision is None
         assert len(state.step_results) == 0
+
+    def test_loop_state_goal_user_submission(self) -> None:
+        """Slash-skill runs keep the submitted line for trace UX."""
+        state = LoopState(
+            goal="Skill: weather\n\nArguments: x",
+            goal_user_submission="/skill:weather x",
+            thread_id="t1",
+        )
+        assert state.goal_user_submission == "/skill:weather x"
+        trace_goal = state.goal_user_submission or state.goal
+        assert trace_goal == "/skill:weather x"
 
     def test_add_step_result(self):
         """Test adding step results."""
