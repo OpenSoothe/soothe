@@ -1,7 +1,7 @@
 """WebSocket transport implementation (RFC-0013).
 
 This transport implements WebSocket server for web/remote clients
-with CORS validation.
+with CORS validation using FastAPI and uvicorn (native WebSocket text frames).
 """
 
 from __future__ import annotations
@@ -11,18 +11,18 @@ import contextlib
 import fnmatch
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-import websockets.asyncio.server
+import uvicorn
 import websockets.exceptions
+from fastapi import FastAPI, WebSocket
 from soothe_sdk.client.protocol import decode_websocket_text, encode_websocket_text
+from starlette.websockets import WebSocketDisconnect
+from websockets.frames import Close
 
 from soothe_daemon.config.models import WebSocketConfig
 from soothe_daemon.protocol_v2 import create_error_response, validate_message
 from soothe_daemon.transports.base import TransportServer
-
-if TYPE_CHECKING:
-    from websockets.asyncio.server import ServerConnection
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +44,10 @@ class WebSocketTransport(TransportServer):
             config: WebSocket configuration.
         """
         self._config = config
-        self._server: websockets.asyncio.server.Server | None = None
-        self._clients: dict[ServerConnection, dict[str, Any]] = {}
+        self._app: FastAPI | None = None
+        self._server: uvicorn.Server | None = None
+        self._serve_task: asyncio.Task[None] | None = None
+        self._clients: dict[WebSocket, dict[str, Any]] = {}
         self._message_handler: Callable[[str, dict[str, Any]], None] | None = None
         self._handshake_callback: Callable[[Any], list[dict[str, Any]]] | None = None
 
@@ -67,29 +69,37 @@ class WebSocketTransport(TransportServer):
         self._message_handler = message_handler
         self._handshake_callback = handshake_callback
 
-        # Determine SSL context
-        ssl_context = None
-        if self._config.tls_enabled:
-            import ssl
+        app = FastAPI(
+            title="Soothe Daemon WebSocket", version="1.0.0", docs_url=None, redoc_url=None
+        )
 
-            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-            if self._config.tls_cert and self._config.tls_key:
-                ssl_context.load_cert_chain(self._config.tls_cert, self._config.tls_key)
-            else:
-                logger.warning("TLS enabled but no certificate/key configured")
+        @app.websocket("/")
+        async def _ws_endpoint(websocket: WebSocket) -> None:
+            await self._handle_client_endpoint(websocket)
 
-        # Start WebSocket server
-        # Disable WebSocket library ping/pong since daemon uses application-level heartbeats
-        # (RFC-0013: daemon sends heartbeat events every 5 seconds during query execution)
-        self._server = await websockets.asyncio.server.serve(
-            self._handle_client,
+        self._app = app
+
+        ssl_keyfile = None
+        ssl_certfile = None
+        if self._config.tls_enabled and self._config.tls_cert and self._config.tls_key:
+            ssl_certfile = self._config.tls_cert
+            ssl_keyfile = self._config.tls_key
+        elif self._config.tls_enabled:
+            logger.warning("TLS enabled but no certificate/key configured")
+
+        config = uvicorn.Config(
+            app=app,
             host=self._config.host,
             port=self._config.port,
-            ssl=ssl_context,
-            ping_interval=None,  # Disable ping/pong mechanism
-            ping_timeout=None,  # Use application-level heartbeats instead
-            max_size=self._config.max_frame_size,  # Set maximum frame size
+            ssl_keyfile=ssl_keyfile,
+            ssl_certfile=ssl_certfile,
+            log_level="warning",
+            ws_max_size=self._config.max_frame_size,
+            ws_ping_interval=None,
+            ws_ping_timeout=None,
         )
+        self._server = uvicorn.Server(config)
+        self._serve_task = asyncio.create_task(self._server.serve())
 
         protocol = "wss" if self._config.tls_enabled else "ws"
         logger.debug(
@@ -110,19 +120,16 @@ class WebSocketTransport(TransportServer):
 
         text = encode_websocket_text(message)
 
-        # IG-258: Parallel broadcast with timeout for scalability
         send_tasks = [
             asyncio.create_task(self._send_with_timeout(client, text, timeout=1.0))
             for client in self._clients
         ]
 
         if not send_tasks:
-            return  # No clients to broadcast to
+            return
 
-        # Gather results with exception handling
         results = await asyncio.gather(*send_tasks, return_exceptions=True)
 
-        # Remove dead clients (those that failed)
         clients_to_remove = []
         for client, result in zip(self._clients.keys(), results):
             if isinstance(result, Exception):
@@ -131,20 +138,20 @@ class WebSocketTransport(TransportServer):
         for client in clients_to_remove:
             self._clients.pop(client, None)
 
-    async def _send_with_timeout(self, client: Any, text: str, timeout: float = 1.0) -> None:
+    async def _send_with_timeout(self, client: WebSocket, text: str, timeout: float = 1.0) -> None:
         """Send a text frame to WebSocket client with timeout (IG-258).
 
         Args:
-            client: WebSocket ServerConnection object
-            text: JSON payload for a single text frame
-            timeout: Send timeout in seconds
+            client: Starlette/FastAPI WebSocket connection.
+            text: JSON payload for a single text frame.
+            timeout: Send timeout in seconds.
 
         Raises:
-            asyncio.TimeoutError: If send exceeds timeout
-            Exception: If send fails
+            asyncio.TimeoutError: If send exceeds timeout.
+            Exception: If send fails.
         """
         try:
-            await asyncio.wait_for(client.send(text), timeout=timeout)
+            await asyncio.wait_for(client.send_text(text), timeout=timeout)
         except TimeoutError:
             logger.warning("WebSocket send timeout for client %s", client)
             raise
@@ -153,48 +160,55 @@ class WebSocketTransport(TransportServer):
         """Send message to specific WebSocket client.
 
         Args:
-            client: WebSocket ServerConnection object
-            message: Message dictionary to send
+            client: Starlette/FastAPI WebSocket connection.
+            message: Message dictionary to send.
 
         Raises:
-            ConnectionError: If send fails (except normal disconnects)
-            websockets.exceptions.ConnectionClosedOK: For normal disconnects (code 1000)
+            ConnectionError: If send fails (except normal disconnects).
+            websockets.exceptions.ConnectionClosedOK: For normal disconnects (code 1000).
         """
+        websocket = client
         try:
-            await client.send(encode_websocket_text(message))
-        except websockets.exceptions.ConnectionClosedOK as e:
-            # Normal disconnect (code 1000) - expected behavior
-            logger.debug("WebSocket client disconnected normally: %s", e)
-            raise  # Propagate without wrapping
+            await websocket.send_text(encode_websocket_text(message))
+        except WebSocketDisconnect as e:
+            close = Close(e.code, e.reason or "")
+            if e.code == 1000:
+                logger.debug("WebSocket client disconnected normally: %s", e)
+                raise websockets.exceptions.ConnectionClosedOK(rcvd=close, sent=None) from e
+            logger.warning("WebSocket client disconnected unexpectedly: %s", e)
+            raise websockets.exceptions.ConnectionClosedError(rcvd=close, sent=None) from e
         except (
+            websockets.exceptions.ConnectionClosedOK,
             websockets.exceptions.ConnectionClosed,
             websockets.exceptions.ConnectionClosedError,
-        ) as e:
-            # Abnormal disconnect - log as warning
+        ):
+            raise
+        except (RuntimeError, OSError, ConnectionError) as e:
             logger.warning("WebSocket client disconnected unexpectedly: %s", e)
-            error_msg = f"Failed to send: {e}"
-            raise ConnectionError(error_msg) from e
+            raise ConnectionError(f"Failed to send: {e}") from e
         except Exception as e:
             logger.exception("Failed to send to WebSocket client")
-            error_msg = f"Failed to send: {e}"
-            raise ConnectionError(error_msg) from e
+            raise ConnectionError(f"Failed to send: {e}") from e
 
     async def stop(self) -> None:
         """Stop the WebSocket server and close all connections."""
         if not self._server:
             return
 
-        # Close all client connections
         for client in list(self._clients):
             with contextlib.suppress(Exception):
                 await client.close()
 
         self._clients.clear()
 
-        # Close server
-        self._server.close()
-        await self._server.wait_closed()
+        self._server.should_exit = True
+        if self._serve_task is not None:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await asyncio.wait_for(self._serve_task, timeout=30.0)
+            self._serve_task = None
+
         self._server = None
+        self._app = None
 
         logger.info("[WS] Transport stopped")
 
@@ -218,7 +232,6 @@ class WebSocketTransport(TransportServer):
             True if origin is allowed, False otherwise.
         """
         if not origin:
-            # Allow connections without Origin header (non-browser clients)
             return True
 
         for pattern in self._config.cors_origins:
@@ -228,19 +241,15 @@ class WebSocketTransport(TransportServer):
         logger.warning("CORS validation failed for origin: %s", origin)
         return False
 
-    async def _handle_client(self, websocket: ServerConnection) -> None:
-        """Handle a new WebSocket client connection.
-
-        Args:
-            websocket: WebSocket connection.
-        """
-        # Validate CORS
-        origin = websocket.request.headers.get("Origin")
+    async def _handle_client_endpoint(self, websocket: WebSocket) -> None:
+        """Handle a new WebSocket client connection (FastAPI endpoint)."""
+        origin = websocket.headers.get("origin")
         if not self._validate_cors(origin):
             await websocket.close(code=1008, reason="Origin not allowed")
             return
 
-        # Create a session for this client if session manager is available
+        await websocket.accept()
+
         client_id: str | None = None
         if hasattr(self, "_session_manager") and self._session_manager:
             try:
@@ -250,44 +259,41 @@ class WebSocketTransport(TransportServer):
                 await websocket.close(code=1011, reason="Internal error")
                 return
         else:
-            # Fallback to generated client ID
-            client_id = f"ws:{websocket.remote_address}"
+            remote = (websocket.client.host, websocket.client.port) if websocket.client else None
+            client_id = f"ws:{remote}"
 
-        # Initialize client state
         client_info: dict[str, Any] = {
-            "remote_addr": websocket.remote_address,
+            "remote_addr": (websocket.client.host, websocket.client.port)
+            if websocket.client
+            else None,
             "origin": origin,
             "client_id": client_id,
         }
 
-        # Register client
         self._clients[websocket] = client_info
-        logger.info(
-            "[WS] Client connected from %s (%d active)",
-            websocket.remote_address[0] if websocket.remote_address else "unknown",
-            len(self._clients),
-        )
+        remote = websocket.client.host if websocket.client else "unknown"
+        logger.info("[WS] Client connected from %s (%d active)", remote, len(self._clients))
 
         try:
-            # Send initial handshake messages
             if self._handshake_callback:
                 try:
                     handshake_msgs = self._handshake_callback(websocket)
                     for msg in handshake_msgs:
-                        await websocket.send(encode_websocket_text(msg))
+                        await websocket.send_text(encode_websocket_text(msg))
                 except Exception:
                     logger.exception("Failed to send initial handshake to WebSocket client")
 
-            # Message loop
-            async for message in websocket:
+            while True:
                 try:
-                    # Parse message
-                    message_str = message.decode("utf-8") if isinstance(message, bytes) else message
+                    message_str = await websocket.receive_text()
+                except WebSocketDisconnect:
+                    break
+
+                try:
                     msg_dict = decode_websocket_text(message_str)
                     if msg_dict is None:
                         continue
 
-                    # Validate message
                     errors = validate_message(msg_dict)
                     if errors:
                         error_msg = create_error_response(
@@ -295,10 +301,9 @@ class WebSocketTransport(TransportServer):
                             errors[0],
                             {"errors": errors},
                         )
-                        await websocket.send(encode_websocket_text(error_msg))
+                        await websocket.send_text(encode_websocket_text(error_msg))
                         continue
 
-                    # Pass message to handler with client_id
                     if self._message_handler:
                         try:
                             self._message_handler(client_id, msg_dict)
@@ -309,18 +314,16 @@ class WebSocketTransport(TransportServer):
                     logger.exception("Error processing WebSocket message")
                     continue
 
-        except websockets.exceptions.ConnectionClosed:
+        except WebSocketDisconnect:
             pass
         except Exception:
             logger.exception("WebSocket client error")
         finally:
-            # Remove session if we created one
             if hasattr(self, "_session_manager") and self._session_manager and client_id:
                 await self._session_manager.remove_session(client_id)
-            # Unregister client
             self._clients.pop(websocket, None)
             logger.info(
                 "[WS] Client disconnected from %s (%d active)",
-                websocket.remote_address[0] if websocket.remote_address else "unknown",
+                remote,
                 len(self._clients),
             )
