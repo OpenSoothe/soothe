@@ -26,7 +26,6 @@ async def test_init_or_resume_routes_fast_path_for_chitchat() -> None:
         task_complexity="minimal",
         chitchat_response="hello",
         quiz_response=None,
-        reasoning="test",
     )
     loop_state = SimpleNamespace(
         intent=intent,
