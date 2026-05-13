@@ -100,9 +100,9 @@ LangGraph checkpoints remain for tool execution, resume capability, and debuggin
 ### P5: Semantic Separation of Context Types
 
 - **System prompt**: Persistent directives and semi-static background (identity, policies, workspace rules, long-term memory summary). The LLM treats these as authoritative instructions.
-- **User message envelope `<DYNAMIC_CONTEXT>`**: Per-turn operational state (current goal, execution hints, timestamp). The LLM uses these to act correctly this turn.
+- **User message envelope (leading) `<CURRENT_GOAL>` + `<USER_QUERY>`**: The active goal text and the step instruction for this turn. Placed first so the model sees intent and task before auxiliary context.
+- **User message envelope `<DYNAMIC_CONTEXT>`**: Per-turn operational context only (execution hints when present, `<CONTEXT_INFO>` with timestamp, date, response-language hint, and optional loop iteration / workspace snapshot). Separated from the leading blocks by a `--- Context ---` delimiter for scanning and cache-friendly grouping.
 - **User message envelope `<RETRIEVED_KNOWLEDGE>`**: Supplemental information (per-turn memories, RAG documents). The LLM may reference these but should not treat them as directives.
-- **User message envelope `<USER_QUERY>`**: Actual dialogue content. The LLM's response addresses this section.
 
 ---
 
@@ -143,29 +143,37 @@ These blocks change infrequently — at most once per goal or when the workspace
 
 All per-turn volatile content is removed from the system prompt:
 
-- **Date/time** → moves to `<CONTEXT_INFO>` in the user message envelope
-- **Execution hints** → moves to `<EXECUTION_HINTS>` in the user message envelope
+- **Date/time** → moves to `<CONTEXT_INFO>` inside `<DYNAMIC_CONTEXT>` in the user message envelope
+- **Execution hints** → moves to `<EXECUTION_HINTS>` inside `<DYNAMIC_CONTEXT>` in the user message envelope
 - **Per-turn recalled memories** → moves to `<RETRIEVED_KNOWLEDGE>` in the user message envelope
-- **Current goal context** → moves to `<CURRENT_GOAL>` in the user message envelope
+- **Current goal context** → moves to `<CURRENT_GOAL>` at the **start** of the user message envelope (not nested under `<DYNAMIC_CONTEXT>`). Any legacy trailing ` (iteration N/M)` suffix on the stored goal string is stripped so `<CURRENT_GOAL>` contains only the user's goal text.
 
 The system prompt is cache-stable across the entire session (static tier) or across goals (semi-static tier). The only cache-invalidating changes are workspace shifts, memory updates, or environment changes — all inherently infrequent.
 
 ### 2. User Message Envelope
 
-Every `LoopHumanMessage` sent to CoreAgent follows a standard XML envelope. The envelope groups per-turn dynamic content into semantically distinct sections, keeping dialogue semantics clean.
+Every `LoopHumanMessage` sent to CoreAgent follows a standard XML envelope. **Goal and step instruction come first**; **secondary per-turn context** (hints, timestamps, language hint) is grouped after a fixed delimiter so the model reads task-before-metadata and prompt prefixes stay stable.
 
 ```xml
+<CURRENT_GOAL>
+  Goal text (verbatim user goal; no iteration suffix)
+</CURRENT_GOAL>
+
+<USER_QUERY>
+  Actual user message or orchestration instruction
+</USER_QUERY>
+
+--- Context ---
+
 <DYNAMIC_CONTEXT>
-  <CURRENT_GOAL>
-    Goal text and progress summary
-  </CURRENT_GOAL>
   <EXECUTION_HINTS>
-    Step-specific guidance from AgentLoop (previously appended by ExecutionHintsMiddleware)
+    Step-specific guidance from AgentLoop (previously appended by ExecutionHintsMiddleware); omitted when empty
   </EXECUTION_HINTS>
   <CONTEXT_INFO>
-    <timestamp>2026-05-08T14:30:00Z</timestamp>
-    <workspace_state>lightweight diff summary for this turn (uncommitted changes, staged files)</workspace_state>
+    <timestamp>2026-05-08T14:30:00+00:00</timestamp>
     <date>2026-05-08</date>
+    <response_language_hint>...</response_language_hint>
+    <workspace_state>lightweight diff summary for this turn (optional)</workspace_state>
   </CONTEXT_INFO>
 </DYNAMIC_CONTEXT>
 
@@ -178,11 +186,9 @@ Every `LoopHumanMessage` sent to CoreAgent follows a standard XML envelope. The 
     Per-turn retrieved documents
   </RAG_DOCS>
 </RETRIEVED_KNOWLEDGE>
-
-<USER_QUERY>
-  Actual user message or orchestration instruction
-</USER_QUERY>
 ```
+
+`<RETRIEVED_KNOWLEDGE>` is optional and may be omitted when there is nothing to inject for that turn. When present, it follows `<DYNAMIC_CONTEXT>` (same overall human message).
 
 **Memory split semantics:**
 
@@ -406,9 +412,9 @@ AgentLoop (Plan-generate phase)
 AgentLoop (Execute phase)
   |
   +-- Build LoopHumanMessage envelope (phase="execute_step"):
-  |     <DYNAMIC_CONTEXT>  goal + hints + timestamp
-  |     <RETRIEVED_KNOWLEDGE> memory + RAG
-  |     <USER_QUERY> orchestration instruction
+  |     <CURRENT_GOAL> + <USER_QUERY>  (task first)
+  |     --- Context --- + <DYNAMIC_CONTEXT>  hints + CONTEXT_INFO
+  |     <RETRIEVED_KNOWLEDGE> memory + RAG (optional)
   |
   v
 CoreAgent.astream(envelope)
@@ -547,7 +553,7 @@ Checkpoint save (complete loop_messages ledger + CoreAgent state)
 **Change**: The `USER_TASK` layer is replaced by the user message envelope.
 
 - **Current**: `USER_TASK` contains `<GOAL>`, `<PRIOR_CONVERSATION>`, `<EVIDENCE>` as XML inside a single human message.
-- **New**: `USER_TASK` becomes the user message envelope with `<DYNAMIC_CONTEXT>`, `<RETRIEVED_KNOWLEDGE>`, `<USER_QUERY>`. No `<PRIOR_CONVERSATION>` or `<EVIDENCE>` blocks — these are replaced by native ledger turns in the message list.
+- **New**: `USER_TASK` becomes the user message envelope: `<CURRENT_GOAL>` and `<USER_QUERY>` first, then `--- Context ---` and `<DYNAMIC_CONTEXT>` (hints + `<CONTEXT_INFO>`), optionally `<RETRIEVED_KNOWLEDGE>`. No `<PRIOR_CONVERSATION>` or `<EVIDENCE>` blocks — these are replaced by native ledger turns in the message list.
 - **Preserved**: `SYSTEM_CONTEXT` layer (now split into static + semi-static tiers), `INSTRUCTIONS` layer, `PromptBuilder` fragment composition.
 - **Removed**: `<PRIOR_CONVERSATION>`, `CONCRETE EVIDENCE`, `<EVIDENCE>`, `WORKING_MEMORY` sections from all prompt construction.
 
@@ -599,3 +605,4 @@ Checkpoint save (complete loop_messages ledger + CoreAgent state)
 |------|--------|
 | 2026-05-03 | Initial draft (unified ledger model, execute-step contract, gap analysis G1-G8) |
 | 2026-05-08 | Major revision: volatility-tiered prompt architecture, user message envelope, complete ledger with plan-assess/plan-generate phases, CoreAgent isolation, reference-based dedup, cache optimization, G9-G11, amendments to RFC-104/206/217 |
+| 2026-05-13 | Execute-step envelope layout: `<CURRENT_GOAL>` + `<USER_QUERY>` before `--- Context ---` + `<DYNAMIC_CONTEXT>` (goal no longer nested under `<DYNAMIC_CONTEXT>`). `<CURRENT_GOAL>` omits iteration suffixes (stripped if present on stored goal text); execute iteration is not duplicated in the envelope — use ledger / message metadata. |

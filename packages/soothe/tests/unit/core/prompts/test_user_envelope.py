@@ -13,12 +13,22 @@ def test_execute_envelope_includes_response_language_hint() -> None:
         goal="请总结项目",
         step_description="Read README",
         execution_hints=None,
-        iteration=1,
-        max_iterations=3,
     )
     assert "<response_language_hint>" in envelope
     assert "same natural language as the user's goal" in envelope
     assert "<CONTEXT_INFO>" in envelope
+
+
+def test_execute_envelope_strips_trailing_iteration_suffix_from_goal() -> None:
+    envelope = build_execute_step_envelope(
+        goal="analyze why the exec interrupted. how to fix (iteration 1/99)",
+        step_description="Do the thing",
+        execution_hints=None,
+    )
+    assert (
+        "<CURRENT_GOAL>\nanalyze why the exec interrupted. how to fix\n</CURRENT_GOAL>" in envelope
+    )
+    assert "(iteration 1/99)" not in envelope
 
 
 def test_plan_context_envelope_includes_response_language_hint() -> None:
