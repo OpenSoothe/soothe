@@ -42,6 +42,10 @@ from soothe.core.loop.engine.hitl_scope import (
 from soothe.core.loop.engine.metadata_generator import (
     PLANNER_OUTCOME_PREVIEW_CAP,
 )
+from soothe.core.loop.engine.predecessor_branch_context import (
+    predecessor_execute_messages_for_branch,
+    transitive_dependency_step_ids,
+)
 from soothe.core.loop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -288,6 +292,23 @@ class Executor:
         if self._config is None:
             return 0
         return max(0, int(self._config.agent_loop.max_subagent_tasks_per_wave))
+
+    def _branch_predecessor_message_cap(self) -> int:
+        """Max ledger messages to deep-copy into a parallel branch CoreAgent input (RFC-214).
+
+        When ``plan_prompt_ledger.plan_ledger_max_messages`` is positive, reuse it as an
+        upper bound (capped at 256). Otherwise use ``DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES``.
+        """
+        from soothe.core.loop.engine.predecessor_branch_context import (
+            DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES,
+        )
+
+        if self._config is None:
+            return DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES
+        cap = int(self._config.agent_loop.plan_prompt_ledger.plan_ledger_max_messages)
+        if cap > 0:
+            return min(cap, 256)
+        return DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES
 
     async def _core_agent_astream_with_hitl(
         self,
@@ -835,6 +856,7 @@ class Executor:
                     routing_classification=getattr(state, "routing_classification", None),
                     git_status=state.git_status,
                     intent_type=itype,
+                    loop_state=state,
                 )
             )
             for step in steps
@@ -1159,6 +1181,7 @@ class Executor:
         routing_classification: Any | None = None,
         git_status: dict[str, Any] | None = None,
         intent_type: str | None = None,
+        loop_state: LoopState | None = None,
     ) -> tuple[list[StreamEvent], StepResult, list[BaseMessage], str]:
         """Execute single step, collecting events for later yielding.
 
@@ -1167,6 +1190,8 @@ class Executor:
 
         RFC-211: Collects outcome metadata instead of full output string.
         IG-355: Fourth tuple element is joined ``task`` tool delegate-final text for finalize.
+        RFC-214: When ``stream_thread_id`` branches off ``thread_id``, prepends deep-copied
+        ``execute_step`` ledger rows for transitive dependency predecessors.
 
         Args:
             step: StepAction with description and optional hints
@@ -1176,6 +1201,8 @@ class Executor:
             routing_classification: Loop routing payload for middleware (IG-349, IG-383).
             git_status: Optional git snapshot for prompt XML (RFC-104).
             intent_type: Optional intent label for scenario guidance (IG-384).
+            loop_state: When set and the graph uses a branched ``thread_id``, predecessor
+                execute-step ledger messages are injected before this step's envelope.
 
         Returns:
             Tuple of ``(events, StepResult, AI messages for IG-199, delegate_final_text)``.
@@ -1214,14 +1241,39 @@ class Executor:
                     )
             configurable.update(await self._claude_runner_config_extras(thread_id))
             # Pass current_decision for middleware to inject agent loop output contract
-            # Note: For single step execution, we don't have LoopState here
-            # The middleware should check for absence and not inject contract
+            # when available on ``loop_state`` (sequential chunk path); parallel branches
+            # may still omit it here because middleware reads configurable elsewhere.
             config: dict[str, Any] = {"configurable": configurable}
             if self._config is not None:
                 config = self._executor_langfuse_merge_for_stream(config, thread_id=cfg_thread)
 
             # Build user message envelope with execution hints (RFC-214)
             from soothe.core.prompts.user_envelope import build_execute_step_envelope
+
+            goal_for_envelope = loop_state.goal if loop_state else None
+            graph_input_messages: list[BaseMessage] = []
+            use_parallel_branch = (
+                stream_thread_id is not None
+                and stream_thread_id != thread_id
+                and loop_state is not None
+                and loop_state.current_decision is not None
+            )
+            if use_parallel_branch:
+                preds = transitive_dependency_step_ids(step, loop_state.current_decision)
+                if preds:
+                    cap = self._branch_predecessor_message_cap()
+                    graph_input_messages = predecessor_execute_messages_for_branch(
+                        loop_state.loop_messages,
+                        preds,
+                        max_messages=cap,
+                    )
+                    if graph_input_messages:
+                        logger.info(
+                            "[BranchPred] step=%s injected %d predecessor ledger msgs (cap=%d)",
+                            step.id,
+                            len(graph_input_messages),
+                            cap,
+                        )
 
             hints_parts: list[str] = []
             if step.subagent:
@@ -1235,7 +1287,7 @@ class Executor:
                 )
 
             envelope = build_execute_step_envelope(
-                goal=None,  # Single step doesn't have goal context
+                goal=goal_for_envelope,
                 step_description=step.description,
                 execution_hints=execution_hints,
             )
@@ -1248,9 +1300,10 @@ class Executor:
                 workspace=workspace,
                 phase="execute_step",
             )
+            graph_input_messages.append(human_msg)
             stream = self._core_agent_astream_with_hitl(
                 self._execute_graph_input(
-                    [human_msg],
+                    graph_input_messages,
                     routing_classification=routing_classification,
                     workspace=workspace,
                     git_status=git_status,
