@@ -39,7 +39,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Keys to merge into the internal queue payload: ``autonomous``,
         ``max_iterations``, ``preferred_subagent``, ``interactive``, ``model``,
-        ``model_params``, ``intent_hint``.
+        ``model_params``, ``intent_hint`` (normalized to lowercase when set).
     """
     max_iterations = msg.get("max_iterations")
     parsed_max: int | None = (
@@ -54,7 +54,9 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
     raw_params = msg.get("model_params")
     model_params = raw_params if isinstance(raw_params, dict) else None
     raw_hint = msg.get("intent_hint")
-    intent_hint = raw_hint.strip() if isinstance(raw_hint, str) and raw_hint.strip() else None
+    intent_hint = (
+        raw_hint.strip().lower() if isinstance(raw_hint, str) and raw_hint.strip() else None
+    )
     return {
         "autonomous": bool(msg.get("autonomous", False)),
         "max_iterations": parsed_max,
@@ -1199,9 +1201,23 @@ class MessageRouter:
         d = self._daemon
         request_id = msg.get("request_id")
         loop_id = msg.get("loop_id")
+        q_opts = _queue_options_from_daemon_message(msg)
+        intent_hint_preview = q_opts.get("intent_hint")
         prompt_text = _coerce_loop_input_text(msg.get("content"))
 
-        if not loop_id or prompt_text is None:
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "loop_id is required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        if intent_hint_preview != "image_to_text" and prompt_text is None:
             await d._send_client_message(
                 client_id,
                 {
@@ -1258,17 +1274,30 @@ class MessageRouter:
         else:
             attachments_for_queue = None
 
+        if intent_hint_preview == "image_to_text" and not attachments_for_queue:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "intent_hint image_to_text requires non-empty attachments",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        text_for_queue = prompt_text if prompt_text is not None else ""
         logger.info(
             "Queueing input for loop %s: %s",
             loop_id,
-            preview_first(prompt_text, 50),
+            preview_first(text_for_queue, 50),
         )
 
         queue_payload: dict[str, Any] = {
             "type": "input",
-            "text": prompt_text,
+            "text": text_for_queue,
             "client_id": client_id,
-            **_queue_options_from_daemon_message(msg),
+            **q_opts,
         }
         if attachments_for_queue:
             queue_payload["attachments"] = attachments_for_queue

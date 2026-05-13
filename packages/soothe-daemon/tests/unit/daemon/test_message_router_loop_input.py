@@ -64,6 +64,12 @@ def test_queue_options_from_daemon_message_max_and_model(
     assert out["model"] == expected_model
 
 
+def test_queue_options_from_daemon_message_intent_hint_lowercased() -> None:
+    assert _queue_options_from_daemon_message({"intent_hint": "  New_Goal  "})["intent_hint"] == (
+        "new_goal"
+    )
+
+
 def test_queue_options_from_daemon_message_model_params_dict_only() -> None:
     d = {"a": 1}
     assert _queue_options_from_daemon_message({"model_params": d})["model_params"] is d
