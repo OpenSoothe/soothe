@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from soothe_daemon.bootstrap_env import bootstrap_dotenv, load_dotenv_adjacent_to_yaml
+
+bootstrap_dotenv()
+
 import asyncio
 import subprocess
 import sys
@@ -45,6 +49,7 @@ def daemon_start(
 ) -> None:
     """Start the Soothe daemon server."""
     daemon_cfg = _load_daemon_config(config)
+    _apply_dotenv_for_daemon_paths(daemon_cfg, config)
     cfg = daemon_cfg.load_soothe_config()
 
     if SootheDaemon.is_running():
@@ -211,6 +216,7 @@ def doctor(
     cfg: SootheConfig | None = None
     try:
         daemon_cfg = _load_daemon_config(config)
+        _apply_dotenv_for_daemon_paths(daemon_cfg, config)
         cfg = daemon_cfg.load_soothe_config()
     except Exception as exc:
         if config:
@@ -301,6 +307,18 @@ def help_command(ctx: typer.Context) -> None:
     """Show help message and exit."""
     parent_ctx = ctx.parent if ctx.parent is not None else ctx
     typer.echo(parent_ctx.get_help())
+
+
+def _apply_dotenv_for_daemon_paths(
+    daemon_cfg: SootheDaemonConfig, explicit_daemon_yaml: str | None
+) -> None:
+    """Load ``.env`` beside daemon YAML and beside ``soothe_config_path`` before parsing agent config."""
+    paths: list[str | Path | None] = [explicit_daemon_yaml]
+    if explicit_daemon_yaml is None:
+        dp = default_daemon_config_path()
+        if dp.is_file():
+            paths.append(dp)
+    load_dotenv_adjacent_to_yaml(*paths, daemon_cfg.soothe_config_path)
 
 
 def _load_daemon_config(config_path: str | None) -> SootheDaemonConfig:
