@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from soothe.config import SootheConfig
 from soothe.config.models import LangfuseIntegrationConfig, ObservabilityConfig
 from soothe.utils.observability import langfuse as langfuse_util
@@ -109,6 +111,53 @@ def test_merge_omits_loop_id_when_none(monkeypatch) -> None:
     base: dict = {"configurable": {"thread_id": "t1"}}
     out = merge_langfuse_runnable_config(base, cfg, session_id="sess-1")
     assert "loop_id" not in out.get("metadata", {})
+
+
+def test_merge_skips_handler_append_when_inherit_carries_same_handler(monkeypatch) -> None:
+    """Nested CoreAgent streams must not stack duplicate Langfuse handlers (goal synthesis)."""
+    pytest.importorskip("langfuse")
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    obs = ObservabilityConfig(
+        langfuse=LangfuseIntegrationConfig(enabled=True, trace_name="soothe-test"),
+    )
+    cfg = SootheConfig(observability=obs)
+    handler = SootheLangfuseCallbackHandler()
+    monkeypatch.setattr(langfuse_util, "_langfuse_callback_handler", lambda _c: handler)
+    parent = {"callbacks": [handler]}
+    base = {"configurable": {"thread_id": "syn-thread"}}
+    out = merge_langfuse_runnable_config(
+        base,
+        cfg,
+        session_id="sess-1",
+        run_name="soothe-test:goal-synthesis",
+        inherit_callbacks_from=parent,
+    )
+    assert "callbacks" not in out
+    assert out["run_name"] == "soothe-test:goal-synthesis"
+    assert out["metadata"]["langfuse_session_id"] == "sess-1"
+
+
+def test_merge_appends_handler_when_inherit_lacks_soothe_handler(monkeypatch) -> None:
+    pytest.importorskip("langfuse")
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    obs = ObservabilityConfig(
+        langfuse=LangfuseIntegrationConfig(enabled=True, trace_name="soothe-test"),
+    )
+    cfg = SootheConfig(observability=obs)
+    handler = SootheLangfuseCallbackHandler()
+    monkeypatch.setattr(langfuse_util, "_langfuse_callback_handler", lambda _c: handler)
+    parent = {"callbacks": [MagicMock()]}
+    base = {"configurable": {"thread_id": "syn-thread"}}
+    out = merge_langfuse_runnable_config(
+        base,
+        cfg,
+        session_id="sess-1",
+        run_name="soothe-test:goal-synthesis",
+        inherit_callbacks_from=parent,
+    )
+    assert out["callbacks"][-1] is handler
 
 
 def test_merge_does_not_override_existing_langfuse_trace_metadata(monkeypatch) -> None:
