@@ -59,7 +59,7 @@ _STEP_TOOL_PREVIEW_ROWS = STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
 """Collapsed step/task activity preview shows this many rows (IG-402)."""
 
 _MAX_STEP_STAT_TOOL_KINDS = 4
-"""Max distinct tool display names in the step header before ``+N more``."""
+"""Max distinct tool display names in the running-line stats suffix before ``+N more``."""
 
 _RUNNING_SPINNER_INTERVAL_SECONDS = 0.2
 """Spinner/status animation cadence for running cards."""
@@ -2516,8 +2516,9 @@ class _StepToolRow:
 class CognitionStepMessage(Vertical):
     """Agent-loop act step card: aggregates main-agent tool calls (IG-402).
 
-    Header shows per-tool counts; body lists one CLI-style row per call. When
-    there are more than ``_STEP_TOOL_PREVIEW_ROWS`` rows, click first folds or
+    Header is the step description only; per-tool counts appear on the running
+    status line (and match the prior header format). Body lists one CLI-style row
+    per call. When there are more than ``_STEP_TOOL_PREVIEW_ROWS`` rows, click first folds or
     unfolds the tool list; otherwise click toggles whole-card collapse. When tool
     rows, subagent notes, and execute prose together exceed that same threshold,
     the card body auto-collapses until the user expands it (a new ``set_running``
@@ -2685,7 +2686,7 @@ class CognitionStepMessage(Vertical):
         return _assemble_card_header(
             self,
             "🚀 ",
-            f"{self._description}{self._stats_title_suffix()}",
+            self._description,
         )
 
     def compose(self) -> ComposeResult:
@@ -3224,7 +3225,8 @@ class CognitionStepMessage(Vertical):
         toggle_icon = ""
         if has_collapsible:
             toggle_icon = f" {g.expand if self._card_collapsed else g.collapse}"
-        line = f"{gutter}{frame} Running...{elapsed}{toggle_icon}"
+        stats_suffix = self._stats_title_suffix()
+        line = f"{gutter}{frame} Running...{elapsed}{stats_suffix}{toggle_icon}"
         self._status_widget.update(Content.styled(line, colors.cognition))
         now = monotonic()
         if any(r.phase == "running" for r in self._rows) and (

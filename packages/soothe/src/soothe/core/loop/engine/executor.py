@@ -598,22 +598,31 @@ class Executor:
                 model_override_token = attach_stream_model_override(fast_model_spec, {})
                 logger.info("[Execute] Using fast model override: %s", fast_model_spec)
 
+        has_dependency_edges = any(step.dependencies for step in decision.steps)
+        effective_execution_mode = "dependency" if has_dependency_edges else decision.execution_mode
+        if effective_execution_mode != decision.execution_mode:
+            logger.info(
+                "[Execute] dependency edges present; draining plan as dependency DAG "
+                "(planner mode=%s)",
+                decision.execution_mode,
+            )
+
         logger.info(
             "[Execute] steps=%d mode=%s max_parallel=%d tool_limit=%d",
             len(ready_steps),
-            decision.execution_mode,
+            effective_execution_mode,
             self._max_parallel_steps,
             max_parallel_tools,
         )
 
         try:
-            if decision.execution_mode == "parallel":
+            if effective_execution_mode == "parallel":
                 async for item in self._execute_parallel_waves(ready_steps, state):
                     yield item
-            elif decision.execution_mode == "sequential":
+            elif effective_execution_mode == "sequential":
                 async for item in self._execute_sequential_waves(ready_steps, state):
                     yield item
-            elif decision.execution_mode == "dependency":
+            elif effective_execution_mode == "dependency":
                 async for item in self._execute_dependency(decision, state):
                     yield item
             else:
