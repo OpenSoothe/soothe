@@ -13,6 +13,7 @@ from soothe.core.loop.engine.synthesis import (
 )
 from soothe.core.loop.state.schemas import LoopState, StepResult
 from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.utils.observability import langfuse as langfuse_util
 
 
 def test_synthesis_checkpoint_thread_id_is_unique_and_prefixed() -> None:
@@ -80,6 +81,68 @@ async def test_generate_synthesis_astream_uses_isolated_thread_and_workspace() -
     assert tid.startswith("parent-thread__synth_gc__")
     assert tid != "parent-thread"
     assert conf.get("workspace") == "/workspace/repo"
+
+
+@pytest.mark.asyncio
+async def test_generate_synthesis_sets_goal_synthesis_langfuse_run_name(monkeypatch) -> None:
+    """Phase-2 synthesis uses the same run-name convention as execute-step (IG-377 pattern)."""
+    captured: dict = {}
+
+    async def recording_astream(graph_input, config=None, **kwargs):  # noqa: ARG001
+        captured["config"] = config
+        if False:
+            yield None
+
+    core = MagicMock()
+    core.astream = recording_astream
+
+    classification = ScenarioClassification(
+        scenario="general_summary",
+        sections=["Summary"],
+        contextual_focus=["c1"],
+        evidence_emphasis="Use evidence",
+    )
+
+    from soothe.config import SootheConfig
+    from soothe.config.models import LangfuseIntegrationConfig, ObservabilityConfig
+
+    obs = ObservabilityConfig(
+        langfuse=LangfuseIntegrationConfig(enabled=True, trace_name="soothe-dev"),
+    )
+    soothe_cfg = SootheConfig(observability=obs)
+    handler = MagicMock()
+    monkeypatch.setattr(langfuse_util, "_langfuse_callback_handler", lambda _c: handler)
+
+    state = LoopState(
+        goal="g",
+        thread_id="parent-thread",
+        workspace=None,
+        step_results=[
+            StepResult(
+                step_id="s1",
+                success=True,
+                outcome={"type": "generic", "step_input": "run", "output_summary": {"first": "x"}},
+                error=None,
+                duration_ms=1,
+                thread_id="parent-thread",
+            )
+        ],
+    )
+
+    gen = SynthesisGenerator(MagicMock(), core, soothe_cfg, loop_id="loop-9")
+    with patch.object(
+        SynthesisGenerator,
+        "_classify_scenario",
+        new_callable=AsyncMock,
+        return_value=classification,
+    ):
+        async for _ in gen.generate_synthesis("g", state):
+            pass
+
+    cfg = captured.get("config") or {}
+    assert cfg.get("run_name") == "soothe-dev:goal-synthesis"
+    assert (cfg.get("metadata") or {}).get("langfuse_session_id") == "parent-thread"
+    assert (cfg.get("metadata") or {}).get("loop_id") == "loop-9"
 
 
 @pytest.mark.asyncio

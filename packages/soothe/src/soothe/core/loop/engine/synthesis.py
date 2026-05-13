@@ -184,13 +184,30 @@ class SynthesisGenerator:
         )
 
         graph_config: dict[str, Any] = {"configurable": configurable}
+        parent_runnable_config: dict[str, Any] | None = None
+        try:
+            from langgraph.config import get_config as _lg_get_config
+
+            parent_runnable_config = _lg_get_config()
+        except RuntimeError:
+            parent_runnable_config = None
+
         if self._soothe_config is not None:
+            tn = (self._soothe_config.observability.langfuse.trace_name or "").strip()
+            run_name = f"{tn}:goal-synthesis" if tn else "goal-synthesis"
             graph_config = merge_langfuse_runnable_config(
                 graph_config,
                 self._soothe_config,
                 session_id=state.thread_id,
+                run_name=run_name,
                 loop_id=self._loop_id,
+                inherit_callbacks_from=parent_runnable_config,
             )
+
+        if parent_runnable_config is not None:
+            from langchain_core.runnables.config import merge_configs
+
+            graph_config = merge_configs(parent_runnable_config, graph_config)
 
         async for chunk in self.core_agent.astream(
             {"messages": messages},

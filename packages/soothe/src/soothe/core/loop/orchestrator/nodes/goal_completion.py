@@ -140,6 +140,21 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         agent_loop.config.agent_loop.final_response,
     )
 
+    dag_report = plan_manager.format_completion_dag_report().strip()
+    if dag_report:
+        logger.info(
+            "[goal_completion] Planning DAG at goal end (action=%s thread_id=%s):\n%s",
+            action.value,
+            state.thread_id,
+            dag_report,
+        )
+    else:
+        logger.debug(
+            "[goal_completion] No unified plan DAG nodes to log (action=%s thread_id=%s)",
+            action.value,
+            state.thread_id,
+        )
+
     final_output = None
     used_synthesis_fallback = False
 

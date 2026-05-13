@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -87,6 +88,73 @@ async def test_synthesize_appends_goal_completion_ledger_pair() -> None:
     assert lm[1].phase == "goal_completion"
     assert lm[1].content == "final synth body"
     assert lm[1].iteration == 0
+
+
+@pytest.mark.asyncio
+async def test_goal_completion_logs_planning_dag_at_info(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """When the unified DAG has nodes, goal completion logs it (not user output)."""
+    from soothe.core.loop.state.schemas import AgentDecision, StepAction, StepResult
+
+    caplog.set_level(logging.INFO)
+    loop_state = LoopState(goal="goal txt", thread_id="thr-dag", loop_messages=[])
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[StepAction(id="ABC-01", description="One thing", dependencies=None)],
+        execution_mode="sequential",
+    )
+    plan_result = PlanResult(
+        status="done",
+        goal_progress="complete",
+        require_goal_completion=True,
+        decision=decision,
+    )
+    pm = PlanManager(goal="goal txt")
+    pm.ingest_plan(plan_result, "ABC", 1)
+    pm.record_step_outcomes(
+        [
+            StepResult(
+                step_id="ABC-01",
+                success=True,
+                outcome={},
+                error=None,
+                duration_ms=1,
+                thread_id="thr-dag",
+            )
+        ]
+    )
+    pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.SYNTHESIZE)
+
+    agent_loop = Mock()
+    agent_loop.loop_planner = Mock()
+    agent_loop.loop_planner._model = Mock()
+    agent_loop.core_agent = Mock()
+    agent_loop.config.agent_loop.final_response = "adaptive"
+
+    sm = Mock()
+    sm.record_iteration = AsyncMock()
+    sm.finalize_goal = AsyncMock()
+
+    async def fake_gen(self, goal, state):  # noqa: ARG002
+        yield ((), "messages", (AIMessage(content="synth only"), {}))
+
+    ctx = _ctx(
+        loop_state=loop_state,
+        plan_manager=pm,
+        agent_loop=agent_loop,
+        state_manager=sm,
+        plan_result=plan_result,
+    )
+
+    with patch.object(SynthesisGenerator, "generate_synthesis", fake_gen):
+        await node_goal_completion(ctx, {})
+
+    assert "Planning DAG at goal end" in caplog.text
+    assert "ABC-01" in caplog.text
+    lm = loop_state.loop_messages
+    assert len(lm) == 2
+    assert lm[1].content == "synth only"
 
 
 @pytest.mark.asyncio

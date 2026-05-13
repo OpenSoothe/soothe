@@ -137,7 +137,8 @@ class LoadingWidget(Static):
         now = monotonic()
         if self._turn_start_mono is None:
             self._turn_start_mono = now
-        self._animation_timer = self.set_interval(0.1, self._update_animation)
+        # Reduced from 0.1s (10fps) to 0.2s (5fps) to reduce UI thread contention
+        self._animation_timer = self.set_interval(0.2, self._update_animation)
 
     def on_unmount(self) -> None:
         """Stop the animation timer when the widget leaves the DOM."""
@@ -159,13 +160,20 @@ class LoadingWidget(Static):
             self._animation_timer = None
 
     def _update_animation(self) -> None:
-        """Update spinner and elapsed time."""
+        """Update spinner and elapsed time (optimized to reduce render overhead)."""
         if self._paused:
+            return
+
+        # Skip update if widget is not visible on screen
+        if not self.is_on_screen:
             return
 
         if self._spinner_widget:
             frame = self._spinner.next_frame()
-            self._spinner_widget.update(frame)
+            # Use refresh with layout=False to avoid expensive layout recalculation
+            self._spinner_widget._content = frame
+            self._spinner_widget._render_cache = None
+            self._spinner_widget.refresh(repaint=True, layout=False)
 
         if self._hint_widget and self._turn_start_mono is not None:
             now = monotonic()

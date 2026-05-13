@@ -711,6 +711,10 @@ class AssistantMessage(Vertical):
     }
     """
 
+    # Performance optimization: batch streaming updates to reduce render frequency
+    _STREAM_FLUSH_INTERVAL: float = 0.05  # 50ms batching for streaming
+    _VISIBILITY_REFRESH_INTERVAL: float = 0.1  # 100ms throttle for visibility refresh
+
     def __init__(self, content: str = "", **kwargs: Any) -> None:
         """Initialize an assistant message.
 
@@ -725,6 +729,11 @@ class AssistantMessage(Vertical):
         self._expanded: bool = False
         self._preview_widget: Static | None = None
         self._hint_widget: Static | None = None
+
+        # Batching buffer for streaming content
+        self._pending_buffer: str = ""
+        self._flush_timer: Timer | None = None
+        self._last_visibility_refresh: float = 0.0
 
     def compose(self) -> ComposeResult:  # noqa: PLR6301  # Textual widget method convention
         """Compose markdown body, plain preview, and expand hint."""
@@ -851,14 +860,50 @@ class AssistantMessage(Vertical):
         else:
             _show_timestamp_toast(self)
 
+    def _should_refresh_visibility(self) -> bool:
+        """Check if visibility refresh should run (throttled)."""
+        from time import monotonic
+
+        now = monotonic()
+        if now - self._last_visibility_refresh > self._VISIBILITY_REFRESH_INTERVAL:
+            self._last_visibility_refresh = now
+            return True
+        return False
+
+    async def _flush_pending_content(self) -> None:
+        """Flush buffered content to stream (batched update)."""
+        self._flush_timer = None
+        if not self._pending_buffer:
+            return
+
+        text = self._pending_buffer
+        self._pending_buffer = ""
+
+        stream = self._ensure_stream()
+        await stream.write(text)
+
+        # Throttle visibility refresh
+        if self._should_refresh_visibility():
+            self._refresh_body_visibility()
+
     async def append_content(self, text: str) -> None:
-        """Append content to the message (for streaming)."""
+        """Append content to the message (for streaming with batching).
+
+        Uses internal buffering to batch writes and reduce render frequency.
+        """
         if not text:
             return
+
+        # Accumulate content
         self._content += text
-        stream = self._ensure_stream()
-        self._refresh_body_visibility()
-        await stream.write(text)
+        self._pending_buffer += text
+
+        # Schedule batched flush if not already scheduled
+        if self._flush_timer is None:
+            self._flush_timer = self.set_timer(
+                self._STREAM_FLUSH_INTERVAL,
+                self._flush_pending_content,
+            )
 
     async def write_initial_content(self) -> None:
         """Write initial content from constructor and finalize the stream."""
@@ -869,6 +914,15 @@ class AssistantMessage(Vertical):
 
     async def stop_stream(self) -> None:
         """Stop the streaming and apply collapsed layout when appropriate."""
+        # Cancel any pending flush timer
+        if self._flush_timer is not None:
+            self._flush_timer.stop()
+            self._flush_timer = None
+
+        # Flush any remaining buffered content
+        if self._pending_buffer:
+            await self._flush_pending_content()
+
         if self._stream is not None:
             await self._stream.stop()
             self._stream = None
@@ -878,6 +932,7 @@ class AssistantMessage(Vertical):
         """Set the full message content (stops any active stream)."""
         await self.stop_stream()
         self._content = content
+        self._pending_buffer = ""  # Clear any pending buffer
         if self._markdown:
             await self._markdown.update(content)
         self._refresh_body_visibility()

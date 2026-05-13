@@ -111,6 +111,7 @@ def merge_langfuse_runnable_config(
     session_id: str | None = None,
     run_name: str | None = None,
     loop_id: str | None = None,
+    inherit_callbacks_from: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return Runnable config like ``base`` with Langfuse callbacks and session metadata merged in.
 
@@ -124,6 +125,10 @@ def merge_langfuse_runnable_config(
         run_name: Optional root run name (e.g. ``soothe-dev:plan-assess``, ``soothe-dev:execute-step``). When omitted,
             uses ``observability.langfuse.trace_name`` when set.
         loop_id: Optional loop identifier for trace correlation across sub-traces.
+        inherit_callbacks_from: When set and already carries the same ``SootheLangfuseCallbackHandler``
+            instance as would be attached, skip appending the handler again so a later
+            ``merge_configs(langgraph_parent, child)`` does not register duplicate Langfuse
+            callbacks (goal-completion synthesis nested under the AgentLoop graph).
 
     When ``observability.langfuse.tags`` / ``user_id`` are set, merges ``langfuse_tags`` /
     ``langfuse_user_id`` into metadata if those keys are not already present (Langfuse
@@ -137,11 +142,17 @@ def merge_langfuse_runnable_config(
     handler = _langfuse_callback_handler(soothe_config)
     if handler is None:
         return base
+    skip_handler_append = False
+    if inherit_callbacks_from is not None:
+        existing = _langfuse_handler_from_runnable_config(inherit_callbacks_from)
+        if existing is not None and existing is handler:
+            skip_handler_append = True
     out: dict[str, Any] = dict(base)
     if "configurable" in base:
         out["configurable"] = dict(base["configurable"])
-    prev = list(out.get("callbacks") or [])
-    out["callbacks"] = prev + [handler]
+    if not skip_handler_append:
+        prev = list(out.get("callbacks") or [])
+        out["callbacks"] = prev + [handler]
     meta = dict(out.get("metadata") or {})
     if session_id:
         meta.setdefault("langfuse_session_id", session_id)

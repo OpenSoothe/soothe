@@ -144,6 +144,51 @@ class PlanManager:
             completed_steps=self.dag.completed_steps,
         )
 
+    def format_completion_dag_report(self) -> str:
+        """Format unified plan DAG for operator logs (goal end).
+
+        Includes per-step composite id, terminal status, dependencies, optional subagent,
+        execution statistics, and a one-line description. Returns empty string when the
+        DAG has no nodes.
+
+        Returns:
+            Plain text suitable for a single log record (may span multiple lines).
+        """
+        dag = self.dag
+        if dag.total_steps == 0:
+            return ""
+        ctx = self.get_planning_context()
+        failed_n = len(ctx.failed_step_ids)
+        pending_n = len(ctx.pending_step_ids)
+        lines: list[str] = [
+            "### Plan DAG (at goal completion)",
+            "",
+            "**Execution statistics**",
+            f"- Planned steps (nodes): {ctx.total_steps}",
+            f"- Completed: {ctx.completed_steps}",
+            f"- Failed: {failed_n}",
+            f"- Pending (not executed): {pending_n}",
+            f"- Max dependency chain depth: {ctx.chain_depth}",
+            f"- Success rate over executed steps: {ctx.success_rate:.0%}",
+            f"- Distinct plan waves ingested: {dag.plan_count}",
+        ]
+        if ctx.replan_count > 0:
+            lines.append(f"- Replans after first wave: {ctx.replan_count}")
+        lines.extend(["", "**Steps**", ""])
+        for cid in sorted(dag.nodes.keys()):
+            node = dag.nodes[cid]
+            dep_s = ", ".join(sorted(node.dependencies)) if node.dependencies else "—"
+            sub = f" | subagent `{node.subagent}`" if node.subagent else ""
+            status_label = node.status.upper()
+            desc = (node.description or "").replace("\n", " ").strip()
+            if len(desc) > 280:
+                desc = desc[:277] + "..."
+            lines.append(f"- **{cid}** — {status_label}{sub}")
+            lines.append(f"  - Depends on: {dep_s}")
+            if desc:
+                lines.append(f"  - {desc}")
+        return "\n".join(lines).strip()
+
     def determine_goal_completion_needs(
         self,
         llm_decision: bool,
