@@ -5,11 +5,12 @@
 # This script runs the complete verification suite for multi-package monorepo:
 # 1. Workspace integrity check (uv sync)
 # 2. Package dependency validation:
-#    - CLI must NOT import daemon runtime
+#    - CLI must NOT import daemon runtime (soothe_daemon)
 #    - SDK must be independent (no CLI/daemon imports)
+#    - soothe (in-proc core) must NOT depend on soothe-daemon (one-way dep)
 # 3. Code formatting check (make format)
 # 4. Linting (make lint) - checks ALL packages
-# 5. Unit tests (soothe daemon package tests)
+# 5. Unit tests (soothe + soothe-daemon package tests)
 #
 # Exit codes:
 #   0 - All checks passed
@@ -122,10 +123,10 @@ print_info() {
 validate_package_dependencies() {
     print_header "Package Dependency Validation"
 
-    # Rule 1: soothe-cli MUST NOT import soothe daemon runtime
-    print_info "Checking: soothe-cli must not import daemon runtime..."
+    # Rule 1: soothe-cli MUST NOT import the daemon runtime
+    print_info "Checking: soothe-cli must not import daemon runtime (soothe_daemon)..."
 
-    CLI_DAEMON_IMPORTS=$(find packages/soothe-cli/src -name "*.py" -exec grep -l "from soothe\." {} \; 2>/dev/null || true)
+    CLI_DAEMON_IMPORTS=$(grep -rEl 'from soothe_daemon|import soothe_daemon' packages/soothe-cli/src --include='*.py' 2>/dev/null || true)
 
     if [ -n "$CLI_DAEMON_IMPORTS" ]; then
         print_failure "CLI package imports daemon runtime (violations found)"
@@ -133,16 +134,16 @@ validate_package_dependencies() {
         echo "$CLI_DAEMON_IMPORTS"
         echo ""
         echo "Forbidden patterns:"
-        grep -r "from soothe\." packages/soothe-cli/src --include="*.py" | head -10 || true
+        grep -rE 'from soothe_daemon|import soothe_daemon' packages/soothe-cli/src --include='*.py' | head -10 || true
         return 1
     else
         print_success "CLI package does not import daemon runtime"
     fi
 
     # Rule 2: soothe-sdk MUST NOT import any other package
-    print_info "Checking: soothe-sdk must be independent (no soothe-cli/soothe imports)..."
+    print_info "Checking: soothe-sdk must be independent (no soothe-cli/soothe/soothe_daemon imports)..."
 
-    SDK_IMPORTS=$(find packages/soothe-sdk/src -name "*.py" -exec grep -l "from soothe_cli\|from soothe_daemon\|import soothe_cli\|import soothe_daemon" {} \; 2>/dev/null || true)
+    SDK_IMPORTS=$(grep -rEl 'from soothe_cli|from soothe_daemon|from soothe[. ]|import soothe_cli|import soothe_daemon|import soothe$|import soothe\.' packages/soothe-sdk/src --include='*.py' 2>/dev/null || true)
 
     if [ -n "$SDK_IMPORTS" ]; then
         print_failure "SDK package imports other packages (violations found)"
@@ -153,7 +154,30 @@ validate_package_dependencies() {
         print_success "SDK package is independent"
     fi
 
-    # Rule 3: Workspace integrity - all packages must be in sync
+    # Rule 3: soothe (in-proc agent core) MUST NOT depend on soothe-daemon
+    # The dependency arrow is one-way: soothe-daemon -> soothe, never the reverse.
+    print_info "Checking: soothe must not depend on soothe-daemon..."
+
+    SOOTHE_TO_DAEMON_SRC=$(grep -rEl 'from soothe_daemon|import soothe_daemon' packages/soothe/src --include='*.py' 2>/dev/null || true)
+    if [ -n "$SOOTHE_TO_DAEMON_SRC" ]; then
+        print_failure "soothe (in-proc core) imports soothe-daemon (violations found)"
+        echo "Violations:"
+        echo "$SOOTHE_TO_DAEMON_SRC"
+        echo ""
+        grep -rE 'from soothe_daemon|import soothe_daemon' packages/soothe/src --include='*.py' | head -10 || true
+        return 1
+    fi
+
+    # Same rule, distribution-metadata edition: pyproject.toml must not pull
+    # soothe-daemon into soothe's dependency tree.
+    if grep -E '^[[:space:]]*"soothe-daemon' packages/soothe/pyproject.toml >/dev/null 2>&1; then
+        print_failure "packages/soothe/pyproject.toml lists soothe-daemon as a dependency"
+        grep -nE '^[[:space:]]*"soothe-daemon' packages/soothe/pyproject.toml || true
+        return 1
+    fi
+    print_success "soothe does not depend on soothe-daemon (one-way dep verified)"
+
+    # Rule 4: Workspace integrity - all packages must be in sync
     print_info "Checking: workspace integrity..."
 
     if ! command -v uv >/dev/null 2>&1; then
@@ -167,7 +191,7 @@ validate_package_dependencies() {
         fi
     fi
 
-    # Rule 4: Check for package import boundaries using existing script
+    # Rule 5: Check for package import boundaries using existing script
     if [ -f "scripts/check_module_import_boundaries.sh" ]; then
         print_info "Running import boundary checks..."
         if bash scripts/check_module_import_boundaries.sh >/dev/null 2>&1; then
@@ -223,7 +247,7 @@ check_formatting() {
 
         # Sync dev dependencies first so ruff is available
         print_info "  Syncing dev dependencies..."
-        for pkg in soothe-sdk soothe-cli soothe; do
+        for pkg in soothe-sdk soothe-cli soothe soothe-daemon; do
             cd packages/$pkg && uv sync --all-extras >/dev/null 2>&1 && cd - >/dev/null
         done
 
@@ -250,12 +274,22 @@ check_formatting() {
         fi
         cd - >/dev/null
 
-        # Daemon package (main tests directory)
-        print_info "  Daemon package..."
+        # soothe (in-proc agent core)
+        print_info "  soothe (in-proc agent core)..."
         if cd packages/soothe && uv run ruff format --check src/ tests/ >/dev/null 2>&1; then
-            print_success "    Daemon formatting OK"
+            print_success "    soothe formatting OK"
         else
-            print_failure "    Daemon formatting issues found"
+            print_failure "    soothe formatting issues found"
+            format_failed=true
+        fi
+        cd - >/dev/null
+
+        # soothe-daemon package
+        print_info "  soothe-daemon package..."
+        if cd packages/soothe-daemon && uv run ruff format --check src/ tests/ >/dev/null 2>&1; then
+            print_success "    soothe-daemon formatting OK"
+        else
+            print_failure "    soothe-daemon formatting issues found"
             format_failed=true
         fi
         cd - >/dev/null
@@ -287,7 +321,7 @@ check_linting() {
         print_info "Running linter across all packages..."
 
         # Sync dev dependencies first so ruff is available
-        for pkg in soothe-sdk soothe-cli soothe; do
+        for pkg in soothe-sdk soothe-cli soothe soothe-daemon; do
             cd packages/$pkg && uv sync --all-extras >/dev/null 2>&1 && cd - >/dev/null
         done
 
@@ -313,12 +347,22 @@ check_linting() {
         fi
         cd - >/dev/null
 
-        # Daemon package
-        print_info "  Daemon package..."
+        # soothe (in-proc agent core)
+        print_info "  soothe (in-proc agent core)..."
         if cd packages/soothe && uv run ruff check src/ tests/ >/dev/null 2>&1; then
-            print_success "    Daemon linting OK (zero errors)"
+            print_success "    soothe linting OK (zero errors)"
         else
-            print_failure "    Daemon linting errors found"
+            print_failure "    soothe linting errors found"
+            lint_failed=true
+        fi
+        cd - >/dev/null
+
+        # soothe-daemon package
+        print_info "  soothe-daemon package..."
+        if cd packages/soothe-daemon && uv run ruff check src/ tests/ >/dev/null 2>&1; then
+            print_success "    soothe-daemon linting OK (zero errors)"
+        else
+            print_failure "    soothe-daemon linting errors found"
             lint_failed=true
         fi
         cd - >/dev/null
@@ -344,23 +388,37 @@ run_tests() {
 
     print_header "Unit Tests"
 
-    print_info "Running unit tests for daemon package..."
+    local tests_failed=false
 
-    # Run daemon package tests (only package with tests currently)
-    # Daemon package has its own .venv with pytest installed
+    # soothe (in-proc agent core)
+    print_info "Running unit tests for soothe (in-proc agent core)..."
     cd packages/soothe
-
-    # Ensure dev dependencies are synced in daemon package
     uv sync --all-extras >/dev/null 2>&1 || true
-
-    # Run tests using python -m pytest (more reliable than pytest binary)
-    # Show full output so users can see progress (removed tail -20 suppression)
     if uv run python -m pytest tests/unit/ -v --tb=short; then
         cd - >/dev/null
-        print_success "Unit tests passed"
+        print_success "soothe unit tests passed"
     else
         cd - >/dev/null
-        print_failure "Unit tests failed"
+        print_failure "soothe unit tests failed"
+        tests_failed=true
+    fi
+
+    # soothe-daemon (server + transports + runner)
+    if [ -d packages/soothe-daemon/tests/unit ]; then
+        print_info "Running unit tests for soothe-daemon..."
+        cd packages/soothe-daemon
+        uv sync --all-extras >/dev/null 2>&1 || true
+        if uv run python -m pytest tests/unit/ -v --tb=short; then
+            cd - >/dev/null
+            print_success "soothe-daemon unit tests passed"
+        else
+            cd - >/dev/null
+            print_failure "soothe-daemon unit tests failed"
+            tests_failed=true
+        fi
+    fi
+
+    if $tests_failed; then
         return 1
     fi
 

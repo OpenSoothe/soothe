@@ -73,15 +73,8 @@ observability:
     tags:
       - soothe
 
-daemon:
-  event_size_stats_enabled: true
-  max_concurrent_vision_preflight: 8
-  transports:
-    http_rest:
-      enabled: true
-  worker_pool:
-    max_pool_size: 8
-    dispatch_wait_stats_enabled: true
+# Daemon-side configuration lives in `config/daemon_config.template.yml`
+# (loaded by `SootheDaemonConfig` from `~/.soothe/config/daemon_config.yml`).
 
 tools:
   audio:

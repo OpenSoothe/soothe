@@ -115,7 +115,7 @@ def resolve_cli_log_level(
     Precedence:
 
     #. Environment variable ``SOOTHE_LOG_LEVEL`` (standard level name).
-    #. ``logging_level`` from ``cli_config.yml`` when set to a valid level.
+    #. ``logging_level`` from ``soothe-cli.yml`` when set to a valid level.
     #. Default ``INFO``.
 
     Args:
@@ -135,7 +135,7 @@ def resolve_cli_log_level(
         if cfg_raw in _VALID_STD_LOG_LEVELS:
             return cfg_raw
         logging.getLogger(__name__).warning(
-            "Invalid logging_level %r in cli_config.yml; expected one of %s. Falling back to INFO.",
+            "Invalid logging_level %r in soothe-cli.yml; expected one of %s. Falling back to INFO.",
             logging_level,
             ", ".join(sorted(_VALID_STD_LOG_LEVELS)),
         )

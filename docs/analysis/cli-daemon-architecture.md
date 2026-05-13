@@ -153,12 +153,12 @@ tools: [...]
 subagents: [...]
 ```
 
-### CLI Configuration (cli_config.yml)
+### CLI Configuration (soothe-cli.yml)
 
 New lightweight config for CLI client:
 
 ```yaml
-# ~/.soothe/cli_config.yml
+# ~/.soothe/soothe-cli.yml
 websocket:
   host: "localhost"
   port: 8765
@@ -174,7 +174,7 @@ tui:
   show_token_usage: true
 ```
 
-**Note**: Users must ensure websocket host/port match between `cli_config.yml` and `config.yml`.
+**Note**: Users must ensure websocket host/port match between `soothe-cli.yml` and `config.yml`.
 
 ## Benefits
 
@@ -224,15 +224,15 @@ tui:
 ### Config Changes
 
 **New CLI Config**:
-- Create `~/.soothe/cli_config.yml` for CLI-specific settings
+- Create `~/.soothe/soothe-cli.yml` for CLI-specific settings
 - Daemon config (`~/.soothe/config.yml`) unchanged
 
 ### Import Changes (For Developers)
 
 **Old**:
 ```python
-from soothe.daemon.websocket_client import WebSocketClient
-from soothe.daemon.protocol import encode, decode
+from soothe_daemon.websocket_client import WebSocketClient
+from soothe_daemon.protocol import encode, decode
 from soothe.foundation import SootheEvent, VerbosityTier
 ```
 

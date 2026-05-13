@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 #
-# check_module_import_boundaries.sh — enforce high-level import layering for Soothe.
+# check_module_import_boundaries.sh — enforce package import layering for the
+# Soothe monorepo (RFC-414 Soothe-Daemon split).
 #
-# Rules (see also RFC-000 / CLAUDE.md architecture):
-#   1. No package under src/soothe/ except "ux" may import soothe.ux (CLI/TUI stay
-#      above the runtime stack: core, daemon, foundation, backends, etc.).
-#   2. soothe.foundation must not import soothe.daemon (shared primitives must not
-#      depend on the server process / transports).
+# Rules:
+#   1. soothe (in-proc agent core) must NOT import soothe_daemon or soothe_cli
+#      (one-way dep: soothe-daemon -> soothe; soothe-cli -> soothe-sdk -> soothe).
+#   2. soothe_daemon must NOT import soothe_cli (CLI sits above the daemon).
+#   3. soothe_sdk must NOT import any other workspace package.
 #
 # Usage:
 #   ./scripts/check_module_import_boundaries.sh
@@ -17,24 +18,18 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SOOTHE_PKG="${ROOT}/src/soothe"
-
-# Import statements only (avoids matching prose in comments that mentions soothe.ux).
-RE_NO_UX='^\s*(from|import)\s+soothe\.ux(\.|\s|$)'
-RE_FOUNDATION_NO_DAEMON='^\s*(from|import)\s+soothe\.daemon(\.|\s|$)'
+PKG_DIR="${ROOT}/packages"
 
 usage() {
   cat <<'EOF'
-check_module_import_boundaries.sh — enforce high-level import layering for Soothe.
+check_module_import_boundaries.sh — Soothe monorepo import boundaries.
 
 Rules:
-  1. No top-level package under src/soothe/ except «ux» may use import lines
-     referring to soothe.ux (CLI/TUI sit above core, daemon, foundation, backends, …).
-  2. soothe.foundation must not import soothe.daemon (shared primitives independent
-     of the server / transports).
+  1. soothe must not import soothe_daemon or soothe_cli.
+  2. soothe-daemon must not import soothe_cli.
+  3. soothe-sdk must not import other workspace packages.
 
 Usage: ./scripts/check_module_import_boundaries.sh [--help]
-
 Requires: ripgrep (rg)
 EOF
 }
@@ -73,34 +68,31 @@ run_check() {
   fi
 }
 
-echo "Soothe module import boundaries (src/soothe)…"
+echo "Soothe monorepo import boundaries…"
 echo ""
 
-checked_ux_rule=0
-shopt -s nullglob
-for pkg_dir in "${SOOTHE_PKG}"/*/; do
-  name="$(basename "$pkg_dir")"
-  case "$name" in
-    ux | __pycache__)
-      continue
-      ;;
-  esac
-  run_check "$pkg_dir" "$RE_NO_UX" "Package «${name}» must not import soothe.ux"
-  checked_ux_rule=$((checked_ux_rule + 1))
-done
-shopt -u nullglob
+# Rule 1: soothe (in-proc core) must not import daemon or CLI.
+run_check "${PKG_DIR}/soothe/src" \
+  '^\s*(from|import)\s+soothe_daemon(\.|\s|$)' \
+  "soothe must not import soothe_daemon"
+run_check "${PKG_DIR}/soothe/src" \
+  '^\s*(from|import)\s+soothe_cli(\.|\s|$)' \
+  "soothe must not import soothe_cli"
 
-echo "  Rule 1: checked ${checked_ux_rule} top-level packages for forbidden soothe.ux imports."
+# Rule 2: soothe-daemon must not import CLI.
+run_check "${PKG_DIR}/soothe-daemon/src" \
+  '^\s*(from|import)\s+soothe_cli(\.|\s|$)' \
+  "soothe-daemon must not import soothe_cli"
 
-run_check "${SOOTHE_PKG}/foundation" "$RE_FOUNDATION_NO_DAEMON" \
-  "soothe.foundation must not import soothe.daemon"
-
-echo "  Rule 2: checked soothe/foundation for forbidden soothe.daemon imports."
+# Rule 3: soothe-sdk must be standalone.
+run_check "${PKG_DIR}/soothe-sdk/src" \
+  '^\s*(from|import)\s+(soothe|soothe_daemon|soothe_cli)(\.|\s|$)' \
+  "soothe-sdk must not import other workspace packages"
 
 echo ""
 
 if [[ "$failures" -gt 0 ]]; then
-  echo "ERROR: ${failures} boundary violation(s). Fix imports or adjust this script with team agreement."
+  echo "ERROR: ${failures} boundary violation(s). Fix imports."
   exit 1
 fi
 

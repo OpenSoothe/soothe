@@ -6,7 +6,7 @@
 
 **Recent (2026-05-07 follow-up)**
 
-- **CLI sample** [`config/cli_config.dev.yml`](../../config/cli_config.dev.yml): trimmed keys that `CLIConfig.from_config_file` never applied (`verbosity`, `ui`, `tui`, websocket retry/timeout stubs). Canonical shape uses `daemon.transports.websocket` + `logging_level`.
+- **CLI sample** [`config/soothe-cli.dev.yml`](../../config/soothe-cli.dev.yml): trimmed keys that `SootheCliConfig.from_config_file` never applied (`verbosity`, `ui`, `tui`, websocket retry/timeout stubs). Canonical shape uses `daemon.transports.websocket` + `logging_level`.
 - **Daemon YAML**: removed ineffective / misleading template keys (`tools.wizsearch.crawler`, sqlite_vec `db_path` / `vector_size` / `distance` until `VectorStoreProviderConfig` supports them), dropped stale footer comment; removed commented duplicate `router` block from `config.dev.yml`.
 - **`SootheConfig._merge_top_level_logging_yaml`**: legacy top-level `logging.report_output` now merges into `agent_loop.report_output` (the old `data["agentic"]` path was a no-op after IG-407 removed the `agentic` field).
 - **Models**: restored standalone `AutopilotConfig` (it had been accidentally merged into `InfrastructureLimitsConfig`); moved `RecoveryConfig` / `ToolCallLimitConfig` / `ToolRetryConfig` / `InfrastructureLimitsConfig` **above** `AgentLoopConfig` so `default_factory=InfrastructureLimitsConfig` resolves at class body time.
@@ -40,7 +40,7 @@ Clean cut migration: NO backward compatibility, direct replacement.
 ### Config YAML (Critical - MUST synchronize) ✅
 - `config/config.template.yml` (unified `agent_loop`; removed dead keys and stale footer)
 - `config/config.dev.yml` (synchronized with template structure where shared)
-- `config/cli_config.dev.yml` (repo sample aligned with what `CLIConfig` actually loads — separate from daemon YAML)
+- `config/soothe-cli.dev.yml` (repo sample aligned with what `SootheCliConfig` actually loads — separate from daemon YAML)
 
 ### Code Usage Sites ✅
 - Bulk updated 15+ files using sed replacement:
@@ -59,7 +59,7 @@ Clean cut migration: NO backward compatibility, direct replacement.
 - [ ] Update RFC-201 config references
 - [ ] Update RFC-220 topology references
 - [ ] Update IG-394 implementation notes
-- [ ] Update CLAUDE.md config section (mention `agent_loop` + `cli_config.yml` scope)
+- [ ] Update CLAUDE.md config section (mention `agent_loop` + `soothe-cli.yml` scope)
 
 ## Progress
 
@@ -90,7 +90,7 @@ Clean cut migration: NO backward compatibility, direct replacement.
 
 ### Phase 5: Verification 🔄
 - [x] Run `./scripts/verify_finally.sh` (format, lint, tests) — required before merge
-- [ ] Optional: manual daemon + TUI smoke with `config.dev.yml` and symlinked `cli_config.dev.yml`
+- [ ] Optional: manual daemon + TUI smoke with `config.dev.yml` and symlinked `soothe-cli.dev.yml`
 
 ## Notes
 

@@ -151,7 +151,7 @@ class LoopRunnerFactory:
 
     def create_runner(self, loop_id: str) -> LoopRunnerProtocol:
         if self._config.distributed:
-            from soothe.core.runner.ray_runner import RayLoopRunner
+            from soothe_daemon.runner.ray_runner import RayLoopRunner
             return RayLoopRunner(loop_id, self._config)
         return LocalLoopRunner(loop_id, self._config)
 ```

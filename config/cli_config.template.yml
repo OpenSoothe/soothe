@@ -1,0 +1,19 @@
+# Soothe CLI client configuration template (loaded as `CLIConfig`).
+# Defaults match `soothe_cli.config.cli_config.CLIConfig`.
+#
+# Place at `~/.soothe/config/cli_config.yml` to override CLI defaults.
+# Subscription/event display verbosity is not read from this file today;
+# the TUI uses a fixed bootstrap level. Theme and other UI prefs live in
+# `~/.soothe/config/config.yml` (`ui.theme`).
+
+# Python logging level for `~/.soothe/logs/cli.log`.
+# `SOOTHE_LOG_LEVEL` overrides when set.
+logging_level: INFO
+
+# Daemon connection (WebSocket) — must match `daemon_config.yml`
+# `transports.websocket.{host,port}`.
+daemon:
+  transports:
+    websocket:
+      host: "127.0.0.1"
+      port: 8765
