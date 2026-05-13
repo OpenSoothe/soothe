@@ -18,8 +18,10 @@ from soothe.core.workspace import resolve_workspace_for_stream
 from soothe.foundation import extract_text_from_ai_message
 from soothe.logging import ThreadLogger
 from soothe.utils.error_format import emit_error_event
+from soothe_sdk.client.protocol import _serialize_for_json
 
 from soothe_daemon.image_understanding import enrich_user_text_with_vision
+from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn, run_image_to_text_turn
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +203,20 @@ class QueryEngine:
                 )
             if client_id:
                 await d._session_manager.release_loop_ownership(client_id)
+            return
+
+        if intent_hint in ("direct_llm", "image_to_text"):
+            await self._start_direct_model_background(
+                text=text,
+                thread_id=thread_id,
+                effective_loop_id=effective_loop_id,
+                client_id=client_id,
+                direct_intent_hint=intent_hint,
+                model=model,
+                model_params=model_params,
+                attachments=attachments,
+                thread_logger=thread_logger,
+            )
             return
 
         effective_text = text
@@ -545,6 +561,164 @@ class QueryEngine:
             if client_id:
                 await d._session_manager.release_loop_ownership(client_id)
             raise
+
+    async def _start_direct_model_background(
+        self,
+        *,
+        text: str,
+        thread_id: str,
+        effective_loop_id: str,
+        client_id: str | None,
+        direct_intent_hint: str,
+        model: str | None,
+        model_params: dict[str, Any] | None,
+        attachments: list[dict[str, str]] | None,
+        thread_logger: ThreadLogger,
+    ) -> None:
+        """Spawn background task for ``intent_hint`` direct LLM turns (no agent subprocess)."""
+        d = self._daemon
+
+        async def _run_direct() -> None:
+            await self._run_direct_model_body(
+                text=text,
+                thread_id=thread_id,
+                effective_loop_id=effective_loop_id,
+                client_id=client_id,
+                direct_intent_hint=direct_intent_hint,
+                model=model,
+                model_params=model_params,
+                attachments=attachments,
+                thread_logger=thread_logger,
+            )
+
+        try:
+            task = asyncio.create_task(_run_direct())
+            d._current_query_task = task
+            d._active_threads[thread_id] = task
+            await asyncio.sleep(0)
+        except asyncio.CancelledError:
+            logger.info("Direct model task cancelled during creation")
+            d._runner.set_current_thread_id(None)
+            raise
+        except Exception:
+            logger.exception("Failed to create direct model task")
+            d._query_running = False
+            if thread_id in d._active_threads:
+                d._active_threads.pop(thread_id, None)
+            if client_id:
+                await d._session_manager.release_loop_ownership(client_id)
+            raise
+
+    async def _run_direct_model_body(
+        self,
+        *,
+        text: str,
+        thread_id: str,
+        effective_loop_id: str,
+        client_id: str | None,
+        direct_intent_hint: str,
+        model: str | None,
+        model_params: dict[str, Any] | None,
+        attachments: list[dict[str, str]] | None,
+        thread_logger: ThreadLogger,
+    ) -> None:
+        """Execute one direct model call and broadcast a single assistant ``messages`` event."""
+        from langchain_core.messages import AIMessage
+
+        d = self._daemon
+        async with d._query_state_lock:
+            d._query_running = True
+
+        if client_id and effective_loop_id:
+            await d._session_manager.claim_loop_ownership(client_id, effective_loop_id)
+            subscribed = await d._session_manager.subscribe_loop(client_id, effective_loop_id)
+            if not subscribed:
+                logger.warning(
+                    "Client %s not found for loop %s subscription (direct model turn)",
+                    client_id[:8] if client_id else "?",
+                    effective_loop_id[:8],
+                )
+
+        await d._broadcast(
+            self._loop_scoped_client_message(
+                effective_loop_id,
+                {"type": "status", "state": "running"},
+            )
+        )
+
+        user_log_line = text.strip() if text.strip() else f"[{direct_intent_hint}]"
+        thread_logger.log_user_input(user_log_line)
+
+        await d._runner.touch_thread_activity_timestamp(thread_id)
+        st_activity = d._thread_registry.get(thread_id)
+        if st_activity:
+            st_activity.last_activity = datetime.now(UTC)
+
+        try:
+            if direct_intent_hint == "image_to_text":
+                att = list(attachments or [])
+                if not att:
+                    raise ValueError("image_to_text requires attachments")
+                answer = await run_image_to_text_turn(
+                    d._config,
+                    user_text=text,
+                    attachments=att,
+                    session_id=thread_id,
+                )
+            elif direct_intent_hint == "direct_llm":
+                answer = await run_direct_llm_turn(
+                    d._config,
+                    user_text=text,
+                    model=model,
+                    model_params=model_params,
+                    session_id=thread_id,
+                )
+            else:
+                raise ValueError(
+                    f"unsupported intent_hint for direct model: {direct_intent_hint!r}"
+                )
+
+            ai_flat = _serialize_for_json(AIMessage(content=answer))
+            await d._broadcast(
+                self._loop_scoped_client_message(
+                    effective_loop_id,
+                    {
+                        "type": "event",
+                        "namespace": [],
+                        "mode": "messages",
+                        "data": (ai_flat, {}),
+                    },
+                )
+            )
+            thread_logger.log_assistant_response(answer)
+        except asyncio.CancelledError:
+            logger.info("Direct model turn cancelled")
+            raise
+        except Exception as exc:
+            logger.exception("Direct model turn failed")
+            await d._broadcast(
+                self._loop_scoped_client_message(
+                    effective_loop_id,
+                    {
+                        "type": "event",
+                        "namespace": [],
+                        "mode": "custom",
+                        "data": emit_error_event(exc),
+                    },
+                )
+            )
+        finally:
+            d._query_running = False
+            d._active_threads.pop(thread_id, None)
+            await d._broadcast(
+                self._loop_scoped_client_message(
+                    effective_loop_id,
+                    {"type": "status", "state": "idle"},
+                )
+            )
+            if client_id:
+                await d._session_manager.release_loop_ownership(client_id)
+            d._current_query_task = None
 
     async def _await_cancel_after_signal(self, task: asyncio.Task, label: str) -> None:
         """Await task cancellation without forging daemon state (IG-398).

@@ -226,8 +226,11 @@ class WebSocketClient:
             model: Provider:model override string.
             model_params: Additional model parameters.
             attachments: Image attachments (mime_type + base64 data).
-            intent_hint: Suggested intent to bypass LLM classification
-                (one of: chitchat, quiz, continue_thread, new_goal).
+            intent_hint: Suggested intent. Standard values bypass in-agent classification:
+                ``chitchat``, ``quiz``, ``continue_thread``, ``new_goal``. Daemon-only
+                values ``direct_llm`` and ``image_to_text`` invoke a configured chat
+                model directly (no Soothe agent graph); ``image_to_text`` requires
+                ``attachments``.
         """
         payload: dict[str, Any] = {
             "type": "loop_input",
