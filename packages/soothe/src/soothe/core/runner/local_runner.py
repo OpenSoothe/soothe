@@ -115,7 +115,7 @@ def _loop_worker(
 class LocalLoopRunner:
     """Runs a single agent loop in an isolated ``multiprocessing`` subprocess.
 
-    One instance per ``loop_id``. Created by ``LoopRunnerFactory``.
+    One instance per ``loop_id``. Created by ``soothe_daemon.runner.LoopRunnerFactory``.
     """
 
     def __init__(self, loop_id: str, config: SootheConfig | None) -> None:

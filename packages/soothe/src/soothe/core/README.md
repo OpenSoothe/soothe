@@ -9,8 +9,8 @@ No transport or UI dependencies.
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  soothe.ux  (CLI, TUI)                              │
-│  soothe.daemon  (process, transports, IPC)          │
+│  soothe_cli  (CLI, TUI)                             │
+│  soothe_daemon  (process, transports, IPC)          │
 └──────────────────────┬──────────────────────────────┘
                        │ uses
 ┌──────────────────────▼──────────────────────────────┐
@@ -203,9 +203,9 @@ SootheRunner.astream(user_input)
 
 ## Downstream consumers
 
-- `soothe.daemon` — constructs `SootheRunner`, delegates to runner APIs
-- `soothe.ux.cli` — constructs `SootheRunner` for headless runs
-- `soothe.ux.tui` — constructs `SootheRunner` for interactive sessions
+- `soothe_daemon` — constructs `SootheRunner`, delegates to runner APIs
+- `soothe_cli.cli` — constructs `SootheRunner` for headless runs
+- `soothe_cli.tui` — constructs `SootheRunner` for interactive sessions
 - `tests/` — unit and integration tests
 
 ---

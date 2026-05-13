@@ -13,7 +13,7 @@ Soothe maintains multiple log files in `~/.soothe/` for different purposes:
 | Log File | Purpose | Configured By |
 |----------|---------|---------------|
 | `~/.soothe/logs/soothed.log` | Daemon backend logs (agent execution, protocols, tools) | `config.yml` → `logging.file.level` |
-| `~/.soothe/logs/soothe-cli.log` | CLI client logs (connection, UI, event handling) | `cli_config.yml` → `logging_level` |
+| `~/.soothe/logs/soothe-cli.log` | CLI client logs (connection, UI, event handling) | `soothe-cli.yml` → `logging_level` |
 
 ### Data Directory Structure
 
@@ -84,7 +84,7 @@ logging:
 
 #### 2. Enable CLI Client Debug Logs
 
-Edit `~/.soothe/config/cli_config.yml`:
+Edit `~/.soothe/config/soothe-cli.yml`:
 
 ```yaml
 # Client verbosity controls what events are DISPLAYED in TUI/CLI
@@ -117,7 +117,7 @@ soothed stop
 soothed start
 ```
 
-CLI picks up `cli_config.yml` on every invocation, no restart needed.
+CLI picks up `soothe-cli.yml` on every invocation, no restart needed.
 
 ---
 
@@ -243,7 +243,7 @@ soothed start
 
 2. Run agent with verbose TUI:
 ```bash
-# Edit ~/.soothe/config/cli_config.yml
+# Edit ~/.soothe/config/soothe-cli.yml
 verbosity: detailed
 
 # Run agent
@@ -318,7 +318,7 @@ tail -f ~/.soothe/logs/soothe-cli.log | grep -i "websocket\|connection\|retry\|t
 cat ~/.soothe/config/config.yml | grep -A 10 "websocket:"
 
 # Check CLI connection config
-cat ~/.soothe/config/cli_config.yml | grep -A 10 "websocket:"
+cat ~/.soothe/config/soothe-cli.yml | grep -A 10 "websocket:"
 ```
 
 ### Workflow 4: Debug Subagent Issues
@@ -335,7 +335,7 @@ logging:
   file:
     level: DEBUG
 
-# ~/.soothe/config/cli_config.yml
+# ~/.soothe/config/soothe-cli.yml
 verbosity: detailed  # See subagent internals
 ```
 
@@ -467,7 +467,7 @@ performance:
   classification_mode: llm
 ```
 
-### In `~/.soothe/config/cli_config.yml`:
+### In `~/.soothe/config/soothe-cli.yml`:
 
 ```yaml
 # Client verbosity (TUI event display)

@@ -350,7 +350,7 @@ soothe --streaming-mode batch "query"      # Accumulate silently
 ```
 
 **Override Logic**:
-1. CLI flags → `CLIConfig.output_streaming_enabled/mode`
+1. CLI flags → `SootheCliConfig.output_streaming_enabled/mode`
 2. Client fetches daemon config via RPC
 3. Merge: `daemon_config + cli_overrides` → effective config
 4. Pass to EventProcessor for display behavior

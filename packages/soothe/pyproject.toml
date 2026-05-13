@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "soothe"
 dynamic = ["version"]
-description = "Soothe - Protocol-driven multi-agent orchestration framework (daemon server)"
+description = "Soothe - Protocol-driven multi-agent orchestration framework (in-process agent core)"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11,<4.0"
@@ -29,7 +29,6 @@ dependencies = [
     "anyio>=3.0.0",
     "bubus>=1.5.6",
     "deepagents>=0.4.10,<1.0.0",
-    "fastapi>=0.104.0",
     "langchain>=1.2.11,<2.0.0",
     "langchain-community>=0.3.0,<1.0.0",
     "langchain-experimental>=0.0.50,<1.0.0",
@@ -47,13 +46,9 @@ dependencies = [
     "psutil>=5.9.0",
     "pydantic-settings>=2.0.0,<3.0.0",
     "pydantic>=2.0.0,<3.0.0",
-    "pyjwt>=2.8.0",
-    "pyperclip>=1.8.0",
     "python-dotenv>=1.0.0,<2.0.0",
     "pyyaml>=6.0.0,<7.0.0",
     "requests>=2.32.3",
-    "uvicorn[standard]>=0.24.0",
-    "websockets>=12.0",
     "psycopg[binary,pool]>=3.2.0",
     "langgraph-checkpoint-postgres>=2.0.0",
 ]
@@ -117,9 +112,6 @@ langfuse = [
 all = [
     "soothe[research,websearch,tabular,document,media,video,claude,github,dashscope,cli,langfuse,semantic]",
 ]
-
-[project.scripts]
-soothed = "soothe.cli.daemon_main:app"
 
 [project.urls]
 Homepage = "https://github.com/OpenSoothe/soothe"

@@ -19,7 +19,7 @@ from soothe_sdk.core.types import VerbosityLevel
 
 logger = logging.getLogger(__name__)
 
-# Align with soothe.config.daemon_config.WebSocketConfig.max_frame_size (default 10 MiB).
+# Align with soothe_daemon.config.models.WebSocketConfig.max_frame_size (default 10 MiB).
 # The websockets library defaults max_size to 1 MiB, which closes the connection (1009)
 # when the daemon streams larger JSON events to the client.
 _DEFAULT_MAX_FRAME_SIZE = 10 * 1024 * 1024

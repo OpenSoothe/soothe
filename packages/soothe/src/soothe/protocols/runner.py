@@ -55,7 +55,8 @@ class LoopRunnerProtocol(Protocol):
 
     Consumers (``QueryEngine``) depend only on this interface. The concrete
     runtime — ``LocalLoopRunner`` (multiprocessing) or ``RayLoopRunner`` (Ray
-    actor) — is selected by ``LoopRunnerFactory`` based on daemon config.
+    actor) — is selected by ``soothe_daemon.runner.LoopRunnerFactory`` based
+    on ``SootheDaemonConfig``.
     """
 
     async def run(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk | InterruptPending]:

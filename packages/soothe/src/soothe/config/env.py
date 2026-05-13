@@ -6,7 +6,6 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any
 
 SOOTHE_HOME: Path = Path(os.environ.get("SOOTHE_HOME", str(Path.home() / ".soothe"))).expanduser()
 """Default Soothe home directory. Overridable via ``SOOTHE_HOME`` env var."""
@@ -28,16 +27,6 @@ def default_soothe_workspace_dir() -> str:
 _ENV_VAR_RE = re.compile(r"^\$\{(\w+)\}$")
 
 _logger = logging.getLogger(__name__)
-
-
-def apply_env_overrides(config: Any) -> None:  # noqa: ANN401
-    """Apply environment variable overrides to a ``SootheConfig`` instance.
-
-    Currently handles:
-    - ``SOOTHE_DISTRIBUTED=1/true/yes``: enables subprocess-isolated loop execution (RFC-221).
-    """
-    if os.environ.get("SOOTHE_DISTRIBUTED", "").lower() in ("1", "true", "yes"):
-        config.daemon.distributed.enabled = True
 
 
 def _resolve_env(value: str) -> str:
