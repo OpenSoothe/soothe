@@ -344,7 +344,6 @@ class IntentClassifier:
                 goal_description=None,
                 task_complexity=TaskComplexity.MINIMAL,
                 chitchat_response=chitchat_response,
-                reasoning=f"Intent hint bypass: {hint.value}",
             )
         elif hint == IntentHint.QUIZ:
             # Quiz uses think model for deeper reasoning - no pre-generated response
@@ -354,7 +353,6 @@ class IntentClassifier:
                 goal_description=None,
                 task_complexity=TaskComplexity.MINIMAL,
                 quiz_response=None,  # Will be filled by _run_quiz with think model
-                reasoning=f"Intent hint bypass: {hint.value}",
             )
         elif hint == IntentHint.CONTINUE_THREAD:
             return IntentClassification(
@@ -362,7 +360,6 @@ class IntentClassifier:
                 reuse_current_goal=True,
                 goal_description=query,
                 task_complexity=TaskComplexity.MEDIUM,
-                reasoning=f"Intent hint bypass: {hint.value}",
             )
         elif hint == IntentHint.NEW_GOAL:
             return IntentClassification(
@@ -370,7 +367,6 @@ class IntentClassifier:
                 reuse_current_goal=False,
                 goal_description=query,
                 task_complexity=TaskComplexity.MEDIUM,
-                reasoning=f"Intent hint bypass: {hint.value}",
             )
         else:
             # Fallback for unknown hint (should not happen with enum)
@@ -386,18 +382,18 @@ class IntentClassifier:
 
         Args:
             query: Original user query.
-            error_context: Optional exception for reasoning.
+            error_context: Optional exception when falling back after classification failure.
 
         Returns:
             IntentClassification with safe defaults (new_goal).
         """
-        error_msg = type(error_context).__name__ if error_context else "classification disabled"
+        reason = type(error_context).__name__ if error_context else "classification_disabled"
+        logger.debug("Intent fallback to new_goal (%s)", reason)
         return IntentClassification(
             intent_type="new_goal",
             reuse_current_goal=False,
             goal_description=query,
             task_complexity=TaskComplexity.MEDIUM,
-            reasoning=f"Fallback: {error_msg}",
         )
 
     def _patch_missing_fields(

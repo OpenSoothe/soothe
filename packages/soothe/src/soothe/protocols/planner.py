@@ -75,7 +75,9 @@ class Plan(BaseModel):
 
     # Unified planning metadata
     is_plan_only: bool = Field(default=False, description="User wants planning without execution")
-    reasoning: str | None = Field(default=None, description="Intent classification reasoning")
+    reasoning: str | None = Field(
+        default=None, description="Optional planner rationale or strategy summary when populated"
+    )
 
 
 class StepResult(BaseModel):
