@@ -59,7 +59,7 @@ def run_headless(
             import subprocess
 
             subprocess.Popen(
-                [sys.executable, "-m", "soothe.daemon", "--detached"],
+                [sys.executable, "-m", "soothe_daemon", "--detached"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )

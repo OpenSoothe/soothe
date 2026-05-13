@@ -41,13 +41,11 @@ from ._runner_checkpoint import CheckpointMixin
 from ._runner_phases import PhasesMixin
 from ._runner_shared import StreamChunk
 from ._types import generate_thread_id
-from .factory import LoopRunnerFactory
 from .local_runner import LocalLoopRunner, SubprocessLoopError
 
 # Re-export types
 __all__ = [
     "IntentHint",
-    "LoopRunnerFactory",
     "LocalLoopRunner",
     "SootheRunner",
     "SubprocessLoopError",

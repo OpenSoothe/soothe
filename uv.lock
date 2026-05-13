@@ -20,6 +20,7 @@ resolution-markers = [
 members = [
     "soothe",
     "soothe-cli",
+    "soothe-daemon",
     "soothe-sdk",
     "soothe-workspace",
 ]
@@ -7078,15 +7079,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyperclip"
-version = "1.11.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e8/52/d87eba7cb129b81563019d1679026e7a112ef76855d6159d24754dbd2a51/pyperclip-1.11.0.tar.gz", hash = "sha256:244035963e4428530d9e3a6101a1ef97209c6825edab1567beac148ccc1db1b6", size = 12185, upload-time = "2025-09-26T14:40:37.245Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/df/80/fc9d01d5ed37ba4c42ca2b55b4339ae6e200b456be3a1aaddf4a9fa99b8c/pyperclip-1.11.0-py3-none-any.whl", hash = "sha256:299403e9ff44581cb9ba2ffeed69c7aa96a008622ad0c46cb575ca75b5b84273", size = 11063, upload-time = "2025-09-26T14:40:36.069Z" },
-]
-
-[[package]]
 name = "pytest"
 version = "9.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -7885,7 +7877,6 @@ dependencies = [
     { name = "anyio" },
     { name = "bubus" },
     { name = "deepagents" },
-    { name = "fastapi" },
     { name = "langchain" },
     { name = "langchain-community" },
     { name = "langchain-core" },
@@ -7902,15 +7893,11 @@ dependencies = [
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "pyjwt" },
-    { name = "pyperclip" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "requests" },
     { name = "soothe-sdk" },
     { name = "sqlite-vec" },
-    { name = "uvicorn", extra = ["standard"] },
-    { name = "websockets" },
 ]
 
 [package.optional-dependencies]
@@ -8016,7 +8003,6 @@ requires-dist = [
     { name = "deepagents", specifier = ">=0.4.10,<1.0.0" },
     { name = "docx2txt", marker = "extra == 'all'", specifier = ">=0.8.0" },
     { name = "docx2txt", marker = "extra == 'document'", specifier = ">=0.8.0" },
-    { name = "fastapi", specifier = ">=0.104.0" },
     { name = "langchain", specifier = ">=1.2.11,<2.0.0" },
     { name = "langchain-community", specifier = ">=0.3.0,<1.0.0" },
     { name = "langchain-core", specifier = ">=1.2.18,<2.0.0" },
@@ -8051,12 +8037,10 @@ requires-dist = [
     { name = "pydub", marker = "extra == 'media'", specifier = ">=0.25.0" },
     { name = "pygithub", marker = "extra == 'all'", specifier = ">=2.0.0" },
     { name = "pygithub", marker = "extra == 'github'", specifier = ">=2.0.0" },
-    { name = "pyjwt", specifier = ">=2.8.0" },
     { name = "pymupdf", marker = "extra == 'all'", specifier = ">=1.24.0" },
     { name = "pymupdf", marker = "extra == 'document'", specifier = ">=1.24.0" },
     { name = "pypdf", marker = "extra == 'all'", specifier = ">=3.0.0" },
     { name = "pypdf", marker = "extra == 'document'", specifier = ">=3.0.0" },
-    { name = "pyperclip", specifier = ">=1.8.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.3.0" },
     { name = "pytest-cov", marker = "extra == 'dev'" },
@@ -8072,8 +8056,6 @@ requires-dist = [
     { name = "sqlite-vec", specifier = ">=0.1.0" },
     { name = "tavily-python", marker = "extra == 'all'", specifier = ">=0.5.0" },
     { name = "tavily-python", marker = "extra == 'research'", specifier = ">=0.5.0" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
-    { name = "websockets", specifier = ">=12.0" },
     { name = "wikipedia", marker = "extra == 'all'", specifier = ">=1.4.0" },
     { name = "wikipedia", marker = "extra == 'research'", specifier = ">=1.4.0" },
     { name = "wizsearch", marker = "extra == 'all'", specifier = ">=1.1.8,<2.0.0" },
@@ -8118,6 +8100,55 @@ requires-dist = [
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "textual", specifier = ">=8.0.0" },
     { name = "typer", specifier = ">=0.9.0,<1.0.0" },
+    { name = "websockets", specifier = ">=12.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "soothe-daemon"
+source = { editable = "packages/soothe-daemon" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "fastapi" },
+    { name = "psutil" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "soothe" },
+    { name = "soothe-sdk" },
+    { name = "typer" },
+    { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiohttp", specifier = ">=3.9.0" },
+    { name = "fastapi", specifier = ">=0.104.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "psutil", specifier = ">=5.9.0" },
+    { name = "pydantic", specifier = ">=2.0.0,<3.0.0" },
+    { name = "pydantic-settings", specifier = ">=2.0.0,<3.0.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.3.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'" },
+    { name = "pyyaml", specifier = ">=6.0.0,<7.0.0" },
+    { name = "requests", specifier = ">=2.32.3" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
+    { name = "soothe", editable = "packages/soothe" },
+    { name = "soothe-sdk", editable = "packages/soothe-sdk" },
+    { name = "typer", specifier = ">=0.9.0,<1.0.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
     { name = "websockets", specifier = ">=12.0" },
 ]
 provides-extras = ["dev"]

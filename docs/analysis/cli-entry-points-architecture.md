@@ -126,13 +126,13 @@ soothe agent list                # List agents
 | File | Package | Purpose |
 |------|---------|---------|
 | `~/.soothe/config/config.yml` | soothe (daemon) | Agent configuration, providers, persistence, daemon **file logging** |
-| `~/.soothe/config/cli_config.yml` | soothe-cli (client) | **Client display verbosity**, WebSocket connection, UI settings |
+| `~/.soothe/config/soothe-cli.yml` | soothe-cli (client) | **Client display verbosity**, WebSocket connection, UI settings |
 
 ### Verbosity Architecture
 
 **Important**: Verbosity is a **client-side display preference**, not a daemon configuration.
 
-- **Client config (`cli_config.yml`)**: `verbosity: detailed` controls what events are **displayed** in TUI/CLI
+- **Client config (`soothe-cli.yml`)**: `verbosity: detailed` controls what events are **displayed** in TUI/CLI
   - Client sends verbosity to daemon when subscribing to a thread
   - Daemon filters events **per-client** before sending over WebSocket
   - Options: `quiet`, `normal`, `detailed`, `debug`

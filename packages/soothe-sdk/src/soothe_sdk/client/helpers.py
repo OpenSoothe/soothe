@@ -5,28 +5,60 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from typing import TYPE_CHECKING
+from typing import Any
 
 from soothe_sdk.client.websocket import WebSocketClient
 
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    from soothe.config import SootheConfig
 
+def websocket_url_from_config(cfg: Any) -> str:
+    """Construct WebSocket URL from a config-like object.
 
-def websocket_url_from_config(cfg: SootheConfig) -> str:
-    """Construct WebSocket URL from config (standard helper).
+    Duck-typed across the three workspace configs:
+
+    * ``CLIConfig`` (`soothe-cli`) exposes ``daemon_host`` / ``daemon_port``
+      and a ``websocket_url()`` helper.
+    * ``SootheDaemonConfig`` (`soothe-daemon`) exposes
+      ``transports.websocket.host`` / ``.port``.
+    * Legacy callers may still pass an object with
+      ``daemon.transports.websocket.host`` / ``.port``.
+
+    The SDK deliberately does not import any of those classes — keeping
+    `soothe_sdk` independent of `soothe`, `soothe_cli`, and `soothe_daemon`.
 
     Args:
-        cfg: SootheConfig with daemon.transports.websocket settings
+        cfg: Any object exposing one of the shapes above.
 
     Returns:
-        WebSocket URL string (e.g., "ws://127.0.0.1:8765")
+        WebSocket URL string (e.g., ``"ws://127.0.0.1:8765"``).
+
+    Raises:
+        AttributeError: If ``cfg`` exposes none of the supported shapes.
     """
-    host = cfg.daemon.transports.websocket.host
-    port = cfg.daemon.transports.websocket.port
-    return f"ws://{host}:{port}"
+    if hasattr(cfg, "websocket_url") and callable(cfg.websocket_url):
+        url = cfg.websocket_url()
+        if isinstance(url, str) and url:
+            return url
+
+    if hasattr(cfg, "daemon_host") and hasattr(cfg, "daemon_port"):
+        return f"ws://{cfg.daemon_host}:{cfg.daemon_port}"
+
+    transports = getattr(cfg, "transports", None)
+    if transports is None:
+        daemon = getattr(cfg, "daemon", None)
+        transports = getattr(daemon, "transports", None) if daemon is not None else None
+
+    if transports is not None:
+        websocket = getattr(transports, "websocket", None)
+        if websocket is not None:
+            return f"ws://{websocket.host}:{websocket.port}"
+
+    raise AttributeError(
+        "websocket_url_from_config: object does not expose websocket settings; "
+        "expected daemon_host/daemon_port, transports.websocket, or "
+        "daemon.transports.websocket"
+    )
 
 
 async def check_daemon_status(

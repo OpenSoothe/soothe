@@ -1,0 +1,76 @@
+# Soothe daemon configuration template (loaded as SootheDaemonConfig).
+# Defaults match `soothe_daemon.config.SootheDaemonConfig`.
+#
+# Place at ``~/.soothe/config/daemon_config.yml`` or pass via ``soothed --config``.
+#
+# The daemon also loads the in-proc agent config:
+#   soothe_config_path: <path to config.yml>
+# (defaults to ``~/.soothe/config/config.yml``).
+
+soothe_config_path: ~/.soothe/config/config.yml
+
+transports:
+  websocket:
+    enabled: true
+    host: 127.0.0.1
+    port: 8765
+    tls_enabled: false
+    tls_cert: null
+    tls_key: null
+    cors_origins:
+      - http://localhost:*
+      - http://127.0.0.1:*
+    max_frame_size: 10485760
+  http_rest:
+    enabled: false
+    host: 127.0.0.1
+    port: 8766
+    tls_enabled: false
+    tls_cert: null
+    tls_key: null
+    cors_origins:
+      - http://localhost:*
+      - http://127.0.0.1:*
+
+# Concurrency / safety (IG-138, IG-258)
+max_concurrent_threads: 100
+max_query_duration_minutes: 60
+cancel_grace_seconds: 30
+hitl_timeout_seconds: 30
+query_timeout_action: cancel
+thread_max_age_hours: 24
+auto_cancel_on_startup: true
+max_input_queue_size: 1000
+max_concurrent_dispatches: 50
+# Cap parallel image-role vision preflight on the daemon (0 = unlimited).
+max_concurrent_vision_preflight: 8
+
+# EventBus distribution stats (IG-403)
+event_size_stats_enabled: false
+event_size_stats_interval_seconds: 60
+event_size_stats_idle_pause_seconds: 120
+
+# RFC-221: distributed loop execution (Ray actors)
+distributed:
+  enabled: false
+  ray:
+    address: null
+    num_cpus: 0.0
+    object_store_memory: 0
+    max_concurrent_actors: 10
+    actor_lifetime: detached
+    log_to_driver: true
+
+# Persistent worker pool (local multiprocessing)
+worker_pool:
+  enabled: true
+  min_pool_size: 2
+  max_pool_size: 4
+  idle_timeout_seconds: 300
+  max_requests_per_worker: 100
+  request_timeout_seconds: 1800
+  heartbeat_interval_seconds: 30
+  stuck_worker_timeout_seconds: 180
+  dispatch_wait_stats_enabled: false
+  dispatch_wait_stats_interval_seconds: 60
+  dispatch_wait_stats_idle_pause_seconds: 120

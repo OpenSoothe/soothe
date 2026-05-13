@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
-from soothe.config.daemon_config import DaemonConfig
 from soothe.config.env import _resolve_env, _resolve_provider_env, default_soothe_workspace_dir
 from soothe.config.models import (
     AgentLoopConfig,
@@ -296,11 +295,6 @@ class SootheConfig(BaseSettings):
         default_factory=FilesystemMiddlewareConfig
     )
     """Filesystem middleware configuration."""
-
-    # --- Daemon configuration (RFC-0013) ---
-
-    daemon: DaemonConfig = Field(default_factory=DaemonConfig)
-    """Daemon multi-transport configuration."""
 
     autopilot: AutopilotConfig = Field(default_factory=AutopilotConfig)
     """Autopilot mode configuration (RFC-204)."""
