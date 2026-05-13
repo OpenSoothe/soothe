@@ -93,6 +93,7 @@ subagents:
   explore:
     enabled: true
     config:
+      semantic_similarity_timeout_seconds: 10
       max_iterations:
         quick: 6
         medium: 10

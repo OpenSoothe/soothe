@@ -620,6 +620,7 @@ class LLMPlanner:
             "- Trivial local skim: one step (list_files + selective read_file); heavy readonly recon: prefer subagent explore (scoped target per step)",
             "- For project structure: single step listing top-level directories",
             "- Avoid duplicate paths; batch sequential related reads—independent readonly probes may stay separate steps",
+            "- explore subagent steps: name likely subtrees (e.g. docs/, packages/, benchmarks/) in the step text so search stays scoped; avoid vague whole-repo recon without directory hints",
             "</EFFICIENCY_RULES>",
         ]
         sections.append("<PLANNING_OUTPUT>\n" + "\n".join(output_spec) + "\n</PLANNING_OUTPUT>")

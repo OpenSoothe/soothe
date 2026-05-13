@@ -45,8 +45,44 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _thread_workspace_from_agent_runtime(runtime: Any) -> str | None:
+    """Resolve client thread workspace for explore graph state (IG-328).
+
+    ``before_agent`` receives LangGraph ``Runtime`` (or compatible). Prefer
+    ``runtime.config["configurable"]["workspace"]`` from the parent invoke, then
+    ``langgraph.config.get_config()`` when available.
+
+    Args:
+        runtime: Agent ``Runtime`` from middleware (may be None in tests).
+
+    Returns:
+        Stripped workspace path, or ``None``.
+    """
+    if runtime is not None:
+        cfg = getattr(runtime, "config", None)
+        if isinstance(cfg, dict):
+            conf = cfg.get("configurable") or {}
+            if isinstance(conf, dict):
+                w = conf.get("workspace")
+                if isinstance(w, str) and w.strip():
+                    return w.strip()
+    try:
+        from langgraph.config import get_config
+
+        c = get_config()
+        if isinstance(c, dict):
+            conf = c.get("configurable") or {}
+            if isinstance(conf, dict):
+                w = conf.get("workspace")
+                if isinstance(w, str) and w.strip():
+                    return w.strip()
+    except Exception:  # noqa: S110
+        pass
+    return None
+
+
 class ExploreWireMiddleware(AgentMiddleware[ExploreAgentState, None]):
-    """Emit started wire event and persist resolved ``search_target``."""
+    """Emit explore wire events, resolve ``search_target``, and seed ``workspace`` on state (IG-328)."""
 
     state_schema = ExploreAgentState
 
@@ -69,6 +105,14 @@ class ExploreWireMiddleware(AgentMiddleware[ExploreAgentState, None]):
         explicit = state.get("search_target")
         search_target = resolve_explore_search_target(messages, explicit)
         updates: dict[str, Any] = {}
+        # Persist thread workspace on graph state so ``ToolRuntime.state`` exposes it to
+        # ``run_command`` (cwd) and matches callable filesystem backends (IG-328).
+        if not str(state.get("workspace") or "").strip():
+            tw = _thread_workspace_from_agent_runtime(runtime)
+            if tw:
+                updates["workspace"] = tw
+            elif self._resolver_workspace.strip():
+                updates["workspace"] = self._resolver_workspace.strip()
         if search_target and not (isinstance(explicit, str) and explicit.strip()):
             updates["search_target"] = search_target
         if state.get("explore_wire_started"):
@@ -294,22 +338,34 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
 
         # Calculate relevance scores if semantic similarity enabled
         if self._explore_config.enable_semantic_similarity:
-            for finding in findings:
-                finding["relevance"] = calculate_relevance_score(
-                    finding,
+            try:
+                for finding in findings:
+                    finding["relevance"] = calculate_relevance_score(
+                        finding,
+                        search_target,
+                        enable_semantic=True,
+                    )
+                logger.debug("Explore: calculated relevance scores for %d findings", len(findings))
+
+                # Rank findings by relevance (highest first)
+                findings = rank_by_similarity(
+                    findings,
                     search_target,
+                    content_key="snippet",
                     enable_semantic=True,
                 )
-            logger.debug("Explore: calculated relevance scores for %d findings", len(findings))
-
-            # Rank findings by relevance (highest first)
-            findings = rank_by_similarity(
-                findings,
-                search_target,
-                content_key="snippet",
-                enable_semantic=True,
-            )
-            logger.debug("Explore: ranked findings by relevance")
+                logger.debug("Explore: ranked findings by relevance")
+            except Exception as exc:
+                logger.warning(
+                    "Explore: semantic similarity failed (%s), using keyword fallback",
+                    exc,
+                )
+                for finding in findings:
+                    finding["relevance"] = calculate_relevance_score(
+                        finding,
+                        search_target,
+                        enable_semantic=False,
+                    )
 
         # Reduce payload size for faster synthesis (configurable max_findings_for_synthesis)
         max_findings = self._explore_config.max_findings_for_synthesis
@@ -388,14 +444,15 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
 
             # Calculate relevance scores if semantic similarity enabled (async with timeout)
             if self._explore_config.enable_semantic_similarity:
+                sem_timeout = self._explore_config.semantic_similarity_timeout_seconds
                 try:
-                    # Use async versions with 60s overall timeout for synthesis
-                    async with asyncio.timeout(60):
+                    async with asyncio.timeout(sem_timeout):
                         for finding in findings:
                             finding["relevance"] = await async_calculate_relevance_score(
                                 finding,
                                 search_target,
                                 enable_semantic=True,
+                                timeout_seconds=max(1.0, sem_timeout),
                             )
                         logger.debug(
                             "Explore: calculated relevance scores for %d findings", len(findings)
@@ -407,6 +464,7 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
                             search_target,
                             content_key="snippet",
                             enable_semantic=True,
+                            timeout_seconds=max(1.0, sem_timeout),
                         )
                         logger.debug("Explore: ranked findings by relevance")
                 except TimeoutError:
@@ -417,6 +475,17 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
                             finding,
                             search_target,
                             enable_semantic=False,  # Disable semantic to use keyword fallback
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "Explore: semantic similarity failed (%s), using keyword fallback",
+                        exc,
+                    )
+                    for finding in findings:
+                        finding["relevance"] = calculate_relevance_score(
+                            finding,
+                            search_target,
+                            enable_semantic=False,
                         )
 
             # Reduce payload size for faster synthesis (configurable max_findings_for_synthesis)

@@ -8,6 +8,13 @@ Target: {search_target}
 Workspace: {workspace} | Mode: {thoroughness} (≤{max_iterations} model turns) | read ≤{max_read_lines} lines/call
 Tools you may call: glob, grep, ls, read_file, file_info (metadata), run_command (shell)
 
+## Path discipline (sandbox)
+
+- ``grep``, ``glob``, and ``ls`` return paths starting with ``/`` (virtual workspace root). Pass **only** those strings—or the same path shape—to ``read_file``, ``grep``, ``glob``, and ``file_info``.
+- **Do not** use host paths like ``/Users/...``, ``/home/...``, or ``~/...`` in filesystem tools; they fail validation or resolve incorrectly.
+- Scope ``glob`` to a subdirectory when possible (e.g. ``path="/docs"`` with ``pattern="**/*.md"``). Avoid huge scans from ``path="/"`` with broad patterns—they may hit the tool time limit.
+- ``run_command`` uses the workspace directory as **shell cwd** (same as this workspace line). Do not rely on ``cd`` to the project root unless you intentionally move elsewhere.
+
 {mandatory_rules}
 
 Tactics: honor any subtree or symbol named in the target first → widen (glob/ls) → grep → read_file to confirm. Treat **`run_command`** as fallback for read-only shell checks only when native tools cannot express the query efficiently.
