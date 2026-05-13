@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-05-03
-**Last Updated**: 2026-05-08 (Volatility-tiered prompt architecture, user message envelope, complete ledger, cache optimization, reference-based dedup)
+**Last Updated**: 2026-05-13 (Parallel branch predecessor ledger replay; execute-step envelope tweaks)
 **Dependencies**: RFC-100 (CoreAgent Runtime), RFC-206 (Prompt Architecture), RFC-104 (Dynamic System Context), RFC-207 (Thread & Goal Context), RFC-203 (AgentLoop State & Memory), RFC-215 (AgentLoop Persistence), RFC-218 (Checkpoint Tree), RFC-216 (Multi-Thread Lifecycle), RFC-217 (Goal Context Management)
 **Related**: RFC-211 (Tool Result Shaping), RFC-213 (AgentLoop Reasoning Quality), RFC-220 (LangGraph Agent Loop Orchestrator), RFC-614 (Streaming Messaging)
 
@@ -82,7 +82,7 @@ The ledger captures all orchestration-visible conversation:
 - **execute-step** phase: step execution turns (human inputs, AI outcomes)
 - Special flows: synthesis, thread checks, goal completion
 
-Each turn is marked with `phase` for filtering. CoreAgent receives only execute-step messages.
+Each turn is marked with `phase` for filtering. CoreAgent receives only execute-step messages (see §3.1 for parallel-branch replay of predecessor execute rows into isolated checkpoints).
 
 ### P3: Ledger as Authoritative Plan Context
 
@@ -213,7 +213,7 @@ The `loop_messages` ledger is a complete record of the entire AgentLoop conversa
 2. **Complete audit trail**: The ledger is the single source of truth for the full AgentLoop conversation. Checkpoint recovery, debugging, and observability all benefit from a complete history.
 3. **Iteration continuity**: When the planner re-assesses after an execute wave, it sees its own prior assessment and plan as preceding turns, not as a flattened summary.
 
-**CoreAgent isolation**: When building messages for CoreAgent execution, ledger projection filters to `phase="execute_step"` only. Plan-phase messages are excluded — CoreAgent never sees planning reasoning in its thread. This keeps CoreAgent's message history focused on tool execution and prevents planning internals from leaking into tool-call context.
+**CoreAgent isolation**: When building messages for CoreAgent execution, ledger projection filters to `phase="execute_step"` only. Plan-phase messages are excluded — CoreAgent never sees planning reasoning in its thread. **Parallel branch checkpoints** (§3.1) prepend a bounded transitive-predecessor slice from the same ledger before the current envelope; that slice is still execute-phase rows only. This keeps CoreAgent's message history focused on tool execution and prevents planning internals from leaking into tool-call context.
 
 **Ledger Structure:**
 
@@ -223,6 +223,19 @@ The ledger contains ONLY orchestration-visible messages in adjacent pairs:
 - Both messages in pair share same `iteration` (for plan phases)
 - Order: plan-assess pair → plan-generate pair → execute step A pair → step B pair → ...
 - NO tool messages, NO internal reasoning traces, NO subgraph traffic
+
+### 3.1 Parallel execute branches and LangGraph checkpoint isolation
+
+When several steps run in one wave with **independent** LangGraph checkpoints per step, the runtime may use a **derived** `thread_id` for CoreAgent (for example `{logical_thread}__p{step_id}`) so each step’s checkpoint stays isolated from siblings. A new namespace starts with an **empty** CoreAgent message list even though the orchestration ledger (`LoopState.loop_messages`) already holds prior execute turns on the **logical** thread.
+
+**Requirement:** Dependency-ordered work must still see completed predecessor **execute** evidence. The executor therefore builds CoreAgent input as:
+
+1. **Predecessor replay (optional):** Deep-copied `LoopHumanMessage` / `LoopAIMessage` rows from `loop_messages` with `phase="execute_step"`, in ledger order, whose `step_id` lies in the **transitive dependency closure** of the current step (per the scoped `AgentDecision`). Sibling steps in the same parallel wave are **excluded**—only predecessors the DAG names are replayed.
+2. **Current envelope:** The standard execute-step `LoopHumanMessage` envelope for this step (goal + step instruction + dynamic context), as in §2.
+
+Replay is a **projection** of the single authoritative ledger, not a second transcript. A configurable cap limits how many predecessor messages are copied (large waves stay bounded); when set, `plan_prompt_ledger.plan_ledger_max_messages` may serve as that upper bound.
+
+`StepResult` and ledger appends continue to use the **logical** `thread_id`; only the LangGraph stream/checkpoint namespace may use the derived id.
 
 ### 4. AgentLoop Plan Prompt Structure
 
@@ -417,13 +430,14 @@ AgentLoop (Execute phase)
   |     <RETRIEVED_KNOWLEDGE> memory + RAG (optional)
   |
   v
-CoreAgent.astream(envelope)
+CoreAgent.astream(messages)
   |
   +-- System prompt (two tiers):
   |     Static: identity + tools + policies + directives
   |     Semi-static: workspace rules + workspace + environment + memory summary + context + thread + protocols
-  +-- User message: the envelope above
-  +-- CoreAgent thread receives ONLY execute-step ledger messages
+  +-- Message list: execute-step ledger projection (see §3); on **parallel branch** namespaces,
+  |     optional transitive-predecessor replay (§3.1) then the current-step envelope
+  +-- CoreAgent thread (per checkpoint namespace) receives only that projection + envelope — never plan-phase rows
   |
   v
 CoreAgent response (AIMessage)
@@ -483,9 +497,9 @@ Checkpoint save (complete loop_messages ledger + CoreAgent state)
 
 ### G8: Special Flows Outside Ledger Model
 
-**Current**: Synthesis, thread checks, and parallel branches use isolated patterns.
+**Current**: Synthesis, thread checks, and parallel branches historically used ad hoc context (e.g. empty branch checkpoints without predecessor execute history).
 
-**Target**: `LoopAIMessage(phase="goal_completion")`, `LoopHumanMessage(phase="thread_check")`. All orchestration turns in ledger.
+**Target**: `LoopAIMessage(phase="goal_completion")`, `LoopHumanMessage(phase="thread_check")`. All orchestration turns in ledger. **Parallel branches:** replay transitive-predecessor `execute_step` ledger rows into the branch CoreAgent input before the current envelope (§3.1); logical ledger remains canonical.
 
 ### G9: Volatile Content in System Prompt Breaks Caching
 
@@ -585,7 +599,7 @@ Checkpoint save (complete loop_messages ledger + CoreAgent state)
 1. **Plan reconstruction without LangGraph dependency**: Given a resumed AgentLoop checkpoint, Plan can reconstruct full context from ledger + metadata alone.
 2. **Deterministic step-outcome pairing**: Each completed step has exactly one `(LoopHumanMessage, LoopAIMessage)` pair in the ledger.
 3. **Serde round-trip fidelity**: Checkpoint serialization preserves `LoopHumanMessage`/`LoopAIMessage` types, never deserializes as `dict`.
-4. **CoreAgent isolation**: CoreAgent thread contains only `phase="execute_step"` messages. Plan-phase reasoning never leaks into CoreAgent context.
+4. **CoreAgent isolation**: CoreAgent input contains only `phase="execute_step"` messages (and the current-step envelope). Plan-phase reasoning never leaks into CoreAgent context. Parallel branch namespaces (§3.1) additionally receive a bounded predecessor slice from the same ledger—never plan-phase rows.
 
 ### Cache Performance
 
@@ -606,3 +620,4 @@ Checkpoint save (complete loop_messages ledger + CoreAgent state)
 | 2026-05-03 | Initial draft (unified ledger model, execute-step contract, gap analysis G1-G8) |
 | 2026-05-08 | Major revision: volatility-tiered prompt architecture, user message envelope, complete ledger with plan-assess/plan-generate phases, CoreAgent isolation, reference-based dedup, cache optimization, G9-G11, amendments to RFC-104/206/217 |
 | 2026-05-13 | Execute-step envelope layout: `<CURRENT_GOAL>` + `<USER_QUERY>` before `--- Context ---` + `<DYNAMIC_CONTEXT>` (goal no longer nested under `<DYNAMIC_CONTEXT>`). `<CURRENT_GOAL>` omits iteration suffixes (stripped if present on stored goal text); execute iteration is not duplicated in the envelope — use ledger / message metadata. |
+| 2026-05-13 | §3.1 **Parallel execute branches:** isolated LangGraph `thread_id` per concurrent step; executor injects transitive-predecessor `execute_step` ledger replay before the step envelope so branches see dependency history without sibling cross-talk. G8 target text aligned. |
