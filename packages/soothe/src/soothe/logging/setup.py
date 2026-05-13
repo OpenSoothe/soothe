@@ -126,6 +126,7 @@ def _suppress_noisy_third_party() -> None:
         "langchain_core",
         "langgraph",
         "langsmith",
+        "langfuse",
         "browser_use",
         "bubus",
         "cdp_use",

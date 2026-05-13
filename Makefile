@@ -20,7 +20,7 @@ help:
 	@echo "  make reset-the-world  - Reset all state: docker compose down -v + clean ~/.soothe/ (keeps config) + restart"
 	@echo ""
 	@echo "Unified Targets (all packages):"
-	@echo "  make sync             - Sync all packages with all extras"
+	@echo "  make sync             - Sync all workspace packages, all optional extras, and dev deps"
 	@echo "  make format           - Format all packages"
 	@echo "  make format-check     - Check formatting (for CI)"
 	@echo "  make lint             - Lint all packages"
@@ -52,7 +52,7 @@ help:
 
 setup:
 	@echo "Syncing workspace dependencies..."
-	uv sync --all-extras
+	uv sync --all-packages --all-extras
 	@echo "Workspace ready (.venv created if needed)"
 
 # Reset all state: docker volumes + ~/.soothe/ (keeps config), then restart services
@@ -73,9 +73,9 @@ reset-the-world:
 # ============================================================================
 
 sync:
-	@echo "Syncing all workspace dependencies with extras..."
-	uv sync --all-extras --package soothe --package soothe-sdk --package soothe-cli --package soothe-daemon
-	@echo "All packages synced with all dependencies and extras"
+	@echo "Syncing all workspace packages (optional extras + dev dependency group)..."
+	uv sync --all-packages --all-extras
+	@echo "All packages synced with all optional extras and workspace dev dependencies"
 
 format: sync
 	@echo "Formatting all packages..."

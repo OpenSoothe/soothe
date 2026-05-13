@@ -74,6 +74,9 @@ target-version = "py311"
 select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+"src/soothe_daemon/cli/daemon_main.py" = ["E402"]
+
 [tool.ruff.format]
 docstring-code-format = true
 
