@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-22
-**Dependencies**: RFC-216 (Multi-Thread Lifecycle), IG-238 (Checkpoint Unified Integration)
+**Dependencies**: RFC-216 (Multi-Thread Lifecycle), RFC-215 (Persistence Backend)
 **Author**: Claude Sonnet 4.6
 
 ---

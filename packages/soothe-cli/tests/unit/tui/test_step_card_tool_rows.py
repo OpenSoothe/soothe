@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from time import time
+from unittest.mock import patch
+
+from soothe_cli.tui import theme as theme_mod
 from soothe_cli.tui.preview_limits import STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
 from soothe_cli.tui.widgets.messages import CognitionStepMessage, ToolCallMessage
 
@@ -32,6 +36,48 @@ def test_stats_title_suffix_counts_by_display_name() -> None:
     suffix = w._stats_title_suffix()
     assert "Grep(2)" in suffix
     assert "ListFiles(1)" in suffix or "List(1)" in suffix
+
+
+def test_running_status_line_includes_tool_call_stats_suffix() -> None:
+    """Running step status shows per-tool counts (IG-402)."""
+    w = CognitionStepMessage("s-run", "Work", id="st-run-stats")
+    w.add_tool_call("a", "read_file", {"file_path": "/x.md"})
+    w.add_tool_call("b", "glob_file_search", {"glob_pattern": "*.md"})
+    w._status = "running"  # noqa: SLF001
+    w._spinner_position = 0  # noqa: SLF001
+    w._start_time = time() - 2  # noqa: SLF001
+    captured: list[str] = []
+
+    class _FakeStatus:
+        def update(self, content: object) -> None:
+            from textual.content import Content
+
+            if isinstance(content, Content):
+                captured.append(content.plain)
+            else:
+                captured.append(str(content))
+
+    w._status_widget = _FakeStatus()  # noqa: SLF001
+    suffix = w._stats_title_suffix()
+    with (
+        patch("soothe_cli.tui.widgets.messages._is_widget_animation_visible", return_value=True),
+        patch.object(theme_mod, "get_theme_colors", return_value=theme_mod.DARK_COLORS),
+    ):
+        w._update_running_animation()
+    assert len(captured) == 1
+    line = captured[0]
+    assert "Running..." in line
+    assert suffix in line
+    assert suffix.strip().startswith("·")
+
+
+def test_step_header_has_no_tool_count_suffix() -> None:
+    w = CognitionStepMessage("s-hdr", "Read RFCs", id="st-hdr")
+    w.add_tool_call("a", "grep", {"pattern": "x"})
+    w.add_tool_call("b", "grep", {"pattern": "y"})
+    suffix = w._stats_title_suffix()
+    assert "Grep(2)" in suffix
+    assert "Grep(2)" not in w._step_header_content().plain
 
 
 def test_format_tool_call_row_smoke() -> None:
