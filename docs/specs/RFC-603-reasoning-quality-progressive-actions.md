@@ -1,11 +1,13 @@
 # RFC-603: Reasoning Quality & Progressive Actions
 
+**RFC**: 603
+**Title**: Reasoning Quality & Progressive Actions
 **Status**: Draft
-**Type**: Feature Enhancement
-**Authors**: Claude Code
+**Kind**: Feature Enhancement
 **Created**: 2026-04-09
-**Last Updated**: 2026-05-04 (IG-376: LLM-only `goal_progress`; confidence blend path; RFC cross-refs)
-**Related**: IG-143, IG-376, RFC-0008 (Agentic Loop), RFC-214, RFC-604
+**Updated**: 2026-05-04
+**Authors**: Claude Code
+**Related**: IG-143, IG-376, RFC-214, RFC-604
 
 ---
 

@@ -1,12 +1,13 @@
 # RFC-403: Unified Event Naming Semantics
 
-**RFC**: 453
+**RFC**: 403
+**Title**: Unified Event Naming Semantics
 **Status**: Draft
-**Authors**: Platonic Brainstorming Session
-**Created**: 2026-04-15
-**Last Updated**: 2026-05-01
-**Depends on**: `RFC-401-event-processing.md` (Event Processing)
 **Kind**: Implementation Interface Design
+**Created**: 2026-04-15
+**Updated**: 2026-05-01
+**Authors**: Platonic Brainstorming Session
+**Depends on**: RFC-401 (Event Processing)
 
 ---
 

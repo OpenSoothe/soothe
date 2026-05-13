@@ -1,10 +1,10 @@
 # RFC-221: Loop Runner Protocol and Subprocess Isolation
 
-**RFC**: 221  
-**Title**: LoopRunnerProtocol: Unified Subprocess-Isolated Agent Loop Execution  
-**Status**: Draft  
-**Kind**: Architecture Design  
-**Created**: 2026-05-09  
+**RFC**: 221
+**Title**: LoopRunnerProtocol: Unified Subprocess-Isolated Agent Loop Execution
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-05-09
 **Dependencies**: RFC-001, RFC-220, RFC-450, RFC-452
 
 ---

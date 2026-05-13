@@ -1,8 +1,9 @@
 # RFC-102: Secure Filesystem Path Handling and Security Policy
 
-**RFC Number**: RFC-102
-**Kind**: Implementation Interface Design
+**RFC**: 102
+**Title**: Secure Filesystem Path Handling and Security Policy
 **Status**: Implemented
+**Kind**: Implementation Interface Design
 **Created**: 2026-03-18
 **Implemented**: 2026-03-18
 **Author**: System

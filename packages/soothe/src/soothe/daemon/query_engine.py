@@ -476,8 +476,18 @@ class QueryEngine:
                 reset_stream_model_override(override_token)
                 d._query_running = False
                 d._active_threads.pop(thread_id, None)
-                # RFC-221: clean up the per-loop runner
-                self._active_runners.pop(effective_loop_id or thread_id, None)
+                # RFC-221: tear down the subprocess runner (pool cancel_event / local SIGTERM).
+                # ``cancel_loop`` may have already popped and cancelled; pop here covers
+                # disconnect and other paths where no explicit cancel ran.
+                loop_runner_cleanup = self._active_runners.pop(effective_loop_id or thread_id, None)
+                if loop_runner_cleanup is not None:
+                    try:
+                        await loop_runner_cleanup.cancel()
+                    except Exception:
+                        logger.debug(
+                            "QueryEngine: loop_runner.cancel during stream finally failed",
+                            exc_info=True,
+                        )
                 if effective_loop_id:  # Flaw 4.8: guard against None key
                     d._pending_interrupt_responses.pop(effective_loop_id, None)
                 if effective_loop_id:
@@ -606,7 +616,12 @@ class QueryEngine:
             await self._await_cancel_after_signal(task, label)
 
     async def cancel_loop(self, loop_id: str) -> None:
-        """Cancel running query tasks bound to ``loop_id`` (IG-408)."""
+        """Cancel running query tasks bound to ``loop_id`` (IG-408).
+
+        Signals the pool/local subprocess runner for ``loop_id`` *before* awaiting
+        asyncio task unwind so ``cancel_request`` runs even if ``_run_stream`` finally
+        would otherwise pop ``_active_runners`` first (subprocess would never see cancel).
+        """
         lidq = str(loop_id or "").strip()
         if not lidq:
             logger.warning("cancel_loop called with empty loop_id; ignoring (no cancellation)")
@@ -636,7 +651,30 @@ class QueryEngine:
             tasks_to_cancel.append(("current", ct))
             seen.add(id(ct))
 
+        # RFC-221: signal the pool/local subprocess runner *before* awaiting asyncio
+        # task unwind. Otherwise ``_run_stream`` finally pops the runner first and
+        # ``cancel_request`` (cooperative cancel_event) never runs.
+        loop_runner = self._active_runners.pop(lidq, None)
+        if loop_runner is not None:
+            try:
+                await loop_runner.cancel()
+            except Exception:
+                logger.debug(
+                    "cancel_loop: loop_runner.cancel failed loop_id=%s",
+                    lidq[:16],
+                    exc_info=True,
+                )
+
         if not tasks_to_cancel:
+            if loop_runner is None:
+                return
+            await d._broadcast(
+                {
+                    "type": "command_response",
+                    "content": "[yellow]Cancellation requested.[/yellow]",
+                    "loop_id": lidq,
+                }
+            )
             return
 
         await d._broadcast(
@@ -651,11 +689,6 @@ class QueryEngine:
             logger.info("Cancelling query task %s for loop %s", label, lidq[:16])
             task.cancel()
             await self._await_cancel_after_signal(task, label)
-
-        # RFC-221: also cancel the subprocess runner for this loop
-        loop_runner = self._active_runners.pop(lidq, None)
-        if loop_runner is not None:
-            await loop_runner.cancel()
 
     async def cancel_thread(self, checkpoint_thread_id: str) -> None:
         """Cancel a specific query task keyed by LangGraph checkpoint id."""

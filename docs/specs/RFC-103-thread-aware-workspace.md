@@ -1,12 +1,13 @@
 # RFC-103: Thread-Aware Workspace
 
-**RFC Number**: RFC-103
-**Kind**: Implementation Interface Design
+**RFC**: 103
+**Title**: Thread-Aware Workspace
 **Status**: Draft
+**Kind**: Implementation Interface Design
 **Created**: 2026-03-31
 **Author**: Design brainstorming session
 **Design Draft**: [2026-03-31-thread-aware-workspace-design.md](../drafts/2026-03-31-thread-aware-workspace-design.md)
-**Depends On**: RFC-102 (Security Filesystem Policy), `RFC-450-daemon-communication-protocol.md` (Daemon Communication), `RFC-452-unified-thread-management.md` (Thread Management)
+**Depends On**: RFC-102 (Security Filesystem Policy), RFC-450 (Daemon Communication), RFC-452 (Thread Management)
 
 ## Abstract
 

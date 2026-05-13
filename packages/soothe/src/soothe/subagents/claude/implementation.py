@@ -9,7 +9,9 @@ Requires the optional `claude` extra: `pip install soothe[claude]`
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import aclosing
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -258,58 +260,66 @@ def _build_claude_graph(
         last_claude_session_id: str | None = None
 
         try:
-            async for message in query(prompt=task, options=options):
-                if isinstance(message, AssistantMessage):
-                    for block in message.content:
-                        if isinstance(block, TextBlock):
-                            collected_text.append(block.text)
-                            logger.debug(
-                                "Claude text block: length=%d, preview=%s",
-                                len(block.text),
-                                block.text[:50] if len(block.text) > 50 else block.text,
-                            )
-                            # IG-258: Removed event emission
-                        elif isinstance(block, ToolUseBlock):
-                            tool_input = getattr(block, "input", None)
-                            logger.debug(
-                                "Claude tool use: tool=%s, input=%s",
-                                block.name,
-                                str(tool_input)[:200] if tool_input else "<none>",
-                            )
-                            emit_subagent_wire_event(
-                                ClaudeStepCompletedEvent(
-                                    tool_name=str(getattr(block, "name", "") or ""),
-                                    input_preview=_preview_claude_tool_input(tool_input),
-                                ).to_dict(),
-                                logger,
-                            )
-                elif isinstance(message, ResultMessage):
-                    cost_usd = message.total_cost_usd or 0.0
-                    last_claude_session_id = getattr(message, "session_id", None)
-                    if (
-                        isinstance(last_claude_session_id, str)
-                        and not last_claude_session_id.strip()
-                    ):
-                        last_claude_session_id = None
-                    duration_ms = int(getattr(message, "duration_ms", 0) or 0)
-                    logger.debug(
-                        "Claude result: cost_usd=%.4f, duration_ms=%d, session_id=%s, "
-                        "text_length=%d",
-                        cost_usd,
-                        duration_ms,
-                        last_claude_session_id or "<none>",
-                        len(collected_text),
-                    )
-                    completion_summary = claude_text_summary_for_display("\n".join(collected_text))
-                    emit_subagent_wire_event(
-                        ClaudeCompletedEvent(
-                            cost_usd=cost_usd,
-                            duration_ms=duration_ms,
-                            claude_session_id=last_claude_session_id,
-                            summary=completion_summary,
-                        ).to_dict(),
-                        logger,
-                    )
+            # ``query`` has no interrupt API; rely on asyncio cancellation + ``aclosing``
+            # so InternalClient terminates the Claude Code subprocess on unwind.
+            async with aclosing(query(prompt=task, options=options)) as stream:
+                async for message in stream:
+                    if isinstance(message, AssistantMessage):
+                        for block in message.content:
+                            if isinstance(block, TextBlock):
+                                collected_text.append(block.text)
+                                logger.debug(
+                                    "Claude text block: length=%d, preview=%s",
+                                    len(block.text),
+                                    block.text[:50] if len(block.text) > 50 else block.text,
+                                )
+                                # IG-258: Removed event emission
+                            elif isinstance(block, ToolUseBlock):
+                                tool_input = getattr(block, "input", None)
+                                logger.debug(
+                                    "Claude tool use: tool=%s, input=%s",
+                                    block.name,
+                                    str(tool_input)[:200] if tool_input else "<none>",
+                                )
+                                emit_subagent_wire_event(
+                                    ClaudeStepCompletedEvent(
+                                        tool_name=str(getattr(block, "name", "") or ""),
+                                        input_preview=_preview_claude_tool_input(tool_input),
+                                    ).to_dict(),
+                                    logger,
+                                )
+                    elif isinstance(message, ResultMessage):
+                        cost_usd = message.total_cost_usd or 0.0
+                        last_claude_session_id = getattr(message, "session_id", None)
+                        if (
+                            isinstance(last_claude_session_id, str)
+                            and not last_claude_session_id.strip()
+                        ):
+                            last_claude_session_id = None
+                        duration_ms = int(getattr(message, "duration_ms", 0) or 0)
+                        logger.debug(
+                            "Claude result: cost_usd=%.4f, duration_ms=%d, session_id=%s, "
+                            "text_length=%d",
+                            cost_usd,
+                            duration_ms,
+                            last_claude_session_id or "<none>",
+                            len(collected_text),
+                        )
+                        completion_summary = claude_text_summary_for_display(
+                            "\n".join(collected_text)
+                        )
+                        emit_subagent_wire_event(
+                            ClaudeCompletedEvent(
+                                cost_usd=cost_usd,
+                                duration_ms=duration_ms,
+                                claude_session_id=last_claude_session_id,
+                                summary=completion_summary,
+                            ).to_dict(),
+                            logger,
+                        )
+        except asyncio.CancelledError:
+            logger.debug("Claude subagent cancelled (async unwind)")
+            raise
         except Exception:
             logger.exception("Claude agent failed")
             collected_text.append("Claude agent encountered an error.")

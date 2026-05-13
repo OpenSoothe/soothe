@@ -439,10 +439,34 @@ def _pool_worker(
                         ("heartbeat", request_id, {"elapsed_seconds": 0.0}),
                     )
                     hb_task = _asyncio.create_task(_periodic_heartbeat())
+                    stream_task = _asyncio.create_task(_stream())
+
+                    async def _poll_cancel_event() -> None:
+                        """Cancel the stream task when the main process sets cancel_event.
+
+                        Without this, cooperative cancel is only observed between
+                        ``runner.astream`` chunks; long tool/subagent awaits never
+                        re-enter the outer loop to check ``cancel_event``.
+                        """
+                        try:
+                            while not stream_finished.is_set():
+                                await _asyncio.sleep(0.25)
+                                if cancel_event.is_set():
+                                    stream_task.cancel()
+                                    return
+                        except _asyncio.CancelledError:
+                            raise
+
+                    poll_task = _asyncio.create_task(_poll_cancel_event())
                     try:
-                        await _stream()
+                        await stream_task
                     finally:
                         stream_finished.set()
+                        poll_task.cancel()
+                        try:
+                            await poll_task
+                        except _asyncio.CancelledError:
+                            pass
                         hb_task.cancel()
                         try:
                             await hb_task

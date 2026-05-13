@@ -1,12 +1,14 @@
 # RFC-101: Tool Interface & Event Naming
 
+**RFC**: 101
+**Title**: Tool Interface & Event Naming
 **Status**: Implemented
-**Authors**: Xiaming Chen
-**Created**: 2026-03-31
-**Last Updated**: 2026-03-31
-**Depends on**: RFC-100 (CoreAgent Runtime), `RFC-401-event-processing.md` (Event Processing)
-**Supersedes**: RFC-0016, RFC-0025
 **Kind**: Implementation Interface Design
+**Created**: 2026-03-31
+**Updated**: 2026-03-31
+**Authors**: Xiaming Chen
+**Depends on**: RFC-100 (CoreAgent Runtime), RFC-401 (Event Processing)
+**Supersedes**: RFC-0016, RFC-0025
 
 ---
 

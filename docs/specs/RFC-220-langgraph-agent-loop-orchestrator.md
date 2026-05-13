@@ -1,13 +1,12 @@
 # RFC-220: LangGraph Agent Loop Orchestrator
 
-**RFC**: RFC-220  
-**Title**: LangGraph Agent Loop Orchestrator  
-**Status**: Draft  
-**Kind**: Architecture Design  
-**Classification**: Core Architecture — Agentic Goal Execution (Layer 2)  
-**Created**: 2026-05-05  
-**Dependencies**: RFC-000, RFC-001, RFC-100, RFC-604, RFC-215, RFC-218, RFC-219  
-**Supersedes (orchestration mechanics)**: RFC-201 §loop driver (imperative Plan → Execute driver)  
+**RFC**: 220
+**Title**: LangGraph Agent Loop Orchestrator
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-05-05
+**Dependencies**: RFC-000, RFC-001, RFC-100, RFC-604, RFC-215, RFC-218, RFC-219
+**Supersedes**: RFC-201 §loop driver (imperative Plan → Execute driver)
 **Related**: RFC-203, RFC-207, RFC-211, RFC-213, RFC-214, RFC-216, RFC-217  
 
 ---
