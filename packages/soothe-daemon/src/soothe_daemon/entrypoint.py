@@ -4,17 +4,19 @@ from __future__ import annotations
 
 # Load environment variables from .env file BEFORE any langchain imports
 # so provider API keys and other env-backed config are visible at import time.
-from dotenv import load_dotenv
+from soothe_daemon.bootstrap_env import bootstrap_dotenv, load_dotenv_adjacent_to_yaml
 
-load_dotenv()
+bootstrap_dotenv()
 
 import argparse  # noqa: E402
 import asyncio  # noqa: E402
 import contextlib  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 from soothe.config import SootheConfig  # noqa: E402
 
 from soothe_daemon.config import SootheDaemonConfig  # noqa: E402
+from soothe_daemon.config.settings import default_daemon_config_path  # noqa: E402
 from soothe_daemon.server import SootheDaemon  # noqa: E402
 
 
@@ -86,6 +88,17 @@ def main() -> None:
     args = parser.parse_args()
 
     daemon_cfg = _load_daemon_config(args.config)
+
+    _daemon_yaml_for_dotenv: list[str | Path | None] = [args.config]
+    if args.config is None:
+        _dd = default_daemon_config_path()
+        if _dd.is_file():
+            _daemon_yaml_for_dotenv.append(_dd)
+    load_dotenv_adjacent_to_yaml(
+        *_daemon_yaml_for_dotenv,
+        daemon_cfg.soothe_config_path,
+        args.soothe_config,
+    )
 
     if args.soothe_config:
         cfg = SootheConfig.from_yaml_file(args.soothe_config)
