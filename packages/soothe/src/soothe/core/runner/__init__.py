@@ -1,4 +1,4 @@
-"""SootheRunner -- protocol-orchestrated agent runner (RFC-0003, RFC-0007, RFC-0008, RFC-0009).
+"""SootheRunner -- protocol-orchestrated agent runner (RFC-0003, RFC-0007, RFC-0008).
 
 Wraps `create_soothe_agent()` with protocol pre/post-processing and
 yields the deepagents-canonical ``(namespace, mode, data)`` stream
@@ -9,18 +9,16 @@ loops reflect -> revise -> re-execute until the goal is complete or
 max_iterations is reached.
 
 RFC-0008 adds agentic loop: default execution mode with Reason → Act
-iterative refinement loop (RFC-201) replacing single-pass execution.
+iterative refinement loop (RFC-201) via ``AgentLoop`` and the compiled
+loop graph (RFC-220). DAG-style multi-step execution is implemented
+inside the AgentLoop execute phase (``StepScheduler`` / ``Executor``),
+not as a separate runner mixin.
 
-RFC-0009 adds DAG-based step execution: plans with multiple steps are
-iterated via ``StepScheduler``, independent steps can run in parallel,
-and ``ConcurrencyController`` enforces hierarchical limits.
+Implementation is decomposed into four mixins:
 
-Implementation is decomposed into five mixins:
-
-- `PhasesMixin`     -- pre/post-stream, LangGraph streaming, HITL loop
+- `PhasesMixin`     -- pre-stream helpers (threads, policy, memory, plan bootstrap)
 - `AgenticMixin`    -- agentic loop (RFC-0008)
 - `AutonomousMixin` -- autonomous iteration loop (RFC-0007)
-- `StepLoopMixin`   -- DAG-based step execution (RFC-0009)
 - `CheckpointMixin` -- progressive checkpoint, artifacts, reports (RFC-0010)
 """
 
@@ -42,7 +40,6 @@ from ._runner_autonomous import AutonomousMixin
 from ._runner_checkpoint import CheckpointMixin
 from ._runner_phases import PhasesMixin
 from ._runner_shared import StreamChunk
-from ._runner_steps import StepLoopMixin
 from ._types import generate_thread_id
 from .factory import LoopRunnerFactory
 from .local_runner import LocalLoopRunner, SubprocessLoopError
@@ -72,7 +69,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
+class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
     """Protocol-orchestrated agent runner.
 
     Wraps ``create_soothe_agent()`` with pre/post protocol steps and

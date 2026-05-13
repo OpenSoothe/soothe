@@ -7,7 +7,10 @@ from pathlib import Path
 from soothe.config import SootheConfig
 from soothe.skills.catalog import (
     build_skill_invocation_envelope,
+    format_slash_skill_invoke_line,
+    parse_slash_skill_user_line,
     resolve_skill_directory,
+    try_expand_slash_skill_user_line,
     wire_entries_for_agent_config,
 )
 
@@ -62,3 +65,36 @@ def test_build_skill_invocation_envelope_includes_name() -> None:
     assert "Do thing" in env.prompt
     assert env.message_kwargs is not None
     assert env.message_kwargs["additional_kwargs"]["soothe_skill"] == "x"
+
+
+def test_format_slash_skill_invoke_line() -> None:
+    assert (
+        format_slash_skill_invoke_line("weather", "what is rain") == "/skill:weather what is rain"
+    )
+    assert format_slash_skill_invoke_line("remember", "") == "/skill:remember"
+    assert format_slash_skill_invoke_line("remember", "   ") == "/skill:remember"
+
+
+def test_parse_slash_skill_user_line() -> None:
+    assert parse_slash_skill_user_line("/skill:Weather please") == ("weather", "please")
+    assert parse_slash_skill_user_line("  /SKILL:alpha  ") == ("alpha", "")
+    assert parse_slash_skill_user_line("/skill:beta") == ("beta", "")
+    assert parse_slash_skill_user_line("not a skill") is None
+
+
+def test_try_expand_slash_skill_user_line(tmp_path: Path) -> None:
+    d = tmp_path / "expand-me"
+    d.mkdir()
+    (d / "SKILL.md").write_text(
+        "---\nname: expand-me\ndescription: D\n---\n# Do the thing\n",
+        encoding="utf-8",
+    )
+    cfg = SootheConfig()
+    cfg.skills = [str(d)]
+    env = try_expand_slash_skill_user_line("/skill:expand-me run it", cfg)
+    assert env is not None
+    assert "expand-me" in env.prompt
+    assert "Do the thing" in env.prompt
+    assert "run it" in env.prompt
+    assert env.prompt.index("User instruction") < env.prompt.index("Skill reference")
+    assert try_expand_slash_skill_user_line("/skill:missing-skill x", cfg) is None

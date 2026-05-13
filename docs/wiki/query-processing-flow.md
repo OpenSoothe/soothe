@@ -213,33 +213,23 @@ class PlanStep(BaseModel):
 
 ## 6. Step Execution (DAG-based)
 
-For multi-step plans, execution follows DAG dependencies:
+Multi-step plans are executed inside **AgentLoop** (RFC-220): the compiled graph’s
+execute phase uses `StepScheduler` / `Executor` to respect DAG dependencies and
+optional parallelism. Each ready step is run as a **CoreAgent** `astream` turn with
+HITL handling in `Executor._core_agent_astream_with_hitl`.
 
 ```
-_run_step_loop()
+AgentLoop graph (execute_steps)
     ↓
-StepScheduler(plan)  →  Build DAG from depends_on
-    ↓
-┌─────────────────────────────────────┐
-│           BATCH LOOP                │
-└─────────────────────────────────────┘
+Executor: StepScheduler(plan)  →  Build DAG from depends_on
     ↓
 ready_steps = scheduler.ready_steps(limit, parallelism)
     ↓
-┌────────────────┐
-│ Single step?   │
-└────────────────┘
-    ↓           ↓
-   YES         NO
-    ↓           ↓
-Sequential   asyncio.gather()
-             (parallel execution)
+Single step OR asyncio.gather for parallel steps
     ↓
-_execute_step()
+CoreAgent.astream(stream_input, ...)  (+ HITL resume loop)
     ↓
-_stream_phase() → agent.astream()
-    ↓
-PlanStepCompletedEvent / PlanStepFailedEvent
+PlanStepCompletedEvent / PlanStepFailedEvent (protocol events)
 ```
 
 ### Parallel Execution
@@ -254,38 +244,38 @@ Execution: A + B parallel, then C
 ```
 
 **Key files:**
-- `packages/soothe/src/soothe/core/runner/_runner_steps.py` — Step orchestration (`StepScheduler` for DAG batches)
-- `packages/soothe/src/soothe/core/agent_loop/state/schemas.py` — `AgentDecision`, `StepAction`, dependency metadata
+
+- `packages/soothe/src/soothe/core/loop/engine/executor.py` — execute waves, DAG batches, CoreAgent streaming
+- `packages/soothe/src/soothe/core/loop/planning/dag.py` — `StepScheduler`
+- `packages/soothe/src/soothe/core/loop/state/schemas.py` — `LoopState`, step ledger metadata
 
 ## 7. Agent Execution
 
-### Stream Phase
+### CoreAgent streaming (execute phase)
 
-The `_stream_phase()` runs the LangGraph compiled agent:
+Execute steps stream the compiled LangGraph agent via `CoreAgent.astream` (see
+`Executor._core_agent_astream_with_hitl` for interrupt / resume). The graph input
+dict carries messages plus optional `workspace`, `git_status`,
+`routing_classification`, and related fields for middleware and system-prompt XML
+injection (RFC-104).
 
 ```python
-# _stream_phase() in _runner_phases.py
+# Executor builds graph input (simplified)
 
-async def _stream_phase(self, ...):
-    # Build enriched input
-    stream_input = {
-        "messages": messages,
-        "context_projection": context,
-        "recalled_memories": memories,
-    }
+stream_input = {
+    "messages": messages,
+    "workspace": workspace,
+    "git_status": git_status,
+    "routing_classification": routing_classification,
+}
 
-    # Stream from agent
-    async for chunk in agent.astream(
-        stream_input,
-        stream_mode=["messages", "updates", "custom"],
-        subgraphs=True
-    ):
-        # Handle HITL interrupts
-        if is_interrupt(chunk):
-            # Auto-approve or wait for human
-            await handle_interrupt(chunk)
-
-        yield chunk
+async for chunk in core_agent.astream(
+    stream_input,
+    stream_mode=["messages", "updates", "custom"],
+    subgraphs=True,
+):
+    # HITL: on __interrupt__, wait for client resume or auto-approve
+    yield chunk
 ```
 
 ### Event Types
@@ -297,7 +287,7 @@ async def _stream_phase(self, ...):
 | `custom` | Protocol events |
 
 **Key files:**
-- `packages/soothe/src/soothe/core/runner/_runner_phases.py` — Phase execution
+- `packages/soothe/src/soothe/core/loop/engine/executor.py` — CoreAgent streaming for execute waves
 - `packages/soothe/src/soothe/core/agent.py` — CoreAgent factory
 
 ## 8. Response Streaming
@@ -431,8 +421,7 @@ User Query
 | Daemon | `packages/soothe/src/soothe/daemon/_handlers.py` | Query handling |
 | Runner | `packages/soothe/src/soothe/core/runner/__init__.py` | Runner package |
 | Runner | `packages/soothe/src/soothe/core/runner/_runner_agentic.py` | Agentic loop |
-| Runner | `packages/soothe/src/soothe/core/runner/_runner_phases.py` | Phase execution |
-| Runner | `packages/soothe/src/soothe/core/runner/_runner_steps.py` | Step orchestration |
+| Runner | `packages/soothe/src/soothe/core/runner/_runner_phases.py` | Pre-stream (thread, policy, memory, plan bootstrap) |
 | Planning | `packages/soothe/src/soothe/core/agent_loop/core/planner.py` | `LLMPlanner` (RFC-604) |
 | Agent | `packages/soothe/src/soothe/core/agent.py` | CoreAgent factory |
 

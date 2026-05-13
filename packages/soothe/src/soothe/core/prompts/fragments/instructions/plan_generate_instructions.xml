@@ -1,7 +1,7 @@
 <PLAN_GENERATE>
 Schema-only output: plan_action, type, steps, execution_mode, reasoning, adaptive_granularity, next_action.
 
-Assess already ran: the appended system line ``Status: …, Progress: …`` is authoritative. Goal text and execute iteration live in ``<GOAL_PROGRESS>`` in the user message after the ledger.
+Assess already ran: the appended system line ``Status: …, Progress: …`` is authoritative. Goal text and execute iteration live in ``<GOAL_PROGRESS>`` in the user message after the ledger. When ``<USER_PRIMARY_QUERY>`` is present, prioritize that short user text over long content in ``<FULL_GOAL_AND_SKILL_CONTEXT>``.
 
 **plan_action**
 - ``keep``: Reuse the current plan; omit new type/steps/execution_mode unless you must adjust them.

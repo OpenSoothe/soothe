@@ -1,4 +1,4 @@
-"""Autonomous iteration loop mixin for SootheRunner (RFC-0007, RFC-0009).
+"""Autonomous iteration loop mixin for SootheRunner (RFC-0007).
 
 Extracted from ``runner.py`` to isolate the autonomous goal-driven
 execution logic from the main runner orchestration.
@@ -7,14 +7,14 @@ execution logic from the main runner orchestration.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
+from soothe_sdk.core.exceptions import ConfigurationError
+
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.events import (
-    GoalFailedEvent,
     LoopCompletedEvent,
     PlanCreatedEvent,
     PlanReflectedEvent,
@@ -23,7 +23,6 @@ from soothe.core.intention import IntentHint
 from soothe.core.loop import AgentLoop
 from soothe.core.loop.state.schemas import PlanResult
 from soothe.core.loop.utils.messages import loop_assistant_messages_chunk
-from soothe.protocols.planner import StepResult
 
 from ._runner_goal_directives import GoalDirectivesMixin
 from ._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom
@@ -38,7 +37,7 @@ _BACKOFF_BASE_SECONDS = 2.0
 
 
 class AutonomousMixin(GoalDirectivesMixin):
-    """Autonomous iteration loop (RFC-0007, RFC-0009, IG-155).
+    """Autonomous iteration loop (RFC-0007, IG-155).
 
     Mixed into ``SootheRunner`` -- all ``self.*`` attributes are defined
     on the concrete class.  Inherits goal directive processing from
@@ -383,14 +382,9 @@ class AutonomousMixin(GoalDirectivesMixin):
             total_iterations: Current iteration number
             parallel_goals: Number of parallel goals executing
         """
-        import asyncio
-
-        from ._types import IterationRecord, RunnerState
-
         logger.info("Iteration %d started | Goal: %s", total_iterations, goal.id)
 
         iter_start = perf_counter()
-        current_input = goal.description
 
         # IG-154: Delegate to AgentLoop when planner implements LoopPlannerProtocol
         if self._planner and hasattr(self._planner, "plan"):
@@ -640,425 +634,22 @@ class AutonomousMixin(GoalDirectivesMixin):
                 # Return early - AgentLoop handled everything
                 return
 
-        # Fallback: Non-AgentLoop execution path
-        # For goals without LoopPlannerProtocol planner
-        logger.warning(
-            "[GoalEngine] Using legacy execution path (no AgentLoop) for goal %s - violates RFC architecture",
-            goal.id,
+            logger.error(
+                "AgentLoop produced no goal_result for goal %s (check loop graph / events)",
+                goal.id,
+            )
+            if self._goal_engine:
+                await self._goal_engine.fail_goal(
+                    goal.id, error="AgentLoop produced no goal_result"
+                )
+            return
+
+        _planner_required_msg = (
+            "Autonomous goal execution requires a planner implementing LoopPlannerProtocol.plan "
+            "(AgentLoop). Legacy direct CoreAgent streaming has been removed."
         )
-
-        # IG-271: Replace iteration event with compact logging
-        logger.info("Iteration %d started | Goal: %s", total_iterations, goal.id)
-
-        try:
-            iter_state = RunnerState()
-            canonical_tid = parent_state.thread_id
-            iter_state.thread_id = canonical_tid
-            iter_state.langgraph_thread_id = thread_id if thread_id != canonical_tid else None
-            iter_state.workspace = getattr(parent_state, "workspace", None)
-            self._ensure_runner_state_workspace(iter_state)
-            self._ensure_artifact_store(iter_state)
-            iter_state.intent_classification = getattr(parent_state, "intent_classification", None)
-            iter_state.context_projection = getattr(parent_state, "context_projection", None)
-            iter_state.recalled_memories = list(
-                getattr(parent_state, "recalled_memories", []) or []
-            )
-            iter_state.observation_scope_key = getattr(parent_state, "observation_scope_key", "")
-
-            should_refresh_observation = getattr(
-                parent_state, "observation_refresh_needed", False
-            ) or not (iter_state.context_projection is not None or iter_state.recalled_memories)
-
-            if should_refresh_observation and self._memory:
-                try:
-                    items = await self._memory.recall(current_input, limit=5)
-                    iter_state.recalled_memories = items
-                except Exception:
-                    logger.debug("Memory recall failed", exc_info=True)
-
-            if should_refresh_observation:
-                iter_state.observation_scope_key = current_input
-
-            parent_state.context_projection = iter_state.context_projection
-            parent_state.recalled_memories = list(iter_state.recalled_memories)
-            parent_state.observation_scope_key = iter_state.observation_scope_key
-            parent_state.observation_refresh_needed = False
-
-            # Legacy: Direct step execution (bypasses AgentLoop)
-            if iter_state.plan and len(iter_state.plan.steps) > 1:
-                async for chunk in self._run_step_loop(
-                    current_input, iter_state, iter_state.plan, goal_id=goal.id
-                ):
-                    yield chunk
-            else:
-                async with self._concurrency.acquire_llm_call():
-                    async for chunk in self._stream_phase(current_input, iter_state):
-                        yield chunk
-
-            response_text = "".join(iter_state.full_response)
-
-            if self._memory and response_text and len(response_text) > _MIN_MEMORY_STORAGE_LENGTH:
-                try:
-                    from soothe.protocols.memory import MemoryItem
-
-                    await self._memory.remember(
-                        MemoryItem(
-                            content=response_text[:500],
-                            tags=["agent_response"],
-                            source_thread=canonical_tid,
-                        )
-                    )
-                except Exception:
-                    logger.debug("Memory storage failed", exc_info=True)
-
-            reflection = None
-            if self._planner and iter_state.plan and response_text:
-                try:
-                    step_results = [
-                        StepResult(
-                            step_id=s.id,
-                            success=s.status == "completed",
-                            outcome={
-                                "type": "generic",
-                                "size_bytes": len((s.result or "").encode("utf-8")),
-                            },  # RFC-211
-                            duration_ms=0,
-                            thread_id=goal.thread_id,
-                        )
-                        for s in iter_state.plan.steps
-                        if s.status in ("completed", "failed")
-                    ]
-                    if step_results:
-                        # Build goal context for reflection (RFC-0007 §5.4)
-                        goal_context = None
-                        if self._goal_engine:
-                            from soothe.protocols.planner import GoalContext
-
-                            all_goals = await self._goal_engine.list_goals()
-                            goal_context = GoalContext(
-                                current_goal_id=goal.id,
-                                all_goals=[g.model_dump(mode="json") for g in all_goals],
-                                completed_goals=[
-                                    g.id for g in all_goals if g.status == "completed"
-                                ],
-                                failed_goals=[g.id for g in all_goals if g.status == "failed"],
-                                ready_goals=[
-                                    g.id for g in all_goals if g.status in ("pending", "active")
-                                ],
-                                max_parallel_goals=self._concurrency.max_parallel_goals,
-                            )
-
-                        reflection = await self._planner.reflect(
-                            iter_state.plan, step_results, goal_context
-                        )
-                        yield _custom(
-                            PlanReflectedEvent(
-                                should_revise=reflection.should_revise,
-                                assessment=reflection.assessment[:200],
-                            ).to_dict()
-                        )
-
-                        # Process goal directives from reflection (RFC-0007 §5.4)
-                        if reflection.goal_directives:
-                            goal_changes = await self._process_goal_directives(
-                                reflection.goal_directives,
-                                current_goal=goal,
-                            )
-
-                            logger.debug(
-                                "Goal %s directives: %d applied | Changes: %s",
-                                goal.id,
-                                len(reflection.goal_directives),
-                                str(goal_changes)[:50] if goal_changes else "none",
-                            )
-
-                            # CRITICAL: Handle DAG state changes
-                            # If the current goal now has unmet dependencies, reset it to pending
-                            # and abort the current iteration
-                            should_abort = await self._check_goal_dag_consistency(goal)
-
-                            if should_abort:
-                                logger.info(
-                                    "Goal %s now has unmet dependencies, resetting to pending",
-                                    goal.id,
-                                )
-                                goal.status = "pending"
-                                goal.updated_at = datetime.now(UTC)
-
-                                # Note: The plan and any completed steps remain attached to this goal.
-                                # When the goal is rescheduled after its dependencies complete,
-                                # the planner can decide whether to create a new plan or revise the existing one.
-                                # The existing plan provides context for the next iteration.
-
-                                logger.info("Goal %s deferred: Dependencies added", goal.id)
-
-                                # Save checkpoint and exit - scheduler will pick up prerequisite goals
-                                async for chunk in self._save_checkpoint(
-                                    parent_state, user_input=user_input, mode="autonomous"
-                                ):
-                                    yield chunk
-                                return  # Exit _execute_autonomous_goal early
-
-                            # Save checkpoint after goal mutations
-                            async for chunk in self._save_checkpoint(
-                                parent_state, user_input=user_input, mode="autonomous"
-                            ):
-                                yield chunk
-                except Exception:
-                    logger.debug("Plan reflection failed", exc_info=True)
-
-            plan_summary = ""
-            if iter_state.plan:
-                plan_summary = f"{iter_state.plan.goal}: " + "; ".join(
-                    s.description for s in iter_state.plan.steps[:5]
-                )
-
-            should_continue = reflection.should_revise if reflection else False
-
-            # RFC-204: Consensus loop — validate goal completion before accepting
-            if self._goal_engine and self._model and not should_continue:
-                from soothe.core.goal_engine.consensus import evaluate_goal_completion
-
-                success_criteria = getattr(goal, "_success_criteria", None)
-                c_decision, c_reasoning = await evaluate_goal_completion(
-                    goal_description=goal.description,
-                    response_text=response_text,
-                    evidence_summary=plan_summary[:500],
-                    success_criteria=success_criteria,
-                    model=self._model,
-                )
-
-                if c_decision == "send_back":
-                    sb_count = getattr(goal, "send_back_count", 0)
-                    max_sb = getattr(goal, "max_send_backs", 3)
-
-                    if sb_count < max_sb:
-                        goal.send_back_count = sb_count + 1
-                        logger.info(
-                            "Goal %s sent back (%d/%d): %s",
-                            goal.id,
-                            goal.send_back_count,
-                            max_sb,
-                            c_reasoning[:100],
-                        )
-                        # Re-enter loop with refined instruction
-                        current_input = f"Previous attempt did not satisfy goal. Feedback: {c_reasoning}. Try different approach."
-                        should_continue = True  # Force another iteration
-                    else:
-                        # Budget exhausted — suspend
-                        await self._goal_engine.suspend_goal(
-                            goal.id,
-                            reason=f"Send-back budget exhausted ({max_sb} rounds)",
-                        )
-                        # IG-271: Autopilot suspending event removed, replaced with logging
-                        logger.info(
-                            "Goal %s suspending: Budget exhausted (%d rounds) - %s",
-                            goal.id,
-                            max_sb,
-                            c_reasoning[:100],
-                        )
-                        async for chunk in self._save_checkpoint(
-                            parent_state, user_input=user_input, mode="autonomous"
-                        ):
-                            yield chunk
-                        return
-
-                elif c_decision == "suspend":
-                    await self._goal_engine.suspend_goal(
-                        goal.id,
-                        reason=f"Consensus suspension: {c_reasoning}",
-                    )
-                    async for chunk in self._save_checkpoint(
-                        parent_state, user_input=user_input, mode="autonomous"
-                    ):
-                        yield chunk
-                    return
-
-                else:
-                    # Accepted — mark as validated
-                    await self._goal_engine.validate_goal(goal.id)
-                    # IG-271: Autopilot validating event removed, replaced with logging
-                    logger.debug("Goal %s validating: consensus check passed", goal.id)
-
-            record = IterationRecord(
-                iteration=total_iterations,
-                goal_id=goal.id,
-                plan_summary=plan_summary[:500],
-                actions_summary=response_text[:500],
-                reflection_assessment=reflection.assessment[:200] if reflection else "",
-                outcome="continue" if should_continue else "goal_complete",
-            )
-            iteration_records.append(record)
-            await self._store_iteration_record(record, canonical_tid)
-
-            duration_ms = int((perf_counter() - iter_start) * 1000)
-            # IG-271: Replace iteration event with compact logging
-            logger.debug(
-                "Iteration %d completed | Goal: %s | Outcome: %s | Duration: %dms",
-                total_iterations,
-                goal.id,
-                record.outcome,
-                duration_ms,
-            )
-
-            if not should_continue:
-                goal_report = None
-                if iter_state.plan:
-                    from soothe.protocols.planner import (
-                        GoalReport,
-                    )
-                    from soothe.protocols.planner import (
-                        StepReport as StepReportModel,
-                    )
-
-                    sr_list = [
-                        StepReportModel(
-                            step_id=s.id,
-                            description=s.description,
-                            status=s.status if s.status in ("completed", "failed") else "skipped",
-                            result=s.result or "",
-                            depends_on=s.depends_on,
-                        )
-                        for s in iter_state.plan.steps
-                        if s.status in ("completed", "failed", "pending")
-                    ]
-                    n_completed = sum(1 for r in sr_list if r.status == "completed")
-                    n_failed = sum(1 for r in sr_list if r.status == "failed")
-
-                    child_reports: list[Any] = []
-                    if self._goal_engine:
-                        for dep_id in getattr(goal, "depends_on", []):
-                            dep_goal = self._goal_engine._goals.get(dep_id)
-                            if dep_goal and dep_goal.report:
-                                child_reports.append(dep_goal.report)
-
-                    summary = await self._synthesize_root_goal_report(
-                        goal,
-                        sr_list,
-                        child_reports,
-                        max_chars=self._config.logging.report_output.synthesis_max_chars,
-                    )
-
-                    refl_assessment = ""
-                    if reflection:
-                        refl_assessment = reflection.assessment
-
-                    goal_report = GoalReport(
-                        goal_id=goal.id,
-                        description=goal.description,
-                        step_reports=sr_list,
-                        summary=summary,
-                        status="completed" if n_failed == 0 else "failed",
-                        duration_ms=duration_ms,
-                        reflection_assessment=refl_assessment,
-                    )
-                    goal.report = goal_report
-
-                    logger.info(
-                        "Goal %s report: %d/%d steps completed | Summary: %s",
-                        goal.id,
-                        n_completed,
-                        len(sr_list),
-                        goal_report.summary[:50],
-                    )
-
-                # RFC-204: Process proposals queued by Layer 2 tools before completing
-                pq = getattr(self, "_proposal_queue", None)
-                if pq is not None:
-                    await self._process_proposals(goal.id, pq)
-
-                await self._goal_engine.complete_goal(goal.id)
-
-                # RFC-204: Detect relationships after goal completion
-                rel_events = await self._detect_relationships_for_goal(goal)
-                for ev in rel_events:
-                    yield _custom(ev)
-
-                parent_state.plan = iter_state.plan
-
-                async for chunk in self._save_checkpoint(
-                    parent_state, user_input=user_input, mode="autonomous"
-                ):
-                    yield chunk
-                logger.debug("Post-goal checkpoint saved for goal %s", goal.id)
-
-                logger.info("Goal %s completed", goal.id)
-
-                # RFC-204: Webhook notification for goal completion
-                await self._send_autopilot_webhook(
-                    "goal_completed",
-                    {
-                        "goal_id": goal.id,
-                        "description": goal.description[:200],
-                        "status": "completed",
-                        "summary": goal_report.summary[:200]
-                        if goal_report and goal_report.summary
-                        else "",
-                    },
-                )
-            elif self._planner and iter_state.plan and reflection:
-                try:
-                    revised = await self._planner.revise_plan(
-                        iter_state.plan, reflection.feedback, thread_id=thread_id
-                    )
-                    # Assign new plan ID for revision
-                    goal.plan_count += 1
-                    revised.id = f"P_{goal.plan_count}"
-
-                    self._current_plan = revised
-                    parent_state.plan = revised
-                    parent_state.observation_refresh_needed = True
-                except Exception:
-                    logger.debug("Plan revision failed", exc_info=True)
-
-            # IG-271: Replace iteration event with compact logging
-            duration_ms = int((perf_counter() - iter_start) * 1000)
-            outcome = (
-                "completed" if not reflection or not reflection.should_revise else "needs_revision"
-            )
-            logger.debug(
-                "Iteration %d completed | Goal: %s | Outcome: %s | Duration: %dms",
-                total_iterations,
-                goal.id,
-                outcome,
-                duration_ms,
-            )
-
-        except Exception as exc:
-            logger.exception("Error during autonomous goal %s", goal.id)
-            from soothe.utils.error_format import emit_error_event
-
-            yield _custom(emit_error_event(exc, context="autonomous iteration"))
-
-            updated = await self._goal_engine.fail_goal(goal.id, error=str(exc))
-            yield _custom(
-                GoalFailedEvent(
-                    goal_id=goal.id,
-                    error=str(exc),
-                    retry_count=updated.retry_count,
-                ).to_dict()
-            )
-
-            # RFC-204: Webhook notification for goal failure
-            await self._send_autopilot_webhook(
-                "goal_failed",
-                {
-                    "goal_id": goal.id,
-                    "description": goal.description[:200],
-                    "status": "failed",
-                    "error": str(exc)[:500],
-                },
-            )
-
-            # RFC-204: Process proposals even on failure (e.g., flag_blocker)
-            pq = getattr(self, "_proposal_queue", None)
-            if pq is not None:
-                await self._process_proposals(goal.id, pq)
-
-            if updated.status == "pending":
-                backoff = _BACKOFF_BASE_SECONDS * (2 ** (updated.retry_count - 1))
-                logger.info("Retrying goal %s after %.1fs backoff", goal.id, backoff)
-                await asyncio.sleep(backoff)
+        logger.error("%s goal_id=%s", _planner_required_msg, goal.id)
+        raise ConfigurationError(_planner_required_msg)
 
     async def _process_proposals(
         self,

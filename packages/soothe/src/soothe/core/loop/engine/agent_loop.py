@@ -137,6 +137,24 @@ class AgentLoop:
         Yields:
             Tuples of (event_type, event_data) for progress updates
         """
+        from soothe.skills.catalog import (
+            parse_slash_skill_user_line,
+            try_expand_slash_skill_user_line,
+        )
+
+        goal_user_submission: str | None = None
+        execution_goal = goal
+        skill_env = try_expand_slash_skill_user_line(goal, self.config)
+        if skill_env is not None:
+            goal_user_submission = goal
+            execution_goal = skill_env.prompt
+        elif parse_slash_skill_user_line(goal) is not None:
+            logger.warning(
+                "[AgentLoop] /skill: user line did not expand (missing skill on this host "
+                "or unreadable SKILL.md); planner will see the raw line: %s",
+                log_preview(goal, 120),
+            )
+
         # Initialize AgentLoop state manager (RFC-205, IG-246: loop_id parameter, IG-055: config)
         # IG-406: Pass shared_pool for high-concurrency support
         state_manager = AgentLoopStateManager(
@@ -194,7 +212,7 @@ class AgentLoop:
                     len(checkpoint.goal_history),
                 )
                 checkpoint = await state_manager.initialize(thread_id, max_iterations)
-                goal_record = state_manager.start_new_goal(goal, max_iterations)
+                goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
                 checkpoint.goal_history.append(goal_record)
                 checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
                 checkpoint.status = "running"
@@ -206,7 +224,7 @@ class AgentLoop:
             checkpoint.current_thread_id = thread_id
             if thread_id not in checkpoint.thread_ids:
                 checkpoint.thread_ids.append(thread_id)
-            goal_record = state_manager.start_new_goal(goal, max_iterations)
+            goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
             checkpoint.goal_history.append(goal_record)
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
             checkpoint.status = "running"
@@ -229,7 +247,7 @@ class AgentLoop:
                     state_manager.loop_id,
                 )
             checkpoint = await state_manager.initialize(thread_id, max_iterations)
-            goal_record = state_manager.start_new_goal(goal, max_iterations)
+            goal_record = state_manager.start_new_goal(execution_goal, max_iterations)
             checkpoint.goal_history.append(goal_record)
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
             checkpoint.status = "running"
@@ -244,7 +262,8 @@ class AgentLoop:
             await state_manager.save(checkpoint)
 
         state = LoopState(
-            goal=goal,
+            goal=execution_goal,
+            goal_user_submission=goal_user_submission,
             thread_id=thread_id,
             workspace=workspace,
             git_status=git_status,
@@ -277,7 +296,7 @@ class AgentLoop:
 
         logger.info(
             "[Goal] %s (max_iterations=%d, iteration=%d, continue_thread=%s)",
-            log_preview(goal, 80),
+            log_preview(execution_goal, 80),
             max_iterations,
             state.iteration,
             continue_thread_mode,
@@ -289,7 +308,7 @@ class AgentLoop:
         async def emit(event_type: str, event_data: Any) -> None:
             await queue.put((event_type, event_data))
 
-        plan_manager = PlanManager(goal=goal)
+        plan_manager = PlanManager(goal=execution_goal)
 
         ctx = LoopRuntimeContext(
             agent_loop=self,

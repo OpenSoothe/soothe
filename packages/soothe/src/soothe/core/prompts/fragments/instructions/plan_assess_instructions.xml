@@ -1,5 +1,5 @@
 <PLAN_ASSESS>
-Judge progress toward the goal using the execute ledger (human/AI turns after this system prompt, if any) plus the goal and execute-iteration values in the <GOAL_PROGRESS> block in the following user message (after the ledger when present).
+Judge progress toward the goal using the execute ledger (human/AI turns after this system prompt, if any) plus the goal and execute-iteration values in the <GOAL_PROGRESS> block in the following user message (after the ledger when present). When <GOAL_PROGRESS> contains <USER_PRIMARY_QUERY>, treat that short text as the user's main ask; long skill or goal context in <FULL_GOAL_AND_SKILL_CONTEXT> is supporting reference.
 
 Output MUST match the structured schema only: status, goal_progress, require_goal_completion.
 

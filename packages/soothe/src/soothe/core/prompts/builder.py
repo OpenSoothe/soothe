@@ -381,4 +381,5 @@ class PromptBuilder:
             max_iterations=state.max_iterations,
             dag_context=dag_context,
             step_id_hint=step_id_hint,
+            goal_user_submission=state.goal_user_submission,
         )

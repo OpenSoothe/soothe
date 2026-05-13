@@ -1,4 +1,4 @@
-"""Phase orchestration mixin for SootheRunner (pre/post-stream, LangGraph streaming).
+"""Phase orchestration mixin for SootheRunner (pre-stream helpers).
 
 Extracted from ``runner.py`` to keep the main module focused on orchestration.
 """
@@ -12,24 +12,19 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, HumanMessage
-from langgraph.types import Command, Interrupt
 from soothe_sdk.core.exceptions import ConfigurationError
 
 from soothe.core.events import (
-    LoopCompletedEvent,
     LoopCreatedEvent,
     LoopStartedEvent,
     PlanCreatedEvent,
-    PlanReflectedEvent,
-    PlanStepCompletedEvent,
     PlanStepStartedEvent,
 )
 from soothe.core.loop.utils.messages import loop_assistant_messages_chunk
-from soothe.protocols.planner import PlanContext, StepResult
+from soothe.protocols.planner import PlanContext
 from soothe.protocols.policy import ActionRequest, PolicyContext
-from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 
-from ._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom, _validate_goal
+from ._runner_shared import StreamChunk, _custom, _validate_goal
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -39,9 +34,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_STREAM_CHUNK_LEN = 3
-_MSG_PAIR_LEN = 2
-_MAX_HITL_ITERATIONS = 50
 # IG-157: wake periodically for cooperative cancellation without cancelling the stream read (IG-193)
 _STREAM_POLL_INTERVAL_S = 0.5
 
@@ -464,171 +456,13 @@ Provide a direct, factual answer. Do not use tools or search."""
         except Exception:
             logger.debug("Failed to save chitchat to checkpointer", exc_info=True)
 
-    async def _stream_phase(
-        self,
-        user_input: str,
-        state: Any,
-        *,
-        suppress_global_error_on_llm_timeout: bool = False,
-    ) -> AsyncGenerator[StreamChunk]:
-        """Run the LangGraph stream with HITL interrupt loop.
-
-        Args:
-            user_input: User message content for this invocation.
-            state: Runner state (``RunnerState``); ``stream_error`` is set on failure.
-            suppress_global_error_on_llm_timeout: When True (plan DAG ``_execute_step``),
-                a per-call LLM ``TimeoutError`` still sets ``stream_error`` and fails the
-                step via ``PlanStepFailedEvent``, but does **not** emit a top-level
-                ``soothe.error.general`` chunk so the overall query is not presented as failed.
-        """
-        await self._ensure_checkpointer_initialized()
-
-        enriched_messages = self._build_enriched_input(
-            user_input,
-        )
-
-        # Inject classification into agent state for middleware access (IG-296: use intent_classification)
-        stream_input: dict[str, Any] | Command = {"messages": enriched_messages}
-        if state.intent_classification:
-            # Middleware expects RoutingClassification format
-            stream_input["routing_classification"] = (
-                state.intent_classification.to_routing_classification()
-            )
-            stream_input["intent_type"] = state.intent_classification.intent_type
-            logger.debug(
-                "Injected LLM classification into agent state: task_complexity=%s",
-                state.intent_classification.task_complexity,
-            )
-
-        # Inject context for system prompt XML sections (RFC-104)
-        if hasattr(state, "workspace") and state.workspace:
-            stream_input["workspace"] = state.workspace
-        if hasattr(state, "git_status"):
-            stream_input["git_status"] = state.git_status
-        if hasattr(state, "thread_context"):
-            stream_input["thread_context"] = state.thread_context
-        if hasattr(state, "protocol_summary"):
-            stream_input["protocol_summary"] = state.protocol_summary
-
-        lg_tid = state.thread_id
-        if getattr(state, "langgraph_thread_id", None):
-            lg_tid = state.langgraph_thread_id
-        config = {"configurable": {"thread_id": lg_tid}}
-        if state.workspace:
-            config["configurable"]["workspace"] = state.workspace
-        if lg_tid:
-            try:
-                thread_info = await self._durability.get_thread(lg_tid)
-                if thread_info:
-                    config["configurable"]["claude_sessions"] = dict(
-                        thread_info.metadata.claude_sessions
-                    )
-            except Exception:
-                logger.debug("Claude session snapshot load failed", exc_info=True)
-            config["configurable"]["soothe_durability"] = self._durability
-
-        config = merge_langfuse_runnable_config(
-            config,
-            self._config,
-            session_id=lg_tid,
-        )
-
-        hitl_iterations = 0
-        while True:
-            interrupt_occurred = False
-            pending_interrupts: dict[str, Any] = {}
-
-            try:
-                # IG-157: Use timeout to periodically break out and check for cancellation
-                chunk_iter = self._agent.astream(
-                    stream_input,
-                    stream_mode=["messages", "updates", "custom"],
-                    subgraphs=True,
-                    config=config,
-                )
-
-                while True:
-                    # Check for cancellation before waiting for next chunk
-                    current_task = asyncio.current_task()
-                    if current_task and current_task.cancelling():
-                        logger.info("Runner stream detected cancellation request, stopping")
-                        break
-
-                    try:
-                        # IG-193: use _await_next_astream_chunk — not asyncio.wait_for — so slow
-                        # streams (gaps > poll interval between chunks) are not corrupted.
-                        chunk = await _await_next_astream_chunk(chunk_iter)
-                    except StopAsyncIteration:
-                        # Stream finished normally
-                        logger.debug("StopAsyncIteration received - agent stream finished")
-                        break
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception as stream_exc:
-                        # Graph node error (e.g. model API failure).
-                        # Re-raise so the outer handler can emit an error event.
-                        logger.exception("Agent stream exception: %s", stream_exc)
-                        raise
-
-                    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
-                        logger.debug("Skipping non-tuple chunk: type=%s", type(chunk).__name__)
-                        continue
-
-                    namespace, mode, data = chunk
-
-                    if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
-                        interrupts: list[Interrupt] = data["__interrupt__"]
-                        for interrupt_obj in interrupts:
-                            pending_interrupts[interrupt_obj.id] = interrupt_obj.value
-                            interrupt_occurred = True
-
-                    if mode == "messages" and not namespace:
-                        self._accumulate_response(data, state)
-
-                    yield chunk
-
-            except asyncio.CancelledError:
-                logger.info("Agent stream cancelled")
-                raise
-            except Exception as exc:
-                logger.exception("Error during agent stream")
-                if hasattr(state, "stream_error"):
-                    state.stream_error = str(exc)
-                from soothe.utils.error_format import emit_error_event
-
-                _suppress_global = suppress_global_error_on_llm_timeout and isinstance(
-                    exc,
-                    TimeoutError,
-                )
-                if not _suppress_global:
-                    yield _custom(emit_error_event(exc))
-
-            if not interrupt_occurred:
-                break
-
-            hitl_iterations += 1
-            if hitl_iterations > _MAX_HITL_ITERATIONS:
-                logger.warning("Exceeded HITL iteration limit (%d)", _MAX_HITL_ITERATIONS)
-                from soothe.utils.error_format import emit_error_event
-
-                yield _custom(emit_error_event(f"Exceeded {_MAX_HITL_ITERATIONS} HITL iterations"))
-                break
-
-            scope = (getattr(self, "_client_loop_id_for_stream", None) or "").strip()
-            resolver = self._interrupt_resolvers.get(scope) if scope else None
-            if resolver is not None:
-                resume_payload = await resolver(pending_interrupts)
-            else:
-                resume_payload = self._auto_approve(pending_interrupts)
-            stream_input = Command(resume=resume_payload)
-
     # -- pre-stream ---------------------------------------------------------
 
     def _ensure_runner_state_workspace(self, state: Any) -> None:
         """Set ``state.workspace`` to a resolved path when missing (IG-116).
 
-        Ensures ``_pre_stream_planning`` / ``PlanContext`` and ``_stream_phase``
-        always see an absolute directory, even if the caller omitted workspace.
+        Ensures ``_pre_stream_planning`` / ``PlanContext`` always see an absolute
+        directory, even if the caller omitted workspace.
         """
         from soothe.core.workspace import resolve_workspace_for_stream
 
@@ -854,108 +688,7 @@ Provide a direct, factual answer. Do not use tools or search."""
 
     # -- post-stream --------------------------------------------------------
 
-    async def _post_stream(
-        self,
-        user_input: str,
-        state: Any,
-    ) -> AsyncGenerator[StreamChunk]:
-        """Run protocol post-processing after the LangGraph stream."""
-        response_text = "".join(state.full_response)
-
-        if self._memory and response_text and len(response_text) > _MIN_MEMORY_STORAGE_LENGTH:
-            try:
-                from soothe.protocols.memory import MemoryItem
-
-                await self._memory.remember(
-                    MemoryItem(
-                        content=response_text[:500],
-                        tags=["agent_response"],
-                        source_thread=state.thread_id,
-                    )
-                )
-                logger.debug(
-                    "Memory stored: %d chars | Thread: %s",
-                    len(response_text[:500]),
-                    state.thread_id,
-                )
-            except Exception:
-                logger.debug("Memory storage failed", exc_info=True)
-
-        if self._planner and state.plan:
-            try:
-                if state.plan.steps and state.plan.steps[0].status == "pending" and response_text:
-                    first_step_success = bool(response_text.strip())
-                    state.plan.steps[0].status = "completed" if first_step_success else "failed"
-                    state.plan.steps[0].result = response_text[:200] if first_step_success else None
-                    yield _custom(
-                        PlanStepCompletedEvent(
-                            step_id=state.plan.steps[0].id,
-                            success=first_step_success,
-                            duration_ms=0,
-                        ).to_dict()
-                    )
-
-                step_results = [
-                    StepResult(
-                        step_id=s.id,
-                        success=s.status == "completed",
-                        outcome={
-                            "type": "generic",
-                            "size_bytes": len((s.result or "").encode("utf-8")),
-                        },  # RFC-211
-                        duration_ms=0,
-                        thread_id=state.thread_id,
-                    )
-                    for s in state.plan.steps
-                    if s.status in ("completed", "failed")
-                ]
-                if step_results:
-                    reflection = await self._planner.reflect(state.plan, step_results)
-                    yield _custom(
-                        PlanReflectedEvent(
-                            should_revise=reflection.should_revise,
-                            assessment=reflection.assessment[:200],
-                        ).to_dict()
-                    )
-            except Exception:
-                logger.debug("Plan reflection failed", exc_info=True)
-
-        try:
-            async for chunk in self._save_checkpoint(
-                state,
-                user_input=user_input,
-                mode="single_pass",
-                status="completed",
-            ):
-                yield chunk
-            if self._artifact_store:
-                self._artifact_store.update_status("completed")
-            logger.debug("Thread saved: %s", state.thread_id)
-        except Exception:
-            logger.debug("State persistence failed", exc_info=True)
-
-        yield _custom(
-            LoopCompletedEvent(loop_id=state.thread_id, thread_id=state.thread_id).to_dict()
-        )
-
     # -- internal helpers ---------------------------------------------------
-
-    def _build_enriched_input(
-        self,
-        user_input: str,
-    ) -> list[HumanMessage]:
-        """Build input message with user query only.
-
-        Context and memory injected into SystemMessage by
-        SystemPromptOptimizationMiddleware (RFC-208).
-
-        Args:
-            user_input: User's query text.
-
-        Returns:
-            Single HumanMessage with user query.
-        """
-        return [HumanMessage(content=user_input)]
 
     async def _collect_context_for_injection(self, state: Any) -> None:
         """Collect context for system prompt XML injection (RFC-104).
@@ -1010,51 +743,6 @@ Provide a direct, factual answer. Do not use tools or search."""
             "planner": {"type": type(self._planner).__name__} if self._planner else None,
             "policy": {"type": type(self._policy).__name__} if self._policy else None,
         }
-
-    def _accumulate_response(self, data: Any, state: Any) -> None:
-        """Extract AI text from a messages-mode chunk."""
-        from langchain_core.messages import AIMessage, AIMessageChunk
-
-        if not isinstance(data, tuple) or len(data) != _MSG_PAIR_LEN:
-            return
-        msg, metadata = data
-        if metadata and metadata.get("lc_source") == "summarization":
-            return
-        if not isinstance(msg, AIMessage):
-            return
-
-        msg_id = msg.id or ""
-        if not isinstance(msg, AIMessageChunk):
-            if msg_id in state.seen_message_ids:
-                return
-            state.seen_message_ids.add(msg_id)
-        elif msg_id:
-            state.seen_message_ids.add(msg_id)
-
-        if hasattr(msg, "content_blocks") and msg.content_blocks:
-            for block in msg.content_blocks:
-                if isinstance(block, dict) and block.get("type") == "text":
-                    text = block.get("text", "")
-                    if text:
-                        state.full_response.append(text)
-        elif isinstance(msg.content, str) and msg.content:
-            state.full_response.append(msg.content)
-
-    @staticmethod
-    def _auto_approve(pending_interrupts: dict[str, Any]) -> dict[str, Any]:
-        """Auto-approve all HITL interrupts."""
-        payload: dict[str, Any] = {}
-        for iid, value in pending_interrupts.items():
-            if isinstance(value, dict) and value.get("type") == "ask_user":
-                questions = value.get("questions", [])
-                payload[iid] = {"answers": ["" for _ in questions]}
-            else:
-                action_requests = []
-                if isinstance(value, dict):
-                    action_requests = value.get("action_requests", [])
-                decisions = [{"type": "approve"} for _ in (action_requests or [value])]
-                payload[iid] = {"decisions": decisions}
-        return payload
 
 
 # IG-273: ``generate_goal_completion_from_checkpoint`` (previously defined here)
