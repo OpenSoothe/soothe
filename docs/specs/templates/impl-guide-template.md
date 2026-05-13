@@ -99,8 +99,8 @@ describe('Component', () => {
 
 ## Related Documents
 
-- [RFC Index](../specs/rfc-index.md)
-- [RFC-XXXX](../specs/RFC-XXXX.md) - Related RFC
+- [RFC Index](./rfc-index.md)
+- [RFC-XXXX](./RFC-XXXX.md) - Related RFC
 
 ---
 
