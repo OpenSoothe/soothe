@@ -548,26 +548,19 @@ async def _pre_stream_independent(
         }
 ```
 
-Modify `_stream_phase()` to pass context in stream input:
+The execute phase builds the LangGraph input dict (messages plus optional
+`workspace`, `git_status`, `routing_classification`, etc.) before calling
+``CoreAgent.astream``:
 
 ```python
-async def _stream_phase(self, user_input: str, state: Any) -> AsyncGenerator[StreamChunk]:
-    """Stream with context injected into agent state."""
-    stream_input: dict[str, Any] = {"messages": enriched_messages}
-
-    # Existing classification injection
-    if state.unified_classification:
-        stream_input["unified_classification"] = state.unified_classification
-
-    # NEW: Context for system prompt injection
-    if hasattr(state, "workspace"):
-        stream_input["workspace"] = state.workspace
-    if hasattr(state, "git_status"):
-        stream_input["git_status"] = state.git_status
-    if hasattr(state, "thread_context"):
-        stream_input["thread_context"] = state.thread_context
-    if hasattr(state, "protocol_summary"):
-        stream_input["protocol_summary"] = state.protocol_summary
+async def _execute_graph_input(messages, *, workspace=None, git_status=None, ...):
+    """Build LangGraph input for execute waves (IG-349, IG-383)."""
+    stream_input: dict[str, Any] = {"messages": messages}
+    if workspace:
+        stream_input["workspace"] = workspace
+    if git_status is not None:
+        stream_input["git_status"] = git_status
+    # ... routing_classification, intent_type, synthesis_scenario ...
 
     # ... rest of implementation ...
 ```

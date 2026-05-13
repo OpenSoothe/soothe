@@ -369,7 +369,7 @@ class MessageRouter:
         """Resolve a skill on the daemon host, ack the client, then queue the composed turn."""
         d = self._daemon
         from soothe.skills.catalog import (
-            build_skill_invocation_envelope,
+            format_slash_skill_invoke_line,
             read_skill_markdown,
             resolve_skill_directory,
         )
@@ -431,7 +431,7 @@ class MessageRouter:
             )
             return
 
-        envelope = build_skill_invocation_envelope(meta, md, args)
+        plain_user_line = format_slash_skill_invoke_line(str(meta.get("name", "")), args)
         echo = {
             "skill_name": meta["name"],
             "description": meta.get("description", ""),
@@ -453,7 +453,7 @@ class MessageRouter:
             active_loop,
             {
                 "type": "input",
-                "text": envelope.prompt,
+                "text": plain_user_line,
                 "autonomous": False,
                 "max_iterations": None,
                 "preferred_subagent": None,

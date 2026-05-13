@@ -188,6 +188,8 @@ Every `LoopHumanMessage` sent to CoreAgent follows a standard XML envelope. **Go
 </RETRIEVED_KNOWLEDGE>
 ```
 
+**Slash-skill goals:** When the orchestration goal was expanded from a ``/skill:`` line, ``LoopState.goal_user_submission`` holds that original line. Execute-step and plan-context envelopes then repeat the short trailing user text inside ``<USER_PRIMARY_QUERY>`` before ``<FULL_GOAL_AND_SKILL_CONTEXT>`` (the long composed skill prompt). Plain goals without a slash-skill submission keep a single flat ``<CURRENT_GOAL>`` / ``Goal:`` line layout.
+
 `<RETRIEVED_KNOWLEDGE>` is optional and may be omitted when there is nothing to inject for that turn. When present, it follows `<DYNAMIC_CONTEXT>` (same overall human message).
 
 **Memory split semantics:**
@@ -273,7 +275,7 @@ Prior conversation is injected as native message turns in the message list (not 
 [N]  LoopHumanMessage      — plan-context user message (volatile)
 ```
 
-**Plan-context user message** (the final message, different per call):
+**Plan-context user message** (the final message, different per call). For slash-skill goals (when the original user line was ``/skill:…``), ``<GOAL_PROGRESS>`` may wrap ``<USER_PRIMARY_QUERY>``, ``Execute iteration``, and ``<FULL_GOAL_AND_SKILL_CONTEXT>`` instead of a single ``Goal:`` line — same semantics as execute-step.
 
 ```xml
 <GOAL_PROGRESS>

@@ -2,6 +2,9 @@
 
 Builds the XML envelope that wraps per-turn dynamic content:
 - <CURRENT_GOAL> then <USER_QUERY> up front (what to do this turn)
+- Slash-skill turns: ``goal_user_submission`` is a ``/skill:`` line; the trailing user
+  text is repeated in ``<USER_PRIMARY_QUERY>`` before long skill reference in
+  ``<FULL_GOAL_AND_SKILL_CONTEXT>`` so the model keeps focus on the short query.
 - ``--- Context ---`` then <DYNAMIC_CONTEXT>: execution hints, timestamp, language hint
 
 This envelope keeps volatile content out of the system prompt,
@@ -29,6 +32,35 @@ _RESPONSE_LANGUAGE_HINT = (
 
 _EXECUTE_STEP_CONTEXT_SEPARATOR = "\n\n--- Context ---\n\n"
 
+# Shown inside <USER_PRIMARY_QUERY> when /skill: expanded but the user gave no trailing text.
+_EMPTY_SKILL_USER_TEXT_PLACEHOLDER = (
+    "(No free-text instruction after the skill selector — follow the full goal and skill "
+    "reference below.)"
+)
+
+
+def _slash_skill_trailing_user_text(goal_user_submission: str | None) -> str | None:
+    """Return trailing args for a ``/skill:`` submission, or ``None`` if not a skill line.
+
+    When this is not ``None`` (including empty string for ``/skill:name`` with no args),
+    envelope builders split primary user text from long expanded skill content.
+
+    Args:
+        goal_user_submission: Original user line saved on ``LoopState`` when a skill expands.
+
+    Returns:
+        ``None`` if ``submission`` is missing or not a slash-skill line; otherwise the
+        text after the skill token (may be empty).
+    """
+    if not goal_user_submission or not str(goal_user_submission).strip():
+        return None
+    from soothe.skills.catalog import parse_slash_skill_user_line
+
+    parsed = parse_slash_skill_user_line(str(goal_user_submission).strip())
+    if parsed is None:
+        return None
+    return parsed[1]
+
 
 def _goal_text_for_execute_step_envelope(goal: str | None) -> str:
     """Normalize goal string for ``<CURRENT_GOAL>`` (strip trailing iteration suffix)."""
@@ -45,6 +77,7 @@ def build_execute_step_envelope(
     *,
     execution_hints: str | None = None,
     workspace_state: str | None = None,
+    goal_user_submission: str | None = None,
 ) -> str:
     """Build the user message envelope for an execute-step (RFC-214).
 
@@ -56,6 +89,9 @@ def build_execute_step_envelope(
         step_description: The step's description (what to execute).
         execution_hints: Optional hints text from ExecutionHintsMiddleware.
         workspace_state: Optional lightweight workspace diff summary.
+        goal_user_submission: When set to the original ``/skill:`` user line (after expansion),
+            repeats the short trailing user text in ``<USER_PRIMARY_QUERY>`` before the
+            full expanded goal so long SKILL.md bodies do not bury the real query.
 
     Returns:
         XML envelope string for the LoopHumanMessage content.
@@ -65,7 +101,21 @@ def build_execute_step_envelope(
     timestamp = now.isoformat()
 
     goal_text = _goal_text_for_execute_step_envelope(goal)
-    current_goal = f"<CURRENT_GOAL>\n{goal_text}\n</CURRENT_GOAL>"
+    skill_tail = _slash_skill_trailing_user_text(goal_user_submission)
+    if skill_tail is not None:
+        focus = skill_tail.strip() if skill_tail.strip() else _EMPTY_SKILL_USER_TEXT_PLACEHOLDER
+        current_goal = (
+            "<CURRENT_GOAL>\n"
+            "<USER_PRIMARY_QUERY>\n"
+            f"{focus}\n"
+            "</USER_PRIMARY_QUERY>\n"
+            "<FULL_GOAL_AND_SKILL_CONTEXT>\n"
+            f"{goal_text}\n"
+            "</FULL_GOAL_AND_SKILL_CONTEXT>\n"
+            "</CURRENT_GOAL>"
+        )
+    else:
+        current_goal = f"<CURRENT_GOAL>\n{goal_text}\n</CURRENT_GOAL>"
     user_query = f"<USER_QUERY>\n{step_description}\n</USER_QUERY>"
 
     # <DYNAMIC_CONTEXT>: hints + context only (goal and step instruction are above the fold)
@@ -95,6 +145,7 @@ def build_plan_context_envelope(
     max_iterations: int | None = None,
     dag_context: str | None = None,
     step_id_hint: str | None = None,
+    goal_user_submission: str | None = None,
 ) -> str:
     """Build the user message envelope for plan-assess/plan-generate (RFC-214).
 
@@ -109,6 +160,8 @@ def build_plan_context_envelope(
         max_iterations: Maximum iterations allowed.
         dag_context: Optional DAG planning context XML.
         step_id_hint: Optional next step ID hint text.
+        goal_user_submission: Original ``/skill:`` line when applicable; used to surface
+            the short user query before long expanded skill content.
 
     Returns:
         XML envelope string for the plan-context LoopHumanMessage.
@@ -119,9 +172,23 @@ def build_plan_context_envelope(
 
     # Build <GOAL_PROGRESS>
     iter_display = f"{iteration}/{max_iterations}" if iteration and max_iterations else "?/?"
-    goal_progress = (
-        f"<GOAL_PROGRESS>\nGoal: {goal}\nExecute iteration: {iter_display}\n</GOAL_PROGRESS>"
-    )
+    goal_display = _goal_text_for_execute_step_envelope(goal)
+    skill_tail = _slash_skill_trailing_user_text(goal_user_submission)
+    if skill_tail is not None:
+        focus = skill_tail.strip() if skill_tail.strip() else _EMPTY_SKILL_USER_TEXT_PLACEHOLDER
+        goal_progress = (
+            "<GOAL_PROGRESS>\n"
+            "<USER_PRIMARY_QUERY>\n"
+            f"{focus}\n"
+            "</USER_PRIMARY_QUERY>\n"
+            f"Execute iteration: {iter_display}\n"
+            "<FULL_GOAL_AND_SKILL_CONTEXT>\n"
+            f"{goal_display}\n"
+            "</FULL_GOAL_AND_SKILL_CONTEXT>\n"
+            "</GOAL_PROGRESS>"
+        )
+    else:
+        goal_progress = f"<GOAL_PROGRESS>\nGoal: {goal_display}\nExecute iteration: {iter_display}\n</GOAL_PROGRESS>"
 
     # Optional hints
     extra_parts: list[str] = []

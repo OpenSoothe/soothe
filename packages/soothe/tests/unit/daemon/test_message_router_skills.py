@@ -100,4 +100,4 @@ async def test_invoke_skill_response_then_queued_input(tmp_path: Any) -> None:
 
     queued = await asyncio.wait_for(q.get(), timeout=2.0)
     assert queued["type"] == "input"
-    assert "invoke_rpc" in queued["text"]
+    assert queued["text"] == "/skill:invoke_rpc go"

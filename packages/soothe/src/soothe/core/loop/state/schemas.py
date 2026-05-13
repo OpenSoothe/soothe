@@ -666,7 +666,9 @@ class LoopState(BaseModel):
     """State for agentic loop (RFC-201, RFC-214).
 
     Attributes:
-        goal: Goal description
+        goal: Goal description (after any ``/skill:`` expansion for orchestration).
+        goal_user_submission: Original user line when ``goal`` was expanded from ``/skill:``;
+            used for Langfuse trace input so dashboards stay aligned with submitted text.
         thread_id: Thread context
         workspace: Thread-specific workspace path (RFC-103)
         git_status: Optional git snapshot for planner prompts (branch, main_branch, recent_commits; IG-383)
@@ -691,6 +693,10 @@ class LoopState(BaseModel):
     """
 
     goal: str
+    goal_user_submission: str | None = Field(
+        default=None,
+        description="User-submitted line before /skill: expansion (Langfuse / UX).",
+    )
     thread_id: str
     workspace: str | None = None  # Thread-specific workspace (RFC-103)
     git_status: dict[str, Any] | None = None
