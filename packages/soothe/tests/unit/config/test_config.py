@@ -1,5 +1,7 @@
 """Tests for SootheConfig."""
 
+from pathlib import Path
+
 import pytest
 
 from soothe.config import (
@@ -41,6 +43,19 @@ class TestSootheConfig:
         assert cfg.router.default == "openai:gpt-4o-mini"
         assert cfg.embedding_dims == 1536
         assert cfg.autonomous.enabled_by_default is False
+
+    def test_yaml_with_daemon_top_level_block_loads(self, tmp_path: Path) -> None:
+        """Daemon-only keys may appear in legacy agent YAML; they must not break parsing."""
+        p = tmp_path / "cfg.yml"
+        p.write_text(
+            "assistant_name: TestDaemonStrip\n"
+            "daemon:\n"
+            "  event_size_stats_enabled: true\n"
+            "  event_size_stats_interval_seconds: 90\n",
+            encoding="utf-8",
+        )
+        cfg = SootheConfig.from_yaml_file(str(p))
+        assert cfg.assistant_name == "TestDaemonStrip"
 
     def test_default_subagents(self) -> None:
         cfg = SootheConfig()

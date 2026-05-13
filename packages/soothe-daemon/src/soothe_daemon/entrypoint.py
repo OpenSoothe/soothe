@@ -13,6 +13,7 @@ import asyncio  # noqa: E402
 import contextlib  # noqa: E402
 
 from soothe.config import SootheConfig  # noqa: E402
+
 from soothe_daemon.config import SootheDaemonConfig  # noqa: E402
 from soothe_daemon.server import SootheDaemon  # noqa: E402
 
@@ -57,6 +58,8 @@ def main() -> None:
     """CLI entry point for the daemon module."""
     from soothe.logging import setup_logging
 
+    from soothe_daemon.logging import setup_daemon_logging
+
     parser = argparse.ArgumentParser(description="Soothe daemon")
     parser.add_argument(
         "--config",
@@ -89,7 +92,9 @@ def main() -> None:
     else:
         cfg = daemon_cfg.load_soothe_config()
 
+    # Soothe library logs to soothe.log; daemon logs to daemon.log
     setup_logging(cfg, foreground=args.foreground)
+    setup_daemon_logging(foreground=args.foreground)
 
     # Migrate runtime data files from root to data/ subdirectory
     from soothe_sdk.client.config import migrate_data_to_subdir

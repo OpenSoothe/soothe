@@ -12,9 +12,8 @@ import logging
 from typing import Any
 
 import websockets.exceptions
-from soothe_sdk.client.protocol import decode, encode
-
 from soothe.core.events import ERROR
+from soothe_sdk.client.protocol import decode, encode
 
 # Import RPC command handlers (RFC-404)
 from soothe_daemon._rpc_handlers import (

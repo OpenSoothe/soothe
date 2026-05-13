@@ -1,77 +1,37 @@
-# Soothe Daemon Server
+# Soothe
 
-Agent runtime server with WebSocket/HTTP transport.
+Goal-driven multi-agent orchestration framework (in-process agent core).
 
 ## Installation
 
+For the full agent runtime with daemon server and CLI:
+
 ```bash
-pip install soothed
+pip install soothe soothe-daemon soothe-cli
 ```
 
-## Usage
-
-The `soothed` command manages the server:
+For library use only (no daemon/CLI):
 
 ```bash
-# Start daemon (foreground)
-soothed start --foreground
-
-# Start daemon (background)
-soothed start
-
-# Check status
-soothed status
-
-# Stop daemon
-soothed stop
-
-# Health checks
-soothed doctor
+pip install soothe
 ```
 
 ## Architecture
 
-This package is the **server** component that runs the agent runtime:
-
-- **WebSocket transport** - primary bidirectional streaming
-- **HTTP REST transport** - optional REST API
-- **Full agent runtime** - langchain, langgraph, tools, subagents
-- **Thread persistence** - RocksDB, SQLite, PostgreSQL support
-
-## Dependencies
-
-- `soothe-sdk>=0.2.0` - Shared types, protocol
-- `deepagents>=0.4.10` - Agent orchestration
-- `langchain>=1.2.11` - LLM framework
-- `langgraph>=1.1.1` - Graph-based workflows
-
-## Configuration
-
-Daemon uses `config.yml` (same as original Soothe):
-
-```yaml
-daemon:
-  transports:
-    websocket:
-      host: "localhost"
-      port: 8765
-
-providers:
-  openai:
-    api_key: "${OPENAI_API_KEY}"
-    
-tools: [...]
-subagents: [...]
-```
+This package provides the **in-process agent core**:
+- `SootheRunner` - Agent orchestration
+- `SootheConfig` - Configuration
+- Protocols, backends, tools, subagents
 
 ## Related Packages
 
-- **soothe-cli**: Client package (CLI/TUI)
-- **soothe-sdk**: Shared SDK (types, client utilities)
+| Package | Purpose |
+|---------|---------|
+| `soothe-daemon` | Long-running server with WebSocket/HTTP transports |
+| `soothe-cli` | CLI client with TUI |
+| `soothe-sdk` | Shared types and WebSocket client |
 
 ## Testing
-
-Run daemon package unit tests from this package directory:
 
 ```bash
 uv run pytest tests/unit/ -v

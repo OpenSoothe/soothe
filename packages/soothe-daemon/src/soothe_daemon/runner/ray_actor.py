@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import ray
 from ray.util.queue import Queue
-
 from soothe.protocols.runner import LoopRunRequest
 
 

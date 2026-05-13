@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from typer.testing import CliRunner
 
 from soothe_daemon.cli.daemon_main import app
+from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus, HealthReport
 
 runner = CliRunner()
@@ -29,7 +30,9 @@ def test_status_reports_running_with_pid(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
         "soothe_daemon.cli.daemon_main.SootheDaemon.is_running", staticmethod(lambda: True)
     )
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.SootheDaemon.find_pid", staticmethod(lambda: 12345))
+    monkeypatch.setattr(
+        "soothe_daemon.cli.daemon_main.SootheDaemon.find_pid", staticmethod(lambda: 12345)
+    )
 
     result = runner.invoke(app, ["status"])
 
@@ -39,11 +42,21 @@ def test_status_reports_running_with_pid(monkeypatch, tmp_path: Path) -> None:
     assert "soothe.sock" in result.stdout
 
 
-def test_start_fails_if_already_running(monkeypatch) -> None:
+def test_start_fails_if_already_running(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("soothe_daemon.cli.daemon_main.SOOTHE_HOME", str(tmp_path))
     monkeypatch.setattr(
         "soothe_daemon.cli.daemon_main.SootheDaemon.is_running", staticmethod(lambda: True)
     )
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.SootheDaemon.find_pid", staticmethod(lambda: 99))
+    monkeypatch.setattr(
+        "soothe_daemon.cli.daemon_main.SootheDaemon.find_pid", staticmethod(lambda: 99)
+    )
+    # Mock daemon config to not load any file
+    daemon_cfg = SootheDaemonConfig()
+    daemon_cfg.soothe_config_path = tmp_path / "config.yml"
+    monkeypatch.setattr(
+        "soothe_daemon.cli.daemon_main._load_daemon_config",
+        lambda _path: daemon_cfg,
+    )
 
     result = runner.invoke(app, ["start"])
 
@@ -60,9 +73,19 @@ def test_start_background_success(monkeypatch, tmp_path: Path) -> None:
         state["calls"] += 1
         return state["calls"] >= 2
 
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.SootheDaemon.is_running", staticmethod(_is_running))
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.SootheDaemon.find_pid", staticmethod(lambda: 4242))
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main._load_config", lambda _path: None)
+    monkeypatch.setattr(
+        "soothe_daemon.cli.daemon_main.SootheDaemon.is_running", staticmethod(_is_running)
+    )
+    monkeypatch.setattr(
+        "soothe_daemon.cli.daemon_main.SootheDaemon.find_pid", staticmethod(lambda: 4242)
+    )
+    # Mock daemon config to not load any file
+    daemon_cfg = SootheDaemonConfig()
+    daemon_cfg.soothe_config_path = tmp_path / "config.yml"
+    monkeypatch.setattr(
+        "soothe_daemon.cli.daemon_main._load_daemon_config",
+        lambda _path: daemon_cfg,
+    )
     monkeypatch.setattr("soothe_daemon.cli.daemon_main.time.sleep", lambda _v: None)
 
     popen_called = {"value": False}
@@ -83,7 +106,9 @@ def test_start_background_success(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_stop_reports_not_running(monkeypatch) -> None:
-    monkeypatch.setattr("soothe_daemon.cli.daemon_main.SootheDaemon.find_pid", staticmethod(lambda: None))
+    monkeypatch.setattr(
+        "soothe_daemon.cli.daemon_main.SootheDaemon.find_pid", staticmethod(lambda: None)
+    )
     monkeypatch.setattr(
         "soothe_daemon.cli.daemon_main.SootheDaemon.stop_running", staticmethod(lambda: False)
     )
@@ -128,7 +153,7 @@ def test_doctor_json_format_with_filters(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     class _FakeChecker:
-        def __init__(self, _cfg: object) -> None:
+        def __init__(self, _cfg: object, daemon_config: object = None) -> None:
             pass
 
         async def run_all_checks(  # type: ignore[no-untyped-def]
@@ -140,6 +165,11 @@ def test_doctor_json_format_with_filters(monkeypatch) -> None:
 
     monkeypatch.setattr("soothe_daemon.cli.daemon_main.HealthChecker", _FakeChecker)
     monkeypatch.setattr("soothe_daemon.cli.daemon_main.format_json", lambda _report: '{"ok": true}')
+    # Mock config loading
+    monkeypatch.setattr(
+        "soothe_daemon.cli.daemon_main._load_daemon_config",
+        lambda _path: SootheDaemonConfig(),
+    )
 
     result = runner.invoke(
         app,
@@ -163,7 +193,7 @@ def test_doctor_fail_on_warning(monkeypatch) -> None:
     report = _make_health_report(CheckStatus.WARNING)
 
     class _FakeChecker:
-        def __init__(self, _cfg: object) -> None:
+        def __init__(self, _cfg: object, daemon_config: object = None) -> None:
             pass
 
         async def run_all_checks(  # type: ignore[no-untyped-def]
@@ -174,6 +204,10 @@ def test_doctor_fail_on_warning(monkeypatch) -> None:
     monkeypatch.setattr("soothe_daemon.cli.daemon_main.HealthChecker", _FakeChecker)
     monkeypatch.setattr(
         "soothe_daemon.cli.daemon_main.format_text", lambda _r, use_color=True: "warn report"
+    )
+    monkeypatch.setattr(
+        "soothe_daemon.cli.daemon_main._load_daemon_config",
+        lambda _path: SootheDaemonConfig(),
     )
 
     result = runner.invoke(app, ["doctor", "--fail-on", "warning"])
@@ -186,7 +220,7 @@ def test_doctor_output_to_file(monkeypatch, tmp_path: Path) -> None:
     report = _make_health_report(CheckStatus.OK)
 
     class _FakeChecker:
-        def __init__(self, _cfg: object) -> None:
+        def __init__(self, _cfg: object, daemon_config: object = None) -> None:
             pass
 
         async def run_all_checks(  # type: ignore[no-untyped-def]
@@ -196,6 +230,10 @@ def test_doctor_output_to_file(monkeypatch, tmp_path: Path) -> None:
 
     monkeypatch.setattr("soothe_daemon.cli.daemon_main.HealthChecker", _FakeChecker)
     monkeypatch.setattr("soothe_daemon.cli.daemon_main.format_markdown", lambda _r: "# report")
+    monkeypatch.setattr(
+        "soothe_daemon.cli.daemon_main._load_daemon_config",
+        lambda _path: SootheDaemonConfig(),
+    )
     output_file = tmp_path / "doctor.md"
 
     result = runner.invoke(app, ["doctor", "--format", "markdown", "--output", str(output_file)])

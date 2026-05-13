@@ -7889,7 +7889,6 @@ dependencies = [
     { name = "langgraph-checkpoint-sqlite" },
     { name = "openai" },
     { name = "pexpect" },
-    { name = "psutil" },
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -7910,7 +7909,6 @@ all = [
     { name = "dashscope" },
     { name = "docx2txt" },
     { name = "langchain-tavily" },
-    { name = "langfuse" },
     { name = "opencv-python" },
     { name = "openpyxl" },
     { name = "pandas" },
@@ -7920,7 +7918,6 @@ all = [
     { name = "pymupdf" },
     { name = "pypdf" },
     { name = "sentence-transformers" },
-    { name = "soothe-cli" },
     { name = "tavily-python" },
     { name = "wikipedia" },
     { name = "wizsearch" },
@@ -7930,13 +7927,11 @@ claude = [
     { name = "anthropic" },
     { name = "claude-agent-sdk" },
 ]
-cli = [
-    { name = "soothe-cli" },
-]
 dashscope = [
     { name = "dashscope" },
 ]
 dev = [
+    { name = "langfuse" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -7950,9 +7945,6 @@ document = [
 ]
 github = [
     { name = "pygithub" },
-]
-langfuse = [
-    { name = "langfuse" },
 ]
 media = [
     { name = "pillow" },
@@ -8011,8 +8003,7 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=0.3.0,<1.0.0" },
     { name = "langchain-tavily", marker = "extra == 'all'", specifier = ">=0.2.17" },
     { name = "langchain-tavily", marker = "extra == 'research'", specifier = ">=0.2.17" },
-    { name = "langfuse", marker = "extra == 'all'", specifier = ">=3.0.0,<4.0.0" },
-    { name = "langfuse", marker = "extra == 'langfuse'", specifier = ">=3.0.0,<4.0.0" },
+    { name = "langfuse", marker = "extra == 'dev'", specifier = ">=3.0.0,<4.0.0" },
     { name = "langgraph", specifier = ">=1.1.1,<2.0.0" },
     { name = "langgraph-checkpoint", specifier = ">=4.0.0,<5.0.0" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=2.0.0" },
@@ -8029,7 +8020,6 @@ requires-dist = [
     { name = "pillow", marker = "extra == 'all'", specifier = ">=10.0.0" },
     { name = "pillow", marker = "extra == 'media'", specifier = ">=10.0.0" },
     { name = "pillow", marker = "extra == 'video'", specifier = ">=10.0.0" },
-    { name = "psutil", specifier = ">=5.9.0" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2.0" },
     { name = "pydantic", specifier = ">=2.0.0,<3.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0,<3.0.0" },
@@ -8050,8 +8040,6 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
     { name = "sentence-transformers", marker = "extra == 'all'", specifier = ">=2.2.0" },
     { name = "sentence-transformers", marker = "extra == 'semantic'", specifier = ">=2.2.0" },
-    { name = "soothe-cli", marker = "extra == 'all'", editable = "packages/soothe-cli" },
-    { name = "soothe-cli", marker = "extra == 'cli'", editable = "packages/soothe-cli" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "sqlite-vec", specifier = ">=0.1.0" },
     { name = "tavily-python", marker = "extra == 'all'", specifier = ">=0.5.0" },
@@ -8063,7 +8051,7 @@ requires-dist = [
     { name = "yt-dlp", marker = "extra == 'all'", specifier = ">=2023.0.0" },
     { name = "yt-dlp", marker = "extra == 'media'", specifier = ">=2023.0.0" },
 ]
-provides-extras = ["all", "claude", "cli", "dashscope", "dev", "document", "github", "langfuse", "media", "research", "semantic", "tabular", "video", "websearch"]
+provides-extras = ["all", "claude", "dashscope", "dev", "document", "github", "media", "research", "semantic", "tabular", "video", "websearch"]
 
 [[package]]
 name = "soothe-cli"
@@ -8129,6 +8117,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "soothe-cli" },
 ]
 
 [package.metadata]
@@ -8146,6 +8135,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32.3" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
     { name = "soothe", editable = "packages/soothe" },
+    { name = "soothe-cli", marker = "extra == 'dev'", editable = "packages/soothe-cli" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "typer", specifier = ">=0.9.0,<1.0.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
@@ -8191,6 +8181,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "soothe" },
     { name = "soothe-cli" },
+    { name = "soothe-daemon" },
     { name = "soothe-sdk" },
 ]
 
@@ -8205,6 +8196,7 @@ dev = [
 requires-dist = [
     { name = "soothe", editable = "packages/soothe" },
     { name = "soothe-cli", editable = "packages/soothe-cli" },
+    { name = "soothe-daemon", editable = "packages/soothe-daemon" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
 ]
 

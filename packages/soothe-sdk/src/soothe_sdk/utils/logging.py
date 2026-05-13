@@ -258,7 +258,7 @@ def setup_logging(
         log_file: Optional log file path (e.g., Path("~/.soothe/logs/cli.log")).
         format_string: Optional custom format string.
     """
-    # Default format matches soothed.log: timestamp level [Client:xxxxxxxx] name:lineno message
+    # Default format matches soothe.log: timestamp level [Client:xxxxxxxx] name:lineno message
     if not format_string:
         format_string = "%(asctime)s %(level_short)s %(client_id)s %(name)s:%(lineno)d %(message)s"
 

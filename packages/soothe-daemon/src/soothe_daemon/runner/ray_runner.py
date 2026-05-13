@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 
 import ray
 from ray.util.queue import Queue
-
 from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
 
 if TYPE_CHECKING:

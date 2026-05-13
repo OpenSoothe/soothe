@@ -9,10 +9,10 @@ from typing import Any
 
 import httpx
 import pytest
-
 from soothe.config import SootheConfig
-from soothe_daemon.config.models import HttpRestConfig
+
 from soothe_daemon import SootheDaemon
+from soothe_daemon.config.models import HttpRestConfig
 from soothe_daemon.transports.http_rest import HttpRestTransport
 from tests.integration.conftest import (
     alloc_ephemeral_port,

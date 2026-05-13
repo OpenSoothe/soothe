@@ -1,4 +1,4 @@
-"""Skills catalog: discovery, resolution, and invocation for the Soothe daemon."""
+"""Skills catalog: discovery, resolution, and invocation for Soothe."""
 
 from __future__ import annotations
 

@@ -6,6 +6,7 @@ from importlib.metadata import version as get_version
 from typing import Any
 
 from soothe.config import SootheConfig
+
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.health.formatters import aggregate_status
 from soothe_daemon.health.models import CategoryResult, CheckStatus, HealthReport

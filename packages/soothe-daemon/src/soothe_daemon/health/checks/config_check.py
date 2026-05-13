@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from soothe.config import SOOTHE_HOME, SootheConfig
+
 from soothe_daemon.health.formatters import aggregate_status
 from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus
 

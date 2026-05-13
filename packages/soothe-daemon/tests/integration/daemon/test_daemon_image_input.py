@@ -10,9 +10,10 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
-from soothe_sdk.client import WebSocketClient
-
 from soothe.config import SootheConfig
+from soothe_sdk.client import WebSocketClient
+from tests.integration.ws_loop_client import loop_new, subscribe_loop_stream
+
 from soothe_daemon import SootheDaemon
 from tests.integration.conftest import (
     alloc_ephemeral_port,
@@ -20,7 +21,6 @@ from tests.integration.conftest import (
     await_status_state,
     get_base_config,
 )
-from tests.integration.ws_loop_client import loop_new, subscribe_loop_stream
 
 TINY_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 

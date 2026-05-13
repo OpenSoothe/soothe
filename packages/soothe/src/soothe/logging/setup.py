@@ -52,13 +52,13 @@ class ThreadFormatter(ShortLevelFormatter):
 def setup_logging(config: SootheConfig | None = None, *, foreground: bool = False) -> None:
     """Configure the ``soothe`` logger hierarchy with file and optional console handlers.
 
-    Writes to ``SOOTHE_HOME/logs/soothed.log`` (rotating, 5 MB max, 3 backups).
+    Writes to ``SOOTHE_HOME/logs/soothe.log`` (rotating, 5 MB max, 3 backups).
     Optionally outputs to console when enabled in config.
 
     Args:
         config: Optional config to read logging configuration from.
         foreground: When ``True``, forces console logging to stdout at INFO level
-            regardless of config settings. Useful for ``--foreground`` daemon mode.
+            regardless of config settings. Useful for foreground process mode.
     """
     from soothe.config import SootheConfig as _SootheConfig
 
@@ -81,7 +81,7 @@ def setup_logging(config: SootheConfig | None = None, *, foreground: bool = Fals
     root_logger = logging.getLogger("soothe")
     root_logger.setLevel(min(file_level, console_level))
 
-    log_file = cfg.logging.file.path or str(log_dir / "soothed.log")
+    log_file = cfg.logging.file.path or str(log_dir / "soothe.log")
     if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
         file_handler = RotatingFileHandler(
             log_file,

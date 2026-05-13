@@ -14,10 +14,10 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from soothe.utils.text_preview import preview_first
 
 from soothe_daemon.config.models import HttpRestConfig
 from soothe_daemon.transports.base import TransportServer
-from soothe.utils.text_preview import preview_first
 
 
 def _get_client_id(request: Request) -> str:

@@ -10,11 +10,11 @@ import pytest
 import pytest_asyncio
 import websockets.asyncio.client
 import websockets.exceptions
+from soothe.config import SootheConfig
 from soothe_sdk.client import WebSocketClient
 
-from soothe.config import SootheConfig
-from soothe_daemon.config.models import WebSocketConfig
 from soothe_daemon import SootheDaemon
+from soothe_daemon.config.models import WebSocketConfig
 from soothe_daemon.transports.websocket import WebSocketTransport
 from tests.integration.conftest import (
     alloc_ephemeral_port,

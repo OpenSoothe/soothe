@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "soothe"
 dynamic = ["version"]
-description = "Soothe - Protocol-driven multi-agent orchestration framework (in-process agent core)"
+description = "Soothe - Goal-driven multi-agent orchestration framework"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11,<4.0"
@@ -43,7 +43,6 @@ dependencies = [
     "langgraph-checkpoint-sqlite>=3.0.0,<4.0.0",
     "sqlite-vec>=0.1.0",
     "pexpect>=4.9.0",
-    "psutil>=5.9.0",
     "pydantic-settings>=2.0.0,<3.0.0",
     "pydantic>=2.0.0,<3.0.0",
     "python-dotenv>=1.0.0,<2.0.0",
@@ -96,27 +95,21 @@ semantic = [
 dashscope = [
     "dashscope>=1.20.0",
 ]
-cli = [
-    "soothe-cli>=0.5.0",
-]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=1.3.0",
     "pytest-cov",
     "ruff>=0.12.0",
     "mypy>=1.0.0",
-]
-langfuse = [
     "langfuse>=3.0.0,<4.0.0",
 ]
 all = [
-    "soothe[research,websearch,tabular,document,media,video,claude,github,dashscope,cli,langfuse,semantic]",
+    "soothe[research,websearch,tabular,document,media,video,claude,github,dashscope,semantic]",
 ]
 
 [project.urls]
-Homepage = "https://github.com/OpenSoothe/soothe"
-Documentation = "https://soothe.readthedocs.io"
-Repository = "https://github.com/OpenSoothe/soothe"
+Homepage = "https://github.com/mirasoth/soothe"
+Repository = "https://github.com/mirasoth/soothe"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/soothe"]

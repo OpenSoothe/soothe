@@ -12,8 +12,15 @@ import contextlib
 from pathlib import Path
 
 import pytest
-
 from soothe.config import SootheConfig
+from tests.integration.ws_loop_client import (
+    loop_new_with_initial_input,
+    request_loop_delete,
+    request_loop_get,
+    request_loop_list,
+    subscribe_loop_stream,
+)
+
 from soothe_daemon import SootheDaemon, WebSocketClient
 from tests.integration.conftest import (
     alloc_ephemeral_port,
@@ -21,13 +28,6 @@ from tests.integration.conftest import (
     await_status_state,
     build_daemon_config,
     force_isolated_home,
-)
-from tests.integration.ws_loop_client import (
-    loop_new_with_initial_input,
-    request_loop_delete,
-    request_loop_get,
-    request_loop_list,
-    subscribe_loop_stream,
 )
 
 

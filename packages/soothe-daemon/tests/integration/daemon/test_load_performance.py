@@ -201,13 +201,16 @@ async def test_input_queue_bounded_under_burst_load():
     Scenario: 100 clients send 10 inputs/sec each (1000 inputs/sec burst)
     """
     from soothe.config import SootheConfig
+
+    from soothe_daemon.config import SootheDaemonConfig
     from soothe_daemon.server import SootheDaemon
 
-    config = SootheConfig()
-    config.daemon.max_input_queue_size = 1000  # Phase 1 limit
-    config.daemon.max_concurrent_dispatches = 50
+    agent_config = SootheConfig()
+    daemon_config = SootheDaemonConfig()
+    daemon_config.max_input_queue_size = 1000  # Phase 1 limit
+    daemon_config.max_concurrent_dispatches = 50
 
-    server = SootheDaemon(config)
+    server = SootheDaemon(agent_config, daemon_config)
     server._running = True  # Enable dispatcher workers
     metrics = LoadTestMetrics()
 
@@ -358,12 +361,15 @@ async def test_task_pool_semaphore_limit():
     Scenario: Burst 100 messages, verify semaphore blocks at 50
     """
     from soothe.config import SootheConfig
+
+    from soothe_daemon.config import SootheDaemonConfig
     from soothe_daemon.server import SootheDaemon
 
-    config = SootheConfig()
-    config.daemon.max_concurrent_dispatches = 50  # Phase 1 limit
+    agent_config = SootheConfig()
+    daemon_config = SootheDaemonConfig()
+    daemon_config.max_concurrent_dispatches = 50  # Phase 1 limit
 
-    server = SootheDaemon(config)
+    server = SootheDaemon(agent_config, daemon_config)
     metrics = LoadTestMetrics()
 
     # Track active dispatch tasks
@@ -432,6 +438,7 @@ async def test_event_priority_overflow_strategy():
     queue is full so overflow/drop behavior can still be exercised.
     """
     from soothe.core.events import EventPriority
+
     from soothe_daemon.event_bus import EventBus
 
     bus = EventBus()
@@ -532,8 +539,8 @@ async def test_sender_loop_batching():
 
     Scenario: Send 100 rapid events; all are delivered without loss.
     """
-    from soothe_daemon.config.models import WebSocketConfig
     from soothe_daemon.client_session import ClientSessionManager
+    from soothe_daemon.config.models import WebSocketConfig
     from soothe_daemon.event_bus import EventBus
     from soothe_daemon.transports.websocket import WebSocketTransport
 
@@ -616,12 +623,15 @@ async def test_queue_depth_monitoring_warnings():
     """
 
     from soothe.config import SootheConfig
+
+    from soothe_daemon.config import SootheDaemonConfig
     from soothe_daemon.server import SootheDaemon
 
-    config = SootheConfig()
-    config.daemon.max_input_queue_size = 1000
+    agent_config = SootheConfig()
+    daemon_config = SootheDaemonConfig()
+    daemon_config.max_input_queue_size = 1000
 
-    server = SootheDaemon(config)
+    server = SootheDaemon(agent_config, daemon_config)
     server._running = True  # Enable dispatcher workers
 
     # Create a test loop queue via dispatcher
@@ -674,14 +684,17 @@ async def test_phase1_full_integration():
     """
     from soothe.config import SootheConfig
     from soothe.core.events import EventPriority
+
+    from soothe_daemon.config import SootheDaemonConfig
     from soothe_daemon.event_bus import EventBus
     from soothe_daemon.server import SootheDaemon
 
-    config = SootheConfig()
-    config.daemon.max_input_queue_size = 1000
-    config.daemon.max_concurrent_dispatches = 50
+    agent_config = SootheConfig()
+    daemon_config = SootheDaemonConfig()
+    daemon_config.max_input_queue_size = 1000
+    daemon_config.max_concurrent_dispatches = 50
 
-    server = SootheDaemon(config)
+    server = SootheDaemon(agent_config, daemon_config)
     server._running = True  # Enable dispatcher workers
     bus = EventBus()
     metrics = LoadTestMetrics()

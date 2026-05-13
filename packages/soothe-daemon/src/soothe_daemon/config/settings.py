@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
-
 from soothe.config import SOOTHE_HOME
 
 from soothe_daemon.config.models import (

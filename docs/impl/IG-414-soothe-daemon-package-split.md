@@ -1,8 +1,8 @@
 # IG-414: Soothe Daemon Package Split + Three-Config Refactor
 
-**Status**: In Progress
+**Status**: Completed
 **Created**: 2026-05-13
-**Last checkpoint**: 2026-05-13 21:44 UTC+8 (mid-refactor; resumable from "Resumption checklist" below)
+**Last checkpoint**: 2026-05-13 22:30 UTC+8
 
 ## Goal
 

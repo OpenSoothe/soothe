@@ -9,11 +9,11 @@
 
 ## Overview
 
-This document defines the conceptual design for **Soothe**, a protocol-driven orchestration framework for building 24/7 long-running autonomous agents. Soothe sits at the same abstraction level as deepagents -- above langchain and langgraph -- and extends deepagents with planning, context engineering, security policy, durability, and remote agent interop.
+This document defines the conceptual design for **Soothe**, a Goal-driven orchestration framework for building 24/7 long-running autonomous agents. Soothe sits at the same abstraction level as deepagents -- above langchain and langgraph -- and extends deepagents with planning, context engineering, security policy, durability, and remote agent interop.
 
 ## Vision
 
-A 24/7 long-running autonomous agent whose core strength is **orchestration** -- harnessing AI subagents, tools, and protocols (MCP, A2A, ACP) to accomplish complex, evolving goals. Soothe is a protocol-driven orchestration framework that extends deepagents with capabilities the ecosystem does not provide, while remaining runtime-agnostic and langchain-ecosystem-friendly.
+A 24/7 long-running autonomous agent whose core strength is **orchestration** -- harnessing AI subagents, tools, and protocols (MCP, A2A, ACP) to accomplish complex, evolving goals. Soothe is a Goal-driven orchestration framework that extends deepagents with capabilities the ecosystem does not provide, while remaining runtime-agnostic and langchain-ecosystem-friendly.
 
 Soothe does not implement domain logic. It composes capabilities provided by others: langchain tools, MCP servers, deepagents subagents, and remote agents via ACP/A2A. The value is in the wiring, delegation, lifecycle management, and cognitive context continuity.
 

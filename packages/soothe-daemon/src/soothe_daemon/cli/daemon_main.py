@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-
 from soothe.config import SOOTHE_HOME, SootheConfig
+
 from soothe_daemon.config import SootheDaemonConfig, default_daemon_config_path
 from soothe_daemon.entrypoint import run_daemon
 from soothe_daemon.health.checker import HealthChecker
@@ -56,8 +56,11 @@ def daemon_start(
     if foreground:
         from soothe.logging import setup_logging
 
+        from soothe_daemon.logging import setup_daemon_logging
+
         typer.echo("Starting daemon in foreground...")
         setup_logging(cfg, foreground=True)
+        setup_daemon_logging(foreground=True)
         run_daemon(cfg, daemon_config=daemon_cfg, detached=False)
         return
 

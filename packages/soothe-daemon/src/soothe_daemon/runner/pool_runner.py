@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.config.settings import SootheConfig
 from soothe.protocols.runner import InterruptPending, LoopRunnerProtocol, LoopRunRequest
+
 from soothe_daemon.config import SootheDaemonConfig
 
 if TYPE_CHECKING:

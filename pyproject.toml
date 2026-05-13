@@ -7,6 +7,7 @@ dependencies = [
     "soothe-sdk",
     "soothe-cli",
     "soothe",
+    "soothe-daemon",
 ]
 
 [tool.uv.workspace]
@@ -23,6 +24,7 @@ default = true
 soothe-sdk = { workspace = true }
 soothe-cli = { workspace = true }
 soothe = { workspace = true }
+soothe-daemon = { workspace = true }
 
 [dependency-groups]
 dev = [

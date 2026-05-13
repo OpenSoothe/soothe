@@ -1,10 +1,6 @@
 # soothe-daemon
 
-Soothe daemon server — long-running agent runtime with WebSocket and HTTP transports.
-
-This package hosts the multi-transport daemon that wraps the in-proc agent
-core (`soothe`) and serves clients (`soothe-cli`, custom clients via
-`soothe-sdk`) over WebSocket and optional HTTP REST.
+Soothe daemon server — long-running agent runtime with WebSocket/HTTP transports.
 
 ## Installation
 
@@ -12,7 +8,13 @@ core (`soothe`) and serves clients (`soothe-cli`, custom clients via
 pip install soothe-daemon
 ```
 
-The package ships the `soothed` console script for daemon lifecycle:
+For full runtime, also install the agent core and CLI:
+
+```bash
+pip install soothe soothe-daemon soothe-cli
+```
+
+## Usage
 
 ```bash
 soothed start --foreground
@@ -23,25 +25,10 @@ soothed stop
 
 ## Configuration
 
-The daemon reads two YAML files, both under `~/.soothe/config/`:
+- `~/.soothe/config/config.yml` — Agent config (`SootheConfig`)
+- `~/.soothe/config/daemon_config.yml` — Daemon config (`SootheDaemonConfig`)
 
-- `config.yml` — `SootheConfig`: providers, agent_loop, persistence, etc.
-- `daemon_config.yml` — `SootheDaemonConfig`: transports (WebSocket/HTTP),
-  worker pool, distributed (Ray) settings, queue/dispatch limits.
+## Dependencies
 
-`SootheDaemonConfig.soothe_config_path` points at the `SootheConfig` YAML the
-daemon will load for the agent it hosts.
-
-## Architecture
-
-```
-soothe-daemon  <-- this package
-   ├── server, transports, message_router, query_engine
-   ├── runner (LoopRunnerFactory: pool / Ray / local subprocess)
-   ├── health checks (soothed doctor)
-   └── cli (soothed)
-        |
-        v
-soothe         <-- in-proc agent core (SootheRunner, SootheConfig, ...)
-soothe-sdk     <-- WebSocket protocol + client
-```
+- `soothe>=0.5.0` — In-process agent core
+- `soothe-sdk>=0.5.0` — WebSocket protocol
