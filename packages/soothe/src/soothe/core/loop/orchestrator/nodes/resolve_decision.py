@@ -72,6 +72,9 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
         state.current_decision = decision
 
     ctx.scratch.decision = decision
+    merged = plan_result.model_copy(update={"decision": decision})
+    ctx.scratch.plan_result = merged
+    ctx.plan_manager.ingest_plan(merged, state.plan_id, state.iteration)
 
     await ctx.emit(
         "plan_decision",

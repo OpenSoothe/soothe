@@ -1,6 +1,7 @@
 """Planning functionality - plan generation, management, and DAG."""
 
 from .dag import PlanDAG
+from .dependency_tokens import expand_dependency_satisfaction_ids
 from .manager import (
     CompletionStrategy,
     DagPlanningContext,
@@ -19,5 +20,6 @@ __all__ = [
     "PlanPhase",
     "LLMPlanner",
     "PlanDAG",
+    "expand_dependency_satisfaction_ids",
     "parse_plan_from_text",
 ]
