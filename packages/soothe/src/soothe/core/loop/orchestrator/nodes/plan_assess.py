@@ -181,7 +181,6 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         plan_result = build_continue_thread_bootstrap_plan(state.goal)
         ctx.scratch.plan_result = plan_result
         ctx.scratch.plan_assessment = None
-        plan_manager.ingest_plan(plan_result, state.plan_id, state.iteration)
         await ctx.emit(
             "plan",
             {

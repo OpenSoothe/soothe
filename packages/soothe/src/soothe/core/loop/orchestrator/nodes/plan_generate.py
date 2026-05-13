@@ -31,7 +31,6 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     )
 
     ctx.scratch.plan_result = plan_result
-    plan_manager.ingest_plan(plan_result, state.plan_id, state.iteration)
 
     await ctx.emit(
         "plan",

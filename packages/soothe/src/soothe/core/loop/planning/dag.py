@@ -126,11 +126,17 @@ class PlanDAG:
         if not self.nodes:
             return 0
 
+        from soothe.core.loop.planning.dependency_tokens import expand_dependency_satisfaction_ids
+
+        satisfied = expand_dependency_satisfaction_ids(self.get_completed_step_ids())
+
         # Build adjacency: node -> nodes that depend on it
         dependents: dict[str, list[str]] = {cid: [] for cid in self.nodes}
         in_degree: dict[str, int] = {cid: 0 for cid in self.nodes}
         for cid, node in self.nodes.items():
             for dep in node.dependencies:
+                if dep in satisfied:
+                    continue
                 if dep in dependents:
                     dependents[dep].append(cid)
                     in_degree[cid] += 1
@@ -186,7 +192,9 @@ class PlanDAG:
     @property
     def ready_step_ids(self) -> set[str]:
         """Pending steps whose dependencies are all satisfied (ready to execute)."""
-        completed = self.get_completed_step_ids()
+        from soothe.core.loop.planning.dependency_tokens import expand_dependency_satisfaction_ids
+
+        completed = expand_dependency_satisfaction_ids(self.get_completed_step_ids())
         ready: set[str] = set()
         for cid, node in self.nodes.items():
             if node.status != "pending":
