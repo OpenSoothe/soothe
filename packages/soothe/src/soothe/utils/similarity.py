@@ -27,10 +27,13 @@ if TYPE_CHECKING:
     pass
 
 # Timeout for embedding model calls (seconds)
-_EMBEDDING_TIMEOUT_SECONDS = 30
+_EMBEDDING_TIMEOUT_SECONDS = 10
 
 # Thread pool for embedding calls (to avoid blocking async loop)
 _embedding_executor: ThreadPoolExecutor | None = None
+
+# Dedicated pool for one-time model download/load (avoids HF hub async client vs event-loop issues)
+_model_load_executor: ThreadPoolExecutor | None = None
 
 
 def hf_embedding_cache_dir() -> Path:
@@ -77,11 +80,21 @@ def _get_transformer_model() -> SentenceTransformer | None:
         cache_dir = hf_embedding_cache_dir()
         cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # Load model with shared cache folder
-        _transformer_model = SentenceTransformer(
-            EMBEDDING_MODEL_NAME,
-            cache_folder=str(cache_dir),
-        )
+        def _load_in_worker() -> SentenceTransformer:
+            return SentenceTransformer(
+                EMBEDDING_MODEL_NAME,
+                cache_folder=str(cache_dir),
+            )
+
+        # Load off the asyncio loop: HuggingFace hub can otherwise raise
+        # "Cannot send a request, as the client has been closed" in mixed async/sync contexts.
+        global _model_load_executor
+        if _model_load_executor is None:
+            _model_load_executor = ThreadPoolExecutor(
+                max_workers=1,
+                thread_name_prefix="st_model_load",
+            )
+        _transformer_model = _model_load_executor.submit(_load_in_worker).result(timeout=300)
         logger.info(
             "Loaded sentence_transformers model: %s (cache: %s)",
             EMBEDDING_MODEL_NAME,

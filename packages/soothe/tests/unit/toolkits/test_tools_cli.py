@@ -43,6 +43,14 @@ class TestRunCommandShellToolWorkspaceResolution:
         }
         assert tool._get_effective_workspace(runtime) == "/client/from_state"
 
+    def test_effective_workspace_reads_state_workspace_key(self) -> None:
+        """Subgraphs (explore) set ``state['workspace']`` without LoopHumanMessage."""
+        tool = RunCommandShellTool(workspace_root="/daemon/default")
+        runtime = MagicMock()
+        runtime.config = {"configurable": {"thread_id": "t1"}}
+        runtime.state = {"workspace": "/thread/explore/ws", "messages": []}
+        assert tool._get_effective_workspace(runtime) == "/thread/explore/ws"
+
 
 class TestRunCommandShellToolOpenAiSchema:
     """OpenAI bind_tools requires JSON-serializable tool parameters (no ToolRuntime in schema)."""

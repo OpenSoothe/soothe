@@ -146,6 +146,7 @@ class ExploreSubagentConfig(BaseModel):
         early_stop_no_new_findings_turns: Force synthesis if N consecutive turns produce zero net-new findings.
         max_findings_for_synthesis: Max findings sent to synthesis model (default 15, configurable).
         enable_semantic_similarity: Use semantic similarity for relevance scoring (requires sentence_transformers).
+        semantic_similarity_timeout_seconds: Wall-clock cap for async synthesis relevance scoring (embedding + rank).
     """
 
     thoroughness: str = "medium"
@@ -175,6 +176,13 @@ class ExploreSubagentConfig(BaseModel):
 
     enable_semantic_similarity: bool = True
     """Enable semantic similarity for relevance scoring (requires sentence_transformers optional dependency)."""
+
+    semantic_similarity_timeout_seconds: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=120.0,
+        description="Async synthesis: max seconds for semantic relevance scoring before keyword fallback.",
+    )
 
     # Tool call limit overrides for explore subagent
     tool_call_limit_thread: int | None = None

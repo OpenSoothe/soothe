@@ -95,6 +95,7 @@ subagents:
       early_stop_no_new_findings_turns: 2
       max_findings_for_synthesis: 20
       enable_semantic_similarity: true
+      semantic_similarity_timeout_seconds: 10
       tool_call_limit_thread: null
       tool_call_limit_run: null
     runtime_dir: ''

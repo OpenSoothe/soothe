@@ -51,9 +51,9 @@ def _workspace_from_tool_runtime(tool_runtime: Any) -> str | None:
 
     ``ToolNode`` supplies ``runtime.config`` and ``runtime.state``. For sync tools
     executed on a worker thread, ``langgraph.config.get_config()`` may be empty while
-    ``configurable["workspace"]`` is still missing from the per-call config copy. The
-    latest human message in ``state["messages"]`` (e.g. ``LoopHumanMessage.workspace``)
-    remains the authoritative client thread workspace (RFC-103, IG-300).
+    ``configurable["workspace"]`` is still missing from the per-call copy. Prefer
+    ``state["workspace"]`` for subgraphs (e.g. explore), else the latest human message
+    ``workspace`` in ``state["messages"]`` (RFC-103, IG-300).
 
     Args:
         tool_runtime: LangGraph ``ToolRuntime`` (or compatible duck-typed object).
@@ -74,6 +74,10 @@ def _workspace_from_tool_runtime(tool_runtime: Any) -> str | None:
     state = getattr(tool_runtime, "state", None)
     if not isinstance(state, dict):
         return None
+    # Subgraphs (e.g. explore) set ``state["workspace"]`` without LoopHumanMessage rows.
+    direct_ws = state.get("workspace")
+    if isinstance(direct_ws, str) and direct_ws.strip():
+        return direct_ws.strip()
     messages = state.get("messages")
     if not isinstance(messages, (list, tuple)):
         return None
@@ -97,10 +101,11 @@ def _resolve_workspace(workspace_root: str, tool_runtime: Any = None) -> str | N
     """Resolve effective workspace for shell tools (RFC-103, IG-300).
 
     Priority:
-        1. ``ToolRuntime`` config / messages state
-        2. LangGraph ``get_config()`` configurable
-        3. ContextVar (same-async-context)
-        4. ``workspace_root`` static fallback
+        1. ``ToolRuntime.config["configurable"]["workspace"]`` when set
+        2. ``ToolRuntime.state["workspace"]`` (e.g. explore subgraph thread workspace)
+        3. Latest ``LoopHumanMessage`` / message ``workspace`` in ``state["messages"]``
+        4. LangGraph ``get_config()`` configurable
+        5. ContextVar / ``workspace_root`` static fallback
 
     Args:
         workspace_root: Daemon-configured default workspace.
