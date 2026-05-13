@@ -1,14 +1,14 @@
 # RFC-401: Event Processing & Filtering
 
-**RFC**: 451
+**RFC**: 401
+**Title**: Event Processing & Filtering
 **Status**: Implemented
-**Authors**: Soothe Team
-**Created**: 2026-03-31
-**Last Updated**: 2026-04-29
-**Depends on**: RFC-450 (Daemon Communication), `RFC-403-unified-event-naming.md` (Unified Event Naming), RFC-500 (CLI/TUI Architecture), RFC-502 (Unified Presentation Engine)
-**Supersedes**: RFC-0015, RFC-0019, RFC-0022
 **Kind**: Implementation Interface Design
-**Legacy Note**: Daemon/event consolidation references this document alongside `RFC-450-daemon-communication-protocol.md` and `RFC-453.md`.
+**Created**: 2026-03-31
+**Updated**: 2026-04-29
+**Authors**: Soothe Team
+**Depends on**: RFC-450 (Daemon Communication), RFC-403 (Unified Event Naming), RFC-500 (CLI/TUI Architecture), RFC-502 (Unified Presentation Engine)
+**Supersedes**: RFC-0015, RFC-0019, RFC-0022
 
 ---
 

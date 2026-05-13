@@ -7,7 +7,6 @@
 **Created**: 2026-03-19
 **Updated**: 2026-04-14
 **Dependencies**: RFC-000, RFC-001, RFC-500
-**Number**: 450
 
 ## Abstract
 

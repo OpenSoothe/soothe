@@ -1,12 +1,14 @@
 # RFC-501: Display & Verbosity
 
+**RFC**: 501
+**Title**: Display & Verbosity
 **Status**: Draft
-**Authors**: Soothe Team
-**Created**: 2026-03-31
-**Last Updated**: 2026-05-01
-**Depends on**: RFC-500 (CLI/TUI Architecture), `RFC-401-event-processing.md` (Event Processing), RFC-502 (Unified Presentation Engine)
-**Supersedes**: RFC-0020, RFC-0024
 **Kind**: Implementation Interface Design
+**Created**: 2026-03-31
+**Updated**: 2026-05-01
+**Authors**: Soothe Team
+**Depends on**: RFC-500 (CLI/TUI Architecture), RFC-401 (Event Processing), RFC-502 (Unified Presentation Engine)
+**Supersedes**: RFC-0020, RFC-0024
 
 ---
 

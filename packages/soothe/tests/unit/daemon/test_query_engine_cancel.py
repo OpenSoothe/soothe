@@ -349,3 +349,46 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
     task.cancel()
     with suppress(asyncio.CancelledError):
         await task
+
+
+class _RegistryMapsThreadLoop(_FakeThreadRegistry):
+    """Maps checkpoint thread ids to client loop ids for ``cancel_loop`` task lookup."""
+
+    def __init__(self, thread_to_loop: dict[str, str]) -> None:
+        self._thread_to_loop = thread_to_loop
+
+    def get_thread_loop(self, thread_id: str) -> str:
+        return self._thread_to_loop.get(thread_id, "")
+
+
+@pytest.mark.asyncio
+async def test_cancel_loop_cancels_subprocess_runner_before_stream_finally() -> None:
+    """``cancel_loop`` must call ``LoopRunner.cancel`` while the runner is still active."""
+    broadcasts: list[dict[str, Any]] = []
+    runner = _SlowCancelRunner(unwind_delay=0.02)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=60)
+    daemon._thread_registry = _RegistryMapsThreadLoop({"thread-1": "loop-a"})
+
+    engine = QueryEngine(daemon)
+    await engine.run_query("hello", loop_id="loop-a")
+    await asyncio.sleep(0.05)
+    assert "loop-a" in engine._active_runners
+    loop_runner = engine._active_runners["loop-a"]
+    assert loop_runner._cancelled is False
+
+    task = daemon._current_query_task
+    assert task is not None
+
+    await engine.cancel_loop("loop-a")
+
+    assert loop_runner._cancelled is True
+    assert "loop-a" not in engine._active_runners
+    assert any(
+        m.get("type") == "command_response"
+        and m.get("loop_id") == "loop-a"
+        and "Cancellation requested" in str(m.get("content", ""))
+        for m in broadcasts
+    )
+
+    with suppress(asyncio.CancelledError):
+        await task

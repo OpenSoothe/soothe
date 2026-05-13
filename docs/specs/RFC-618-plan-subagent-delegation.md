@@ -1,13 +1,13 @@
 # RFC-618: Plan Subagent — Structured Planning with Explore Delegation
 
-**RFC**: 618  
-**Title**: Plan Subagent — Structured Planning with Explore Delegation  
-**Status**: Draft  
-**Kind**: Architecture Design  
-**Created**: 2026-05-11  
-**Updated**: 2026-05-11  
-**Authors**: Soothe Team  
-**Depends on**: RFC-000, RFC-001, RFC-100, RFC-600, RFC-601, RFC-613  
+**RFC**: 618
+**Title**: Plan Subagent — Structured Planning with Explore Delegation
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-05-11
+**Updated**: 2026-05-11
+**Authors**: Soothe Team
+**Depends on**: RFC-000, RFC-001, RFC-100, RFC-600, RFC-601, RFC-613
 **Related**: RFC-201 (AgentLoop plan-execute loop), RFC-214 (plan context)
 
 ## Abstract

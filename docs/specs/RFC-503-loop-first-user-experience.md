@@ -1,12 +1,12 @@
-# Loop-First User Experience Architecture
+# RFC-503: Loop-First User Experience Architecture
 
-> Design draft for user-facing loop-centric model with threads as internal implementation detail.
->
-> **RFC Number**: RFC-503
-> **Status**: Draft
-> **Created**: 2026-04-22
-> **Dependencies**: RFC-216 (Multi-Thread Lifecycle), RFC-450 (Daemon Communication), RFC-500 (CLI/TUI), RFC-454 (Slash Commands)
-> **Author**: Claude Sonnet 4.6
+**RFC**: 503
+**Title**: Loop-First User Experience Architecture
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-04-22
+**Dependencies**: RFC-216 (Multi-Thread Lifecycle), RFC-450 (Daemon Communication), RFC-500 (CLI/TUI), RFC-454 (Slash Commands)
+**Author**: Claude Sonnet 4.6
 
 ---
 

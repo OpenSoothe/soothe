@@ -1,12 +1,12 @@
-# AgentLoop Persistence Backend Architecture
+# RFC-215: AgentLoop Persistence Backend Architecture
 
-> Design draft for SQLite/PostgreSQL persistence backend with thread/loop isolation.
->
-> **RFC Number**: RFC-215
-> **Status**: Draft
-> **Created**: 2026-04-22
-> **Dependencies**: RFC-216 (Multi-Thread Lifecycle), RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX)
-> **Author**: Claude Sonnet 4.6
+**RFC**: 215
+**Title**: AgentLoop Persistence Backend Architecture
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-04-22
+**Dependencies**: RFC-216 (Multi-Thread Lifecycle), RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX)
+**Author**: Claude Sonnet 4.6
 
 ---
 

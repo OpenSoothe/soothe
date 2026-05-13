@@ -1,10 +1,12 @@
 # RFC-612: Persistence Architecture Refactor
 
-**Status**: Draft  
-**Created**: 2026-04-22  
-**Last Updated**: 2026-04-22  
-**Authors**: Platonic Coding Workflow  
-**Scope**: Backend storage unification, mode-based validation, in-memory removal
+**RFC**: 612
+**Title**: Persistence Architecture Refactor
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-04-22
+**Updated**: 2026-04-22
+**Authors**: Platonic Coding Workflow
 
 ---
 

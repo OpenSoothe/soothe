@@ -1,12 +1,13 @@
 # RFC-301: Protocol Registry
 
+**RFC**: 301
+**Title**: Protocol Registry
 **Status**: Implemented
-**Authors**: Xiaming Chen
-**Created**: 2026-03-31
-**Last Updated**: 2026-03-31
-**Depends on**: RFC-001 (Core Modules Architecture), RFC-400 (Context Protocol), RFC-402 (Memory Protocol)
-**Supersedes**: ---
 **Kind**: Implementation Interface Design
+**Created**: 2026-03-31
+**Updated**: 2026-03-31
+**Authors**: Xiaming Chen
+**Depends on**: RFC-001 (Core Modules Architecture), RFC-400 (Context Protocol), RFC-402 (Memory Protocol)
 
 ---
 

@@ -1,12 +1,14 @@
 # RFC-601: Built-in Plugin Agents
 
+**RFC**: 601
+**Title**: Built-in Plugin Agents
 **Status**: Implemented
-**Authors**: Soothe Team
+**Kind**: Architecture Design
 **Created**: 2026-03-31
-**Last Updated**: 2026-04-05
+**Updated**: 2026-04-05
+**Authors**: Soothe Team
 **Depends on**: RFC-600 (Plugin Extension System), RFC-301 (Protocol Registry)
 **Supersedes**: RFC-0004, RFC-0005, RFC-0021
-**Kind**: Architecture Design
 
 ---
 

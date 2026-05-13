@@ -1,7 +1,7 @@
 # RFC Index
 
-**Last Updated**: 2026-05-11
-**Total RFCs**: 52
+**Last Updated**: 2026-05-13
+**Total RFCs**: 56
 
 This index reflects the canonical RFC set and defines which files are active for architecture and implementation decisions.
 
@@ -11,253 +11,363 @@ This index reflects the canonical RFC set and defines which files are active for
 
 | Status | Count |
 |--------|-------|
-| Draft | 34 |
-| Implemented | 17 |
+| Draft | 38 |
+| Implemented | 18 |
 
 ---
 
 ## RFC Catalog
 
-### Foundation
+### Foundation (0xx)
 
-- **RFC-000**: [System Conceptual Design](RFC-000*.md)
+- **RFC-000**: [System Conceptual Design](RFC-000-system-conceptual-design.md)
+  - Kind: Conceptual Design
   - Status: Implemented
   - Created: 2026-03-12
 
-- **RFC-001**: [Architecture Design for Core Protocol Modules](RFC-001*.md)
+- **RFC-001**: [Core Modules Architecture](RFC-001-core-modules-architecture.md)
+  - Kind: Architecture Design
   - Status: Implemented
   - Created: 2026-03-12
 
-### Core Architecture
+### Core Agent (1xx)
 
-- **RFC-200**: [Layer 3 - Autonomous Goal Management Loop](RFC-200*.md)
+- **RFC-100**: [CoreAgent Runtime Architecture](RFC-100-coreagent-runtime.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-03-22
+
+- **RFC-101**: [Tool Interface & Event Naming](RFC-101-tool-interface.md)
+  - Kind: Implementation Interface Design
+  - Status: Implemented
+  - Created: 2026-03-31
+  - Supersedes: RFC-0016, RFC-0025
+
+- **RFC-102**: [Secure Filesystem Path Handling and Security Policy](RFC-102-security-filesystem-policy.md)
+  - Kind: Implementation Interface Design
+  - Status: Implemented
+  - Created: 2026-03-22
+
+- **RFC-103**: [Thread-Aware Workspace](RFC-103-thread-aware-workspace.md)
+  - Kind: Implementation Interface Design
+  - Status: Draft
+  - Created: 2026-04-16
+
+- **RFC-104**: [Dynamic System Context Injection](RFC-104-dynamic-system-context.md)
+  - Kind: Implementation Interface Design
+  - Status: Implemented
+  - Created: 2026-04-09
+
+### AgentLoop & Cognition (2xx)
+
+- **RFC-200**: [Autonomous Goal Management Loop](RFC-200-autonomous-goal-management.md)
+  - Kind: Architecture Design
   - Status: Implemented
   - Created: 2026-03-15
+  - Supersedes: RFC-0009, RFC-0010, RFC-0011
 
-- **RFC-201**: [AgentLoop Plan-Execute Loop Architecture](RFC-201*.md)
+- **RFC-201**: [AgentLoop Plan-Execute Loop Architecture](RFC-201-agentloop-plan-execute-loop.md)
+  - Kind: Architecture Design
   - Status: Implemented
   - Created: 2026-04-17
 
-- **RFC-203**: [AgentLoop State & Memory Architecture](RFC-203*.md)
+- **RFC-203**: [AgentLoop State & Memory Architecture](RFC-203-agentloop-state-memory.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
 
-- **RFC-204**: [Autopilot Mode](RFC-204*.md)
+- **RFC-204**: [Autopilot Mode](RFC-204-autopilot-mode.md)
+  - Kind: Architecture Design
   - Status: Implemented
   - Created: 2026-04-03
 
-- **RFC-206**: [Hierarchical Prompt Architecture](RFC-206*.md)
+- **RFC-206**: [Hierarchical Prompt Architecture](RFC-206-prompt-architecture.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-08
 
-- **RFC-207**: [AgentLoop Thread Management & Goal Context](RFC-207*.md)
+- **RFC-207**: [AgentLoop Thread Management & Goal Context](RFC-207-agentloop-thread-context-lifecycle.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
 
-- **RFC-211**: [Layer 2 Tool Result Optimization](RFC-211*.md)
+- **RFC-211**: [Tool Result Optimization](RFC-211-layer2-tool-result-optimization.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-10
 
-- **RFC-213**: [AgentLoop Reasoning Quality & Robustness](RFC-213*.md)
+- **RFC-213**: [AgentLoop Reasoning Quality & Robustness](RFC-213-agentloop-reasoning-quality.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
 
-- **RFC-214**: [AgentLoop Loop Message Surface and Plan Context](RFC-214*.md)
+- **RFC-214**: [Volatility-Tiered Prompt Architecture & Unified Message Ledger](RFC-214-agentloop-loop-message-surface.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Extends: RFC-201, RFC-206, RFC-215
   - Created: 2026-05-03
 
-- **RFC-215**: [AgentLoop Persistence Backend Architecture](RFC-215*.md)
+- **RFC-215**: [AgentLoop Persistence Backend Architecture](RFC-215-agentloop-persistence-backend.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-22
   - Renamed from: RFC-409 (2026-05-03)
 
-- **RFC-216**: [AgentLoop Multi-Thread Lifecycle](RFC-216*.md)
+- **RFC-216**: [AgentLoop Multi-Thread Lifecycle](RFC-216-agentloop-multithread-lifecycle.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-16
   - Renamed from: RFC-608 (2026-05-03)
 
-- **RFC-217**: [Goal Context Management](RFC-217*.md)
+- **RFC-217**: [Goal Context Management](RFC-217-goal-context-management.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
   - Renamed from: RFC-609 (2026-05-03)
 
-- **RFC-218**: [AgentLoop Checkpoint Tree Architecture](RFC-218*.md)
+- **RFC-218**: [AgentLoop Checkpoint Tree Architecture](RFC-218-agentloop-checkpoint-tree-architecture.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-22
   - Renamed from: RFC-611 (2026-05-03)
 
-- **RFC-219**: [Goal Completion Module](RFC-219*.md)
+- **RFC-219**: [Goal Completion Module](RFC-219-goal-completion-module.md)
+  - Kind: Architecture Design
   - Status: Implemented
   - Created: 2026-04-28
   - Renamed from: RFC-615 (2026-05-03)
 
-- **RFC-220**: [LangGraph Agent Loop Orchestrator](RFC-220*.md)
+- **RFC-220**: [LangGraph Agent Loop Orchestrator](RFC-220-langgraph-agent-loop-orchestrator.md)
+  - Kind: Architecture Design
   - Status: Draft
-  - Kind: Architecture Design — Layer 2 Loop Graph (cut-over; supersedes RFC-201 imperative driver)
   - Created: 2026-05-05
-  - Supersedes draft id: RFC-620 (renumbered into 2xx AgentLoop series)
+  - Supersedes: RFC-201 imperative driver (Loop Graph cut-over)
+  - Renamed from: RFC-620 (renumbered into 2xx)
 
-- **RFC-221**: [LoopRunnerProtocol: Unified Subprocess-Isolated Agent Loop Execution](RFC-221*.md)
+- **RFC-221**: [Loop Runner Protocol and Subprocess Isolation](RFC-221-loop-runner-protocol-and-ray.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-05-09
 
-- **RFC-616**: [Scenario-Driven Goal Completion Synthesis](RFC-616*.md)
-  - Status: Draft
-  - Created: 2026-04-28
+### Protocols (3xx)
 
-### Agent Behavior
-
-- **RFC-300**: [Context and Memory Architecture Design](RFC-300*.md)
+- **RFC-300**: [Context and Memory Architecture Design](RFC-300-context-memory-protocols.md)
+  - Kind: Architecture Design
   - Status: Implemented
   - Created: 2026-03-14
 
-- **RFC-301**: [Protocol Registry](RFC-301*.md)
+- **RFC-301**: [Protocol Registry](RFC-301-protocol-registry.md)
+  - Kind: Implementation Interface Design
   - Status: Implemented
   - Created: 2026-03-31
 
-### Persistence & Durability
+### Daemon & Transport (4xx)
 
-- **RFC-400**: [ContextProtocol Architecture](RFC-400*.md)
+- **RFC-400**: [ContextProtocol Architecture](RFC-400-context-protocol-architecture.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
 
-- **RFC-401**: [Event Processing & Filtering](RFC-401*.md)
+- **RFC-401**: [Event Processing & Filtering](RFC-401-event-processing.md)
+  - Kind: Implementation Interface Design
   - Status: Implemented
   - Created: 2026-03-31
+  - Supersedes: RFC-0015, RFC-0019, RFC-0022
 
-- **RFC-402**: [MemoryProtocol Architecture](RFC-402*.md)
+- **RFC-402**: [MemoryProtocol Architecture](RFC-402-memory-protocol-architecture.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
 
-- **RFC-403**: [Unified Event Naming Semantics](RFC-403*.md)
+- **RFC-403**: [Unified Event Naming Semantics](RFC-403-unified-event-naming.md)
+  - Kind: Implementation Interface Design
   - Status: Draft
   - Created: 2026-04-15
 
-- **RFC-404**: [PlannerProtocol Architecture](RFC-404*.md)
+- **RFC-404**: [PlannerProtocol Architecture](RFC-404-planner-protocol-architecture.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
 
-- **RFC-406**: [PolicyProtocol Architecture](RFC-406*.md)
+- **RFC-406**: [PolicyProtocol Architecture](RFC-406-policy-protocol-architecture.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
 
-- **RFC-408**: [DurabilityProtocol Architecture](RFC-408*.md)
+- **RFC-408**: [DurabilityProtocol Architecture](RFC-408-durability-protocol-architecture.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-17
 
-
-- **RFC-450**: [Unified Daemon Communication Protocol](RFC-450*.md)
-  - Status: Implemented
-  - Created: 2026-03-19
-
-- **RFC-452**: [Unified Thread Management Architecture](RFC-452*.md)
-  - Status: Draft
-  - Created: 2026-03-22
-
-- **RFC-454**: [Slash Command Architecture](RFC-454*.md)
-  - Status: Draft
-  - Created: 2026-04-16
-
-- **RFC-614**: [Unified Daemon → Client Streaming Messaging Framework](RFC-614*.md)
-  - Status: Draft
-  - Extends: RFC-450 (Daemon Communication), RFC-401 (Event Processing)
-  - See also: [IG-355](../impl/IG-355-subagent-completion-wire.md) (delegate finals / headless wire parity)
-  - Created: 2026-04-27
-
-- **RFC-617**: [OperationSecurityProtocol: Unified Workspace and Tool Operation Security](RFC-617*.md)
-  - Status: Draft
-  - Created: 2026-04-30
-
-### Daemon & Transport
-
-- **RFC-500**: [CLI TUI Architecture Design](RFC-500*.md)
-  - Status: Implemented
-  - Created: 2026-03-12
-
-- **RFC-501**: [Display & Verbosity](RFC-501*.md)
-  - Status: Draft
-  - Created: 2026-03-31
-
-- **RFC-502**: [Unified Presentation Engine](RFC-502*.md)
-  - Status: Draft
-  - Created: 2026-04-02
-
-- **RFC-600**: [Plugin Extension Specification](RFC-600*.md)
-  - Status: Implemented
-  - Created: 2026-03-23
-
-- **RFC-601**: [Built-in Plugin Agents](RFC-601*.md)
-  - Status: Implemented
-  - Created: 2026-03-31
-
-- **RFC-602**: [SQLite Backend Specification](RFC-602*.md)
-  - Status: Draft
-  - Created: 2026-04-04
-
-- **RFC-603**: [Reasoning Quality & Progressive Actions](RFC-603*.md)
-  - Status: Draft
-  - Created: 2026-04-09
-
-- **RFC-604**: [Plan Phase Robustness (Three-Layer Defense)](RFC-604*.md)
-  - Status: Implemented
-  - Created: 2026-04-11
-
-- **RFC-605**: [Explore Subagent and Parallel Spawning](RFC-605*.md)
-  - Status: Draft
-  - Created: 2026-04-13
-
-- **RFC-613**: [Explore Agent — LLM-Orchestrated Iterative Search](RFC-613*.md)
+- **RFC-411**: [Event Stream Replay & History Reconstruction](RFC-411-event-stream-replay.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-24
 
-- **RFC-618**: [Plan Subagent — Structured Planning with Explore Delegation](RFC-618*.md)
+- **RFC-450**: [Unified Daemon Communication Protocol](RFC-450-daemon-communication-protocol.md)
+  - Kind: Architecture Design
+  - Status: Implemented
+  - Created: 2026-03-19
+
+- **RFC-452**: [Unified Thread Management Architecture](RFC-452-unified-thread-management.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-03-22
+
+- **RFC-454**: [Slash Command Architecture](RFC-454-slash-command-architecture.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-16
+
+### CLI & TUI (5xx)
+
+- **RFC-500**: [CLI TUI Architecture Design](RFC-500-cli-tui-architecture.md)
+  - Kind: Architecture Design
+  - Status: Implemented
+  - Created: 2026-03-12
+
+- **RFC-501**: [Display & Verbosity](RFC-501-display-verbosity.md)
+  - Kind: Implementation Interface Design
+  - Status: Draft
+  - Created: 2026-03-31
+  - Supersedes: RFC-0020, RFC-0024
+
+- **RFC-502**: [Unified Presentation Engine](RFC-502-unified-presentation-engine.md)
+  - Kind: Implementation Interface Design
+  - Status: Draft
+  - Created: 2026-04-02
+
+- **RFC-503**: [Loop-First User Experience Architecture](RFC-503-loop-first-user-experience.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-22
+
+- **RFC-504**: [Loop Management CLI Commands](RFC-504-loop-management-cli-commands.md)
+  - Kind: Implementation Interface Design
+  - Status: Draft
+  - Created: 2026-04-22
+
+### Plugin System & Extensions (6xx)
+
+- **RFC-600**: [Plugin Extension Specification](RFC-600-plugin-extension-system.md)
+  - Kind: Architecture Design
+  - Status: Implemented
+  - Created: 2026-03-23
+
+- **RFC-601**: [Built-in Plugin Agents](RFC-601-built-in-agents.md)
+  - Kind: Architecture Design
+  - Status: Implemented
+  - Created: 2026-03-31
+  - Supersedes: RFC-0004, RFC-0005, RFC-0021
+
+- **RFC-602**: [SQLite Backend Specification](RFC-602-sqlite-backend.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-04
+
+- **RFC-603**: [Reasoning Quality & Progressive Actions](RFC-603-reasoning-quality-progressive-actions.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-09
+
+- **RFC-604**: [Plan Phase Robustness (Three-Layer Defense)](RFC-604-reason-phase-robustness.md)
+  - Kind: Architecture Design
+  - Status: Implemented
+  - Created: 2026-04-11
+
+- **RFC-605**: [Explore Subagent and Parallel Spawning](RFC-605-explore-subagent-parallel-spawning.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-13
+
+- **RFC-606**: [DeepAgents CLI TUI Migration Specification](RFC-606-deepagents-cli-tui-migration.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-13
+
+- **RFC-607**: [Progressive Display Refinements Post-Migration](RFC-607-progressive-display-refinements.md)
+  - Kind: Implementation Interface Design
+  - Status: Draft
+  - Created: 2026-04-14
+
+- **RFC-610**: [SDK Module Structure Refactoring](RFC-610-sdk-module-structure-refactoring.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-17
+
+- **RFC-612**: [Persistence Architecture Refactor](RFC-612-persistence-architecture-refactor.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-22
+
+- **RFC-613**: [Explore Agent — LLM-Orchestrated Iterative Search](RFC-613-explore-agent-llm-orchestrated-search.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-24
+  - Supersedes: RFC-605 explore subagent
+
+- **RFC-614**: [Unified Daemon → Client Streaming Messaging Framework](RFC-614-unified-streaming-messaging.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Extends: RFC-450 (Daemon Communication), RFC-401 (Event Processing)
+  - Created: 2026-04-27
+
+- **RFC-616**: [Scenario-Driven Goal Completion Synthesis](RFC-616-scenario-driven-synthesis.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-28
+
+- **RFC-617**: [Operation Security Protocol](RFC-617-operation-security-protocol.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-04-30
+
+- **RFC-618**: [Plan Subagent — Structured Planning with Explore Delegation](RFC-618-plan-subagent-delegation.md)
+  - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-05-11
   - Depends on: RFC-613, RFC-601, RFC-600
 
-- **RFC-606**: [DeepAgents CLI TUI Migration Specification](RFC-606*.md)
-  - Status: Draft
-  - Created: 2026-04-13
+---
 
-- **RFC-607**: [Progressive Display Refinements Post-Migration: Progressive Display Refinements Post-Migration](RFC-607*.md)
-  - Status: Draft
-  - Scope: DisplayLine dataclass in CLI stream pipeline
-  - Created: 2026-04-14
+## Spec Kind Distribution
 
-- **RFC-610**: [SDK Module Structure Refactoring](RFC-610*.md)
-  - Status: Draft
-  - Created: 2026-04-17
+| Kind | Count |
+|------|-------|
+| Architecture Design | 37 |
+| Implementation Interface Design | 10 |
+| Conceptual Design | 1 |
+| Not stated / ambiguous | 8 |
 
-- **RFC-612**: [Persistence Architecture Refactor](RFC-612*.md)
-  - Status: Draft
-  - Scope: Backend storage unification, mode-based validation, in-memory removal
-  - Created: 2026-04-22
+---
+
+## Numbering Ranges
+
+| Range | Category | Count |
+|-------|----------|-------|
+| 0xx | Foundation | 2 |
+| 1xx | Core Agent | 5 |
+| 2xx | AgentLoop & Cognition | 16 |
+| 3xx | Protocols | 2 |
+| 4xx | Daemon & Transport | 10 |
+| 5xx | CLI & TUI | 5 |
+| 6xx | Plugin System & Extensions | 16 |
 
 ---
 
 ## Recently Added
 
-- RFC-618: Plan Subagent — Structured planning delegate with direct explore runnable invokes (2026-05-11; RFC-618)
-- RFC-221: LoopRunnerProtocol — Unified Subprocess-Isolated Agent Loop Execution (2026-05-09; one subprocess per loop_id via multiprocessing or Ray actor; fixes SootheRunner singleton data race; removes daemon._runner; renumbered into 2xx AgentLoop series)
-- RFC-617: OperationSecurityProtocol — Unified Workspace and Tool Operation Security (2026-04-30)
-- RFC-616: Scenario-Driven Goal Completion Synthesis (2026-04-28; refactors goal completion from keyword-driven to scenario-driven adaptive synthesis)
-- RFC-613: Explore Agent — LLM-Orchestrated Iterative Search (2026-04-24)
-- RFC-220: LangGraph Agent Loop Orchestrator (2026-05-05; Loop Graph keyed by `loop_id`, evidence-bound plan steps, no backward compat with imperative loop; renumbered from RFC-620)
-- RFC-214: AgentLoop Loop Message Surface and Plan Context (2026-05-03; plan human `Execute iteration` — 2026-05-04)
-- RFC-215: AgentLoop Persistence Backend Architecture (renamed from RFC-409, 2026-05-03)
-- RFC-216: AgentLoop Multi-Thread Lifecycle (renamed from RFC-608, 2026-05-03)
-- RFC-217: Goal Context Management (renamed from RFC-609, 2026-05-03)
-- RFC-218: AgentLoop Checkpoint Tree Architecture (renamed from RFC-611, 2026-05-03)
-- RFC-219: Goal Completion Module (renamed from RFC-615, 2026-05-03)
-- RFC-603: Reasoning Quality & Progressive Actions (2026-04-09)
-- RFC-604: Plan Phase Robustness (Three-Layer Defense) (2026-04-11)
-- RFC-605: Explore Subagent and Parallel Spawning (2026-04-13)
-- RFC-606: DeepAgents CLI TUI Migration Specification (2026-04-13)
-- RFC-607: Progressive Display Refinements Post-Migration: Progressive Display Refinements Post-Migration (2026-04-14)
-- RFC-610: SDK Module Structure Refactoring (2026-04-17)
-- RFC-612: Persistence Architecture Refactor (2026-04-22)
-- RFC-614: Unified Daemon → Client Streaming Messaging Framework (2026-04-27)
+- **RFC-618**: Plan Subagent — Structured planning delegate with direct explore runnable invokes (2026-05-11)
+- **RFC-221**: LoopRunnerProtocol — Unified Subprocess-Isolated Agent Loop Execution (2026-05-09)
+- **RFC-220**: LangGraph Agent Loop Orchestrator — Loop Graph keyed by `loop_id` (2026-05-05)
+- **RFC-617**: Operation Security Protocol (2026-04-30)
+- **RFC-616**: Scenario-Driven Goal Completion Synthesis (2026-04-28)
+- **RFC-614**: Unified Daemon → Client Streaming Messaging Framework (2026-04-27)
+- **RFC-613**: Explore Agent — LLM-Orchestrated Iterative Search (2026-04-24)
+- **RFC-612**: Persistence Architecture Refactor (2026-04-22)
+- **RFC-411**: Event Stream Replay & History Reconstruction (2026-04-24)
+- **RFC-503**: Loop-First User Experience Architecture (2026-04-22)
+- **RFC-504**: Loop Management CLI Commands (2026-04-22)
 
 ---
 
@@ -284,5 +394,7 @@ This index reflects the canonical RFC set and defines which files are active for
 
 - **Implementation Guides (IG)**: `docs/impl/IG-*.md`
 - **Design Drafts**: `docs/drafts/YYYY-MM-DD-*.md`
-- **RFC Template**: `docs/specs/rfc-template.md`
-
+- **RFC Standard**: `docs/specs/rfc-standard.md`
+- **RFC History**: `docs/specs/rfc-history.md`
+- **RFC Namings**: `docs/specs/rfc-namings.md`
+- **Event Catalog**: `docs/specs/event-catalog.md`

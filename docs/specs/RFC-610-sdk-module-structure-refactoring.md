@@ -1,11 +1,11 @@
 # RFC-610: SDK Module Structure Refactoring
 
-**RFC**: 610  
-**Title**: SDK Module Structure Refactoring  
-**Status**: Draft  
-**Kind**: Architecture Design  
-**Created**: 2026-04-17  
-**Dependencies**: RFC-600, RFC-400, RFC-173 (IG-173 CLI-Daemon Split)  
+**RFC**: 610
+**Title**: SDK Module Structure Refactoring
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-04-17
+**Dependencies**: RFC-600, RFC-400
 **Related**: RFC-174 (IG-174 CLI Import Violations Fix), RFC-175 (IG-175 WebSocket Migration)
 
 ## Abstract
