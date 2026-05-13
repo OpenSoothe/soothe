@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import typer
+from soothe.config import SootheConfig
 from soothe_cli.cli.execution import daemon as daemon_exec
 from soothe_cli.cli.execution import headless as headless_exec
 from soothe_sdk.client import session as sdk_session  # For retry logic (moved from CLI)
 
-from soothe.config import SootheConfig
 from soothe_daemon import SootheDaemon, WebSocketClient
 from soothe_daemon.message_router import MessageRouter
 from soothe_daemon.server import _ClientConn
@@ -626,7 +626,11 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
         typer, "echo", lambda msg, err=False: stderr.append(str(msg)) if err else None
     )
 
-    code = await daemon_exec.run_headless_via_daemon(SootheConfig(), "analyze project structure")
+    # Use CLIConfig which has daemon_host/daemon_port for websocket_url_from_config
+    from soothe_cli.config.cli_config import CLIConfig
+
+    cli_cfg = CLIConfig()
+    code = await daemon_exec.run_headless_via_daemon(cli_cfg, "analyze project structure")
 
     assert code == 1
     assert stderr == ["Daemon error: busy"]
@@ -641,7 +645,9 @@ def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
     2. WebSocketClient is created and request_daemon_shutdown() is called
     3. Daemon is started via subprocess
     """
-    cfg = SootheConfig()
+    from soothe_cli.config.cli_config import CLIConfig
+
+    cfg = CLIConfig()
     shutdown_called = MagicMock()
     captured_coros: list[object] = []
     subprocess_popen = MagicMock()

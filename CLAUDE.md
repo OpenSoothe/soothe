@@ -6,7 +6,7 @@
 
 ## 🎯 Project Overview
 
-**Soothe** is a protocol-driven orchestration framework for building 24/7 long-running autonomous agents. It extends deepagents with planning, context engineering, security policy, durability, and remote agent interop while remaining langchain-ecosystem-friendly.
+**Soothe** is a Goal-driven orchestration framework for building 24/7 long-running autonomous agents. It extends deepagents with planning, context engineering, security policy, durability, and remote agent interop while remaining langchain-ecosystem-friendly.
 
 **Key Architecture**: See [RFC-000](docs/specs/RFC-000-system-conceptual-design.md) for the full conceptual design.
 

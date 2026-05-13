@@ -1,4 +1,4 @@
-"""Soothe - Protocol-driven multi-agent orchestration framework."""
+"""Soothe - Goal-driven multi-agent orchestration framework."""
 
 import importlib.metadata
 

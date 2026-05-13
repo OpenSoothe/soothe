@@ -5,10 +5,10 @@ import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from soothe.core.events import EventMeta
 from soothe_sdk.core.events import SootheEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 
-from soothe.core.events import EventMeta
 from soothe_daemon.client_session import ClientSessionManager
 from soothe_daemon.event_bus import EventBus
 from soothe_daemon.loop_isolation import loop_event_topic

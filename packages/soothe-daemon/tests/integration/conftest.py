@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from soothe.config import SootheConfig
 from soothe.core.runner import SootheRunner
 

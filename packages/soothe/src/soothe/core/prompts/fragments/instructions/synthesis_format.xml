@@ -28,7 +28,7 @@ STRUCTURE YOUR REPORT AS:
 [List 5-10 critical components by name with brief descriptions]
 
 ## Design Patterns
-[2-3 key patterns observed: protocol-driven, modular, event-based, etc. - explain how they work]
+[2-3 key patterns observed: Goal-driven, modular, event-based, etc. - explain how they work]
 
 ## Dependencies
 [External dependencies and why they're used - specific library names]

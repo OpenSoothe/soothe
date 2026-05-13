@@ -1,4 +1,4 @@
-"""Skills discovery and invocation for Soothe daemon."""
+"""Skills discovery and invocation for Soothe agent runtime."""
 
 from soothe.skills.builtins import get_built_in_skills_paths
 from soothe.skills.catalog import (

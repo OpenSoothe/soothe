@@ -9,11 +9,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe.core.workspace import resolve_loop_daemon_workspace
+from soothe.utils.text_preview import preview_first
 from soothe_sdk.client.protocol import _serialize_for_json
 
-from soothe.core.workspace import resolve_loop_daemon_workspace
 from soothe_daemon.image_understanding import validate_and_normalize_image_attachments
-from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -1127,12 +1127,11 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message; may contain optional ``workspace`` (string path).
         """
-        from uuid_utils import uuid7
-
         from soothe.core.loop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
         from soothe.core.workspace import validate_client_workspace
+        from uuid_utils import uuid7
 
         d = self._daemon
         request_id = msg.get("request_id")

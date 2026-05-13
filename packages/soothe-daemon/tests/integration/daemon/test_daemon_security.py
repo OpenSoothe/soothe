@@ -14,6 +14,7 @@ import contextlib
 from pathlib import Path
 
 import pytest
+from tests.integration.ws_loop_client import loop_new_with_initial_input, request_loop_list
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from tests.integration.conftest import (
@@ -21,7 +22,6 @@ from tests.integration.conftest import (
     build_daemon_config,
     force_isolated_home,
 )
-from tests.integration.ws_loop_client import loop_new_with_initial_input, request_loop_list
 
 
 @pytest.fixture

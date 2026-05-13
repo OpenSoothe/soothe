@@ -16,10 +16,10 @@ import asyncio
 from pathlib import Path
 
 import pytest
-
 from soothe.core.loop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
+
 from soothe_daemon import SootheDaemon, WebSocketClient
 from tests.integration.conftest import (
     alloc_ephemeral_port,

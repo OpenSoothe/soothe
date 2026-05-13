@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from soothe.config import SootheConfig
+
 from soothe_daemon import SootheDaemon
 
 

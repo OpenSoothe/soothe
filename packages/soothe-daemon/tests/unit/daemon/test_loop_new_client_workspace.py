@@ -13,11 +13,11 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-
 import soothe.config as soothe_config
 from soothe.core.loop.state.persistence.manager import (
     AgentLoopCheckpointPersistenceManager,
 )
+
 from soothe_daemon.loop_isolation import bind_execution_thread_for_loop
 from soothe_daemon.message_router import MessageRouter
 

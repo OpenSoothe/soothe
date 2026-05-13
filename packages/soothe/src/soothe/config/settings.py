@@ -156,6 +156,19 @@ class SootheConfig(BaseSettings):
 
     @model_validator(mode="before")
     @classmethod
+    def _strip_daemon_top_level(cls, data: Any) -> Any:
+        """Drop ``daemon:`` from agent YAML or kwargs.
+
+        Daemon transport and server limits live in ``daemon_config.yml`` (``SootheDaemonConfig``).
+        Older unified configs sometimes nested those keys under ``daemon`` here; they are ignored
+        for ``SootheConfig`` so startup does not fail with extra_forbidden.
+        """
+        if isinstance(data, dict):
+            data.pop("daemon", None)
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
     def _merge_top_level_logging_yaml(cls, data: Any) -> Any:
         """Fold top-level ``logging:`` YAML into ``observability`` and ``agent_loop.report_output``."""
         if not isinstance(data, dict):

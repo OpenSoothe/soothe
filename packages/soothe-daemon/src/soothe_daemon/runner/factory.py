@@ -9,6 +9,7 @@ from soothe.protocols.runner import LoopRunnerProtocol
 
 if TYPE_CHECKING:
     from soothe.config.settings import SootheConfig
+
     from soothe_daemon.config import SootheDaemonConfig
 
 logger = logging.getLogger(__name__)
