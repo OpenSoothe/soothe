@@ -15,10 +15,11 @@ from typing import Any
 
 from soothe.core.events import ERROR
 from soothe.core.workspace import resolve_workspace_for_stream
-from soothe_daemon.image_understanding import enrich_user_text_with_vision
 from soothe.foundation import extract_text_from_ai_message
 from soothe.logging import ThreadLogger
 from soothe.utils.error_format import emit_error_event
+
+from soothe_daemon.image_understanding import enrich_user_text_with_vision
 
 logger = logging.getLogger(__name__)
 

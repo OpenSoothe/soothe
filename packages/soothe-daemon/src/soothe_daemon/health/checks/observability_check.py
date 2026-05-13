@@ -5,9 +5,10 @@ import os
 from typing import Any
 
 from soothe.config import SootheConfig
+from soothe.utils.observability.langfuse import _resolve_str
+
 from soothe_daemon.health.formatters import aggregate_status
 from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus
-from soothe.utils.observability.langfuse import _resolve_str
 
 
 def _check_langfuse_from_config(config: SootheConfig | None) -> CheckResult:

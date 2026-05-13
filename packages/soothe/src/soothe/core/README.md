@@ -10,7 +10,7 @@ No transport or UI dependencies.
 ```
 ┌─────────────────────────────────────────────────────┐
 │  soothe_cli  (CLI, TUI)                             │
-│  soothe_daemon  (process, transports, IPC)          │
+│  soothe_daemon  (server process, transports, IPC)   │
 └──────────────────────┬──────────────────────────────┘
                        │ uses
 ┌──────────────────────▼──────────────────────────────┐

@@ -1,7 +1,7 @@
 """Soothe logging package — shared logging infrastructure for all layers.
 
 Provides thread-ID context variables, logging setup, and the JSONL
-thread logger. Importable by ``core``, ``daemon``, and ``ux`` without
+thread logger. Importable by ``core``, ``soothe_daemon``, and ``soothe_cli`` without
 creating cross-layer dependencies.
 """
 

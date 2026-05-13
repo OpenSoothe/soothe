@@ -107,10 +107,10 @@ async def test_ray_loop_runner_streams_chunks_with_stub_actor(ray_multi_node_clu
         async def cancel(self) -> None:
             pass
 
-    with patch("soothe.core.runner.ray_actor.LoopRunnerActor", StubLoopRunnerActor):
+    with patch("soothe_daemon.runner.ray_actor.LoopRunnerActor", StubLoopRunnerActor):
         from soothe_daemon.runner.ray_runner import RayLoopRunner
 
-        runner = RayLoopRunner("ray-integ-loop-runner", MagicMock())
+        runner = RayLoopRunner("ray-integ-loop-runner", MagicMock(), MagicMock())
         collected: list[Any] = []
         async for chunk in runner.run(_make_request(user_input="cluster")):
             collected.append(chunk)
@@ -135,10 +135,10 @@ async def test_ray_loop_runner_cancel_releases_blocked_run(ray_multi_node_cluste
         async def cancel(self) -> None:
             self._released.set()
 
-    with patch("soothe.core.runner.ray_actor.LoopRunnerActor", HeldStubLoopRunnerActor):
+    with patch("soothe_daemon.runner.ray_actor.LoopRunnerActor", HeldStubLoopRunnerActor):
         from soothe_daemon.runner.ray_runner import RayLoopRunner
 
-        runner = RayLoopRunner("ray-integ-cancel", MagicMock())
+        runner = RayLoopRunner("ray-integ-cancel", MagicMock(), MagicMock())
         collected: list[Any] = []
         drain_task = asyncio.create_task(_collect(runner.run(_make_request()), collected))
         await asyncio.sleep(0.5)

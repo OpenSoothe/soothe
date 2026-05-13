@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from soothe.core.goal_engine.webhooks import (
     AUTONOTIFY_EVENTS,
     WebhookConfig,

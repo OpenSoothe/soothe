@@ -14,6 +14,7 @@ from soothe.core.events import EventPriority
 
 if TYPE_CHECKING:
     from soothe.core.events import EventMeta
+
     from soothe_daemon.event_size_stats import EventSizeDistributionCollector
 
 logger = logging.getLogger(__name__)

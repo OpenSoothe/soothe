@@ -13,8 +13,10 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from soothe.config import SootheConfig
+from soothe.protocols.runner import LoopRunRequest
+
+from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.config.models import WorkerPoolConfig
 from soothe_daemon.runner.pool_runner import (
     PoolLoopRunner,
@@ -23,7 +25,6 @@ from soothe_daemon.runner.pool_runner import (
     WorkerProcess,
     WorkerStatus,
 )
-from soothe.protocols.runner import LoopRunRequest
 
 
 def _make_request(**kwargs: Any) -> LoopRunRequest:
@@ -36,8 +37,8 @@ def _make_request(**kwargs: Any) -> LoopRunRequest:
     return LoopRunRequest(**defaults)
 
 
-def _make_config() -> SootheConfig:
-    return SootheConfig()
+def _make_config() -> tuple[SootheDaemonConfig, SootheConfig]:
+    return SootheDaemonConfig(), SootheConfig()
 
 
 def _make_cancel_event() -> multiprocessing.Event:
@@ -118,7 +119,7 @@ class TestWorkerPool:
     @pytest.mark.asyncio
     async def test_get_shared_instance_creates_pool(self) -> None:
         """get_shared_instance() creates singleton pool on first call."""
-        config = _make_config()
+        daemon_config, agent_config = _make_config()
 
         # Clear any existing singleton
         WorkerPool._shared_pool = None
@@ -133,7 +134,7 @@ class TestWorkerPool:
         mock_ctx.Queue.side_effect = queue.Queue
 
         with patch("multiprocessing.get_context", return_value=mock_ctx):
-            pool = await WorkerPool.get_shared_instance(config)
+            pool = await WorkerPool.get_shared_instance(agent_config, daemon_config)
 
         assert pool is not None
         assert WorkerPool._shared_pool is pool
@@ -145,7 +146,7 @@ class TestWorkerPool:
     @pytest.mark.asyncio
     async def test_close_shared_instance_destroys_pool(self) -> None:
         """close_shared_instance() destroys singleton."""
-        config = _make_config()
+        daemon_config, agent_config = _make_config()
 
         WorkerPool._shared_pool = None
         WorkerPool._pool_lock = None
@@ -158,7 +159,7 @@ class TestWorkerPool:
         mock_ctx.Queue.side_effect = queue.Queue
 
         with patch("multiprocessing.get_context", return_value=mock_ctx):
-            await WorkerPool.get_shared_instance(config)
+            await WorkerPool.get_shared_instance(agent_config, daemon_config)
 
         # Now close
         await WorkerPool.close_shared_instance()
@@ -168,7 +169,7 @@ class TestWorkerPool:
     @pytest.mark.asyncio
     async def test_submit_yields_chunks_from_worker(self) -> None:
         """submit() dispatches to worker and yields chunks."""
-        config = _make_config()
+        daemon_config, agent_config = _make_config()
 
         WorkerPool._shared_pool = None
         WorkerPool._pool_lock = None
@@ -209,9 +210,9 @@ class TestWorkerPool:
 
         with (
             patch("multiprocessing.get_context", return_value=mock_ctx),
-            patch("soothe.core.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
+            patch("soothe_daemon.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
         ):
-            pool = await WorkerPool.get_shared_instance(config)
+            pool = await WorkerPool.get_shared_instance(agent_config, daemon_config)
             pool._workers = {"worker-0": worker}
 
             request = _make_request()
@@ -227,7 +228,7 @@ class TestWorkerPool:
     @pytest.mark.asyncio
     async def test_submit_waits_when_pool_saturated(self) -> None:
         """At max_pool_size with all workers busy, submit waits until a worker idles."""
-        config = _make_config()
+        daemon_config, agent_config = _make_config()
 
         WorkerPool._shared_pool = None
         WorkerPool._pool_lock = None
@@ -276,9 +277,9 @@ class TestWorkerPool:
 
         with (
             patch("multiprocessing.get_context", return_value=mock_ctx),
-            patch("soothe.core.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
+            patch("soothe_daemon.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
         ):
-            pool = await WorkerPool.get_shared_instance(config)
+            pool = await WorkerPool.get_shared_instance(agent_config, daemon_config)
             pool._workers = {"worker-0": w1, "worker-1": w2}
             pool._max_pool_size = 2
 
@@ -310,7 +311,7 @@ class TestWorkerPool:
     @pytest.mark.asyncio
     async def test_submit_early_close_drains_remaining_chunks(self) -> None:
         """Consumer disconnect before done: background drain absorbs rest; worker becomes idle."""
-        config = _make_config()
+        daemon_config, agent_config = _make_config()
 
         WorkerPool._shared_pool = None
         WorkerPool._pool_lock = None
@@ -347,9 +348,9 @@ class TestWorkerPool:
 
         with (
             patch("multiprocessing.get_context", return_value=mock_ctx),
-            patch("soothe.core.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
+            patch("soothe_daemon.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
         ):
-            pool = await WorkerPool.get_shared_instance(config)
+            pool = await WorkerPool.get_shared_instance(agent_config, daemon_config)
             pool._workers = {"worker-0": worker}
 
             seen: list[Any] = []
@@ -377,7 +378,7 @@ class TestWorkerPool:
     @pytest.mark.asyncio
     async def test_dead_busy_worker_delivers_error_to_waiter(self) -> None:
         """When the OS worker process dies mid-request, poll path unblocks submit with RuntimeError."""
-        config = _make_config()
+        daemon_config, agent_config = _make_config()
 
         WorkerPool._shared_pool = None
         WorkerPool._pool_lock = None
@@ -405,7 +406,7 @@ class TestWorkerPool:
         mock_ctx.Queue.side_effect = queue.Queue
 
         with patch("multiprocessing.get_context", return_value=mock_ctx):
-            pool = await WorkerPool.get_shared_instance(config)
+            pool = await WorkerPool.get_shared_instance(agent_config, daemon_config)
             pool._workers = {"worker-0": worker}
 
             pending: asyncio.Queue = asyncio.Queue()
@@ -424,7 +425,7 @@ class TestWorkerPool:
     @pytest.mark.asyncio
     async def test_submit_raises_on_worker_error(self) -> None:
         """submit() re-raises error from worker."""
-        config = _make_config()
+        daemon_config, agent_config = _make_config()
 
         WorkerPool._shared_pool = None
         WorkerPool._pool_lock = None
@@ -458,9 +459,9 @@ class TestWorkerPool:
 
         with (
             patch("multiprocessing.get_context", return_value=mock_ctx),
-            patch("soothe.core.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
+            patch("soothe_daemon.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
         ):
-            pool = await WorkerPool.get_shared_instance(config)
+            pool = await WorkerPool.get_shared_instance(agent_config, daemon_config)
             pool._workers = {"worker-0": worker}
 
             with pytest.raises(ValueError, match="worker boom"):
@@ -472,7 +473,7 @@ class TestWorkerPool:
     @pytest.mark.asyncio
     async def test_get_metrics_returns_pool_stats(self) -> None:
         """get_metrics() returns pool utilization stats."""
-        config = _make_config()
+        daemon_config, agent_config = _make_config()
 
         WorkerPool._shared_pool = None
         WorkerPool._pool_lock = None
@@ -484,7 +485,7 @@ class TestWorkerPool:
         mock_ctx.Queue.side_effect = queue.Queue
 
         with patch("multiprocessing.get_context", return_value=mock_ctx):
-            pool = await WorkerPool.get_shared_instance(config)
+            pool = await WorkerPool.get_shared_instance(agent_config, daemon_config)
 
             # Create some workers with different statuses
             empty_rq = MagicMock()
@@ -529,7 +530,7 @@ class TestPoolLoopRunner:
     @pytest.mark.asyncio
     async def test_run_delegates_to_pool(self) -> None:
         """run() delegates to WorkerPool.submit()."""
-        config = _make_config()
+        daemon_config, agent_config = _make_config()
 
         WorkerPool._shared_pool = None
         WorkerPool._pool_lock = None
@@ -563,12 +564,12 @@ class TestPoolLoopRunner:
 
         with (
             patch("multiprocessing.get_context", return_value=mock_ctx),
-            patch("soothe.core.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
+            patch("soothe_daemon.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
         ):
-            pool = await WorkerPool.get_shared_instance(config)
+            pool = await WorkerPool.get_shared_instance(agent_config, daemon_config)
             pool._workers = {"worker-0": worker}
 
-            runner = PoolLoopRunner("loop-1", config)
+            runner = PoolLoopRunner("loop-1", agent_config, daemon_config)
             request = _make_request(loop_id="loop-1")
 
             result = []
@@ -582,7 +583,7 @@ class TestPoolLoopRunner:
     @pytest.mark.asyncio
     async def test_cancel_calls_pool_cancel_request(self) -> None:
         """cancel() delegates to WorkerPool.cancel_request()."""
-        config = _make_config()
+        daemon_config, agent_config = _make_config()
 
         WorkerPool._shared_pool = None
         WorkerPool._pool_lock = None
@@ -597,7 +598,7 @@ class TestPoolLoopRunner:
         empty_rq.get_nowait.side_effect = queue.Empty
 
         with patch("multiprocessing.get_context", return_value=mock_ctx):
-            pool = await WorkerPool.get_shared_instance(config)
+            pool = await WorkerPool.get_shared_instance(agent_config, daemon_config)
             pool._workers = {
                 "worker-0": WorkerProcess(
                     process=mock_process,
@@ -610,7 +611,7 @@ class TestPoolLoopRunner:
                 )
             }
 
-            runner = PoolLoopRunner("loop-1", config)
+            runner = PoolLoopRunner("loop-1", agent_config, daemon_config)
             runner._pool = pool
 
             await runner.cancel()

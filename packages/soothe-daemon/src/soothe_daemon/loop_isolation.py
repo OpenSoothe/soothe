@@ -14,9 +14,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from uuid_utils import uuid7
-
 from soothe.core.workspace import resolve_loop_daemon_workspace
+from uuid_utils import uuid7
 
 if TYPE_CHECKING:
     pass

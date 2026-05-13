@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from soothe_daemon.config.models import DaemonConfig, TransportConfig, WebSocketConfig
+from soothe_daemon.config import SootheDaemonConfig
+from soothe_daemon.config.models import TransportConfig, WebSocketConfig
 from soothe_daemon.protocol_v2 import (
     ERROR_INVALID_MESSAGE,
     create_error_response,
@@ -109,12 +110,14 @@ class TestTransportManager:
     """Tests for transport manager."""
 
     @pytest.fixture
-    def config(self) -> DaemonConfig:
+    def config(self) -> SootheDaemonConfig:
         """Create test configuration with WebSocket disabled (for error tests)."""
-        return DaemonConfig(transports=TransportConfig(websocket=WebSocketConfig(enabled=False)))
+        return SootheDaemonConfig(
+            transports=TransportConfig(websocket=WebSocketConfig(enabled=False))
+        )
 
     @pytest.mark.asyncio
-    async def test_manager_websocket_required(self, config: DaemonConfig) -> None:
+    async def test_manager_websocket_required(self, config: SootheDaemonConfig) -> None:
         """Manager fails when WebSocket is disabled."""
         manager = TransportManager(config)
         manager.set_message_handler(lambda msg: None)
@@ -123,7 +126,7 @@ class TestTransportManager:
             await manager.start_all()
 
     @pytest.mark.asyncio
-    async def test_manager_no_handler(self, config: DaemonConfig) -> None:
+    async def test_manager_no_handler(self, config: SootheDaemonConfig) -> None:
         """Manager fails when no handler is set."""
         manager = TransportManager(config)
 
@@ -133,7 +136,7 @@ class TestTransportManager:
     @pytest.mark.asyncio
     async def test_manager_double_start(self) -> None:
         """Manager handles double start gracefully."""
-        config = DaemonConfig(
+        config = SootheDaemonConfig(
             transports=TransportConfig(websocket=WebSocketConfig(enabled=True, port=18766))
         )
 
@@ -151,7 +154,7 @@ class TestTransportManager:
 
     def test_manager_properties(self) -> None:
         """Manager properties are correct."""
-        config = DaemonConfig(transports=TransportConfig())
+        config = SootheDaemonConfig(transports=TransportConfig())
         manager = TransportManager(config)
 
         assert manager.transport_count == 0

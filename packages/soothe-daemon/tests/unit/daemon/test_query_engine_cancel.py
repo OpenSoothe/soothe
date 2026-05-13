@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.query_engine import QueryEngine
 
 
@@ -107,6 +108,7 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
         broadcasts.append(msg)
 
     runner = _FakeRunner()
+    daemon_config = SootheDaemonConfig()
     daemon = SimpleNamespace(
         _runner=runner,
         _runner_factory=_FakeRunnerFactory(runner),
@@ -119,16 +121,12 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
             log_assistant_response=lambda _text: None,
         ),
         _config=SimpleNamespace(
-            daemon=SimpleNamespace(
-                max_query_duration_minutes=0,
-                max_concurrent_threads=100,
-                cancel_grace_seconds=30,
-            ),
             logging=SimpleNamespace(
                 thread_logging=SimpleNamespace(retention_days=7, max_size_mb=10)
             ),
             workspace_dir=".",
         ),
+        _daemon_config=daemon_config,
         _global_history=None,
         _active_threads={},
         _query_running=False,
@@ -172,6 +170,12 @@ def _daemon_factory(
     async def _broadcast(msg: dict[str, Any]) -> None:
         broadcasts.append(msg)
 
+    daemon_config = SootheDaemonConfig(
+        max_query_duration_minutes=0,
+        max_concurrent_threads=100,
+        cancel_grace_seconds=cancel_grace_seconds,
+    )
+
     return SimpleNamespace(
         _runner=runner,
         _runner_factory=_FakeRunnerFactory(runner),
@@ -184,16 +188,12 @@ def _daemon_factory(
             log_assistant_response=lambda _text: None,
         ),
         _config=SimpleNamespace(
-            daemon=SimpleNamespace(
-                max_query_duration_minutes=0,
-                max_concurrent_threads=100,
-                cancel_grace_seconds=cancel_grace_seconds,
-            ),
             logging=SimpleNamespace(
                 thread_logging=SimpleNamespace(retention_days=7, max_size_mb=10)
             ),
             workspace_dir=".",
         ),
+        _daemon_config=daemon_config,
         _global_history=None,
         _active_threads={},
         _query_running=False,
@@ -301,6 +301,11 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
         broadcasts.append(msg)
 
     runner = _SlowCancelRunner(unwind_delay=0.04)
+    daemon_config = SootheDaemonConfig(
+        max_query_duration_minutes=0,
+        max_concurrent_threads=100,
+        cancel_grace_seconds=60,
+    )
     daemon = SimpleNamespace(
         _runner=runner,
         _runner_factory=_FakeRunnerFactory(runner),
@@ -313,16 +318,12 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
             log_assistant_response=lambda _text: None,
         ),
         _config=SimpleNamespace(
-            daemon=SimpleNamespace(
-                max_query_duration_minutes=0,
-                max_concurrent_threads=100,
-                cancel_grace_seconds=60,
-            ),
             logging=SimpleNamespace(
                 thread_logging=SimpleNamespace(retention_days=7, max_size_mb=10)
             ),
             workspace_dir=".",
         ),
+        _daemon_config=daemon_config,
         _global_history=None,
         _active_threads={},
         _query_running=False,
@@ -340,7 +341,8 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
     engine = QueryEngine(daemon)
     await engine.run_query("hello", loop_id="loop-cancel")
     task = daemon._current_query_task
-    assert task is not None and not task.done()
+    assert task is not None
+    assert not task.done()
 
     await engine.cancel_loop("")
     assert not task.done()

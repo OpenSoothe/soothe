@@ -933,7 +933,7 @@ class FileLoggingConfig(BaseModel):
 
     Args:
         level: Logging level for file output.
-        path: Log file path (empty = SOOTHE_HOME/logs/soothed.log).
+        path: Log file path (empty = SOOTHE_HOME/logs/soothe.log).
         max_bytes: Maximum file size before rotation.
         backup_count: Number of rotating backup files.
     """
@@ -1081,7 +1081,7 @@ class ObservabilityConfig(BaseModel):
 
     Args:
         log_file_level: Logging level for file output (DEBUG, INFO, WARNING, ERROR).
-        log_file_path: Log file path (empty = SOOTHE_HOME/logs/soothed.log).
+        log_file_path: Log file path (empty = SOOTHE_HOME/logs/soothe.log).
         log_file_max_bytes: Maximum file size before rotation (default: 5 MB).
         log_file_backup_count: Number of rotating backup files.
         verbosity: Verbosity level for TUI/headless activity display (quiet, normal, detailed, debug).
@@ -1099,7 +1099,7 @@ class ObservabilityConfig(BaseModel):
 
     log_file_path: str | None = Field(
         default=None,
-        description="Log file path (empty = SOOTHE_HOME/logs/soothed.log)",
+        description="Log file path (empty = SOOTHE_HOME/logs/soothe.log)",
     )
 
     log_file_max_bytes: int = Field(

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from soothe.config import SootheConfig
     from soothe.config.models import OutputStreamingConfig
     from soothe.core.events import EventMeta
+
     from soothe_daemon.event_bus import EventBus
     from soothe_daemon.transports.base import TransportServer
 

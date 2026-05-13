@@ -11,12 +11,12 @@ import threading
 from dataclasses import dataclass
 from typing import Any
 
-from soothe_sdk.client.protocol import encode
-
 from soothe.config import SootheConfig
 from soothe.core import resolve_daemon_workspace
 from soothe.core.loop.state.persistence.manager import AgentLoopCheckpointPersistenceManager
 from soothe.logging import ThreadLogger
+from soothe_sdk.client.protocol import encode
+
 from soothe_daemon._handlers import DaemonHandlersMixin
 from soothe_daemon.client_session import ClientSessionManager
 from soothe_daemon.config import SootheDaemonConfig

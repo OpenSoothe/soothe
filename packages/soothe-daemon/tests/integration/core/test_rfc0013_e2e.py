@@ -19,6 +19,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from tests.integration.ws_loop_client import (
+    loop_new_with_initial_input,
+    request_loop_list,
+    subscribe_loop_stream,
+)
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from soothe_daemon.event_bus import EventBus
@@ -28,11 +33,6 @@ from tests.integration.conftest import (
     await_status_state,
     build_daemon_config,
     force_isolated_home,
-)
-from tests.integration.ws_loop_client import (
-    loop_new_with_initial_input,
-    request_loop_list,
-    subscribe_loop_stream,
 )
 
 # ============================================================================
