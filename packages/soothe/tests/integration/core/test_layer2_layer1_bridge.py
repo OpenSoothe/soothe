@@ -72,14 +72,18 @@ class TestExecutionHintsEnvelopeIntegration:
             goal="Test goal",
             step_description="Open the page",
             execution_hints=hints,
-            iteration=1,
-            max_iterations=3,
         )
         assert "<EXECUTION_HINTS>" in envelope
         assert "</EXECUTION_HINTS>" in envelope
         assert "Suggested subagent: browser" in envelope
         assert "Expected output: Page summary" in envelope
         assert "Consider using the suggested approach first" in envelope
+        gq = envelope.find("<CURRENT_GOAL>")
+        uq = envelope.find("<USER_QUERY>")
+        ctx = envelope.find("--- Context ---")
+        dyn = envelope.find("<DYNAMIC_CONTEXT>")
+        assert 0 <= gq < uq < ctx < dyn
+        assert "<CURRENT_GOAL>" not in envelope[dyn:]
 
     def test_envelope_expected_output_only(self) -> None:
         """Hints may omit subagent when only expected_output is set."""

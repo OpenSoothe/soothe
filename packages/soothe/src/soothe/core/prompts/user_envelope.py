@@ -1,9 +1,8 @@
 """User message envelope builder for execute-step (RFC-214).
 
 Builds the XML envelope that wraps per-turn dynamic content:
-- <DYNAMIC_CONTEXT>: goal context, execution hints, timestamp, response-language hint
-- <RETRIEVED_KNOWLEDGE>: per-turn memories, RAG docs (optional)
-- <USER_QUERY>: actual step instruction
+- <CURRENT_GOAL> then <USER_QUERY> up front (what to do this turn)
+- ``--- Context ---`` then <DYNAMIC_CONTEXT>: execution hints, timestamp, language hint
 
 This envelope keeps volatile content out of the system prompt,
 maximizing prompt cache hits.
@@ -12,6 +11,13 @@ maximizing prompt cache hits.
 from __future__ import annotations
 
 import datetime as dt
+import re
+
+# Strip legacy AgentLoop suffix accidentally baked into goal text or stored checkpoints.
+_GOAL_ITERATION_SUFFIX_RE = re.compile(
+    r"\s*\(iteration\s+\d+/\d+\)\s*$",
+    re.IGNORECASE,
+)
 
 # User-visible prose should track the goal's language (execute + plan envelopes, RFC-214).
 _RESPONSE_LANGUAGE_HINT = (
@@ -21,14 +27,23 @@ _RESPONSE_LANGUAGE_HINT = (
     "</response_language_hint>"
 )
 
+_EXECUTE_STEP_CONTEXT_SEPARATOR = "\n\n--- Context ---\n\n"
+
+
+def _goal_text_for_execute_step_envelope(goal: str | None) -> str:
+    """Normalize goal string for ``<CURRENT_GOAL>`` (strip trailing iteration suffix)."""
+    raw = (goal or "").strip()
+    if not raw:
+        return "No goal specified"
+    stripped = _GOAL_ITERATION_SUFFIX_RE.sub("", raw).strip()
+    return stripped if stripped else "No goal specified"
+
 
 def build_execute_step_envelope(
     goal: str | None,
     step_description: str,
     *,
     execution_hints: str | None = None,
-    iteration: int | None = None,
-    max_iterations: int | None = None,
     workspace_state: str | None = None,
 ) -> str:
     """Build the user message envelope for an execute-step (RFC-214).
@@ -40,8 +55,6 @@ def build_execute_step_envelope(
         goal: Current goal text.
         step_description: The step's description (what to execute).
         execution_hints: Optional hints text from ExecutionHintsMiddleware.
-        iteration: Current iteration number (1-based for display).
-        max_iterations: Maximum iterations allowed.
         workspace_state: Optional lightweight workspace diff summary.
 
     Returns:
@@ -51,21 +64,16 @@ def build_execute_step_envelope(
     date_str = now.strftime("%Y-%m-%d")
     timestamp = now.isoformat()
 
-    # Build <DYNAMIC_CONTEXT>
+    goal_text = _goal_text_for_execute_step_envelope(goal)
+    current_goal = f"<CURRENT_GOAL>\n{goal_text}\n</CURRENT_GOAL>"
+    user_query = f"<USER_QUERY>\n{step_description}\n</USER_QUERY>"
+
+    # <DYNAMIC_CONTEXT>: hints + context only (goal and step instruction are above the fold)
     dynamic_parts: list[str] = []
 
-    # <CURRENT_GOAL>
-    goal_text = goal or "No goal specified"
-    iter_info = ""
-    if iteration is not None and max_iterations is not None:
-        iter_info = f" (iteration {iteration}/{max_iterations})"
-    dynamic_parts.append(f"<CURRENT_GOAL>\n{goal_text}{iter_info}\n</CURRENT_GOAL>")
-
-    # <EXECUTION_HINTS> (when present)
     if execution_hints:
         dynamic_parts.append(f"<EXECUTION_HINTS>\n{execution_hints}\n</EXECUTION_HINTS>")
 
-    # <CONTEXT_INFO>
     context_info_parts = [
         f"<timestamp>{timestamp}</timestamp>",
         f"<date>{date_str}</date>",
@@ -77,11 +85,7 @@ def build_execute_step_envelope(
 
     dynamic_context = "<DYNAMIC_CONTEXT>\n" + "\n".join(dynamic_parts) + "\n</DYNAMIC_CONTEXT>"
 
-    # <USER_QUERY> - the actual step instruction
-    user_query = f"<USER_QUERY>\n{step_description}\n</USER_QUERY>"
-
-    # Assemble full envelope
-    return dynamic_context + "\n\n" + user_query
+    return current_goal + "\n\n" + user_query + _EXECUTE_STEP_CONTEXT_SEPARATOR + dynamic_context
 
 
 def build_plan_context_envelope(
