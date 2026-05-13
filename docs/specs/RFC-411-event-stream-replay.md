@@ -1,12 +1,12 @@
-# Event Stream Replay & History Reconstruction
+# RFC-411: Event Stream Replay & History Reconstruction
 
-> Design draft for reconstructing complete execution history from checkpoint tree for TUI/CLI reattachment.
->
-> **RFC Number**: RFC-411
-> **Status**: Draft
-> **Created**: 2026-04-22
-> **Dependencies**: RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX), RFC-215 (Persistence Backend)
-> **Author**: Claude Sonnet 4.6
+**RFC**: 411
+**Title**: Event Stream Replay & History Reconstruction
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-04-22
+**Dependencies**: RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX), RFC-215 (Persistence Backend)
+**Author**: Claude Sonnet 4.6
 
 ---
 

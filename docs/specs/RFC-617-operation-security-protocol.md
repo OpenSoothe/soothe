@@ -1,10 +1,10 @@
 # RFC-617: OperationSecurityProtocol for Workspace and Tool Execution
 
-**RFC**: 617  
-**Title**: OperationSecurityProtocol: Unified Workspace and Tool Operation Security  
-**Status**: Draft  
-**Kind**: Architecture Design  
-**Created**: 2026-04-30  
+**RFC**: 617
+**Title**: OperationSecurityProtocol: Unified Workspace and Tool Operation Security
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-04-30
 **Dependencies**: RFC-102, RFC-103, RFC-406, RFC-613
 
 ---

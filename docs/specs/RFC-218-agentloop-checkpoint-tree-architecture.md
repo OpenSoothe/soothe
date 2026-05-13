@@ -1,12 +1,12 @@
-# AgentLoop Checkpoint Tree Architecture
+# RFC-218: AgentLoop Checkpoint Tree Architecture
 
-> Design draft for branch-based checkpoint synchronization and smart retry with learning.
->
-> **RFC Number**: RFC-218
-> **Status**: Draft
-> **Created**: 2026-04-22
-> **Dependencies**: RFC-216 (Multi-Thread Lifecycle), IG-238 (Checkpoint Unified Integration)
-> **Author**: Claude Sonnet 4.6
+**RFC**: 218
+**Title**: AgentLoop Checkpoint Tree Architecture
+**Status**: Draft
+**Kind**: Architecture Design
+**Created**: 2026-04-22
+**Dependencies**: RFC-216 (Multi-Thread Lifecycle), IG-238 (Checkpoint Unified Integration)
+**Author**: Claude Sonnet 4.6
 
 ---
 

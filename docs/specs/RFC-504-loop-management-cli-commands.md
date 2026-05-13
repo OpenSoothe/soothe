@@ -1,12 +1,12 @@
-# Loop Management CLI Commands
+# RFC-504: Loop Management CLI Commands
 
-> Design draft for loop-centric CLI commands for managing AgentLoop instances.
->
-> **RFC Number**: RFC-504
-> **Status**: Draft
-> **Created**: 2026-04-22
-> **Dependencies**: RFC-503 (Loop-First UX), RFC-218 (Checkpoint Tree), RFC-454 (Slash Commands)
-> **Author**: Claude Sonnet 4.6
+**RFC**: 504
+**Title**: Loop Management CLI Commands
+**Status**: Draft
+**Kind**: Implementation Interface Design
+**Created**: 2026-04-22
+**Dependencies**: RFC-503 (Loop-First UX), RFC-218 (Checkpoint Tree), RFC-454 (Slash Commands)
+**Author**: Claude Sonnet 4.6
 
 ---
 

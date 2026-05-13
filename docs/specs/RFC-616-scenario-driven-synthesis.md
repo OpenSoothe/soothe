@@ -1,6 +1,9 @@
 # RFC-616: Scenario-Driven Goal Completion Synthesis
 
+**RFC**: 616
+**Title**: Scenario-Driven Goal Completion Synthesis
 **Status**: Draft
+**Kind**: Architecture Design
 **Created**: 2026-04-28
 **Related**: RFC-603, RFC-219, IG-298, IG-299
 

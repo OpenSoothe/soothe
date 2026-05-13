@@ -5,7 +5,8 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Last Updated**: 2026-05-05 (IG-399: progressive planning removed; pre-generate evidence probe added)
+**Updated**: 2026-05-05
+**Authors**: Claude Code
 **Dependencies**: RFC-200, RFC-203
 **Related**: RFC-207 (Thread), RFC-214 (plan-context human), RFC-603, RFC-604, IG-376
 

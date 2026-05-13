@@ -1,10 +1,12 @@
-# RFC-607: Progressive Display Refinements Post-Migration: Progressive Display Refinements Post-Migration
+# RFC-607: Progressive Display Refinements Post-Migration
 
+**RFC**: 607
+**Title**: Progressive Display Refinements Post-Migration
 **Status**: Draft
-**Authors**: Claude Code, Xiaming Chen
-**Created**: 2026-04-14
-**Depends on**: RFC-606 (DeepAgents CLI TUI Migration), RFC-501 (Display Verbosity), RFC-500 (CLI/TUI Architecture)
 **Kind**: Implementation Interface Design
+**Created**: 2026-04-14
+**Authors**: Claude Code, Xiaming Chen
+**Depends on**: RFC-606 (DeepAgents CLI TUI Migration), RFC-501 (Display Verbosity), RFC-500 (CLI/TUI Architecture)
 
 ---
 

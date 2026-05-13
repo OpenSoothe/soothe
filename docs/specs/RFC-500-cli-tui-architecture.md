@@ -3,6 +3,7 @@
 **RFC**: 500
 **Title**: CLI TUI Architecture Design
 **Status**: Implemented
+**Kind**: Architecture Design
 **Created**: 2026-03-12
 **Updated**: 2026-04-29
 **Related**: RFC-000, RFC-001, RFC-400, RFC-402

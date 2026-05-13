@@ -1,10 +1,12 @@
 # RFC-502: Unified Presentation Engine
 
-**Status**: Draft  
-**Authors**: Soothe Team  
-**Created**: 2026-04-02  
-**Depends on**: `RFC-401-event-processing.md` (Event Processing), RFC-501 (Display & Verbosity), RFC-500 (CLI/TUI Architecture)  
+**RFC**: 502
+**Title**: Unified Presentation Engine
+**Status**: Draft
 **Kind**: Implementation Interface Design
+**Created**: 2026-04-02
+**Authors**: Soothe Team
+**Depends on**: RFC-401 (Event Processing), RFC-501 (Display & Verbosity), RFC-500 (CLI/TUI Architecture)
 
 ---
 

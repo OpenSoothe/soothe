@@ -1,7 +1,9 @@
 # RFC-454: Slash Command Architecture
 
 **RFC**: 454
+**Title**: Slash Command Architecture
 **Status**: Draft
+**Kind**: Architecture Design
 **Created**: 2026-04-16
 **Author**: Claude (Sonnet 4.6)
 **Extends**: RFC-450 (Daemon Communication Protocol)

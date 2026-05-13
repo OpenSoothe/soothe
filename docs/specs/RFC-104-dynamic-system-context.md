@@ -1,8 +1,9 @@
 # RFC-104: Dynamic System Context Injection
 
-**RFC Number**: RFC-104
-**Kind**: Implementation Interface Design
+**RFC**: 104
+**Title**: Dynamic System Context Injection
 **Status**: Implemented
+**Kind**: Implementation Interface Design
 **Created**: 2026-03-31
 **Author**: Platonic brainstorming session
 **Design Draft**: [2026-03-31-dynamic-system-context-design.md](../drafts/2026-03-31-dynamic-system-context-design.md)

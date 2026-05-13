@@ -1,13 +1,13 @@
 # RFC-604: Plan Phase Robustness (Three-Layer Defense)
 
+**RFC**: 604
+**Title**: Plan Phase Robustness (Three-Layer Defense)
 **Status**: Implemented
-**Authors**: Claude Sonnet 4.6
-**Created**: 2026-04-11
-**Last Updated**: 2026-05-05 (IG-399: split assess/pre-generate/generate flow; flattened `PlanGeneration`)
-**Depends on**: RFC-201-agentloop-plan-execute-loop
-**Supersedes**: ---
-**Stage**: Cognition/AgentLoop
 **Kind**: Architecture Design
+**Created**: 2026-04-11
+**Updated**: 2026-05-05
+**Authors**: Claude Sonnet 4.6
+**Depends on**: RFC-201 (AgentLoop Plan-Execute Loop)
 
 ---
 
