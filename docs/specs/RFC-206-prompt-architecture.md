@@ -329,6 +329,10 @@ class LLMPlanner:
 
 ## Changelog
 
+**2026-05-13**:
+- Aligned RFC-214 amendment example with execute-step envelope: `<CURRENT_GOAL>` + `<USER_QUERY>` first, then `--- Context ---` + `<DYNAMIC_CONTEXT>`; updated Key Changes item 3 accordingly.
+- Execute-step `<CONTEXT_INFO>` documents timestamp, date, response-language hint, and optional workspace state only (no loop-iteration element in the envelope).
+
 **2026-05-04**:
 - Documented `instructions/` contents for plan phase: `plan_assess_instructions.xml`, `plan_generate_instructions.xml`; `execution_policies.xml` under `system/policies/` (IG-329 / IG-372). Removed obsolete `plan_execute_instructions.xml`.
 
@@ -342,7 +346,7 @@ class LLMPlanner:
 
 ## Amendment: RFC-214 Volatility-Tiered Prompt Architecture
 
-**Date**: 2026-05-08
+**Date**: 2026-05-08 (revised 2026-05-13 for execute-step envelope ordering)
 
 RFC-214 supersedes the `USER_TASK` layer composition defined in this RFC. The changes are:
 
@@ -364,20 +368,23 @@ The `USER_TASK` layer's internal structure changes from a single XML block to th
 
 **After (RFC-214):**
 ```xml
+<CURRENT_GOAL>goal text</CURRENT_GOAL>
+
+<USER_QUERY>
+  Actual user message or orchestration instruction
+</USER_QUERY>
+
+--- Context ---
+
 <DYNAMIC_CONTEXT>
-  <CURRENT_GOAL>goal text and progress summary</CURRENT_GOAL>
   <EXECUTION_HINTS>step-specific guidance</EXECUTION_HINTS>
-  <CONTEXT_INFO>timestamp, workspace state, date</CONTEXT_INFO>
+  <CONTEXT_INFO>timestamp, date, response_language_hint, workspace state</CONTEXT_INFO>
 </DYNAMIC_CONTEXT>
 
 <RETRIEVED_KNOWLEDGE>
   <MEMORY>per-turn recalled memories</MEMORY>
   <RAG_DOCS>per-turn retrieved documents</RAG_DOCS>
 </RETRIEVED_KNOWLEDGE>
-
-<USER_QUERY>
-  Actual user message or orchestration instruction
-</USER_QUERY>
 ```
 
 ### Key Changes
@@ -386,7 +393,7 @@ The `USER_TASK` layer's internal structure changes from a single XML block to th
 
 2. **`<EVIDENCE>` eliminated**: Step results are now `LoopAIMessage` entries in the ledger. No separate evidence blocks.
 
-3. **`<GOAL>` → `<CURRENT_GOAL>`**: Goal text moves into `<DYNAMIC_CONTEXT>` since it changes every turn.
+3. **`<GOAL>` → `<CURRENT_GOAL>`**: Goal text moves to a leading `<CURRENT_GOAL>` block (before `<USER_QUERY>`), not nested under `<DYNAMIC_CONTEXT>`. Per-turn hints and timestamps stay under `<DYNAMIC_CONTEXT>` after a `--- Context ---` delimiter.
 
 4. **New sections**: `<EXECUTION_HINTS>`, `<CONTEXT_INFO>`, `<RETRIEVED_KNOWLEDGE>`, `<USER_QUERY>` — all per-turn volatile content that was previously mixed into the system prompt.
 

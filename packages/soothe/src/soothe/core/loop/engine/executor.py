@@ -1594,9 +1594,9 @@ class Executor:
     ) -> list[LoopHumanMessage]:
         """Build N LoopHumanMessage inputs for batch execution (RFC-214).
 
-        Each step gets its own LoopHumanMessage with the user message envelope
-        containing <DYNAMIC_CONTEXT> (goal, execution hints, timestamp) and
-        <USER_QUERY> (step description).
+        Each step gets its own LoopHumanMessage with the user message envelope:
+        <CURRENT_GOAL>, <USER_QUERY>, then ``--- Context ---`` and <DYNAMIC_CONTEXT>
+        (execution hints, timestamp, and related context).
 
         Args:
             steps: Steps to execute in this wave
@@ -1625,8 +1625,6 @@ class Executor:
                 goal=state.goal,
                 step_description=step.description,
                 execution_hints=execution_hints,
-                iteration=state.iteration + 1 if state.iteration is not None else None,
-                max_iterations=state.max_iterations,
             )
             msg = LoopHumanMessage(
                 content=envelope,
