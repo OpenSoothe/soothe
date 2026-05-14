@@ -1221,35 +1221,58 @@ class WorkerPool:
             if cond is None:
                 raise RuntimeError("Worker pool is not started")
 
-            worker: WorkerProcess | None = None
+            worker: WorkerProcess
+            response_queue: asyncio.Queue
+            handoff_retries = 0
             while True:
-                worker = await self._try_acquire_idle_worker()
-                if worker is not None:
+                while True:
+                    worker = await self._try_acquire_idle_worker()
+                    if worker is not None:
+                        break
+                    if not self._running:
+                        raise RuntimeError("Worker pool is shutting down")
+                    async with cond:
+                        self._waiting_for_worker_slot += 1
+                        try:
+                            if self._dispatch_stats is not None:
+                                await self._dispatch_stats.record_waiter_snapshot(
+                                    self._waiting_for_worker_slot
+                                )
+                            await cond.wait()
+                        finally:
+                            self._waiting_for_worker_slot -= 1
+
+                # Register routing and mark busy before releasing the semaphore so the poll
+                # loop cannot treat this worker as idle and drain a stale response_queue.
+                response_queue = asyncio.Queue()
+                self._pending_responses[request_id] = response_queue
+                self._workers_by_loop_id[request.loop_id] = worker.worker_id
+                worker.mark_busy(request.loop_id, request_id)
+                worker.request_queue.put(("request", request_id, request))
+                if worker.is_alive():
                     break
-                if not self._running:
-                    raise RuntimeError("Worker pool is shutting down")
-                async with cond:
-                    self._waiting_for_worker_slot += 1
-                    try:
-                        if self._dispatch_stats is not None:
-                            await self._dispatch_stats.record_waiter_snapshot(
-                                self._waiting_for_worker_slot
-                            )
-                        await cond.wait()
-                    finally:
-                        self._waiting_for_worker_slot -= 1
+
+                # Worker exited after we observed it idle (common race: subprocess idle
+                # timeout vs dispatch). Recover without surfacing a client RuntimeError.
+                self._pending_responses.pop(request_id, None)
+                self._workers_by_loop_id.pop(request.loop_id, None)
+                worker.mark_idle()
+                handoff_retries += 1
+                if handoff_retries > 64:
+                    raise RuntimeError(
+                        "Worker pool: unable to hand off request after repeated worker exits; "
+                        "see daemon logs."
+                    )
+                logger.info(
+                    "WorkerPool: worker %s exited during dispatch handoff "
+                    "(often idle timeout vs acquire); recovering",
+                    worker.worker_id,
+                )
+                await self._handle_dead_worker(worker)
 
             wait_ms = (time.monotonic() - dispatch_wait_start) * 1000.0
             if self._dispatch_stats is not None:
                 await self._dispatch_stats.record_dispatch_handoff(wait_ms)
-
-            # Register routing and mark busy before releasing the semaphore so the poll
-            # loop cannot treat this worker as idle and drain a stale response_queue.
-            response_queue: asyncio.Queue = asyncio.Queue()
-            self._pending_responses[request_id] = response_queue
-            self._workers_by_loop_id[request.loop_id] = worker.worker_id
-            worker.mark_busy(request.loop_id, request_id)
-            worker.request_queue.put(("request", request_id, request))
 
         start_time = datetime.now()
         completed = False

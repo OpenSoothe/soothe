@@ -46,6 +46,19 @@ InputMode = Literal["normal", "shell", "command"]
 
 logger = logging.getLogger(__name__)
 
+# Partial match for daemon pool_runner RuntimeError when an OS worker exits mid-turn.
+_DAEMON_WORKER_SUBPROCESS_LOST = "Worker subprocess exited unexpectedly during query execution"
+
+
+def _friendly_agent_execution_error(exc: BaseException) -> str:
+    """Map known daemon failures to concise TUI copy."""
+    if isinstance(exc, RuntimeError) and _DAEMON_WORKER_SUBPROCESS_LOST in str(exc):
+        return (
+            "The daemon execution worker stopped unexpectedly (for example after the pool "
+            "recycled an idle subprocess). Send your message again."
+        )
+    return str(exc)
+
 
 class _ExecutionMixin:
     """Agent execution, message routing, queue, shell commands, and daemon events."""
@@ -859,13 +872,14 @@ class _ExecutionMixin:
             )
         except Exception as e:  # Resilient tool rendering
             logger.exception("Agent execution failed")
+            display_err = _friendly_agent_execution_error(e)
             # Ensure any in-flight tool calls don't remain stuck in "Running..."
             # when streaming aborts before tool results arrive.
             if self._ui_adapter:
-                self._ui_adapter.finalize_pending_tools_with_error(f"Agent error: {e}")
-                self._ui_adapter.finalize_pending_steps_with_error(f"Agent error: {e}")
+                self._ui_adapter.finalize_pending_tools_with_error(f"Agent error: {display_err}")
+                self._ui_adapter.finalize_pending_steps_with_error(f"Agent error: {display_err}")
             try:
-                await self._mount_message(ErrorMessage(f"Agent error: {e}"))
+                await self._mount_message(ErrorMessage(f"Agent error: {display_err}"))
             except Exception:
                 logger.debug("Could not mount error message (app closing?)", exc_info=True)
         finally:

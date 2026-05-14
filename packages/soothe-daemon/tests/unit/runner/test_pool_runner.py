@@ -471,6 +471,72 @@ class TestWorkerPool:
         await WorkerPool.close_shared_instance()
 
     @pytest.mark.asyncio
+    async def test_submit_retries_when_worker_dies_at_dispatch_handoff(self) -> None:
+        """Idle-timeout exit vs acquire race: retry dispatch instead of failing the turn."""
+        daemon_config, agent_config = _make_config()
+
+        WorkerPool._shared_pool = None
+        WorkerPool._pool_lock = None
+
+        chunk1 = (("ns",), "messages", "handoff-ok")
+        fixed_request_id = "abcd1234efgh5678"
+
+        good_result_q: queue.Queue[tuple[str, str, Any]] = queue.Queue()
+        good_result_q.put(("chunk", fixed_request_id, chunk1))
+        good_result_q.put(("done", fixed_request_id, None))
+
+        bad_process = MagicMock()
+        bad_process.pid = 1111
+        # Acquire (True), handoff check (False), then _try_acquire skips dead (False+).
+        bad_process.is_alive.side_effect = [True, False] + [False] * 8
+
+        good_process = MagicMock()
+        good_process.pid = 2222
+        good_process.is_alive.return_value = True
+
+        bad_worker = WorkerProcess(
+            process=bad_process,
+            request_queue=MagicMock(),
+            response_queue=MagicMock(),
+            cancel_event=_make_cancel_event(),
+            interrupt_queue=_make_interrupt_queue(),
+            worker_id="worker-0",
+            status=WorkerStatus.IDLE,
+        )
+        good_worker = WorkerProcess(
+            process=good_process,
+            request_queue=MagicMock(),
+            response_queue=good_result_q,
+            cancel_event=_make_cancel_event(),
+            interrupt_queue=_make_interrupt_queue(),
+            worker_id="worker-1",
+            status=WorkerStatus.IDLE,
+        )
+
+        mock_ctx = MagicMock()
+        mock_ctx.Process.return_value = good_process
+        mock_ctx.Queue.side_effect = queue.Queue
+
+        fake_uuid = SimpleNamespace(hex=fixed_request_id + fixed_request_id)
+
+        with (
+            patch("multiprocessing.get_context", return_value=mock_ctx),
+            patch("soothe_daemon.runner.pool_runner.uuid.uuid4", return_value=fake_uuid),
+        ):
+            pool = await WorkerPool.get_shared_instance(agent_config, daemon_config)
+            pool._workers = {"worker-0": bad_worker, "worker-1": good_worker}
+
+            with patch.object(pool, "_handle_dead_worker", new=AsyncMock()):
+                chunks: list[Any] = []
+                async for chunk in pool.submit(_make_request()):
+                    chunks.append(chunk)
+
+        assert chunks == [chunk1]
+        assert bad_process.is_alive.call_count >= 2
+
+        await WorkerPool.close_shared_instance()
+
+    @pytest.mark.asyncio
     async def test_get_metrics_returns_pool_stats(self) -> None:
         """get_metrics() returns pool utilization stats."""
         daemon_config, agent_config = _make_config()
