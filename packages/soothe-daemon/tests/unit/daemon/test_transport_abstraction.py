@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from soothe_daemon.config import SootheDaemonConfig
-from soothe_daemon.config.models import TransportConfig, WebSocketConfig
+from soothe_daemon.config.models import HttpRestConfig, TransportConfig, WebSocketConfig
 from soothe_daemon.protocol_v2 import (
     ERROR_INVALID_MESSAGE,
     create_error_response,
@@ -87,6 +87,26 @@ class TestProtocolV2:
         assert error_dict["code"] == "INVALID_MESSAGE"
         assert error_dict["message"] == "Test error message"
         assert error_dict["details"]["key"] == "value"
+
+
+class TestTransportConfig:
+    """Transport configuration helpers."""
+
+    def test_effective_http_rest_listen_when_unified(self) -> None:
+        """HTTP REST reaches the WebSocket bind address when both transports are on."""
+        cfg = TransportConfig(
+            websocket=WebSocketConfig(enabled=True, host="10.0.0.2", port=9001),
+            http_rest=HttpRestConfig(enabled=True, host="127.0.0.1", port=9002),
+        )
+        assert cfg.effective_http_rest_listen() == ("10.0.0.2", 9001)
+
+    def test_effective_http_rest_listen_http_only_config(self) -> None:
+        """When HTTP is disabled, helper still returns http_rest host/port (unused)."""
+        cfg = TransportConfig(
+            websocket=WebSocketConfig(enabled=True, host="127.0.0.1", port=8765),
+            http_rest=HttpRestConfig(enabled=False, host="127.0.0.1", port=9999),
+        )
+        assert cfg.effective_http_rest_listen() == ("127.0.0.1", 9999)
 
 
 class TestWebSocketTransport:

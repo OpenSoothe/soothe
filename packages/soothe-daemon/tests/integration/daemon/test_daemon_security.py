@@ -14,7 +14,6 @@ import contextlib
 from pathlib import Path
 
 import pytest
-from tests.integration.ws_loop_client import loop_new_with_initial_input, request_loop_list
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from tests.integration.conftest import (
@@ -22,6 +21,7 @@ from tests.integration.conftest import (
     build_daemon_config,
     force_isolated_home,
 )
+from tests.integration.ws_loop_client import loop_new_with_initial_input, request_loop_list
 
 
 @pytest.fixture
@@ -30,13 +30,13 @@ async def websocket_daemon_fixture(tmp_path: Path):
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
 
-    config = build_daemon_config(
+    config, daemon_cfg = build_daemon_config(
         tmp_path,
         websocket_port=ws_port,
         cors_origins=["http://localhost:*", "http://127.0.0.1:*"],
     )
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
     await asyncio.sleep(0.4)
     try:
@@ -80,8 +80,8 @@ async def test_message_size_limit(tmp_path: Path) -> None:
     """Test that messages exceeding 10MB size limit are rejected."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
-    daemon = SootheDaemon(config)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
     await asyncio.sleep(0.4)
     try:
@@ -107,9 +107,9 @@ async def test_rate_limiting(tmp_path: Path) -> None:
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
 
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
     await asyncio.sleep(0.4)
 
@@ -137,9 +137,9 @@ async def test_pid_lock_enforcement(tmp_path: Path) -> None:
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
 
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon1 = SootheDaemon(config)
+    daemon1 = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon1.start()
     await asyncio.sleep(0.4)
 
@@ -153,7 +153,7 @@ async def test_pid_lock_enforcement(tmp_path: Path) -> None:
         finally:
             await client1.close()
 
-        daemon2 = SootheDaemon(config)
+        daemon2 = SootheDaemon(config, daemon_config=daemon_cfg)
         try:
             await daemon2.start()
             await asyncio.sleep(0.2)

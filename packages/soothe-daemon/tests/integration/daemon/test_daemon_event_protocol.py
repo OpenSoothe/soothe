@@ -14,6 +14,15 @@ from pathlib import Path
 
 import pytest
 from soothe.config import SootheConfig
+
+from soothe_daemon import SootheDaemon, WebSocketClient
+from soothe_daemon.config import SootheDaemonConfig
+from tests.integration.conftest import (
+    alloc_ephemeral_port,
+    await_event_type,
+    build_daemon_config,
+    force_isolated_home,
+)
 from tests.integration.ws_loop_client import (
     loop_new_with_initial_input,
     request_loop_delete,
@@ -21,17 +30,9 @@ from tests.integration.ws_loop_client import (
     subscribe_loop_stream,
 )
 
-from soothe_daemon import SootheDaemon, WebSocketClient
-from tests.integration.conftest import (
-    alloc_ephemeral_port,
-    await_event_type,
-    build_daemon_config,
-    force_isolated_home,
-)
 
-
-def _build_daemon_config(tmp_path: Path, ws_port: int) -> SootheConfig:
-    """Build an isolated daemon config for event protocol tests."""
+def _build_daemon_config(tmp_path: Path, ws_port: int) -> tuple[SootheConfig, SootheDaemonConfig]:
+    """Build an isolated agent and daemon server config for event protocol tests."""
     return build_daemon_config(
         tmp_path=tmp_path,
         websocket_port=ws_port,
@@ -85,8 +86,8 @@ async def daemon_fixture(tmp_path: Path):
     """Start a daemon for event protocol tests."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = _build_daemon_config(tmp_path, ws_port)
-    daemon = SootheDaemon(config)
+    config, daemon_cfg = _build_daemon_config(tmp_path, ws_port)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
     await asyncio.sleep(0.2)
     try:

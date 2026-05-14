@@ -26,7 +26,7 @@ async def test_websocket_transport_basic() -> None:
 
     messages_received: list[dict[str, Any]] = []
 
-    def message_handler(msg: dict[str, Any]) -> None:
+    def message_handler(_client_id: str, msg: dict[str, Any]) -> None:
         messages_received.append(msg)
 
     # Start transport
@@ -51,10 +51,11 @@ async def test_websocket_client_connect() -> None:
     transport = WebSocketTransport(config)
 
     # Use synchronous message handler
-    def message_handler(msg: dict[str, Any]) -> None:
+    def message_handler(_client_id: str, msg: dict[str, Any]) -> None:
         pass
 
     await transport.start(message_handler)
+    await asyncio.sleep(0.2)
 
     try:
         # Connect client
@@ -84,10 +85,11 @@ async def test_websocket_broadcast() -> None:
 
     transport = WebSocketTransport(config)
 
-    async def message_handler(msg: dict[str, Any]) -> None:
+    def message_handler(_client_id: str, msg: dict[str, Any]) -> None:
         pass
 
     await transport.start(message_handler)
+    await asyncio.sleep(0.2)
 
     try:
         # Connect client
