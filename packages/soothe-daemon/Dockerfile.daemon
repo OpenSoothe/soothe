@@ -32,6 +32,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         './packages/soothe[all]' \
         ./packages/soothe-daemon
 
+# Warmup embedding model cache (semantic similarity)
+RUN mkdir -p /var/lib/soothe/data \
+    && .venv/bin/soothed warmup \
+    && rm -rf /root/.cache/uv /root/.cache/pip
+
 # ========================================
 # Stage 2: Runtime
 # ========================================
