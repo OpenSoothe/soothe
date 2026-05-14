@@ -781,7 +781,7 @@ class InfrastructureLimitsConfig(BaseModel):
     # Timeout controls
     llm_call_timeout_seconds: int = Field(default=120, ge=5, le=3600)
     llm_call_timeout_adaptive: bool = True
-    llm_call_timeout_max_seconds: int = Field(default=900, ge=60, le=3600)
+    llm_call_timeout_max_seconds: int = Field(default=120, ge=60, le=3600)
 
     # IG-295: Retry with timeout escalation
     llm_retry_on_timeout: bool = True
