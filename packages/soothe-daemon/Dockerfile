@@ -2,8 +2,8 @@
 # Build context must be the monorepo root (parent of `packages/`).
 #   docker build -f packages/soothe-daemon/Dockerfile -t soothed .
 #
-# Run (publish WebSocket 8765 and HTTP REST 8766; mount config and data as needed):
-#   docker run --rm -p 8765:8765 -p 8766:8766 \
+# Run (publish unified listener on 8765: WebSocket + REST; mount config and data as needed):
+#   docker run --rm -p 8765:8765 \
 #     -e OPENAI_API_KEY=... \
 #     -v soothe-data:/var/lib/soothe \
 #     soothed
@@ -120,7 +120,7 @@ COPY --from=builder --chown=soothe:soothe /root/.cache/soothe/models/huggingface
 USER soothe
 WORKDIR /var/lib/soothe
 
-EXPOSE 8765/tcp 8766/tcp
+EXPOSE 8765/tcp
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import socket; s=socket.socket(); s.settimeout(3); s.connect(('localhost',8765)); s.close()" || exit 1

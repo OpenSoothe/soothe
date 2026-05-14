@@ -10,9 +10,11 @@ import asyncio
 import json
 import logging
 import sqlite3
+import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import aiosqlite
 
@@ -20,6 +22,8 @@ from soothe.core.loop.state.persistence.base_backend import AgentLoopPersistence
 
 if TYPE_CHECKING:
     pass
+
+T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +47,20 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         self._reader_pool: list[sqlite3.Connection] = []
         self._pool_semaphore = asyncio.Semaphore(pool_size)
         self._init_lock = asyncio.Lock()
+        self._writer_thread_lock = threading.Lock()
+
+    async def _writer_to_thread(self, sync_fn: Callable[..., T], *args: Any) -> T:
+        """Run ``sync_fn(self._writer_conn, *args)`` with serialized SQLite writer access."""
+        await self._ensure_pool_initialized()
+        return await asyncio.to_thread(self._exec_on_writer_locked, sync_fn, *args)
+
+    def _exec_on_writer_locked(self, sync_fn: Callable[..., T], *args: Any) -> T:
+        with self._writer_thread_lock:
+            conn = self._writer_conn
+            if conn is None:
+                msg = "SQLite persistence writer connection is not available"
+                raise RuntimeError(msg)
+            return sync_fn(conn, *args)
 
     async def _ensure_pool_initialized(self) -> None:
         """Lazy pool initialization."""
@@ -53,20 +71,24 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
 
     def _init_writer_sync(self) -> None:
         """Initialize writer connection with WAL mode."""
-        # Ensure database schema
-        self.initialize_database_sync(self.db_path)
+        with self._writer_thread_lock:
+            if self._writer_conn is not None:
+                return
+            # Ensure database schema
+            self.initialize_database_sync(self.db_path)
 
-        # Create writer connection
-        self._writer_conn = sqlite3.connect(
-            str(self.db_path),
-            check_same_thread=False,
-            timeout=30,
-        )
-        self._writer_conn.execute("PRAGMA journal_mode=WAL")
-        self._writer_conn.execute("PRAGMA foreign_keys=ON")
-        self._writer_conn.row_factory = sqlite3.Row
+            # Create writer connection
+            self._writer_conn = sqlite3.connect(
+                str(self.db_path),
+                check_same_thread=False,
+                timeout=30,
+            )
+            self._writer_conn.execute("PRAGMA journal_mode=WAL")
+            self._writer_conn.execute("PRAGMA foreign_keys=ON")
+            self._writer_conn.execute("PRAGMA busy_timeout=60000")
+            self._writer_conn.row_factory = sqlite3.Row
 
-        logger.info("SQLite backend writer connection initialized at %s", self.db_path)
+            logger.info("SQLite backend writer connection initialized at %s", self.db_path)
 
     async def _get_reader_connection(self) -> sqlite3.Connection:
         """Get reader connection from pool."""
@@ -87,6 +109,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             )
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("PRAGMA busy_timeout=60000")
             conn.row_factory = sqlite3.Row
             self._reader_pool.append(conn)
 
@@ -102,10 +125,8 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         status: str = "running",
     ) -> None:
         """Register new AgentLoop in database."""
-        await self._ensure_pool_initialized()
-        await asyncio.to_thread(
+        await self._writer_to_thread(
             self._register_loop_sync,
-            self._writer_conn,
             loop_id,
             thread_ids,
             current_thread_id,
@@ -147,8 +168,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
 
     async def get_loop_metadata(self, loop_id: str) -> dict | None:
         """Get loop metadata for daemon reconstruction."""
-        await self._ensure_pool_initialized()
-        return await asyncio.to_thread(self._get_loop_metadata_sync, self._writer_conn, loop_id)
+        return await self._writer_to_thread(self._get_loop_metadata_sync, loop_id)
 
     def _get_loop_metadata_sync(self, conn: sqlite3.Connection, loop_id: str) -> dict | None:
         """Sync get loop metadata."""
@@ -184,8 +204,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
 
     async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
         """Partially update loop metadata fields."""
-        await self._ensure_pool_initialized()
-        await asyncio.to_thread(self._update_loop_metadata_sync, self._writer_conn, loop_id, fields)
+        await self._writer_to_thread(self._update_loop_metadata_sync, loop_id, fields)
 
     def _update_loop_metadata_sync(
         self, conn: sqlite3.Connection, loop_id: str, fields: dict[str, Any]
@@ -224,10 +243,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         limit: int = 100,
     ) -> list[dict]:
         """Return summary rows for all loops, ordered by created_at DESC."""
-        await self._ensure_pool_initialized()
-        return await asyncio.to_thread(
-            self._list_loops_sync, self._writer_conn, status_filter, limit
-        )
+        return await self._writer_to_thread(self._list_loops_sync, status_filter, limit)
 
     def _list_loops_sync(
         self,
@@ -290,10 +306,8 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         execution_summary: dict[str, Any] | None = None,
     ) -> None:
         """Save iteration checkpoint anchor."""
-        await self._ensure_pool_initialized()
-        await asyncio.to_thread(
+        await self._writer_to_thread(
             self._save_anchor_sync,
-            self._writer_conn,
             loop_id,
             iteration,
             thread_id,
@@ -353,10 +367,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         self, loop_id: str, start: int, end: int
     ) -> list[dict[str, Any]]:
         """Query checkpoint anchors for iteration range."""
-        await self._ensure_pool_initialized()
-        return await asyncio.to_thread(
-            self._get_anchors_range_sync, self._writer_conn, loop_id, start, end
-        )
+        return await self._writer_to_thread(self._get_anchors_range_sync, loop_id, start, end)
 
     def _deserialize_anchor_json_fields(self, row_dict: dict[str, Any]) -> dict[str, Any]:
         """Deserialize JSON fields and timestamp fields in anchor row."""
@@ -419,10 +430,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         self, loop_id: str, thread_id: str
     ) -> list[dict[str, Any]]:
         """Query checkpoint anchors for specific thread."""
-        await self._ensure_pool_initialized()
-        return await asyncio.to_thread(
-            self._get_thread_checkpoints_sync, self._writer_conn, loop_id, thread_id
-        )
+        return await self._writer_to_thread(self._get_thread_checkpoints_sync, loop_id, thread_id)
 
     def _get_thread_checkpoints_sync(
         self, conn: sqlite3.Connection, loop_id: str, thread_id: str | None
@@ -475,10 +483,8 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         execution_path: list[dict[str, Any]],
     ) -> None:
         """Save failed branch record."""
-        await self._ensure_pool_initialized()
-        await asyncio.to_thread(
+        await self._writer_to_thread(
             self._save_branch_sync,
-            self._writer_conn,
             branch_id,
             loop_id,
             iteration,
@@ -533,10 +539,8 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         suggested_adjustments: list[dict[str, Any]],
     ) -> None:
         """Update branch analysis insights."""
-        await self._ensure_pool_initialized()
-        await asyncio.to_thread(
+        await self._writer_to_thread(
             self._update_branch_analysis_sync,
-            self._writer_conn,
             branch_id,
             loop_id,
             failure_insights,
@@ -579,8 +583,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         self, loop_id: str, limit: int = 10
     ) -> list[dict[str, Any]]:
         """Query failed branches for loop."""
-        await self._ensure_pool_initialized()
-        return await asyncio.to_thread(self._get_branches_sync, self._writer_conn, loop_id, limit)
+        return await self._writer_to_thread(self._get_branches_sync, loop_id, limit)
 
     def _get_branches_sync(
         self, conn: sqlite3.Connection, loop_id: str, limit: int
@@ -604,10 +607,7 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
 
     async def prune_old_branches(self, loop_id: str, max_age_days: int = 30) -> int:
         """Prune old failed branches."""
-        await self._ensure_pool_initialized()
-        return await asyncio.to_thread(
-            self._prune_branches_sync, self._writer_conn, loop_id, max_age_days
-        )
+        return await self._writer_to_thread(self._prune_branches_sync, loop_id, max_age_days)
 
     def _prune_branches_sync(
         self, conn: sqlite3.Connection, loop_id: str, max_age_days: int
@@ -645,10 +645,8 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         started_at: str,
     ) -> None:
         """Save goal execution record."""
-        await self._ensure_pool_initialized()
-        await asyncio.to_thread(
+        await self._writer_to_thread(
             self._save_goal_sync,
-            self._writer_conn,
             goal_id,
             loop_id,
             goal_text,
@@ -699,10 +697,8 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         completed_at: str | None,
     ) -> None:
         """Update goal execution record."""
-        await self._ensure_pool_initialized()
-        await asyncio.to_thread(
+        await self._writer_to_thread(
             self._update_goal_sync,
-            self._writer_conn,
             goal_id,
             loop_id,
             status,
@@ -757,11 +753,15 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             duration_ms,
         )
 
+    def _close_writer_locked(self) -> None:
+        with self._writer_thread_lock:
+            if self._writer_conn:
+                self._writer_conn.close()
+                self._writer_conn = None
+
     async def close(self) -> None:
         """Close backend connections."""
-        if self._writer_conn:
-            self._writer_conn.close()
-            self._writer_conn = None
+        await asyncio.to_thread(self._close_writer_locked)
 
         for conn in self._reader_pool:
             conn.close()

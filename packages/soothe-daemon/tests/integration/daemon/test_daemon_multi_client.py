@@ -40,9 +40,9 @@ async def test_two_clients_isolated(tmp_path: Path):
     """Test that two clients don't receive each other's loop events."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config, handle_sigint_shutdown=False)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg, handle_sigint_shutdown=False)
     await daemon.start()
     await asyncio.sleep(0.3)
 
@@ -81,9 +81,9 @@ async def test_unsubscribed_client_receives_nothing(tmp_path: Path):
     """Client that never ``loop_subscribe``s should not receive loop events."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config, handle_sigint_shutdown=False)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg, handle_sigint_shutdown=False)
     await daemon.start()
     await asyncio.sleep(0.3)
 
@@ -117,9 +117,9 @@ async def test_loop_subscribe_handshake_succeeds(tmp_path: Path):
     """``bootstrap_loop_session`` completes with a ``loop_id``."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config, handle_sigint_shutdown=False)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg, handle_sigint_shutdown=False)
     await daemon.start()
     await asyncio.sleep(0.3)
 
@@ -140,9 +140,9 @@ async def test_client_id_in_status(tmp_path: Path):
     """Test that status message includes client_id."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config, handle_sigint_shutdown=False)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg, handle_sigint_shutdown=False)
     await daemon.start()
     await asyncio.sleep(0.3)
 
@@ -168,9 +168,9 @@ async def test_event_message_includes_thread_and_loop_id(tmp_path: Path):
     """Streamed events should carry CoreAgent ``thread_id`` and ``loop_id``."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config, handle_sigint_shutdown=False)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg, handle_sigint_shutdown=False)
     await daemon.start()
     await asyncio.sleep(0.3)
 
@@ -200,9 +200,9 @@ async def test_switching_loop_subscription_replaces_prior(tmp_path: Path):
     """Subscribing to a second loop drops the first subscription (single active loop)."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config, handle_sigint_shutdown=False)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg, handle_sigint_shutdown=False)
     await daemon.start()
     await asyncio.sleep(0.3)
 
@@ -241,9 +241,9 @@ async def test_session_cleanup_on_disconnect(tmp_path: Path):
     """Test that session is cleaned up when client disconnects."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config, handle_sigint_shutdown=False)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg, handle_sigint_shutdown=False)
     await daemon.start()
     await asyncio.sleep(0.3)
 

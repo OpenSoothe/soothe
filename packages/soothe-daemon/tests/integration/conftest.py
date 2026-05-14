@@ -14,6 +14,8 @@ import pytest
 from soothe.config import SootheConfig
 from soothe.core.runner import SootheRunner
 
+from soothe_daemon.config import SootheDaemonConfig
+
 
 def pytest_addoption(parser) -> None:
     """Add custom command-line options for integration tests."""
@@ -215,28 +217,40 @@ def build_daemon_config(
     websocket_port: int | None = None,
     http_port: int | None = None,
     cors_origins: list[str] | None = None,
-) -> SootheConfig:
-    """Build an isolated daemon config with WebSocket and HTTP REST transports (RFC-450).
+) -> tuple[SootheConfig, SootheDaemonConfig]:
+    """Build isolated agent and daemon server configs (RFC-450).
 
-    Unix socket transport was removed on 2026-03-29 due to stability issues.
+    ``SootheConfig`` intentionally omits a ``daemon:`` block (it is stripped at
+    validation). Pass the returned :class:`SootheDaemonConfig` as
+    ``SootheDaemon(..., daemon_config=...)``.
 
     Args:
         tmp_path: Temporary path for test isolation
         websocket_port: WebSocket port (primary transport for bidirectional streaming)
-        http_port: Optional HTTP REST port (for health checks and stateless CRUD)
+        http_port: When not None, enables HTTP REST on the **same** TCP listener as
+            WebSocket (unified ASGI). If both ``websocket_port`` and ``http_port`` are
+            set, the WebSocket port is used for the shared listener.
         cors_origins: Optional CORS origins for WebSocket
 
     Returns:
-        SootheConfig with isolated daemon configuration
+        ``(agent_config, daemon_server_config)``
     """
     base_config = get_base_config()
+
+    ws_p = websocket_port if websocket_port is not None else alloc_ephemeral_port()
+    if http_port is not None:
+        if websocket_port is not None:
+            listen = websocket_port
+        else:
+            listen = http_port
+        ws_p = listen
 
     daemon_config = {
         "transports": {
             "websocket": {
                 "enabled": True,
                 "host": "127.0.0.1",
-                "port": websocket_port or alloc_ephemeral_port(),
+                "port": ws_p,
                 "cors_origins": cors_origins or ["http://localhost:*", "http://127.0.0.1:*"],
             },
             "http_rest": {"enabled": False},
@@ -247,10 +261,10 @@ def build_daemon_config(
         daemon_config["transports"]["http_rest"] = {
             "enabled": True,
             "host": "127.0.0.1",
-            "port": http_port,
+            "port": ws_p,
         }
 
-    return SootheConfig(
+    agent = SootheConfig(
         providers=base_config.providers,
         router=base_config.router,
         vector_stores=base_config.vector_stores,
@@ -261,8 +275,8 @@ def build_daemon_config(
             "memory": {"enabled": False},
             "durability": {"backend": "sqlite", "persist_dir": str(tmp_path / "durability")},
         },
-        daemon=daemon_config,
     )
+    return agent, SootheDaemonConfig.model_validate(daemon_config)
 
 
 async def await_event_type(readable, expected_type: str, timeout: float = 3.0) -> dict:

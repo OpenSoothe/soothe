@@ -45,10 +45,14 @@ class HttpRestConfig(BaseModel):
 
     HTTP REST provides stateless CRUD operations and health checks.
 
+    When both WebSocket and HTTP REST are enabled, the daemon serves REST on the
+    same TCP port and ASGI app as WebSocket; ``host`` / ``port`` here are ignored
+    for binding (the WebSocket transport settings are authoritative).
+
     Args:
         enabled: Enable HTTP REST server.
-        host: Bind address.
-        port: Listen port.
+        host: Bind address (standalone HTTP-only; ignored when unified with WebSocket).
+        port: Listen port (standalone; ignored when unified with WebSocket).
         tls_enabled: Enable TLS encryption.
         tls_cert: TLS certificate path.
         tls_key: TLS key path.
@@ -57,7 +61,7 @@ class HttpRestConfig(BaseModel):
 
     enabled: bool = False
     host: str = "127.0.0.1"
-    port: int = 8766
+    port: int = 8765
     tls_enabled: bool = False
     tls_cert: str | None = None
     tls_key: str | None = None
@@ -79,6 +83,16 @@ class TransportConfig(BaseModel):
 
     websocket: WebSocketConfig = Field(default_factory=WebSocketConfig)
     http_rest: HttpRestConfig = Field(default_factory=HttpRestConfig)
+
+    def effective_http_rest_listen(self) -> tuple[str, int]:
+        """Return ``(host, port)`` for reaching HTTP REST over TCP.
+
+        When WebSocket and HTTP REST are both enabled, REST is exposed on the
+        WebSocket listener (single ASGI application).
+        """
+        if self.http_rest.enabled and self.websocket.enabled:
+            return (self.websocket.host, self.websocket.port)
+        return (self.http_rest.host, self.http_rest.port)
 
 
 class WorkerPoolConfig(BaseModel):
