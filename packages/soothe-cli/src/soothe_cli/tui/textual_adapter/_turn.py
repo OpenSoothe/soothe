@@ -841,7 +841,7 @@ async def execute_task_textual(
                             # Main graph: skip standalone AssistantMessage cards for
                             # intermediate AIMessage streams (execute_wave, unphased, etc.).
                             # ``goal_completion`` is handled above. Other RFC-614 user-output
-                            # phases (chitchat, quiz, autonomous_goal) still use cards.
+                            # phases (quiz, autonomous_goal) still use cards.
                             if (
                                 is_main_agent
                                 and assistant_output_phase(message)

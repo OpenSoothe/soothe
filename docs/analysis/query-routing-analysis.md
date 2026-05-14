@@ -64,7 +64,7 @@
 Soothe routes queries through a multi-layer architecture with decision points at each layer. The routing determines:
 
 - **Execution mode**: Autonomous vs. agentic
-- **Intent handling**: Fast path (chitchat/quiz) vs. full AgentLoop
+- **Intent handling**: Fast path (`quiz`) vs. full AgentLoop
 - **Thread continuation**: New goal vs. resume from checkpoint
 - **Goal lifecycle**: Creation, execution, completion
 - **Early completion optimization**: Direct execute vs. goal completion synthesis
@@ -238,13 +238,7 @@ intent_classification = await self._intent_classifier.classify_intent(
     ...
 )
 
-# Fast path: skip AgentLoop entirely for chitchat
-if intent_classification.intent_type == "chitchat":
-    async for chunk in self._run_chitchat(user_input, ...):
-        yield chunk
-    return
-
-# Fast path: skip AgentLoop entirely for quiz
+# Fast path: skip AgentLoop entirely for quiz (greetings, thanks, piggybacked trivia)
 if intent_classification.intent_type == "quiz":
     async for chunk in self._run_quiz(user_input, ...):
         yield chunk
@@ -255,7 +249,6 @@ if intent_classification.intent_type == "quiz":
 
 | Intent Type | Fast Path | Latency |
 |-------------|-----------|---------|
-| `chitchat` | `_run_chitchat()` → CoreAgent | ~1-2s |
 | `quiz` | `_run_quiz()` → CoreAgent | ~1-2s |
 | `new_goal` | Full AgentLoop | ~5-30s |
 | `continue_thread` | Full AgentLoop | ~3-15s |
@@ -281,13 +274,6 @@ User Query
     ↓
 IntentClassifier.classify_intent()
     ↓
-┌─────────────────────────────────────────┐
-│ intent_type == "chitchat"               │
-│   → _run_chitchat()                     │
-│   → CoreAgent.astream() directly        │
-│   → FAST PATH (~1-2s)                   │
-└─────────────────────────────────────────┘
-    ↓ (not chitchat)
 ┌─────────────────────────────────────────┐
 │ intent_type == "quiz"                   │
 │   → _run_quiz()                         │
@@ -359,17 +345,16 @@ class StatusAssessment(BaseModel):
 
 | Intent Type | Route | Description |
 |-------------|-------|-------------|
-| `chitchat` | `_run_chitchat()` | Fast path, skip AgentLoop |
 | `quiz` | `_run_quiz()` | Fast path, skip AgentLoop |
 | `new_goal` | AgentLoop | Full loop execution, fresh goal |
 | `continue_thread` | AgentLoop | Reuse working memory from prior goal |
 
 ### 7.2 Fast Path Execution
 
-Fast path (chitchat/quiz) skips the AgentLoop orchestrator:
+Fast path (`quiz`) skips the AgentLoop orchestrator:
 
 ```
-IntentClassifier → "chitchat" → _run_chitchat()
+IntentClassifier → "quiz" → _run_quiz()
                 → CoreAgent.astream() directly
                 → Return response
 ```
@@ -430,7 +415,7 @@ START → init_or_resume → iteration_gate → iteration_start
 
 | Function | Condition | Route |
 |----------|-----------|-------|
-| `route_after_init` | Fast-path intent (chitchat/quiz) | END |
+| `route_after_init` | Fast-path intent (`quiz`) | END |
 | `route_after_plan` | `PLAN_ROUTE_GOAL_DONE` | goal_completion |
 | `route_after_execute` | Fatal error | END |
 | | Otherwise | record_iteration → loop |
@@ -788,14 +773,14 @@ Reuses existing checkpoint state
 LoopGraph proceeds with accumulated context
 ```
 
-### Scenario 3: Fast Path (Chitchat/Quiz)
+### Scenario 3: Fast Path (Quiz)
 
 ```
 User Query (simple question)
     ↓
-IntentClassifier → "chitchat" or "quiz"
+IntentClassifier → "quiz"
     ↓
-_run_chitchat() or _run_quiz()
+_run_quiz()
     ↓
 CoreAgent.astream() directly
     ↓
@@ -1048,7 +1033,7 @@ class BackoffDecision:
 | 2 | Capacity check | `query_engine.py` | 159-198 | Reject or proceed |
 | 3 | Runner selection | `runner/factory.py` | - | Local, Pool, Ray |
 | 4 | Execution mode | `runner/__init__.py` | 505-580 | Autonomous or Agentic |
-| 5 | Intent classification | `_runner_agentic.py` | 280-310 | chitchat, quiz, new_goal, continue_thread |
+| 5 | Intent classification | `_runner_agentic.py` | 280-310 | quiz, new_goal, continue_thread |
 | 6 | Checkpoint status | `agent_loop.py` | 173-244 | Resume, new goal, fresh start |
 | 7 | Plan routing | `routing.py` | 12-67 | goal_completion, execute, END |
 | 8 | Goal completion | `plan_assess.py` | - | PLAN_ROUTE_GOAL_DONE signal |
@@ -1063,7 +1048,7 @@ class BackoffDecision:
 
 ### 14.1 Fast Path Optimization
 
-Chitchat and quiz intents bypass AgentLoop for:
+Quiz intents bypass AgentLoop for:
 
 - Reduced latency (single CoreAgent call)
 - Lower resource usage (no plan generation)
@@ -1156,7 +1141,6 @@ Per-loop queues ensure:
 │  INTENT CLASSIFIER                                                        │
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
 │  │ Intent → Route                                                      │  │
-│  │ chitchat → _run_chitchat() → CoreAgent (FAST PATH)                 │  │
 │  │ quiz → _run_quiz() → CoreAgent (FAST PATH)                         │  │
 │  │ new_goal → AgentLoop (FRESH)                                       │  │
 │  │ continue_thread → AgentLoop (RESUME)                               │  │

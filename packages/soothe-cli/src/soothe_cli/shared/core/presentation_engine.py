@@ -49,7 +49,7 @@ class PresentationEngine:
 
     @property
     def final_answer_locked(self) -> bool:
-        """True after a custom final/chitchat response was emitted for this turn."""
+        """True after a custom final or quiz-phase response was emitted for this turn."""
         return self._state.final_answer_locked
 
     def mark_final_answer_locked(self) -> None:

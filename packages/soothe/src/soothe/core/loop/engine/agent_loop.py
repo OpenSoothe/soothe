@@ -131,7 +131,7 @@ class AgentLoop:
             shared_pool: SharedPostgreSQLPool for high-concurrency (IG-406).
                 - continue_thread: Adjust iteration behavior, reuse working memory
                 - new_goal: Normal goal execution flow
-                - chitchat: Should not reach here (handled in runner)
+                - quiz: Should not reach here (handled in runner)
             routing_classification: ``RoutingClassification`` for CoreAgent middleware (IG-383).
 
         Yields:

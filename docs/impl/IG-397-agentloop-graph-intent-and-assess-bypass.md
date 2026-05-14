@@ -23,7 +23,7 @@ In Progress
 
 ## Design Notes
 - Graph entry node (`init_or_resume`) performs single-shot intent classification for each loop run.
-- Fast-path intents (`chitchat`, `quiz`) emit an `intent_fast_path` event and terminate the graph before planning/execution nodes.
+- Fast-path intents (`quiz`) emit an `intent_fast_path` event and terminate the graph before planning/execution nodes.
 - Non-fast intents hydrate `LoopState.intent` and `LoopState.routing_classification` for downstream planner/executor use.
 
 ## Compatibility Decision (Cut Change)

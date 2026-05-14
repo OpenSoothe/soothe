@@ -85,7 +85,7 @@ Files on disk remain aligned with existing layout: loop runtime under **`$SOOTHE
 
 1. **`init_or_resume`** — Load or initialize loop checkpoint via `AgentLoopStateManager`; construct `LoopState`; run single-shot intent classification for this loop entry; handle thread-continuation bootstrap where applicable.
 2. **`iteration_start`** — Iteration begin hooks; checkpoint anchors “start” (RFC-218).
-3. **`intent_fast_path`** — Terminal branch for intent `chitchat` / `quiz`; emits graph event payload for runner to execute direct response flow without entering planning nodes.
+3. **`intent_fast_path`** — Terminal branch for intent `quiz`; emits graph event payload for runner to execute direct response flow without entering planning nodes.
 4. **`bounded_evidence_gather`** — Pre-plan placeholder node in current implementation (retained for topology compatibility).
 5. **`plan_assess`** — RFC-604 `StatusAssessment` structured call only.
 6. **`plan_pre_generate`** — Deterministic readonly preflight probe (max three probes) to collect baseline workspace evidence.

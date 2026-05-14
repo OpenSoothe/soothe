@@ -623,8 +623,6 @@ class QueryEngine:
         thread_logger: ThreadLogger,
     ) -> None:
         """Execute one direct model call and broadcast a single assistant ``messages`` event."""
-        from langchain_core.messages import AIMessage
-
         d = self._daemon
         async with d._query_state_lock:
             d._query_running = True
@@ -678,7 +676,11 @@ class QueryEngine:
                     f"unsupported intent_hint for direct model: {direct_intent_hint!r}"
                 )
 
-            ai_flat = _serialize_for_json(AIMessage(content=answer))
+            from soothe.core.loop.utils.messages import LoopAIMessage
+
+            ai_flat = _serialize_for_json(
+                LoopAIMessage(content=answer, phase="direct_model", thread_id=thread_id)
+            )
             await d._broadcast(
                 self._loop_scoped_client_message(
                     effective_loop_id,

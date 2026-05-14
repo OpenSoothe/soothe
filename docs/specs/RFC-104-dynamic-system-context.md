@@ -72,7 +72,7 @@ Injection depth adapts to task complexity:
 
 | Complexity | Sections | Token Budget |
 |------------|----------|--------------|
-| chitchat | None | ~50 |
+| minimal | None | ~50 |
 | medium | ENVIRONMENT + WORKSPACE | ~300 |
 | complex | All four sections | ~600 |
 
@@ -207,7 +207,7 @@ Protocol availability and state:
 │  - Read classification.task_complexity from state               │
 │  - Select base prompt (existing logic)                          │
 │  - Build XML sections based on complexity:                      │
-│      chitchat: none                                             │
+│      minimal: none                                             │
 │      medium: _build_environment() + _build_workspace()          │
 │      complex: all four _build_*() methods                       │
 │  - Append sections with "\n\n" separator                        │
@@ -343,7 +343,7 @@ def _get_prompt_for_complexity(self, complexity: str, state: dict) -> str:
     """Get prompt with XML context sections for complexity level.
 
     Args:
-        complexity: One of "chitchat", "medium", "complex".
+        complexity: One of "minimal", "medium", "complex".
         state: Request state with context information.
 
     Returns:
@@ -351,7 +351,7 @@ def _get_prompt_for_complexity(self, complexity: str, state: dict) -> str:
     """
     base_prompt = self._get_base_prompt_for_complexity(complexity)
 
-    if complexity == "chitchat":
+    if complexity == "minimal":
         return base_prompt  # No context injection
 
     sections = []
@@ -640,7 +640,7 @@ All phases backward compatible. Context injection only activates when all compon
 - [ ] `<SOOTHE_WORKSPACE>` shows correct cwd and git status
 - [ ] `<SOOTHE_THREAD>` shows thread ID and goals when present
 - [ ] `<SOOTHE_PROTOCOLS>` shows active protocols when present
-- [ ] No sections for chitchat complexity
+- [ ] No sections for minimal task complexity
 - [ ] Git status collection doesn't block on slow repos (timeout works)
 - [ ] Concurrent threads receive correct isolated workspace context
 
@@ -694,7 +694,7 @@ RFC-214 refines the prompt-cache ordering principle (this RFC's Principle 5) int
 ### What Is Preserved from This RFC
 
 - All `<SOOTHE_*>` XML tags and inner element structure
-- Classification-driven injection depth (chitchat/medium/complex)
+- Classification-driven injection depth (minimal/medium/complex)
 - `ToolTriggerRegistry` mechanism for conditional section injection
 - "Runner collects, middleware injects" principle
 - Graceful degradation on context collection failures

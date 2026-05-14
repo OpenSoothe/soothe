@@ -17,7 +17,7 @@ This RFC defines a unified streaming messaging framework for daemon-to-client ou
 Daemon output emission owns suppression boundaries for AgentLoop execution:
 
 1. Execute-phase assistant prose is suppressed at daemon emission and is not streamed as user-visible output.
-2. Message-mode forwarding carries **tool UI** (`ToolMessage` + AI tool-call metadata) **and** loop-tagged assistant completion chunks (`phase` in `goal_completion`, `chitchat`, `quiz`, `autonomous_goal`).
+2. Message-mode forwarding carries **tool UI** (`ToolMessage` + AI tool-call metadata) **and** loop-tagged assistant completion chunks (`phase` in `goal_completion`, `quiz`, `autonomous_goal`, `direct_model`).
 3. User-facing completion text uses the **`messages`** stream with **`phase`** (IG-317); it is **not** modeled as parallel `soothe.output.goal_completion.*` custom events.
 4. Clients consume the normalized output contract; they should not be the primary suppression authority for execute-phase prose.
 
@@ -42,7 +42,7 @@ The runner's IG-119 filtering logic (`_runner_agentic.py` lines 541-545) blocks 
 - Only works for synthesis phase (final report generation)
 
 **Resolved (IG-317)**:
-- Goal completion, chitchat, quiz, and autonomous summaries stream as **`messages`** chunks with an explicit **`phase`** field instead of bespoke `soothe.output.*` assistant events.
+- Goal completion, quiz, autonomous summaries, and direct-model turns stream as **`messages`** chunks with an explicit **`phase`** field instead of bespoke `soothe.output.*` assistant events.
 - Execute-phase assistant prose (CoreAgent Act narration) remains suppressed by daemon contract.
 - Optional ancillary `soothe.output.*` events (for example library line capture) are orthogonal to the assistant answer contract.
 
@@ -156,7 +156,7 @@ Early RFC-614 drafts described a `_wrap_streaming_output()` helper that re-publi
 **Design checklist**:
 1. Config: honor `OutputStreamingConfig` for **goal-completion message** streaming vs batch display on the client.
 2. Extraction: collect plain text from AI message / chunk payloads when forwarding is allowed.
-3. Loop tags: preserve `phase` metadata so clients can classify `goal_completion`, `chitchat`, `quiz`, and `autonomous_goal`.
+3. Loop tags: preserve `phase` metadata so clients can classify `goal_completion`, `quiz`, `autonomous_goal`, and `direct_model`.
 4. Namespace: carry LangGraph namespace through to the client so concurrent subgraphs do not interleave text.
 
 **Delegate finals & completion replay**  
@@ -398,7 +398,7 @@ Concurrent execution: A and B isolated (no chunk interleaving)
 ### Event Semantics
 
 - **`soothe.cognition.agent_loop.completed`**: lifecycle / progress only (no parallel requirement to ship final answer text on this event).
-- **Removed for assistant bodies**: `soothe.output.goal_completion.*`, `soothe.output.chitchat.responded`, `soothe.output.quiz.responded`, and related autonomous output-domain duplicates — **replaced by `messages` + `phase`.**
+- **Removed for assistant bodies**: `soothe.output.goal_completion.*`, `soothe.output.quiz.responded`, and related autonomous output-domain duplicates — **replaced by `messages` + `phase`.**
 
 **Integrator guidance**:
 - Clients must consume **`mode="messages"`** chunks and inspect **`phase`** (via `soothe_sdk.ux.loop_stream`) for user-visible loop answers.

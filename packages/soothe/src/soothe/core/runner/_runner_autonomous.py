@@ -173,15 +173,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                 getattr(intent_classification, "confidence", 1.0),
             )
 
-            # Fast path for chitchat - skip goal engine and planning
-            if intent_classification.intent_type == "chitchat":
-                async for chunk in self._run_chitchat(
-                    user_input, state.thread_id or "", classification=intent_classification
-                ):
-                    yield chunk
-                return
-
-            # Fast path for quiz (IG-250) - skip goal engine and planning
+            # Fast path for quiz — skip goal engine and planning
             if intent_classification.intent_type == "quiz":
                 async for chunk in self._run_quiz(
                     user_input, state.thread_id or "", classification=intent_classification
@@ -444,20 +436,15 @@ class AutonomousMixin(GoalDirectivesMixin):
                             goal.description, thread_id, classification=classification
                         ):
                             yield chunk
-                    else:
-                        async for chunk in self._run_chitchat(
-                            goal.description, thread_id, classification=classification
-                        ):
-                            yield chunk
-                    goal_result = GoalResult(
-                        goal_id=goal.id,
-                        status="completed",
-                        evidence_summary="Handled via intent fast path",
-                        goal_progress="complete",
-                        full_output="",
-                        iteration_count=0,
-                    )
-                    break
+                        goal_result = GoalResult(
+                            goal_id=goal.id,
+                            status="completed",
+                            evidence_summary="Handled via intent fast path",
+                            goal_progress="complete",
+                            full_output="",
+                            iteration_count=0,
+                        )
+                        break
                 elif event_type == "completed":
                     plan_result = event_data.get("result")
                     if isinstance(plan_result, PlanResult):

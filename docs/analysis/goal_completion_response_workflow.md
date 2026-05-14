@@ -87,7 +87,7 @@ Before generating any response, the system uses configuration (`SootheConfig.age
 
 | Category | Word Count | Usage Scenario |
 |----------|------------|----------------|
-| **BRIEF** | 50-150 | Chitchat, quiz, simple questions |
+| **BRIEF** | 50-150 | Quiz, simple questions |
 | **CONCISE** | 150-300 | Thread continuation, simple follow-ups |
 | **STANDARD** | 300-500 | Medium tasks, research synthesis |
 | **COMPREHENSIVE** | 600-800 | Architecture analysis, complex implementation |
@@ -96,9 +96,9 @@ Before generating any response, the system uses configuration (`SootheConfig.age
 
 ```python
 def determine_response_length(
-    intent_type: str,          # chitchat/quiz/thread_continuation/new_goal
+    intent_type: str,          # quiz/continue_thread/new_goal
     goal_type: str,            # architecture_analysis/research_synthesis/implementation_summary/general
-    task_complexity: str,      # chitchat/quiz/medium/complex
+    task_complexity: str,      # minimal/simple/medium/complex
     evidence_volume: int,      # Total evidence char count
     evidence_diversity: int,    # Unique step types count
 ) -> ResponseLengthCategory:
@@ -107,7 +107,7 @@ def determine_response_length(
 **Priority Rules**:
 
 1. **Intent Override**:
-   - Chitchat/Quiz → BRIEF (always short replies)
+   - Quiz → BRIEF (always short replies)
    - Thread continuation → CONCISE (builds on prior context)
 
 2. **Goal Type Specialization**:
@@ -427,7 +427,7 @@ async def fail_goal(self, goal_id: str, error: str, evidence: EvidenceBundle) ->
 ### 2. Adaptive Response Sizing (IG-268)
 
 **Match response length to task complexity**:
-- BRIEF for simple interactions (chitchat, quiz)
+- BRIEF for simple interactions (quiz)
 - CONCISE for thread continuation (builds on context)
 - STANDARD for medium tasks (research synthesis)
 - COMPREHENSIVE for complex work (architecture, implementation)
