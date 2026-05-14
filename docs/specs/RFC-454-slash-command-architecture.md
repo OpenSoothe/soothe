@@ -13,7 +13,7 @@
 
 ## Abstract
 
-Establish clear architectural boundaries for slash command processing where CLI is the presentation layer (parsing, validating, rendering) and daemon is the runtime layer (RPC execution, behavior routing). This RFC extends RFC-400 with a new `command_request` message type for structured RPC commands, while routing commands continue via plain text input path.
+Establish clear architectural boundaries for slash command processing where CLI is the presentation layer (parsing, validating, rendering) and daemon is the runtime layer (RPC execution, behavior routing). This RFC extends RFC-450 with a new `command_request` message type for structured RPC commands, while routing commands continue via plain text input path.
 
 **Key Principle**: No backward compatibility - complete cut change to enforce architectural separation.
 

@@ -611,4 +611,4 @@ await handle_loop_subscribe(client_id, loop_abc123)
 
 ---
 
-**End of RFC-612 Draft**
+**End of RFC-503 Draft**
