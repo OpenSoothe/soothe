@@ -53,6 +53,8 @@ class HttpRestTransport(TransportServer):
         runner: Any | None = None,
         soothe_config: Any | None = None,
         session_manager: Any | None = None,
+        *,
+        unified_app: FastAPI | None = None,
     ) -> None:
         """Initialize HTTP REST transport.
 
@@ -61,12 +63,15 @@ class HttpRestTransport(TransportServer):
             runner: Optional SootheRunner instance.
             soothe_config: Optional SootheConfig instance.
             session_manager: Optional ClientSessionManager for queue metrics.
+            unified_app: When set, routes and middleware attach to this shared ASGI app
+                and this transport does not start its own uvicorn process.
         """
         self._config = config
         self._runner = runner
         self._soothe_config = soothe_config
         self._session_manager = session_manager
-        self._app = FastAPI(
+        self._unified_mode = unified_app is not None
+        self._app = unified_app or FastAPI(
             title="Soothe Daemon API",
             description="REST API for Soothe multi-agent assistant",
             version="1.0.0",
@@ -408,6 +413,10 @@ class HttpRestTransport(TransportServer):
 
         self._message_handler = message_handler
         # HTTP REST doesn't need handshake callback - each request is independent
+
+        if self._unified_mode:
+            logger.debug("HTTP REST routes attached to unified ASGI app (no standalone listener)")
+            return
 
         # Import uvicorn here to avoid import errors if not installed
         import uvicorn

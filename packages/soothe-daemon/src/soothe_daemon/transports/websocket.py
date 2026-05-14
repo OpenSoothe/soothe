@@ -37,19 +37,28 @@ class WebSocketTransport(TransportServer):
         config: WebSocket configuration.
     """
 
-    def __init__(self, config: WebSocketConfig) -> None:
+    def __init__(
+        self,
+        config: WebSocketConfig,
+        *,
+        unified_app: FastAPI | None = None,
+    ) -> None:
         """Initialize WebSocket transport.
 
         Args:
             config: WebSocket configuration.
+            unified_app: When set, WebSocket is registered on this shared ASGI app
+                and the transport manager owns a single uvicorn listener.
         """
         self._config = config
+        self._unified_parent_app = unified_app
         self._app: FastAPI | None = None
         self._server: uvicorn.Server | None = None
         self._serve_task: asyncio.Task[None] | None = None
         self._clients: dict[WebSocket, dict[str, Any]] = {}
         self._message_handler: Callable[[str, dict[str, Any]], None] | None = None
         self._handshake_callback: Callable[[Any], list[dict[str, Any]]] | None = None
+        self._ws_route_registered = False
 
     async def start(
         self,
@@ -69,12 +78,23 @@ class WebSocketTransport(TransportServer):
         self._message_handler = message_handler
         self._handshake_callback = handshake_callback
 
+        if self._unified_parent_app is not None:
+            if not self._ws_route_registered:
+
+                @self._unified_parent_app.websocket("/")
+                async def _ws_endpoint(websocket: WebSocket) -> None:
+                    await self._handle_client_endpoint(websocket)
+
+                self._ws_route_registered = True
+            self._app = self._unified_parent_app
+            return
+
         app = FastAPI(
             title="Soothe Daemon WebSocket", version="1.0.0", docs_url=None, redoc_url=None
         )
 
         @app.websocket("/")
-        async def _ws_endpoint(websocket: WebSocket) -> None:
+        async def _ws_endpoint_standalone(websocket: WebSocket) -> None:
             await self._handle_client_endpoint(websocket)
 
         self._app = app
@@ -87,7 +107,7 @@ class WebSocketTransport(TransportServer):
         elif self._config.tls_enabled:
             logger.warning("TLS enabled but no certificate/key configured")
 
-        config = uvicorn.Config(
+        uv_cfg = uvicorn.Config(
             app=app,
             host=self._config.host,
             port=self._config.port,
@@ -98,7 +118,7 @@ class WebSocketTransport(TransportServer):
             ws_ping_interval=None,
             ws_ping_timeout=None,
         )
-        self._server = uvicorn.Server(config)
+        self._server = uvicorn.Server(uv_cfg)
         self._serve_task = asyncio.create_task(self._server.serve())
 
         protocol = "wss" if self._config.tls_enabled else "ws"
@@ -115,9 +135,6 @@ class WebSocketTransport(TransportServer):
         Args:
             message: Message dict to broadcast.
         """
-        if not self._server:
-            return
-
         text = encode_websocket_text(message)
 
         send_tasks = [
@@ -192,23 +209,23 @@ class WebSocketTransport(TransportServer):
 
     async def stop(self) -> None:
         """Stop the WebSocket server and close all connections."""
-        if not self._server:
-            return
-
         for client in list(self._clients):
             with contextlib.suppress(Exception):
                 await client.close()
 
         self._clients.clear()
 
-        self._server.should_exit = True
-        if self._serve_task is not None:
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await asyncio.wait_for(self._serve_task, timeout=30.0)
-            self._serve_task = None
+        if self._server is not None:
+            self._server.should_exit = True
+            if self._serve_task is not None:
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await asyncio.wait_for(self._serve_task, timeout=30.0)
+                self._serve_task = None
 
-        self._server = None
-        self._app = None
+            self._server = None
+
+        if self._unified_parent_app is None:
+            self._app = None
 
         logger.info("[WS] Transport stopped")
 

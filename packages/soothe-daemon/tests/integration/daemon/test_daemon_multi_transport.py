@@ -13,6 +13,16 @@ from pathlib import Path
 
 import pytest
 from soothe.config import SootheConfig
+
+from soothe_daemon import SootheDaemon, WebSocketClient
+from soothe_daemon.config import SootheDaemonConfig
+from tests.integration.conftest import (
+    alloc_ephemeral_port,
+    await_event_type,
+    await_status_state,
+    build_daemon_config,
+    force_isolated_home,
+)
 from tests.integration.ws_loop_client import (
     loop_new_with_initial_input,
     request_loop_delete,
@@ -21,21 +31,12 @@ from tests.integration.ws_loop_client import (
     subscribe_loop_stream,
 )
 
-from soothe_daemon import SootheDaemon, WebSocketClient
-from tests.integration.conftest import (
-    alloc_ephemeral_port,
-    await_event_type,
-    await_status_state,
-    build_daemon_config,
-    force_isolated_home,
-)
-
 
 def _build_daemon_config(
     tmp_path: Path,
     websocket_port: int,
     http_port: int,
-) -> SootheConfig:
+) -> tuple[SootheConfig, SootheDaemonConfig]:
     """Build an isolated daemon config with WebSocket and HTTP transports enabled."""
     return build_daemon_config(
         tmp_path=tmp_path,
@@ -46,14 +47,13 @@ def _build_daemon_config(
 
 @pytest.fixture
 async def multi_transport_daemon(tmp_path: Path):
-    """Start a daemon with WebSocket and HTTP transports enabled."""
+    """Start a daemon with WebSocket and HTTP REST transports enabled."""
     force_isolated_home(tmp_path / "soothe-home")
 
-    ws_port = alloc_ephemeral_port()
-    http_port = alloc_ephemeral_port()
+    port = alloc_ephemeral_port()
 
-    config = _build_daemon_config(tmp_path, ws_port, http_port)
-    daemon = SootheDaemon(config)
+    config, daemon_cfg = _build_daemon_config(tmp_path, port, port)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
     # Allow transports to fully initialize
     await asyncio.sleep(0.3)
@@ -61,8 +61,8 @@ async def multi_transport_daemon(tmp_path: Path):
     try:
         yield {
             "daemon": daemon,
-            "ws_port": ws_port,
-            "http_port": http_port,
+            "ws_port": port,
+            "http_port": port,
             "config": config,
         }
     finally:

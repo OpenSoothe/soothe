@@ -12,6 +12,16 @@ from pathlib import Path
 
 import pytest
 from soothe.config import SootheConfig
+
+from soothe_daemon import SootheDaemon, WebSocketClient
+from soothe_daemon.config import SootheDaemonConfig
+from tests.integration.conftest import (
+    alloc_ephemeral_port,
+    await_event_type,
+    await_status_state,
+    build_daemon_config,
+    force_isolated_home,
+)
 from tests.integration.ws_loop_client import (
     loop_new_with_initial_input,
     request_loop_get,
@@ -19,48 +29,15 @@ from tests.integration.ws_loop_client import (
     subscribe_loop_stream,
 )
 
-from soothe_daemon import SootheDaemon, WebSocketClient
-from tests.integration.conftest import (
-    alloc_ephemeral_port,
-    await_event_type,
-    await_status_state,
-    force_isolated_home,
-    get_base_config,
-)
-
 
 def _build_daemon_config(
     tmp_path: Path, websocket_port: int, max_concurrent_threads: int = 3
-) -> SootheConfig:
-    """Build an isolated daemon config for recovery tests."""
-    base_config = get_base_config()
-
-    return SootheConfig(
-        providers=base_config.providers,
-        router=base_config.router,
-        vector_stores=base_config.vector_stores,
-        vector_store_router=base_config.vector_store_router,
-        workspace_dir=str(tmp_path / "workspace"),
-        persistence={"persist_dir": str(tmp_path / "persistence")},
-        protocols={
-            "memory": {"enabled": False},
-            "durability": {
-                "backend": "sqlite",
-                "persist_dir": str(tmp_path / "durability"),
-            },
-        },
-        daemon={
-            "transports": {
-                "websocket": {
-                    "enabled": True,
-                    "host": "127.0.0.1",
-                    "port": websocket_port,
-                },
-                "http_rest": {"enabled": False},
-            },
-            "max_concurrent_threads": max_concurrent_threads,
-        },
-    )
+) -> tuple[SootheConfig, SootheDaemonConfig]:
+    """Build an isolated agent and daemon server config for recovery tests."""
+    agent, daemon_cfg = build_daemon_config(tmp_path, websocket_port=websocket_port)
+    merged = daemon_cfg.model_dump()
+    merged["max_concurrent_threads"] = max_concurrent_threads
+    return agent, SootheDaemonConfig.model_validate(merged)
 
 
 @pytest.fixture
@@ -69,8 +46,8 @@ async def daemon_fixture(tmp_path: Path):
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
 
-    config = _build_daemon_config(tmp_path, websocket_port=ws_port)
-    daemon = SootheDaemon(config)
+    config, daemon_cfg = _build_daemon_config(tmp_path, websocket_port=ws_port)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
     await asyncio.sleep(0.2)
     try:
@@ -86,9 +63,9 @@ async def test_loop_resume_from_disk(tmp_path: Path) -> None:
     """Loop metadata survives daemon restart; client can reattach and continue."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = _build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = _build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon1 = SootheDaemon(config)
+    daemon1 = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon1.start()
     await asyncio.sleep(0.2)
 
@@ -118,7 +95,7 @@ async def test_loop_resume_from_disk(tmp_path: Path) -> None:
 
     await asyncio.sleep(0.2)
 
-    daemon2 = SootheDaemon(config)
+    daemon2 = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon2.start()
     await asyncio.sleep(0.2)
 

@@ -110,8 +110,7 @@ def _check_http_rest_connectivity(config: SootheDaemonConfig | None) -> CheckRes
             message="HTTP REST transport disabled",
         )
 
-    http_host = config.transports.http_rest.host
-    http_port = config.transports.http_rest.port
+    http_host, http_port = config.transports.effective_http_rest_listen()
     health_url = f"http://{http_host}:{http_port}/api/v1/health"
 
     try:
@@ -163,8 +162,7 @@ def _check_http_rest_status(config: SootheDaemonConfig | None) -> CheckResult:
             message="HTTP REST transport disabled",
         )
 
-    http_host = config.transports.http_rest.host
-    http_port = config.transports.http_rest.port
+    http_host, http_port = config.transports.effective_http_rest_listen()
     status_url = f"http://{http_host}:{http_port}/api/v1/status"
 
     try:
@@ -310,8 +308,7 @@ def _check_client_sessions(config: SootheDaemonConfig | None) -> CheckResult:
             message="HTTP REST transport disabled",
         )
 
-    http_host = config.transports.http_rest.host
-    http_port = config.transports.http_rest.port
+    http_host, http_port = config.transports.effective_http_rest_listen()
     status_url = f"http://{http_host}:{http_port}/api/v1/status"
 
     try:
@@ -352,8 +349,7 @@ def _check_active_threads(config: SootheDaemonConfig | None) -> CheckResult:
             message="HTTP REST transport disabled",
         )
 
-    http_host = config.transports.http_rest.host
-    http_port = config.transports.http_rest.port
+    http_host, http_port = config.transports.effective_http_rest_listen()
     threads_url = f"http://{http_host}:{http_port}/api/v1/threads"
 
     try:
@@ -405,8 +401,7 @@ def _check_queue_depth(config: SootheDaemonConfig | None) -> CheckResult:
             message="HTTP REST transport disabled",
         )
 
-    http_host = config.transports.http_rest.host
-    http_port = config.transports.http_rest.port
+    http_host, http_port = config.transports.effective_http_rest_listen()
     health_url = f"http://{http_host}:{http_port}/api/v1/health"
 
     try:

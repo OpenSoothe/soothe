@@ -24,7 +24,9 @@ transports:
   http_rest:
     enabled: false
     host: 127.0.0.1
-    port: 8766
+    # When enabled alongside WebSocket, HTTP REST shares the WebSocket listener
+    # (same host/port; this port should match ``websocket.port``).
+    port: 8765
     tls_enabled: false
     tls_cert: null
     tls_key: null

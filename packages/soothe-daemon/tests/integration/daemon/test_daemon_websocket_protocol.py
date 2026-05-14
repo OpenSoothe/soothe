@@ -14,47 +14,20 @@ from soothe.config import SootheConfig
 from soothe_sdk.client import WebSocketClient
 
 from soothe_daemon import SootheDaemon
+from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.config.models import WebSocketConfig
 from soothe_daemon.transports.websocket import WebSocketTransport
 from tests.integration.conftest import (
     alloc_ephemeral_port,
     await_event_type,
+    build_daemon_config,
     force_isolated_home,
-    get_base_config,
 )
 
 
-def _build_daemon_config(tmp_path: Path, port: int) -> SootheConfig:
-    """Build an isolated daemon config for websocket protocol tests."""
-    base_config = get_base_config()
-
-    return SootheConfig(
-        providers=base_config.providers,
-        router=base_config.router,
-        vector_stores=base_config.vector_stores,
-        vector_store_router=base_config.vector_store_router,
-        workspace_dir=str(tmp_path / "workspace"),
-        persistence={"persist_dir": str(tmp_path / "persistence")},
-        protocols={
-            "memory": {"enabled": False},
-            "durability": {
-                "backend": "sqlite",
-                "persist_dir": str(tmp_path / "durability"),
-            },
-        },
-        daemon={
-            "transports": {
-                "websocket": {
-                    "enabled": True,
-                    "host": "127.0.0.1",
-                    "port": port,
-                    "cors_origins": ["*"],
-                    "tls_enabled": False,
-                },
-                "http_rest": {"enabled": False},
-            },
-        },
-    )
+def _build_daemon_config(tmp_path: Path, port: int) -> tuple[SootheConfig, SootheDaemonConfig]:
+    """Build an isolated agent and daemon server config for websocket protocol tests."""
+    return build_daemon_config(tmp_path=tmp_path, websocket_port=port)
 
 
 @pytest_asyncio.fixture
@@ -62,8 +35,8 @@ async def websocket_daemon(tmp_path: Path):
     """Start a daemon exposing only the WebSocket transport."""
     force_isolated_home(tmp_path / "soothe-home")
     port = alloc_ephemeral_port()
-    config = _build_daemon_config(tmp_path, port)
-    daemon = SootheDaemon(config)
+    config, daemon_cfg = _build_daemon_config(tmp_path, port)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
     await asyncio.sleep(0.2)
     try:
@@ -86,7 +59,7 @@ async def test_websocket_transport_lifecycle_and_broadcast() -> None:
         tls_enabled=False,
     )
     transport = WebSocketTransport(config)
-    await transport.start(lambda msg: None)
+    await transport.start(lambda _client_id, _msg: None)
     await asyncio.sleep(0.2)
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
@@ -111,7 +84,7 @@ async def test_websocket_protocol_message_validation_returns_error() -> None:
     port = alloc_ephemeral_port()
     config = WebSocketConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
     transport = WebSocketTransport(config)
-    await transport.start(lambda msg: None)
+    await transport.start(lambda _client_id, _msg: None)
     await asyncio.sleep(0.2)
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
@@ -165,8 +138,8 @@ async def test_websocket_daemon_shutdown_rpc_stops_server(tmp_path: Path) -> Non
     """daemon_shutdown RPC acknowledges then stops daemon."""
     force_isolated_home(tmp_path / "soothe-home")
     port = alloc_ephemeral_port()
-    config = _build_daemon_config(tmp_path, port)
-    daemon = SootheDaemon(config)
+    config, daemon_cfg = _build_daemon_config(tmp_path, port)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
     await asyncio.sleep(0.2)
 
@@ -294,7 +267,7 @@ async def test_websocket_auth_message_should_return_auth_response() -> None:
     port = alloc_ephemeral_port()
     config = WebSocketConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
     transport = WebSocketTransport(config)
-    await transport.start(lambda msg: None)
+    await transport.start(lambda _client_id, _msg: None)
     await asyncio.sleep(0.2)
 
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")

@@ -14,11 +14,6 @@ import uuid
 from pathlib import Path
 
 import pytest
-from tests.integration.ws_loop_client import (
-    loop_new_with_initial_input,
-    request_loop_list,
-    subscribe_loop_stream,
-)
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from tests.integration.conftest import (
@@ -27,6 +22,11 @@ from tests.integration.conftest import (
     build_daemon_config,
     force_isolated_home,
 )
+from tests.integration.ws_loop_client import (
+    loop_new_with_initial_input,
+    request_loop_list,
+    subscribe_loop_stream,
+)
 
 
 @pytest.fixture
@@ -34,8 +34,8 @@ async def daemon_fixture(tmp_path: Path):
     """Start a daemon for error handling tests."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
-    daemon = SootheDaemon(config)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
     await asyncio.sleep(0.4)
     try:

@@ -19,11 +19,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.integration.ws_loop_client import (
-    loop_new_with_initial_input,
-    request_loop_list,
-    subscribe_loop_stream,
-)
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from soothe_daemon.event_bus import EventBus
@@ -34,6 +29,42 @@ from tests.integration.conftest import (
     build_daemon_config,
     force_isolated_home,
 )
+from tests.integration.ws_loop_client import (
+    loop_new_with_initial_input,
+    request_loop_list,
+    subscribe_loop_stream,
+)
+
+
+async def _assert_client_receives_no_events_for_loop(
+    client: WebSocketClient,
+    forbidden_loop_id: str,
+    *,
+    timeout: float = 0.5,
+) -> None:
+    """Fail if ``client`` receives an event clearly scoped to ``forbidden_loop_id``.
+
+    Global broadcasts (no loop id) are ignored so the check targets cross-loop leaks.
+    """
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
+        remaining = deadline - asyncio.get_running_loop().time()
+        if remaining <= 0:
+            return
+        try:
+            ev = await asyncio.wait_for(
+                client.read_event(),
+                timeout=min(0.05, remaining),
+            )
+        except TimeoutError:
+            return
+        if not ev:
+            continue
+        lid = ev.get("loop_id") or ev.get("thread_id")
+        if lid == forbidden_loop_id:
+            msg = f"received loop-scoped traffic for another client's loop: {ev!r}"
+            raise AssertionError(msg)
+
 
 # ============================================================================
 # Test Fixtures
@@ -45,24 +76,23 @@ async def isolated_daemon(tmp_path: Path):
     """Start an isolated daemon with WebSocket and HTTP REST transports for E2E testing."""
     force_isolated_home(tmp_path / "soothe-home")
 
-    ws_port = alloc_ephemeral_port()
-    http_port = alloc_ephemeral_port()
+    port = alloc_ephemeral_port()
 
-    config = build_daemon_config(
+    config, daemon_cfg = build_daemon_config(
         tmp_path=tmp_path,
-        websocket_port=ws_port,
-        http_port=http_port,
+        websocket_port=port,
+        http_port=port,
     )
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
     await asyncio.sleep(0.3)  # Allow transports to initialize
 
     try:
         yield {
             "daemon": daemon,
-            "ws_port": ws_port,
-            "http_port": http_port,
+            "ws_port": port,
+            "http_port": port,
             "config": config,
         }
     finally:
@@ -180,9 +210,9 @@ async def test_three_clients_complete_isolation(tmp_path: Path, requires_llm_api
     """Test that three clients with different threads are completely isolated."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:
@@ -215,12 +245,9 @@ async def test_three_clients_complete_isolation(tmp_path: Path, requires_llm_api
         event = await asyncio.wait_for(clients[0].read_event(), timeout=2.0)
         assert event is not None
 
-        # Clients 1 and 2 should NOT receive events from client 0's thread
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(clients[1].read_event(), timeout=0.5)
-
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(clients[2].read_event(), timeout=0.5)
+        # Clients 1 and 2 must not receive loop-scoped traffic for client 0's loop
+        await _assert_client_receives_no_events_for_loop(clients[1], thread_ids[0])
+        await _assert_client_receives_no_events_for_loop(clients[2], thread_ids[0])
 
         # Cleanup
         for client in clients:
@@ -236,9 +263,9 @@ async def test_client_subscription_after_thread_creation(tmp_path: Path, require
     """Test that client can subscribe to thread after it's created."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:
@@ -274,9 +301,9 @@ async def test_client_multiple_thread_subscriptions(tmp_path: Path, requires_llm
     """Test that a single client can subscribe to multiple threads simultaneously."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:
@@ -318,9 +345,9 @@ async def test_rapid_client_connections(tmp_path: Path, requires_llm_api) -> Non
     """Test daemon stability with rapid client connections/disconnections."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:
@@ -367,9 +394,9 @@ async def test_event_throughput_stress(tmp_path: Path, requires_llm_api) -> None
     """Test event bus performance under high throughput."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:
@@ -401,9 +428,9 @@ async def test_large_message_handling(tmp_path: Path, requires_llm_api) -> None:
     """Test daemon handles large messages correctly (up to size limit)."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:
@@ -432,9 +459,9 @@ async def test_session_cleanup_on_unexpected_disconnect(tmp_path: Path, requires
     """Test that session is properly cleaned up on unexpected client disconnect."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:
@@ -469,9 +496,9 @@ async def test_client_reconnect_after_disconnect(tmp_path: Path, requires_llm_ap
     """Test that client can reconnect after disconnect and create new session."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:
@@ -511,9 +538,9 @@ async def test_protocol_message_thread_id_in_events(tmp_path: Path, requires_llm
     """Test that stream events include loop/thread correlation (``loop_id``)."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:
@@ -568,9 +595,9 @@ async def test_protocol_client_id_in_status(tmp_path: Path, requires_llm_api) ->
     """Test that status messages include client_id field."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:
@@ -665,9 +692,9 @@ async def test_event_delivery_latency(tmp_path: Path) -> None:
     """Test event delivery latency is within acceptable bounds."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:
@@ -711,9 +738,9 @@ async def test_daemon_remains_stable_after_client_errors(tmp_path: Path) -> None
     """Test daemon remains stable after client errors (malformed messages, etc.)."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:
@@ -754,9 +781,9 @@ async def test_graceful_handling_of_invalid_subscriptions(tmp_path: Path) -> Non
     """Test that invalid subscription attempts are handled gracefully."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:
@@ -793,9 +820,9 @@ async def test_concurrent_queries_different_threads(tmp_path: Path, requires_llm
     """Test that multiple threads can execute concurrently (if supported)."""
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
-    config = build_daemon_config(tmp_path, websocket_port=ws_port)
+    config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
 
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
 
     try:

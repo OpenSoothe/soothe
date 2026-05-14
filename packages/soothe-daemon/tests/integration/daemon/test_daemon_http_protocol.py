@@ -12,6 +12,7 @@ import pytest
 from soothe.config import SootheConfig
 
 from soothe_daemon import SootheDaemon
+from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.config.models import HttpRestConfig
 from soothe_daemon.transports.http_rest import HttpRestTransport
 from tests.integration.conftest import (
@@ -51,52 +52,47 @@ async def _await_user_messages(
 
 
 def _build_http_transport_config(
-    tmp_path: Path, port: int, *, with_daemon: bool = True
-) -> tuple[SootheConfig, int]:
-    """Build an isolated daemon config for HTTP transport tests."""
+    tmp_path: Path, port: int
+) -> tuple[SootheConfig, SootheDaemonConfig]:
+    """Build an isolated agent config and daemon server config for HTTP transport tests."""
     base_config = get_base_config()
 
-    if with_daemon:
-        return (
-            SootheConfig(
-                providers=base_config.providers,
-                router=base_config.router,
-                vector_stores=base_config.vector_stores,
-                vector_store_router=base_config.vector_store_router,
-                workspace_dir=str(tmp_path / "workspace"),
-                persistence={"persist_dir": str(tmp_path / "persistence")},
-                protocols={
-                    "memory": {"enabled": False},
-                    "durability": {
-                        "backend": "sqlite",
-                        "persist_dir": str(tmp_path / "durability"),
-                    },
-                },
-                daemon={
-                    "transports": {
-                        "websocket": {
-                            "enabled": True,
-                            "host": "127.0.0.1",
-                            "port": alloc_ephemeral_port(),
-                            "cors_origins": ["*"],
-                            "tls_enabled": False,
-                        },
-                        "http_rest": {
-                            "enabled": True,
-                            "host": "127.0.0.1",
-                            "port": port,
-                            "cors_origins": ["*"],
-                            "tls_enabled": False,
-                        },
-                    },
-                },
-            ),
-            port,
-        )
-    return (
-        SootheConfig(),
-        port,
+    agent = SootheConfig(
+        providers=base_config.providers,
+        router=base_config.router,
+        vector_stores=base_config.vector_stores,
+        vector_store_router=base_config.vector_store_router,
+        workspace_dir=str(tmp_path / "workspace"),
+        persistence={"persist_dir": str(tmp_path / "persistence")},
+        protocols={
+            "memory": {"enabled": False},
+            "durability": {
+                "backend": "sqlite",
+                "persist_dir": str(tmp_path / "durability"),
+            },
+        },
     )
+    daemon_cfg = SootheDaemonConfig.model_validate(
+        {
+            "transports": {
+                "websocket": {
+                    "enabled": True,
+                    "host": "127.0.0.1",
+                    "port": port,
+                    "cors_origins": ["*"],
+                    "tls_enabled": False,
+                },
+                "http_rest": {
+                    "enabled": True,
+                    "host": "127.0.0.1",
+                    "port": port,
+                    "cors_origins": ["*"],
+                    "tls_enabled": False,
+                },
+            },
+        }
+    )
+    return agent, daemon_cfg
 
 
 @pytest.fixture
@@ -104,8 +100,8 @@ async def http_daemon(tmp_path: Path):
     """Start a daemon exposing only HTTP REST transport."""
     force_isolated_home(tmp_path / "soothe-home")
     port = alloc_ephemeral_port()
-    config, _ = _build_http_transport_config(tmp_path, port, with_daemon=True)
-    daemon = SootheDaemon(config)
+    config, daemon_cfg = _build_http_transport_config(tmp_path, port)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
     await asyncio.sleep(0.3)
     try:
@@ -122,7 +118,7 @@ async def test_http_transport_system_lifecycle(tmp_path: Path) -> None:
     port = alloc_ephemeral_port()
     config = HttpRestConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
     transport = HttpRestTransport(config)
-    await transport.start(lambda msg: None)
+    await transport.start(lambda _client_id, _msg: None)
     await asyncio.sleep(0.2)
 
     try:
@@ -315,7 +311,7 @@ async def test_http_transport_config_endpoints_are_contractual(tmp_path: Path) -
     port = alloc_ephemeral_port()
     config = HttpRestConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
     transport = HttpRestTransport(config)
-    await transport.start(lambda msg: None)
+    await transport.start(lambda _client_id, _msg: None)
     await asyncio.sleep(0.2)
 
     try:
@@ -344,7 +340,7 @@ async def test_http_transport_file_endpoints_contract(tmp_path: Path) -> None:
     port = alloc_ephemeral_port()
     config = HttpRestConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
     transport = HttpRestTransport(config)
-    await transport.start(lambda msg: None)
+    await transport.start(lambda _client_id, _msg: None)
     await asyncio.sleep(0.2)
 
     try:

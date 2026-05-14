@@ -12,15 +12,17 @@ import pytest
 import pytest_asyncio
 from soothe.config import SootheConfig
 from soothe_sdk.client import WebSocketClient
-from tests.integration.ws_loop_client import loop_new, subscribe_loop_stream
 
 from soothe_daemon import SootheDaemon
+from soothe_daemon.config import SootheDaemonConfig
 from tests.integration.conftest import (
     alloc_ephemeral_port,
     await_event_type,
     await_status_state,
-    get_base_config,
+    build_daemon_config,
+    force_isolated_home,
 )
+from tests.integration.ws_loop_client import loop_new, subscribe_loop_stream
 
 TINY_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
@@ -56,36 +58,8 @@ def _get_logical_arch_b64() -> str:
     return LOGICAL_ARCH_B64
 
 
-def _build_daemon_config(tmp_path: Path, port: int) -> SootheConfig:
-    base_config = get_base_config()
-
-    return SootheConfig(
-        providers=base_config.providers,
-        router=base_config.router,
-        vector_stores=base_config.vector_stores,
-        vector_store_router=base_config.vector_store_router,
-        persistence={"persist_dir": str(tmp_path / "persistence")},
-        protocols={
-            "memory": {"enabled": False},
-            "durability": {
-                "backend": "sqlite",
-                "persist_dir": str(tmp_path / "durability"),
-            },
-        },
-        daemon={
-            "transports": {
-                "unix_socket": {"enabled": False},
-                "websocket": {
-                    "enabled": True,
-                    "host": "127.0.0.1",
-                    "port": port,
-                    "cors_origins": ["*"],
-                    "tls_enabled": False,
-                },
-                "http_rest": {"enabled": False},
-            },
-        },
-    )
+def _build_daemon_config(tmp_path: Path, port: int) -> tuple[SootheConfig, SootheDaemonConfig]:
+    return build_daemon_config(tmp_path=tmp_path, websocket_port=port)
 
 
 @pytest_asyncio.fixture
@@ -97,8 +71,10 @@ async def websocket_daemon_patched(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         config: Any,
         text: str,
         attachments: list[dict[str, str]],
+        *,
+        session_id: str | None = None,
     ) -> str:
-        vision_calls.append({"text": text, "n": len(attachments)})
+        vision_calls.append({"text": text, "n": len(attachments), "session_id": session_id})
         return f"{text}\n--- Vision summary ---\nstub-vision\n---\n"
 
     monkeypatch.setattr(
@@ -107,9 +83,10 @@ async def websocket_daemon_patched(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         raising=True,
     )
 
+    force_isolated_home(tmp_path / "soothe-home")
     port = alloc_ephemeral_port()
-    config = _build_daemon_config(tmp_path, port)
-    daemon = SootheDaemon(config)
+    config, daemon_cfg = _build_daemon_config(tmp_path, port)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
     await asyncio.sleep(0.2)
     try:
@@ -156,9 +133,10 @@ async def test_websocket_input_with_image_runs_turn(
 async def test_websocket_input_invalid_attachment_returns_error(
     tmp_path: Path,
 ) -> None:
+    force_isolated_home(tmp_path / "soothe-home")
     port = alloc_ephemeral_port()
-    config = _build_daemon_config(tmp_path, port)
-    daemon = SootheDaemon(config)
+    config, daemon_cfg = _build_daemon_config(tmp_path, port)
+    daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
     await asyncio.sleep(0.2)
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
