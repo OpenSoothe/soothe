@@ -836,7 +836,7 @@ class AgentLoopConfig(BaseModel):
     )
 
     max_subagent_tasks_per_wave: int = Field(
-        default=16,
+        default=4,
         description="Max completed subagent ``task`` tool results per Execute wave (0 = no limit)",
         ge=0,
         le=20,
