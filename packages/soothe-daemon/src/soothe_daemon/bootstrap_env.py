@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+from soothe_sdk import _upstream_warnings as _upstream_warnings  # noqa: F401
 
 
 def _soothe_home_dir() -> Path:

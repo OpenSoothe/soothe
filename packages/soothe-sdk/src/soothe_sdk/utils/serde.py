@@ -7,13 +7,11 @@ continue to work when ``LANGGRAPH_STRICT_MSGPACK=true`` becomes the default).
 This module lives in the SDK package so that both the daemon and CLI can
 use it without the CLI importing daemon runtime.
 
-**Upstream Warning Note:**
-During import, you may see a deprecation warning from ``langchain_core.load.load.Reviver``.
-This is a known upstream issue in langchain-core that emits a misleading warning about
-"allowed_objects" (which doesn't exist; the actual parameter is ``allowed_msgpack_modules``).
-Our code properly passes ``allowed_msgpack_modules`` to suppress future deprecation,
-but the warning still appears during langgraph's module initialization.
-See: langgraph/checkpoint/serde/jsonplus.py:45 (LC_REVIVER = Reviver())
+**Upstream Reviver warning:** LangGraph's ``jsonplus`` serde uses a module-level
+``Reviver()`` without ``allowed_objects=``, which triggers a LangChain pending
+deprecation on import. That is unrelated to ``allowed_msgpack_modules`` on
+``JsonPlusSerializer``; filters are installed from ``soothe_sdk`` / ``soothe`` /
+daemon bootstrap (see ``soothe_sdk._upstream_warnings``).
 
 Usage::
 
@@ -49,8 +47,6 @@ def create_soothe_serde() -> JsonPlusSerializer:
     """
     from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
-    # Pass explicit allowed_msgpack_modules to suppress deprecation warning.
-    # The warning mentions "allowed_objects" but that param doesn't exist.
     return JsonPlusSerializer(allowed_msgpack_modules=_SOOTHE_MSGPACK_MODULES)
 
 
