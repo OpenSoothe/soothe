@@ -80,14 +80,6 @@ tools:
 subagents:
   browser:
     enabled: false
-  explore:
-    enabled: true
-    config:
-      semantic_similarity_timeout_seconds: 10
-      max_iterations:
-        quick: 6
-        medium: 10
-        thorough: 16
 
 persistence:
   default_backend: postgresql
@@ -102,7 +94,3 @@ vector_stores:
 
 vector_store_router:
   default: pgvector_dev:soothe_default
-
-update:
-  check: true
-  auto_update: true
