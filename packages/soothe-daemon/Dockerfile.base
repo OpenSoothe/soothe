@@ -61,10 +61,6 @@ RUN uv sync --frozen --no-dev \
     && .venv/bin/python -m playwright install chromium \
     && rm -rf /root/.cache/uv /root/.cache/pip
 
-# Warmup embedding model cache
-RUN mkdir -p /var/lib/soothe/data \
-    && .venv/bin/soothed warmup
-
 # Install system deps for Playwright + ffmpeg
 RUN apt-get update \
     && .venv/bin/python -m playwright install-deps \
