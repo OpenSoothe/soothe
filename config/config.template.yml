@@ -206,7 +206,7 @@ autonomous:
 agent_loop:
   enabled: true
   max_iterations: 10
-  max_subagent_tasks_per_wave: 16
+  max_subagent_tasks_per_wave: 4
   agent_loop_output_contract_enabled: true
   final_response: adaptive
   goal_completion_mode: llm_only
@@ -257,7 +257,7 @@ agent_loop:
     llm_concurrent_limit: 10
     llm_call_timeout_seconds: 120
     llm_call_timeout_adaptive: true
-    llm_call_timeout_max_seconds: 900
+    llm_call_timeout_max_seconds: 120
     llm_retry_on_timeout: true
     llm_max_timeout_retries: 2
     llm_timeout_retry_multiplier: 2.0
