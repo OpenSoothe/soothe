@@ -46,7 +46,6 @@ router:
 
 agent_loop:
   max_iterations: 99
-  max_subagent_tasks_per_wave: 3
   plan_prompt_ledger:
     plan_ledger_max_messages: 40
     plan_ledger_max_total_chars: 60000
@@ -70,16 +69,6 @@ observability:
     trace_name: soothe-dev
     tags:
       - soothe
-
-tools:
-  audio:
-    enabled: false
-  video:
-    enabled: false
-
-subagents:
-  browser:
-    enabled: false
 
 persistence:
   default_backend: postgresql
