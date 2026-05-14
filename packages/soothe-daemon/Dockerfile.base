@@ -55,10 +55,11 @@ RUN mkdir -p packages/soothe/src/soothe \
     && : > packages/soothe-daemon/src/soothe_daemon/__init__.py
 
 # Install all extras + Playwright (EXPENSIVE)
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev \
+# Note: No cache mount to avoid disk space buildup in multi-platform builds
+RUN uv sync --frozen --no-dev \
     && uv pip install 'soothe[all]' soothe-daemon playwright \
-    && .venv/bin/python -m playwright install chromium
+    && .venv/bin/python -m playwright install chromium \
+    && rm -rf /root/.cache/uv /root/.cache/pip
 
 # Warmup embedding model cache
 RUN mkdir -p /var/lib/soothe/data \
