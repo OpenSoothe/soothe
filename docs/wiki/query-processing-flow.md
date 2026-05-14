@@ -107,9 +107,9 @@ SootheRunner.astream(text, thread_id, autonomous, subagent)
                  ↓
     ┌────────────┼────────────┐
     ↓            ↓            ↓
-chitchat    agentic      subagent?
+quiz        agentic      subagent?
     ↓            ↓            ↓
-chitchat    default      direct
+quiz        default      direct
 response    mode         execution
                 ↓
         _run_agentic_loop()
@@ -189,7 +189,7 @@ Planning is implemented inside **AgentLoop**, not a separate `cognition/planning
 1. **StatusAssessment** — structured `status`, `goal_progress`, `confidence`, `require_goal_completion`
 2. **PlanGeneration** (when not `done`) — `plan_action`, `AgentDecision` steps, `next_action`
 
-Routing (chitchat vs agentic vs subagent) happens earlier in **`SootheRunner`** / unified classification. Historical **AutoPlanner / SimplePlanner / ClaudePlanner** routers have been removed (IG-150 consolidation).
+Routing (quiz fast path vs agentic vs subagent) happens earlier in **`SootheRunner`** / unified classification. Historical **AutoPlanner / SimplePlanner / ClaudePlanner** routers have been removed (IG-150 consolidation).
 
 ### Plan structure (conceptual)
 

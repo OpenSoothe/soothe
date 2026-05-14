@@ -561,7 +561,7 @@ Checkpoint save (complete loop_messages ledger + CoreAgent state)
 
 - **Current**: Sections injected in order: base prompt → ENVIRONMENT → context/memory (conditional) → subagent directive → output contract → dynamic sections → date line.
 - **New**: Sections injected in volatility order: base prompt + tool guides + policies (static) → workspace rules + workspace + environment + memory summary + context + thread + protocols (semi-static). Date line, execution hints, and per-turn memories removed from system prompt entirely.
-- **Preserved**: All `<SOOTHE_*>` XML tags, classification-driven depth (chitchat/medium/complex), `ToolTriggerRegistry` mechanism.
+- **Preserved**: All `<SOOTHE_*>` XML tags, classification-driven depth (minimal/medium/complex), `ToolTriggerRegistry` mechanism.
 - **Removed from system prompt**: `_current_date_line()`, execution hints suffix, per-turn memory injection.
 
 ## Amendment: RFC-206 (Hierarchical Prompt Architecture)

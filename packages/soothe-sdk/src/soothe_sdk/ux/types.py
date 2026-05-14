@@ -8,7 +8,7 @@ from typing import Final
 # IG-317 / RFC-614: User-visible **assistant answer text** for the main agent loop is not
 # modeled as `soothe.output.*` types. It arrives on the LangGraph ``mode="messages"`` stream
 # as loop-tagged AI payloads with a ``phase`` field (see ``soothe_sdk.ux.loop_stream``:
-# ``goal_completion``, ``chitchat``, ``quiz``, ``autonomous_goal``). Optional ancillary
+# ``goal_completion``, ``quiz``, ``autonomous_goal``, ``direct_model``). Optional ancillary
 # progress may still use the ``soothe.output.*`` domain for verbosity classification only.
 ESSENTIAL_EVENT_TYPES: Final[frozenset[str]] = frozenset(
     {

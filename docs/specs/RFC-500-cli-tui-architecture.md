@@ -63,7 +63,7 @@ LangGraph `(namespace, mode, data)` 3-tuple:
 **AgentLoop output contract note** (IG-304, IG-317, RFC-614):
 - Execute-phase assistant prose is daemon-suppressed for user-facing **stdout**; the TUI still receives `messages` tuples for routing.
 - Live execute observability is carried by tool telemetry (`ToolMessage` + AI tool-call metadata).
-- Final user-facing answer text (goal completion, chitchat, quiz, autonomous summaries) is emitted on the **`messages`** stream as loop-tagged AI message chunks with a **`phase`** field (for example `goal_completion`), not as `soothe.output.goal_completion.*` custom events.
+- Final user-facing answer text (goal completion, quiz, autonomous summaries, direct-model replies) is emitted on the **`messages`** stream as loop-tagged AI message chunks with a **`phase`** field (for example `goal_completion`), not as `soothe.output.goal_completion.*` custom events.
 
 **Textual TUI — `LoopAIMessage` rendering (canonical)**  
 | Source | `phase` / origin | TUI surface |

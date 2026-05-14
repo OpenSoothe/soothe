@@ -68,11 +68,11 @@ class MockModelRequest(ModelRequest[dict]):
 
 
 def test_simple_query_gets_minimal_prompt():
-    """Chitchat queries (LLM-classified) should receive minimal system prompt (RFC-214)."""
+    """Minimal task complexity (e.g. quiz path) should receive minimal system prompt (RFC-214)."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
-    # LLM classified this as "chitchat"
+    # LLM routed with minimal complexity
     classification = RoutingClassification(
         task_complexity="minimal",
         reasoning="Greeting/quick question",
@@ -241,15 +241,15 @@ def test_all_prompts_do_not_include_date():
         assert "Today's date is" not in modified.system_message.content
 
 
-def test_chitchat_query_treated_as_chitchat():
-    """Chitchat queries should be treated as chitchat for prompt selection."""
+def test_minimal_task_complexity_uses_compact_prompt():
+    """Minimal task complexity should use compact system prompt tier."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
-    # Chitchat complexity maps to simple prompt
+    # Minimal complexity maps to simple prompt
     classification = RoutingClassification(
         task_complexity="minimal",
-        reasoning="Chitchat greeting",
+        reasoning="Quiz greeting",
     )
 
     request = MockModelRequest(

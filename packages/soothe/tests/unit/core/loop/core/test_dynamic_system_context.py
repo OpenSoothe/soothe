@@ -241,14 +241,16 @@ class TestComplexityMapping:
         config.agent_loop.unified_classification = True
         return SystemPromptOptimizationMiddleware(config)
 
-    def test_chitchat_no_sections(self, middleware: SystemPromptOptimizationMiddleware) -> None:
-        """Chitchat complexity gets minimal prompt with ENVIRONMENT (RFC-214: no date in system prompt)."""
-        prompt = middleware._get_prompt_for_complexity("chitchat", {})
+    def test_minimal_complexity_no_extra_sections(
+        self, middleware: SystemPromptOptimizationMiddleware
+    ) -> None:
+        """Minimal task complexity gets minimal prompt with ENVIRONMENT (RFC-214: no date in system prompt)."""
+        prompt = middleware._get_prompt_for_complexity("minimal", {})
 
         assert "<SOOTHE_" not in prompt
         # RFC-214: Date is in user message envelope, not system prompt
         assert "Today's date is" not in prompt
-        assert "<ENVIRONMENT" in prompt  # ENVIRONMENT is always included for non-chitchat
+        assert "<ENVIRONMENT" in prompt  # ENVIRONMENT is always included for minimal tier
 
     def test_medium_gets_environment_only(
         self, middleware: SystemPromptOptimizationMiddleware

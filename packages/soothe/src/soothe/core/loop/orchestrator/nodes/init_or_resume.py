@@ -44,7 +44,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         )
 
     intent_type = getattr(intent, "intent_type", "")
-    if intent_type in ("chitchat", "quiz"):
+    if intent_type == "quiz":
         logger.info("[Intent] Fast path in graph: %s", intent_type)
         await ctx.emit(
             "intent_fast_path",

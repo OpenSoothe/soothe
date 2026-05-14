@@ -33,7 +33,7 @@ class IntentClassifier:
     """LLM-driven intent classification system (IG-226).
 
     Pure LLM-driven classification with conversation context:
-    - Intent classification (chitchat/continue_thread/new_goal)
+    - Intent classification (quiz/continue_thread/new_goal)
     - Routing classification (task complexity for execution path selection)
     - No keyword heuristics or language detection shortcuts
 
@@ -45,7 +45,7 @@ class IntentClassifier:
 
     Args:
         model: Fast LLM for classification (e.g., gpt-4o-mini).
-        assistant_name: Name used in chitchat responses.
+        assistant_name: Name used in quiz fallback replies.
     """
 
     def __init__(
@@ -92,8 +92,8 @@ class IntentClassifier:
         Single LLM call determines intent, goal handling, and routing complexity.
         Uses conversation context to detect thread continuation queries.
 
-        When ``intent_hint`` is provided for fast-path intents (chitchat, quiz),
-        bypasses LLM classification entirely and returns a pre-built classification.
+        When ``intent_hint`` is ``quiz``, bypasses LLM classification entirely
+        and returns a pre-built classification.
 
         Args:
             query: User input text.
@@ -102,13 +102,13 @@ class IntentClassifier:
             active_goal_description: Description of active goal.
             thread_id: Thread context for state awareness.
             observability_metadata: Optional metadata for observability.
-            intent_hint: Suggested intent to bypass LLM classification.
+            intent_hint: Suggested intent to bypass LLM classification (``quiz`` only).
 
         Returns:
             IntentClassification with intent type and routing attributes.
         """
-        # Fast-path bypass when hint provided for chitchat/quiz
-        if intent_hint in (IntentHint.CHITCHAT, IntentHint.QUIZ):
+        # Fast-path bypass when hint provided for quiz
+        if intent_hint == IntentHint.QUIZ:
             logger.info(
                 "Intent hint bypass: using suggested intent_type=%s",
                 intent_hint.value,
@@ -216,7 +216,7 @@ class IntentClassifier:
         if result is None:
             raise ValueError("LLM returned None - structured output parsing failed")
 
-        if result.intent_type not in ("chitchat", "continue_thread", "new_goal", "quiz"):
+        if result.intent_type not in ("continue_thread", "new_goal", "quiz"):
             raise ValueError(f"Invalid intent_type from LLM: {result.intent_type!r}")
 
         return result
@@ -325,8 +325,7 @@ class IntentClassifier:
     ) -> IntentClassification:
         """Build intent classification from hint (bypasses LLM).
 
-        Used when caller provides intent_hint for fast-path intents
-        (chitchat, quiz) to skip LLM classification entirely.
+        Used when caller provides ``intent_hint=quiz`` to skip LLM classification.
 
         Args:
             query: Original user query.
@@ -335,24 +334,13 @@ class IntentClassifier:
         Returns:
             IntentClassification with the hinted intent type.
         """
-        if hint == IntentHint.CHITCHAT:
-            # Generate a simple chitchat response
-            chitchat_response = self._generate_chitchat_response(query)
-            return IntentClassification(
-                intent_type="chitchat",
-                reuse_current_goal=False,
-                goal_description=None,
-                task_complexity=TaskComplexity.MINIMAL,
-                chitchat_response=chitchat_response,
-            )
-        elif hint == IntentHint.QUIZ:
-            # Quiz uses think model for deeper reasoning - no pre-generated response
+        if hint == IntentHint.QUIZ:
             return IntentClassification(
                 intent_type="quiz",
                 reuse_current_goal=False,
                 goal_description=None,
                 task_complexity=TaskComplexity.MINIMAL,
-                quiz_response=None,  # Will be filled by _run_quiz with think model
+                quiz_response=None,  # Filled by _run_quiz (default-role model)
             )
         elif hint == IntentHint.CONTINUE_THREAD:
             return IntentClassification(
@@ -410,12 +398,7 @@ class IntentClassifier:
         Returns:
             IntentClassification with patched fields.
         """
-        # Patch missing chitchat_response
-        if intent.intent_type == "chitchat" and not intent.chitchat_response:
-            intent.chitchat_response = self._generate_chitchat_response(query)
-            logger.debug("Patched missing chitchat_response")
-
-        # Patch missing quiz_response
+        # Patch missing quiz_response (greetings and factual piggyback)
         if intent.intent_type == "quiz" and not intent.quiz_response:
             intent.quiz_response = self._generate_quiz_response(query)
             logger.debug("Patched missing quiz_response")
@@ -432,31 +415,9 @@ class IntentClassifier:
 
         return intent
 
-    def _generate_chitchat_response(self, query: str) -> str:
-        """Generate chitchat response (pure LLM-driven, no language detection heuristics).
-
-        Args:
-            query: User query (LLM will detect language from context).
-
-        Returns:
-            Friendly greeting response.
-        """
-        # Pure fallback: simple template without language detection
-        # LLM will have already detected language in the classification prompt
-        return f"Hello! I'm {self._assistant_name}. How can I help you today?"
-
     def _generate_quiz_response(self, query: str) -> str:
-        """Generate quiz response fallback (LLM knowledge query).
-
-        Args:
-            query: Quiz/trivia question.
-
-        Returns:
-            Factual answer placeholder (primary path uses piggybacked quiz_response).
-        """
-        # Fallback placeholder - primary path uses piggybacked quiz_response from classification
-        # This is only used if LLM classification fails to provide quiz_response
-        return f"I'll answer that question: {query}"
+        """Template fallback when classification omits ``quiz_response``."""
+        return f"Hello! I'm {self._assistant_name}. How can I help you today?"
 
     def _generate_friendly_message(self, query: str) -> str:
         """Generate friendly message fallback (IG-287).

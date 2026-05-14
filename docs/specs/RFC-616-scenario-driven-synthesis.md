@@ -42,8 +42,8 @@ Replace keyword-based classification and length constraints with:
 
 **Input**:
 - `goal`: User's goal description
-- `intent_type`: Intent classification (chitchat/quiz/thread_continuation/new_goal)
-- `task_complexity`: Task complexity level (chitchat/quiz/medium/complex)
+- `intent_type`: Intent classification (`quiz` / `continue_thread` / `new_goal`)
+- `task_complexity`: Task complexity level (`minimal` / `simple` / `medium` / `complex`)
 - `execution_summary`: Execution metadata (total_steps, successful_steps, step_types, tools_used, evidence_volume)
 
 **Output Schema**:

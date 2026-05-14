@@ -154,8 +154,8 @@ def _build_classifier_prompt(
 
     Args:
         goal: User's goal description.
-        intent_type: Intent classification (chitchat/quiz/continue_thread/new_goal).
-        task_complexity: Task complexity (chitchat/quiz/medium/complex).
+        intent_type: Intent classification (quiz/continue_thread/new_goal).
+        task_complexity: Task complexity (minimal/simple/medium/complex).
         execution_summary: Execution metadata dict.
 
     Returns:

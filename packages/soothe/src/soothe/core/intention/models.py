@@ -1,7 +1,7 @@
 """Intent classification Pydantic models (IG-226).
 
-Models for LLM-driven query intent classification with three-tier system:
-- chitchat: Direct response (no goal)
+Models for LLM-driven intent classification with three-tier system:
+- quiz: Minimal direct reply (greetings, thanks, trivia) without tools
 - continue_thread: Reuse current thread/goal
 - new_goal: Create goal via GoalEngine
 """
@@ -23,7 +23,6 @@ class IntentHint(StrEnum):
     Values match ``IntentClassification.intent_type`` literal values.
     """
 
-    CHITCHAT = "chitchat"
     QUIZ = "quiz"
     CONTINUE_THREAD = "continue_thread"
     NEW_GOAL = "new_goal"
@@ -33,7 +32,7 @@ class TaskComplexity(StrEnum):
     """Unified task complexity levels for routing decisions.
 
     Used by both IntentClassification and RoutingClassification.
-    - minimal: No tools needed (fast-path: chitchat/quiz intents)
+    - minimal: No tools needed (fast-path: quiz intent)
     - simple: Single focused step
     - medium: Multi-step with moderate tool use
     - complex: Architecture, migration, deep multi-phase work
@@ -50,17 +49,12 @@ class RoutingClassification(BaseModel):
 
     Args:
         task_complexity: Routing complexity level.
-        chitchat_response: Direct response for chitchat queries.
         preferred_subagent: Wire or classifier hint for which subagent to prefer in AgentLoop.
         routing_hint: Routing strategy hint.
     """
 
     task_complexity: TaskComplexity = Field(
         description="Routing complexity: minimal (no tools), simple, medium, or complex"
-    )
-    chitchat_response: str | None = Field(
-        default=None,
-        description="Direct response for chitchat queries (piggybacked from classification)",
     )
     preferred_subagent: str | None = Field(
         default=None,
@@ -75,22 +69,21 @@ class IntentClassification(BaseModel):
     """Primary intent classification model (IG-226, IG-250, IG-287).
 
     LLM-driven query intent classification determining execution path and goal handling.
-    Four-tier classification system with conversation context awareness.
+    Three-tier classification system with conversation context awareness.
 
     Args:
-        intent_type: Primary intent (chitchat | continue_thread | new_goal | quiz).
+        intent_type: Primary intent (continue_thread | new_goal | quiz).
         reuse_current_goal: Whether to reuse active goal in current thread.
         goal_description: Normalized goal description for GoalEngine.
         friendly_message: User-friendly reinterpretation for display (IG-287).
         task_complexity: Routing complexity level (minimal | simple | medium | complex).
-            For chitchat/quiz intents, task_complexity is always "minimal".
-        chitchat_response: Direct response for chitchat queries.
-        quiz_response: Direct response for quiz/trivia queries.
+            For quiz intents, task_complexity is always "minimal".
+        quiz_response: Direct reply for quiz path (greetings, thanks, or brief factual text).
     """
 
-    intent_type: Literal["chitchat", "continue_thread", "new_goal", "quiz"] = Field(
-        description="Primary intent: chitchat (greeting), continue_thread (follow-up), "
-        "new_goal (tool-requiring task), quiz (factual knowledge query)"
+    intent_type: Literal["continue_thread", "new_goal", "quiz"] = Field(
+        description="Primary intent: quiz (greeting/thanks/trivia without tools), "
+        "continue_thread (follow-up), new_goal (tool-requiring task)"
     )
     reuse_current_goal: bool = Field(
         default=False,
@@ -104,15 +97,11 @@ class IntentClassification(BaseModel):
         description="User-friendly task reinterpretation for display (new_goal only, IG-287)",
     )
     task_complexity: TaskComplexity = Field(
-        description="Routing complexity: minimal (chitchat/quiz), simple, medium, or complex"
-    )
-    chitchat_response: str | None = Field(
-        default=None,
-        description="Direct response for chitchat queries (piggybacked from classification)",
+        description="Routing complexity: minimal (quiz), simple, medium, or complex"
     )
     quiz_response: str | None = Field(
         default=None,
-        description="Direct response for quiz/trivia queries (piggybacked from classification)",
+        description="Direct reply for quiz path (piggybacked from classification)",
     )
 
     def to_routing_classification(self) -> RoutingClassification:
@@ -123,7 +112,6 @@ class IntentClassification(BaseModel):
         """
         return RoutingClassification(
             task_complexity=self.task_complexity,
-            chitchat_response=self.chitchat_response,
             routing_hint="intent_based",
         )
 
@@ -150,10 +138,8 @@ def build_loop_routing_classification(
             )
         return None
 
-    # intent.task_complexity is already TaskComplexity enum
     base = RoutingClassification(
         task_complexity=intent.task_complexity,
-        chitchat_response=intent.chitchat_response,
         preferred_subagent=None,
         routing_hint="intent_based",
     )

@@ -259,8 +259,8 @@ register_event(
 
 # Internal events
 register_event(
-    ChitchatStartedEvent,
-    verbosity=VerbosityTier.INTERNAL,
+    DaemonHeartbeatEvent,
+    verbosity=VerbosityTier.DEBUG,
     summary_template="",
 )
 ```

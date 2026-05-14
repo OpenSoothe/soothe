@@ -103,7 +103,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
 
     Uses task_complexity from RoutingClassification (determined by fast LLM)
     to select appropriate prompt verbosity:
-    - chitchat: Minimal prompt for greetings and quick questions
+    - minimal: Minimal prompt for greetings and quick questions (quiz path)
     - simple: Compact execution prompt for small tasks
     - medium: Standard prompt with guidelines
     - complex: Full prompt with all context
@@ -311,7 +311,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         # ── Static Tier (session-stable) ──────────────────────────────
         static_sections: list[str] = [base_core]
 
-        # ENVIRONMENT in static tier for non-chitchat
+        # ENVIRONMENT in static tier when not using the minimal-only branch above
         env_sections = build_context_sections_for_complexity(
             config=self._config,
             complexity=complexity,  # type: ignore[arg-type]
@@ -395,7 +395,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             if ws_section:
                 semi_static_sections.append(ws_section)
 
-        # Environment section (already added to static above for non-chitchat;
+        # Environment section (already added to static above for minimal tier;
         # for semi-static tier we include workspace-related context)
 
         # Thread context (complex only)
@@ -523,7 +523,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Injects targeted guidance based on intent classification and goal type.
 
         Args:
-            intent_type: Intent classification (chitchat/quiz/continue_thread/new_goal).
+            intent_type: Intent classification (quiz/continue_thread/new_goal).
             goal_type: Goal type classification (architecture_analysis/research_synthesis/etc).
 
         Returns:
