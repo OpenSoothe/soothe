@@ -1,7 +1,7 @@
 """Cognition intention module for LLM-driven query classification.
 
 IG-226: Unified intent classification system with three-tier classification:
-- chitchat: Direct response (no goal)
+- quiz: Direct minimal reply (greetings, thanks, trivia) without tools
 - continue_thread: Reuse current thread/goal
 - new_goal: Create goal via GoalEngine
 

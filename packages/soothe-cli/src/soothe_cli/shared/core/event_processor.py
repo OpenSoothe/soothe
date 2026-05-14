@@ -229,7 +229,7 @@ class EventProcessor:
         """Headless stdout: only RFC-614 loop-tagged finals (IG-343 / IG-345).
 
         Suppresses unphased execute-wave narration on the main graph; ``goal_completion``,
-        ``chitchat``, etc. are routed via ``assistant_output_phase`` before this path.
+        ``quiz``, etc. are routed via ``assistant_output_phase`` before this path.
 
         Subgraph streams without RFC-614 phases are skipped in ``_handle_ai_message`` before
         this runs; loop-tagged subgraph finals use ``_dispatch_loop_tagged_assistant_text``.

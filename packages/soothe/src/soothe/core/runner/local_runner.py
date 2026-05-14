@@ -59,8 +59,9 @@ def _parse_intent_hint(intent_hint: str | None) -> IntentHint | None:
     """
     if not intent_hint:
         return None
+    normalized = intent_hint.strip().lower()
     try:
-        return IntentHint(intent_hint)
+        return IntentHint(normalized)
     except ValueError:
         logger.warning("Invalid intent_hint value: %s", intent_hint)
         return None

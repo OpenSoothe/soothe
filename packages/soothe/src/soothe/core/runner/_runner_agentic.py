@@ -279,7 +279,7 @@ class AgenticMixin:
             except Exception:
                 logger.debug("Failed to get active goal for intent classification", exc_info=True)
 
-        # Early intent classification for chitchat/quiz short-circuit (matches autonomous mode)
+        # Early intent classification for quiz short-circuit (matches autonomous mode)
         intent_classification = None
         if self._intent_classifier:
             intent_classification = await self._intent_classifier.classify_intent(
@@ -297,15 +297,7 @@ class AgenticMixin:
                 user_input[:50],
             )
 
-            # Fast path: skip AgentLoop entirely for chitchat
-            if intent_classification.intent_type == "chitchat":
-                async for chunk in self._run_chitchat(
-                    user_input, tid, classification=intent_classification
-                ):
-                    yield chunk
-                return
-
-            # Fast path: skip AgentLoop entirely for quiz
+            # Fast path: skip AgentLoop entirely for quiz (greetings + trivia)
             if intent_classification.intent_type == "quiz":
                 async for chunk in self._run_quiz(
                     user_input, tid, classification=intent_classification
@@ -403,10 +395,7 @@ class AgenticMixin:
                 if intent_type == "quiz":
                     async for chunk in self._run_quiz(user_input, tid, classification):
                         yield chunk
-                else:
-                    async for chunk in self._run_chitchat(user_input, tid, classification):
-                        yield chunk
-                return
+                    return
 
             if event_type == "iteration_started":
                 # Internal event - not shown to user

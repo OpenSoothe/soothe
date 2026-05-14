@@ -286,7 +286,7 @@ _No changes from 0.2.5 — duplicate tag._
 - Loop agent output capture and continue strategy
 - Duplicate events and streaming display for agentic loops
 - Thread context persistence across lifecycle transitions
-- ChitchatStartedEvent hidden from user display
+- Duplicate `soothe.output.*` assistant answer events hidden from user display (superseded by `messages` + `phase`, IG-317)
 
 ### Removed
 - soothe-community package references
@@ -364,7 +364,7 @@ _No changes from 0.2.5 — duplicate tag._
 
 ### Changed
 - Optimized unified classifier
-- Removed planner subagent and added chitchat fast path
+- Removed planner subagent and added quiz fast path
 - Simplified planning workflow architecture and removed dead code
 - Modularized CLI architecture
 - Replaced vector/keyword memory backends with unified MemU backend

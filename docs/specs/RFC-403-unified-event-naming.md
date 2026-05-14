@@ -107,7 +107,7 @@ This RFC does **not** define:
 | `protocol` | Protocol operations (memory, policy, context, durability) | `memory.recalling`, `policy.checking`, `durability.storing` |
 | `cognition` | Cognitive reasoning and decision-making | `plan.creating`, `goal.creating`, `agent_loop.completed`, `reason.running` |
 | `capability` | External capability naming (draft taxonomy; not used for built-in subagent wire) | Hypothetical `soothe.capability.*` names—**obsolete for built-ins** (IG-339 uses `soothe.subagent.*`) |
-| `output` | User-facing content delivery | `chitchat.started`, `final_report.reporting`, `autonomous.displaying` |
+| `output` | User-facing content delivery | `final_report.reporting`, `autonomous.displaying` (duplicate `soothe.output.*` assistant bodies removed; use `messages` + `phase` per RFC-614) |
 | `system` | System-level operations (daemon, autopilot) | `daemon.heartbeat`, `autopilot.status_changed` |
 | `error` | Error and exception events | `general.failed`, `protocol.violated` |
 | `plugin` | Plugin lifecycle (core-managed) | `plugin.loaded`, `plugin.failed`, `plugin.health_checked` |

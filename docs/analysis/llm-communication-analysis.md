@@ -81,23 +81,23 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
 #### Output from LLM
 
 **Structured Response** (`UnifiedClassification`):
-- `task_complexity`: chitchat | medium | complex
+- `task_complexity`: minimal | simple | medium | complex
 - `preferred_subagent`: Optional routing hint (e.g., "claude", "browser")
 - `routing_hint`: subagent | default
-- `chitchat_response`: Piggybacked response (chitchat only)
+- `quiz_response`: Piggybacked reply text when the classifier selects the quiz path
 
 #### Behavioral Paths
 
-**Chitchat Path** (complexity="chitchat"):
-- Returns piggybacked response immediately
-- No further LLM calls
+**Quiz path** (`intent_type="quiz"` with piggybacked answer when available):
+- Returns piggybacked response immediately when `quiz_response` is set
+- Otherwise one follow-up LLM call via the quiz model stack
 - Saves exchange to checkpointer
-- Total: **1 LLM call**
+- Total: **0–1 LLM calls** after classification
 
-**Medium/Complex Path**:
+**Medium/Complex path**:
 - Proceeds to pre-stream preparation
 - Loads memory and context projections
-- Enters Layer 2 agentic loop
+- Enters AgentLoop agentic execution
 
 ---
 
@@ -360,7 +360,7 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
 
 **System Prompt** (complexity-based optimization, updated in RFC-207):
 
-**Chitchat Complexity**:
+**Minimal / quiz-tier prompts** (task complexity `minimal`, RFC-214):
 ```
 [SIMPLE_SYSTEM_PROMPT]
 [Current date line]

@@ -11,21 +11,20 @@ from soothe.core.loop.orchestrator.nodes.init_or_resume import node_init_or_resu
 
 
 @pytest.mark.asyncio
-async def test_init_or_resume_routes_fast_path_for_chitchat() -> None:
-    """Chitchat intent should terminate graph before iteration gate."""
+async def test_init_or_resume_routes_fast_path_for_quiz() -> None:
+    """Quiz intent should terminate graph before iteration gate."""
     emitted: list[tuple[str, object]] = []
 
     async def _emit(event_type: str, event_data: object) -> None:
         emitted.append((event_type, event_data))
 
     intent = IntentClassification(
-        intent_type="chitchat",
+        intent_type="quiz",
         reuse_current_goal=False,
         goal_description=None,
         friendly_message=None,
         task_complexity="minimal",
-        chitchat_response="hello",
-        quiz_response=None,
+        quiz_response="hello",
     )
     loop_state = SimpleNamespace(
         intent=intent,

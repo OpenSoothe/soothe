@@ -99,8 +99,7 @@ class LoopHumanMessage(HumanMessage):
             "execute_wave",  # Parallel execution wave
             "execute_step",  # Single step execution
             "goal_completion",  # Goal completion phase
-            "chitchat",  # Chitchat response
-            "quiz",  # Quiz response
+            "quiz",  # Quiz / minimal direct reply
         ]
         | None
     ) = None

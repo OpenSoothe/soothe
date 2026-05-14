@@ -90,46 +90,7 @@ class PhasesMixin:
     on the concrete class.
     """
 
-    # -- chitchat fast path -------------------------------------------------
-
-    async def _run_chitchat(
-        self,
-        user_input: str,
-        thread_id: str,
-        classification: Any | None = None,
-    ) -> AsyncGenerator[StreamChunk]:
-        """Fast path for chitchat -- uses piggybacked response from classification.
-
-        The unified classifier guarantees ``chitchat_response`` is always
-        populated for chitchat queries (via post-processing fallback), so
-        this method should never need a second LLM call.
-        """
-        logger.info("Chitchat: %s", user_input[:50])
-
-        piggybacked = getattr(classification, "chitchat_response", None)
-        if piggybacked:
-            yield loop_assistant_messages_chunk(
-                content=piggybacked,
-                phase="chitchat",
-                thread_id=thread_id,
-            )
-            logger.debug("Chitchat completed for query: %s", user_input[:50])
-            await self._save_chitchat_to_state(user_input, piggybacked, thread_id)
-            return
-
-        # Safety net: should not be reached if classifier post-processing works.
-        logger.warning("Chitchat classification missing piggybacked response, using canned reply")
-        name = self._config.assistant_name
-        # Pure fallback - LLM handles language detection in classification prompt
-        fallback = f"Hello! I'm {name}, your AI assistant. How can I help you today?"
-        yield loop_assistant_messages_chunk(
-            content=fallback,
-            phase="chitchat",
-            thread_id=thread_id,
-        )
-        logger.debug("Chitchat completed (canned fallback) for query: %s", user_input[:50])
-
-    # -- quiz fast path (IG-250) ----------------------------------------------
+    # -- quiz fast path (greetings + trivia, IG-250) -----------------------
 
     async def _run_quiz(
         self,
@@ -137,22 +98,21 @@ class PhasesMixin:
         thread_id: str,
         classification: Any | None = None,
     ) -> AsyncGenerator[StreamChunk]:
-        """Fast path for quiz/trivia queries (IG-250).
+        """Fast path for quiz-style queries (greetings, thanks, brief trivia).
 
-        Uses piggybacked quiz_response from classification (fast model) when available.
-        Falls back to think model for deeper reasoning on factual accuracy.
+        Uses piggybacked ``quiz_response`` from classification when available.
+        Otherwise invokes the configured **default** role chat model.
 
         Args:
-            user_input: Quiz/trivia question.
+            user_input: User message.
             thread_id: Thread ID for state tracking.
-            classification: IntentClassification with quiz_response.
+            classification: IntentClassification with ``quiz_response`` when present.
 
-        Returns:
-            StreamChunk events for quiz start and response.
+        Yields:
+            StreamChunk events for quiz response.
         """
         logger.info("Quiz: %s", user_input[:50])
 
-        # Use piggybacked response if available (primary path)
         piggybacked = getattr(classification, "quiz_response", None)
         if piggybacked:
             yield loop_assistant_messages_chunk(
@@ -164,13 +124,16 @@ class PhasesMixin:
             await self._save_quiz_to_state(user_input, piggybacked, thread_id)
             return
 
-        # Fallback: spawn LLM for quiz response. Prefer fast model (lower latency)
-        # over think model; the intent_hint=quiz path skips classification so there
-        # is no piggybacked response, but the answer rarely needs deep reasoning.
         logger.warning("Quiz classification missing piggybacked quiz_response, spawning LLM call")
 
-        quiz_model = getattr(self, "_fast_model", None) or getattr(self, "_model", None)
-        model_label = "fast" if getattr(self, "_fast_model", None) else "think"
+        quiz_model = getattr(self, "_default_chat_model", None)
+        model_label = "default"
+        if not quiz_model:
+            quiz_model = getattr(self, "_fast_model", None)
+            model_label = "fast"
+        if not quiz_model:
+            quiz_model = getattr(self, "_model", None)
+            model_label = "think"
         if not quiz_model:
             fallback_response = f"I'll answer that question: {user_input}"
             yield loop_assistant_messages_chunk(
@@ -218,21 +181,23 @@ Provide a direct, factual answer. Do not use tools or search."""
             )
 
     async def _save_quiz_to_state(self, query: str, response: str, thread_id: str) -> None:
-        """Save quiz interaction to thread state (IG-250).
+        """Persist quiz (minimal-path) Human+AI pair to the checkpointer."""
+        await self._ensure_checkpointer_initialized()
 
-        Args:
-            query: Quiz question.
-            response: Quiz answer.
-            thread_id: Thread ID.
-        """
-        # Similar to _save_chitchat_to_state - save interaction to thread
-        # This is optional and can be implemented based on thread persistence needs
-        logger.debug(
-            "Quiz interaction saved to thread %s: %s -> %s",
-            thread_id,
-            query[:30],
-            response[:30],
-        )
+        if not thread_id:
+            return
+
+        config = {"configurable": {"thread_id": thread_id}}
+
+        try:
+            await self._agent.graph.aupdate_state(
+                config,
+                {"messages": [HumanMessage(content=query), AIMessage(content=response)]},
+                as_node="model",
+            )
+            logger.debug("Quiz exchange saved to checkpointer for thread %s", thread_id)
+        except Exception:
+            logger.debug("Failed to save quiz to checkpointer", exc_info=True)
 
     # -- LangGraph stream with HITL loop ------------------------------------
 
@@ -314,7 +279,7 @@ Provide a direct, factual answer. Do not use tools or search."""
 
         Used to provide conversation context to the unified classifier so it
         can distinguish follow-up actions (e.g. "translate that") from
-        standalone chitchat.
+        standalone minimal-path turns.
 
         Args:
             thread_id: Thread ID to load messages for.
@@ -423,38 +388,6 @@ Provide a direct, factual answer. Do not use tools or search."""
             # XML format handles multi-line content cleanly
             lines.append(f"<{tag}>\n{body}\n</{tag}>")
         return lines
-
-    async def _save_chitchat_to_state(
-        self,
-        user_input: str,
-        response: str,
-        thread_id: str,
-    ) -> None:
-        """Save a chitchat exchange (HumanMessage + AIMessage) to the checkpointer.
-
-        Ensures subsequent turns in the same thread can see the chitchat
-        conversation history.
-        """
-        from langchain_core.messages import AIMessage, HumanMessage
-
-        await self._ensure_checkpointer_initialized()
-
-        if not thread_id:
-            return
-
-        config = {"configurable": {"thread_id": thread_id}}
-
-        try:
-            # LangGraph requires as_node when update is ambiguous (multiple message types).
-            # LangChain create_agent (deepagents) names the main LLM node "model", not "agent".
-            await self._agent.graph.aupdate_state(
-                config,
-                {"messages": [HumanMessage(content=user_input), AIMessage(content=response)]},
-                as_node="model",
-            )
-            logger.debug("Chitchat exchange saved to checkpointer for thread %s", thread_id)
-        except Exception:
-            logger.debug("Failed to save chitchat to checkpointer", exc_info=True)
 
     # -- pre-stream ---------------------------------------------------------
 
