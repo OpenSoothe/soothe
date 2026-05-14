@@ -336,8 +336,8 @@ class BrowserPlugin:
 - RFC-000: System Conceptual Design
 - RFC-001: Core Modules Architecture
 - RFC-200: Agentic Loop Execution
-- RFC-400: Daemon Communication Protocol
-- RFC-400: Event Processing & Filtering
+- RFC-450: Daemon Communication Protocol
+- RFC-401: Event Processing & Filtering
 - PEP 440: Version Specification
 - PEP 517: Build System Format
 

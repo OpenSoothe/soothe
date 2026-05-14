@@ -35,7 +35,7 @@ This RFC defines:
 * EventProcessor unified processing architecture
 * Integration boundary with PresentationEngine
 
-**Note**: Event naming conventions and domain taxonomy are defined in RFC-402 (Unified Event Naming).
+**Note**: Event naming conventions and domain taxonomy are defined in RFC-403 (Unified Event Naming).
 
 ### 2.2 Non-Goals
 
@@ -73,16 +73,16 @@ This RFC does **not** define:
 
 ## 4. Naming Conventions
 
-Event naming semantics, including grammar rules, domain taxonomy, and approved vocabularies, are defined in **RFC-402 (Unified Event Naming)**.
+Event naming semantics, including grammar rules, domain taxonomy, and approved vocabularies, are defined in **RFC-403 (Unified Event Naming)**.
 
-This RFC references RFC-402 for:
+This RFC references RFC-403 for:
 * Event type hierarchy format: `soothe.<domain>.<component>.<action>`
 * Domain definitions and scope
 * Present progressive tense grammar rules
 * Plugin extension namespace conventions
 * Approved verb and state noun lists
 
-For complete naming guidelines, migration rules, and validation criteria, see RFC-402.
+For complete naming guidelines, migration rules, and validation criteria, see RFC-403.
 
 ---
 
