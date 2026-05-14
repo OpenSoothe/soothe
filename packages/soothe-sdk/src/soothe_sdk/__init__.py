@@ -18,10 +18,14 @@ Canonical import paths (IG-259 refactoring):
     from soothe_sdk.plugin import plugin, tool
 """
 
+import importlib
 import importlib.metadata
 
-from soothe_sdk.core.exceptions import PluginError  # noqa: F401
-from soothe_sdk.plugin import plugin, subagent, tool, tool_group  # noqa: F401
+# Load before plugin stack so LangGraph serde import-time Reviver() warning is filtered.
+importlib.import_module("soothe_sdk._upstream_warnings")
+
+from soothe_sdk.core.exceptions import PluginError  # noqa: E402, F401
+from soothe_sdk.plugin import plugin, subagent, tool, tool_group  # noqa: E402, F401
 
 try:
     __version__ = importlib.metadata.version("soothe-sdk")
