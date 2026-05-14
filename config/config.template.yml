@@ -85,9 +85,9 @@ subagents:
     config:
       thoroughness: medium
       max_iterations:
-        quick: 12
-        medium: 24
-        thorough: 48
+        quick: 6
+        medium: 10
+        thorough: 16
       max_read_lines: 50
       max_matches_returned: 5
       max_history_messages_for_model: 8
