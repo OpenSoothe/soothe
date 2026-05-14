@@ -53,7 +53,7 @@ agent_loop:
     max_parallel_tools: 20
     global_max_llm_calls: 10
     tool_call_limit:
-      global_thread_limit: 220
+      global_thread_limit: 200
       global_run_limit: 80
 
 observability:
