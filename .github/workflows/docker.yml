@@ -38,6 +38,12 @@ jobs:
       actions: write
 
     steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          df -h
+
       - name: Checkout
         uses: actions/checkout@v5
 
