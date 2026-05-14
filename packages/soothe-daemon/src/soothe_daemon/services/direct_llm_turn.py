@@ -6,10 +6,13 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage
+from soothe.utils.text_preview import log_preview
 
 from soothe_daemon.image_understanding import _build_vision_invoke_config
 
 logger = logging.getLogger(__name__)
+
+_LOG_PREVIEW_CHARS = 800
 
 
 def _build_direct_invoke_config(
@@ -71,12 +74,27 @@ async def run_image_to_text_turn(
         b64 = att["data"]
         blocks.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
 
+    att_meta = [
+        {"mime_type": a["mime_type"], "data_chars": len(a.get("data", ""))} for a in attachments
+    ]
+    logger.info(
+        "[intent_hint image_to_text] request session_id=%s instruction=%s attachments=%s",
+        session_id,
+        log_preview(instruction, chars=_LOG_PREVIEW_CHARS),
+        att_meta,
+    )
+
     msg = HumanMessage(content=blocks)
     invoke_cfg = _build_vision_invoke_config(config, session_id=session_id)
     response = await model.ainvoke([msg], config=invoke_cfg)
     out = str(response.content).strip()
     if not out:
         out = "(Image model returned empty content.)"
+    logger.info(
+        "[intent_hint image_to_text] response session_id=%s content=%s",
+        session_id,
+        log_preview(out, chars=_LOG_PREVIEW_CHARS),
+    )
     return out
 
 
@@ -120,8 +138,21 @@ async def run_direct_llm_turn(
         component="daemon.direct_llm",
         session_id=session_id,
     )
+    model_label = m if m else "default"
+    logger.info(
+        "[intent_hint direct_llm] request session_id=%s model=%s user_text=%s",
+        session_id,
+        model_label,
+        log_preview(stripped, chars=_LOG_PREVIEW_CHARS),
+    )
     response = await chat.ainvoke([HumanMessage(content=stripped)], config=invoke_cfg)
     out = str(response.content).strip()
     if not out:
         out = "(Model returned empty content.)"
+    logger.info(
+        "[intent_hint direct_llm] response session_id=%s model=%s content=%s",
+        session_id,
+        model_label,
+        log_preview(out, chars=_LOG_PREVIEW_CHARS),
+    )
     return out
