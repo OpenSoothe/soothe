@@ -58,8 +58,7 @@ class StepTaskRouter:
 
     Attributes:
         active_step_ids: Execute steps currently in the running phase.
-        tool_call_to_step_id: Authoritative root ``tool_call_id`` → ``step_id`` map
-            (from ``AGENT_LOOP_STEP_TOOL_BINDING``).
+        tool_call_to_step_id: Root ``tool_call_id`` → ``step_id`` map (legacy fallback).
     """
 
     active_step_ids: set[str] = field(default_factory=set)
@@ -101,7 +100,7 @@ class StepTaskRouter:
             self._spawns_by_step_id.pop(sid, None)
 
     def bind_tool_to_step(self, tool_call_id: str, step_id: str) -> None:
-        """Record executor ``AGENT_LOOP_STEP_TOOL_BINDING`` for a root tool call."""
+        """Record tool_call_id → step_id mapping (legacy fallback for non-unified IDs)."""
         tcid = str(tool_call_id).strip()
         sid = str(step_id).strip()
         if tcid and sid:

@@ -6,6 +6,7 @@ from collections import deque
 
 from soothe_sdk.ux.task_namespace import (
     maybe_bind_namespace,
+    parse_unified_tool_call_id,
     register_task_spawn_for_step,
     resolve_task_scope_for_namespace,
     scoped_subgraph_tool_key,
@@ -85,7 +86,8 @@ def test_scoped_subgraph_tool_key_is_unique_per_namespace() -> None:
     a = scoped_subgraph_tool_key(("tools:aaa",), "functions.grep:1")
     b = scoped_subgraph_tool_key(("tools:bbb",), "functions.grep:1")
     assert a != b
-    assert scoped_subgraph_tool_key((), "functions.grep:1") == "functions.grep:1"
+    # IG-416: Empty namespace returns shortened tool_call_id (strips 'functions.')
+    assert scoped_subgraph_tool_key((), "functions.grep:1") == "grep:1"
 
 
 def test_resolve_task_scope_prefix_match() -> None:
@@ -97,3 +99,52 @@ def test_resolve_task_scope_prefix_match() -> None:
         ("tools:parent", "child", "grand"),
     )
     assert scope == ("tc-1", "explore", "EMD-01")
+
+
+def test_parse_unified_tool_call_id_step_level() -> None:
+    """Step-level unified IDs: {step_id}:s:{tool}.{idx}"""
+    assert parse_unified_tool_call_id("GHT-01:s:task.0") == (
+        "GHT-01",
+        "s",
+        None,
+        "task.0",
+    )
+    assert parse_unified_tool_call_id("EMD-02:s:read_file.1") == (
+        "EMD-02",
+        "s",
+        None,
+        "read_file.1",
+    )
+
+
+def test_parse_unified_tool_call_id_task_level() -> None:
+    """Task-level unified IDs: {step_id}:t{task_idx}:{tool}.{idx}"""
+    assert parse_unified_tool_call_id("GHT-01:t0:read_file.1") == (
+        "GHT-01",
+        "t",
+        0,
+        "read_file.1",
+    )
+    assert parse_unified_tool_call_id("EMD-02:t2:grep.5") == (
+        "EMD-02",
+        "t",
+        2,
+        "grep.5",
+    )
+
+
+def test_parse_unified_tool_call_id_non_unified() -> None:
+    """Non-unified IDs return empty type and step info."""
+    assert parse_unified_tool_call_id("task:0") == ("", "", None, "task:0")
+    assert parse_unified_tool_call_id("functions.grep:1") == (
+        "",
+        "",
+        None,
+        "functions.grep:1",
+    )
+    assert parse_unified_tool_call_id("call_abc123") == ("", "", None, "call_abc123")
+
+
+def test_parse_unified_tool_call_id_empty() -> None:
+    """Empty IDs return empty tuple."""
+    assert parse_unified_tool_call_id("") == ("", "", None, "")
