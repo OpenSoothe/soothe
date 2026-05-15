@@ -1,11 +1,8 @@
-"""FIFO Task-tool namespace binding (IG-334) — reusable pure helpers.
+"""Task-tool namespace binding — pure helpers for subgraph stream routing.
 
-Main graph records ``task`` tool calls in order; subgraph namespaces bind to the
-spawn for the **active execute step** (from ``AGENT_LOOP_STEP_TOOL_BINDING``) when
-available, otherwise FIFO queue fallback for non-loop clients.
-
-Parallel waves may reuse the same provider ``tool_call_id`` (e.g. ``functions.task:0``);
-``step_id`` disambiguates spawns and parent step cards.
+Main graph records ``task`` tool calls in order; subgraph namespaces bind to spawns
+via an unscoped FIFO deferred until :func:`register_task_spawn_for_step` runs
+(parallel-safe). Clients without step ids fall back to binding against the spawn queue.
 """
 
 from __future__ import annotations
@@ -19,24 +16,11 @@ TaskScope: TypeAlias = tuple[str, str, str]
 _TASK_SCOPE_SEP = "\x1e"
 
 
-def task_scope_step_id(scope: TaskScope | tuple[str, str] | None) -> str:
+def task_scope_step_id(scope: TaskScope | None) -> str:
     """Return the AgentLoop step id from a task scope tuple, if present."""
     if not scope:
         return ""
-    if len(scope) >= 3:
-        return str(scope[2] or "").strip()
-    return ""
-
-
-def normalize_task_scope(scope: TaskScope | tuple[str, str] | None) -> TaskScope | None:
-    """Normalize legacy 2-tuples to ``TaskScope``."""
-    if not scope:
-        return None
-    if len(scope) >= 3:
-        return (str(scope[0]), str(scope[1]), str(scope[2] or ""))
-    if len(scope) == 2:
-        return (str(scope[0]), str(scope[1]), "")
-    return None
+    return str(scope[2] or "").strip()
 
 
 def scoped_subgraph_tool_key(namespace: tuple[str, ...], tool_call_id: str) -> str:
@@ -63,40 +47,43 @@ def enqueue_task_spawn(
     args: dict[str, Any],
     tool_call_id: str,
     is_main: bool,
-    step_id: str = "",
 ) -> None:
     """Queue a Task delegation when ``tool_name`` is ``task`` on the main graph."""
     if not is_main or tool_name != "task" or not tool_call_id:
         return
     raw = args.get("subagent_type", "")
     subagent_type = raw.strip() if isinstance(raw, str) else ""
-    queue.append((tool_call_id, subagent_type or "?", str(step_id or "").strip()))
+    queue.append((tool_call_id, subagent_type or "?", ""))
 
 
 def register_task_spawn_for_step(
     bindings: dict[tuple[str, ...], TaskScope],
     queue: deque[TaskScope],
     spawns_by_step: dict[str, TaskScope],
-    pending_namespaces_by_step: dict[str, list[tuple[str, ...]]],
     scope: TaskScope,
+    *,
+    pending_unscoped_namespaces: deque[tuple[str, ...]] | None = None,
 ) -> None:
     """Record a task spawn for ``scope[2]`` and bind any namespaces that arrived early.
 
     Args:
         bindings: LangGraph namespace → task scope map (updated in place).
-        queue: FIFO fallback queue (also appended for headless CLI parity).
+        queue: FIFO fallback queue (also appended for headless clients).
         spawns_by_step: Authoritative ``step_id`` → spawn map for AgentLoop execute.
-        pending_namespaces_by_step: Namespaces seen before spawn for that step.
         scope: ``(tool_call_id, subagent_type, step_id)``.
+        pending_unscoped_namespaces: FIFO of namespaces seen before spawn (parallel-safe).
     """
     queue.append(scope)
     step_id = task_scope_step_id(scope)
     if not step_id:
         return
     spawns_by_step[step_id] = scope
-    for ns in pending_namespaces_by_step.pop(step_id, []):
-        if ns not in bindings:
-            bindings[ns] = scope
+    if pending_unscoped_namespaces is not None:
+        while pending_unscoped_namespaces:
+            ns = pending_unscoped_namespaces.popleft()
+            if ns not in bindings:
+                bindings[ns] = scope
+                break
 
 
 def maybe_bind_namespace(
@@ -104,26 +91,18 @@ def maybe_bind_namespace(
     queue: deque[TaskScope],
     namespace: tuple[str, ...],
     *,
-    active_step_id: str = "",
-    spawns_by_step: dict[str, TaskScope] | None = None,
-    pending_namespaces_by_step: dict[str, list[tuple[str, ...]]] | None = None,
+    pending_unscoped_namespaces: deque[tuple[str, ...]] | None = None,
 ) -> None:
-    """Bind ``namespace`` to the task spawn for the active step, else FIFO queue.
+    """Defer ``namespace`` until a spawn is registered, or bind via the spawn queue.
 
-    When ``active_step_id`` is set (TUI: from ``AGENT_LOOP_STEP_TOOL_BINDING``) and the
-    spawn for that step is already registered, bind immediately. If the spawn is not
-    registered yet, defer the namespace until :func:`register_task_spawn_for_step` runs.
+    When ``pending_unscoped_namespaces`` is provided (TUI / AgentLoop), namespaces are
+    queued in arrival order and consumed one per :func:`register_task_spawn_for_step`.
+    Otherwise the next queued main-graph ``task`` spawn is bound immediately (headless).
     """
-    if not namespace:
+    if not namespace or namespace in bindings:
         return
-    if namespace in bindings:
-        return
-    step_id = (active_step_id or "").strip()
-    if step_id and spawns_by_step is not None and step_id in spawns_by_step:
-        bindings[namespace] = spawns_by_step[step_id]
-        return
-    if step_id and pending_namespaces_by_step is not None:
-        pending_namespaces_by_step.setdefault(step_id, []).append(namespace)
+    if pending_unscoped_namespaces is not None:
+        pending_unscoped_namespaces.append(namespace)
         return
     if queue:
         bindings[namespace] = queue.popleft()
@@ -145,7 +124,7 @@ def resolve_task_scope_for_namespace(
 
 
 def resolve_task_parent_lookup(
-    scope: TaskScope | tuple[str, str] | None,
+    scope: TaskScope | None,
     *,
     step_cards: dict[str, Any],
     tool_display_by_call_id: dict[str, Any],
@@ -160,22 +139,20 @@ def resolve_task_parent_lookup(
     Returns:
         Parent widget, or ``None`` when unresolved.
     """
-    norm = normalize_task_scope(scope)
-    if norm is None:
+    if scope is None:
         return None
-    step_id = task_scope_step_id(norm)
+    step_id = task_scope_step_id(scope)
     if step_id:
         parent = step_cards.get(step_id)
         if parent is not None:
             return parent
-    return tool_display_by_call_id.get(norm[0])
+    return tool_display_by_call_id.get(scope[0])
 
 
 __all__ = [
     "TaskScope",
     "enqueue_task_spawn",
     "maybe_bind_namespace",
-    "normalize_task_scope",
     "register_task_spawn_for_step",
     "resolve_task_parent_lookup",
     "resolve_task_scope_for_namespace",

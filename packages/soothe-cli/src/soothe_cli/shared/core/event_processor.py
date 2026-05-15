@@ -148,7 +148,6 @@ class EventProcessor:
         tool_call_id: str,
         *,
         is_main: bool,
-        step_id: str = "",
     ) -> None:
         """Record main-graph ``task`` tool calls so subgraph streams can resolve labels."""
         enqueue_task_spawn(
@@ -157,7 +156,6 @@ class EventProcessor:
             args=args,
             tool_call_id=tool_call_id,
             is_main=is_main,
-            step_id=step_id,
         )
 
     def _emit_tool_call_for_renderer(

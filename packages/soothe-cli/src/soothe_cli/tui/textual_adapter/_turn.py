@@ -7,7 +7,6 @@ import json
 import logging
 import time
 import uuid
-from collections import deque
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -19,13 +18,7 @@ if TYPE_CHECKING:
 from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
-from soothe_sdk.ux.task_namespace import (
-    maybe_bind_namespace,
-    register_task_spawn_for_step,
-    resolve_task_parent_lookup,
-    resolve_task_scope_for_namespace,
-    scoped_subgraph_tool_key,
-)
+from soothe_sdk.ux.task_namespace import scoped_subgraph_tool_key
 
 from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.shared.core.presentation_engine import PresentationEngine
@@ -66,6 +59,7 @@ from soothe_cli.tui.textual_adapter._adapter import (
     _get_hitl_request_adapter,
 )
 from soothe_cli.tui.textual_adapter._stream_formatting import (
+    _flush_router_pending_subgraph_tools,
     _format_display_line_for_tui,
     _format_progress_event_lines_for_tui,
     _is_summarization_chunk,
@@ -84,8 +78,8 @@ from soothe_cli.tui.textual_adapter._stream_messages import (
 from soothe_cli.tui.textual_adapter._turn_helpers import (
     _adapter_has_pending_tools,
     _finalize_goal_completion_stream,
-    _goal_completion_time_footer_if_needed,
     _flush_assistant_text_ns,
+    _goal_completion_time_footer_if_needed,
     _handle_interrupt_cleanup,
     _hitl_reject_step_tool_rows,
     _hitl_start_step_tool_rows,
@@ -252,6 +246,8 @@ async def execute_task_textual(
         adapter._on_tokens_hide()
 
     file_op_tracker = FileOpTracker(assistant_id=assistant_id)
+    router = adapter._step_router
+    router.reset_turn()
     adapter._task_inner_tool_pending_lines.clear()
     adapter._task_inner_tool_start_times.clear()
     displayed_tool_ids: set[str] = set()
@@ -266,13 +262,6 @@ async def execute_task_textual(
     goal_completion_stream_by_namespace: dict[tuple, AssistantMessage] = {}
     goal_loop_start_monotonic: float | None = None
     task_loop_assistant_by_tcid: dict[str, str] = {}
-    # IG-334 Task tool FIFO binding (parity with ``EventProcessor`` / SDK helpers)
-    task_spawn_queue: deque[tuple[str, str, str]] = deque()
-    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
-    task_spawn_recorded: set[tuple[str, str]] = set()
-    spawns_by_step_id: dict[str, tuple[str, str, str]] = {}
-    pending_namespace_by_step: dict[str, list[tuple[str, ...]]] = {}
-    active_loop_step_id: str = ""
 
     # Clear media from tracker after creating the message
     if image_tracker:
@@ -384,14 +373,7 @@ async def execute_task_textual(
                 # Handle MESSAGES stream - for content and tool calls
                 elif current_stream_mode == "messages":
                     if ns_key:
-                        maybe_bind_namespace(
-                            namespace_task_bindings,
-                            task_spawn_queue,
-                            ns_key,
-                            active_step_id=active_loop_step_id,
-                            spawns_by_step=spawns_by_step_id,
-                            pending_namespaces_by_step=pending_namespace_by_step,
-                        )
+                        router.on_subgraph_namespace(ns_key)
 
                     if not isinstance(data, (list, tuple)) or len(data) != 2:  # noqa: PLR2004
                         logger.debug(
@@ -439,7 +421,7 @@ async def execute_task_textual(
                                 pending_text,
                                 ns_key,
                                 assistant_message_by_namespace,
-                                namespace_task_bindings=namespace_task_bindings,
+                                router=router,
                             )
                             pending_text_by_namespace[ns_key] = ""
                         continue
@@ -535,11 +517,9 @@ async def execute_task_textual(
                             pending_ln = adapter._task_inner_tool_pending_lines.pop(row_key, None)
                             start_tm = adapter._task_inner_tool_start_times.pop(row_key, None)
                             if pending_ln:
-                                ts_ap = resolve_task_scope_for_namespace(
-                                    namespace_task_bindings, ns_key
-                                )
+                                ts_ap = router.resolve_task_scope(ns_key)
                                 if ts_ap and ts_ap[0]:
-                                    parent_task = resolve_task_parent_lookup(
+                                    parent_task = router.resolve_parent(
                                         ts_ap,
                                         step_cards=adapter._current_step_messages,
                                         tool_display_by_call_id=adapter._tool_display_by_call_id,
@@ -649,7 +629,7 @@ async def execute_task_textual(
                                     pending_text,
                                     ns_key,
                                     assistant_message_by_namespace,
-                                    namespace_task_bindings=namespace_task_bindings,
+                                    router=router,
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                             if record.diff:
@@ -725,7 +705,7 @@ async def execute_task_textual(
                                     pending_text,
                                     ns_key,
                                     assistant_message_by_namespace,
-                                    namespace_task_bindings=namespace_task_bindings,
+                                    router=router,
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
@@ -795,7 +775,7 @@ async def execute_task_textual(
                                 pending_text,
                                 ns_key,
                                 assistant_message_by_namespace,
-                                namespace_task_bindings=namespace_task_bindings,
+                                router=router,
                             )
                             pending_text_by_namespace[ns_key] = ""
                             assistant_message_by_namespace.pop(ns_key, None)
@@ -833,11 +813,7 @@ async def execute_task_textual(
                         if block_type == "text":
                             if suppress_main_agent_assistant_text:
                                 continue
-                            task_scope_txt = (
-                                resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
-                                if ns_key
-                                else None
-                            )
+                            task_scope_txt = router.resolve_task_scope(ns_key) if ns_key else None
                             phase_loop = getattr(message, "phase", None)
                             text = block.get("text", "") or ""
                             if task_scope_txt is not None:
@@ -851,7 +827,7 @@ async def execute_task_textual(
                                 ):
                                     tcid = str(task_scope_txt[0] or "").strip()
                                     if tcid:
-                                        parent_tool = resolve_task_parent_lookup(
+                                        parent_tool = router.resolve_parent(
                                             task_scope_txt,
                                             step_cards=adapter._current_step_messages,
                                             tool_display_by_call_id=adapter._tool_display_by_call_id,
@@ -989,7 +965,7 @@ async def execute_task_textual(
                                     pending_text,
                                     ns_key,
                                     assistant_message_by_namespace,
-                                    namespace_task_bindings=namespace_task_bindings,
+                                    router=router,
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
@@ -1003,29 +979,21 @@ async def execute_task_textual(
                                 and buffer_name == "task"
                                 and args_meaningful
                             ):
-                                bound_step_id = (
-                                    active_loop_step_id
-                                    or adapter._tool_call_to_step_id.get(str(lookup_id), "")
-                                ).strip()
-                                spawn_key = (bound_step_id, str(lookup_id))
-                                if spawn_key not in task_spawn_recorded:
-                                    raw_st = parsed_args.get("subagent_type", "")
-                                    subagent_type = (
-                                        raw_st.strip() if isinstance(raw_st, str) else ""
+                                bound_step_id = router.step_id_for_tool(str(lookup_id))
+                                raw_st = parsed_args.get("subagent_type", "")
+                                subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
+                                if router.register_task_spawn(
+                                    str(lookup_id),
+                                    subagent_type,
+                                    step_id=bound_step_id,
+                                ):
+                                    await _flush_router_pending_subgraph_tools(
+                                        adapter,
+                                        router,
+                                        show_tool_ui=show_tool_ui,
+                                        pending_tool_calls_lc=pending_tool_calls_lc,
+                                        file_op_tracker=file_op_tracker,
                                     )
-                                    scope = (
-                                        str(lookup_id),
-                                        subagent_type or "?",
-                                        bound_step_id,
-                                    )
-                                    register_task_spawn_for_step(
-                                        namespace_task_bindings,
-                                        task_spawn_queue,
-                                        spawns_by_step_id,
-                                        pending_namespace_by_step,
-                                        scope,
-                                    )
-                                    task_spawn_recorded.add(spawn_key)
                                     if bound_step_id:
                                         step_w = adapter._current_step_messages.get(bound_step_id)
                                         if step_w is not None:
@@ -1119,7 +1087,32 @@ async def execute_task_textual(
                                 else str(lookup_id)
                             )
                             if display_key and display_key not in displayed_tool_ids:
-                                if _defer_first_tool_card_mount_until_final_stream_chunk(message):
+                                bound_early = (
+                                    router.step_id_for_tool(str(lookup_id)) if lookup_id else ""
+                                )
+                                step_card_early = (
+                                    adapter._current_step_messages.get(bound_early)
+                                    if bound_early
+                                    else None
+                                )
+                                parent_early = None
+                                if not is_main_agent:
+                                    ts_early = router.resolve_task_scope(ns_key)
+                                    if ts_early:
+                                        parent_early = router.resolve_parent(
+                                            ts_early,
+                                            step_cards=adapter._current_step_messages,
+                                            tool_display_by_call_id=adapter._tool_display_by_call_id,
+                                        )
+                                skip_defer_mount = (
+                                    is_main_agent and step_card_early is not None
+                                ) or (not is_main_agent and parent_early is not None)
+                                if (
+                                    not skip_defer_mount
+                                    and _defer_first_tool_card_mount_until_final_stream_chunk(
+                                        message
+                                    )
+                                ):
                                     logger.debug(
                                         "Tool call first mount deferred (non-final stream chunk): "
                                         "name=%s tool_call_id=%r chunk_position=%r",
@@ -1139,23 +1132,23 @@ async def execute_task_textual(
                                     displayed_tool_ids.add(display_key)
                                     _try_register_task_scoped_inner_tool_pending(
                                         adapter,
+                                        router,
                                         lookup_id=str(lookup_id),
                                         buffer_name=buffer_name,
                                         parsed_args=parsed_args,
                                         is_main_agent=is_main_agent,
                                         ns_key=ns_key,
-                                        namespace_task_bindings=namespace_task_bindings,
                                         show_tool_ui=show_tool_ui,
                                         presentation=presentation,
                                     )
                                     if await _mount_subagent_inner_tool_row_if_resolved(
                                         adapter,
+                                        router,
                                         lookup_id=str(lookup_id),
                                         buffer_name=buffer_name,
                                         parsed_args=parsed_args,
                                         buffer_id=buffer_id,
                                         ns_key=ns_key,
-                                        namespace_task_bindings=namespace_task_bindings,
                                         show_tool_ui=show_tool_ui,
                                         is_main_agent=is_main_agent,
                                         pending_tool_calls_lc=pending_tool_calls_lc,
@@ -1172,12 +1165,12 @@ async def execute_task_textual(
                                         tool_call_buffers.pop(buffer_key, None)
                                         continue
                                     if not is_main_agent:
-                                        logger.debug(
-                                            "Tool call card skipped (IG-300 terminal empty args): "
-                                            "name=%s tool_call_id=%r chunk_position=%r",
-                                            buffer_name,
-                                            lookup_id,
-                                            getattr(message, "chunk_position", None),
+                                        router.buffer_subgraph_tool(
+                                            ns_key=ns_key,
+                                            lookup_id=str(lookup_id),
+                                            display_key=display_key,
+                                            tool_name=buffer_name or "tool",
+                                            args=parsed_args,
                                         )
                                         tool_call_buffers.pop(buffer_key, None)
                                         continue
@@ -1191,23 +1184,23 @@ async def execute_task_textual(
                                     displayed_tool_ids.add(display_key)
                                     _try_register_task_scoped_inner_tool_pending(
                                         adapter,
+                                        router,
                                         lookup_id=str(lookup_id),
                                         buffer_name=buffer_name,
                                         parsed_args=parsed_args,
                                         is_main_agent=is_main_agent,
                                         ns_key=ns_key,
-                                        namespace_task_bindings=namespace_task_bindings,
                                         show_tool_ui=show_tool_ui,
                                         presentation=presentation,
                                     )
                                     if await _mount_subagent_inner_tool_row_if_resolved(
                                         adapter,
+                                        router,
                                         lookup_id=str(lookup_id),
                                         buffer_name=buffer_name,
                                         parsed_args=parsed_args,
                                         buffer_id=buffer_id,
                                         ns_key=ns_key,
-                                        namespace_task_bindings=namespace_task_bindings,
                                         show_tool_ui=show_tool_ui,
                                         is_main_agent=is_main_agent,
                                         pending_tool_calls_lc=pending_tool_calls_lc,
@@ -1224,10 +1217,7 @@ async def execute_task_textual(
                                         await adapter._set_spinner("Tools")
 
                                     # Check binding first for accurate parallel routing
-                                    bound_step_id = (
-                                        active_loop_step_id
-                                        or adapter._tool_call_to_step_id.get(str(lookup_id))
-                                    )
+                                    bound_step_id = router.step_id_for_tool(str(lookup_id))
                                     if bound_step_id:
                                         active_step = adapter._current_step_messages.get(
                                             bound_step_id
@@ -1264,15 +1254,11 @@ async def execute_task_textual(
                                         pend = pending_tool_calls_lc.get(str(lookup_id))
                                         if isinstance(pend, dict):
                                             raw = str(pend.get("args_str", ""))
-                                        adapter._pending_main_tools.append(
-                                            (
-                                                str(lookup_id),
-                                                {
-                                                    "name": buffer_name or "tool",
-                                                    "args": dict(parsed_args),
-                                                    "raw_args": raw,
-                                                },
-                                            )
+                                        router.buffer_main_tool(
+                                            str(lookup_id),
+                                            buffer_name or "tool",
+                                            parsed_args,
+                                            raw_args=raw,
                                         )
                                         if buffer_name != "task":
                                             # Pending marker for non-task tools: subagent
@@ -1287,10 +1273,21 @@ async def execute_task_textual(
                                             ns_key,
                                         )
                                     else:
-                                        # IG-404: Never mount standalone tool cards for subgraph
-                                        # streams (only rows on Task/step parents).
+                                        # Buffer until namespace → task scope resolves.
+                                        raw_sg = ""
+                                        pend_sg = pending_tool_calls_lc.get(str(lookup_id))
+                                        if isinstance(pend_sg, dict):
+                                            raw_sg = str(pend_sg.get("args_str", ""))
+                                        router.buffer_subgraph_tool(
+                                            ns_key=ns_key,
+                                            lookup_id=str(lookup_id),
+                                            display_key=display_key,
+                                            tool_name=buffer_name or "tool",
+                                            args=parsed_args,
+                                            raw_args=raw_sg,
+                                        )
                                         logger.debug(
-                                            "Subagent tool card suppressed (no parent): "
+                                            "Subagent tool buffered (parent pending): "
                                             "name=%s tool_call_id=%s namespace=%s",
                                             buffer_name,
                                             lookup_id,
@@ -1321,7 +1318,7 @@ async def execute_task_textual(
                                 pending_text,
                                 ns_key,
                                 assistant_message_by_namespace,
-                                namespace_task_bindings=namespace_task_bindings,
+                                router=router,
                             )
                             pending_text_by_namespace[ns_key] = ""
                             assistant_message_by_namespace.pop(ns_key, None)
@@ -1352,7 +1349,7 @@ async def execute_task_textual(
                                     pending_text,
                                     ns_key,
                                     assistant_message_by_namespace,
-                                    namespace_task_bindings=namespace_task_bindings,
+                                    router=router,
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
@@ -1372,7 +1369,7 @@ async def execute_task_textual(
                                         pending_text,
                                         ns_key,
                                         assistant_message_by_namespace,
-                                        namespace_task_bindings=namespace_task_bindings,
+                                        router=router,
                                     )
                                     pending_text_by_namespace[ns_key] = ""
                                     assistant_message_by_namespace.pop(ns_key, None)
@@ -1385,30 +1382,19 @@ async def execute_task_textual(
                                 step_widget.set_running()
                                 adapter._current_step_messages[step_id] = step_widget
                                 adapter._step_by_namespace[ns_key] = step_widget
-
-                                # IG-402: Flush buffered main-namespace tools into the step card.
-                                # Only flush tools that were buffered *before* this step_started
-                                # event (preserve ordering so subsequent steps don't get mixed in).
-                                pending_count = len(adapter._pending_main_tools)
-                                for tcid_str, buf in adapter._pending_main_tools:
-                                    step_widget.add_tool_call(
-                                        tcid_str,
-                                        buf["name"],
-                                        buf["args"],
-                                        raw_args=buf.get("raw_args", ""),
-                                    )
-                                    adapter._tool_to_step[tcid_str] = step_widget
-                                    # IG-404: Preserve existing ToolCallMessage (task card) so
-                                    # subagent tools can still resolve their parent via this id.
-                                    existing_display = adapter._tool_display_by_call_id.get(
-                                        tcid_str
-                                    )
-                                    if not isinstance(existing_display, ToolCallMessage):
-                                        adapter._tool_display_by_call_id[tcid_str] = step_widget
-                                # Keep only tools that arrived after this flush (for subsequent steps).
-                                adapter._pending_main_tools = adapter._pending_main_tools[
-                                    pending_count:
-                                ]
+                                router.on_step_started(step_id)
+                                router.route_pending_main_tools(
+                                    adapter._current_step_messages,
+                                    adapter._tool_to_step,
+                                    adapter._tool_display_by_call_id,
+                                )
+                                await _flush_router_pending_subgraph_tools(
+                                    adapter,
+                                    router,
+                                    show_tool_ui=show_tool_ui,
+                                    pending_tool_calls_lc=pending_tool_calls_lc,
+                                    file_op_tracker=file_op_tracker,
+                                )
 
                                 continue
 
@@ -1423,14 +1409,19 @@ async def execute_task_textual(
                                     step_id,
                                 )
                                 adapter.apply_tool_step_binding(tool_call_id, step_id)
-                                active_loop_step_id = step_id
+                                await _flush_router_pending_subgraph_tools(
+                                    adapter,
+                                    router,
+                                    show_tool_ui=show_tool_ui,
+                                    pending_tool_calls_lc=pending_tool_calls_lc,
+                                    file_op_tracker=file_op_tracker,
+                                )
                             continue
 
                         if event_type == AGENT_LOOP_STEP_COMPLETED:
                             step_id = str(data.get("step_id", "")).strip()
                             if step_id:
-                                if active_loop_step_id == step_id:
-                                    active_loop_step_id = ""
+                                router.on_step_completed(step_id)
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
                                     await _flush_assistant_text_ns(
@@ -1438,7 +1429,7 @@ async def execute_task_textual(
                                         pending_text,
                                         ns_key,
                                         assistant_message_by_namespace,
-                                        namespace_task_bindings=namespace_task_bindings,
+                                        router=router,
                                     )
                                     pending_text_by_namespace[ns_key] = ""
                                     assistant_message_by_namespace.pop(ns_key, None)
@@ -1460,9 +1451,7 @@ async def execute_task_textual(
                                     for k in stale_tool_ids:
                                         adapter._tool_to_step.pop(k, None)
                                     # Clean up tool-to-step bindings for this step
-                                    for k in list(adapter._tool_call_to_step_id.keys()):
-                                        if adapter._tool_call_to_step_id.get(k) == step_id:
-                                            adapter._tool_call_to_step_id.pop(k, None)
+                                    router.clear_step_tool_bindings(step_id)
                                     for k, parent in list(adapter._tool_display_by_call_id.items()):
                                         if parent is widget:
                                             adapter._tool_display_by_call_id.pop(k, None)
@@ -1498,7 +1487,7 @@ async def execute_task_textual(
                                     pending_text,
                                     ns_key,
                                     assistant_message_by_namespace,
-                                    namespace_task_bindings=namespace_task_bindings,
+                                    router=router,
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
@@ -1517,24 +1506,15 @@ async def execute_task_textual(
                             continue
 
                         if ns_key:
-                            maybe_bind_namespace(
-                                namespace_task_bindings,
-                                task_spawn_queue,
-                                ns_key,
-                                active_step_id=active_loop_step_id,
-                                spawns_by_step=spawns_by_step_id,
-                                pending_namespaces_by_step=pending_namespace_by_step,
-                            )
-                        task_scope = resolve_task_scope_for_namespace(
-                            namespace_task_bindings, ns_key
-                        )
+                            router.on_subgraph_namespace(ns_key)
+                        task_scope = router.resolve_task_scope(ns_key)
                         if (
                             task_scope
                             and event_type.startswith("soothe.subagent.")
                             and is_allowlisted_subagent_event_type(event_type)
                         ):
                             tcid = task_scope[0]
-                            card = resolve_task_parent_lookup(
+                            card = router.resolve_parent(
                                 task_scope,
                                 step_cards=adapter._current_step_messages,
                                 tool_display_by_call_id=adapter._tool_display_by_call_id,
@@ -1569,7 +1549,7 @@ async def execute_task_textual(
                                     pending_text,
                                     ns_key,
                                     assistant_message_by_namespace,
-                                    namespace_task_bindings=namespace_task_bindings,
+                                    router=router,
                                 )
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
@@ -1599,7 +1579,7 @@ async def execute_task_textual(
                         pending_text,
                         ns_key,
                         assistant_message_by_namespace,
-                        namespace_task_bindings=namespace_task_bindings,
+                        router=router,
                     )
             for ns_key, stream_msg in list(goal_completion_stream_by_namespace.items()):
                 await _finalize_goal_completion_stream(
@@ -1616,14 +1596,28 @@ async def execute_task_textual(
             assistant_message_by_namespace.clear()
             task_loop_assistant_by_tcid.clear()
 
-            # Buffered tools without a step_started event: do not mount standalone tool cards.
-            if adapter._pending_main_tools:
+            # Buffered tools without a step card: do not mount standalone tool cards.
+            routed_main = router.route_pending_main_tools(
+                adapter._current_step_messages,
+                adapter._tool_to_step,
+                adapter._tool_display_by_call_id,
+            )
+            if routed_main:
                 logger.debug(
-                    "Dropping %d pending main-namespace tool row(s) (no step card; "
-                    "standalone tool cards disabled)",
-                    len(adapter._pending_main_tools),
+                    "Routed %d pending main-namespace tool row(s) at stream end",
+                    routed_main,
                 )
-            adapter._pending_main_tools.clear()
+            elif router.pending_main_tool_count:
+                logger.debug(
+                    "Dropping %d pending main-namespace tool row(s) (no step card)",
+                    router.pending_main_tool_count,
+                )
+            pending_sub = router.pending_subgraph_tools()
+            if pending_sub:
+                logger.debug(
+                    "Dropping %d pending subgraph tool row(s) (parent unresolved)",
+                    len(pending_sub),
+                )
 
             # Safety net: finalize any steps/tools still in-flight (e.g. worker
             # crash sent a soothe.error.* event but step_completed was never

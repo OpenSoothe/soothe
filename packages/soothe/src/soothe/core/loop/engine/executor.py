@@ -244,12 +244,35 @@ class _ActStreamBudget:
     hit_subagent_cap: bool = False
 
 
+@dataclass(slots=True)
+class _ParallelStepDone:
+    """Sentinel placed on the parallel live-event queue when one step finishes."""
+
+    step_id: str
+    payload: (
+        tuple[list[StreamEvent], StepResult, list[BaseMessage], str] | BaseException
+    )
+
+
 _TUPLE_LEN = 3
 # ``task`` tool return text cap per invocation before joining (delegate finals).
 _DELEGATE_FINAL_PER_TASK_CAP = 80_000
 
 # Type for stream events yielded during execution
 StreamEvent = tuple[tuple[str, ...], str, Any]  # (namespace, mode, data)
+
+_ParallelLiveQueueItem = StreamEvent | _ParallelStepDone
+
+
+def _append_parallel_stream_event(
+    events: list[StreamEvent],
+    event: StreamEvent,
+    live_event_queue: asyncio.Queue[_ParallelLiveQueueItem] | None,
+) -> None:
+    """Record a stream chunk for the step result and optionally fan out to the TUI queue."""
+    events.append(event)
+    if live_event_queue is not None:
+        live_event_queue.put_nowait(event)
 
 
 class Executor:
@@ -874,90 +897,113 @@ class Executor:
     ) -> AsyncGenerator[StreamEvent | StepResult, None]:
         """Execute steps in parallel with isolated threads.
 
-        Note: For parallel execution, we cannot yield events in real-time
-        because asyncio.gather runs all tasks concurrently. We collect
-        events from each task and yield them after all complete.
+        Stream events are merged onto a shared queue and yielded as they arrive so
+        daemon/TUI clients see tool and subagent activity during the wave, not only
+        after ``asyncio.gather`` completes.
 
         Args:
             steps: Steps to execute
             state: Loop state
 
         Yields:
-            StepResult for each completed step.
+            StreamEvent chunks in arrival order, then each ``StepResult`` when its step
+            finishes (completion order, not necessarily step list order).
         """
         # Branched LangGraph thread_id for parallel checkpoint isolation; StepResult keeps logical thread_id.
         logical_tid = state.thread_id
         itype = self._intent_type_for_prompt(state)
-        tasks = [
-            asyncio.create_task(
-                self._execute_step_collecting_events(
+        n_steps = len(steps)
+        live_queue: asyncio.Queue[_ParallelLiveQueueItem] = asyncio.Queue()
+        gather_results: list[Any] = [None] * n_steps
+        step_wave_index: dict[str, int] = {step.id: i for i, step in enumerate(steps)}
+
+        async def _run_parallel_step(step: StepAction) -> None:
+            sid = step.id
+            try:
+                payload = await self._execute_step_collecting_events(
                     step,
                     logical_tid,
                     state.workspace,
                     stream_thread_id=(
-                        f"{logical_tid}__p{step.id}" if len(steps) > 1 else logical_tid
+                        f"{logical_tid}__p{sid}" if n_steps > 1 else logical_tid
                     ),
                     routing_classification=getattr(state, "routing_classification", None),
                     git_status=state.git_status,
                     intent_type=itype,
                     loop_state=state,
+                    live_event_queue=live_queue,
                 )
-            )
-            for step in steps
-        ]
+                live_queue.put_nowait(_ParallelStepDone(sid, payload))
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                live_queue.put_nowait(_ParallelStepDone(sid, exc))
 
-        try:
-            # Execute concurrently
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-        except asyncio.CancelledError:
-            # Cancel all child tasks immediately on cancellation (IG-109)
-            for task in tasks:
-                if not task.done():
-                    task.cancel()
-            # Wait briefly for tasks to acknowledge cancellation
-            await asyncio.gather(*tasks, return_exceptions=True)
-            raise
+        tasks = [asyncio.create_task(_run_parallel_step(step)) for step in steps]
 
-        # Process results
         all_step_results: list[StepResult] = []
         single_wave_messages: list[BaseMessage] = []
         wave_delegate_final = ""
         wave_delegate_parts: list[str] = []
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                logger.error(
-                    "Parallel step %s failed with exception: %s",
-                    steps[i].id,
-                    result,
-                    exc_info=result,
-                )
-                step_result = StepResult(
-                    step_id=steps[i].id,
-                    success=False,
-                    outcome={"type": "error", "error": str(result)},  # RFC-211
-                    error=str(result),
-                    error_type=self._classify_error_severity(result),
-                    duration_ms=0,
-                    thread_id=state.thread_id,
-                    subagent_task_completions=0,
-                    hit_subagent_cap=False,
-                )
-                all_step_results.append(step_result)
-                yield step_result
-            else:
-                events, step_result, step_messages, delegate_final = result
-                if len(steps) == 1:
-                    single_wave_messages = step_messages
-                    wave_delegate_final = delegate_final
-                df = (delegate_final or "").strip()
-                if df:
-                    wave_delegate_parts.append(df)
-                all_step_results.append(step_result)
-                # Yield collected events first
-                for event in events:
-                    yield event
-                # Then yield the result
-                yield step_result
+        completed = 0
+
+        try:
+            while completed < n_steps:
+                item = await live_queue.get()
+                if isinstance(item, _ParallelStepDone):
+                    completed += 1
+                    sid = item.step_id
+                    wave_i = step_wave_index.get(sid)
+                    if wave_i is None:
+                        logger.warning(
+                            "Parallel step completion for unknown step_id=%r; skipping",
+                            sid,
+                        )
+                        continue
+                    result = item.payload
+                    gather_results[wave_i] = result
+                    if isinstance(result, Exception):
+                        logger.error(
+                            "Parallel step %s failed with exception: %s",
+                            sid,
+                            result,
+                            exc_info=result,
+                        )
+                        step_result = StepResult(
+                            step_id=sid,
+                            success=False,
+                            outcome={"type": "error", "error": str(result)},  # RFC-211
+                            error=str(result),
+                            error_type=self._classify_error_severity(result),
+                            duration_ms=0,
+                            thread_id=state.thread_id,
+                            subagent_task_completions=0,
+                            hit_subagent_cap=False,
+                        )
+                        all_step_results.append(step_result)
+                        yield step_result
+                    else:
+                        _events, step_result, step_messages, delegate_final = result
+                        if n_steps == 1:
+                            single_wave_messages = step_messages
+                            wave_delegate_final = delegate_final
+                        df = (delegate_final or "").strip()
+                        if df:
+                            wave_delegate_parts.append(df)
+                        all_step_results.append(step_result)
+                        yield step_result
+                else:
+                    yield item
+        except asyncio.CancelledError:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+        finally:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+        results = gather_results
 
         # RFC-214: parallel waves must update the ledger like sequential chunks so Plan-assess
         # receives prior execute evidence via ``state.loop_messages`` (IG-374).
@@ -1231,11 +1277,13 @@ class Executor:
         git_status: dict[str, Any] | None = None,
         intent_type: str | None = None,
         loop_state: LoopState | None = None,
+        live_event_queue: asyncio.Queue[_ParallelLiveQueueItem] | None = None,
     ) -> tuple[list[StreamEvent], StepResult, list[BaseMessage], str]:
-        """Execute single step, collecting events for later yielding.
+        """Execute single step, collecting events for the parallel merge queue.
 
-        Used for parallel execution where we can't yield in real-time.
-        Events are collected and returned with the final result.
+        When ``live_event_queue`` is set (parallel execute), each stream chunk is pushed
+        immediately for upstream TUI/WebSocket display. The returned event list is kept
+        for tests and ledger helpers but is not re-yielded by ``_execute_parallel``.
 
         RFC-211: Collects outcome metadata instead of full output string.
         IG-355: Fourth tuple element is joined ``task`` tool delegate-final text for finalize.
@@ -1380,7 +1428,7 @@ class Executor:
                 tool_binding_step_id=step.id,
             ):
                 if event is not None:
-                    events.append(event)
+                    _append_parallel_stream_event(events, event, live_event_queue)
                 elif final_output is not None:
                     output = final_output
                     tool_call_count = tc_count
@@ -1397,17 +1445,16 @@ class Executor:
                     step.id,
                     tcid,
                 )
-                events.append(
-                    (
-                        (),  # namespace - root graph
-                        "custom",
-                        {
-                            "type": "soothe.cognition.agent_loop.step.tool_binding",
-                            "step_id": step.id,
-                            "tool_call_id": tcid,
-                        },
-                    )
+                binding_event: StreamEvent = (
+                    (),
+                    "custom",
+                    {
+                        "type": "soothe.cognition.agent_loop.step.tool_binding",
+                        "step_id": step.id,
+                        "tool_call_id": tcid,
+                    },
                 )
+                _append_parallel_stream_event(events, binding_event, live_event_queue)
 
             # RFC-211: Aggregate outcomes from all tools in this step
             # Use the first outcome as primary (future: merge multiple)
