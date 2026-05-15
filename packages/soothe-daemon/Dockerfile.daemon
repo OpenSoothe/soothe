@@ -22,21 +22,27 @@ FROM ${BASE_IMAGE} AS builder
 
 WORKDIR /app
 
-# Copy real source code (base has stubs)
-COPY packages ./packages
+# Layer ordering for caching:
+# 1. Copy pyproject only → cached if deps unchanged
+# 2. uv pip install → cached if pyproject unchanged (uv checks metadata)
+# 3. Copy source → rebuilds on source change, but skips install layer
 
-# Rebuild workspace packages only (deps already in base)
+COPY packages/soothe/pyproject.toml packages/soothe/VERSION packages/soothe/
+COPY packages/soothe-sdk/pyproject.toml packages/soothe-sdk/
+COPY packages/soothe-cli/pyproject.toml packages/soothe-cli/
+COPY packages/soothe-daemon/pyproject.toml packages/soothe-daemon/
+
+# Reinstall workspace packages if pyproject changed (uv skips if unchanged)
+# Base image has editable installs pointing to /app/packages/*/src/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --force-reinstall --no-deps \
+    uv pip install --no-deps \
         ./packages/soothe-sdk \
         ./packages/soothe-cli \
         './packages/soothe[all]' \
         ./packages/soothe-daemon
 
-# Warmup embedding model cache (semantic similarity)
-RUN mkdir -p /var/lib/soothe/data \
-    && .venv/bin/soothed warmup \
-    && rm -rf /root/.cache/uv /root/.cache/pip
+# Copy source code (replaces base stubs; editable installs pick up real code)
+COPY packages ./packages
 
 # ========================================
 # Stage 2: Runtime
@@ -79,7 +85,7 @@ RUN useradd --create-home --system soothe \
     && mkdir -p /home/soothe/.cache/soothe/models \
     && chown -R soothe:soothe /var/lib/soothe /opt/ms-playwright /home/soothe/.cache
 
-# Copy embedding model cache from builder
+# Copy embedding model cache from builder to soothe user's home (default cache path)
 COPY --from=builder --chown=soothe:soothe /root/.cache/soothe/models/huggingface /home/soothe/.cache/soothe/models/huggingface
 
 USER soothe
