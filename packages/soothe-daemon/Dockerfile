@@ -9,10 +9,10 @@
 #     --build-arg SOOTHE_VERSION=0.5.7 \
 #     -t soothed:latest .
 #
-# `soothe[all]` is pinned to SOOTHE_VERSION. `soothe-daemon` defaults to
-# `>=SOOTHE_VERSION,<1.0.0` so the image still builds when a daemon wheel was
-# skipped for that patch (PyPI). To force an exact daemon build:
-#   --build-arg SOOTHE_DAEMON_VERSION=0.5.8
+# `soothe[all]` is pinned to SOOTHE_VERSION. `soothe-daemon` defaults to the
+# latest PyPI release compatible with that pin (PyPI may lag: newer soothe
+# patch, older daemon-only release). Override when you need an exact daemon:
+#   --build-arg SOOTHE_DAEMON_VERSION=0.5.6
 #
 # Optional: use a custom Python base (e.g. internal mirror):
 #   --build-arg PYTHON_BASE=registry.example.com/python:3.12-bookworm
@@ -31,7 +31,7 @@ ARG PYTHON_BASE=docker.io/library/python:3.12-bookworm
 FROM ${PYTHON_BASE} AS deps
 
 ARG SOOTHE_VERSION=0.5.8
-# Empty = latest soothe-daemon on PyPI satisfying >=SOOTHE_VERSION (when patch wheels are missing).
+# Empty = latest soothe-daemon on PyPI compatible with pinned soothe[all].
 ARG SOOTHE_DAEMON_VERSION=
 
 ENV PYTHONUNBUFFERED=1 \
@@ -53,7 +53,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     if [ -n "${SOOTHE_DAEMON_VERSION}" ]; then \
       dspec="soothe-daemon==${SOOTHE_DAEMON_VERSION}"; \
     else \
-      dspec="soothe-daemon>=${SOOTHE_VERSION},<1.0.0"; \
+      dspec="soothe-daemon"; \
     fi; \
     uv venv /app/.venv; \
     uv pip install --python /app/.venv/bin/python \
