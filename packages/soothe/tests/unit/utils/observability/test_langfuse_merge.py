@@ -29,6 +29,25 @@ def test_merge_returns_base_when_handler_unavailable(monkeypatch) -> None:
     assert out is base
 
 
+def test_callback_handler_returns_none_when_langfuse_placeholder_loaded(monkeypatch) -> None:
+    pytest.importorskip("langfuse.langchain")
+    import soothe.utils.observability.langfuse_callback_handler as callback_module
+
+    obs = ObservabilityConfig(
+        langfuse=LangfuseIntegrationConfig(enabled=True, public_key="pk-test"),
+    )
+    cfg = SootheConfig(observability=obs)
+
+    class PlaceholderHandler:
+        pass
+
+    langfuse_util._HANDLERS.clear()
+    monkeypatch.setattr(callback_module, "LANGFUSE_AVAILABLE", False)
+    monkeypatch.setattr(callback_module, "SootheLangfuseCallbackHandler", PlaceholderHandler)
+
+    assert langfuse_util._langfuse_callback_handler(cfg) is None
+
+
 def test_merge_adds_callback_and_metadata(monkeypatch) -> None:
     obs = ObservabilityConfig(
         langfuse=LangfuseIntegrationConfig(enabled=True, trace_name="soothe-test"),
