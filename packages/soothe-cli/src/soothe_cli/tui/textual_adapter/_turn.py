@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
-from soothe_sdk.ux.task_namespace import scoped_subgraph_tool_key
+from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id, scoped_subgraph_tool_key
 
 from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.shared.core.presentation_engine import PresentationEngine
@@ -53,7 +53,6 @@ from soothe_cli.tui.textual_adapter._adapter import (
     AGENT_LOOP_GOAL_STARTED,
     AGENT_LOOP_STEP_COMPLETED,
     AGENT_LOOP_STEP_STARTED,
-    AGENT_LOOP_STEP_TOOL_BINDING,
     TextualUIAdapter,
     _get_ask_user_adapter,
     _get_hitl_request_adapter,
@@ -983,13 +982,21 @@ async def execute_task_textual(
                             args_meaningful = bool(parsed_args)
 
                             # IG-403: Per-step task spawn + namespace bind (not global FIFO).
+                            # IG-416: Extract step_id from unified tool_call_id format.
                             if (
                                 lookup_id
                                 and is_main_agent
                                 and buffer_name == "task"
                                 and args_meaningful
                             ):
-                                bound_step_id = router.step_id_for_tool(str(lookup_id))
+                                # Parse unified tool_call_id to get step_id directly
+                                parsed_step_id, parsed_type, _, _ = parse_unified_tool_call_id(
+                                    str(lookup_id)
+                                )
+                                # Use parsed step_id from unified ID, fallback to router
+                                bound_step_id = parsed_step_id or router.step_id_for_tool(
+                                    str(lookup_id)
+                                )
                                 raw_st = parsed_args.get("subagent_type", "")
                                 subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
                                 if router.register_task_spawn(
@@ -1019,12 +1026,6 @@ async def execute_task_textual(
                                                     raw_args=raw_spawn,
                                                 )
                                             adapter._tool_to_step[str(lookup_id)] = step_w
-                                            logger.debug(
-                                                "Task row on step card (pre-defer): "
-                                                "step_id=%s tool_call_id=%s",
-                                                bound_step_id,
-                                                lookup_id,
-                                            )
                                     elif lookup_id not in adapter._current_tool_messages:
                                         task_card = ToolCallMessage(
                                             buffer_name,
@@ -1035,11 +1036,6 @@ async def execute_task_textual(
                                         task_card.set_running()
                                         adapter._current_tool_messages[lookup_id] = task_card
                                         adapter._tool_display_by_call_id[str(lookup_id)] = task_card
-                                        logger.debug(
-                                            "Task subagent card mounted early (pre-defer): "
-                                            "tool_call_id=%s",
-                                            lookup_id,
-                                        )
 
                             if not args_meaningful and _defer_tool_card_for_empty_streaming_args(
                                 message
@@ -1097,9 +1093,12 @@ async def execute_task_textual(
                                 else str(lookup_id)
                             )
                             if display_key and display_key not in displayed_tool_ids:
-                                # IG-416: Check if binding event already mounted this tool
+                                # IG-416: Extract step_id from unified tool_call_id
                                 if lookup_id and is_main_agent:
-                                    bound_step = router.step_id_for_tool(str(lookup_id))
+                                    parsed_sid, _, _, _ = parse_unified_tool_call_id(str(lookup_id))
+                                    bound_step = parsed_sid or router.step_id_for_tool(
+                                        str(lookup_id)
+                                    )
                                     if bound_step:
                                         step_card_bound = adapter._current_step_messages.get(
                                             bound_step
@@ -1124,7 +1123,13 @@ async def execute_task_textual(
                                             )
                                             tool_call_buffers.pop(buffer_key, None)
                                             continue
-                                bound_early = (
+                                # IG-416: Parse unified ID for step_id
+                                parsed_sid_early = ""
+                                if lookup_id:
+                                    parsed_sid_early, _, _, _ = parse_unified_tool_call_id(
+                                        str(lookup_id)
+                                    )
+                                bound_early = parsed_sid_early or (
                                     router.step_id_for_tool(str(lookup_id)) if lookup_id else ""
                                 )
                                 step_card_early = (
@@ -1253,8 +1258,15 @@ async def execute_task_textual(
                                     if adapter._set_spinner:
                                         await adapter._set_spinner("Tools")
 
-                                    # Check binding first for accurate parallel routing
-                                    bound_step_id = router.step_id_for_tool(str(lookup_id))
+                                    # IG-416: Parse unified ID for step_id, fallback to router binding
+                                    parsed_sid = ""
+                                    if lookup_id:
+                                        parsed_sid, _, _, _ = parse_unified_tool_call_id(
+                                            str(lookup_id)
+                                        )
+                                    bound_step_id = parsed_sid or router.step_id_for_tool(
+                                        str(lookup_id)
+                                    )
                                     if bound_step_id:
                                         active_step = adapter._current_step_messages.get(
                                             bound_step_id
@@ -1448,86 +1460,6 @@ async def execute_task_textual(
                                 )
 
                                 continue
-
-                        if event_type == AGENT_LOOP_STEP_TOOL_BINDING:
-                            step_id = str(data.get("step_id", "")).strip()
-                            tool_call_id = str(data.get("tool_call_id", "")).strip()
-                            # IG-416: Augmented fields for direct rendering
-                            tool_name = str(data.get("tool_name", "")).strip()
-                            aug_args = data.get("args")
-                            aug_args_status = str(data.get("args_status", "pending"))
-                            if step_id and tool_call_id:
-                                logger.info(
-                                    "[StepToolBind] stream_event ns=%r tool_call_id=%s step_id=%s "
-                                    "name=%s args_status=%s",
-                                    ns_key,
-                                    tool_call_id,
-                                    step_id,
-                                    tool_name,
-                                    aug_args_status,
-                                )
-                                adapter.apply_tool_step_binding(tool_call_id, step_id)
-                                # IG-416: Mount tool row even with pending args (show "loading" state)
-                                if tool_name and show_tool_ui and step_id:
-                                    step_card = adapter._current_step_messages.get(step_id)
-                                    # Debug: Log step_card state
-                                    logger.info(
-                                        "[StepToolBind] step_card lookup: step_id=%s "
-                                        "step_card=%s current_step_messages_keys=%s",
-                                        step_id,
-                                        type(step_card).__name__ if step_card else "None",
-                                        list(adapter._current_step_messages.keys()),
-                                    )
-                                    if step_card is not None and not getattr(
-                                        step_card, "has_tool_call_row", lambda _x: False
-                                    )(tool_call_id):
-                                        ingest = getattr(step_card, "add_tool_call", None)
-                                        if callable(ingest):
-                                            # Use args if available, otherwise show placeholder
-                                            display_args = (
-                                                aug_args
-                                                if aug_args_status == "complete"
-                                                and isinstance(aug_args, dict)
-                                                else {}  # Empty dict shows as pending
-                                            )
-                                            ingest(tool_call_id, tool_name, display_args)
-                                            adapter._tool_to_step[tool_call_id] = step_card
-                                            if tool_call_id not in adapter._tool_display_by_call_id:
-                                                adapter._tool_display_by_call_id[tool_call_id] = (
-                                                    step_card
-                                                )
-                                            logger.info(
-                                                "[StepToolBind] MOUNTED tool_call_id=%s "
-                                                "step_id=%s name=%s args_status=%s",
-                                                tool_call_id,
-                                                step_id,
-                                                tool_name,
-                                                aug_args_status,
-                                            )
-                                        else:
-                                            logger.warning(
-                                                "[StepToolBind] add_tool_call NOT CALLABLE step_id=%s",
-                                                step_id,
-                                            )
-                                    elif step_card is None:
-                                        logger.warning(
-                                            "[StepToolBind] step_card MISSING step_id=%s",
-                                            step_id,
-                                        )
-                                    else:
-                                        logger.info(
-                                            "[StepToolBind] tool_row EXISTS tool_call_id=%s step_id=%s",
-                                            tool_call_id,
-                                            step_id,
-                                        )
-                                await _flush_router_pending_subgraph_tools(
-                                    adapter,
-                                    router,
-                                    show_tool_ui=show_tool_ui,
-                                    pending_tool_calls_lc=pending_tool_calls_lc,
-                                    file_op_tracker=file_op_tracker,
-                                )
-                            continue
 
                         if event_type == AGENT_LOOP_STEP_COMPLETED:
                             step_id = str(data.get("step_id", "")).strip()
