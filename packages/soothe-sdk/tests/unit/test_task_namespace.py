@@ -1,4 +1,4 @@
-"""Tests for Task-tool namespace binding helpers (IG-334, parallel step scope)."""
+"""Tests for Task-tool namespace binding helpers."""
 
 from __future__ import annotations
 
@@ -12,54 +12,41 @@ from soothe_sdk.ux.task_namespace import (
 )
 
 
-def test_register_task_spawn_binds_deferred_namespace_for_step() -> None:
-    """Namespaces that arrive before spawn attach to the correct step, not FIFO head."""
+def test_register_task_spawn_binds_deferred_unscoped_namespace() -> None:
+    """Namespaces that arrive before spawn attach in FIFO order per register."""
     bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
     queue: deque[tuple[str, str, str]] = deque()
     spawns: dict[str, tuple[str, str, str]] = {}
-    pending: dict[str, list[tuple[str, ...]]] = {}
+    pending_unscoped: deque[tuple[str, ...]] = deque()
     ns = ("tools:explore-a",)
 
     maybe_bind_namespace(
         bindings,
         queue,
         ns,
-        active_step_id="YKF-02",
-        spawns_by_step=spawns,
-        pending_namespaces_by_step=pending,
+        pending_unscoped_namespaces=pending_unscoped,
     )
     assert ns not in bindings
-    assert pending["YKF-02"] == [ns]
+    assert list(pending_unscoped) == [ns]
 
     scope = ("functions.task:0", "explore", "YKF-02")
-    register_task_spawn_for_step(bindings, queue, spawns, pending, scope)
+    register_task_spawn_for_step(
+        bindings,
+        queue,
+        spawns,
+        scope,
+        pending_unscoped_namespaces=pending_unscoped,
+    )
     assert bindings[ns] == scope
     assert spawns["YKF-02"] == scope
 
 
-def test_maybe_bind_uses_active_step_when_spawn_registered() -> None:
-    bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
-    queue: deque[tuple[str, str, str]] = deque()
-    spawns = {"YKF-03": ("functions.task:0", "explore", "YKF-03")}
-    ns = ("tools:explore-c",)
-
-    maybe_bind_namespace(
-        bindings,
-        queue,
-        ns,
-        active_step_id="YKF-03",
-        spawns_by_step=spawns,
-        pending_namespaces_by_step={},
-    )
-    assert bindings[ns] == spawns["YKF-03"]
-
-
-def test_parallel_spawns_do_not_steal_via_fifo_when_step_scoped() -> None:
+def test_parallel_spawns_bind_namespaces_in_order() -> None:
     """Three step-scoped spawns bind three namespaces without cross-talk."""
     bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
     queue: deque[tuple[str, str, str]] = deque()
     spawns: dict[str, tuple[str, str, str]] = {}
-    pending: dict[str, list[tuple[str, ...]]] = {}
+    pending_unscoped: deque[tuple[str, ...]] = deque()
 
     for step_id, ns in (
         ("YKF-01", ("tools:aaa",)),
@@ -70,21 +57,28 @@ def test_parallel_spawns_do_not_steal_via_fifo_when_step_scoped() -> None:
             bindings,
             queue,
             ns,
-            active_step_id=step_id,
-            spawns_by_step=spawns,
-            pending_namespaces_by_step=pending,
+            pending_unscoped_namespaces=pending_unscoped,
         )
         register_task_spawn_for_step(
             bindings,
             queue,
             spawns,
-            pending,
             ("functions.task:0", "explore", step_id),
+            pending_unscoped_namespaces=pending_unscoped,
         )
 
     assert bindings[("tools:aaa",)][2] == "YKF-01"
     assert bindings[("tools:bbb",)][2] == "YKF-02"
     assert bindings[("tools:ccc",)][2] == "YKF-03"
+
+
+def test_headless_maybe_bind_uses_spawn_queue_fifo() -> None:
+    """Clients without unscoped deferral bind the next queued task spawn."""
+    bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
+    queue: deque[tuple[str, str, str]] = deque()
+    queue.append(("tc-1", "explore", ""))
+    maybe_bind_namespace(bindings, queue, ("tools:x",))
+    assert bindings[("tools:x",)] == ("tc-1", "explore", "")
 
 
 def test_scoped_subgraph_tool_key_is_unique_per_namespace() -> None:

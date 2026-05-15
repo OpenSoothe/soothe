@@ -30,5 +30,5 @@ def test_apply_tool_step_binding_migrates_row_between_step_cards() -> None:
     assert not wrong.has_tool_call_row(tcid)
     assert right.has_tool_call_row(tcid)
     assert adapter._tool_to_step[tcid] is right
-    assert adapter._tool_call_to_step_id[tcid] == "s-right"
+    assert adapter._step_router.tool_call_to_step_id[tcid] == "s-right"
     assert adapter._tool_display_by_call_id[tcid] is right

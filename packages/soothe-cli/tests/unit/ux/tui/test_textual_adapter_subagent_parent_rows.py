@@ -22,6 +22,7 @@ async def test_mount_subagent_inner_tool_row_resolves_parent_task_card() -> None
         request_approval=AsyncMock(),
         set_spinner=AsyncMock(),
     )
+    router = adapter._step_router
     task_card = ToolCallMessage(
         "task",
         {"subagent_type": "explore", "description": "find files"},
@@ -29,17 +30,17 @@ async def test_mount_subagent_inner_tool_row_resolves_parent_task_card() -> None
     )
     adapter._tool_display_by_call_id["tc-task"] = task_card
     ns_key = ("delegated:subgraph-1",)
-    bindings = {ns_key: ("tc-task", "explore", "")}
+    router._namespace_bindings[ns_key] = ("tc-task", "explore", "")
     tracker = FileOpTracker(assistant_id="asst-1")
 
     ok = await _mount_subagent_inner_tool_row_if_resolved(
         adapter,
+        router,
         lookup_id="inner-grep-1",
         buffer_name="grep",
         parsed_args={"pattern": "TODO"},
         buffer_id="inner-grep-1",
         ns_key=ns_key,
-        namespace_task_bindings=bindings,
         show_tool_ui=True,
         is_main_agent=False,
         pending_tool_calls_lc={},
@@ -62,19 +63,20 @@ async def test_mount_subagent_inner_noop_for_main_namespace() -> None:
         update_status=MagicMock(),
         request_approval=AsyncMock(),
     )
+    router = adapter._step_router
     task_card = ToolCallMessage("task", {"subagent_type": "x"}, tool_call_id="tc-1")
     adapter._tool_display_by_call_id["tc-1"] = task_card
     ns_key = ("delegated",)
-    bindings = {ns_key: ("tc-1", "x", "")}
+    router._namespace_bindings[ns_key] = ("tc-1", "x", "")
 
     ok = await _mount_subagent_inner_tool_row_if_resolved(
         adapter,
+        router,
         lookup_id="t1",
         buffer_name="grep",
         parsed_args={"pattern": "a"},
         buffer_id="t1",
         ns_key=ns_key,
-        namespace_task_bindings=bindings,
         show_tool_ui=True,
         is_main_agent=True,
         pending_tool_calls_lc={},
@@ -93,15 +95,16 @@ async def test_mount_subagent_inner_noop_when_task_scope_unbound() -> None:
         update_status=MagicMock(),
         request_approval=AsyncMock(),
     )
+    router = adapter._step_router
 
     ok = await _mount_subagent_inner_tool_row_if_resolved(
         adapter,
+        router,
         lookup_id="t1",
         buffer_name="read_file",
         parsed_args={"path": "/x"},
         buffer_id="t1",
         ns_key=("unknown-namespace",),
-        namespace_task_bindings={},
         show_tool_ui=True,
         is_main_agent=False,
         pending_tool_calls_lc={},

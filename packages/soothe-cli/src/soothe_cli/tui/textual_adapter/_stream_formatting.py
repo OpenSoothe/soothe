@@ -11,17 +11,14 @@ if TYPE_CHECKING:
 
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.utils import get_tool_display_name
-from soothe_sdk.ux.task_namespace import (
-    resolve_task_parent_lookup,
-    resolve_task_scope_for_namespace,
-    scoped_subgraph_tool_key,
-)
+from soothe_sdk.ux.task_namespace import scoped_subgraph_tool_key
 
 from soothe_cli.cli.stream.display_line import DisplayLine
 from soothe_cli.shared.events.essential_events import is_essential_progress_event_type
 from soothe_cli.shared.tools.message_processing import format_tool_call_args
 from soothe_cli.tui._session_stats import SessionStats
 from soothe_cli.tui.formatting import format_duration
+from soothe_cli.tui.step_task_routing import StepTaskRouter
 from soothe_cli.tui.widgets.messages import ToolCallMessage
 
 
@@ -192,13 +189,13 @@ def _raw_tool_content_for_presentation(message: Any) -> str:
 
 def _try_register_task_scoped_inner_tool_pending(
     adapter: TextualUIAdapter,
+    router: StepTaskRouter,
     *,
     lookup_id: str | None,
     buffer_name: str | None,
     parsed_args: dict[str, Any],
     is_main_agent: bool,
     ns_key: tuple[str, ...],
-    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str, str]],
     show_tool_ui: bool,
     presentation: Any,
 ) -> None:
@@ -207,10 +204,10 @@ def _try_register_task_scoped_inner_tool_pending(
         return
     if buffer_name == "task":
         return
-    ts_r = resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
+    ts_r = router.resolve_task_scope(ns_key)
     if not ts_r or not ts_r[0]:
         return
-    parent = resolve_task_parent_lookup(
+    parent = router.resolve_parent(
         ts_r,
         step_cards=adapter._current_step_messages,
         tool_display_by_call_id=adapter._tool_display_by_call_id,
@@ -234,13 +231,13 @@ def _try_register_task_scoped_inner_tool_pending(
 
 async def _mount_subagent_inner_tool_row_if_resolved(
     adapter: TextualUIAdapter,
+    router: StepTaskRouter,
     *,
     lookup_id: str,
     buffer_name: str | None,
     parsed_args: dict[str, Any],
     buffer_id: Any,
     ns_key: tuple[Any, ...],
-    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str, str]],
     show_tool_ui: bool,
     is_main_agent: bool,
     pending_tool_calls_lc: dict[str, dict[str, Any]],
@@ -255,9 +252,9 @@ async def _mount_subagent_inner_tool_row_if_resolved(
     Returns:
         True if a parent card was found and the row was attached.
     """
-    ts_inner = resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
+    ts_inner = router.resolve_task_scope(ns_key)
     parent_for_inner = (
-        resolve_task_parent_lookup(
+        router.resolve_parent(
             ts_inner,
             step_cards=adapter._current_step_messages,
             tool_display_by_call_id=adapter._tool_display_by_call_id,
@@ -297,3 +294,36 @@ async def _mount_subagent_inner_tool_row_if_resolved(
         type(parent_for_inner).__name__,
     )
     return True
+
+
+async def _flush_router_pending_subgraph_tools(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    *,
+    show_tool_ui: bool,
+    pending_tool_calls_lc: dict[str, dict[str, Any]],
+    file_op_tracker: FileOpTracker,
+) -> int:
+    """Mount subgraph tool rows that were buffered while parent scope was unresolved.
+
+    Returns:
+        Count of pending subgraph tools successfully mounted.
+    """
+    routed: set[str] = set()
+    for item in router.pending_subgraph_tools():
+        if await _mount_subagent_inner_tool_row_if_resolved(
+            adapter,
+            router,
+            lookup_id=item.lookup_id,
+            buffer_name=item.tool_name,
+            parsed_args=item.args,
+            buffer_id=item.lookup_id,
+            ns_key=item.ns_key,
+            show_tool_ui=show_tool_ui,
+            is_main_agent=False,
+            pending_tool_calls_lc=pending_tool_calls_lc,
+            file_op_tracker=file_op_tracker,
+        ):
+            routed.add(item.display_key)
+    router.take_routed_subgraph_tools(routed)
+    return len(routed)
