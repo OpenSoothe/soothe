@@ -1481,7 +1481,11 @@ class ToolCallMessage(Vertical):
         if row is None:
             return None
         self._rows = [r for r in self._rows if r.tool_call_id != tcid]
-        self._activity = [e for e in self._activity if not (isinstance(e, _StepToolRow) and e.tool_call_id == tcid)]
+        self._activity = [
+            e
+            for e in self._activity
+            if not (isinstance(e, _StepToolRow) and e.tool_call_id == tcid)
+        ]
         self._refresh_activity_display()
         return row
 
