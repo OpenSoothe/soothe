@@ -27,7 +27,10 @@ WORKDIR /app
 # 2. uv pip install → cached if pyproject unchanged (uv checks metadata)
 # 3. Copy source → rebuilds on source change, but skips install layer
 
-COPY packages/soothe/pyproject.toml packages/soothe/VERSION packages/soothe/
+# Copy VERSION file for hatch version detection (packages/soothe/pyproject.toml uses ../../VERSION)
+COPY VERSION /app/VERSION
+
+COPY packages/soothe/pyproject.toml packages/soothe/
 COPY packages/soothe-sdk/pyproject.toml packages/soothe-sdk/
 COPY packages/soothe-cli/pyproject.toml packages/soothe-cli/
 COPY packages/soothe-daemon/pyproject.toml packages/soothe-daemon/

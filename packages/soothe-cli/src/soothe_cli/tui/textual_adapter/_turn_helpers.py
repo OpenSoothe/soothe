@@ -139,7 +139,7 @@ async def _finalize_goal_completion_stream(
     if extra_text and extra_text not in getattr(stream_msg, "_content", ""):
         await stream_msg.append_content(extra_text)
     # Expand before ending the stream so the first post-stream layout is full
-    # markdown (avoids a collapsed preview flash for long synthesis text).
+    # body text (avoids a collapsed preview flash for long synthesis text).
     stream_msg.set_body_expanded(True)
     await stream_msg.stop_stream()
     if adapter._sync_message_content and stream_msg.id:
@@ -323,7 +323,7 @@ async def _flush_assistant_text_ns(
 ) -> None:
     """Flush accumulated assistant text for a specific namespace.
 
-    Finalizes the streaming by stopping the MarkdownStream.
+    Finalizes the streaming state on the assistant card.
     If no message exists yet, creates one with the full content.
     """
     from soothe_cli.cli.stream.task_scope import format_task_scope_prefix
