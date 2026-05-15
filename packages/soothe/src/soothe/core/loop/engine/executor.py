@@ -1036,9 +1036,14 @@ class Executor:
             tool_call_count = 0
             messages: list[BaseMessage] = []
             output = ""
-            async for final_output, event, tc_count, msg_list, _ in self._stream_and_collect(
-                stream, budget=budget
-            ):
+            async for (
+                final_output,
+                event,
+                tc_count,
+                msg_list,
+                _,
+                _tool_ids,
+            ) in self._stream_and_collect(stream, budget=budget):
                 if event is not None:
                     event_count += 1
                     yield event
@@ -1326,9 +1331,15 @@ class Executor:
             tool_call_count = 0
             messages: list[BaseMessage] = []
             delegate_final = ""
-            async for final_output, event, tc_count, msg_list, df in self._stream_and_collect(
-                stream, budget=budget
-            ):
+            root_tool_call_ids: set[str] = set()
+            async for (
+                final_output,
+                event,
+                tc_count,
+                msg_list,
+                df,
+                tc_ids,
+            ) in self._stream_and_collect(stream, budget=budget):
                 if event is not None:
                     events.append(event)
                 elif final_output is not None:
@@ -1336,8 +1347,23 @@ class Executor:
                     tool_call_count = tc_count
                     messages = msg_list
                     delegate_final = df
+                    root_tool_call_ids = tc_ids
 
             duration_ms = int((time.perf_counter() - start) * 1000)
+
+            # Emit step-tool binding events for root-graph tool calls (parallel routing)
+            for tcid in root_tool_call_ids:
+                events.append(
+                    (
+                        (),  # namespace - root graph
+                        "custom",
+                        {
+                            "type": "soothe.cognition.agent_loop.step.tool_binding",
+                            "step_id": step.id,
+                            "tool_call_id": tcid,
+                        },
+                    )
+                )
 
             # RFC-211: Aggregate outcomes from all tools in this step
             # Use the first outcome as primary (future: merge multiple)
@@ -1434,7 +1460,7 @@ class Executor:
         *,
         budget: _ActStreamBudget | None = None,
     ) -> AsyncGenerator[
-        tuple[str | None, StreamEvent | None, int, list[BaseMessage], str],
+        tuple[str | None, StreamEvent | None, int, list[BaseMessage], str, set[str]],
         None,
     ]:
         """Stream events immediately while accumulating output and counting tool calls.
@@ -1453,11 +1479,12 @@ class Executor:
             budget: Optional Act wave budget (subagent ``task`` cap, IG-130).
 
         Yields:
-            Tuple of ``(output, event, tool_call_count, messages, delegate_final_text)``:
+            Tuple of ``(output, event, tool_call_count, messages, delegate_final_text, tool_call_ids)``:
             - When event is not None: immediate display chunk (delegate_final_text empty).
             - At end: combined_output, ``tool_call_count`` (root graph plus namespaced
               subgraph ``ToolMessage`` totals), root AIMessages list, and joined ``task``
               tool bodies (ordered, capped)—empty string when no ``task`` tools ran.
+            - tool_call_ids: Set of root-graph tool_call_ids seen for step binding.
         """
         from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
@@ -1485,6 +1512,9 @@ class Executor:
         # Track tool call arguments from AI messages for logging
         tool_call_args: dict[str, dict[str, Any]] = {}
 
+        # Collect root-graph tool_call_ids for step binding (parallel routing)
+        root_tool_call_ids: set[str] = set()
+
         stream_chunk_count = 0  # Debug counter
 
         def _maybe_cap_subagent_tasks(msg: ToolMessage) -> bool:
@@ -1511,7 +1541,7 @@ class Executor:
             # Handle tuple format (namespace, mode, data) - deepagents canonical
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                 # Yield event immediately for real-time display
-                yield None, chunk, 0, [], ""
+                yield None, chunk, 0, [], "", set()
 
             stop_act_stream = False
             for msg in iter_messages_for_act_aggregation(chunk):
@@ -1519,6 +1549,10 @@ class Executor:
                     tool_call_count += 1
                     tool_call_id = msg.tool_call_id
                     tool_name = msg.name or "unknown"
+
+                    # Track root-graph tool_call_id for step binding
+                    if tool_call_id:
+                        root_tool_call_ids.add(str(tool_call_id))
 
                     if _maybe_cap_subagent_tasks(msg):
                         stop_act_stream = True
@@ -1648,7 +1682,14 @@ class Executor:
 
         total_tool_calls = tool_call_count + subgraph_tool_call_count
         # Final yield with combined output and tool call count
-        yield join_text_fragments(chunks), None, total_tool_calls, messages, delegate_final_text
+        yield (
+            join_text_fragments(chunks),
+            None,
+            total_tool_calls,
+            messages,
+            delegate_final_text,
+            root_tool_call_ids,
+        )
 
     def _build_batch_human_messages(
         self,

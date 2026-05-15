@@ -5,11 +5,12 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import ConfigDict
-from soothe_sdk.core.events import SootheEvent
+from soothe_sdk.core.events import SootheEvent, SubagentEvent
 from soothe_sdk.core.subagent_wire import (
     SUBAGENT_EXPLORE_COMPLETED,
     SUBAGENT_EXPLORE_MILESTONE,
     SUBAGENT_EXPLORE_STARTED,
+    SUBAGENT_EXPLORE_STEP_COMPLETED,
 )
 from soothe_sdk.core.verbosity import VerbosityTier
 
@@ -33,6 +34,17 @@ class ExploreMilestoneEvent(SootheEvent):
     decision: str = ""
     findings_count: int = 0
     iterations_used: int = 0
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ExploreStepCompletedEvent(SubagentEvent):
+    """One explore tool call completed (metadata only)."""
+
+    type: Literal["soothe.subagent.explore.step.completed"] = SUBAGENT_EXPLORE_STEP_COMPLETED  # type: ignore[assignment]
+    tool_name: str = ""
+    args_preview: str = ""
+    result_preview: str = ""
 
     model_config = ConfigDict(extra="allow")
 
@@ -61,6 +73,11 @@ register_event(
     summary_template="{decision} ({findings_count} findings)",
 )
 register_event(
+    ExploreStepCompletedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="{tool_name}: {args_preview}",
+)
+register_event(
     ExploreCompletedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Explore done ({total_findings} findings)",
@@ -68,13 +85,16 @@ register_event(
 
 SUBAGENT_EXPLORE_STARTED = SUBAGENT_EXPLORE_STARTED
 SUBAGENT_EXPLORE_MILESTONE = SUBAGENT_EXPLORE_MILESTONE
+SUBAGENT_EXPLORE_STEP_COMPLETED = SUBAGENT_EXPLORE_STEP_COMPLETED
 SUBAGENT_EXPLORE_COMPLETED = SUBAGENT_EXPLORE_COMPLETED
 
 __all__ = [
     "SUBAGENT_EXPLORE_COMPLETED",
     "SUBAGENT_EXPLORE_MILESTONE",
+    "SUBAGENT_EXPLORE_STEP_COMPLETED",
     "SUBAGENT_EXPLORE_STARTED",
     "ExploreCompletedEvent",
     "ExploreMilestoneEvent",
+    "ExploreStepCompletedEvent",
     "ExploreStartedEvent",
 ]

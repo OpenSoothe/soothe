@@ -58,6 +58,7 @@ from soothe_cli.tui.textual_adapter._adapter import (
     AGENT_LOOP_GOAL_STARTED,
     AGENT_LOOP_STEP_COMPLETED,
     AGENT_LOOP_STEP_STARTED,
+    AGENT_LOOP_STEP_TOOL_BINDING,
     TextualUIAdapter,
     _get_ask_user_adapter,
     _get_hitl_request_adapter,
@@ -1149,7 +1150,17 @@ async def execute_task_textual(
                                     if adapter._set_spinner:
                                         await adapter._set_spinner("Tools")
 
-                                    active_step = adapter._step_by_namespace.get(ns_key)
+                                    # Check binding first for accurate parallel routing
+                                    bound_step_id = adapter._tool_call_to_step_id.get(
+                                        str(lookup_id)
+                                    )
+                                    if bound_step_id:
+                                        active_step = adapter._current_step_messages.get(
+                                            bound_step_id
+                                        )
+                                    else:
+                                        # Fallback to namespace lookup (existing behavior)
+                                        active_step = adapter._step_by_namespace.get(ns_key)
                                     use_step_aggregator = is_main_agent and active_step is not None
                                     if use_step_aggregator:
                                         # IG-402: Pass _raw from streaming accumulator so
@@ -1326,6 +1337,18 @@ async def execute_task_textual(
 
                                 continue
 
+                        if event_type == AGENT_LOOP_STEP_TOOL_BINDING:
+                            step_id = str(data.get("step_id", "")).strip()
+                            tool_call_id = str(data.get("tool_call_id", "")).strip()
+                            if step_id and tool_call_id:
+                                adapter._tool_call_to_step_id[tool_call_id] = step_id
+                                logger.debug(
+                                    "Tool-step binding: tool_call_id=%s → step_id=%s",
+                                    tool_call_id,
+                                    step_id,
+                                )
+                            continue
+
                         if event_type == AGENT_LOOP_STEP_COMPLETED:
                             step_id = str(data.get("step_id", "")).strip()
                             if step_id:
@@ -1357,6 +1380,10 @@ async def execute_task_textual(
                                     ]
                                     for k in stale_tool_ids:
                                         adapter._tool_to_step.pop(k, None)
+                                    # Clean up tool-to-step bindings for this step
+                                    for k in list(adapter._tool_call_to_step_id.keys()):
+                                        if adapter._tool_call_to_step_id.get(k) == step_id:
+                                            adapter._tool_call_to_step_id.pop(k, None)
                                     for k, parent in list(adapter._tool_display_by_call_id.items()):
                                         if parent is widget:
                                             adapter._tool_display_by_call_id.pop(k, None)
