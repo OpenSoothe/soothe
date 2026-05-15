@@ -1,87 +1,16 @@
 # Specialized Subagents
 
-Core Soothe ships **explore**, **plan**, and **research** subagents. **Browser**, **Claude**, **Skillify**, and **Weaver** are optional capabilities from **`soothe-community`** (install the package and enable the matching `subagents.*` entries).
+Core Soothe ships **explore**, **plan**, and **research** subagents. Additional optional delegated agents (extra slash commands, numeric prefixes, and install steps) are maintained in the **`soothe-community`** repository—see that project’s README and docs.
 
 ## Overview
 
 | Subagent | Slash Command | Prefix | Best For |
 |----------|--------------|--------|----------|
-| Browser | `/browser <query>` | `5` | Web browsing (requires `soothe-community[browser]`) |
-| Claude | `/claude <query>` | `6` | Claude Code agent (requires `soothe-community[claude]`) |
+| Research | `/research <query>` | (see TUI guide) | Multi-source investigation |
+| Explore | `/explore <query>` | (see TUI guide) | Readonly repository search |
+| Plan | `/plan` or `/plan <prompt>` | — | Plan-mode routing |
 | Skillify | `/skillify <query>` | `7` | Skill retrieval and discovery |
 | Weaver | `/weaver <query>` | `8` | Agent generation |
-
-## Browser Agent
-
-Automated web browsing and automation.
-
-**Capabilities**:
-- Navigate pages
-- Fill forms
-- Click elements
-- Take screenshots
-- Extract content
-
-**Installation**:
-```bash
-pip install "soothe-community[browser]"
-```
-
-**Usage**:
-```bash
-# In TUI
-/browser Open https://example.com and extract the main content
-
-# With prefix
-5 Navigate to the login page and fill the form with test credentials
-```
-
-**Privacy**: Extensions, cloud sync, and telemetry are disabled by default.
-
-**Configuration**:
-```yaml
-subagents:
-  browser:
-    enabled: true
-    config:
-      runtime_dir: ""  # Empty = use SOOTHE_HOME/agents/browser/
-      disable_extensions: true  # Disable uBlock Origin, cookie handler
-      disable_cloud: true  # Disable browser-use cloud service
-      disable_telemetry: true  # Disable anonymous telemetry
-```
-
-## Claude Agent
-
-Direct access to Claude for complex reasoning tasks.
-
-**Capabilities**:
-- Long context reasoning (200K tokens)
-- Careful analysis
-- Complex problem-solving
-- Nuanced understanding
-
-**Installation**:
-```bash
-pip install "soothe-community[claude]"
-export ANTHROPIC_API_KEY=sk-ant-your-key-here
-```
-
-**Usage**:
-```bash
-# In TUI
-/claude Analyze this complex argument and identify logical fallacies
-
-# With prefix
-6 Provide a detailed analysis of this research paper's methodology
-```
-
-**Configuration**:
-```yaml
-subagents:
-  claude:
-    enabled: true
-    model: "anthropic:claude-sonnet-4-20250514"  # Optional override
-```
 
 ## Skillify Agent
 
@@ -149,23 +78,17 @@ subagents:
 
 ### Slash Commands
 
-Direct routing with slash commands:
+Direct routing with slash commands for core agents:
 ```bash
-/browser <query>   # Route to Browser
-/claude <query>    # Route to Claude
+/research <query>  # Route to Research
+/explore <query>   # Route to Explore
 /skillify <query>  # Route to Skillify
 /weaver <query>    # Route to Weaver
 ```
 
 ### Prefix Routing
 
-Route with numeric prefix:
-```bash
-5 <query>  # Route to Browser
-6 <query>  # Route to Claude
-7 <query>  # Route to Skillify
-8 <query>  # Route to Weaver
-```
+Route with numeric prefix (see [TUI Guide](tui-guide.md) for the current mapping on your install).
 
 ### Default Behavior
 
@@ -176,14 +99,14 @@ Without a prefix or slash command, queries go to the Main agent (prefix `1`):
 
 ## Examples
 
-### Web Browsing
+### Research
 ```bash
-/browser Open https://news.ycombinator.com and extract the top 5 stories
+/research Compare vector databases for RAG workloads
 ```
 
-### Complex Analysis
+### Explore
 ```bash
-/claude Analyze this codebase and identify potential security vulnerabilities
+/explore Find where authentication middleware is registered
 ```
 
 ### Skill Discovery

@@ -3,7 +3,7 @@
 This example demonstrates CoreAgent with configured subagents:
 - Subagent configuration from config/config.dev.yml
 - Delegation to first-party subagents such as explore, plan, and research when enabled
-- Optional community plugins (for example browser automation) when installed and configured
+- Optional community plugins when installed and configured
 
 Use case: Agent that can delegate specialized tasks to expert subagents
 (filesystem search, planning, research, etc.)
@@ -75,8 +75,8 @@ async def main() -> None:
     print("Query 2: Optional community plugins")
     print("=" * 40)
     print(
-        "Skipping optional web automation: install soothe-community and enable "
-        "subagents.browser to try /browser or Task(browser, ...) flows."
+        "Skipping optional web automation: install soothe-community and enable the matching "
+        "subagent entries from that package’s documentation."
     )
 
     # Example using research tool (if enabled in config)
@@ -92,7 +92,7 @@ async def main() -> None:
     print("\n" + "=" * 60)
     print("Example completed successfully!")
     print("=" * 60)
-    print("\nTip: Install soothe-community and enable subagents.browser for web automation.")
+    print("\nTip: For optional delegated agents from soothe-community, follow that package’s README.")
 
 
 if __name__ == "__main__":

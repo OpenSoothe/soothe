@@ -4,7 +4,7 @@
 
 Soothe is a Goal-driven orchestration framework for building 24/7 long-running autonomous agents. It extends deepagents with planning, context engineering, security policy, durability, and remote agent interoperability while remaining langchain-ecosystem-friendly.
 
-Soothe can work autonomously on complex tasks, maintain context across long conversations, and leverage specialized subagents for different types of work including web browsing, complex reasoning, skill retrieval, and agent generation.
+Soothe can work autonomously on complex tasks, maintain context across long conversations, and leverage specialized subagents for different types of work including filesystem search, planning, research synthesis, skill retrieval, and agent generation.
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ Browse the complete Soothe documentation organized by user journey.
 
 ### 📖 User Guides
 
-- [Specialized Subagents](wiki/subagents.md) - Overview of Browser, Claude, Skillify, and Weaver subagents
+- [Specialized Subagents](wiki/subagents.md) - Core explore, plan, and research; optional agents from soothe-community
 - [Autonomous Mode](wiki/autonomous-mode.md) - Enable autonomous iteration for complex tasks
 - [Thread Management](wiki/thread-management.md) - Work with conversation threads and maintain context
 
@@ -109,7 +109,7 @@ Technical documentation for developers and system architects.
 | [IG-021](impl/021-daemon-lifecycle-fixes.md) | Daemon Lifecycle Fixes |
 | [IG-022](impl/022-unified-persistence-storage.md) | Unified Persistence Storage |
 | [IG-023](impl/023-failure-recovery-progressive-persistence.md) | Failure Recovery, Progressive Persistence |
-| [IG-024](impl/024-existing-browser-connection.md) | Existing Browser Connection |
+| [IG-024](impl/024-existing-browser-connection.md) | Existing Web Session Connection |
 | [IG-025](impl/025-subagent-progress-visibility.md) | Subagent Progress Visibility |
 | [IG-026](impl/026-rfc0009-logging-enhancements.md) | RFC-200 Logging Enhancements |
 | [IG-027](impl/027-final-report-cli-output.md) | Final Report CLI Output |

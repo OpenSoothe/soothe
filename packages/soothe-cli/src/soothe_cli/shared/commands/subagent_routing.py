@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
-    "browser": "Browser",
-    "claude": "Claude",
     "research": "Research",
     "explore": "Explore",
 }
 
-BUILTIN_SUBAGENT_NAMES: list[str] = list(SUBAGENT_DISPLAY_NAMES.keys())
+# Lowercase ids matched after ``/`` for preferred_subagent routing (core only).
+SUBAGENT_SLASH_ROUTE_IDS: tuple[str, ...] = ("research", "explore")
+
+BUILTIN_SUBAGENT_NAMES: list[str] = list(SUBAGENT_SLASH_ROUTE_IDS)
 
 
 def get_subagent_display_name(technical_name: str) -> str:
@@ -19,18 +20,18 @@ def get_subagent_display_name(technical_name: str) -> str:
         technical_name: Internal subagent name.
 
     Returns:
-        PascalCase display name.
+        Title-cased label for first-party ids; otherwise the raw id string.
     """
-    return SUBAGENT_DISPLAY_NAMES.get(
-        technical_name,
-        technical_name.replace("_", " ").title().replace(" ", ""),
-    )
+    key = (technical_name or "").strip()
+    if key.lower() in SUBAGENT_DISPLAY_NAMES:
+        return SUBAGENT_DISPLAY_NAMES[key.lower()]
+    return key
 
 
 def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
     """Parse subagent subcommand from user input.
 
-    Detects subagent routing commands (e.g. `/research`, `/explore`, `/plan`, or `/<id>` when configured)
+    Detects subagent routing commands (e.g. ``/research``, ``/explore``)
     and extracts the subagent name along with the cleaned input text.
 
     Args:
@@ -48,7 +49,7 @@ def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
     """
     first_match: tuple[int, str] | None = None
 
-    for subagent_name in BUILTIN_SUBAGENT_NAMES:
+    for subagent_name in SUBAGENT_SLASH_ROUTE_IDS:
         subcommand = f"/{subagent_name}"
         idx = user_input.lower().find(subcommand)
         if idx != -1 and (first_match is None or idx < first_match[0]):

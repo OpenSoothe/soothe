@@ -266,20 +266,8 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "requires_loop": True,
         "handler": show_autopilot_dashboard,
     },
-    # Daemon routing commands (5)
+    # Daemon routing commands (3)
     "/plan": {"location": "daemon", "type": "routing", "description": "Trigger plan mode"},
-    "/browser": {
-        "location": "daemon",
-        "type": "routing",
-        "description": "Route query to subagent id `browser` (soothe-community)",
-        "requires_query": True,
-    },
-    "/claude": {
-        "location": "daemon",
-        "type": "routing",
-        "description": "Route query to subagent id `claude` (soothe-community)",
-        "requires_query": True,
-    },
     "/research": {
         "location": "daemon",
         "type": "routing",

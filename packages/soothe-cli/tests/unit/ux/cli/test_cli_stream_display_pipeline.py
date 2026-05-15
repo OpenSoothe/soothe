@@ -7,7 +7,7 @@ in message widgets. Headless mode does not print tool/progress lines.
 
 from __future__ import annotations
 
-from soothe_sdk.core.subagent_wire import SUBAGENT_CLAUDE_STEP_COMPLETED
+from soothe_sdk.core.subagent_wire import SUBAGENT_EXPLORE_STEP_COMPLETED
 
 from soothe_cli.cli.stream.context import PipelineContext
 from soothe_cli.cli.stream.display_line import DisplayLine, indent_for_level
@@ -95,16 +95,16 @@ class TestStreamDisplayPipelineTaskScope:
 
     def test_task_scope_from_event_accepts_list_pair(self) -> None:
         pl = StreamDisplayPipeline()
-        assert pl._task_scope_from_event({"task_scope": ["call-1", "browser"]}) == (
+        assert pl._task_scope_from_event({"task_scope": ["call-1", "research"]}) == (
             "call-1",
-            "browser",
+            "research",
         )
 
     def test_task_scope_from_event_accepts_tuple_pair(self) -> None:
         pl = StreamDisplayPipeline()
-        assert pl._task_scope_from_event({"task_scope": ("call-1", "browser")}) == (
+        assert pl._task_scope_from_event({"task_scope": ("call-1", "research")}) == (
             "call-1",
-            "browser",
+            "research",
         )
 
 
@@ -165,15 +165,15 @@ class TestFormatters:
     def test_format_subagent_done_task_scope_with_answer_summary(self) -> None:
         """IG-344: Optional answer tail after completion metrics inside Task scope."""
         line = format_subagent_done(
-            "$0.01, session=abc12345",
+            "2 findings, 4 iterations (medium)",
             40.852,
-            task_scope=("functions.task:0", "claude"),
+            task_scope=("functions.task:0", "explore"),
             task_description="Count README files",
             answer_summary="Found 88 README files in the workspace.",
         )
         assert (
             line.content
-            == 'Task(claude, "Count README files") -> ✓ Completed (40.9s): Found 88 README files in the workspace.'
+            == 'Task(explore, "Count README files") -> ✓ Completed (40.9s): Found 88 README files in the workspace.'
         )
 
     def test_format_step_done(self) -> None:
@@ -264,19 +264,19 @@ class TestStreamDisplayPipeline:
     This pipeline focuses on goal/step/subagent progress events.
     """
 
-    def test_claude_step_wire_emits_task_scoped_milestone(self) -> None:
-        """IG-344: Claude tool-use wire events render as Task-scoped milestones."""
+    def test_explore_step_wire_emits_task_scoped_milestone(self) -> None:
+        """IG-344: Explore tool-use wire events render as Task-scoped milestones."""
         pipeline = StreamDisplayPipeline()
         event = {
-            "type": SUBAGENT_CLAUDE_STEP_COMPLETED,
+            "type": SUBAGENT_EXPLORE_STEP_COMPLETED,
             "tool_name": "Glob",
-            "input_preview": "pattern=**/*.md",
-            "task_scope": ("functions.task:0", "claude"),
+            "args_preview": "pattern=**/*.md",
+            "task_scope": ("functions.task:0", "explore"),
         }
         lines = pipeline.process(event)
         assert len(lines) == 1
         assert lines[0].icon == "⚙"
-        assert "Task(claude):#0" in lines[0].content
+        assert "Task(explore):#0" in lines[0].content
         assert "Glob" in lines[0].content
 
     def test_goal_started(self) -> None:
@@ -686,17 +686,15 @@ class TestStreamDisplayPipeline:
         # Second call should be deduped (no lines)
         assert lines2 == []
 
-    def test_capability_browser_step_renders_at_normal_verbosity(self) -> None:
-        """Browser step.completed wire events are NORMAL tier — visible at normal."""
+    def test_explore_step_renders_at_normal_verbosity(self) -> None:
+        """Explore step.completed wire events are NORMAL tier — visible at normal."""
         pipeline = StreamDisplayPipeline()
         event = {
-            "type": "soothe.subagent.browser.step.completed",
-            "step_index": 3,
-            "url": "https://example.com/news",
-            "action_preview": "scroll",
-            "title": "News",
+            "type": "soothe.subagent.explore.step.completed",
+            "tool_name": "Glob",
+            "args_preview": "pattern=**/*.md",
             "status": "running",
         }
         lines = pipeline.process(event)
         assert len(lines) == 1
-        assert "scroll" in lines[0].content
+        assert "Glob" in lines[0].content

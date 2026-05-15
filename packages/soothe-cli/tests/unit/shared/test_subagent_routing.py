@@ -13,8 +13,6 @@ from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_inpu
 @pytest.mark.parametrize(
     ("raw", "expected_subagent", "expected_text"),
     [
-        ("/browser open x", "browser", "open x"),
-        ("/claude reason", "claude", "reason"),
         ("/research papers", "research", "papers"),
         ("/explore find files", "explore", "find files"),
         ("Please /explore search code", "explore", "Please search code"),
@@ -26,23 +24,23 @@ from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_inpu
 def test_parse_subagent_from_input(
     raw: str, expected_subagent: str | None, expected_text: str
 ) -> None:
-    """Built-in /browser, /claude, /research set subagent; other text is unchanged."""
+    """Slash prefixes for core subagents set preferred routing; other text is unchanged."""
     subagent, cleaned = parse_subagent_from_input(raw)
     assert subagent == expected_subagent
     assert cleaned == expected_text
 
 
 @pytest.mark.asyncio
-async def test_handle_routing_command_sets_subagent_for_browser() -> None:
+async def test_handle_routing_command_sets_subagent_for_research() -> None:
     """Routing handler must send cleaned text and WebSocket subagent field."""
     client = MagicMock()
     client.send_input = AsyncMock()
     console = MagicMock()
 
-    await handle_routing_command("/browser open example.com", console, client, loop_id="loop-a")
+    await handle_routing_command("/research summarize pyproject.toml", console, client, loop_id="loop-a")
 
     client.send_input.assert_awaited_once_with(
-        "loop-a", "open example.com", preferred_subagent="browser"
+        "loop-a", "summarize pyproject.toml", preferred_subagent="research"
     )
 
 
