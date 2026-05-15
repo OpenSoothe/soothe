@@ -33,6 +33,7 @@ from soothe.core.context.model_override import (
     attach_stream_model_override,
     reset_stream_model_override,
 )
+from soothe.core.events.constants import AGENT_LOOP_STEP_TOOL_BINDING
 from soothe.core.loop.engine.hitl_scope import (
     _MAX_HITL_ITERATIONS,
     auto_approve_interrupt_resume_payload,
@@ -52,7 +53,6 @@ from soothe.core.loop.state.schemas import (
     StepAction,
     StepResult,
 )
-from soothe.core.events.constants import AGENT_LOOP_STEP_TOOL_BINDING
 from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.middleware.tool_concurrency import init_tool_concurrency_for_thread
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config

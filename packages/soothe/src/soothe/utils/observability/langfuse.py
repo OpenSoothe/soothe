@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -16,6 +17,8 @@ _ENV_REF = re.compile(r"^\$\{(\w+)\}$")
 _INIT_LOCK = threading.Lock()
 _CLIENT_INITIALIZED_FOR_PUBLIC_KEY: set[str] = set()
 _HANDLERS: dict[str, Any] = {}
+# Thread pool for non-blocking Langfuse initialization (prevents event loop blocking)
+_LANGFUSE_EXECUTOR: ThreadPoolExecutor | None = None
 
 
 def _resolved_langfuse_tags(soothe_config: SootheConfig) -> list[str] | None:
@@ -47,8 +50,29 @@ def resolve_langfuse_config_str(value: str | None) -> str | None:
     return _resolve_str(value)
 
 
+def _get_executor() -> ThreadPoolExecutor:
+    """Get or create the thread pool executor for Langfuse initialization."""
+    global _LANGFUSE_EXECUTOR
+    if _LANGFUSE_EXECUTOR is None:
+        _LANGFUSE_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="langfuse-init")
+    return _LANGFUSE_EXECUTOR
+
+
+def _init_langfuse_client_sync(kwargs: dict[str, Any]) -> None:
+    """Synchronous Langfuse client initialization (runs in thread pool)."""
+    from langfuse import Langfuse
+
+    Langfuse(**kwargs)
+
+
 def _ensure_langfuse_client(soothe_config: SootheConfig) -> None:
-    """Register a Langfuse SDK client when both public and secret keys are configured."""
+    """Register a Langfuse SDK client when both public and secret keys are configured.
+
+    This function is called from sync context (e.g., during model creation or config building).
+    Runs initialization in a background thread WITHOUT blocking the calling thread.
+    The Langfuse client will be initialized asynchronously; callbacks will still work
+    because the handler references the client lazily.
+    """
     lf = soothe_config.observability.langfuse
     pub = _resolve_str(lf.public_key)
     sec = _resolve_str(lf.secret_key)
@@ -57,7 +81,9 @@ def _ensure_langfuse_client(soothe_config: SootheConfig) -> None:
     with _INIT_LOCK:
         if pub in _CLIENT_INITIALIZED_FOR_PUBLIC_KEY:
             return
-        from langfuse import Langfuse
+
+        # Mark as initializing immediately to prevent duplicate attempts
+        _CLIENT_INITIALIZED_FOR_PUBLIC_KEY.add(pub)
 
         kwargs: dict[str, Any] = {"public_key": pub, "secret_key": sec}
         host = _resolve_str(lf.host)
@@ -73,8 +99,20 @@ def _ensure_langfuse_client(soothe_config: SootheConfig) -> None:
                 kwargs["release"] = rel
         if lf.sample_rate is not None:
             kwargs["sample_rate"] = float(lf.sample_rate)
-        Langfuse(**kwargs)
-        _CLIENT_INITIALIZED_FOR_PUBLIC_KEY.add(pub)
+
+        # Submit to background thread WITHOUT waiting - non-blocking
+        executor = _get_executor()
+        executor.submit(_init_langfuse_client_sync, kwargs)
+        logger.debug("Langfuse client initialization submitted to background thread")
+
+
+async def _ensure_langfuse_client_async(soothe_config: SootheConfig) -> None:
+    """Async version of Langfuse client initialization for use in async context.
+
+    Runs the initialization in a thread pool executor without blocking the event loop.
+    The actual initialization happens in background; we don't wait for completion.
+    """
+    _ensure_langfuse_client(soothe_config)  # Already non-blocking now
 
 
 def _langfuse_callback_handler(soothe_config: SootheConfig) -> Any | None:
