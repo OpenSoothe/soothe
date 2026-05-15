@@ -20,9 +20,11 @@ from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
 from soothe_sdk.ux.task_namespace import (
-    enqueue_task_spawn,
     maybe_bind_namespace,
+    register_task_spawn_for_step,
+    resolve_task_parent_lookup,
     resolve_task_scope_for_namespace,
+    scoped_subgraph_tool_key,
 )
 
 from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
@@ -82,6 +84,7 @@ from soothe_cli.tui.textual_adapter._stream_messages import (
 from soothe_cli.tui.textual_adapter._turn_helpers import (
     _adapter_has_pending_tools,
     _finalize_goal_completion_stream,
+    _goal_completion_time_footer_if_needed,
     _flush_assistant_text_ns,
     _handle_interrupt_cleanup,
     _hitl_reject_step_tool_rows,
@@ -261,11 +264,15 @@ async def execute_task_textual(
     pending_text_by_namespace: dict[tuple, str] = {}
     assistant_message_by_namespace: dict[tuple, Any] = {}
     goal_completion_stream_by_namespace: dict[tuple, AssistantMessage] = {}
+    goal_loop_start_monotonic: float | None = None
     task_loop_assistant_by_tcid: dict[str, str] = {}
     # IG-334 Task tool FIFO binding (parity with ``EventProcessor`` / SDK helpers)
-    task_spawn_queue: deque[tuple[str, str]] = deque()
-    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str]] = {}
-    task_spawn_recorded: set[str] = set()
+    task_spawn_queue: deque[tuple[str, str, str]] = deque()
+    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
+    task_spawn_recorded: set[tuple[str, str]] = set()
+    spawns_by_step_id: dict[str, tuple[str, str, str]] = {}
+    pending_namespace_by_step: dict[str, list[tuple[str, ...]]] = {}
+    active_loop_step_id: str = ""
 
     # Clear media from tracker after creating the message
     if image_tracker:
@@ -381,6 +388,9 @@ async def execute_task_textual(
                             namespace_task_bindings,
                             task_spawn_queue,
                             ns_key,
+                            active_step_id=active_loop_step_id,
+                            spawns_by_step=spawns_by_step_id,
+                            pending_namespaces_by_step=pending_namespace_by_step,
                         )
 
                     if not isinstance(data, (list, tuple)) or len(data) != 2:  # noqa: PLR2004
@@ -458,23 +468,28 @@ async def execute_task_textual(
 
                         # Update tool call status with output (unified ToolMessage / wire dict)
                         sid = str(tool_id) if tool_id else ""
+                        row_key = (
+                            scoped_subgraph_tool_key(ns_key, sid)
+                            if sid and not is_main_agent
+                            else sid
+                        )
                         output_str = tool_card.output_display
                         handled_step = False
-                        if sid:
-                            step_w = adapter._tool_to_step.pop(sid, None)
+                        if row_key:
+                            step_w = adapter._tool_to_step.pop(row_key, None)
                             if step_w is not None:
                                 handled_step = True
-                                dur_ms = step_w.row_duration_ms_since_started(sid)
+                                dur_ms = step_w.row_duration_ms_since_started(row_key)
                                 logger.debug(
                                     "Tool result matched step row: tool_call_id=%s error=%s",
-                                    sid,
+                                    row_key,
                                     tool_card.is_error,
                                 )
                                 if not tool_card.is_error:
-                                    step_w.set_tool_success(sid, output_str, duration_ms=dur_ms)
+                                    step_w.set_tool_success(row_key, output_str, duration_ms=dur_ms)
                                 else:
                                     step_w.set_tool_error(
-                                        sid, output_str or "Error", duration_ms=dur_ms
+                                        row_key, output_str or "Error", duration_ms=dur_ms
                                     )
                                     await dispatch_hook(
                                         "tool.error",
@@ -512,15 +527,23 @@ async def execute_task_textual(
                                 )
 
                         handled_task_inner = False
-                        if sid and show_tool_ui and presentation.tier_visible(VerbosityTier.NORMAL):
-                            pending_ln = adapter._task_inner_tool_pending_lines.pop(sid, None)
-                            start_tm = adapter._task_inner_tool_start_times.pop(sid, None)
+                        if (
+                            row_key
+                            and show_tool_ui
+                            and presentation.tier_visible(VerbosityTier.NORMAL)
+                        ):
+                            pending_ln = adapter._task_inner_tool_pending_lines.pop(row_key, None)
+                            start_tm = adapter._task_inner_tool_start_times.pop(row_key, None)
                             if pending_ln:
                                 ts_ap = resolve_task_scope_for_namespace(
                                     namespace_task_bindings, ns_key
                                 )
                                 if ts_ap and ts_ap[0]:
-                                    parent_task = adapter._tool_display_by_call_id.get(ts_ap[0])
+                                    parent_task = resolve_task_parent_lookup(
+                                        ts_ap,
+                                        step_cards=adapter._current_step_messages,
+                                        tool_display_by_call_id=adapter._tool_display_by_call_id,
+                                    )
                                     if parent_task is not None:
                                         duration_ms = (
                                             int((time.time() - start_tm) * 1000) if start_tm else 0
@@ -726,6 +749,8 @@ async def execute_task_textual(
                                     goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
                                     assistant_message_by_namespace=assistant_message_by_namespace,
                                     extra_text="",
+                                    goal_loop_start_monotonic=goal_loop_start_monotonic,
+                                    turn_start_monotonic=start_time,
                                 )
                             continue
 
@@ -737,6 +762,8 @@ async def execute_task_textual(
                                 goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
                                 assistant_message_by_namespace=assistant_message_by_namespace,
                                 extra_text=output_text,
+                                goal_loop_start_monotonic=goal_loop_start_monotonic,
+                                turn_start_monotonic=start_time,
                             )
                             continue
 
@@ -773,17 +800,24 @@ async def execute_task_textual(
                             pending_text_by_namespace[ns_key] = ""
                             assistant_message_by_namespace.pop(ns_key, None)
 
+                        repaired_output = RendererBase.repair_concatenated_output(output_text)
+                        footer = _goal_completion_time_footer_if_needed(
+                            repaired_output,
+                            goal_loop_start_monotonic=goal_loop_start_monotonic,
+                            turn_start_monotonic=start_time,
+                        )
+                        if footer:
+                            repaired_output += footer
                         output_widget = AssistantMessage(
-                            RendererBase.repair_concatenated_output(output_text),
+                            repaired_output,
                             id=f"asst-{uuid.uuid4().hex[:8]}",
                         )
                         await adapter._mount_message(output_widget)
                         await output_widget.write_initial_content()
-                        output_widget.set_body_expanded(True)
                         if adapter._sync_message_content and output_widget.id:
                             adapter._sync_message_content(
                                 output_widget.id,
-                                RendererBase.repair_concatenated_output(output_text),
+                                repaired_output,
                             )
                         assistant_message_by_namespace[ns_key] = output_widget
 
@@ -817,7 +851,11 @@ async def execute_task_textual(
                                 ):
                                     tcid = str(task_scope_txt[0] or "").strip()
                                     if tcid:
-                                        parent_tool = adapter._tool_display_by_call_id.get(tcid)
+                                        parent_tool = resolve_task_parent_lookup(
+                                            task_scope_txt,
+                                            step_cards=adapter._current_step_messages,
+                                            tool_display_by_call_id=adapter._tool_display_by_call_id,
+                                        )
                                         if parent_tool is not None and hasattr(
                                             parent_tool, "set_result_preview"
                                         ):
@@ -958,42 +996,72 @@ async def execute_task_textual(
 
                             args_meaningful = bool(parsed_args)
 
-                            # IG-403: Early task registration — enqueue spawn and mount task card
-                            # as soon as we have an id and args, before defer/elide guards.
-                            # This ensures namespace_task_bindings is populated so subagent tools
-                            # that arrive concurrently can resolve their parent card.
+                            # IG-403: Per-step task spawn + namespace bind (not global FIFO).
                             if (
                                 lookup_id
                                 and is_main_agent
                                 and buffer_name == "task"
                                 and args_meaningful
-                                and lookup_id not in task_spawn_recorded
                             ):
-                                enqueue_task_spawn(
-                                    task_spawn_queue,
-                                    tool_name="task",
-                                    args=parsed_args,
-                                    tool_call_id=str(lookup_id),
-                                    is_main=True,
-                                )
-                                task_spawn_recorded.add(str(lookup_id))
-                                # Mount ToolCallMessage task card immediately so subagent tools
-                                # can resolve it as their parent via _tool_display_by_call_id.
-                                if lookup_id not in adapter._current_tool_messages:
-                                    task_card = ToolCallMessage(
-                                        buffer_name,
-                                        parsed_args,
-                                        tool_call_id=lookup_id,
+                                bound_step_id = (
+                                    active_loop_step_id
+                                    or adapter._tool_call_to_step_id.get(str(lookup_id), "")
+                                ).strip()
+                                spawn_key = (bound_step_id, str(lookup_id))
+                                if spawn_key not in task_spawn_recorded:
+                                    raw_st = parsed_args.get("subagent_type", "")
+                                    subagent_type = (
+                                        raw_st.strip() if isinstance(raw_st, str) else ""
                                     )
-                                    await adapter._mount_message(task_card)
-                                    task_card.set_running()
-                                    adapter._current_tool_messages[lookup_id] = task_card
-                                    adapter._tool_display_by_call_id[str(lookup_id)] = task_card
-                                    logger.debug(
-                                        "Task subagent card mounted early (pre-defer): "
-                                        "tool_call_id=%s",
-                                        lookup_id,
+                                    scope = (
+                                        str(lookup_id),
+                                        subagent_type or "?",
+                                        bound_step_id,
                                     )
+                                    register_task_spawn_for_step(
+                                        namespace_task_bindings,
+                                        task_spawn_queue,
+                                        spawns_by_step_id,
+                                        pending_namespace_by_step,
+                                        scope,
+                                    )
+                                    task_spawn_recorded.add(spawn_key)
+                                    if bound_step_id:
+                                        step_w = adapter._current_step_messages.get(bound_step_id)
+                                        if step_w is not None:
+                                            raw_spawn = ""
+                                            pend_spawn = pending_tool_calls_lc.get(str(lookup_id))
+                                            if isinstance(pend_spawn, dict):
+                                                raw_spawn = str(pend_spawn.get("args_str", ""))
+                                            if not step_w.has_tool_call_row(str(lookup_id)):
+                                                step_w.add_tool_call(
+                                                    str(lookup_id),
+                                                    buffer_name or "task",
+                                                    parsed_args,
+                                                    raw_args=raw_spawn,
+                                                )
+                                            adapter._tool_to_step[str(lookup_id)] = step_w
+                                            logger.debug(
+                                                "Task row on step card (pre-defer): "
+                                                "step_id=%s tool_call_id=%s",
+                                                bound_step_id,
+                                                lookup_id,
+                                            )
+                                    elif lookup_id not in adapter._current_tool_messages:
+                                        task_card = ToolCallMessage(
+                                            buffer_name,
+                                            parsed_args,
+                                            tool_call_id=lookup_id,
+                                        )
+                                        await adapter._mount_message(task_card)
+                                        task_card.set_running()
+                                        adapter._current_tool_messages[lookup_id] = task_card
+                                        adapter._tool_display_by_call_id[str(lookup_id)] = task_card
+                                        logger.debug(
+                                            "Task subagent card mounted early (pre-defer): "
+                                            "tool_call_id=%s",
+                                            lookup_id,
+                                        )
 
                             if not args_meaningful and _defer_tool_card_for_empty_streaming_args(
                                 message
@@ -1045,7 +1113,12 @@ async def execute_task_textual(
                                 tool_call_buffers.pop(buffer_key, None)
                                 continue
 
-                            if lookup_id and lookup_id not in displayed_tool_ids:
+                            display_key = (
+                                scoped_subgraph_tool_key(ns_key, str(lookup_id))
+                                if lookup_id and not is_main_agent
+                                else str(lookup_id)
+                            )
+                            if display_key and display_key not in displayed_tool_ids:
                                 if _defer_first_tool_card_mount_until_final_stream_chunk(message):
                                     logger.debug(
                                         "Tool call first mount deferred (non-final stream chunk): "
@@ -1063,7 +1136,7 @@ async def execute_task_textual(
                                     ),
                                 )
                                 if elide_empty_args_card:
-                                    displayed_tool_ids.add(lookup_id)
+                                    displayed_tool_ids.add(display_key)
                                     _try_register_task_scoped_inner_tool_pending(
                                         adapter,
                                         lookup_id=str(lookup_id),
@@ -1115,7 +1188,7 @@ async def execute_task_textual(
                                         lookup_id,
                                     )
                                 else:
-                                    displayed_tool_ids.add(lookup_id)
+                                    displayed_tool_ids.add(display_key)
                                     _try_register_task_scoped_inner_tool_pending(
                                         adapter,
                                         lookup_id=str(lookup_id),
@@ -1151,8 +1224,9 @@ async def execute_task_textual(
                                         await adapter._set_spinner("Tools")
 
                                     # Check binding first for accurate parallel routing
-                                    bound_step_id = adapter._tool_call_to_step_id.get(
-                                        str(lookup_id)
+                                    bound_step_id = (
+                                        active_loop_step_id
+                                        or adapter._tool_call_to_step_id.get(str(lookup_id))
                                     )
                                     if bound_step_id:
                                         active_step = adapter._current_step_messages.get(
@@ -1268,6 +1342,7 @@ async def execute_task_textual(
 
                         if event_type == AGENT_LOOP_GOAL_STARTED:
                             if not ns_key:
+                                goal_loop_start_monotonic = time.monotonic()
                                 adapter._last_completed_main_step_execute_prose = ""
                                 adapter._last_main_flushed_assistant_prose = ""
                             pending_text = pending_text_by_namespace.get(ns_key, "")
@@ -1348,11 +1423,14 @@ async def execute_task_textual(
                                     step_id,
                                 )
                                 adapter.apply_tool_step_binding(tool_call_id, step_id)
+                                active_loop_step_id = step_id
                             continue
 
                         if event_type == AGENT_LOOP_STEP_COMPLETED:
                             step_id = str(data.get("step_id", "")).strip()
                             if step_id:
+                                if active_loop_step_id == step_id:
+                                    active_loop_step_id = ""
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
                                     await _flush_assistant_text_ns(
@@ -1443,6 +1521,9 @@ async def execute_task_textual(
                                 namespace_task_bindings,
                                 task_spawn_queue,
                                 ns_key,
+                                active_step_id=active_loop_step_id,
+                                spawns_by_step=spawns_by_step_id,
+                                pending_namespaces_by_step=pending_namespace_by_step,
                             )
                         task_scope = resolve_task_scope_for_namespace(
                             namespace_task_bindings, ns_key
@@ -1453,9 +1534,13 @@ async def execute_task_textual(
                             and is_allowlisted_subagent_event_type(event_type)
                         ):
                             tcid = task_scope[0]
-                            card = adapter._tool_display_by_call_id.get(
-                                tcid
-                            ) or adapter._current_tool_messages.get(tcid)
+                            card = resolve_task_parent_lookup(
+                                task_scope,
+                                step_cards=adapter._current_step_messages,
+                                tool_display_by_call_id=adapter._tool_display_by_call_id,
+                            )
+                            if card is None and tcid:
+                                card = adapter._current_tool_messages.get(tcid)
                             ev_wire = dict(data)
                             ev_wire.setdefault("type", event_type)
                             ev_wire["namespace"] = list(ns_key)
@@ -1524,6 +1609,8 @@ async def execute_task_textual(
                     goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
                     assistant_message_by_namespace=assistant_message_by_namespace,
                     extra_text="",
+                    goal_loop_start_monotonic=goal_loop_start_monotonic,
+                    turn_start_monotonic=start_time,
                 )
             pending_text_by_namespace.clear()
             assistant_message_by_namespace.clear()

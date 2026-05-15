@@ -65,8 +65,10 @@ class ProcessorState:
     """(phase, namespace) pairs that already emitted final loop-tagged output this turn."""
 
     # Task tool spawn queue → bind first subgraph namespace (FIFO; IG-334)
-    task_spawn_queue: deque[tuple[str, str]] = field(default_factory=deque)
-    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str]] = field(default_factory=dict)
+    task_spawn_queue: deque[tuple[str, str, str]] = field(default_factory=deque)
+    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str, str]] = field(
+        default_factory=dict
+    )
 
     def reset_turn(self) -> None:
         """Reset per-turn state.
