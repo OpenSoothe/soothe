@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import patch
 
 import pytest
@@ -64,6 +65,41 @@ def test_is_embedding_model_cached_locally_false_when_empty(tmp_path, monkeypatc
     cache = tmp_path / "hf"
     monkeypatch.setattr(sim, "hf_embedding_cache_dir", lambda: cache)
     assert sim.is_embedding_model_cached_locally() is False
+
+
+@pytest.mark.asyncio
+async def test_async_get_transformer_model_uses_executor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Model load on a running loop must not call blocking Future.result on the loop thread."""
+    sentinel = object()
+    monkeypatch.setattr(sim, "_has_sentence_transformers", True)
+    monkeypatch.setattr(sim, "_transformer_model", None)
+    monkeypatch.setattr(sim, "_model_loading_attempted", False)
+    monkeypatch.setattr(sim, "_model_load_async_lock", None)
+    monkeypatch.setattr(sim, "_load_transformer_model_in_thread", lambda: sentinel)
+
+    ran_in_executor = False
+
+    async def track_wait_for(awaitable, timeout):  # type: ignore[no-untyped-def]
+        nonlocal ran_in_executor
+        ran_in_executor = True
+        return await awaitable
+
+    monkeypatch.setattr(sim.asyncio, "wait_for", track_wait_for)
+
+    result = await sim.async_get_transformer_model()
+    assert result is sentinel
+    assert ran_in_executor
+
+
+def test_get_transformer_model_refuses_running_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _probe() -> None:
+        monkeypatch.setattr(sim, "_model_loading_attempted", False)
+        monkeypatch.setattr(sim, "_transformer_model", None)
+        assert sim._get_transformer_model() is None
+
+    asyncio.run(_probe())
 
 
 def test_is_embedding_model_cached_locally_true_with_snapshot(

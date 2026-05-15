@@ -8,6 +8,8 @@ from __future__ import annotations
 import asyncio
 import multiprocessing
 import queue
+import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -26,6 +28,7 @@ from soothe_daemon.runner.pool_runner import (
     WorkerPool,
     WorkerProcess,
     WorkerStatus,
+    _start_thread_heartbeat,
 )
 
 
@@ -696,6 +699,28 @@ class TestPoolLoopRunner:
             await runner.cancel()
 
         await WorkerPool.close_shared_instance()
+
+
+class TestThreadHeartbeat:
+    """Background-thread heartbeats while the worker event loop is blocked."""
+
+    def test_thread_heartbeat_emits_during_interval(self) -> None:
+        ctx = multiprocessing.get_context("spawn")
+        response_queue = ctx.Queue()
+        stop_event = threading.Event()
+        _start_thread_heartbeat(
+            response_queue=response_queue,
+            request_id="req-heartbeat",
+            stop_event=stop_event,
+            heartbeat_interval_seconds=0.05,
+            start_time=time.monotonic(),
+        )
+        time.sleep(0.2)
+        stop_event.set()
+        messages: list[tuple] = []
+        while not response_queue.empty():
+            messages.append(response_queue.get_nowait())
+        assert any(msg[0] == "heartbeat" and msg[1] == "req-heartbeat" for msg in messages)
 
 
 class TestWorkerPoolConfig:
