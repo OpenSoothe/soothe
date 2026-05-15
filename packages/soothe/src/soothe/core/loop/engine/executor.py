@@ -101,6 +101,89 @@ def _root_ai_tool_call_ids_for_binding(msg: BaseMessage) -> list[str]:
     return out
 
 
+def _extract_tool_name_and_args_for_binding(
+    msg: BaseMessage,
+    tool_call_id: str,
+    accumulated_args: dict[str, Any],
+) -> tuple[str, dict[str, Any] | None, str]:
+    """Extract tool name and args for a specific tool_call_id from AI message/chunk.
+
+    Args:
+        msg: AIMessage or AIMessageChunk containing tool call info.
+        tool_call_id: The tool_call_id to extract info for.
+        accumulated_args: Dict of tool_call_id → args accumulated from prior chunks.
+
+    Returns:
+        Tuple of (tool_name, args_dict, args_status):
+        - tool_name: Name from chunk or empty string if not found.
+        - args_dict: Args dict if complete JSON, None if partial/missing.
+        - args_status: "complete", "partial", or "pending".
+    """
+    tool_name: str = ""
+    chunk_args: Any = None
+
+    if isinstance(msg, AIMessageChunk):
+        # Check tool_call_chunks first (streaming)
+        for tc in getattr(msg, "tool_call_chunks", None) or []:
+            if not isinstance(tc, dict):
+                continue
+            tid = tc.get("id")
+            if isinstance(tid, str) and tid.strip() == tool_call_id:
+                tool_name = str(tc.get("name", "") or "").strip()
+                chunk_args = tc.get("args")
+                break
+        # Fallback to tool_calls if not found in chunks
+        if not tool_name:
+            for tc in getattr(msg, "tool_calls", None) or []:
+                if not isinstance(tc, dict):
+                    continue
+                tid = tc.get("id")
+                if isinstance(tid, str) and tid.strip() == tool_call_id:
+                    tool_name = str(tc.get("name", "") or "").strip()
+                    chunk_args = tc.get("args")
+                    break
+    elif isinstance(msg, AIMessage):
+        for tc in getattr(msg, "tool_calls", None) or []:
+            if not isinstance(tc, dict):
+                continue
+            tid = tc.get("id")
+            if isinstance(tid, str) and tid.strip() == tool_call_id:
+                tool_name = str(tc.get("name", "") or "").strip()
+                chunk_args = tc.get("args")
+                break
+
+    # Determine args status
+    args_dict: dict[str, Any] | None = None
+    args_status: str = "pending"
+
+    # Check chunk args first (may be dict or string)
+    if isinstance(chunk_args, dict) and chunk_args:
+        args_dict = chunk_args
+        args_status = "complete"
+    elif isinstance(chunk_args, str) and chunk_args.strip():
+        # Try to parse string as JSON
+        import json
+
+        try:
+            parsed = json.loads(chunk_args)
+            if isinstance(parsed, dict):
+                args_dict = parsed
+                args_status = "complete"
+            else:
+                args_status = "partial"
+        except json.JSONDecodeError:
+            args_status = "partial"
+
+    # Use accumulated args if chunk didn't have complete dict
+    if args_status != "complete" and tool_call_id in accumulated_args:
+        acc_args = accumulated_args[tool_call_id]
+        if isinstance(acc_args, dict) and acc_args:
+            args_dict = acc_args
+            args_status = "complete"
+
+    return tool_name, args_dict, args_status
+
+
 # --- Act-wave finalize resolution (merged from execute_wave_finalize.py) ---
 
 ActWaveAnswerProvenance = Literal["root_assistant_stream", "task_tool_aggregate", "none"]
@@ -249,9 +332,7 @@ class _ParallelStepDone:
     """Sentinel placed on the parallel live-event queue when one step finishes."""
 
     step_id: str
-    payload: (
-        tuple[list[StreamEvent], StepResult, list[BaseMessage], str] | BaseException
-    )
+    payload: tuple[list[StreamEvent], StepResult, list[BaseMessage], str] | BaseException
 
 
 _TUPLE_LEN = 3
@@ -924,9 +1005,7 @@ class Executor:
                     step,
                     logical_tid,
                     state.workspace,
-                    stream_thread_id=(
-                        f"{logical_tid}__p{sid}" if n_steps > 1 else logical_tid
-                    ),
+                    stream_thread_id=(f"{logical_tid}__p{sid}" if n_steps > 1 else logical_tid),
                     routing_classification=getattr(state, "routing_classification", None),
                     git_status=state.git_status,
                     intent_type=itype,
@@ -1440,10 +1519,36 @@ class Executor:
 
             # Emit step-tool binding events for root-graph tool calls (parallel routing)
             for tcid in root_tool_call_ids:
+                # IG-416: Include accumulated args in post-complete binding
+                # Extract name and args from accumulated messages
+                post_name = ""
+                post_args: dict[str, Any] | None = None
+                for m in messages:
+                    if isinstance(m, (AIMessage, AIMessageChunk)):
+                        for tc in getattr(m, "tool_calls", None) or []:
+                            if isinstance(tc, dict) and tc.get("id") == tcid:
+                                post_name = str(tc.get("name", "") or "").strip()
+                                tc_args = tc.get("args")
+                                if isinstance(tc_args, dict) and tc_args:
+                                    post_args = tc_args
+                                break
+                        if not post_name:
+                            for tc in getattr(m, "tool_call_chunks", None) or []:
+                                if isinstance(tc, dict) and tc.get("id") == tcid:
+                                    post_name = str(tc.get("name", "") or "").strip()
+                                    tc_args = tc.get("args")
+                                    if isinstance(tc_args, dict) and tc_args:
+                                        post_args = tc_args
+                                    break
+                        if post_name:
+                            break
                 logger.debug(
-                    "[StepToolBind] source=stream_complete step_id=%r tool_call_id=%r",
+                    "[StepToolBind] source=stream_complete step_id=%r tool_call_id=%r "
+                    "name=%r has_args=%r",
                     step.id,
                     tcid,
+                    post_name,
+                    bool(post_args),
                 )
                 binding_event: StreamEvent = (
                     (),
@@ -1452,6 +1557,10 @@ class Executor:
                         "type": "soothe.cognition.agent_loop.step.tool_binding",
                         "step_id": step.id,
                         "tool_call_id": tcid,
+                        # IG-416: Augmented fields (args should be complete at this point)
+                        "tool_name": post_name,
+                        "args": post_args,
+                        "args_status": "complete" if post_args else "pending",
                     },
                 )
                 _append_parallel_stream_event(events, binding_event, live_event_queue)
@@ -1640,14 +1749,41 @@ class Executor:
                     for msg in iter_messages_for_act_aggregation(chunk):
                         if not isinstance(msg, (AIMessage, AIMessageChunk)):
                             continue
+                        # IG-416: Accumulate args BEFORE emitting binding (was after)
+                        if isinstance(msg, AIMessageChunk):
+                            for tc in getattr(msg, "tool_call_chunks", None) or []:
+                                if isinstance(tc, dict) and "id" in tc:
+                                    tc_id = tc["id"]
+                                    args_val = tc.get("args", "")
+                                    if args_val:
+                                        try:
+                                            import json
+
+                                            tool_call_args[tc_id] = json.loads(args_val)
+                                        except (json.JSONDecodeError, TypeError):
+                                            pass  # Args may be partial in streaming
+                            for tc in getattr(msg, "tool_calls", None) or []:
+                                if isinstance(tc, dict) and "id" in tc:
+                                    tool_call_args[tc["id"]] = tc.get("args", {})
+                        elif isinstance(msg, AIMessage):
+                            for tc in getattr(msg, "tool_calls", None) or []:
+                                if isinstance(tc, dict) and "id" in tc:
+                                    tool_call_args[tc["id"]] = tc.get("args", {})
                         for tid in _root_ai_tool_call_ids_for_binding(msg):
                             if tid in early_stream_tool_bindings:
                                 continue
                             early_stream_tool_bindings.add(tid)
+                            # IG-416: Extract name and args from current chunk + accumulated
+                            t_name, t_args, t_args_status = _extract_tool_name_and_args_for_binding(
+                                msg, tid, tool_call_args
+                            )
                             logger.debug(
-                                "[StepToolBind] source=stream_ai step_id=%r tool_call_id=%r",
+                                "[StepToolBind] source=stream_ai step_id=%r tool_call_id=%r "
+                                "name=%r args_status=%r",
                                 tool_binding_step_id,
                                 tid,
+                                t_name,
+                                t_args_status,
                             )
                             yield (
                                 None,
@@ -1658,6 +1794,10 @@ class Executor:
                                         "type": AGENT_LOOP_STEP_TOOL_BINDING,
                                         "step_id": tool_binding_step_id,
                                         "tool_call_id": tid,
+                                        # IG-416: Augmented fields for TUI direct rendering
+                                        "tool_name": t_name,
+                                        "args": t_args,
+                                        "args_status": t_args_status,
                                     },
                                 ),
                                 0,
