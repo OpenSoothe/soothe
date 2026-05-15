@@ -132,11 +132,26 @@ def _langfuse_callback_handler(soothe_config: SootheConfig) -> Any | None:
     with _INIT_LOCK:
         if cache_key not in _HANDLERS:
             from soothe.utils.observability.langfuse_callback_handler import (
+                LANGFUSE_AVAILABLE,
                 SootheLangfuseCallbackHandler,
             )
 
+            if not LANGFUSE_AVAILABLE:
+                logger.warning(
+                    "observability.langfuse.enabled is true but Langfuse callback handler "
+                    "is unavailable; ensure langfuse and langchain are both installed"
+                )
+                return None
+
             if pub_resolved:
-                _HANDLERS[cache_key] = SootheLangfuseCallbackHandler(public_key=pub_resolved)
+                try:
+                    _HANDLERS[cache_key] = SootheLangfuseCallbackHandler(public_key=pub_resolved)
+                except TypeError:
+                    logger.warning(
+                        "Langfuse callback handler does not accept public_key; "
+                        "falling back to default constructor"
+                    )
+                    _HANDLERS[cache_key] = SootheLangfuseCallbackHandler()
             else:
                 _HANDLERS[cache_key] = SootheLangfuseCallbackHandler()
         return _HANDLERS[cache_key]
