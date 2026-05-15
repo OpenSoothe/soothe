@@ -31,7 +31,7 @@ async def test_stream_and_collect_namespaced_task_chunk_populates_delegate_final
 
     executor = Executor(mock_agent)
     rows = [r async for r in executor._stream_and_collect(fake_stream(), budget=None)]
-    _evt, _ev, tc_total, _msgs, delegate_final = rows[-1]
+    _evt, _ev, tc_total, _msgs, delegate_final, _tool_ids = rows[-1]
     assert delegate_final.strip() == "Namespaced explore answer."
     assert tc_total == 1  # namespaced ``task`` ToolMessage counts toward wave tool total
 
@@ -60,7 +60,7 @@ async def test_stream_and_collect_joins_task_tool_returns_as_delegate_finals() -
     async for row in executor._stream_and_collect(fake_stream(), budget=None):
         results.append(row)
     assert len(results) == 2  # tuple passthrough + final aggregate
-    final_out, event, tc_count, msgs, delegate_final = results[-1]
+    final_out, event, tc_count, msgs, delegate_final, _tool_ids = results[-1]
     assert event is None
     assert tc_count == 1
     assert delegate_final == "Counted 3 README files."

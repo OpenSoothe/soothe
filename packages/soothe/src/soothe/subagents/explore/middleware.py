@@ -26,7 +26,7 @@ from soothe.utils.similarity import (
 )
 from soothe.utils.subagent_emit import emit_subagent_wire_event
 
-from .events import ExploreCompletedEvent, ExploreStartedEvent
+from .events import ExploreCompletedEvent, ExploreStartedEvent, ExploreStepCompletedEvent
 from .findings import extract_findings_from_tool_result, should_record_findings
 from .prompts import SYNTHESIZE, format_explore_agent_system
 from .schemas import (
@@ -138,9 +138,54 @@ class ExploreWireMiddleware(AgentMiddleware[ExploreAgentState, None]):
 
 
 class ExploreFindingsMiddleware(AgentMiddleware[ExploreAgentState, None]):
-    """Accumulate ``findings`` from readonly tool outputs via state reducer."""
+    """Accumulate ``findings`` from readonly tool outputs via state reducer.
+
+    Also emits step-completed wire events for TUI display.
+    """
 
     state_schema = ExploreAgentState
+
+    def _emit_step_event(
+        self,
+        request: ToolCallRequest,
+        tm: ToolMessage | Command[Any],
+    ) -> None:
+        """Emit ExploreStepCompletedEvent for TUI progress display."""
+        tool_name = ""
+        args_preview = ""
+        result_preview = ""
+
+        if isinstance(request.tool_call, dict):
+            tool_name = str(request.tool_call.get("name", ""))
+            args_raw = request.tool_call.get("args", {})
+            if isinstance(args_raw, dict):
+                args_preview = str(args_raw)[:120]
+            elif isinstance(args_raw, str):
+                args_preview = args_raw[:120]
+
+        if isinstance(tm, ToolMessage):
+            tool_name = tm.name or tool_name
+            content = tm.content
+            if isinstance(content, str):
+                result_preview = content[:120]
+            elif isinstance(content, list):
+                parts = []
+                for item in content:
+                    if isinstance(item, str):
+                        parts.append(item)
+                    elif isinstance(item, dict) and "text" in item:
+                        parts.append(str(item["text"]))
+                result_preview = "".join(parts)[:120]
+
+        if tool_name:
+            emit_subagent_wire_event(
+                ExploreStepCompletedEvent(
+                    tool_name=tool_name,
+                    args_preview=args_preview,
+                    result_preview=result_preview,
+                ).to_dict(),
+                logger,
+            )
 
     def _merge_findings(
         self,
@@ -165,7 +210,9 @@ class ExploreFindingsMiddleware(AgentMiddleware[ExploreAgentState, None]):
         handler: Callable[[ToolCallRequest], ToolMessage | Command[Any]],
     ) -> ToolMessage | Command[Any]:
         try:
-            return self._merge_findings(request, handler(request))
+            result = handler(request)
+            self._emit_step_event(request, result)
+            return self._merge_findings(request, result)
         except Exception as e:
             tool_name = (
                 request.tool_call.get("name") if isinstance(request.tool_call, dict) else "?"
@@ -179,7 +226,9 @@ class ExploreFindingsMiddleware(AgentMiddleware[ExploreAgentState, None]):
         handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]],
     ) -> ToolMessage | Command[Any]:
         try:
-            return self._merge_findings(request, await handler(request))
+            result = await handler(request)
+            self._emit_step_event(request, result)
+            return self._merge_findings(request, result)
         except Exception as e:
             tool_name = (
                 request.tool_call.get("name") if isinstance(request.tool_call, dict) else "?"

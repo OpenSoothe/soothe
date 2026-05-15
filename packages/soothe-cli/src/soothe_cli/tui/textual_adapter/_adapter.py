@@ -55,6 +55,7 @@ logger = logging.getLogger(__name__)
 
 AGENT_LOOP_STEP_STARTED = "soothe.cognition.agent_loop.step.started"
 AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
+AGENT_LOOP_STEP_TOOL_BINDING = "soothe.cognition.agent_loop.step.tool_binding"
 AGENT_LOOP_GOAL_STARTED = "soothe.cognition.agent_loop.started"
 AGENT_LOOP_GOAL_COMPLETED = "soothe.cognition.agent_loop.completed"
 
@@ -205,6 +206,13 @@ class TextualUIAdapter:
         is preserved so that when ``AGENT_LOOP_STEP_STARTED`` fires, only tools
         buffered **before** that event are flushed into the step card (not tools
         that arrive later for subsequent steps).
+        """
+
+        self._tool_call_to_step_id: dict[str, str] = {}
+        """tool_call_id → step_id mapping for accurate parallel step routing.
+
+        Populated by AGENT_LOOP_STEP_TOOL_BINDING events from executor.
+        Used to route root-graph tool calls to the correct parallel step card.
         """
 
         # Token display callbacks (set by the app after construction)

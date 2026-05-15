@@ -67,7 +67,9 @@ def _minimal_cfg() -> MagicMock:
 
 def test_prompt_defaults_to_headless_run_impl(monkeypatch: pytest.MonkeyPatch) -> None:
     """Non-empty -p should select headless unless resuming a loop or --tui."""
-    monkeypatch.setattr("soothe_cli.cli.commands.run_cmd.load_config", lambda _config=None: _minimal_cfg())
+    monkeypatch.setattr(
+        "soothe_cli.cli.commands.run_cmd.load_config", lambda _config=None: _minimal_cfg()
+    )
     monkeypatch.setattr("soothe_cli.cli.commands.run_cmd.setup_logging", lambda *_a, **_k: None)
     mode: dict[str, str] = {}
 
@@ -95,7 +97,9 @@ def test_prompt_defaults_to_headless_run_impl(monkeypatch: pytest.MonkeyPatch) -
 
 def test_prompt_with_resume_loop_uses_tui(monkeypatch: pytest.MonkeyPatch) -> None:
     """Loop continue passes resume_loop_id — keep TUI even with a prompt."""
-    monkeypatch.setattr("soothe_cli.cli.commands.run_cmd.load_config", lambda _config=None: _minimal_cfg())
+    monkeypatch.setattr(
+        "soothe_cli.cli.commands.run_cmd.load_config", lambda _config=None: _minimal_cfg()
+    )
     monkeypatch.setattr("soothe_cli.cli.commands.run_cmd.setup_logging", lambda *_a, **_k: None)
     mode: dict[str, str] = {}
 
@@ -122,7 +126,9 @@ def test_prompt_with_resume_loop_uses_tui(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_prompt_with_tui_flag_uses_tui(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("soothe_cli.cli.commands.run_cmd.load_config", lambda _config=None: _minimal_cfg())
+    monkeypatch.setattr(
+        "soothe_cli.cli.commands.run_cmd.load_config", lambda _config=None: _minimal_cfg()
+    )
     monkeypatch.setattr("soothe_cli.cli.commands.run_cmd.setup_logging", lambda *_a, **_k: None)
     mode: dict[str, str] = {}
 
@@ -149,7 +155,9 @@ def test_prompt_with_tui_flag_uses_tui(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_no_tui_without_prompt_exits(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("soothe_cli.cli.commands.run_cmd.load_config", lambda _config=None: _minimal_cfg())
+    monkeypatch.setattr(
+        "soothe_cli.cli.commands.run_cmd.load_config", lambda _config=None: _minimal_cfg()
+    )
     monkeypatch.setattr("soothe_cli.cli.commands.run_cmd.setup_logging", lambda *_a, **_k: None)
     monkeypatch.setattr("soothe_cli.cli.commands.run_cmd.run_headless", lambda *_a, **_k: None)
     monkeypatch.setattr("soothe_cli.cli.commands.run_cmd.run_tui", lambda *_a, **_k: None)
