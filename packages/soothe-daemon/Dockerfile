@@ -6,8 +6,13 @@
 #
 # Build:
 #   docker build -f packages/soothe-daemon/Dockerfile \
-#     --build-arg SOOTHE_VERSION=0.5.8 \
+#     --build-arg SOOTHE_VERSION=0.5.7 \
 #     -t soothed:latest .
+#
+# `soothe[all]` is pinned to SOOTHE_VERSION. `soothe-daemon` defaults to
+# `>=SOOTHE_VERSION,<1.0.0` so the image still builds when a daemon wheel was
+# skipped for that patch (PyPI). To force an exact daemon build:
+#   --build-arg SOOTHE_DAEMON_VERSION=0.5.8
 #
 # Optional: use a custom Python base (e.g. internal mirror):
 #   --build-arg PYTHON_BASE=registry.example.com/python:3.12-bookworm
@@ -26,6 +31,8 @@ ARG PYTHON_BASE=docker.io/library/python:3.12-bookworm
 FROM ${PYTHON_BASE} AS deps
 
 ARG SOOTHE_VERSION=0.5.8
+# Empty = latest soothe-daemon on PyPI satisfying >=SOOTHE_VERSION (when patch wheels are missing).
+ARG SOOTHE_DAEMON_VERSION=
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -42,13 +49,19 @@ WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv venv /app/.venv \
-    && uv pip install --python /app/.venv/bin/python \
+    set -eux; \
+    if [ -n "${SOOTHE_DAEMON_VERSION}" ]; then \
+      dspec="soothe-daemon==${SOOTHE_DAEMON_VERSION}"; \
+    else \
+      dspec="soothe-daemon>=${SOOTHE_VERSION},<1.0.0"; \
+    fi; \
+    uv venv /app/.venv; \
+    uv pip install --python /app/.venv/bin/python \
         "soothe[all]==${SOOTHE_VERSION}" \
-        "soothe-daemon==${SOOTHE_VERSION}" \
+        "${dspec}" \
         playwright \
-        sentence_transformers \
-    && /app/.venv/bin/python -m playwright install chromium
+        sentence_transformers; \
+    /app/.venv/bin/python -m playwright install chromium
 
 ENV SOOTHE_HF_CACHE=/root/.cache/soothe/models/huggingface
 COPY scripts/warmup_embedding_model.py /tmp/warmup_embedding_model.py
