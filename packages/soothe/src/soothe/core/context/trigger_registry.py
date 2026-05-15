@@ -44,10 +44,8 @@ BUILTIN_TOOL_TRIGGERS: dict[str, list[str]] = {
     "analyze_image": [],
     "transcribe_audio": [],
     "analyze_video": [],
-    # Subagents
-    "browser": ["WORKSPACE", "BROWSER_CONTEXT"],
+    # Subagents (task tool targets — core: explore, plan, research; plugins add more)
     "research": ["RESEARCH_RULES", "context"],
-    "claude": [],
     # Goal management tools
     "create_goal": ["THREAD", "PROTOCOLS"],
     "list_goals": ["THREAD"],

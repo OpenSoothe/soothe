@@ -182,8 +182,7 @@ Install additional capabilities as needed:
 | Extra | Command | Adds |
 |-------|---------|------|
 | `research` | `pip install soothe[research]` | Tavily web search |
-| `browser` | `pip install soothe[browser]` | Browser automation |
-| `claude` | `pip install soothe[claude]` | Claude agent SDK |
+| `browser` / `claude` | `pip install "soothe-community[browser]"` / `"soothe-community[claude]"` | Optional plugin subagents (not core extras) |
 | `serper` | `pip install soothe[serper]` | Google Serper search |
 | `wizsearch` | `pip install soothe[wizsearch]` | Multi-engine search |
 | `jina` | `pip install soothe[jina]` | Jina web reader |

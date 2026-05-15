@@ -1,13 +1,12 @@
-"""CoreAgent with subagents example -- Layer 1 runtime with delegation capabilities.
+"""CoreAgent with subagents example -- CoreAgent runtime with delegation capabilities.
 
-This example demonstrates CoreAgent WITH subagents:
+This example demonstrates CoreAgent with configured subagents:
 - Subagent configuration from config/config.dev.yml
-- Delegation to Browser subagent for web tasks
-- Delegation to Claude subagent for CLI tasks
-- Custom ad-hoc subagent creation
+- Delegation to first-party subagents such as explore, plan, and research when enabled
+- Optional community plugins (for example browser automation) when installed and configured
 
 Use case: Agent that can delegate specialized tasks to expert subagents
-(web browsing, CLI operations, research, etc.)
+(filesystem search, planning, research, etc.)
 
 Run:
     python examples/core_agent/05_with_subagents_example.py
@@ -72,18 +71,13 @@ async def main() -> None:
         thread_id="subagents-example-1",
     )
 
-    # Note: Web browsing requires browser-use library and proper setup
-    # This query may delegate to Browser subagent if enabled
     print("\n" + "=" * 40)
-    print("Query 2: Potential browser delegation")
+    print("Query 2: Optional community plugins")
     print("=" * 40)
-    print("Note: Browser subagent requires browser-use library and Playwright")
-    print("Skipping browser task for this example...")
-    # await stream_core_agent(
-    #     agent,
-    #     "Go to https://news.ycombinator.com and list the top 3 headlines.",
-    #     thread_id="subagents-example-2",
-    # )
+    print(
+        "Skipping optional web automation: install soothe-community and enable "
+        "subagents.browser to try /browser or Task(browser, ...) flows."
+    )
 
     # Example using research tool (if enabled in config)
     print("\n" + "=" * 40)
@@ -98,8 +92,7 @@ async def main() -> None:
     print("\n" + "=" * 60)
     print("Example completed successfully!")
     print("=" * 60)
-    print("\nTip: Enable browser subagent in config/config.dev.yml for web automation tasks.")
-    print("Set subagents.browser.enabled: true and install browser-use library.")
+    print("\nTip: Install soothe-community and enable subagents.browser for web automation.")
 
 
 if __name__ == "__main__":

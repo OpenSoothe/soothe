@@ -139,7 +139,7 @@ class FailedBranchRecord(BaseModel):
   "context": "Large file analysis exceeded timeout threshold",
   "patterns": [
     "Sequential file reads in single iteration",
-    "Claude subagent used for files > 500KB without streaming"
+    "Delegated subagent used for files > 500KB without streaming"
   ],
   "suggestions": [
     "Use streaming mode for large file analysis",

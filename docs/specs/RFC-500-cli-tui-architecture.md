@@ -55,7 +55,7 @@ LangGraph `(namespace, mode, data)` 3-tuple:
 | `messages` | `()` (main) | LLM text tokens, tool calls |
 | `messages` | non-empty | Subagent text and tool calls |
 | `updates` | `()` (main) | HITL interrupts |
-| `custom` | `()` or non-empty | Subagent progress (`soothe.research.*`, `soothe.browser.*`) |
+| `custom` | `()` or non-empty | Subagent progress (`soothe.subagent.*` wire events) |
 | `custom` | `()` (main) | Protocol orchestration events (`soothe.plan.*`, `soothe.policy.*`) |
 
 **Naming**: `soothe.<component>.<action>`. Subagent: `soothe.<subagent>.<action>`, Protocol: `soothe.<protocol>.<action>`.
@@ -75,7 +75,7 @@ LangGraph `(namespace, mode, data)` 3-tuple:
 **Runner replay (`loop_assistant_messages_chunk`)**  
 After `completed`, the runner emits **one** phased `goal_completion` chunk when `skip_goal_completion_wire_duplicate=False`. AgentLoop sets the flag **true** only after a **successful streamed `synthesize`** (body already arrived on `messages` via `stream_event`). It stays **false** for **`ledger_direct`** and **`summary`** so **headless** stdout still receives an answer: execute-phase prose is suppressed there (IG-343), and without this replay there would be no `goal_completion` line to print.
 
-**Headless** (`--no-tui`): stdout shows loop-tagged assistant text only (`HeadlessCliRenderer`), following the same `messages` + `phase` contract. Slash routes such as `/claude` set `preferred_subagent` as a planner hint (IG-349); they do not bypass the streaming contract.
+**Headless** (`--no-tui`): stdout shows loop-tagged assistant text only (`HeadlessCliRenderer`), following the same `messages` + `phase` contract. Slash routes such as `/research` or `/explore` set `preferred_subagent` as a planner hint; they do not bypass the streaming contract.
 
 ### Protocol Custom Events
 
@@ -186,13 +186,13 @@ Pattern: `soothe <subcommand> <action> [options]`
 
 **ConversationPanel**: User turns, final assistant response text. No partial tokens, protocol events, tool activity, subagent text.
 
-**ActivityInfo**: Last 5 lines of activity (protocol events, tool calls, subagent events). `VerbosityTier` filtering (RFC-501). Browser progress via `soothe.browser.step` events.
+**ActivityInfo**: Last 5 lines of activity (protocol events, tool calls, subagent events). `VerbosityTier` filtering (RFC-501). Optional plugin subagents may emit additional curated wire events.
 
 ## Subagent Routing
 
 **Primary**: LLM-driven via deepagents `task` tool. Main LLM decides delegation based on request and subagent descriptions.
 
-**Available**: Main (orchestrator), Planner, Scout, Research (RFC-601), Browser, Claude, Skillify (RFC-601), Weaver (RFC-601).
+**Available**: Main (orchestrator), Planner, Scout, Research (RFC-601), Explore, Plan; optional plugin-backed agents when installed (see soothe-community / RFC-601 community doc).
 
 **Deprecated**: Numeric prefix routing (e.g., `4 search...` → Research). Retained for compatibility but not used in main flow. Use natural language routing.
 
@@ -210,7 +210,7 @@ Pattern: `soothe <subcommand> <action> [options]`
 
 **Subagent Logging**: `emit_progress()` writes to LangGraph stream + Python logger (INFO level). At "normal" verbosity, subagent events suppressed from TUI/stdout. Visible at "detailed". Log files always record all events.
 
-**Suppression**: Third-party loggers (`httpx`, `openai`, `langchain_core`, etc.) → WARNING. Browser subagent suppresses browser-use loggers → CRITICAL.
+**Suppression**: Third-party loggers (`httpx`, `openai`, `langchain_core`, etc.) → WARNING. Heavy browser-automation stacks may raise selected logger families to CRITICAL when configured.
 
 **Truncation**: Tool results (2000 chars), args (500 chars).
 

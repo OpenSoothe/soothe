@@ -319,11 +319,9 @@ Learn more: [Daemon Management Guide](daemon-management.md)
 Install additional capabilities as needed:
 
 ```bash
-# Browser automation
-pip install soothe[browser]
-
-# Claude agent
-pip install soothe[claude]
+# Optional plugin subagents (soothe-community; requires core soothe installed)
+pip install "soothe-community[browser]"
+pip install "soothe-community[claude]"
 
 # Vector stores
 pip install soothe[pgvector]

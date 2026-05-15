@@ -222,11 +222,11 @@ Failed Branch: branch_8a7b9c
   Execution Path: checkpoint_ghi → checkpoint_jkl → checkpoint_mno → checkpoint_xyz
   
   Failure Insights:
-    - Root cause: Subagent timeout after 30s (claude subagent)
+    - Root cause: Subagent timeout after 30s (delegated subagent)
     - Context: Large file analysis exceeded timeout threshold
     
   Avoid Patterns:
-    - Do not use claude subagent for files > 500KB without streaming
+    - Do not use a delegated subagent for files > 500KB without streaming
     - Avoid sequential file reads in single iteration
     
   Suggested Adjustments:
@@ -321,7 +321,7 @@ Main Execution Line:
   iteration 2 (thread_002)  ← Thread switch (message history threshold)
     ├─ checkpoint_mno [start]
     ├─ Reason: Plan next goal
-    ├─ Tool: subagent(claude, analyze_large_file)
+    ├─ Tool: subagent(specialist, analyze_large_file)
     └─ checkpoint_pqr [end] ✓
 
 Failed Branches:
@@ -329,14 +329,14 @@ Failed Branches:
     ├─ checkpoint_ghi [root] ← Rewind point
     ├─ checkpoint_jkl
     ├─ checkpoint_mno
-    ├─ Tool: subagent(claude, analyze_file) → TIMEOUT ❌
+    ├─ Tool: subagent(specialist, analyze_file) → TIMEOUT ❌
     └─ checkpoint_xyz [failure]
     
     Learning Applied (iteration 4):
       ├─ checkpoint_retry_start [root: checkpoint_ghi]
-      ├─ Tool: subagent(claude, analyze_file_chunk_1) ✓
-      ├─ Tool: subagent(claude, analyze_file_chunk_2) ✓
-      ├─ Tool: subagent(claude, analyze_file_chunk_3) ✓
+      ├─ Tool: subagent(specialist, analyze_file_chunk_1) ✓
+      ├─ Tool: subagent(specialist, analyze_file_chunk_2) ✓
+      ├─ Tool: subagent(specialist, analyze_file_chunk_3) ✓
       └─ checkpoint_retry_end ✓
 ```
 

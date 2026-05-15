@@ -58,7 +58,7 @@ class RoutingClassification(BaseModel):
     )
     preferred_subagent: str | None = Field(
         default=None,
-        description="Preferred subagent name from slash routing or classifier (e.g. 'browser', 'claude')",
+        description="Preferred subagent name from slash routing or classifier (e.g. 'explore', 'research')",
     )
     routing_hint: str | None = Field(
         default=None, description="Routing strategy hint: 'subagent', 'tool', 'llm_only', etc."
@@ -124,7 +124,7 @@ def build_loop_routing_classification(
 
     Args:
         intent: IntentClassification from classifier.
-        preferred_subagent: Optional subagent hint (e.g., 'browser', 'claude').
+        preferred_subagent: Optional subagent hint (e.g., 'explore', 'research').
 
     Returns:
         RoutingClassification for middleware/planner consumption.

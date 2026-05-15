@@ -168,7 +168,7 @@ packages/
 ### Capabilities
 | Package | Contents |
 |---------|----------|
-| `subagents/` | Browser, Claude (deepagents SubAgents) |
+| `subagents/` | Core: explore, plan, research |
 | `tools/` | Tool groups (execution, websearch, research, etc.) |
 | `mcp/` | MCP server loading and management |
 

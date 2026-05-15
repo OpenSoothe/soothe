@@ -12,19 +12,21 @@
 
 This benchmark validates:
 
-1. **Explicit routing** via `/subagentname` slash commands routes correctly to the three tested subagents
+1. **Explicit routing** via `/subagentname` slash commands routes correctly to the subagents under test (see table below)
 2. **Inline routing** where the slash command appears in the middle of the query
 3. **Case-insensitive routing** (`/BROWSER`, `/Research`, etc.)
 4. **No-subagent passthrough** — queries that should stay in the main agent are not incorrectly routed to a subagent
 5. **Multi-command first-wins** — when multiple slash commands appear, only the first is used
 
-### Tested Subagents
+### Tested subagents (routing)
 
-| Subagent   | Slash Command  | Purpose |
-|------------|---------------|---------|
-| browser    | `/browser`    | Interactive web browsing, form filling, JS-heavy sites |
-| claude     | `/claude`     | Complex reasoning with Claude model directly |
-| research   | `/research`   | Deep multi-source iterative research |
+Core ships **research** (and other first-party names such as explore/plan when enabled). **`/browser`** and **`/claude`** require **`soothe-community[browser]`** / **`[claude]`** installed and the matching `subagents.*` config; TC-001, TC-003, TC-005, and TC-008 are skipped or expected to fail routing if those plugins are absent.
+
+| Subagent   | Slash Command  | Purpose | Distribution |
+|------------|---------------|---------|----------------|
+| browser    | `/browser`    | Interactive web browsing, form filling, JS-heavy sites | soothe-community |
+| claude     | `/claude`     | Claude Code / agent SDK delegate | soothe-community |
+| research   | `/research`   | Deep multi-source iterative research | core soothe |
 
 ---
 
@@ -51,7 +53,7 @@ Check that the agent's response reflects the subagent's characteristic behavior/
 
 **Expected Behavior**:
 - `parse_subagent_from_input()` extracts `subagent="browser"`, `text="go to https://example.com and tell me the page title"`
-- Runner takes "quick path" and calls `create_browser_subagent()`
+- Runner takes "quick path" and calls `soothe_community.browser.create_browser_subagent()` when the browser plugin is installed
 - Response is from the browser subagent (may fail gracefully if Chrome not available, but routing must happen)
 
 **Verification Conditions**:
@@ -97,7 +99,7 @@ Response: contains comparison of PostgreSQL vs SQLite with sourced or synthesize
 
 **Expected Behavior**:
 - `parse_subagent_from_input()` extracts `subagent="claude"`, `text="explain the difference between supervised and unsupervised learning in one paragraph"`
-- Runner quick-paths to `create_claude_subagent()`
+- Runner quick-paths to `soothe_community.claude.create_claude_subagent()` when the claude plugin is installed
 - Response is a direct answer from Claude subagent
 
 **Verification Conditions**:
@@ -236,6 +238,12 @@ Log: NO entry for research subagent routing
 
 ### Prerequisites
 
+Install optional plugins before browser/claude test cases:
+
+```bash
+pip install "soothe-community[browser,claude]"
+```
+
 ```bash
 # Ensure daemon is running
 uv run soothed status
@@ -304,7 +312,7 @@ grep "routing directly to subagent" ~/.soothe/logs/soothe.log | tail -20
 The core routing logic can be verified directly without running the full daemon:
 
 ```python
-from soothe.ux.cli.commands.subagent_names import parse_subagent_from_input
+from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
 
 # TC-001/002/003: Prefix commands
 assert parse_subagent_from_input("/browser go to example.com") == ("browser", "go to example.com")
@@ -372,9 +380,9 @@ print("All parse_subagent_from_input assertions passed!")
 
 ## Related Files
 
-- `src/soothe/ux/cli/commands/subagent_names.py` — `parse_subagent_from_input()`, `BUILTIN_SUBAGENT_NAMES`
-- `src/soothe/core/runner/__init__.py` — `astream()` quick path for subagent routing
-- `src/soothe/core/resolver/_resolver_tools.py` — `SUBAGENT_FACTORIES` registry
-- `src/soothe/subagents/` — individual subagent implementations
-- `docs/impl/IG-072-quick-path-subagent-routing.md` — quick path optimization design
-- `docs/impl/IG-073-fix-subagent-routing-and-logging.md` — headless mode routing fix
+- `packages/soothe-cli/src/soothe_cli/shared/commands/subagent_routing.py` — `parse_subagent_from_input()`, built-in name lists used for slash routing
+- `packages/soothe/src/soothe/core/runner/__init__.py` — `astream()` quick path for subagent routing
+- `packages/soothe/src/soothe/core/resolver/_resolver_tools.py` — `resolve_subagents()`, core factory map for explore/plan/research; plugin factories for community names
+- `packages/soothe/src/soothe/subagents/` — first-party explore/plan/research implementations
+- `community/src/soothe_community/browser/`, `.../claude/` — optional browser and Claude plugins
+- `docs/impl/IG-415-browser-claude-community-migration.md` — browser/claude live in soothe-community

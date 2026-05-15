@@ -7,7 +7,7 @@ This document describes **how subagents are exposed**, **what ships with deepage
 ## How every subagent is reached
 
 1. **Single user-facing tool**: the LangChain tool named **`task`** (built by deepagents `SubAgentMiddleware`).
-2. **Selection**: the model passes **`subagent_type`** matching one of the registered subagent **`name`** strings (e.g. `general-purpose`, `browser`, `research`).
+2. **Selection**: the model passes **`subagent_type`** matching one of the registered subagent **`name`** strings (e.g. `general-purpose`, `explore`, `research`).
 3. **Soothe patch**: `soothe/core/agent/_patch.py` replaces `deepagents.middleware.subagents._build_task_tool` so nested `invoke` / `ainvoke` receives **`runtime.config`** from the parent (streaming / configurable propagation).
 
 ---
@@ -46,18 +46,18 @@ Soothe’s `AgentBuilder` passes that list here:
 
 ## Soothe first-party subagents
 
-Factories are registered in **`soothe/core/resolver/_resolver_tools.py`** → **`SUBAGENT_FACTORIES`** (lazy import). Resolution order for each configured name: **plugin registry** (if loaded), else built-in factory.
+Factories are registered in **`soothe/core/resolver/_resolver_tools.py`** → **`SUBAGENT_FACTORIES`** (lazy import). Resolution order for each configured name: **plugin registry** (if loaded), else the core **`SUBAGENT_FACTORIES`** map (explore, plan, research only).
 
 | `subagent_type` | Factory | Package / entry | In default `SootheConfig.subagents` merge? | Notes |
 |-----------------|---------|-----------------|---------------------------------------------|--------|
-| **`browser`** | `create_browser_subagent` | `soothe/subagents/browser/` | **Yes** (`SubagentConfig()` default `enabled: true`) | Plugin decorator `@subagent`; browser-use based. `BrowserSubagentConfig` passed when `name == "browser"`. |
-| **`claude`** | `create_claude_subagent` | `soothe/subagents/claude/` | **Yes** | Claude Code / agent SDK wrapper; **`cwd`** defaulted to resolved `workspace_dir` when not in YAML. Model override suppressed for this name in resolver (`model_override = None` for `claude`). |
+| **`browser`** | `create_browser_subagent` | `soothe-community` (`soothe_community/browser/`) | Via entry point when installed | `@plugin` + `@subagent`; browser-use; typed config in `BrowserSubagentConfig`. |
+| **`claude`** | `create_claude_subagent` | `soothe-community` (`soothe_community/claude/`) | Via entry point when installed | Claude Code / agent SDK; plugin sets `cwd` from `workspace_dir`. Resolver keeps `model_override = None` for name `claude`. |
 | **`explore`** | `create_explore_subagent` | `soothe/subagents/explore/` | **Yes** (builtin merge; IG-324) | RFC-613 readonly filesystem search; `CompiledSubAgent`. |
 | **`research`** | `create_research_subagent` | `soothe/subagents/research/` | **Yes** (builtin merge; IG-324) | Deep research / multi-source; receives full **`SootheConfig`** and `context.work_dir`. There is **no** `tools.research` group — research is **subagent-only**. |
 
 ### Configuration defaults
 
-- **`soothe/config/settings.py`** `_merge_subagents`: starts with **`browser`**, **`claude`**, **`explore`**, and **`research`**; merges **plugin-discovered** subagent names from the global registry (when plugins are loaded), then user YAML overrides.
+- **`soothe/config/settings.py`** `_merge_subagents`: starts with **`explore`**, **`plan`**, and **`research`**; merges **plugin-discovered** subagent names from the global registry (when plugins are loaded, including `soothe-community` entry points such as `browser` and `claude`), then user YAML overrides.
 - **`SubagentConfig.enabled`** defaults to **`true`**; set `enabled: false` under a name to drop it from `resolve_subagents()`.
 
 ### Plugin-discovered subagents
@@ -72,7 +72,7 @@ For a typical daemon with default config:
 
 1. **`task`** is always available (deepagents).
 2. **`subagent_type`** values always include **`general-purpose`** (deepagents).
-3. Soothe adds **`browser`**, **`claude`**, **`explore`**, and **`research`** when their entries remain enabled after merge (disable per name under `subagents:` if needed).
+3. Optional **`browser`** and **`claude`** appear when `soothe-community` is installed and those plugins register; core defaults include **`explore`**, **`plan`**, and **`research`** when enabled.
 
 The main graph’s tool list still includes deepagents builtins (e.g. todos, filesystem tools, **`task`**); Soothe adds toolkit tools separately via `resolve_tools()`.
 

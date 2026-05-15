@@ -82,22 +82,22 @@ Error:    {"type": "command_response", "command": "memory", "error": "Thread not
 
 ---
 
-### Category 3: Daemon Routing Commands (5)
+### Category 3: Daemon Routing Commands
 
-Behavior indicators sent as plain text via existing input path. Daemon input parser detects prefix and routes.
+Behavior indicators sent as plain text via the existing input path. Daemon input parser detects prefix and sets `preferred_subagent` (and related routing) for the target id.
 
 | Command | Description | Query Required |
 |---------|-------------|----------------|
 | `/plan` | Trigger plan mode | No |
 | `/autopilot <N> <query>` | Autonomous execution | Yes |
-| `/browser <query>` | Route to Browser subagent | Yes |
-| `/claude <query>` | Route to Claude subagent | Yes |
 | `/research <query>` | Route to Research subagent | Yes |
+| `/explore <query>` | Route to Explore subagent | Yes |
+| `/<subagent_id> <query>` | When `subagents.<subagent_id>` is enabled (including optional plugins), route to that subagent | Yes |
 
 **Protocol**: Plain text input (no changes to RFC-400)
 ```
-CLI sends:  "/browser AI trends" (plain text)
-Daemon parses: detects /browser prefix, routes to Browser subagent
+CLI sends:  "/research market outlook" (plain text)
+Daemon parses: detects /research prefix, routes to the research subagent
 ```
 
 ---
@@ -151,12 +151,12 @@ User types "/memory"
 
 **Daemon routing commands**:
 ```
-User types "/browser AI trends"
+User types "/research market outlook"
 → CLI registry lookup (location="daemon", type="routing")
 → CLI validates (query required)
-→ CLI sends "/browser AI trends" (plain text input)
-→ Daemon input parser detects /browser prefix
-→ Daemon routes to Browser subagent
+→ CLI sends "/research market outlook" (plain text input)
+→ Daemon input parser detects /research prefix
+→ Daemon routes to the research subagent
 → Daemon streams events back
 → CLI event processor handles events
 ```
@@ -185,10 +185,10 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "requires_loop": True,
         "handler": show_memory  # Rendering function
     },
-    "/browser": {
+    "/research": {
         "location": "daemon",
         "type": "routing",
-        "description": "Route to Browser subagent",
+        "description": "Route to Research subagent",
         "requires_query": True
     },
     # ... all other commands
@@ -484,10 +484,10 @@ async def _handle_input(self, client_id: str, msg: dict[str, Any]) -> None:
     if text.startswith("/plan"):
         # Trigger plan mode
         # ... existing logic
-    elif text.startswith("/browser "):
-        # Route to Browser subagent
+    elif text.startswith("/research "):
+        # Route to Research subagent
         query = text.split(maxsplit=1)[1]
-        await self._run_query(query, subagent="browser")
+        await self._run_query(query, subagent="research")
     elif text.startswith("/autopilot "):
         # Parse autonomous command
         # ... existing logic
@@ -532,7 +532,7 @@ async def _handle_input(self, client_id: str, msg: dict[str, Any]) -> None:
 ### Integration Tests
 - End-to-end: CLI `/memory` → daemon stats → CLI renders table
 - Error: CLI `/clear` no thread → daemon error → CLI displays error
-- Routing: CLI `/browser query` → daemon routes → events stream
+- Routing: CLI `/research query` → daemon routes → events stream
 
 ---
 

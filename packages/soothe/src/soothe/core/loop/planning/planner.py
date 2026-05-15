@@ -208,7 +208,6 @@ def _actions_semantically_similar(action1: str, action2: str) -> bool:
 
 
 _SIMPLE_PLANNER_HINT_MAP = {
-    "browser": "subagent",
     "search": "tool",
     "web": "tool",
     "api": "tool",
@@ -561,11 +560,11 @@ class LLMPlanner:
                 "- reading files → read_file tool",
                 "- searching files → search_files tool",
                 "- shell commands (pwd, ls, cat) → run_command tool",
-                "- web URLs/sites → browser subagent (ONLY for http/https URLs)",
+                "- web URLs/sites → search_web / crawl_web tools (or a browsing-capable subagent if listed in capabilities)",
                 "</TOOL_ROUTING_RULES>",
                 "",
                 "<FORBIDDEN_ACTIONS>",
-                "- delegating browser, claude, or research for trivial local file ops (use direct file tools)",
+                "- delegating research or other subagents for trivial local file ops (use direct file tools)",
                 "- using explore for writes, deletes, shell mutation, or anything outside readonly search",
                 "- searching system directories (/etc, /Library, /usr, /System, /Applications)",
                 "- listing root filesystem (/)",

@@ -16,6 +16,9 @@ from soothe.utils.progress import emit_progress
 def emit_subagent_wire_event(event: dict[str, Any], logger: logging.Logger) -> None:
     """Emit allowlisted subagent progress to LangGraph ``custom`` stream.
 
+    Delegates wire allowlisting and clipping to ``soothe_sdk``, then uses
+    ``emit_progress`` so step context and compact logging match core agents.
+
     Unknown types are dropped (must use constants from ``soothe_sdk.core.subagent_wire``).
 
     Args:
@@ -23,9 +26,13 @@ def emit_subagent_wire_event(event: dict[str, Any], logger: logging.Logger) -> N
         logger: Caller logger for audit trail.
     """
     et = event.get("type", "")
-    if not isinstance(et, str) or not is_allowlisted_subagent_event_type(et):
+    if not isinstance(et, str):
+        logger.debug("Ignoring subagent wire event without string type: %r", et)
+        return
+    if not is_allowlisted_subagent_event_type(et):
         logger.debug("Ignoring non-allowlisted subagent wire event: %r", et)
         return
+
     emit_progress(clip_wire_event_payload(event), logger)
 
 
