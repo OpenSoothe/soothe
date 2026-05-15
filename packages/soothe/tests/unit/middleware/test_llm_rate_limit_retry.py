@@ -351,6 +351,19 @@ def test_error_format_generic_timeout() -> None:
     assert "retrying automatically" in msg or "timed out" in msg
 
 
+def test_error_format_worker_subprocess_lost() -> None:
+    """Pool worker exit should map to actionable daemon copy."""
+    from soothe.utils.error_format import format_cli_error
+
+    exc = RuntimeError(
+        "Worker subprocess exited unexpectedly during query execution; "
+        "check daemon logs for worker or model errors. (worker exit code: 0)"
+    )
+    msg = format_cli_error(exc)
+    assert "Send your message again" in msg
+    assert "Worker subprocess exited unexpectedly" not in msg
+
+
 @pytest.mark.asyncio
 async def test_global_mode_retry(
     middleware_no_retry: LLMRateLimitMiddleware,

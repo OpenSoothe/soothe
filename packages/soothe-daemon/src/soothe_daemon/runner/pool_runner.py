@@ -88,8 +88,10 @@ class WorkerProcess:
         self.status = WorkerStatus.BUSY
         self.current_loop_id = loop_id
         self.current_request_id = request_id
-        self.last_activity = datetime.now()
-        self.last_heartbeat_at = None  # Reset heartbeat tracking for new request
+        now = datetime.now()
+        self.last_activity = now
+        # Grace period until the worker's first heartbeat arrives (SootheRunner init).
+        self.last_heartbeat_at = now
 
 
 @dataclass

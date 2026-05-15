@@ -633,7 +633,7 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
     code = await daemon_exec.run_headless_via_daemon(cli_cfg, "analyze project structure")
 
     assert code == 1
-    assert stderr == ["Daemon error: busy"]
+    assert stderr == ["ERROR: busy"]
 
 
 def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:

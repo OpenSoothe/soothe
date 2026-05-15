@@ -22,12 +22,17 @@ from soothe_cli.cli.execution.headless_renderer import HeadlessCliRenderer
 from soothe_cli.shared import EventProcessor
 from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.shared.core.presentation_engine import PresentationEngine
+from soothe_cli.shared.daemon_errors import (
+    friendly_daemon_execution_error,
+    is_daemon_worker_subprocess_lost,
+)
 
 logger = logging.getLogger(__name__)
 
 _DAEMON_FALLBACK_EXIT_CODE = 42
 _SESSION_BOOTSTRAP_TIMEOUT_S = 30.0
 _QUERY_START_TIMEOUT_S = 20.0
+_HEADLESS_WORKER_LOST_RETRIES = 1
 
 
 def _is_loop_scoped_event(event: dict[str, Any], *, active_loop_id: str) -> bool:
@@ -38,19 +43,20 @@ def _is_loop_scoped_event(event: dict[str, Any], *, active_loop_id: str) -> bool
     return event.get("loop_id") == active_loop_id
 
 
-async def run_headless_via_daemon(
+def _emit_headless_error(message: str) -> None:
+    """Write a user-facing error line to stderr (headless renderer convention)."""
+    typer.echo(f"ERROR: {message}", err=True)
+
+
+async def _run_headless_session_once(
     cfg: Any,
     prompt: str,
     *,
     resume_loop_id: str | None = None,
     autonomous: bool = False,
     max_iterations: int | None = None,
-) -> int:
-    """Run a single prompt by connecting to a running daemon.
-
-    Uses WebSocket transport for all connections (RFC-0013).
-    Headless output is RFC-614 loop-tagged main-graph assistant text only (IG-343).
-    """
+) -> tuple[int, bool]:
+    """Run one headless daemon session; return ``(exit_code, retry_on_worker_loss)``."""
     from soothe_sdk.client import WebSocketClient
 
     ws_url = websocket_url_from_config(cfg)
@@ -67,20 +73,22 @@ async def run_headless_via_daemon(
             subscribe_timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S,
         )
         if status_event.get("type") == "error":
-            typer.echo(f"Daemon error: {status_event.get('message', 'unknown')}", err=True)
-            return 1
+            raw = str(status_event.get("message", "unknown"))
+            _emit_headless_error(friendly_daemon_execution_error(raw))
+            return 1, is_daemon_worker_subprocess_lost(raw)
 
         active_loop_id = status_event.get("loop_id")
         if not active_loop_id:
-            typer.echo("Error: No loop_id after session bootstrap", err=True)
-            return 1
+            _emit_headless_error("No loop_id after session bootstrap")
+            return 1, False
 
         subagent_name, cleaned_prompt = parse_subagent_from_input(prompt)
+        effective_prompt = cleaned_prompt if subagent_name else prompt
 
         await asyncio.wait_for(
             client.send_input(
                 active_loop_id,
-                cleaned_prompt if subagent_name else prompt,
+                effective_prompt,
                 autonomous=autonomous,
                 max_iterations=max_iterations,
                 preferred_subagent=subagent_name,
@@ -107,7 +115,7 @@ async def run_headless_via_daemon(
                         client.read_event(), timeout=_QUERY_START_TIMEOUT_S
                     )
             except TimeoutError:
-                return _DAEMON_FALLBACK_EXIT_CODE
+                return _DAEMON_FALLBACK_EXIT_CODE, False
             if not event:
                 break
 
@@ -116,17 +124,17 @@ async def run_headless_via_daemon(
                 continue
 
             if event_type == "error":
-                typer.echo(f"Daemon error: {event.get('message', 'unknown')}", err=True)
-                return 1
+                raw = str(event.get("message", "unknown"))
+                _emit_headless_error(friendly_daemon_execution_error(raw))
+                return 1, is_daemon_worker_subprocess_lost(raw)
 
             ev_data = event.get("data")
-            if (
-                not query_started
-                and isinstance(ev_data, dict)
-                and str(ev_data.get("type", "")).startswith("soothe.error")
+            if isinstance(ev_data, dict) and str(ev_data.get("type", "")).startswith(
+                "soothe.error"
             ):
-                typer.echo(f"Daemon error: {ev_data.get('error', 'unknown')}", err=True)
-                return 1
+                raw = str(ev_data.get("error", "unknown"))
+                _emit_headless_error(friendly_daemon_execution_error(raw))
+                return 1, is_daemon_worker_subprocess_lost(raw)
 
             if event_type == "status":
                 state = event.get("state", "")
@@ -155,15 +163,48 @@ async def run_headless_via_daemon(
         logger.exception("Daemon connection failed")
         from soothe_sdk.utils import format_cli_error
 
-        typer.echo(f"Error: {format_cli_error(e)}", err=True)
-        return _DAEMON_FALLBACK_EXIT_CODE
+        _emit_headless_error(format_cli_error(e))
+        return _DAEMON_FALLBACK_EXIT_CODE, False
     except Exception as e:
         logger.exception("Failed to run via daemon")
-        from soothe_sdk.utils import format_cli_error
-
-        typer.echo(f"Error: {format_cli_error(e)}", err=True)
-        return 1
+        friendly = friendly_daemon_execution_error(e)
+        _emit_headless_error(friendly)
+        return 1, is_daemon_worker_subprocess_lost(e)
     else:
-        return 0
+        return 0, False
     finally:
         await client.close()
+
+
+async def run_headless_via_daemon(
+    cfg: Any,
+    prompt: str,
+    *,
+    resume_loop_id: str | None = None,
+    autonomous: bool = False,
+    max_iterations: int | None = None,
+) -> int:
+    """Run a single prompt by connecting to a running daemon.
+
+    Uses WebSocket transport for all connections (RFC-0013).
+    Headless output is RFC-614 loop-tagged main-graph assistant text only (IG-343).
+
+    Retries once when the worker pool loses a subprocess mid-query (common idle-timeout
+    race or transient worker recycle).
+    """
+    last_code = 1
+    for attempt in range(_HEADLESS_WORKER_LOST_RETRIES + 1):
+        last_code, retryable = await _run_headless_session_once(
+            cfg,
+            prompt,
+            resume_loop_id=resume_loop_id,
+            autonomous=autonomous,
+            max_iterations=max_iterations,
+        )
+        if last_code == 0:
+            return 0
+        if retryable and attempt < _HEADLESS_WORKER_LOST_RETRIES:
+            logger.warning("Headless query failed after worker subprocess exit; retrying once")
+            continue
+        return last_code
+    return last_code
