@@ -116,10 +116,7 @@ the subagent's unique capability:
 - explore: Readonly repo search (glob/grep/list/read); locate/map/trace; not edits or shell.
 - plan: Agentic recon then plan — multiple explore batches/rounds, then iterative markdown plan; one report.
 - research: Web or multi-source deep investigation—not trivial directory walks.
-- browser: Interactive web browsing with login, forms, JavaScript-heavy sites (view-choose-click). \
-Use web search tools for simple lookups; browser for interactive browsing.
-- claude: Complex coding tasks, large project refactoring, sophisticated code generation. \
-Preferred for any coding task needing deep analysis or multi-file changes.\
+Additional subagents may be available from installed plugins; use only names listed in your runtime capabilities.\
 """
 
 _TOOL_ORCHESTRATION_GUIDE = f"""\

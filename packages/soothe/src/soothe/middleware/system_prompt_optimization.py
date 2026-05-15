@@ -272,7 +272,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Static Tier (session-stable, maximum cache hits):
         - Base behavioral prompt + tool orchestration guide
         - Execution policies
-        - Subagent routing directive (when user explicitly requests /browser, /claude, etc.)
+        - Subagent routing directive (when the user explicitly requests a routed subagent via slash command)
         - Agent loop output contract (execute-step only)
 
         Semi-Static Tier (goal-stable, changes infrequently):
@@ -344,7 +344,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             if memories and "memory" in triggered:
                 static_sections.append(self._build_memory_section(memories))
 
-        # Subagent routing directive (explicit /browser, /claude, /research, /explore)
+        # Subagent routing directive (explicit /research, /explore, /plan, or other routed subagent id)
         subagent_directive = state.get("_subagent_routing_directive") if state else None
         if subagent_directive:
             directive_section = (
@@ -353,7 +353,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                 f"'{_TASK_TOOL_NAME}' tool with subagent_type='{subagent_directive}' for this request.\n"
                 f"\n"
                 f"CRITICAL INSTRUCTION:\n"
-                f"- The subagent_type argument MUST be exactly '{subagent_directive}' (not 'claude', 'browser', etc.)\n"
+                f"- The subagent_type argument MUST be exactly '{subagent_directive}' (use this id verbatim)\n"
                 f"- Do NOT substitute or override this choice with a different subagent\n"
                 f"- The user selected {subagent_directive} for a specific reason and will be confused if you use a different one\n"
                 f"\n"

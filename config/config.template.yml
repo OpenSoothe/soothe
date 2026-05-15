@@ -3,8 +3,8 @@
 # Full YAML aligned with Pydantic defaults in ``packages/soothe/src/soothe/config/``
 # (``models.py``, ``daemon_config.py``, ``settings.py``). Values match those defaults
 # except documented examples: OpenAI ``providers`` sample, ``sqlite_vec`` store + router,
-# and explicit ``subagents.*.config`` blocks (same as ``BrowserSubagentConfig`` /
-# ``ExploreSubagentConfig`` defaults; optional router roles are null and inherit ``default``).
+# and explicit ``subagents.*.config`` blocks (``ExploreSubagentConfig`` / ``PlanSubagentConfig``
+# defaults; optional router roles are null and inherit ``default``).
 #
 # Usage: soothe --config /path/to/this-file.yaml
 # Local dev: start from config/config.dev.yml and adjust providers.
@@ -51,32 +51,6 @@ embedding_dims: 1536
 assistant_name: Soothe
 system_prompt: null
 subagents:
-  browser:
-    enabled: true
-    model: null
-    transport: local
-    url: null
-    config:
-      max_steps: 10
-      runtime_dir: ''
-      downloads_dir: ''
-      user_data_dir: ''
-      extensions_dir: ''
-      cleanup_on_exit: true
-      disable_extensions: true
-      disable_cloud: true
-      disable_telemetry: true
-      enable_existing_browser: true
-      browser_start_timeout: 90
-      profile_mode: ephemeral
-    runtime_dir: ''
-  claude:
-    enabled: true
-    model: null
-    transport: local
-    url: null
-    config: {}
-    runtime_dir: ''
   explore:
     enabled: true
     model: null

@@ -40,10 +40,10 @@ Route queries to specialized subagents:
 
 | Command | Subagent | Use Case |
 |---------|----------|----------|
-| `/browser <query>` | Browser Agent | Web browsing and automation |
-| `/claude <query>` | Claude Agent | Complex reasoning with Claude |
-| `/skillify <query>` | Skillify Agent | Skill retrieval and discovery |
-| `/weaver <query>` | Weaver Agent | Agent generation |
+| `/research <query>` | Research | Multi-source investigation |
+| `/explore <query>` | Explore | Readonly repo search |
+| `/plan` | Plan | Plan-mode routing |
+| `/«id» <query>` | Configured id | Optional plugins (e.g. soothe-community: skillify, weaver, browser, claude) |
 
 ## Keyboard Shortcuts
 

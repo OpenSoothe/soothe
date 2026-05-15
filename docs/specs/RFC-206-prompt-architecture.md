@@ -92,7 +92,7 @@ The hierarchical nesting makes it impossible for the LLM to confuse system metad
     </WORKSPACE>
 
     <CAPABILITIES>
-      browser, claude, research
+      explore, plan, research
     </CAPABILITIES>
 
     <POLICIES>

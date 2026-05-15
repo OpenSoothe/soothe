@@ -1,9 +1,6 @@
-"""Soothe subagents exposed as deepagents SubAgent/CompiledSubAgent."""
+"""Built-in subagents shipped with the core ``soothe`` package.
 
-from soothe.subagents.browser import create_browser_subagent
-from soothe.subagents.claude import create_claude_subagent
+Browser and Claude Code subagents live in ``soothe-community`` (optional install).
+"""
 
-__all__ = [
-    "create_browser_subagent",
-    "create_claude_subagent",
-]
+__all__: list[str] = []

@@ -271,13 +271,13 @@ COMMANDS: dict[str, dict[str, Any]] = {
     "/browser": {
         "location": "daemon",
         "type": "routing",
-        "description": "Route query to Browser subagent",
+        "description": "Route query to subagent id `browser` (soothe-community)",
         "requires_query": True,
     },
     "/claude": {
         "location": "daemon",
         "type": "routing",
-        "description": "Route query to Claude subagent",
+        "description": "Route query to subagent id `claude` (soothe-community)",
         "requires_query": True,
     },
     "/research": {

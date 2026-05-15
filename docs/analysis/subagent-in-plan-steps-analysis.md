@@ -88,7 +88,7 @@ def _apply_preferred_subagent(plan: Plan, subagent_name: str) -> Plan:
 
 ## Concrete Examples
 
-### Example 1: Browser Subagent in Step
+### Example 1: Subagent hint in step metadata
 
 **Test case** (`test_execution_hints_middleware.py:18-27`):
 ```python
@@ -96,13 +96,13 @@ config = {
     "configurable": {
         "thread_id": "test-thread",
         "soothe_step_tools": ["glob", "grep"],
-        "soothe_step_subagent": "browser",  # ← Browser subagent
+        "soothe_step_subagent": "research",  # ← delegated subagent id
         "soothe_step_expected_output": "Config file list",
     }
 }
 
 hints = middleware._extract_hints(config)
-assert hints["subagent"] == "browser"
+assert hints["subagent"] == "research"
 ```
 
 ### Example 2: Preferred Subagent Configuration
@@ -110,7 +110,7 @@ assert hints["subagent"] == "browser"
 **Test case** (`test_system_prompt_optimization.py:279`):
 ```python
 # Unified classification can specify preferred subagent
-preferred_subagent="browser",  # ← Forces browser for action steps
+preferred_subagent="research",  # ← Forces research for action steps
 ```
 
 **Planner applies preferred subagent** (`planner.py:342-347`):
@@ -120,7 +120,7 @@ if preferred_subagent:
     plan = self._apply_preferred_subagent(plan, preferred)
 ```
 
-### Example 3: Multi-Step Plan with Claude Subagent
+### Example 3: Multi-Step Plan with delegated subagent
 
 **Hypothetical scenario** (architecture supports this):
 ```python
@@ -135,7 +135,7 @@ plan = Plan(
         PlanStep(
             id="step_2",
             description="Analyze code patterns and dependencies",
-            execution_hint="subagent",  # ← Claude subagent
+            execution_hint="subagent",  # ← delegated subagent (e.g. research)
         ),
         PlanStep(
             id="step_3",
@@ -152,7 +152,7 @@ When subagent is used in a step, the CLI display shows:
 
 ```
 ❇️ Analyze code patterns and dependencies
-  └─ ⚙ Task(claude, "Analyze code patterns and dependencies")
+  └─ ⚙ Task(research, "Analyze code patterns and dependencies")
   └─ ✓ Completed (1500ms)
 ```
 
@@ -166,15 +166,15 @@ When subagent is used in a step, the CLI display shows:
 
 **Step execution with subagent:**
 
-1. **Planner** creates `StepAction` with `subagent="claude"`
-2. **Executor** passes `soothe_step_subagent="claude"` to CoreAgent config
+1. **Planner** creates `StepAction` with `subagent="research"`
+2. **Executor** passes `soothe_step_subagent="research"` to CoreAgent config
 3. **ExecutionHintsMiddleware** extracts hint and injects into system prompt:
    ```
-   Suggested subagent: claude
+   Suggested subagent: research
    Expected output: Code pattern analysis report
    ```
 4. **CoreAgent** uses hint to prioritize Task tool with specified subagent
-5. **Task tool** invoked with `subagent_type="claude"`
+5. **Task tool** invoked with `subagent_type="research"`
 6. **Result** captured in StepResult with outcome metadata
 
 ## Use Cases

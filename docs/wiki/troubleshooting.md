@@ -32,31 +32,18 @@ OPENAI_API_KEY=sk-your-key-here
 
 ## Subagent Issues
 
-### Browser Agent Not Working
+### Browser or Claude plugin subagent not working
 
-**Error**: `Browser subagent not available`
-
-**Solution**: Install the browser extra:
+These capabilities ship in **`soothe-community`**, not as `soothe[…]` extras.
 
 ```bash
-pip install soothe[browser]
+pip install "soothe-community[browser]"
+# or
+pip install "soothe-community[claude]"
+export ANTHROPIC_API_KEY=sk-ant-your-key-here   # for Claude Code agent path
 ```
 
-### Claude Agent Not Working
-
-**Error**: `Claude subagent not available`
-
-**Solution**:
-
-1. Install the Claude extra:
-```bash
-pip install soothe[claude]
-```
-
-2. Set your Anthropic API key:
-```bash
-export ANTHROPIC_API_KEY=sk-ant-your-key-here
-```
+Ensure matching `subagents.<name>.enabled: true` in your agent config.
 
 ### Subagent Disabled
 

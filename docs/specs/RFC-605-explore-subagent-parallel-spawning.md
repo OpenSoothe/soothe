@@ -114,9 +114,8 @@ Outcome: {type: "parallel_subagents", subagents: [...], outputs: [...]}
 
 ```xml
 <AVAILABLE_SUBAGENTS>
-- browser: Web automation
+- browser / claude: Optional `soothe-community` plugins when installed
 - research: Multi-source synthesis
-- claude: Full capabilities
 - explore: Targeted filesystem search (NEW)
 
 <SUBAGENT_SELECTION_GUIDE>
@@ -450,16 +449,18 @@ agentic:
 ### 5. Subagent Registry
 
 ```python
-# In src/soothe/core/resolver/_resolver_tools.py
+# In src/soothe/core/resolver/_resolver_tools.py (IG-415: browser/claude via soothe-community entry points)
 
-from soothe.subagents.explore.implementation import create_explore_subagent
+from soothe.subagents.explore import create_explore_subagent
+from soothe.subagents.plan import create_plan_subagent
+from soothe.subagents.research import create_research_subagent
 
 SUBAGENT_FACTORIES = {
-    "browser": create_browser_subagent,
-    "claude": create_claude_subagent,
+    "explore": create_explore_subagent,
+    "plan": create_plan_subagent,
     "research": create_research_subagent,
-    "explore": create_explore_subagent,  # NEW
 }
+# Browser and Claude are provided by soothe-community plugins when installed.
 ```
 
 ### 6. LLMPlanner Integration
@@ -469,9 +470,8 @@ SUBAGENT_FACTORIES = {
 
 sections.append("""
 <AVAILABLE_SUBAGENTS>
-- browser: Web automation and browsing tasks
+- browser / claude: Optional community plugins (`soothe-community`) when installed
 - research: Multi-source research and synthesis
-- claude: General-purpose agent with full capabilities
 - explore: Targeted filesystem search and navigation
 
 <SUBAGENT_SELECTION_GUIDE>

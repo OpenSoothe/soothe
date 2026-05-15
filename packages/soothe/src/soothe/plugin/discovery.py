@@ -213,7 +213,7 @@ def discover_all_plugins(
     discovered: dict[str, tuple[str, dict, PluginDiscoverySource]] = {}
 
     # Built-in subagent plugins (new module structure)
-    for subagent_name in ["browser", "claude", "explore", "plan", "research"]:
+    for subagent_name in ["explore", "plan", "research"]:
         module_path = f"soothe.subagents.{subagent_name}"
         discovered[subagent_name] = (module_path, {}, "built-in")
         logger.debug("Discovered built-in subagent plugin: %s", subagent_name)

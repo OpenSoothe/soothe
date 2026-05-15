@@ -311,8 +311,8 @@ Add validation script to CI pipeline:
 4. Update `register_event()` calls in module event files:
    - `packages/soothe/src/soothe/core/events/catalog.py` (core registry)
    - `packages/soothe/src/soothe/core/agent_loop/utils/events.py` (AgentLoop typed events)
-   - `packages/soothe/src/soothe/subagents/browser/events.py`
-   - `packages/soothe/src/soothe/subagents/claude/events.py`
+   - `community/src/soothe_community/browser/events.py`
+   - `community/src/soothe_community/claude/events.py`
    - `packages/soothe/src/soothe/subagents/research/events.py`
    - `packages/soothe/src/soothe/plugin/events.py`
 5. Delete old type string constants completely
@@ -459,8 +459,7 @@ The following table recorded an abandoned rename toward `soothe.capability.*`. *
 
 - [ ] Migrate `core/events/catalog.py` core events
 - [ ] Migrate `core/events/catalog.py` and per-module `register_event()` sites (e.g. `core/agent_loop/utils/events.py`)
-- [ ] Migrate `subagents/browser/events.py`
-- [ ] Migrate `subagents/claude/events.py`
+- [x] Migrate `soothe_community/browser/events.py` and `soothe_community/claude/events.py` (IG-415)
 - [ ] Migrate `subagents/research/events.py`
 - [ ] Migrate `plugin/events.py`
 - [ ] Run `make lint` and fix errors

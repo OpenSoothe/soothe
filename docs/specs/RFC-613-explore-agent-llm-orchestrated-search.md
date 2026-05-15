@@ -56,7 +56,7 @@ Claude Code's explore agent demonstrates that an **LLM-orchestrated iterative ap
 2. **Thoroughness as Iteration Cap** — Simple, predictable resource control through max iterations
 3. **Read-Only Boundary** — Explore is a search agent; file modification is out of scope
 4. **Tool Reuse** — Leverage deepagents' `glob`, `grep`, `ls`, `read_file`; no custom file tools
-5. **Follow Existing Patterns** — Same plugin/factory/event structure as research and browser subagents
+5. **Follow Existing Patterns** — Same plugin/factory/event structure as the research subagent
 
 ---
 
@@ -373,9 +373,8 @@ def _get_subagent_factories() -> dict[str, Callable]:
 
 ```xml
 <AVAILABLE_SUBAGENTS>
-- browser: Web automation and browsing
+- browser / claude: Optional soothe-community plugins when installed
 - research: Multi-source research and synthesis
-- claude: General-purpose agent with full capabilities
 - explore: Targeted filesystem search (quick/medium/thorough)
 
 <SUBAGENT_SELECTION_GUIDE>

@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from _config_helper import load_example_config
 from _shared.streaming import run_with_streaming
 
-from soothe.subagents.browser import create_browser_subagent
+from soothe_community.browser import create_browser_subagent
 
 load_dotenv()
 
