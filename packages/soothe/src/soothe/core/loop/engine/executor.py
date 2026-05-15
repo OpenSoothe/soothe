@@ -52,6 +52,7 @@ from soothe.core.loop.state.schemas import (
     StepAction,
     StepResult,
 )
+from soothe.core.events.constants import AGENT_LOOP_STEP_TOOL_BINDING
 from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.middleware.tool_concurrency import init_tool_concurrency_for_thread
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
@@ -64,6 +65,40 @@ if TYPE_CHECKING:
     from .goal_context_manager import GoalContextManager
 
 logger = logging.getLogger(__name__)
+
+
+def _root_ai_tool_call_ids_for_binding(msg: BaseMessage) -> list[str]:
+    """Return stable root-graph tool_call_id strings from one AI message or chunk.
+
+    Used to emit ``AGENT_LOOP_STEP_TOOL_BINDING`` before the client renders tool rows
+    (parallel step routing and TUI step cards).
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    if isinstance(msg, AIMessageChunk):
+        for tc in getattr(msg, "tool_call_chunks", None) or []:
+            if not isinstance(tc, dict):
+                continue
+            tid = tc.get("id")
+            if isinstance(tid, str) and tid.strip() and tid.strip() not in seen:
+                seen.add(tid.strip())
+                out.append(tid.strip())
+        for tc in getattr(msg, "tool_calls", None) or []:
+            if not isinstance(tc, dict):
+                continue
+            tid = tc.get("id")
+            if isinstance(tid, str) and tid.strip() and tid.strip() not in seen:
+                seen.add(tid.strip())
+                out.append(tid.strip())
+    elif isinstance(msg, AIMessage):
+        for tc in getattr(msg, "tool_calls", None) or []:
+            if not isinstance(tc, dict):
+                continue
+            tid = tc.get("id")
+            if isinstance(tid, str) and tid.strip() and tid.strip() not in seen:
+                seen.add(tid.strip())
+                out.append(tid.strip())
+    return out
 
 
 # --- Act-wave finalize resolution (merged from execute_wave_finalize.py) ---
@@ -1339,7 +1374,11 @@ class Executor:
                 msg_list,
                 df,
                 tc_ids,
-            ) in self._stream_and_collect(stream, budget=budget):
+            ) in self._stream_and_collect(
+                stream,
+                budget=budget,
+                tool_binding_step_id=step.id,
+            ):
                 if event is not None:
                     events.append(event)
                 elif final_output is not None:
@@ -1353,6 +1392,11 @@ class Executor:
 
             # Emit step-tool binding events for root-graph tool calls (parallel routing)
             for tcid in root_tool_call_ids:
+                logger.debug(
+                    "[StepToolBind] source=stream_complete step_id=%r tool_call_id=%r",
+                    step.id,
+                    tcid,
+                )
                 events.append(
                     (
                         (),  # namespace - root graph
@@ -1459,6 +1503,7 @@ class Executor:
         stream: AsyncGenerator,
         *,
         budget: _ActStreamBudget | None = None,
+        tool_binding_step_id: str | None = None,
     ) -> AsyncGenerator[
         tuple[str | None, StreamEvent | None, int, list[BaseMessage], str, set[str]],
         None,
@@ -1477,6 +1522,9 @@ class Executor:
         Args:
             stream: Async iterator from agent.astream()
             budget: Optional Act wave budget (subagent ``task`` cap, IG-130).
+            tool_binding_step_id: When set, emit ``AGENT_LOOP_STEP_TOOL_BINDING`` custom
+                events as soon as root-graph AI messages expose new ``tool_call_id`` values,
+                before the matching ``messages`` chunk is yielded (TUI / parallel routing).
 
         Yields:
             Tuple of ``(output, event, tool_call_count, messages, delegate_final_text, tool_call_ids)``:
@@ -1514,6 +1562,7 @@ class Executor:
 
         # Collect root-graph tool_call_ids for step binding (parallel routing)
         root_tool_call_ids: set[str] = set()
+        early_stream_tool_bindings: set[str] = set()
 
         stream_chunk_count = 0  # Debug counter
 
@@ -1540,6 +1589,35 @@ class Executor:
 
             # Handle tuple format (namespace, mode, data) - deepagents canonical
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
+                if tool_binding_step_id:
+                    for msg in iter_messages_for_act_aggregation(chunk):
+                        if not isinstance(msg, (AIMessage, AIMessageChunk)):
+                            continue
+                        for tid in _root_ai_tool_call_ids_for_binding(msg):
+                            if tid in early_stream_tool_bindings:
+                                continue
+                            early_stream_tool_bindings.add(tid)
+                            logger.debug(
+                                "[StepToolBind] source=stream_ai step_id=%r tool_call_id=%r",
+                                tool_binding_step_id,
+                                tid,
+                            )
+                            yield (
+                                None,
+                                (
+                                    (),
+                                    "custom",
+                                    {
+                                        "type": AGENT_LOOP_STEP_TOOL_BINDING,
+                                        "step_id": tool_binding_step_id,
+                                        "tool_call_id": tid,
+                                    },
+                                ),
+                                0,
+                                [],
+                                "",
+                                set(),
+                            )
                 # Yield event immediately for real-time display
                 yield None, chunk, 0, [], "", set()
 

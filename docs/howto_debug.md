@@ -323,7 +323,7 @@ cat ~/.soothe/config/soothe-cli.yml | grep -A 10 "websocket:"
 
 ### Workflow 4: Debug Subagent Issues
 
-**Scenario**: Browser/Claude/Explore subagent not working, delegation failing.
+**Scenario**: Explore, research, or an optional soothe-community delegate is not working; delegation failing.
 
 **Steps**:
 

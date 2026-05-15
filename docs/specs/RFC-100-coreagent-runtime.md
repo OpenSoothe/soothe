@@ -105,9 +105,7 @@ Concurrent execution: `asyncio.gather([astream(step, thread_id=tid) for step in 
 
 ### Subagents
 
-**Browser** (deepagents): Web browsing and automation.
-
-**Claude** (deepagents): Claude CLI integration.
+**Explore**, **Plan**, and **Research** ship in core Soothe. Optional delegated agents are published in **`soothe-community`** (install and configuration documented there).
 
 **Skillify** (RFC-601): Skill discovery and execution.
 
@@ -137,7 +135,7 @@ Layer 2 passes advisory hints via `config.configurable`:
 
 | Hint | Purpose | Example |
 |------|---------|---------|
-| `soothe_step_subagent` | Suggested subagent | `"browser"` |
+| `soothe_step_subagent` | Suggested subagent | `"explore"` |
 | `soothe_step_expected_output` | Expected result | `"File contents matching pattern"` |
 
 **Behavior**: Advisory (not mandatory), `ExecutionHintsMiddleware` injects into system prompt, LLM considers hints but decides final execution, backward compatible (steps without hints work unchanged).

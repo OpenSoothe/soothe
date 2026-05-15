@@ -50,14 +50,15 @@ Factories are registered in **`soothe/core/resolver/_resolver_tools.py`** → **
 
 | `subagent_type` | Factory | Package / entry | In default `SootheConfig.subagents` merge? | Notes |
 |-----------------|---------|-----------------|---------------------------------------------|--------|
-| **`browser`** | `create_browser_subagent` | `soothe-community` (`soothe_community/browser/`) | Via entry point when installed | `@plugin` + `@subagent`; browser-use; typed config in `BrowserSubagentConfig`. |
-| **`claude`** | `create_claude_subagent` | `soothe-community` (`soothe_community/claude/`) | Via entry point when installed | Claude Code / agent SDK; plugin sets `cwd` from `workspace_dir`. Resolver keeps `model_override = None` for name `claude`. |
 | **`explore`** | `create_explore_subagent` | `soothe/subagents/explore/` | **Yes** (builtin merge; IG-324) | RFC-613 readonly filesystem search; `CompiledSubAgent`. |
+| **`plan`** | `create_plan_subagent` | `soothe/subagents/plan/` | **Yes** | Planning delegate. |
 | **`research`** | `create_research_subagent` | `soothe/subagents/research/` | **Yes** (builtin merge; IG-324) | Deep research / multi-source; receives full **`SootheConfig`** and `context.work_dir`. There is **no** `tools.research` group — research is **subagent-only**. |
+
+Additional manifest ids (optional packages such as **`soothe-community`**) register through the plugin entry-point system; see that repository for names, factories, and YAML.
 
 ### Configuration defaults
 
-- **`soothe/config/settings.py`** `_merge_subagents`: starts with **`explore`**, **`plan`**, and **`research`**; merges **plugin-discovered** subagent names from the global registry (when plugins are loaded, including `soothe-community` entry points such as `browser` and `claude`), then user YAML overrides.
+- **`soothe/config/settings.py`** `_merge_subagents`: starts with **`explore`**, **`plan`**, and **`research`**; merges **plugin-discovered** subagent names from the global registry when plugins are loaded, then user YAML overrides.
 - **`SubagentConfig.enabled`** defaults to **`true`**; set `enabled: false` under a name to drop it from `resolve_subagents()`.
 
 ### Plugin-discovered subagents
@@ -72,7 +73,7 @@ For a typical daemon with default config:
 
 1. **`task`** is always available (deepagents).
 2. **`subagent_type`** values always include **`general-purpose`** (deepagents).
-3. Optional **`browser`** and **`claude`** appear when `soothe-community` is installed and those plugins register; core defaults include **`explore`**, **`plan`**, and **`research`** when enabled.
+3. Optional delegates from installed plugins (for example **`soothe-community`**) appear when those packages register factories; core defaults include **`explore`**, **`plan`**, and **`research`** when enabled.
 
 The main graph’s tool list still includes deepagents builtins (e.g. todos, filesystem tools, **`task`**); Soothe adds toolkit tools separately via `resolve_tools()`.
 

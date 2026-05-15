@@ -311,8 +311,7 @@ Add validation script to CI pipeline:
 4. Update `register_event()` calls in module event files:
    - `packages/soothe/src/soothe/core/events/catalog.py` (core registry)
    - `packages/soothe/src/soothe/core/agent_loop/utils/events.py` (AgentLoop typed events)
-   - `community/src/soothe_community/browser/events.py`
-   - `community/src/soothe_community/claude/events.py`
+Optional community plugin event modules (see `community/src/soothe_community/`)
    - `packages/soothe/src/soothe/subagents/research/events.py`
    - `packages/soothe/src/soothe/plugin/events.py`
 5. Delete old type string constants completely
@@ -409,8 +408,8 @@ Built-in subagents emit **only** allowlisted, metadata-only progress types under
 
 | Agent | Curated custom-stream types (examples) | Purpose |
 |-------|------------------------------------------|---------|
-| Browser | `soothe.subagent.browser.started`, `…step.completed`, `…completed` | Lifecycle + step metadata |
-| Claude | `…claude.started`, `…completed`, `…failed` | Lifecycle + outcome |
+| Community web delegate | `soothe.subagent.browser.started`, `…step.completed`, `…completed` | Lifecycle + step metadata |
+| Community coding delegate | `…claude.started`, `…completed`, `…failed` | Lifecycle + outcome |
 | Explore | `…explore.started`, `…milestone`, `…completed` | Lifecycle + assessment milestone + done |
 | Research | `…research.started`, `…gather.summary`, `…completed` | Lifecycle + gather batch + done |
 
@@ -422,8 +421,8 @@ The following table recorded an abandoned rename toward `soothe.capability.*`. *
 
 | Old Type | Superseded direction (obsolete) | Notes |
 |----------|----------------------------------|-------|
-| `soothe.subagent.browser.dispatched` | *(never shipped as stable)* | Use curated `soothe.subagent.browser.*` |
-| `soothe.subagent.claude.text` | *(removed from wire)* | Assistant text → `messages` stream |
+| `soothe.subagent.<id>.dispatched` | *(never shipped as stable)* | Use curated `soothe.subagent.<id>.*` |
+| `soothe.subagent.<id>.text` | *(removed from wire)* | Assistant text → `messages` stream |
 | `soothe.subagent.research.analyze` | *(removed from wire)* | Use curated research types |
 
 ### 8.5 System Events
@@ -459,7 +458,7 @@ The following table recorded an abandoned rename toward `soothe.capability.*`. *
 
 - [ ] Migrate `core/events/catalog.py` core events
 - [ ] Migrate `core/events/catalog.py` and per-module `register_event()` sites (e.g. `core/agent_loop/utils/events.py`)
-- [x] Migrate `soothe_community/browser/events.py` and `soothe_community/claude/events.py` (IG-415)
+- [x] Migrate community plugin event modules under `soothe_community/` (IG-415)
 - [ ] Migrate `subagents/research/events.py`
 - [ ] Migrate `plugin/events.py`
 - [ ] Run `make lint` and fix errors

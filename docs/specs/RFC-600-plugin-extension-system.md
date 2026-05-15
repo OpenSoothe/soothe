@@ -244,17 +244,17 @@ Permissions enforced at plugin loader level based on trust level.
 
 **Before** (old-style factory):
 ```python
-def create_browser_subagent(model=None, **kwargs) -> CompiledSubAgent:
-    return {"name": "browser", "runnable": runnable}
+def create_widget_subagent(model=None, **kwargs) -> CompiledSubAgent:
+    return {"name": "widget", "runnable": runnable}
 ```
 
 **After** (plugin-based):
 ```python
-@plugin(name="browser", version="1.0.0", dependencies=["browser-use~=0.1.0"])
-class BrowserPlugin:
-    @subagent(name="browser", description="Web navigation")
-    async def create_browser_subagent(self, model, config, **kwargs):
-        return {"name": "browser", "runnable": runnable}
+@plugin(name="widget", version="1.0.0", dependencies=["some-sdk~=0.1.0"])
+class WidgetPlugin:
+    @subagent(name="widget", description="Example delegate")
+    async def create_widget_subagent(self, model, config, **kwargs):
+        return {"name": "widget", "runnable": runnable}
 ```
 
 **Backward Compatibility**:
@@ -291,7 +291,7 @@ class BrowserPlugin:
 - [ ] Modify `core/agent.py`, `core/resolver/` to use plugin registry
 
 ### Migration
-- [x] Migrate browser, claude to soothe-community (IG-415); skillify, weaver already community
+- [x] Migrate optional heavy delegated agents to soothe-community (IG-415); skillify, weaver already community
 
 ### Testing
 - [ ] Unit tests for manifest, decorators, registry, lifecycle

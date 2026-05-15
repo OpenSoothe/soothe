@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-16
-**Author**: Claude (Sonnet 4.6)
+**Author**: Soothe contributors
 **Extends**: RFC-450 (Daemon Communication Protocol)
 **Related**: RFC-500 (CLI/TUI Architecture), IG-176 (Move Rich to CLI)
 
