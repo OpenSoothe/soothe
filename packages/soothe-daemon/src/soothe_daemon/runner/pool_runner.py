@@ -21,6 +21,7 @@ import math
 import multiprocessing
 import multiprocessing.context
 import queue
+import threading
 import time
 import uuid
 from collections.abc import AsyncIterator, Callable
@@ -40,6 +41,47 @@ if TYPE_CHECKING:
     from soothe.core.runner._runner_shared import StreamChunk
 
 logger = logging.getLogger(__name__)
+
+
+def _start_thread_heartbeat(
+    *,
+    response_queue: multiprocessing.Queue,
+    request_id: str,
+    stop_event: threading.Event,
+    heartbeat_interval_seconds: float,
+    start_time: float,
+) -> threading.Thread:
+    """Emit pool heartbeats from a daemon thread (survives event-loop blocking).
+
+    ``asyncio`` heartbeats stop when sync code blocks the worker loop (e.g. embedding
+    model download via ``Future.result()``). A thread timer keeps the parent from
+    marking the worker stuck during long CPU/IO work.
+    """
+
+    def _heartbeat_loop() -> None:
+        while not stop_event.wait(timeout=heartbeat_interval_seconds):
+            try:
+                response_queue.put(
+                    (
+                        "heartbeat",
+                        request_id,
+                        {"elapsed_seconds": time.monotonic() - start_time},
+                    )
+                )
+            except Exception:
+                logger.debug(
+                    "Worker heartbeat enqueue failed for request_id=%s",
+                    request_id,
+                    exc_info=True,
+                )
+
+    thread = threading.Thread(
+        target=_heartbeat_loop,
+        name=f"pool-hb-{request_id[:8]}",
+        daemon=True,
+    )
+    thread.start()
+    return thread
 
 
 class WorkerStatus(StrEnum):
@@ -376,7 +418,8 @@ def _pool_worker_body(
         - Create fresh SootheRunner per request (no user data leakage)
         - Execute request, stream results to response_queue
         - Check cancel_event between chunks for cooperative cancellation
-        - Send heartbeat messages on a timer task (independent of chunk cadence)
+        - Send heartbeat messages on a background thread (independent of chunk cadence
+          and event-loop blocking during sync work such as model downloads)
         - Exit on shutdown sentinel, idle timeout, or max requests
 
     Args:
@@ -427,7 +470,6 @@ def _pool_worker_body(
             # SootheRunner inside try so constructor failures surface as protocol errors,
             # not a silent worker process exit (BaseException would bypass except Exception).
             runner: SootheRunner | None = None
-            start_time = 0.0
 
             try:
                 runner = SootheRunner(config)
@@ -444,35 +486,12 @@ def _pool_worker_body(
 
                     runner.set_interrupt_resolver(req.loop_id, _interrupt_resolver)
 
-                start_time = loop.time()
-
                 # Use asyncio.timeout for overall request timeout if enabled
                 timeout_ctx = _asyncio.timeout(timeout_seconds) if timeout_enabled else None
 
-                stream_finished = _asyncio.Event()
-
-                async def _periodic_heartbeat() -> None:
-                    """Ping main process on a timer while the stream is in flight.
-
-                    Heartbeats must not be tied to chunk delivery: `runner.astream` can go
-                    long periods without yielding while awaiting model/tool work. A
-                    separate task keeps stuck-worker detection accurate as long as this
-                    process's event loop is not blocked by synchronous work.
-                    """
-                    try:
-                        while not stream_finished.is_set():
-                            await _asyncio.sleep(heartbeat_interval_seconds)
-                            if stream_finished.is_set():
-                                break
-                            response_queue.put(
-                                (
-                                    "heartbeat",
-                                    request_id,
-                                    {"elapsed_seconds": loop.time() - start_time},
-                                )
-                            )
-                    except _asyncio.CancelledError:
-                        raise
+                heartbeat_stop = threading.Event()
+                heartbeat_start = time.monotonic()
+                heartbeat_thread: threading.Thread | None = None
 
                 async def _stream() -> None:
                     async for chunk in runner.astream(
@@ -502,11 +521,18 @@ def _pool_worker_body(
                     response_queue.put(("done", request_id, None))
 
                 async def _stream_with_heartbeat() -> None:
-                    # Prime stuck-detection so busy workers are not flagged before first sleep.
+                    nonlocal heartbeat_thread
+                    # Prime stuck-detection so busy workers are not flagged before first tick.
                     response_queue.put(
                         ("heartbeat", request_id, {"elapsed_seconds": 0.0}),
                     )
-                    hb_task = _asyncio.create_task(_periodic_heartbeat())
+                    heartbeat_thread = _start_thread_heartbeat(
+                        response_queue=response_queue,
+                        request_id=request_id,
+                        stop_event=heartbeat_stop,
+                        heartbeat_interval_seconds=float(heartbeat_interval_seconds),
+                        start_time=heartbeat_start,
+                    )
                     stream_task = _asyncio.create_task(_stream())
 
                     async def _poll_cancel_event() -> None:
@@ -517,7 +543,7 @@ def _pool_worker_body(
                         re-enter the outer loop to check ``cancel_event``.
                         """
                         try:
-                            while not stream_finished.is_set():
+                            while True:
                                 await _asyncio.sleep(0.25)
                                 if cancel_event.is_set():
                                     stream_task.cancel()
@@ -529,17 +555,14 @@ def _pool_worker_body(
                     try:
                         await stream_task
                     finally:
-                        stream_finished.set()
+                        heartbeat_stop.set()
                         poll_task.cancel()
                         try:
                             await poll_task
                         except _asyncio.CancelledError:
                             pass
-                        hb_task.cancel()
-                        try:
-                            await hb_task
-                        except _asyncio.CancelledError:
-                            pass
+                        if heartbeat_thread is not None:
+                            heartbeat_thread.join(timeout=2.0)
 
                 if timeout_ctx:
                     async with timeout_ctx:

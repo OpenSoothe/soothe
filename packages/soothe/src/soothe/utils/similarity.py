@@ -20,6 +20,7 @@ import asyncio
 import logging
 import math
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -37,6 +38,9 @@ _embedding_executor: ThreadPoolExecutor | None = None
 
 # Dedicated pool for one-time model download/load (avoids HF hub async client vs event-loop issues)
 _model_load_executor: ThreadPoolExecutor | None = None
+_model_load_thread_lock = threading.Lock()
+_model_load_async_lock: asyncio.Lock | None = None
+_MODEL_LOAD_TIMEOUT_SECONDS = 300.0
 
 
 def hf_embedding_cache_dir() -> Path:
@@ -70,12 +74,53 @@ except ImportError:
     logger.debug("sentence_transformers not available, falling back to keyword similarity")
 
 
-def _get_transformer_model() -> SentenceTransformer | None:
-    """Load transformer model (cached globally, loads on first call).
+def _ensure_model_load_executor() -> ThreadPoolExecutor:
+    global _model_load_executor
+    if _model_load_executor is None:
+        _model_load_executor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="st_model_load",
+        )
+    return _model_load_executor
 
-    Uses synchronous loading to avoid async client closure issues.
-    The model is loaded on first actual use, not at import time.
-    Models are cached under ``~/.cache/soothe/models/huggingface``.
+
+def _load_transformer_model_in_thread() -> SentenceTransformer | None:
+    """Load the embedding model in a worker thread (may download on first use)."""
+    if not _has_sentence_transformers:
+        return None
+    cache_dir = hf_embedding_cache_dir()
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return SentenceTransformer(
+        EMBEDDING_MODEL_NAME,
+        cache_folder=str(cache_dir),
+    )
+
+
+def _complete_transformer_model_load(
+    model: SentenceTransformer | None,
+) -> SentenceTransformer | None:
+    """Store a loaded model globally and mark the load attempt complete."""
+    global _transformer_model, _model_loading_attempted
+
+    _model_loading_attempted = True
+    if model is None:
+        _transformer_model = None
+        return None
+    _transformer_model = model
+    logger.info(
+        "Loaded sentence_transformers model: %s (cache: %s)",
+        EMBEDDING_MODEL_NAME,
+        hf_embedding_cache_dir(),
+    )
+    return _transformer_model
+
+
+def _get_transformer_model() -> SentenceTransformer | None:
+    """Load transformer model synchronously (only when no asyncio loop is running).
+
+    Never call from a running event-loop thread: use ``async_get_transformer_model()``
+    instead. Blocking here (including ``Future.result`` during HF download) stops worker
+    heartbeats and triggers pool stuck-worker termination.
     """
     global _transformer_model, _has_sentence_transformers, _model_loading_attempted
 
@@ -83,40 +128,77 @@ def _get_transformer_model() -> SentenceTransformer | None:
         return None
 
     if _model_loading_attempted:
-        # Already tried loading, use cached result (may be None if failed)
         return _transformer_model
 
-    _model_loading_attempted = True
     try:
-        cache_dir = hf_embedding_cache_dir()
-        cache_dir.mkdir(parents=True, exist_ok=True)
-
-        def _load_in_worker() -> SentenceTransformer:
-            return SentenceTransformer(
-                EMBEDDING_MODEL_NAME,
-                cache_folder=str(cache_dir),
-            )
-
-        # Load off the asyncio loop: HuggingFace hub can otherwise raise
-        # "Cannot send a request, as the client has been closed" in mixed async/sync contexts.
-        global _model_load_executor
-        if _model_load_executor is None:
-            _model_load_executor = ThreadPoolExecutor(
-                max_workers=1,
-                thread_name_prefix="st_model_load",
-            )
-        _transformer_model = _model_load_executor.submit(_load_in_worker).result(timeout=300)
-        logger.info(
-            "Loaded sentence_transformers model: %s (cache: %s)",
-            EMBEDDING_MODEL_NAME,
-            cache_dir,
+        asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    else:
+        logger.warning(
+            "_get_transformer_model() called on a running event loop; "
+            "use async_get_transformer_model() to avoid blocking heartbeats"
         )
-    except Exception as e:
-        logger.warning("Failed to load sentence_transformers model: %s", e)
-        _has_sentence_transformers = False
-        _transformer_model = None
+        return _transformer_model
 
-    return _transformer_model
+    with _model_load_thread_lock:
+        if _model_loading_attempted:
+            return _transformer_model
+        try:
+            executor = _ensure_model_load_executor()
+            loaded = executor.submit(_load_transformer_model_in_thread).result(
+                timeout=_MODEL_LOAD_TIMEOUT_SECONDS,
+            )
+            return _complete_transformer_model_load(loaded)
+        except Exception as e:
+            logger.warning("Failed to load sentence_transformers model: %s", e)
+            _has_sentence_transformers = False
+            _model_loading_attempted = True
+            _transformer_model = None
+            return None
+
+
+async def async_get_transformer_model() -> SentenceTransformer | None:
+    """Load the embedding model without blocking the asyncio event loop."""
+    global _transformer_model, _has_sentence_transformers, _model_loading_attempted
+    global _model_load_async_lock
+
+    if not _has_sentence_transformers:
+        return None
+    if _transformer_model is not None:
+        return _transformer_model
+    if _model_loading_attempted:
+        return _transformer_model
+
+    if _model_load_async_lock is None:
+        _model_load_async_lock = asyncio.Lock()
+
+    async with _model_load_async_lock:
+        if _transformer_model is not None:
+            return _transformer_model
+        if _model_loading_attempted:
+            return _transformer_model
+        try:
+            loop = asyncio.get_running_loop()
+            executor = _ensure_model_load_executor()
+            loaded = await asyncio.wait_for(
+                loop.run_in_executor(executor, _load_transformer_model_in_thread),
+                timeout=_MODEL_LOAD_TIMEOUT_SECONDS,
+            )
+            return _complete_transformer_model_load(loaded)
+        except TimeoutError:
+            logger.warning(
+                "Embedding model load timed out after %.0fs",
+                _MODEL_LOAD_TIMEOUT_SECONDS,
+            )
+            _model_loading_attempted = True
+            return None
+        except Exception as e:
+            logger.warning("Failed to load sentence_transformers model: %s", e)
+            _has_sentence_transformers = False
+            _model_loading_attempted = True
+            _transformer_model = None
+            return None
 
 
 def _embedding_model_snapshot_dir() -> Path:
@@ -252,7 +334,7 @@ async def async_semantic_similarity(
         return 0.0
 
     # Try semantic similarity with transformers (async with timeout)
-    model = _get_transformer_model()
+    model = await async_get_transformer_model()
     if model is not None:
         try:
             # Run blocking encode() in thread pool with timeout
