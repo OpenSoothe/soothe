@@ -329,6 +329,16 @@ async def execute_task_textual(
                 # Convert namespace to hashable tuple for dict keys
                 ns_key = tuple(namespace) if namespace else ()
 
+                # IG-416 debug: Log every chunk arrival
+                if current_stream_mode == "custom" and isinstance(data, dict):
+                    event_type = str(data.get("type", ""))
+                    logger.info(
+                        "[TUI_CHUNK] mode=%s ns=%r event_type=%s",
+                        current_stream_mode,
+                        ns_key,
+                        event_type,
+                    )
+
                 # Root graph uses namespace ``()``; delegated subgraphs use non-empty
                 # namespaces. Assistant *text* from subgraphs is suppressed (avoid duplicate
                 # prose with main). Tool-call UI is gated by ``show_tool_ui``, not namespace.
@@ -1087,6 +1097,33 @@ async def execute_task_textual(
                                 else str(lookup_id)
                             )
                             if display_key and display_key not in displayed_tool_ids:
+                                # IG-416: Check if binding event already mounted this tool
+                                if lookup_id and is_main_agent:
+                                    bound_step = router.step_id_for_tool(str(lookup_id))
+                                    if bound_step:
+                                        step_card_bound = adapter._current_step_messages.get(
+                                            bound_step
+                                        )
+                                        if step_card_bound and getattr(
+                                            step_card_bound, "has_tool_call_row", lambda _x: False
+                                        )(str(lookup_id)):
+                                            # Already mounted via binding event, just update args
+                                            if parsed_args:
+                                                update_fn = getattr(
+                                                    step_card_bound, "update_tool_args", None
+                                                )
+                                                if callable(update_fn):
+                                                    update_fn(str(lookup_id), parsed_args)
+                                            displayed_tool_ids.add(display_key)
+                                            logger.debug(
+                                                "Tool call args refreshed (binding-mounted): "
+                                                "id=%s name=%s step_id=%s",
+                                                lookup_id,
+                                                buffer_name,
+                                                bound_step,
+                                            )
+                                            tool_call_buffers.pop(buffer_key, None)
+                                            continue
                                 bound_early = (
                                     router.step_id_for_tool(str(lookup_id)) if lookup_id else ""
                                 )
@@ -1361,6 +1398,12 @@ async def execute_task_textual(
                         if event_type == AGENT_LOOP_STEP_STARTED:
                             step_id = str(data.get("step_id", "")).strip()
                             description = str(data.get("description", "")).strip()
+                            logger.info(
+                                "[STEP_STARTED] received step_id=%s description=%s ns=%r",
+                                step_id,
+                                description[:50] if description else "",
+                                ns_key,
+                            )
                             if step_id:
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
@@ -1383,6 +1426,14 @@ async def execute_task_textual(
                                 adapter._current_step_messages[step_id] = step_widget
                                 adapter._step_by_namespace[ns_key] = step_widget
                                 router.on_step_started(step_id)
+                                # IG-416 debug: Log step card creation
+                                logger.info(
+                                    "[STEP_STARTED] CREATED step_card step_id=%s ns=%r "
+                                    "current_step_messages_keys=%s",
+                                    step_id,
+                                    ns_key,
+                                    list(adapter._current_step_messages.keys()),
+                                )
                                 router.route_pending_main_tools(
                                     adapter._current_step_messages,
                                     adapter._tool_to_step,
@@ -1401,14 +1452,74 @@ async def execute_task_textual(
                         if event_type == AGENT_LOOP_STEP_TOOL_BINDING:
                             step_id = str(data.get("step_id", "")).strip()
                             tool_call_id = str(data.get("tool_call_id", "")).strip()
+                            # IG-416: Augmented fields for direct rendering
+                            tool_name = str(data.get("tool_name", "")).strip()
+                            aug_args = data.get("args")
+                            aug_args_status = str(data.get("args_status", "pending"))
                             if step_id and tool_call_id:
                                 logger.info(
-                                    "[StepToolBind] stream_event ns=%r tool_call_id=%s step_id=%s",
+                                    "[StepToolBind] stream_event ns=%r tool_call_id=%s step_id=%s "
+                                    "name=%s args_status=%s",
                                     ns_key,
                                     tool_call_id,
                                     step_id,
+                                    tool_name,
+                                    aug_args_status,
                                 )
                                 adapter.apply_tool_step_binding(tool_call_id, step_id)
+                                # IG-416: Mount tool row even with pending args (show "loading" state)
+                                if tool_name and show_tool_ui and step_id:
+                                    step_card = adapter._current_step_messages.get(step_id)
+                                    # Debug: Log step_card state
+                                    logger.info(
+                                        "[StepToolBind] step_card lookup: step_id=%s "
+                                        "step_card=%s current_step_messages_keys=%s",
+                                        step_id,
+                                        type(step_card).__name__ if step_card else "None",
+                                        list(adapter._current_step_messages.keys()),
+                                    )
+                                    if step_card is not None and not getattr(
+                                        step_card, "has_tool_call_row", lambda _x: False
+                                    )(tool_call_id):
+                                        ingest = getattr(step_card, "add_tool_call", None)
+                                        if callable(ingest):
+                                            # Use args if available, otherwise show placeholder
+                                            display_args = (
+                                                aug_args
+                                                if aug_args_status == "complete"
+                                                and isinstance(aug_args, dict)
+                                                else {}  # Empty dict shows as pending
+                                            )
+                                            ingest(tool_call_id, tool_name, display_args)
+                                            adapter._tool_to_step[tool_call_id] = step_card
+                                            if tool_call_id not in adapter._tool_display_by_call_id:
+                                                adapter._tool_display_by_call_id[tool_call_id] = (
+                                                    step_card
+                                                )
+                                            logger.info(
+                                                "[StepToolBind] MOUNTED tool_call_id=%s "
+                                                "step_id=%s name=%s args_status=%s",
+                                                tool_call_id,
+                                                step_id,
+                                                tool_name,
+                                                aug_args_status,
+                                            )
+                                        else:
+                                            logger.warning(
+                                                "[StepToolBind] add_tool_call NOT CALLABLE step_id=%s",
+                                                step_id,
+                                            )
+                                    elif step_card is None:
+                                        logger.warning(
+                                            "[StepToolBind] step_card MISSING step_id=%s",
+                                            step_id,
+                                        )
+                                    else:
+                                        logger.info(
+                                            "[StepToolBind] tool_row EXISTS tool_call_id=%s step_id=%s",
+                                            tool_call_id,
+                                            step_id,
+                                        )
                                 await _flush_router_pending_subgraph_tools(
                                     adapter,
                                     router,
