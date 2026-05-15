@@ -27,8 +27,10 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from soothe.config import SOOTHE_HOME
 from soothe.config.settings import SootheConfig
 from soothe.protocols.runner import InterruptPending, LoopRunnerProtocol, LoopRunRequest
 
@@ -291,6 +293,31 @@ def _spawn_safe_config(config: SootheConfig | None) -> SootheConfig:
     return _local_spawn_safe_config(config)
 
 
+def _log_pool_worker_fatal(worker_id: str, exc: BaseException) -> None:
+    """Append uncaught subprocess errors to a file under ``SOOTHE_HOME/logs``.
+
+    Worker file logging (``runner.log``) is only attached when a loop request
+    starts, so import/bootstrap failures in an otherwise-idle pool worker would
+    otherwise disappear unless stderr is captured.
+    """
+    import os
+    import traceback
+
+    base = Path(SOOTHE_HOME)
+    log_path = base / "logs" / "pool_worker_bootstrap.log"
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(
+                f"\n--- {datetime.now().isoformat(timespec='milliseconds')} "
+                f"worker={worker_id} pid={os.getpid()} ---\n"
+            )
+            traceback.print_exception(type(exc), exc, exc.__traceback__, file=fh)
+    except Exception:
+        # Never let diagnostics break the crash path.
+        pass
+
+
 def _pool_worker(
     config: SootheConfig,
     worker_id: str,
@@ -303,9 +330,46 @@ def _pool_worker(
     default_timeout_seconds: int,
     heartbeat_interval_seconds: int,
 ) -> None:
-    """Persistent worker process main loop.
+    """Multiprocessing entry: delegate to body and record fatal errors on disk."""
+    try:
+        _pool_worker_body(
+            config,
+            worker_id,
+            request_queue,
+            response_queue,
+            cancel_event,
+            interrupt_queue,
+            idle_timeout_seconds,
+            max_requests,
+            default_timeout_seconds,
+            heartbeat_interval_seconds,
+        )
+    except BaseException as exc:
+        if type(exc) is GeneratorExit:
+            raise
+        if isinstance(exc, SystemExit) and exc.code in (0, None, False):
+            raise
+        _log_pool_worker_fatal(worker_id, exc)
+        raise
 
-    Top-level function (picklable) that runs indefinitely:
+
+def _pool_worker_body(
+    config: SootheConfig,
+    worker_id: str,
+    request_queue: multiprocessing.Queue,
+    response_queue: multiprocessing.Queue,
+    cancel_event: multiprocessing.Event,
+    interrupt_queue: multiprocessing.Queue,
+    idle_timeout_seconds: int,
+    max_requests: int,
+    default_timeout_seconds: int,
+    heartbeat_interval_seconds: int,
+) -> None:
+    """Worker subprocess body: wait for requests and execute loop runs.
+
+    The multiprocessing entrypoint is ``_pool_worker`` (wraps this function).
+
+    Behavior:
         - Wait for requests on request_queue (with idle timeout)
         - Create fresh SootheRunner per request (no user data leakage)
         - Execute request, stream results to response_queue
@@ -682,6 +746,9 @@ class WorkerPool:
         self._abandon_drain_tasks: set[asyncio.Task[None]] = set()
         # Next worker slot index for scaling up
         self._next_worker_index: int = 0
+        #: Consecutive "fast" deaths per slot (respawn storm mitigation).
+        self._worker_rapid_death_streak: dict[str, int] = {}
+        self._worker_last_death_monotonic: dict[str, float] = {}
 
     @classmethod
     async def get_shared_instance(
@@ -951,6 +1018,30 @@ class WorkerPool:
         )
         if worker.current_request_id is not None:
             await self._route_failure_for_dead_busy_worker(worker)
+
+        wid = worker.worker_id
+        now = time.monotonic()
+        last = self._worker_last_death_monotonic.get(wid, 0.0)
+        if now - last <= 2.0:
+            self._worker_rapid_death_streak[wid] = self._worker_rapid_death_streak.get(wid, 0) + 1
+        else:
+            self._worker_rapid_death_streak[wid] = 1
+        self._worker_last_death_monotonic[wid] = now
+
+        streak = self._worker_rapid_death_streak[wid]
+        if streak >= 5:
+            backoff = min(30.0, 0.2 * (2.0 ** min(streak - 5, 8)))
+            crash_log = Path(SOOTHE_HOME) / "logs" / "pool_worker_bootstrap.log"
+            logger.error(
+                "WorkerPool: worker %s died %d times in quick succession; "
+                "waiting %.1fs before respawn (if the child crashes on startup, see %s)",
+                wid,
+                streak,
+                backoff,
+                crash_log,
+            )
+            await asyncio.sleep(backoff)
+
         try:
             await self._respawn_worker(worker)
         except Exception:
@@ -962,6 +1053,11 @@ class WorkerPool:
 
         while self._running:
             for worker_id, worker in list(self._workers.items()):
+                if worker.is_alive():
+                    age_sec = (datetime.now() - worker.started_at).total_seconds()
+                    if age_sec >= 5.0:
+                        self._worker_rapid_death_streak.pop(worker_id, None)
+
                 # STUCK WORKER DETECTION: Check if busy worker hasn't sent heartbeat
                 if worker.status == WorkerStatus.BUSY:
                     now = datetime.now()

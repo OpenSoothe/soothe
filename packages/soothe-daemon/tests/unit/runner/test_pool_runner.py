@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import multiprocessing
 import queue
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -16,6 +17,7 @@ import pytest
 from soothe.config import SootheConfig
 from soothe.protocols.runner import LoopRunRequest
 
+import soothe_daemon.runner.pool_runner as pool_runner_module
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.config.models import WorkerPoolConfig
 from soothe_daemon.runner.pool_runner import (
@@ -93,6 +95,17 @@ class TestWorkerProcess:
 
         assert worker.status == WorkerStatus.BUSY
         assert worker.current_loop_id == "loop-456"
+
+
+def test_log_pool_worker_fatal_writes_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fatal worker hook appends to pool_worker_bootstrap.log under SOOTHE_HOME."""
+    monkeypatch.setattr(pool_runner_module, "SOOTHE_HOME", tmp_path)
+    pool_runner_module._log_pool_worker_fatal("worker-9", RuntimeError("boom"))
+    logf = tmp_path / "logs" / "pool_worker_bootstrap.log"
+    assert logf.is_file()
+    body = logf.read_text(encoding="utf-8")
+    assert "worker-9" in body
+    assert "boom" in body
 
 
 class TestPoolMetrics:

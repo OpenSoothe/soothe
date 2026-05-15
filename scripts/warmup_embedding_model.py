@@ -4,7 +4,7 @@
 Downloads the sentence_transformers embedding model to a shared cache directory.
 Does NOT import soothe code - only requires sentence_transformers package.
 
-Used in Dockerfile.base to pre-cache embedding models before daemon build.
+Used in packages/soothe-daemon/Dockerfile to pre-cache embedding models in the image build.
 
 Usage:
     python scripts/warmup_embedding_model.py [--verbose]
