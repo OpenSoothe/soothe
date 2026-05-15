@@ -13,6 +13,7 @@
 #     soothed:latest
 
 ARG BASE_IMAGE=registry.cn-hangzhou.aliyuncs.com/lacogito/soothed-base:latest
+ARG PYTHON_BASE=registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
 
 # ========================================
 # Stage 1: Use pre-built base
@@ -40,8 +41,7 @@ RUN mkdir -p /var/lib/soothe/data \
 # ========================================
 # Stage 2: Runtime
 # ========================================
-ARG PYTHON_BASE=registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
-FROM ${PYTHON_BASE}
+FROM ${PYTHON_BASE} AS runtime
 
 LABEL org.opencontainers.image.title="Soothe Daemon" \
     org.opencontainers.image.description="Soothe agent orchestration daemon - built from base image" \
