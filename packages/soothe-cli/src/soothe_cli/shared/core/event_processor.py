@@ -137,12 +137,18 @@ class EventProcessor:
             namespace,
         )
 
-    def _resolve_task_scope(self, namespace: tuple[str, ...]) -> tuple[str, str] | None:
-        """Return ``(task_tool_call_id, subagent_type)`` for this stream namespace."""
+    def _resolve_task_scope(self, namespace: tuple[str, ...]) -> tuple[str, str, str] | None:
+        """Return task scope ``(task_tool_call_id, subagent_type, step_id)`` for namespace."""
         return resolve_task_scope_for_namespace(self._state.namespace_task_bindings, namespace)
 
     def _enqueue_task_spawn_if_needed(
-        self, name: str, args: dict[str, Any], tool_call_id: str, *, is_main: bool
+        self,
+        name: str,
+        args: dict[str, Any],
+        tool_call_id: str,
+        *,
+        is_main: bool,
+        step_id: str = "",
     ) -> None:
         """Record main-graph ``task`` tool calls so subgraph streams can resolve labels."""
         enqueue_task_spawn(
@@ -151,6 +157,7 @@ class EventProcessor:
             args=args,
             tool_call_id=tool_call_id,
             is_main=is_main,
+            step_id=step_id,
         )
 
     def _emit_tool_call_for_renderer(

@@ -58,6 +58,8 @@ class ExploreCompletedEvent(SootheEvent):
     iterations_used: int = 0
     duration_ms: int = 0
     search_target: str = ""
+    completion_status: str = "complete"
+    failure_reason: str = ""
 
     model_config = ConfigDict(extra="allow")
 
