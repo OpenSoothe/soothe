@@ -346,7 +346,7 @@ async def test_persistence_manager_update_branch_analysis(tmp_path):
             "context": "Large file analysis exceeded threshold",
         }
         avoid_patterns = [
-            "Do not use claude subagent for files > 500KB without streaming",
+            "Do not delegate large-file reads to a remote coding sidecar without streaming",
             "Avoid sequential file reads in single iteration",
         ]
         suggested_adjustments = [

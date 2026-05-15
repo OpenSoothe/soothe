@@ -111,7 +111,7 @@ def format_subagent_done(
         duration_s: Duration in seconds.
         task_scope: Optional ``(task_tool_call_id, subagent_type)`` for delegated rows.
         task_description: Original brief (e.g. explore ``search_target``) when available.
-        task_done_success: False for delegated failures (e.g. Claude subagent error).
+        task_done_success: False for delegated failures (e.g. optional plugin delegate error).
         answer_summary: Optional one-line answer tail after metrics (IG-344).
 
     Returns:

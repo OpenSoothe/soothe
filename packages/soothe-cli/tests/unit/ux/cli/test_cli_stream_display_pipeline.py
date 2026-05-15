@@ -495,7 +495,7 @@ class TestStreamDisplayPipeline:
         }
         lines = pipeline.process(event)
         assert len(lines) == 1
-        assert "Completed" in lines[0].content
+        assert "2 findings" in lines[0].content
 
     def test_loop_agent_reason_shown_at_normal(self) -> None:
         """IG-225: Loop agent Reason event shows judgement + plan reasoning."""

@@ -231,6 +231,7 @@ async def _handle_interrupt_cleanup(
     adapter._tool_to_step.clear()
     adapter._step_by_namespace.clear()
     adapter._pending_main_tools.clear()
+    adapter._tool_call_to_step_id.clear()
 
     adapter._last_completed_main_step_execute_prose = ""
     adapter._last_main_flushed_assistant_prose = ""

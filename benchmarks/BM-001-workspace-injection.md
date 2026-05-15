@@ -104,7 +104,7 @@ Response excludes:
 **Expected Behavior**:
 - Planner creates a plan that searches in the workspace
 - Does not plan to search in system directories or home directory broadly
-- Uses file tools (read_file, list_files) not browser subagent for local files
+- Uses file tools (read_file, list_files) not a web delegate for local files
 
 **Verification Conditions**:
 - [ ] Plan steps reference workspace-relative paths
@@ -269,7 +269,7 @@ def run_benchmark():
 2. **Root Filesystem Access**: Agent lists/searches in `/` or system directories
 3. **File Not Found**: Agent cannot find files that exist in workspace
 4. **Empty Directory**: Agent reports workspace is empty when it's not
-5. **Browser for Local Files**: Agent uses browser subagent for local file operations
+5. **Web delegate for Local Files**: Agent routes local file operations through a web-oriented delegate
 6. **Home Directory Search**: Agent searches broadly in `~` instead of workspace
 
 ---
@@ -324,7 +324,7 @@ grep -E "(workspace|LangGraph configurable)" ~/.soothe/logs/soothe.log | tail -2
 | 2026-04-01 | Fixed: `PlanContext` now receives `workspace` field from `state.workspace` in `_runner_phases.py` and `_runner_autonomous.py` |
 | 2026-04-01 | Fixed: Planner prompt now emphasizes workspace context prominently with explicit instructions to NOT search system directories |
 | 2026-04-01 | Refactored: Planner prompt to XML sections (RFC-104) with `<PLANNING_*>` tags for better structure |
-| 2026-04-01 | Fixed: Browser subagent description now explicitly forbids local file operations (pwd, ls, cat) |
-| 2026-04-01 | Fixed: Claude subagent description now advises using direct tools for simple operations |
+| 2026-04-01 | Fixed: Web-oriented delegate descriptions now explicitly forbid local file operations (pwd, ls, cat) |
+| 2026-04-01 | Fixed: Coding-sidecar delegate descriptions now advise using direct tools for simple operations |
 | 2026-04-01 | Fixed: Research subagent description simplified and clarified scope |
 | 2026-04-01 | Added: `<EFFICIENCY_RULES>` section in planner prompt to encourage batched operations |

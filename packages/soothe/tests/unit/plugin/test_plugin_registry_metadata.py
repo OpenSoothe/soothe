@@ -60,12 +60,12 @@ def test_get_subagent_metadata_from_factory() -> None:
     assert entry is not None
 
     class _Factory:
-        _subagent_name = "claude"
+        _subagent_name = "sidecar"
         _subagent_triggers = ["THREAD"]
         _subagent_system_context = "<sub/>"
 
     entry.subagents = [_Factory()]
-    meta = reg.get_subagent_metadata("claude")
+    meta = reg.get_subagent_metadata("sidecar")
     assert meta == {"triggers": ["THREAD"], "system_context": "<sub/>"}
 
 

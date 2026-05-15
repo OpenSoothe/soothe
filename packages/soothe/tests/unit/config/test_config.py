@@ -59,8 +59,6 @@ class TestSootheConfig:
 
     def test_default_subagents(self) -> None:
         cfg = SootheConfig()
-        assert "browser" in cfg.subagents
-        assert "claude" in cfg.subagents
         assert "explore" in cfg.subagents
         assert "plan" in cfg.subagents
         assert "research" in cfg.subagents

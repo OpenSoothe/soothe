@@ -338,7 +338,7 @@ class TestDomainScopedPrompts:
         assert "read_file" in _FILE_OPS_GUIDE or "file" in _FILE_OPS_GUIDE.lower()
         assert "run_command" in _SHELL_GUIDE or "execute" in _SHELL_GUIDE.lower()
         assert "data" in _DATA_GUIDE.lower()
-        assert "browser" in _SUBAGENT_GUIDE.lower()
+        assert "explore" in _SUBAGENT_GUIDE.lower()
 
     def test_orchestration_guide_has_all_domains(self) -> None:
         from soothe.core.prompts import _TOOL_ORCHESTRATION_GUIDE

@@ -83,10 +83,6 @@ tools:
     enabled: false
 
 subagents:
-  browser:
-    enabled: false
-  claude:
-    enabled: false
   research:
     enabled: false
   explore:

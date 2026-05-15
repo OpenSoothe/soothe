@@ -103,6 +103,48 @@ def test_record_execute_wave_parallel_multi_merges_delegate_finals() -> None:
     assert state.last_wave_answer_from_delegate_final is True
 
 
+@pytest.mark.asyncio
+async def test_stream_and_collect_emits_early_tool_binding_before_ai_chunk() -> None:
+    """Root AI tool-call ids emit binding custom events before the messages chunk."""
+    from langchain_core.messages import AIMessageChunk
+
+    from soothe.core.events.constants import AGENT_LOOP_STEP_TOOL_BINDING
+
+    chunk: tuple = (
+        (),
+        "messages",
+        (
+            AIMessageChunk(
+                content="",
+                tool_call_chunks=[{"name": "grep", "id": "call-grep-1", "args": "{}"}],
+            ),
+            {},
+        ),
+    )
+    mock_agent = MagicMock()
+
+    async def fake_stream():
+        yield chunk
+
+    executor = Executor(mock_agent)
+    rows: list = []
+    async for row in executor._stream_and_collect(
+        fake_stream(),
+        budget=None,
+        tool_binding_step_id="step-a",
+    ):
+        rows.append(row)
+    assert len(rows) == 3
+    bind_ev = rows[0][1]
+    assert isinstance(bind_ev, tuple) and len(bind_ev) == 3
+    _ns, mode, payload = bind_ev
+    assert mode == "custom"
+    assert payload["type"] == AGENT_LOOP_STEP_TOOL_BINDING
+    assert payload["step_id"] == "step-a"
+    assert payload["tool_call_id"] == "call-grep-1"
+    assert rows[1][1] == chunk
+
+
 def test_record_execute_wave_parallel_multi_clears_when_no_delegate() -> None:
     """Parallel wave with no task returns keeps assistant text empty."""
     from soothe.core.loop.state.schemas import LoopState

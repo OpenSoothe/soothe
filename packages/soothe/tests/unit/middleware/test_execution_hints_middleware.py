@@ -16,7 +16,7 @@ class TestExecutionHintsMiddleware:
         config = {
             "configurable": {
                 "thread_id": "test-thread",
-                "soothe_step_subagent": "browser",
+                "soothe_step_subagent": "explore",
                 "soothe_step_expected_output": "Config file list",
             }
         }

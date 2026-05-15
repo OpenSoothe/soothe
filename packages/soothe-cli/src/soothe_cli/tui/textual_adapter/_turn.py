@@ -1341,12 +1341,13 @@ async def execute_task_textual(
                             step_id = str(data.get("step_id", "")).strip()
                             tool_call_id = str(data.get("tool_call_id", "")).strip()
                             if step_id and tool_call_id:
-                                adapter._tool_call_to_step_id[tool_call_id] = step_id
-                                logger.debug(
-                                    "Tool-step binding: tool_call_id=%s → step_id=%s",
+                                logger.info(
+                                    "[StepToolBind] stream_event ns=%r tool_call_id=%s step_id=%s",
+                                    ns_key,
                                     tool_call_id,
                                     step_id,
                                 )
+                                adapter.apply_tool_step_binding(tool_call_id, step_id)
                             continue
 
                         if event_type == AGENT_LOOP_STEP_COMPLETED:

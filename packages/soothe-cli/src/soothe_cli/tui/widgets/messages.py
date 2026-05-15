@@ -1472,6 +1472,32 @@ class ToolCallMessage(Vertical):
         """Return True if this card already tracks ``tool_call_id``."""
         return str(tool_call_id) in self._row_index
 
+    def pop_tool_row(self, tool_call_id: str) -> _StepToolRow | None:
+        """Remove and return a tool row so another card can adopt it (step re-bind)."""
+        tcid = str(tool_call_id).strip()
+        if not tcid:
+            return None
+        row = self._row_index.pop(tcid, None)
+        if row is None:
+            return None
+        self._rows = [r for r in self._rows if r.tool_call_id != tcid]
+        self._activity = [e for e in self._activity if not (isinstance(e, _StepToolRow) and e.tool_call_id == tcid)]
+        self._refresh_activity_display()
+        return row
+
+    def ingest_tool_row(self, row: _StepToolRow) -> None:
+        """Attach a row moved from another card (parallel step routing)."""
+        tcid = str(row.tool_call_id).strip()
+        if not tcid:
+            return
+        if tcid in self._row_index:
+            self.update_tool_args(tcid, row.args)
+            return
+        self._rows.append(row)
+        self._activity.append(row)
+        self._row_index[tcid] = row
+        self._refresh_activity_display()
+
     def row_duration_ms_since_started(self, tool_call_id: str) -> int:
         """Elapsed ms since this row entered running state."""
         row = self._row_index.get(str(tool_call_id))
@@ -2845,6 +2871,16 @@ class CognitionStepMessage(Vertical):
             self._stats_counts[key] = 0
         self._stats_counts[key] += 1
 
+    def _decrement_tool_stat_for_row(self, tool_name: str) -> None:
+        key = get_tool_display_name(_normalize_tool_name_for_arg_map(tool_name or ""))
+        c = self._stats_counts.get(key, 0)
+        if c <= 1:
+            self._stats_counts.pop(key, None)
+            if key in self._stats_order:
+                self._stats_order.remove(key)
+        else:
+            self._stats_counts[key] = c - 1
+
     def _stats_title_suffix(self) -> str:
         if not self._stats_order:
             return ""
@@ -3029,6 +3065,34 @@ class CognitionStepMessage(Vertical):
     def has_tool_call_row(self, tool_call_id: str) -> bool:
         """Return True if this step card already tracks ``tool_call_id``."""
         return str(tool_call_id) in self._row_index
+
+    def pop_tool_row(self, tool_call_id: str) -> _StepToolRow | None:
+        """Remove and return a tool row so another step card can adopt it (parallel routing)."""
+        tcid = str(tool_call_id).strip()
+        if not tcid:
+            return None
+        row = self._row_index.pop(tcid, None)
+        if row is None:
+            return None
+        self._rows = [r for r in self._rows if r.tool_call_id != tcid]
+        self._decrement_tool_stat_for_row(row.tool_name)
+        self._refresh_header_title()
+        self._refresh_tools_display()
+        return row
+
+    def ingest_tool_row(self, row: _StepToolRow) -> None:
+        """Attach a tool row moved from another step card."""
+        tcid = str(row.tool_call_id).strip()
+        if not tcid:
+            return
+        if tcid in self._row_index:
+            self.update_tool_args(tcid, row.args)
+            return
+        self._rows.append(row)
+        self._row_index[tcid] = row
+        self._bump_stat(row.tool_name)
+        self._refresh_header_title()
+        self._refresh_tools_display()
 
     def row_duration_ms_since_started(self, tool_call_id: str) -> int:
         """Elapsed ms since this row entered running state (for result lines)."""

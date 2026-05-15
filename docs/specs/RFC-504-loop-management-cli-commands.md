@@ -6,7 +6,7 @@
 **Kind**: Implementation Interface Design
 **Created**: 2026-04-22
 **Dependencies**: RFC-503 (Loop-First UX), RFC-218 (Checkpoint Tree), RFC-454 (Slash Commands)
-**Author**: Claude Sonnet 4.6
+**Author**: Soothe contributors
 
 ---
 

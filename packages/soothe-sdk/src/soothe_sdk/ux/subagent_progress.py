@@ -35,12 +35,12 @@ def get_subagent_name_from_event(event_type: str) -> str | None:
         event_type: Full event type string.
 
     Returns:
-        Subagent segment (e.g., ``browser``, ``claude``) for ``soothe.subagent.<id>.…``,
+        Subagent segment (e.g., ``explore``, ``research``) for ``soothe.subagent.<id>.…``,
         else None.
 
     Example:
-        >>> get_subagent_name_from_event("soothe.subagent.browser.started")
-        'browser'
+        >>> get_subagent_name_from_event("soothe.subagent.explore.started")
+        'explore'
         >>> get_subagent_name_from_event("soothe.cognition.plan.created")
         None
     """

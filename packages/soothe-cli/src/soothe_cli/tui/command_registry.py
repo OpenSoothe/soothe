@@ -147,7 +147,7 @@ COMMANDS: tuple[SlashCommand, ...] = (
     ),
     SlashCommand(
         name="/changelog",
-        description="Open changelog in browser",
+        description="Open changelog in default web viewer",
         bypass_tier=BypassTier.SIDE_EFFECT_FREE,
     ),
     SlashCommand(
@@ -162,7 +162,7 @@ COMMANDS: tuple[SlashCommand, ...] = (
     ),
     SlashCommand(
         name="/docs",
-        description="Open documentation in browser",
+        description="Open documentation in default web viewer",
         bypass_tier=BypassTier.SIDE_EFFECT_FREE,
     ),
     SlashCommand(

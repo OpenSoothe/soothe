@@ -225,6 +225,58 @@ class TextualUIAdapter:
         self._on_tokens_show: _TokensShowCallback | None = None
         """Called to restore the token display with the cached value."""
 
+    def apply_tool_step_binding(self, tool_call_id: str, step_id: str) -> None:
+        """Map a root-graph tool call to a step and migrate any misplaced row (parallel act).
+
+        ``AGENT_LOOP_STEP_TOOL_BINDING`` may arrive after a row was attached using the
+        namespace fallback; this moves the row to the authoritative step card when needed.
+
+        Args:
+            tool_call_id: LangChain / provider tool call id.
+            step_id: Agent-loop execute step id.
+        """
+        tcid = str(tool_call_id).strip()
+        sid = str(step_id).strip()
+        if not tcid or not sid:
+            return
+        self._tool_call_to_step_id[tcid] = sid
+        target = self._current_step_messages.get(sid)
+        if target is None:
+            logger.info(
+                "[StepToolBind] ui_apply step_id=%s tool_call_id=%s target_card=missing",
+                sid,
+                tcid,
+            )
+            return
+        parent = self._tool_to_step.get(tcid)
+        migrated = False
+        if parent is not None and parent is not target:
+            pop = getattr(parent, "pop_tool_row", None)
+            ingest = getattr(target, "ingest_tool_row", None)
+            if callable(pop) and callable(ingest):
+                moved = pop(tcid)
+                if moved is not None:
+                    ingest(moved)
+                    migrated = True
+            self._tool_to_step[tcid] = target
+        disp = self._tool_display_by_call_id.get(tcid)
+        if disp is parent and parent is not None:
+            self._tool_display_by_call_id[tcid] = target
+        if migrated:
+            logger.info(
+                "[StepToolBind] ui_migrate tool_call_id=%s step_id=%s from_parent=%s",
+                tcid,
+                sid,
+                type(parent).__name__,
+            )
+        else:
+            logger.debug(
+                "[StepToolBind] ui_apply tool_call_id=%s step_id=%s parent=%s",
+                tcid,
+                sid,
+                type(parent).__name__ if parent is not None else "none",
+            )
+
     def finalize_pending_tools_with_error(self, error: str) -> None:
         """Mark all pending/running tool widgets as error and clear tracking.
 
@@ -248,6 +300,7 @@ class TextualUIAdapter:
         self._pending_main_tools.clear()
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
+        self._tool_call_to_step_id.clear()
 
         # Clear active streaming message to avoid stale "active" state in the store.
         if self._set_active_message:
@@ -265,3 +318,4 @@ class TextualUIAdapter:
         self._pending_main_tools.clear()
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
+        self._tool_call_to_step_id.clear()
