@@ -11,13 +11,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from langchain_core.runnables import RunnableConfig
 
+    from soothe_cli.tui.step_task_routing import StepTaskRouter
     from soothe_cli.tui.textual_adapter._adapter import TextualUIAdapter
     from soothe_cli.tui.widgets.messages import AssistantMessage
-
-from soothe_sdk.ux.task_namespace import (
-    resolve_task_parent_lookup,
-    resolve_task_scope_for_namespace,
-)
 
 from soothe_cli.shared.rendering.renderer_base import RendererBase
 from soothe_cli.tui._session_stats import SessionStats
@@ -142,7 +138,9 @@ def _goal_completion_time_footer_if_needed(
     """Build a markdown footer with total elapsed time for goal completion cards."""
     if _GOAL_COMPLETION_TIME_MARKER in (content or ""):
         return None
-    start = goal_loop_start_monotonic if goal_loop_start_monotonic is not None else turn_start_monotonic
+    start = (
+        goal_loop_start_monotonic if goal_loop_start_monotonic is not None else turn_start_monotonic
+    )
     if start is None:
         return None
     elapsed = max(0.0, time.monotonic() - start)
@@ -259,8 +257,7 @@ async def _handle_interrupt_cleanup(
     adapter._current_step_messages.clear()
     adapter._tool_to_step.clear()
     adapter._step_by_namespace.clear()
-    adapter._pending_main_tools.clear()
-    adapter._tool_call_to_step_id.clear()
+    adapter._step_router.reset_turn()
 
     adapter._last_completed_main_step_execute_prose = ""
     adapter._last_main_flushed_assistant_prose = ""
@@ -349,7 +346,7 @@ async def _flush_assistant_text_ns(
     ns_key: tuple,
     assistant_message_by_namespace: dict[tuple, Any],
     *,
-    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str, str]] | None = None,
+    router: StepTaskRouter | None = None,
 ) -> None:
     """Flush accumulated assistant text for a specific namespace.
 
@@ -367,11 +364,9 @@ async def _flush_assistant_text_ns(
     if not repaired_text.strip():
         return
 
-    ts_card = None
-    if namespace_task_bindings is not None and ns_key:
-        ts_card = resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
+    ts_card = router.resolve_task_scope(ns_key) if router is not None and ns_key else None
     if ts_card and ts_card[0]:
-        parent_tool = resolve_task_parent_lookup(
+        parent_tool = router.resolve_parent(
             ts_card,
             step_cards=adapter._current_step_messages,
             tool_display_by_call_id=adapter._tool_display_by_call_id,

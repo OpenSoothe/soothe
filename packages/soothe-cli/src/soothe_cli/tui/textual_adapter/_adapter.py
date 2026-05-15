@@ -46,6 +46,7 @@ from soothe_cli.tui._session_stats import (
 from soothe_cli.tui._session_stats import (
     format_token_count as format_token_count,
 )
+from soothe_cli.tui.step_task_routing import StepTaskRouter
 from soothe_cli.tui.widgets.messages import (
     CognitionStepMessage,
     ToolCallMessage,
@@ -199,21 +200,8 @@ class TextualUIAdapter:
         self._task_inner_tool_start_times: dict[str, float] = {}
         """Wall time when the pending inner-tool line was recorded (for duration in status)."""
 
-        self._pending_main_tools: list[tuple[str, dict[str, Any]]] = []
-        """IG-402: Ordered buffer of tool calls on main namespace awaiting step_started.
-
-        Each entry is ``(tool_call_id, {name, args, raw_args})``. Insertion order
-        is preserved so that when ``AGENT_LOOP_STEP_STARTED`` fires, only tools
-        buffered **before** that event are flushed into the step card (not tools
-        that arrive later for subsequent steps).
-        """
-
-        self._tool_call_to_step_id: dict[str, str] = {}
-        """tool_call_id → step_id mapping for accurate parallel step routing.
-
-        Populated by AGENT_LOOP_STEP_TOOL_BINDING events from executor.
-        Used to route root-graph tool calls to the correct parallel step card.
-        """
+        self._step_router = StepTaskRouter()
+        """Per-turn routing for parallel steps, root tools, and subagent namespaces."""
 
         # Token display callbacks (set by the app after construction)
         self._on_tokens_update: _TokensUpdateCallback | None = None
@@ -239,7 +227,12 @@ class TextualUIAdapter:
         sid = str(step_id).strip()
         if not tcid or not sid:
             return
-        self._tool_call_to_step_id[tcid] = sid
+        self._step_router.bind_tool_to_step(tcid, sid)
+        self._step_router.route_pending_main_tools(
+            self._current_step_messages,
+            self._tool_to_step,
+            self._tool_display_by_call_id,
+        )
         target = self._current_step_messages.get(sid)
         if target is None:
             logger.info(
@@ -297,10 +290,9 @@ class TextualUIAdapter:
         self._step_by_namespace.clear()
         self._task_inner_tool_pending_lines.clear()
         self._task_inner_tool_start_times.clear()
-        self._pending_main_tools.clear()
+        self._step_router.reset_turn()
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
-        self._tool_call_to_step_id.clear()
 
         # Clear active streaming message to avoid stale "active" state in the store.
         if self._set_active_message:
@@ -315,7 +307,6 @@ class TextualUIAdapter:
         self._step_by_namespace.clear()
         self._task_inner_tool_pending_lines.clear()
         self._task_inner_tool_start_times.clear()
-        self._pending_main_tools.clear()
+        self._step_router.reset_turn()
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
-        self._tool_call_to_step_id.clear()
