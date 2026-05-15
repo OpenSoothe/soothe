@@ -48,7 +48,6 @@ from .constants import (
     AGENT_LOOP_STARTED,
     AGENT_LOOP_STEP_COMPLETED,
     AGENT_LOOP_STEP_STARTED,
-    AGENT_LOOP_STEP_TOOL_BINDING,
     # Cognition - AgentLoop
     AUTOPILLOT_CHECKPOINT_SAVED,
     AUTOPILLOT_DREAMING_ENTERED,
@@ -248,16 +247,6 @@ class AgenticStepCompletedEvent(LifecycleEvent):
     summary: str
     duration_ms: int
     tool_call_count: int = 0
-
-
-class StepToolBindingEvent(LifecycleEvent):
-    """Bind a tool_call_id to its originating step_id for parallel routing."""
-
-    type: Literal["soothe.cognition.agent_loop.step.tool_binding"] = (
-        "soothe.cognition.agent_loop.step.tool_binding"
-    )
-    step_id: str
-    tool_call_id: str
 
 
 # ---------------------------------------------------------------------------
@@ -678,12 +667,6 @@ _reg(
     AgenticStepCompletedEvent,
     verbosity=VerbosityTier.NORMAL,  # Show step completion at normal verbosity for progress visibility
     summary_template="{summary} ({duration_ms}ms)",
-)
-_reg(
-    AGENT_LOOP_STEP_TOOL_BINDING,
-    StepToolBindingEvent,
-    verbosity=VerbosityTier.DEBUG,  # Internal routing event, not user-visible
-    summary_template="tool {tool_call_id} → step {step_id}",
 )
 
 # -- Protocol: memory --------------------------------------------------------

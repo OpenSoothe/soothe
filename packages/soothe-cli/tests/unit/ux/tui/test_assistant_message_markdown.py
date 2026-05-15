@@ -17,11 +17,29 @@ async def test_stop_stream_finalizes_markdown_stream() -> None:
     msg._stream = stream
     msg._content = "Hello"
     msg._streaming_active = True
+    md = MagicMock()
+    md.update = AsyncMock()
+    msg._markdown = md
 
     await msg.stop_stream()
 
     stream.stop.assert_awaited_once()
     assert msg._stream is None
+    md.update.assert_awaited_once_with("Hello")
+
+
+@pytest.mark.asyncio
+async def test_stop_stream_skips_full_markdown_refresh_without_stream() -> None:
+    msg = AssistantMessage(id="asst-test")
+    msg._stream = None
+    msg._content = "Hello"
+    md = MagicMock()
+    md.update = AsyncMock()
+    msg._markdown = md
+
+    await msg.stop_stream()
+
+    md.update.assert_not_called()
 
 
 @pytest.mark.asyncio

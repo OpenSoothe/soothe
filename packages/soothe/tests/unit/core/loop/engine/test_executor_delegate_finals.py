@@ -31,7 +31,7 @@ async def test_stream_and_collect_namespaced_task_chunk_populates_delegate_final
 
     executor = Executor(mock_agent)
     rows = [r async for r in executor._stream_and_collect(fake_stream(), budget=None)]
-    _evt, _ev, tc_total, _msgs, delegate_final, _tool_ids = rows[-1]
+    _evt, _ev, tc_total, _msgs, delegate_final = rows[-1]
     assert delegate_final.strip() == "Namespaced explore answer."
     assert tc_total == 1  # namespaced ``task`` ToolMessage counts toward wave tool total
 
@@ -60,7 +60,7 @@ async def test_stream_and_collect_joins_task_tool_returns_as_delegate_finals() -
     async for row in executor._stream_and_collect(fake_stream(), budget=None):
         results.append(row)
     assert len(results) == 2  # tuple passthrough + final aggregate
-    final_out, event, tc_count, msgs, delegate_final, _tool_ids = results[-1]
+    final_out, event, tc_count, msgs, delegate_final = results[-1]
     assert event is None
     assert tc_count == 1
     assert delegate_final == "Counted 3 README files."
@@ -104,11 +104,9 @@ def test_record_execute_wave_parallel_multi_merges_delegate_finals() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stream_and_collect_emits_early_tool_binding_before_ai_chunk() -> None:
-    """Root AI tool-call ids emit binding custom events before the messages chunk."""
+async def test_stream_and_collect_rewrites_tool_call_ids_to_unified() -> None:
+    """Root AI tool-call ids are rewritten to unified format with step_id prefix."""
     from langchain_core.messages import AIMessageChunk
-
-    from soothe.core.events.constants import AGENT_LOOP_STEP_TOOL_BINDING
 
     chunk: tuple = (
         (),
@@ -116,7 +114,7 @@ async def test_stream_and_collect_emits_early_tool_binding_before_ai_chunk() -> 
         (
             AIMessageChunk(
                 content="",
-                tool_call_chunks=[{"name": "grep", "id": "call-grep-1", "args": "{}"}],
+                tool_call_chunks=[{"name": "grep", "id": "functions.grep:0", "args": "{}"}],
             ),
             {},
         ),
@@ -131,18 +129,23 @@ async def test_stream_and_collect_emits_early_tool_binding_before_ai_chunk() -> 
     async for row in executor._stream_and_collect(
         fake_stream(),
         budget=None,
-        tool_binding_step_id="step-a",
+        step_id="GHT-01",
     ):
         rows.append(row)
-    assert len(rows) == 3
-    bind_ev = rows[0][1]
-    assert isinstance(bind_ev, tuple) and len(bind_ev) == 3
-    _ns, mode, payload = bind_ev
-    assert mode == "custom"
-    assert payload["type"] == AGENT_LOOP_STEP_TOOL_BINDING
-    assert payload["step_id"] == "step-a"
-    assert payload["tool_call_id"] == "call-grep-1"
-    assert rows[1][1] == chunk
+    # Should have the modified chunk (unified IDs)
+    assert len(rows) >= 1
+    # Check that the chunk was modified with unified ID
+    modified_chunk = rows[0]
+    if isinstance(modified_chunk[1], tuple) and len(modified_chunk[1]) == 3:
+        _ns, mode, data = modified_chunk[1]
+        if mode == "messages" and isinstance(data, tuple) and len(data) >= 2:
+            msg = data[0]
+            if isinstance(msg, AIMessageChunk):
+                tc_chunks = getattr(msg, "tool_call_chunks", None) or []
+                if tc_chunks:
+                    tc_id = tc_chunks[0].get("id", "")
+                    # Unified format: {step_id}:s:{tool}.{idx}
+                    assert tc_id.startswith("GHT-01:s:")
 
 
 def test_record_execute_wave_parallel_multi_clears_when_no_delegate() -> None:

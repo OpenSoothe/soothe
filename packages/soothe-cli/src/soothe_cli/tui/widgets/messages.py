@@ -832,9 +832,22 @@ class AssistantMessage(Vertical):
 
         self._streaming_active = False
         if self._render_markdown:
+            stream_was_active = self._stream is not None
             if self._stream is not None:
                 await self._stream.stop()
                 self._stream = None
+            # Textual's incremental `Markdown.append` (used by MarkdownStream) can
+            # leave fenced code blocks / merged tails inconsistent once the stream
+            # ends. Re-parse the full document so the finished card matches what a
+            # one-shot render would produce.
+            if stream_was_active and self._content:
+                try:
+                    await self._get_markdown().update(self._content)
+                except Exception:
+                    logger.debug(
+                        "AssistantMessage: full markdown refresh after stream failed",
+                        exc_info=True,
+                    )
         elif self._body is not None:
             await self._body.update(self._content)
 

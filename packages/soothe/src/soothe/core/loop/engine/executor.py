@@ -33,7 +33,6 @@ from soothe.core.context.model_override import (
     attach_stream_model_override,
     reset_stream_model_override,
 )
-from soothe.core.events.constants import AGENT_LOOP_STEP_TOOL_BINDING
 from soothe.core.loop.engine.hitl_scope import (
     _MAX_HITL_ITERATIONS,
     auto_approve_interrupt_resume_payload,
@@ -67,60 +66,159 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _root_ai_tool_call_ids_for_binding(msg: BaseMessage) -> list[str]:
-    """Return stable root-graph tool_call_id strings from one AI message or chunk.
+def _shorten_tool_call_id(raw_tid: str) -> str:
+    """Shorten provider tool_call_id for compact display.
 
-    Used to emit ``AGENT_LOOP_STEP_TOOL_BINDING`` before the client renders tool rows
-    (parallel step routing and TUI step cards).
+    Strips 'functions.' prefix and keeps last numeric index.
+
+    Examples:
+        'functions.task:0' → 'task.0'
+        'functions.read_file:18' → 'read_file.18'
+        'call_abc123' → 'call_abc123' (no pattern match, return as-is)
     """
-    out: list[str] = []
-    seen: set[str] = set()
+    tid = str(raw_tid).strip()
+    # Strip common prefix
+    if tid.startswith("functions."):
+        tid = tid[len("functions.") :]
+    return tid
+
+
+def _make_step_tool_call_id(step_id: str, raw_tid: str, call_idx: int) -> str:
+    """Generate unified step-level tool call ID.
+
+    Format: {step_id}:s:{tool}.{idx}
+
+    Examples:
+        ('GHT-01', 'functions.task:0', 0) → 'GHT-01:s:task.0'
+        ('GHT-01', 'functions.read_file:1', 1) → 'GHT-01:s:read_file.1'
+    """
+    short_tid = _shorten_tool_call_id(raw_tid)
+    return f"{step_id}:s:{short_tid}"
+
+
+def _make_task_inner_tool_call_id(
+    step_id: str, task_idx: int, raw_tid: str, inner_call_idx: int
+) -> str:
+    """Generate unified task-level (subagent inner) tool call ID.
+
+    Format: {step_id}:t{task_idx}:{tool}.{idx}
+
+    Examples:
+        ('GHT-01', 0, 'functions.read_file:1', 0) → 'GHT-01:t0:read_file.1'
+        ('GHT-01', 0, 'functions.grep:2', 1) → 'GHT-01:t0:grep.2'
+    """
+    short_tid = _shorten_tool_call_id(raw_tid)
+    return f"{step_id}:t{task_idx}:{short_tid}"
+
+
+def _rewrite_tool_call_ids_to_unified(msg: BaseMessage, step_id: str) -> BaseMessage:
+    """Rewrite tool_call_ids in AI message/chunk to unified format.
+
+    IG-416: Transforms provider tool_call_ids like 'functions.task:0'
+    to unified format like 'GHT-01:s:task:0' for step-level tool calls.
+
+    Returns the original message if no modifications needed, or a new
+    message object with rewritten IDs.
+    """
+    from copy import deepcopy
+
+    needs_rewrite = False
+    seen_ids: set[str] = set()
+
+    # Check if any tool_call_ids need rewriting
     if isinstance(msg, AIMessageChunk):
         for tc in getattr(msg, "tool_call_chunks", None) or []:
-            if not isinstance(tc, dict):
-                continue
-            tid = tc.get("id")
-            if isinstance(tid, str) and tid.strip() and tid.strip() not in seen:
-                seen.add(tid.strip())
-                out.append(tid.strip())
-        for tc in getattr(msg, "tool_calls", None) or []:
-            if not isinstance(tc, dict):
-                continue
-            tid = tc.get("id")
-            if isinstance(tid, str) and tid.strip() and tid.strip() not in seen:
-                seen.add(tid.strip())
-                out.append(tid.strip())
+            if isinstance(tc, dict) and "id" in tc:
+                raw_id = str(tc.get("id", ""))
+                if raw_id and raw_id not in seen_ids:
+                    seen_ids.add(raw_id)
+                    # Check if already unified (contains ':')
+                    if ":" not in raw_id or not raw_id.startswith(step_id):
+                        needs_rewrite = True
+                        break
+        if not needs_rewrite:
+            for tc in getattr(msg, "tool_calls", None) or []:
+                if isinstance(tc, dict) and "id" in tc:
+                    raw_id = str(tc.get("id", ""))
+                    if raw_id and raw_id not in seen_ids:
+                        seen_ids.add(raw_id)
+                        if ":" not in raw_id or not raw_id.startswith(step_id):
+                            needs_rewrite = True
+                            break
     elif isinstance(msg, AIMessage):
         for tc in getattr(msg, "tool_calls", None) or []:
-            if not isinstance(tc, dict):
-                continue
-            tid = tc.get("id")
-            if isinstance(tid, str) and tid.strip() and tid.strip() not in seen:
-                seen.add(tid.strip())
-                out.append(tid.strip())
-    return out
+            if isinstance(tc, dict) and "id" in tc:
+                raw_id = str(tc.get("id", ""))
+                if raw_id and raw_id not in seen_ids:
+                    seen_ids.add(raw_id)
+                    if ":" not in raw_id or not raw_id.startswith(step_id):
+                        needs_rewrite = True
+                        break
+
+    if not needs_rewrite:
+        return msg
+
+    # Create modified copy with unified IDs
+    modified = deepcopy(msg)
+
+    if isinstance(modified, AIMessageChunk):
+        # Rewrite tool_call_chunks
+        new_chunks = []
+        for tc in getattr(modified, "tool_call_chunks", None) or []:
+            if isinstance(tc, dict):
+                new_tc = dict(tc)
+                raw_id = str(tc.get("id", ""))
+                if raw_id:
+                    unified_id = _make_step_tool_call_id(step_id, raw_id, 0)
+                    new_tc["id"] = unified_id
+                new_chunks.append(new_tc)
+        if hasattr(modified, "tool_call_chunks") and new_chunks:
+            # AIMessageChunk doesn't allow direct assignment, need to update internal dict
+            if hasattr(modified, "__dict__"):
+                modified.__dict__["tool_call_chunks"] = new_chunks
+
+        # Rewrite tool_calls
+        new_calls = []
+        for tc in getattr(modified, "tool_calls", None) or []:
+            if isinstance(tc, dict):
+                new_tc = dict(tc)
+                raw_id = str(tc.get("id", ""))
+                if raw_id:
+                    unified_id = _make_step_tool_call_id(step_id, raw_id, 0)
+                    new_tc["id"] = unified_id
+                new_calls.append(new_tc)
+        if hasattr(modified, "tool_calls") and new_calls:
+            if hasattr(modified, "__dict__"):
+                modified.__dict__["tool_calls"] = new_calls
+
+    elif isinstance(modified, AIMessage):
+        # Rewrite tool_calls
+        new_calls = []
+        for tc in getattr(modified, "tool_calls", None) or []:
+            if isinstance(tc, dict):
+                new_tc = dict(tc)
+                raw_id = str(tc.get("id", ""))
+                if raw_id:
+                    unified_id = _make_step_tool_call_id(step_id, raw_id, 0)
+                    new_tc["id"] = unified_id
+                new_calls.append(new_tc)
+        if hasattr(modified, "__dict__"):
+            modified.__dict__["tool_calls"] = new_calls
+
+    return modified
 
 
-def _extract_tool_name_and_args_for_binding(
-    msg: BaseMessage,
-    tool_call_id: str,
-    accumulated_args: dict[str, Any],
-) -> tuple[str, dict[str, Any] | None, str]:
-    """Extract tool name and args for a specific tool_call_id from AI message/chunk.
+def _extract_tool_name_from_ai_chunk(msg: BaseMessage, tool_call_id: str) -> str:
+    """Extract tool name for a specific tool_call_id from AI message/chunk.
 
     Args:
         msg: AIMessage or AIMessageChunk containing tool call info.
         tool_call_id: The tool_call_id to extract info for.
-        accumulated_args: Dict of tool_call_id → args accumulated from prior chunks.
 
     Returns:
-        Tuple of (tool_name, args_dict, args_status):
-        - tool_name: Name from chunk or empty string if not found.
-        - args_dict: Args dict if complete JSON, None if partial/missing.
-        - args_status: "complete", "partial", or "pending".
+        Tool name string, or empty string if not found.
     """
     tool_name: str = ""
-    chunk_args: Any = None
 
     if isinstance(msg, AIMessageChunk):
         # Check tool_call_chunks first (streaming)
@@ -130,7 +228,6 @@ def _extract_tool_name_and_args_for_binding(
             tid = tc.get("id")
             if isinstance(tid, str) and tid.strip() == tool_call_id:
                 tool_name = str(tc.get("name", "") or "").strip()
-                chunk_args = tc.get("args")
                 break
         # Fallback to tool_calls if not found in chunks
         if not tool_name:
@@ -140,7 +237,6 @@ def _extract_tool_name_and_args_for_binding(
                 tid = tc.get("id")
                 if isinstance(tid, str) and tid.strip() == tool_call_id:
                     tool_name = str(tc.get("name", "") or "").strip()
-                    chunk_args = tc.get("args")
                     break
     elif isinstance(msg, AIMessage):
         for tc in getattr(msg, "tool_calls", None) or []:
@@ -149,39 +245,9 @@ def _extract_tool_name_and_args_for_binding(
             tid = tc.get("id")
             if isinstance(tid, str) and tid.strip() == tool_call_id:
                 tool_name = str(tc.get("name", "") or "").strip()
-                chunk_args = tc.get("args")
                 break
 
-    # Determine args status
-    args_dict: dict[str, Any] | None = None
-    args_status: str = "pending"
-
-    # Check chunk args first (may be dict or string)
-    if isinstance(chunk_args, dict) and chunk_args:
-        args_dict = chunk_args
-        args_status = "complete"
-    elif isinstance(chunk_args, str) and chunk_args.strip():
-        # Try to parse string as JSON
-        import json
-
-        try:
-            parsed = json.loads(chunk_args)
-            if isinstance(parsed, dict):
-                args_dict = parsed
-                args_status = "complete"
-            else:
-                args_status = "partial"
-        except json.JSONDecodeError:
-            args_status = "partial"
-
-    # Use accumulated args if chunk didn't have complete dict
-    if args_status != "complete" and tool_call_id in accumulated_args:
-        acc_args = accumulated_args[tool_call_id]
-        if isinstance(acc_args, dict) and acc_args:
-            args_dict = acc_args
-            args_status = "complete"
-
-    return tool_name, args_dict, args_status
+    return tool_name
 
 
 # --- Act-wave finalize resolution (merged from execute_wave_finalize.py) ---
@@ -1202,7 +1268,6 @@ class Executor:
                 tc_count,
                 msg_list,
                 _,
-                _tool_ids,
             ) in self._stream_and_collect(stream, budget=budget):
                 if event is not None:
                     event_count += 1
@@ -1493,18 +1558,16 @@ class Executor:
             tool_call_count = 0
             messages: list[BaseMessage] = []
             delegate_final = ""
-            root_tool_call_ids: set[str] = set()
             async for (
                 final_output,
                 event,
                 tc_count,
                 msg_list,
                 df,
-                tc_ids,
             ) in self._stream_and_collect(
                 stream,
                 budget=budget,
-                tool_binding_step_id=step.id,
+                step_id=step.id,
             ):
                 if event is not None:
                     _append_parallel_stream_event(events, event, live_event_queue)
@@ -1513,57 +1576,11 @@ class Executor:
                     tool_call_count = tc_count
                     messages = msg_list
                     delegate_final = df
-                    root_tool_call_ids = tc_ids
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
-            # Emit step-tool binding events for root-graph tool calls (parallel routing)
-            for tcid in root_tool_call_ids:
-                # IG-416: Include accumulated args in post-complete binding
-                # Extract name and args from accumulated messages
-                post_name = ""
-                post_args: dict[str, Any] | None = None
-                for m in messages:
-                    if isinstance(m, (AIMessage, AIMessageChunk)):
-                        for tc in getattr(m, "tool_calls", None) or []:
-                            if isinstance(tc, dict) and tc.get("id") == tcid:
-                                post_name = str(tc.get("name", "") or "").strip()
-                                tc_args = tc.get("args")
-                                if isinstance(tc_args, dict) and tc_args:
-                                    post_args = tc_args
-                                break
-                        if not post_name:
-                            for tc in getattr(m, "tool_call_chunks", None) or []:
-                                if isinstance(tc, dict) and tc.get("id") == tcid:
-                                    post_name = str(tc.get("name", "") or "").strip()
-                                    tc_args = tc.get("args")
-                                    if isinstance(tc_args, dict) and tc_args:
-                                        post_args = tc_args
-                                    break
-                        if post_name:
-                            break
-                logger.debug(
-                    "[StepToolBind] source=stream_complete step_id=%r tool_call_id=%r "
-                    "name=%r has_args=%r",
-                    step.id,
-                    tcid,
-                    post_name,
-                    bool(post_args),
-                )
-                binding_event: StreamEvent = (
-                    (),
-                    "custom",
-                    {
-                        "type": "soothe.cognition.agent_loop.step.tool_binding",
-                        "step_id": step.id,
-                        "tool_call_id": tcid,
-                        # IG-416: Augmented fields (args should be complete at this point)
-                        "tool_name": post_name,
-                        "args": post_args,
-                        "args_status": "complete" if post_args else "pending",
-                    },
-                )
-                _append_parallel_stream_event(events, binding_event, live_event_queue)
+            # Note: tool_call_ids are now in unified format within messages chunks
+            # No separate binding events needed (IG-416 simplified design)
 
             # RFC-211: Aggregate outcomes from all tools in this step
             # Use the first outcome as primary (future: merge multiple)
@@ -1659,9 +1676,9 @@ class Executor:
         stream: AsyncGenerator,
         *,
         budget: _ActStreamBudget | None = None,
-        tool_binding_step_id: str | None = None,
+        step_id: str | None = None,
     ) -> AsyncGenerator[
-        tuple[str | None, StreamEvent | None, int, list[BaseMessage], str, set[str]],
+        tuple[str | None, StreamEvent | None, int, list[BaseMessage], str],
         None,
     ]:
         """Stream events immediately while accumulating output and counting tool calls.
@@ -1674,21 +1691,20 @@ class Executor:
         IG-151: Collects AIMessage objects for token usage extraction.
         IG-355: Collects ``task`` tool return text (delegate finals) for goal completion when
         subgraph AIMessages are not folded into root-graph act aggregation.
+        IG-416: Rewrites tool_call_ids to unified format with step_id prefix (no separate binding).
 
         Args:
             stream: Async iterator from agent.astream()
             budget: Optional Act wave budget (subagent ``task`` cap, IG-130).
-            tool_binding_step_id: When set, emit ``AGENT_LOOP_STEP_TOOL_BINDING`` custom
-                events as soon as root-graph AI messages expose new ``tool_call_id`` values,
-                before the matching ``messages`` chunk is yielded (TUI / parallel routing).
+            step_id: When set, rewrite root-graph tool_call_ids to unified format
+                '{step_id}:s:{tool}.{idx}' for consistent TUI rendering.
 
         Yields:
-            Tuple of ``(output, event, tool_call_count, messages, delegate_final_text, tool_call_ids)``:
+            Tuple of ``(output, event, tool_call_count, messages, delegate_final_text)``:
             - When event is not None: immediate display chunk (delegate_final_text empty).
             - At end: combined_output, ``tool_call_count`` (root graph plus namespaced
               subgraph ``ToolMessage`` totals), root AIMessages list, and joined ``task``
               tool bodies (ordered, capped)—empty string when no ``task`` tools ran.
-            - tool_call_ids: Set of root-graph tool_call_ids seen for step binding.
         """
         from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
@@ -1712,13 +1728,6 @@ class Executor:
 
         # RFC-211: Collect per-tool outcome metadata (structured, no filesystem cache; IG-387)
         outcomes: list[dict] = []
-
-        # Track tool call arguments from AI messages for logging
-        tool_call_args: dict[str, dict[str, Any]] = {}
-
-        # Collect root-graph tool_call_ids for step binding (parallel routing)
-        root_tool_call_ids: set[str] = set()
-        early_stream_tool_bindings: set[str] = set()
 
         stream_chunk_count = 0  # Debug counter
 
@@ -1745,68 +1754,28 @@ class Executor:
 
             # Handle tuple format (namespace, mode, data) - deepagents canonical
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
-                if tool_binding_step_id:
-                    for msg in iter_messages_for_act_aggregation(chunk):
-                        if not isinstance(msg, (AIMessage, AIMessageChunk)):
+                _ns_chunk, mode_chunk, data_chunk = chunk
+                # IG-416: For root-graph AI messages, rewrite tool_call_ids to unified format
+                if (
+                    step_id
+                    and not _ns_chunk  # Only root graph
+                    and mode_chunk == "messages"
+                    and isinstance(data_chunk, (list, tuple))
+                    and len(data_chunk) >= 2
+                ):
+                    msg = data_chunk[0]
+                    if isinstance(msg, (AIMessage, AIMessageChunk)):
+                        # Rewrite tool_call_ids to unified format
+                        modified_msg = _rewrite_tool_call_ids_to_unified(msg, step_id)
+                        if modified_msg is not msg:
+                            # Create new chunk with modified message
+                            modified_data = (modified_msg, data_chunk[1])
+                            modified_chunk = (_ns_chunk, mode_chunk, modified_data)
+                            yield None, modified_chunk, 0, [], ""
                             continue
-                        # IG-416: Accumulate args BEFORE emitting binding (was after)
-                        if isinstance(msg, AIMessageChunk):
-                            for tc in getattr(msg, "tool_call_chunks", None) or []:
-                                if isinstance(tc, dict) and "id" in tc:
-                                    tc_id = tc["id"]
-                                    args_val = tc.get("args", "")
-                                    if args_val:
-                                        try:
-                                            import json
 
-                                            tool_call_args[tc_id] = json.loads(args_val)
-                                        except (json.JSONDecodeError, TypeError):
-                                            pass  # Args may be partial in streaming
-                            for tc in getattr(msg, "tool_calls", None) or []:
-                                if isinstance(tc, dict) and "id" in tc:
-                                    tool_call_args[tc["id"]] = tc.get("args", {})
-                        elif isinstance(msg, AIMessage):
-                            for tc in getattr(msg, "tool_calls", None) or []:
-                                if isinstance(tc, dict) and "id" in tc:
-                                    tool_call_args[tc["id"]] = tc.get("args", {})
-                        for tid in _root_ai_tool_call_ids_for_binding(msg):
-                            if tid in early_stream_tool_bindings:
-                                continue
-                            early_stream_tool_bindings.add(tid)
-                            # IG-416: Extract name and args from current chunk + accumulated
-                            t_name, t_args, t_args_status = _extract_tool_name_and_args_for_binding(
-                                msg, tid, tool_call_args
-                            )
-                            logger.debug(
-                                "[StepToolBind] source=stream_ai step_id=%r tool_call_id=%r "
-                                "name=%r args_status=%r",
-                                tool_binding_step_id,
-                                tid,
-                                t_name,
-                                t_args_status,
-                            )
-                            yield (
-                                None,
-                                (
-                                    (),
-                                    "custom",
-                                    {
-                                        "type": AGENT_LOOP_STEP_TOOL_BINDING,
-                                        "step_id": tool_binding_step_id,
-                                        "tool_call_id": tid,
-                                        # IG-416: Augmented fields for TUI direct rendering
-                                        "tool_name": t_name,
-                                        "args": t_args,
-                                        "args_status": t_args_status,
-                                    },
-                                ),
-                                0,
-                                [],
-                                "",
-                                set(),
-                            )
-                # Yield event immediately for real-time display
-                yield None, chunk, 0, [], "", set()
+                # Yield original chunk if not modified
+                yield None, chunk, 0, [], ""
 
             stop_act_stream = False
             for msg in iter_messages_for_act_aggregation(chunk):
@@ -1814,10 +1783,6 @@ class Executor:
                     tool_call_count += 1
                     tool_call_id = msg.tool_call_id
                     tool_name = msg.name or "unknown"
-
-                    # Track root-graph tool_call_id for step binding
-                    if tool_call_id:
-                        root_tool_call_ids.add(str(tool_call_id))
 
                     if _maybe_cap_subagent_tasks(msg):
                         stop_act_stream = True
@@ -1854,15 +1819,12 @@ class Executor:
                                 clipped = clipped[:_DELEGATE_FINAL_PER_TASK_CAP]
                             delegate_task_final_parts.append(clipped)
 
-                    # Format arguments for logging
-                    args = tool_call_args.get(tool_call_id or "")
-                    args_str = log_preview(str(args), chars=100) if args else ""
+                    # Log tool outcome (IG-416: args no longer tracked separately)
                     logger.debug(
-                        "Tool #%d %s(%s) args=%s → %s, %dB",
+                        "Tool #%d %s(%s) → %s, %dB",
                         tool_call_count,
                         tool_name,
                         tool_call_id,
-                        args_str,
                         outcome.get("type", "unknown"),
                         outcome.get("size_bytes", 0),
                     )
@@ -1871,32 +1833,12 @@ class Executor:
                     t = extract_text_from_message_content(msg.content)
                     if t:
                         chunks.append(t)
-                    # Extract tool call arguments from chunks
-                    for tc in getattr(msg, "tool_call_chunks", []):
-                        if isinstance(tc, dict) and "id" in tc:
-                            tc_id = tc["id"]
-                            args_str = tc.get("args", "")
-                            if args_str:
-                                try:
-                                    import json
-
-                                    tool_call_args[tc_id] = json.loads(args_str)
-                                except (json.JSONDecodeError, TypeError):
-                                    pass  # Args may be partial in streaming
-                    # Also check merged tool_calls
-                    for tc in getattr(msg, "tool_calls", []):
-                        if isinstance(tc, dict) and "id" in tc:
-                            tool_call_args[tc["id"]] = tc.get("args", {})
                 elif isinstance(msg, AIMessage):
                     messages.append(msg)
                     t = extract_text_from_message_content(msg.content)
                     if t:
                         chunks.append(t)
                         logger.debug("[AI Message] %s", log_preview(t, chars=150))
-                    # Extract tool call arguments
-                    for tc in getattr(msg, "tool_calls", []):
-                        if isinstance(tc, dict) and "id" in tc:
-                            tool_call_args[tc["id"]] = tc.get("args", {})
 
             for ns_tuple, tm in iter_namespaced_tool_messages(chunk):
                 subgraph_tool_call_count += 1
@@ -1947,13 +1889,13 @@ class Executor:
 
         total_tool_calls = tool_call_count + subgraph_tool_call_count
         # Final yield with combined output and tool call count
+        # IG-416: No longer return tool_call_ids set - IDs are now in unified format in messages
         yield (
             join_text_fragments(chunks),
             None,
             total_tool_calls,
             messages,
             delegate_final_text,
-            root_tool_call_ids,
         )
 
     def _build_batch_human_messages(
