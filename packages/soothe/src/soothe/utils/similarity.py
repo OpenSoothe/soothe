@@ -8,7 +8,8 @@ Provides reusable similarity calculation for:
 Uses sentence_transformers when available, falls back to keyword matching.
 
 Model Cache:
-- Models are cached under ``~/.cache/soothe/models/huggingface``
+- ``SOOTHE_HF_CACHE`` env var overrides cache path (used in Docker builds)
+- Default: ``~/.cache/soothe/models/huggingface``
 - Use warmup_embedding_model() to pre-download models at daemon startup
 """
 
@@ -17,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -39,8 +41,16 @@ _model_load_executor: ThreadPoolExecutor | None = None
 def hf_embedding_cache_dir() -> Path:
     """HuggingFace cache directory for the embedding model (shared across processes).
 
-    Default: ``~/.cache/soothe/models/huggingface``.
+    Priority:
+    1. ``SOOTHE_HF_CACHE`` env var (for Docker builds and custom paths)
+    2. Default: ``~/.cache/soothe/models/huggingface``
+
+    Docker builds pre-cache models in ``SOOTHE_HF_CACHE`` for faster startup.
     """
+    env_cache = os.environ.get("SOOTHE_HF_CACHE")
+    if env_cache:
+        return Path(env_cache)
+
     return Path.home() / ".cache" / "soothe" / "models" / "huggingface"
 
 
