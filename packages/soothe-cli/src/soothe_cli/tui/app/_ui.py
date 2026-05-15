@@ -180,7 +180,7 @@ class _UIMixin:
                     first_child = widget
                     hydrated_count += 1
                     mounted_messages.append(msg_data)
-                    # Render Markdown content for hydrated assistant messages
+                    # Render plain text for hydrated assistant messages
                     if isinstance(widget, AssistantMessage) and msg_data.content:
                         assistant_render_tasks.append(widget.set_content(msg_data.content))
                 except Exception:

@@ -50,8 +50,6 @@ from soothe_cli.tui.widgets.diff import compose_diff_lines
 if TYPE_CHECKING:
     from textual.app import ComposeResult
     from textual.timer import Timer
-    from textual.widgets import Markdown
-    from textual.widgets._markdown import MarkdownStream
 
 logger = logging.getLogger(__name__)
 
@@ -669,11 +667,12 @@ class SkillMessage(Vertical):
 
 
 class AssistantMessage(Vertical):
-    """Assistant reply card: markdown body only (no title row).
+    """Assistant reply card: plain text body (no title row).
 
-    Long bodies show the first few source lines collapsed (like ``ToolCallMessage``);
-    click the card or use Ctrl+O (after skills) to expand or collapse. While the
-    markdown stream is active, the full body stays visible until streaming stops.
+    Model output is shown verbatim (no Markdown rendering). Long bodies show the
+    first few lines collapsed (like ``ToolCallMessage``); click the card or use
+    Ctrl+O (after skills) to expand or collapse. While streaming, the full body
+    stays visible until streaming stops.
     """
 
     can_select = True
@@ -690,9 +689,10 @@ class AssistantMessage(Vertical):
         background: transparent;
     }
 
-    AssistantMessage Markdown {
+    AssistantMessage .assistant-body {
         padding: 0;
         margin: 0;
+        height: auto;
     }
 
     AssistantMessage .assistant-preview {
@@ -719,13 +719,13 @@ class AssistantMessage(Vertical):
         """Initialize an assistant message.
 
         Args:
-            content: Initial markdown content.
+            content: Initial assistant text (shown verbatim).
             **kwargs: Additional arguments passed to parent.
         """
         super().__init__(**kwargs)
         self._content = content
-        self._markdown: Markdown | None = None
-        self._stream: MarkdownStream | None = None
+        self._body: Static | None = None
+        self._streaming_active: bool = False
         self._expanded: bool = False
         self._preview_widget: Static | None = None
         self._hint_widget: Static | None = None
@@ -736,21 +736,17 @@ class AssistantMessage(Vertical):
         self._last_visibility_refresh: float = 0.0
 
     def compose(self) -> ComposeResult:  # noqa: PLR6301  # Textual widget method convention
-        """Compose markdown body, plain preview, and expand hint."""
-        from textual.widgets import Markdown
-
-        yield Markdown("", id="assistant-md")
+        """Compose plain body, collapsed preview, and expand hint."""
+        yield Static("", markup=False, classes="assistant-body", id="assistant-body")
         yield Static("", markup=False, classes="assistant-preview", id="assistant-preview")
         yield Static("", markup=False, classes="assistant-hint", id="assistant-hint")
 
     def on_mount(self) -> None:
         """Wire child widgets and apply initial layout."""
-        from textual.widgets import Markdown
-
         if is_ascii_mode():
             self.add_class("-ascii")
 
-        self._markdown = self.query_one("#assistant-md", Markdown)
+        self._body = self.query_one("#assistant-body", Static)
         self._preview_widget = self.query_one("#assistant-preview", Static)
         self._hint_widget = self.query_one("#assistant-hint", Static)
 
@@ -772,24 +768,24 @@ class AssistantMessage(Vertical):
         return "\n".join(lines[: self._PREVIEW_LINES])
 
     def _refresh_body_visibility(self) -> None:
-        """Show markdown, plain preview, or hint depending on stream and collapse state."""
-        md = self._markdown
+        """Show full body, plain preview, or hint depending on stream and collapse state."""
+        body_w = self._body
         prev = self._preview_widget
         hint = self._hint_widget
-        if md is None or prev is None or hint is None:
+        if body_w is None or prev is None or hint is None:
             return
 
-        streaming = self._stream is not None
+        streaming = self._streaming_active
         body = self._content or ""
         if not body.strip():
-            md.display = True
+            body_w.display = True
             prev.display = False
             hint.display = False
             return
 
         need = self._needs_truncation(body)
         if streaming or not need or self._expanded:
-            md.display = True
+            body_w.display = True
             prev.display = False
             if need and not streaming and self._expanded:
                 ellipsis = get_glyphs().ellipsis
@@ -804,7 +800,7 @@ class AssistantMessage(Vertical):
                 hint.display = False
             return
 
-        md.display = False
+        body_w.display = False
         prev.update(self._preview_plain(body))
         prev.display = True
         total_lines = len(body.split("\n"))
@@ -819,29 +815,13 @@ class AssistantMessage(Vertical):
         hint.update(Content.styled(hint_line, "dim"))
         hint.display = True
 
-    def _get_markdown(self) -> Markdown:
-        """Return the markdown widget, querying if not cached."""
-        if self._markdown is None:
-            from textual.widgets import Markdown
-
-            self._markdown = self.query_one("#assistant-md", Markdown)
-        return self._markdown
-
-    def _ensure_stream(self) -> MarkdownStream:
-        """Ensure the markdown stream is initialized."""
-        if self._stream is None:
-            from textual.widgets import Markdown
-
-            self._stream = Markdown.get_stream(self._get_markdown())
-        return self._stream
-
     @property
     def has_collapsible_body(self) -> bool:
         """True when the body is long enough to support expand/collapse."""
         return self._needs_truncation(self._content)
 
     def toggle_collapse(self) -> None:
-        """Toggle expanded markdown vs collapsed plain preview."""
+        """Toggle expanded body vs collapsed plain preview."""
         if not self.has_collapsible_body:
             return
         self._expanded = not self._expanded
@@ -871,16 +851,15 @@ class AssistantMessage(Vertical):
         return False
 
     async def _flush_pending_content(self) -> None:
-        """Flush buffered content to stream (batched update)."""
+        """Flush buffered content to the body widget (batched update)."""
         self._flush_timer = None
         if not self._pending_buffer:
             return
 
-        text = self._pending_buffer
         self._pending_buffer = ""
 
-        stream = self._ensure_stream()
-        await stream.write(text)
+        if self._body is not None:
+            await self._body.update(self._content)
 
         # Throttle visibility refresh
         if self._should_refresh_visibility():
@@ -897,6 +876,7 @@ class AssistantMessage(Vertical):
         # Accumulate content
         self._content += text
         self._pending_buffer += text
+        self._streaming_active = True
 
         # Schedule batched flush if not already scheduled
         if self._flush_timer is None:
@@ -906,14 +886,15 @@ class AssistantMessage(Vertical):
             )
 
     async def write_initial_content(self) -> None:
-        """Write initial content from constructor and finalize the stream."""
+        """Write initial content from constructor and finalize streaming state."""
         if self._content:
-            stream = self._ensure_stream()
-            await stream.write(self._content)
+            self._streaming_active = True
+            if self._body is not None:
+                await self._body.update(self._content)
             await self.stop_stream()
 
     async def stop_stream(self) -> None:
-        """Stop the streaming and apply collapsed layout when appropriate."""
+        """End streaming batched updates and apply collapsed layout when appropriate."""
         # Cancel any pending flush timer
         if self._flush_timer is not None:
             self._flush_timer.stop()
@@ -923,9 +904,9 @@ class AssistantMessage(Vertical):
         if self._pending_buffer:
             await self._flush_pending_content()
 
-        if self._stream is not None:
-            await self._stream.stop()
-            self._stream = None
+        self._streaming_active = False
+        if self._body is not None:
+            await self._body.update(self._content)
         self._refresh_body_visibility()
 
     async def set_content(self, content: str) -> None:
@@ -933,8 +914,8 @@ class AssistantMessage(Vertical):
         await self.stop_stream()
         self._content = content
         self._pending_buffer = ""  # Clear any pending buffer
-        if self._markdown:
-            await self._markdown.update(content)
+        if self._body:
+            await self._body.update(content)
         self._refresh_body_visibility()
 
 

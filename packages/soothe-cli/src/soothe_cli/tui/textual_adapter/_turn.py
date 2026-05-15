@@ -872,8 +872,7 @@ async def execute_task_textual(
                                 assistant_message_by_namespace[ns_key] = current_msg
 
                             # Append just the new text chunk for smoother
-                            # streaming (uses MarkdownStream internally for
-                            # better performance)
+                            # streaming (batched plain-text updates on the card)
                             await current_msg.append_content(text)
 
                         elif block_type in {"tool_call_chunk", "tool_call", "tool_use"}:
