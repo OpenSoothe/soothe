@@ -296,7 +296,7 @@ class TestLLMPlanner:
         data = {
             "goal": "test goal",
             "steps": [
-                {"id": "S_1", "description": "Step 1", "execution_hint": "browser"},
+                {"id": "S_1", "description": "Step 1", "execution_hint": "legacy_x"},
                 {"id": "S_2", "description": "Step 2", "execution_hint": "search"},
                 {"id": "S_3", "description": "Step 3", "execution_hint": "web"},
                 {"id": "S_4", "description": "Step 4", "execution_hint": "tool"},
@@ -306,7 +306,7 @@ class TestLLMPlanner:
 
         normalized_data = planner._normalize_hints_in_dict(data)
 
-        assert normalized_data["steps"][0]["execution_hint"] == "subagent"  # browser
+        assert normalized_data["steps"][0]["execution_hint"] == "auto"  # unknown token
         assert normalized_data["steps"][1]["execution_hint"] == "tool"  # search
         assert normalized_data["steps"][2]["execution_hint"] == "tool"  # web
         assert normalized_data["steps"][3]["execution_hint"] == "tool"  # valid, unchanged
@@ -360,7 +360,7 @@ class TestLLMPlanner:
         content = """{
   "goal": "test goal",
   "steps": [
-    {"id": "S_1", "description": "Step 1", "execution_hint": "browser"},
+    {"id": "S_1", "description": "Step 1", "execution_hint": "legacy_x"},
     {"id": "S_2", "description": "Step 2", "execution_hint": "search"}
   ]
 }"""
@@ -368,7 +368,7 @@ class TestLLMPlanner:
         plan = planner._parse_json_from_response(content, "fallback goal")
 
         assert plan is not None
-        assert plan.steps[0].execution_hint == "subagent"  # browser -> subagent
+        assert plan.steps[0].execution_hint == "auto"  # unknown token -> auto
         assert plan.steps[1].execution_hint == "tool"  # search -> tool
 
     @pytest.mark.asyncio
@@ -406,9 +406,9 @@ class TestLLMPlanner:
                 PlanStep(id="2", description="Do work", execution_hint="tool"),
             ],
         )
-        out = LLMPlanner._apply_preferred_subagent(plan, "claude")
+        out = LLMPlanner._apply_preferred_subagent(plan, "research")
         assert out.steps[0].subagent is None
-        assert out.steps[1].subagent == "claude"
+        assert out.steps[1].subagent == "research"
         assert out.steps[1].execution_hint == "subagent"
 
     def test_apply_preferred_subagent_single_step_names_subagent(self) -> None:
@@ -417,7 +417,7 @@ class TestLLMPlanner:
             goal="g",
             steps=[PlanStep(id="1", description="Only step", execution_hint="tool")],
         )
-        out = LLMPlanner._apply_preferred_subagent(plan, "browser")
+        out = LLMPlanner._apply_preferred_subagent(plan, "explore")
         assert len(out.steps) == 1
-        assert out.steps[0].subagent == "browser"
+        assert out.steps[0].subagent == "explore"
         assert out.steps[0].execution_hint == "subagent"

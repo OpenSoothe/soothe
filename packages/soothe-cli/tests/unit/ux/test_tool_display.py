@@ -121,9 +121,9 @@ def test_task_shows_type_in_parentheses_not_brackets() -> None:
 
 
 def test_task_type_only_uses_parentheses() -> None:
-    s = format_tool_display("task", {"subagent_type": "browser"})
+    s = format_tool_display("task", {"subagent_type": "widget_agent"})
     assert "[" not in s
-    assert "browser" in s
+    assert "widget_agent" in s
 
 
 def test_cli_style_command_uses_format_tool_call_args() -> None:

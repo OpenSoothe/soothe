@@ -49,7 +49,7 @@ max_concurrent_dispatches: 50
 max_concurrent_vision_preflight: 8
 
 # EventBus JSON wire-size distribution logging (optional diagnostics)
-event_size_stats_enabled: false
+event_size_stats_enabled: true
 event_size_stats_interval_seconds: 60
 event_size_stats_idle_pause_seconds: 120
 
@@ -74,6 +74,6 @@ worker_pool:
   request_timeout_seconds: 1800
   heartbeat_interval_seconds: 30
   stuck_worker_timeout_seconds: 180
-  dispatch_wait_stats_enabled: false
+  dispatch_wait_stats_enabled: true
   dispatch_wait_stats_interval_seconds: 60
   dispatch_wait_stats_idle_pause_seconds: 120

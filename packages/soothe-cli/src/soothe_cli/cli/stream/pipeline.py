@@ -338,7 +338,7 @@ class StreamDisplayPipeline:
                 return summary
             return "done"
 
-        # Claude Code / plugin id `claude`: cost_usd, claude_session_id
+        # Optional plugin session: cost_usd + opaque session id field
         if subagent_name == "claude":
             cost = event.get("cost_usd", 0.0)
             session_id = event.get("claude_session_id")
@@ -349,7 +349,7 @@ class StreamDisplayPipeline:
                 return summary
             return "done"
 
-        # Browser-use / plugin id `browser`: success status
+        # Optional web automation plugin: boolean success in payload
         if subagent_name == "browser":
             success = event.get("success", True)
             return "✓ success" if success else "✗ failed"

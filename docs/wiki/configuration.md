@@ -120,16 +120,12 @@ Enable or disable subagents:
 
 ```yaml
 subagents:
-  browser:
+  explore:
     enabled: true
-    config:
-      runtime_dir: ""
-      disable_extensions: true
-      disable_cloud: true
-
-  claude:
+  plan:
     enabled: true
-    model: "anthropic:claude-sonnet-4-20250514"
+  research:
+    enabled: true
 
   skillify:
     enabled: true
@@ -182,7 +178,7 @@ Install additional capabilities as needed:
 | Extra | Command | Adds |
 |-------|---------|------|
 | `research` | `pip install soothe[research]` | Tavily web search |
-| `browser` / `claude` | `pip install "soothe-community[browser]"` / `"soothe-community[claude]"` | Optional plugin subagents (not core extras) |
+| `soothe-community` | `pip install soothe-community` | Optional delegated agents and extras (see that repository) |
 | `serper` | `pip install soothe[serper]` | Google Serper search |
 | `wizsearch` | `pip install soothe[wizsearch]` | Multi-engine search |
 | `jina` | `pip install soothe[jina]` | Jina web reader |
@@ -305,9 +301,11 @@ protocols:
 
 # Subagents
 subagents:
-  browser:
+  explore:
     enabled: true
-  claude:
+  plan:
+    enabled: true
+  research:
     enabled: true
 
 # Daemon

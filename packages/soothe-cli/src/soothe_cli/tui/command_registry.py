@@ -101,17 +101,6 @@ COMMANDS: tuple[SlashCommand, ...] = (
         hidden_keywords="continue history sessions",
     ),
     SlashCommand(
-        name="/browser",
-        description="Route prompt to Browser subagent (usage: /browser <query>)",
-        bypass_tier=BypassTier.QUEUED,
-        hidden_keywords="web page",
-    ),
-    SlashCommand(
-        name="/claude",
-        description="Route prompt to Claude subagent (usage: /claude <query>)",
-        bypass_tier=BypassTier.QUEUED,
-    ),
-    SlashCommand(
         name="/research",
         description="Route prompt to Research subagent (usage: /research <query>)",
         bypass_tier=BypassTier.QUEUED,

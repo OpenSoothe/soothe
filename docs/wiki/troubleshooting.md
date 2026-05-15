@@ -32,28 +32,21 @@ OPENAI_API_KEY=sk-your-key-here
 
 ## Subagent Issues
 
-### Browser or Claude plugin subagent not working
+### Optional soothe-community delegate not working
 
-These capabilities ship in **`soothe-community`**, not as `soothe[…]` extras.
+Optional delegated agents ship in **`soothe-community`**, not as `soothe[…]` extras. Install that package and follow its README for provider keys, extras, and `subagents.*` YAML.
 
-```bash
-pip install "soothe-community[browser]"
-# or
-pip install "soothe-community[claude]"
-export ANTHROPIC_API_KEY=sk-ant-your-key-here   # for Claude Code agent path
-```
-
-Ensure matching `subagents.<name>.enabled: true` in your agent config.
+Ensure matching `subagents.<name>.enabled: true` in your agent config for the delegate you enabled.
 
 ### Subagent Disabled
 
-**Error**: `Subagent 'browser' is disabled`
+**Error**: `Subagent '<name>' is disabled`
 
 **Solution**: Enable in configuration:
 
 ```yaml
 subagents:
-  browser:
+  <name>:
     enabled: true
 ```
 
@@ -164,7 +157,7 @@ curl -H "Authorization: Bearer your-jwt-token" \
 
 ### Error: CORS policy blocked
 
-**Error**: `CORS policy blocked` in browser console
+**Error**: `CORS policy blocked` in the client developer tools
 
 **Solution**: This is handled by the reverse proxy, not Soothe directly.
 
@@ -205,7 +198,7 @@ soothe.example.com {
 
 ### Error: CORS policy blocked
 
-**Error**: `CORS policy blocked` in browser console
+**Error**: `CORS policy blocked` in the client developer tools
 
 **Solution**: Add your origin to allowed CORS origins:
 

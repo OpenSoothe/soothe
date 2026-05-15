@@ -16,7 +16,10 @@ def _display_subagent_name(name: str) -> str:
     """Return friendly display name for a subagent id."""
     from soothe_cli.shared.commands.subagent_routing import SUBAGENT_DISPLAY_NAMES
 
-    return SUBAGENT_DISPLAY_NAMES.get(name.lower(), name.replace("_", " ").title())
+    key = (name or "").strip()
+    if key.lower() in SUBAGENT_DISPLAY_NAMES:
+        return SUBAGENT_DISPLAY_NAMES[key.lower()]
+    return key
 
 
 def update_name_map_from_tool_calls(message_obj: object, name_map: dict[str, str]) -> None:

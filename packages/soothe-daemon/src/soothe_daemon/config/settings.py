@@ -100,7 +100,7 @@ class SootheDaemonConfig(BaseSettings):
     # --- EventBus distribution stats (IG-403) -------------------------------
 
     event_size_stats_enabled: bool = Field(
-        default=False,
+        default=True,
         description="Log EventBus JSON wire-size distribution on an interval when enabled",
     )
     event_size_stats_interval_seconds: int = Field(

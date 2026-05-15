@@ -47,9 +47,9 @@ class TestExecutorHints:
 
         step = StepAction(
             id="step-1",
-            description="Browse web page",
-            subagent="browser",
-            expected_output="Page content",
+            description="Map repository layout",
+            subagent="explore",
+            expected_output="Matching paths",
         )
 
         await executor._execute_step_collecting_events(step, "thread-456")
@@ -57,7 +57,7 @@ class TestExecutorHints:
         call_args = mock_agent.astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
 
-        assert configurable["soothe_step_subagent"] == "browser"
+        assert configurable["soothe_step_subagent"] == "explore"
         assert "soothe_step_tools" not in configurable
 
     @pytest.mark.asyncio
