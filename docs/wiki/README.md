@@ -27,7 +27,7 @@ Welcome to the Soothe end-user wiki. This directory contains comprehensive guide
 | Guide | What You'll Learn |
 |-------|-------------------|
 | **[Autonomous Mode](autonomous-mode.md)** | Enable autonomous iteration for complex multi-step tasks |
-| **[Specialized Subagents](subagents.md)** | Browser automation, research, planning, and skill creation |
+| **[Specialized Subagents](subagents.md)** | Core explore/plan/research and optional community delegates |
 | **[Thread Management](thread-management.md)** | Work with conversation threads, resume previous sessions |
 
 ### 🔧 Configuration & Management

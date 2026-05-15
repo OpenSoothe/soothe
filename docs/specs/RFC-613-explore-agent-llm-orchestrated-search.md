@@ -34,7 +34,7 @@ RFC-605 defined an Explore subagent with a **fixed wave-based search progression
 3. **No concept of search depth**: All searches run the same number of waves regardless of target complexity
 4. **Inefficient for simple targets**: A simple "find auth.py" requires running all 3 waves before validation
 
-Claude Code's explore agent demonstrates that an **LLM-orchestrated iterative approach** is more effective: the agent decides what tool to call next based on what it has found so far, adapting strategy dynamically.
+Some upstream coding agents demonstrate that an **LLM-orchestrated iterative approach** is more effective: the agent decides what tool to call next based on what it has found so far, adapting strategy dynamically.
 
 ---
 
@@ -373,7 +373,7 @@ def _get_subagent_factories() -> dict[str, Callable]:
 
 ```xml
 <AVAILABLE_SUBAGENTS>
-- browser / claude: Optional soothe-community plugins when installed
+- Optional soothe-community delegates when installed (see that repository)
 - research: Multi-source research and synthesis
 - explore: Targeted filesystem search (quick/medium/thorough)
 

@@ -114,7 +114,7 @@ Outcome: {type: "parallel_subagents", subagents: [...], outputs: [...]}
 
 ```xml
 <AVAILABLE_SUBAGENTS>
-- browser / claude: Optional `soothe-community` plugins when installed
+- Optional `soothe-community` delegates when installed (see that repository)
 - research: Multi-source synthesis
 - explore: Targeted filesystem search (NEW)
 
@@ -313,7 +313,7 @@ class StepAction(BaseModel):
 **Breaking changes** (no backward compatibility):
 
 - All existing StepAction instantiations must update
-- `subagent="browser"` → `subagents=["browser"]`
+- `subagent="widget"` → `subagents=["widget"]`  (example community id)
 - `subagent="research"` → `subagents=["research"]`
 
 **Files requiring updates**:
@@ -449,7 +449,7 @@ agentic:
 ### 5. Subagent Registry
 
 ```python
-# In src/soothe/core/resolver/_resolver_tools.py (IG-415: browser/claude via soothe-community entry points)
+# In packages/soothe/src/soothe/core/resolver/_resolver_tools.py (IG-415: optional agents via soothe-community entry points)
 
 from soothe.subagents.explore import create_explore_subagent
 from soothe.subagents.plan import create_plan_subagent
@@ -460,7 +460,7 @@ SUBAGENT_FACTORIES = {
     "plan": create_plan_subagent,
     "research": create_research_subagent,
 }
-# Browser and Claude are provided by soothe-community plugins when installed.
+# Optional delegates are provided by soothe-community plugins when installed.
 ```
 
 ### 6. LLMPlanner Integration
@@ -470,7 +470,7 @@ SUBAGENT_FACTORIES = {
 
 sections.append("""
 <AVAILABLE_SUBAGENTS>
-- browser / claude: Optional community plugins (`soothe-community`) when installed
+- Optional community plugins (`soothe-community`) when installed (see that repository)
 - research: Multi-source research and synthesis
 - explore: Targeted filesystem search and navigation
 

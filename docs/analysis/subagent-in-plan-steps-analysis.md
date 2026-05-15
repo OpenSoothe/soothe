@@ -37,12 +37,12 @@ configurable: dict[str, Any] = {
 # Extract hints from config
 hints = {
     "tools": ["glob", "grep"],
-    "subagent": "browser",  # ← Subagent hint
+    "subagent": "research",  # ← Subagent hint
     "expected_output": "Config file list"
 }
 
 # Inject into system prompt
-"Suggested subagent: browser"
+"Suggested subagent: research"
 ```
 
 ### 2. Execution Hint in PlanStep
@@ -180,9 +180,9 @@ When subagent is used in a step, the CLI display shows:
 ## Use Cases
 
 **Appropriate for subagent delegation:**
-- Complex multi-step operations (browser automation, code analysis)
+- Complex multi-step operations (web research, code analysis)
 - Tasks requiring external context (web research, file exploration)
-- Operations needing specialized capabilities (Claude's full agent features)
+- Operations needing specialized capabilities (long-horizon delegates, multi-tool pipelines)
 
 **Not appropriate:**
 - Simple file reads → use `read_file` directly

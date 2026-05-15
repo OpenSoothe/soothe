@@ -902,7 +902,7 @@ class MessageRouter:
         # 4. Clean up ThreadStateRegistry entries for this loop
         removed_threads = d._thread_registry.cleanup_loop(loop_id)
 
-        # 5. Clean up Claude session cache for removed threads (optional community plugin)
+        # 5. Clean up optional plugin session cache for removed threads (optional community package)
         if removed_threads:
             try:
                 from soothe_community.claude.session_bridge import cleanup_claude_sessions

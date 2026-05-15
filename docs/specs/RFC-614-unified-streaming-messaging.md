@@ -384,9 +384,9 @@ Main Agent:
   namespace: ()
   → streams[(internal_goal_completion_key, ())] → AccumState A
 
-Subagent Browser:
-  namespace: ("browser",)
-  → streams[(internal_goal_completion_key, ("browser",))] → AccumState B
+Subagent Explore:
+  namespace: ("explore",)
+  → streams[(internal_goal_completion_key, ("explore",))] → AccumState B
 
 Concurrent execution: A and B isolated (no chunk interleaving)
 ```

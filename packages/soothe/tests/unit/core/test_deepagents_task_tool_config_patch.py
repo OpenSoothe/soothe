@@ -43,18 +43,18 @@ def _runtime(config: dict) -> ToolRuntime:
 def test_task_tool_runtime_is_injected_arg_for_schema_strip() -> None:
     """PEP563 string annotations break StructuredTool._injected_args_keys; keep real types."""
     rec = _RecordingRunnable()
-    tool = sm._build_task_tool([{"name": "browser", "description": "d", "runnable": rec}])
+    tool = sm._build_task_tool([{"name": "sidecar", "description": "d", "runnable": rec}])
     assert "runtime" in tool._injected_args_keys
 
 
 def test_task_tool_async_passes_parent_config_to_ainvoke() -> None:
     rec = _RecordingRunnable()
-    tool = sm._build_task_tool([{"name": "browser", "description": "d", "runnable": rec}])
+    tool = sm._build_task_tool([{"name": "sidecar", "description": "d", "runnable": rec}])
     cfg = {"configurable": {"thread_id": "tid-parent"}}
 
     async def _run() -> None:
         assert tool.coroutine is not None
-        await tool.coroutine("do something", "browser", _runtime(cfg))
+        await tool.coroutine("do something", "sidecar", _runtime(cfg))
 
     import asyncio
 
@@ -64,8 +64,8 @@ def test_task_tool_async_passes_parent_config_to_ainvoke() -> None:
 
 def test_task_tool_sync_passes_parent_config_to_invoke() -> None:
     rec = _RecordingRunnable()
-    tool = sm._build_task_tool([{"name": "browser", "description": "d", "runnable": rec}])
+    tool = sm._build_task_tool([{"name": "sidecar", "description": "d", "runnable": rec}])
     cfg = {"configurable": {"thread_id": "tid-parent"}}
     assert tool.func is not None
-    tool.func("do something", "browser", _runtime(cfg))
+    tool.func("do something", "sidecar", _runtime(cfg))
     assert rec.invoke_configs == [cfg]
