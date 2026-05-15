@@ -5,7 +5,8 @@ Provides reusable similarity calculation for:
 - Loop message similarity detection (future use)
 - Content deduplication and ranking
 
-Uses sentence_transformers when available, falls back to keyword matching.
+Uses sentence_transformers when available and cached locally; keyword overlap is
+only used inside ``semantic_similarity`` when encoding fails (not for explore relevance).
 
 Model Cache:
 - ``SOOTHE_HF_CACHE`` env var overrides cache path (used in Docker builds)
@@ -116,6 +117,44 @@ def _get_transformer_model() -> SentenceTransformer | None:
         _transformer_model = None
 
     return _transformer_model
+
+
+def _embedding_model_snapshot_dir() -> Path:
+    """Directory holding cached snapshots for the configured embedding model."""
+    return (
+        hf_embedding_cache_dir()
+        / f"models--sentence-transformers--{EMBEDDING_MODEL_NAME.replace('/', '--')}"
+        / "snapshots"
+    )
+
+
+def is_embedding_model_cached_locally() -> bool:
+    """Return True when the embedding model artifacts exist locally (no download needed).
+
+    Does not load the model or contact the network.
+    """
+    snapshots = _embedding_model_snapshot_dir()
+    if not snapshots.is_dir():
+        return False
+    return any(child.is_dir() and any(child.iterdir()) for child in snapshots.iterdir())
+
+
+def embedding_model_ready_without_download() -> bool:
+    """Return True when semantic similarity can run without triggering a model download."""
+    if not _has_sentence_transformers:
+        return False
+    if _transformer_model is not None:
+        return True
+    return is_embedding_model_cached_locally()
+
+
+def log_skip_semantic_similarity(msg: str, *args: object) -> None:
+    """Log that semantic ranking/scoring is skipped and original ordering is kept."""
+    reason = msg % args if args else msg
+    logger.warning(
+        "Skipping semantic similarity (%s); using findings in original order",
+        reason,
+    )
 
 
 def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
@@ -274,146 +313,36 @@ def calculate_relevance_score(
     threshold_high: float = 0.7,
     threshold_medium: float = 0.4,
 ) -> str:
-    """Calculate relevance score for an explore finding.
-
-    Combines path heuristic and content similarity:
-    - High path match → immediate "high" (fast path)
-    - Medium path match → check content similarity (semantic path)
-    - Low path match → "low" (skip expensive calculation)
+    """Calculate relevance for an explore finding using snippet semantic similarity only.
 
     Args:
         finding: Finding dict with 'path' and 'snippet' keys.
         search_target: Original search target text.
-        enable_semantic: Enable semantic similarity (requires sentence_transformers).
+        enable_semantic: When False, returns ``medium`` without embedding calls.
         threshold_high: Threshold for "high" relevance.
         threshold_medium: Threshold for "medium" relevance.
 
     Returns:
         Relevance string: "high", "medium", or "low".
     """
-    path = finding.get("path", "")
-    snippet = finding.get("snippet")
-
-    # Fast path: path-based heuristic
-    path_relevance = _path_heuristic_relevance(path, search_target)
-
-    # If high path match, return immediately (avoid expensive similarity)
-    if path_relevance == "high":
-        return "high"
-
-    # Medium path: check content similarity if snippet exists
-    if snippet and path_relevance == "medium" and enable_semantic:
-        try:
-            similarity = semantic_similarity(snippet[:200], search_target)
-
-            if similarity >= threshold_high:
-                return "high"
-            elif similarity >= threshold_medium:
-                return "medium"
-            else:
-                return "low"
-        except Exception as e:
-            logger.debug("Similarity calculation failed: %s", e)
-            return path_relevance
-
-    # Low path: no snippet or semantic disabled
-    return path_relevance
-
-
-def _path_heuristic_relevance(path: str, search_target: str) -> str:
-    """Quick path-based relevance heuristic.
-
-    Args:
-        path: File path.
-        search_target: Search target text.
-
-    Returns:
-        "high", "medium", or "low".
-    """
-    # Extract keywords from search target
-    keywords = _extract_keywords(search_target)
-
-    # Count keyword matches in path
-    path_lower = path.lower()
-    matches = sum(1 for kw in keywords if kw.lower() in path_lower)
-
-    if matches >= 3:
-        return "high"
-    elif matches >= 1:
+    if not enable_semantic or not embedding_model_ready_without_download():
         return "medium"
-    else:
+
+    snippet = finding.get("snippet")
+    if not snippet:
         return "low"
 
+    try:
+        similarity = semantic_similarity(str(snippet)[:200], search_target)
+    except Exception as e:
+        logger.debug("Similarity calculation failed: %s", e)
+        return "medium"
 
-def _extract_keywords(text: str) -> list[str]:
-    """Extract keywords from text (simple heuristic).
-
-    Args:
-        text: Input text.
-
-    Returns:
-        List of potential keywords.
-    """
-    # Split on common separators
-    words = text.lower().split()
-
-    # Filter: remove stop words and short tokens
-    stop_words = {
-        "a",
-        "an",
-        "the",
-        "in",
-        "on",
-        "at",
-        "to",
-        "for",
-        "of",
-        "and",
-        "or",
-        "with",
-        "by",
-        "from",
-        "is",
-        "are",
-        "was",
-        "were",
-        "be",
-        "been",
-        "being",
-        "have",
-        "has",
-        "had",
-        "do",
-        "does",
-        "did",
-        "will",
-        "would",
-        "could",
-        "should",
-        "may",
-        "might",
-        "must",
-        "shall",
-        "can",
-        "need",
-        "dare",
-        "ought",
-        "used",
-        "find",
-        "search",
-        "locate",
-        "show",
-        "get",
-        "all",
-        "this",
-        "that",
-    }
-
-    keywords = [
-        word for word in words if len(word) >= 3 and word not in stop_words and word.isalnum()
-    ]
-
-    return keywords
+    if similarity >= threshold_high:
+        return "high"
+    if similarity >= threshold_medium:
+        return "medium"
+    return "low"
 
 
 def rank_by_similarity(
@@ -434,9 +363,20 @@ def rank_by_similarity(
         enable_semantic: Enable semantic similarity.
 
     Returns:
-        Items sorted by relevance (highest first).
+        Items sorted by relevance (highest first), or unchanged when semantic is skipped.
     """
     if not items:
+        return items
+
+    if enable_semantic and not embedding_model_ready_without_download():
+        if not _has_sentence_transformers:
+            log_skip_semantic_similarity("sentence_transformers is not installed")
+        else:
+            log_skip_semantic_similarity(
+                "embedding model %s is not cached under %s (download required)",
+                EMBEDDING_MODEL_NAME,
+                hf_embedding_cache_dir(),
+            )
         return items
 
     scored_items = []
@@ -473,35 +413,28 @@ async def async_calculate_relevance_score(
     Returns:
         Relevance string: "high", "medium", or "low".
     """
-    path = finding.get("path", "")
+    if not enable_semantic or not embedding_model_ready_without_download():
+        return "medium"
+
     snippet = finding.get("snippet")
+    if not snippet:
+        return "low"
 
-    # Fast path: path-based heuristic
-    path_relevance = _path_heuristic_relevance(path, search_target)
+    try:
+        similarity = await async_semantic_similarity(
+            str(snippet)[:200],
+            search_target,
+            timeout_seconds=timeout_seconds,
+        )
+    except Exception as e:
+        logger.debug("Similarity calculation failed: %s", e)
+        return "medium"
 
-    # If high path match, return immediately (avoid expensive similarity)
-    if path_relevance == "high":
+    if similarity >= threshold_high:
         return "high"
-
-    # Medium path: check content similarity if snippet exists
-    if snippet and path_relevance == "medium" and enable_semantic:
-        try:
-            similarity = await async_semantic_similarity(
-                snippet[:200], search_target, timeout_seconds=timeout_seconds
-            )
-
-            if similarity >= threshold_high:
-                return "high"
-            elif similarity >= threshold_medium:
-                return "medium"
-            else:
-                return "low"
-        except Exception as e:
-            logger.debug("Similarity calculation failed: %s", e)
-            return path_relevance
-
-    # Low path: no snippet or semantic disabled
-    return path_relevance
+    if similarity >= threshold_medium:
+        return "medium"
+    return "low"
 
 
 async def async_rank_by_similarity(
@@ -522,9 +455,20 @@ async def async_rank_by_similarity(
         timeout_seconds: Timeout for each embedding call.
 
     Returns:
-        Items sorted by relevance (highest first).
+        Items sorted by relevance (highest first), or unchanged when semantic is skipped.
     """
     if not items:
+        return items
+
+    if enable_semantic and not embedding_model_ready_without_download():
+        if not _has_sentence_transformers:
+            log_skip_semantic_similarity("sentence_transformers is not installed")
+        else:
+            log_skip_semantic_similarity(
+                "embedding model %s is not cached under %s (download required)",
+                EMBEDDING_MODEL_NAME,
+                hf_embedding_cache_dir(),
+            )
         return items
 
     scored_items = []
@@ -594,9 +538,9 @@ async def async_warmup_embedding_model() -> bool:
 
 # Check availability at import time
 def is_semantic_similarity_available() -> bool:
-    """Check if semantic similarity is available (sentence_transformers installed and model loadable).
+    """Check if semantic similarity can run without downloading the embedding model.
 
     Returns:
-        True if sentence_transformers model is available and loadable.
+        True when ``sentence_transformers`` is installed and the model is cached or loaded.
     """
-    return _has_sentence_transformers and _get_transformer_model() is not None
+    return embedding_model_ready_without_download()

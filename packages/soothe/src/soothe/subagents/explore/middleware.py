@@ -22,6 +22,7 @@ from soothe.utils.similarity import (
     async_calculate_relevance_score,
     async_rank_by_similarity,
     calculate_relevance_score,
+    embedding_model_ready_without_download,
     rank_by_similarity,
 )
 from soothe.utils.subagent_emit import emit_subagent_wire_event
@@ -385,36 +386,31 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             current_iter,
         )
 
-        # Calculate relevance scores if semantic similarity enabled
         if self._explore_config.enable_semantic_similarity:
             try:
-                for finding in findings:
-                    finding["relevance"] = calculate_relevance_score(
-                        finding,
-                        search_target,
-                        enable_semantic=True,
+                if embedding_model_ready_without_download():
+                    for finding in findings:
+                        finding["relevance"] = calculate_relevance_score(
+                            finding,
+                            search_target,
+                            enable_semantic=True,
+                        )
+                    logger.debug(
+                        "Explore: calculated relevance scores for %d findings", len(findings)
                     )
-                logger.debug("Explore: calculated relevance scores for %d findings", len(findings))
-
-                # Rank findings by relevance (highest first)
                 findings = rank_by_similarity(
                     findings,
                     search_target,
                     content_key="snippet",
                     enable_semantic=True,
                 )
-                logger.debug("Explore: ranked findings by relevance")
+                if embedding_model_ready_without_download():
+                    logger.debug("Explore: ranked findings by relevance")
             except Exception as exc:
                 logger.warning(
-                    "Explore: semantic similarity failed (%s), using keyword fallback",
+                    "Explore: semantic similarity failed (%s); using findings in original order",
                     exc,
                 )
-                for finding in findings:
-                    finding["relevance"] = calculate_relevance_score(
-                        finding,
-                        search_target,
-                        enable_semantic=False,
-                    )
 
         # Reduce payload size for faster synthesis (configurable max_findings_for_synthesis)
         max_findings = self._explore_config.max_findings_for_synthesis
@@ -491,23 +487,22 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
                 current,
             )
 
-            # Calculate relevance scores if semantic similarity enabled (async with timeout)
             if self._explore_config.enable_semantic_similarity:
                 sem_timeout = self._explore_config.semantic_similarity_timeout_seconds
                 try:
                     async with asyncio.timeout(sem_timeout):
-                        for finding in findings:
-                            finding["relevance"] = await async_calculate_relevance_score(
-                                finding,
-                                search_target,
-                                enable_semantic=True,
-                                timeout_seconds=max(1.0, sem_timeout),
+                        if embedding_model_ready_without_download():
+                            for finding in findings:
+                                finding["relevance"] = await async_calculate_relevance_score(
+                                    finding,
+                                    search_target,
+                                    enable_semantic=True,
+                                    timeout_seconds=max(1.0, sem_timeout),
+                                )
+                            logger.debug(
+                                "Explore: calculated relevance scores for %d findings",
+                                len(findings),
                             )
-                        logger.debug(
-                            "Explore: calculated relevance scores for %d findings", len(findings)
-                        )
-
-                        # Rank findings by relevance (highest first)
                         findings = await async_rank_by_similarity(
                             findings,
                             search_target,
@@ -515,27 +510,17 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
                             enable_semantic=True,
                             timeout_seconds=max(1.0, sem_timeout),
                         )
-                        logger.debug("Explore: ranked findings by relevance")
+                        if embedding_model_ready_without_download():
+                            logger.debug("Explore: ranked findings by relevance")
                 except TimeoutError:
-                    logger.warning("Explore: semantic similarity timed out, using keyword fallback")
-                    # Fallback: use synchronous keyword-based versions (fast)
-                    for finding in findings:
-                        finding["relevance"] = calculate_relevance_score(
-                            finding,
-                            search_target,
-                            enable_semantic=False,  # Disable semantic to use keyword fallback
-                        )
+                    logger.warning(
+                        "Explore: semantic similarity timed out; using findings in original order"
+                    )
                 except Exception as exc:
                     logger.warning(
-                        "Explore: semantic similarity failed (%s), using keyword fallback",
+                        "Explore: semantic similarity failed (%s); using findings in original order",
                         exc,
                     )
-                    for finding in findings:
-                        finding["relevance"] = calculate_relevance_score(
-                            finding,
-                            search_target,
-                            enable_semantic=False,
-                        )
 
             # Reduce payload size for faster synthesis (configurable max_findings_for_synthesis)
             max_findings = self._explore_config.max_findings_for_synthesis
