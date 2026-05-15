@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from _shared.streaming import run_with_streaming
 
-from soothe.subagents.claude import create_claude_subagent
+from soothe_community.claude import create_claude_subagent
 
 load_dotenv()
 

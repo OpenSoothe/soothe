@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe.config import BrowserSubagentConfig, SootheConfig
+from soothe.config import SootheConfig
 from soothe.core.workspace.tool_path_resolution import (
     filesystem_virtual_mode_from_soothe_config,
     max_file_size_mb_for_filesystem_backend,
@@ -32,18 +32,13 @@ logger = logging.getLogger(__name__)
 def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubAgent]]:
     """Lazily load subagent factories on first access.
 
-    This avoids importing heavy subagent modules (browser)
-    at module load time, which was causing 24+ second startup delays.
+    This avoids importing heavy subagent modules at module load time.
     """
-    from soothe.subagents.browser import create_browser_subagent
-    from soothe.subagents.claude import create_claude_subagent
     from soothe.subagents.explore import create_explore_subagent
     from soothe.subagents.plan import create_plan_subagent
     from soothe.subagents.research import create_research_subagent
 
     return {
-        "browser": create_browser_subagent,
-        "claude": create_claude_subagent,
         "explore": create_explore_subagent,
         "plan": create_plan_subagent,
         "research": create_research_subagent,
@@ -571,7 +566,6 @@ def resolve_subagents(
 
     # Collect (name, factory, kwargs) tuples for enabled subagents
     pending: list[tuple[str, Callable, dict]] = []
-    cwd_subagents = {"claude"}
     resolved_cwd = (
         str(expand_path(config.workspace_dir)) if config.workspace_dir else str(Path.cwd())
     )
@@ -630,10 +624,6 @@ def resolve_subagents(
             continue
 
         extra_kwargs: dict = dict(sub_cfg.config)
-        if name in cwd_subagents and "cwd" not in extra_kwargs:
-            extra_kwargs["cwd"] = resolved_cwd
-        if name == "browser":
-            extra_kwargs["config"] = BrowserSubagentConfig(**sub_cfg.config)
         if name == "research":
             extra_kwargs["config"] = config
             if "context" not in extra_kwargs:

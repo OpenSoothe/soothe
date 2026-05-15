@@ -291,8 +291,7 @@ class BrowserPlugin:
 - [ ] Modify `core/agent.py`, `core/resolver/` to use plugin registry
 
 ### Migration
-- [ ] Migrate browser, claude, skillify, weaver plugins
-- [ ] Add backward compatibility wrappers
+- [x] Migrate browser, claude to soothe-community (IG-415); skillify, weaver already community
 
 ### Testing
 - [ ] Unit tests for manifest, decorators, registry, lifecycle

@@ -5,6 +5,7 @@ Built-in subagents emit only allowlisted types with bounded string fields.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 # --- Browser ---
@@ -104,6 +105,32 @@ def clip_wire_event_payload(data: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def emit_subagent_wire_event(event: dict[str, Any], logger: logging.Logger) -> None:
+    """Emit allowlisted subagent progress to the LangGraph ``custom`` stream.
+
+    Community subagents use this helper so they do not depend on the ``soothe`` package.
+    Unknown event types are dropped.
+
+    Args:
+        event: Dict with at least ``type`` matching ``ALLOWLISTED_SUBAGENT_EVENT_TYPES``.
+        logger: Caller logger for audit trail.
+    """
+    et = event.get("type", "")
+    if not isinstance(et, str) or not is_allowlisted_subagent_event_type(et):
+        logger.debug("Ignoring non-allowlisted subagent wire event: %r", et)
+        return
+    clipped = clip_wire_event_payload(event)
+    logger.debug("subagent.wire %s", clipped.get("type", ""))
+    try:
+        from langgraph.config import get_stream_writer
+
+        writer = get_stream_writer()
+        if writer:
+            writer(clipped)
+    except (ImportError, RuntimeError, KeyError):
+        pass
+
+
 __all__ = [
     "ALLOWLISTED_SUBAGENT_EVENT_TYPES",
     "SUBAGENT_BROWSER_COMPLETED",
@@ -121,6 +148,7 @@ __all__ = [
     "SUBAGENT_RESEARCH_GATHER_SUMMARY",
     "SUBAGENT_RESEARCH_STARTED",
     "clip_wire_event_payload",
+    "emit_subagent_wire_event",
     "is_allowlisted_subagent_event_type",
     "parse_subagent_wire_agent",
     "truncate_wire_str",

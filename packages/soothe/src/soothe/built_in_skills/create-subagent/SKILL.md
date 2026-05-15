@@ -120,7 +120,7 @@ Key points:
 
 ## Pattern B: CompiledSubAgent (Custom Graph)
 
-Reference implementations: `browser.py` (external SDK), `claude.py` (external CLI), `research.py` (multi-node pipeline)
+Reference implementations live in **soothe-community**: `soothe_community/browser/` (external SDK), `soothe_community/claude/` (external CLI), `soothe/subagents/research/` (multi-node pipeline in core).
 
 ```python
 """MyAgent subagent -- wraps {library} as a CompiledSubAgent."""
@@ -232,7 +232,7 @@ Key points:
 - The final node **must** return `{"messages": [AIMessage(content=...)]}`
 - Import external deps lazily inside the node function (keeps them optional)
 - Sync wrapper is required -- deepagents calls graph nodes in a thread pool
-- If the external library needs a model name string (not a langchain model object), extract it; see `_extract_model_name()` in `browser.py`
+- If the external library needs a model name string (not a langchain model object), extract it; see `_extract_model_name()` in the browser subagent implementation under `soothe_community/browser/`.
 
 ## Progress Reporting
 
@@ -268,7 +268,7 @@ After creating the subagent file:
 
 ## Common Pitfalls
 
-**Model type mismatch**: `_resolve_subagents` may pass a `BaseChatModel` instance instead of a string. If your subagent wraps an external library that needs a model name string, use `_extract_model_name()` (see `browser.py`).
+**Model type mismatch**: `_resolve_subagents` may pass a `BaseChatModel` instance instead of a string. If your subagent wraps an external library that needs a model name string, use `_extract_model_name()` (see `soothe_community/browser/implementation.py`).
 
 **Async in sync context**: deepagents runs CompiledSubAgent nodes in a thread pool. If your node is async, you need the sync wrapper pattern with `asyncio.new_event_loop()` for the `loop.is_running()` case.
 

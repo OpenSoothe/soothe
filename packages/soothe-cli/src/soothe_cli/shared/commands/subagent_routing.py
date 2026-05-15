@@ -30,7 +30,7 @@ def get_subagent_display_name(technical_name: str) -> str:
 def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
     """Parse subagent subcommand from user input.
 
-    Detects subagent subcommands (e.g., /browser, /claude) anywhere in the text
+    Detects subagent routing commands (e.g. `/research`, `/explore`, `/plan`, or `/<id>` when configured)
     and extracts the subagent name along with the cleaned input text.
 
     Args:
@@ -42,8 +42,8 @@ def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
         The subcommand is removed from ``cleaned_text``.
 
     Examples:
-        ``"/browser check this"`` -> ``("browser", "check this")``
-        ``"Can you /claude analyze this"`` -> ``("claude", "Can you analyze this")``
+        ``"/research check this"`` -> ``("research", "check this")``
+        ``"/explore map the repo"`` -> ``("explore", "map the repo")``
         ``"hello world"`` -> ``(None, "hello world")``
     """
     first_match: tuple[int, str] | None = None

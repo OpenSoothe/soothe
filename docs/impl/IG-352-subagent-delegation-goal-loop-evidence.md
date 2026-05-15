@@ -4,7 +4,7 @@
 
 ## Intent
 
-Wire-level ``preferred_subagent`` (slash routes such as ``/claude``) is a **hint** merged into ``LoopState.unified_classification`` (IG-349). Execution should treat delegated work like any other **bounded tool interaction**: the deepagents ``task`` tool runs the chosen subgraph; its **ToolMessage** result is classified as ``outcome_type=subagent`` (``soothe_sdk.tools.metadata`` → ``generate_outcome_metadata``) and becomes **step evidence** via ``StepResult`` / ``to_evidence_string()``. The **Plan phase** (``PlanPhase.plan``) already consumes ``state.step_results`` when calling the loop planner—same path as non-subagent steps—so the model can mark the goal done, continue, or replan.
+Wire-level ``preferred_subagent`` (slash routes such as ``/research``) is a **hint** merged into ``LoopState.unified_classification`` (IG-349). Execution should treat delegated work like any other **bounded tool interaction**: the deepagents ``task`` tool runs the chosen subgraph; its **ToolMessage** result is classified as ``outcome_type=subagent`` (``soothe_sdk.tools.metadata`` → ``generate_outcome_metadata``) and becomes **step evidence** via ``StepResult`` / ``to_evidence_string()``. The **Plan phase** (``PlanPhase.plan``) already consumes ``state.step_results`` when calling the loop planner—same path as non-subagent steps—so the model can mark the goal done, continue, or replan.
 
 ## Current architecture (as implemented)
 

@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.config.models import BrowserSubagentConfig
 from soothe.subagents.explore.schemas import ExploreSubagentConfig
 from soothe.subagents.plan.schemas import PlanSubagentConfig
 
@@ -33,8 +32,6 @@ def _normalize_for_default_compare(data: dict) -> dict:
             sub["config"] = {}
         if name == "plan" and PlanSubagentConfig(**cfg) == PlanSubagentConfig():
             sub["config"] = {}
-        if name == "browser" and BrowserSubagentConfig(**cfg) == BrowserSubagentConfig():
-            sub["config"] = {}
         subs[name] = sub
     return out
 
@@ -52,6 +49,5 @@ def test_config_template_matches_pydantic_defaults() -> None:
 
     assert ExploreSubagentConfig(**loaded.subagents["explore"].config) == ExploreSubagentConfig()
     assert PlanSubagentConfig(**loaded.subagents["plan"].config) == PlanSubagentConfig()
-    assert BrowserSubagentConfig(**loaded.subagents["browser"].config) == BrowserSubagentConfig()
     assert len(loaded.providers) >= 1
     assert loaded.vector_store_router.default is not None

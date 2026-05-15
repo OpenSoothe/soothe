@@ -28,7 +28,7 @@ These blocks rarely or never change during a session. They form the cache-friend
 | 1 | Agent identity + behavioral rules | (plain text) | Name, guidelines (concise answers, multi-step plans, obstacle handling, never reference internal architecture, maintain context, respect CLAUDE.md/AGENTS.md) | `_DEFAULT_SYSTEM_PROMPT` / `_MEDIUM_SYSTEM_PROMPT` |
 | 2 | Tool orchestration guide | (plain text) | Shell, file ops, surgical edit, data, goals, research, subagent guides + key rules | `_TOOL_ORCHESTRATION_GUIDE` |
 | 3 | Execution policies | `<EXECUTION_POLICIES>` | Step granularity, filesystem discovery, first-wave constraints | `execution_policies.xml` fragment |
-| 4 | Subagent routing directive | `<SUBAGENT_ROUTING_DIRECTIVE>` | When user explicitly requests a subagent (`/browser`, `/claude`, etc.) — force `task` tool usage | Conditionally injected |
+| 4 | Subagent routing directive | `<SUBAGENT_ROUTING_DIRECTIVE>` | When the user explicitly requests a routed subagent (slash command) — force `task` tool usage | Conditionally injected |
 | 5 | Agent loop output contract | `<AGENT_LOOP_OUTPUT_CONTRACT>` | Wrap-up limits for tool/subagent results | Conditionally injected when `current_decision` exists |
 
 #### Semi-Static Tier (goal-stable)

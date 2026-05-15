@@ -1,13 +1,13 @@
 # Specialized Subagents
 
-Soothe provides four specialized subagents for different tasks.
+Core Soothe ships **explore**, **plan**, and **research** subagents. **Browser**, **Claude**, **Skillify**, and **Weaver** are optional capabilities from **`soothe-community`** (install the package and enable the matching `subagents.*` entries).
 
 ## Overview
 
 | Subagent | Slash Command | Prefix | Best For |
 |----------|--------------|--------|----------|
-| Browser | `/browser <query>` | `5` | Web browsing and automation |
-| Claude | `/claude <query>` | `6` | Complex reasoning with Claude |
+| Browser | `/browser <query>` | `5` | Web browsing (requires `soothe-community[browser]`) |
+| Claude | `/claude <query>` | `6` | Claude Code agent (requires `soothe-community[claude]`) |
 | Skillify | `/skillify <query>` | `7` | Skill retrieval and discovery |
 | Weaver | `/weaver <query>` | `8` | Agent generation |
 
@@ -24,7 +24,7 @@ Automated web browsing and automation.
 
 **Installation**:
 ```bash
-pip install soothe[browser]
+pip install "soothe-community[browser]"
 ```
 
 **Usage**:
@@ -62,7 +62,7 @@ Direct access to Claude for complex reasoning tasks.
 
 **Installation**:
 ```bash
-pip install soothe[claude]
+pip install "soothe-community[claude]"
 export ANTHROPIC_API_KEY=sk-ant-your-key-here
 ```
 

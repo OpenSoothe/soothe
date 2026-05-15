@@ -301,11 +301,7 @@ class StreamDisplayPipeline:
 
         answer_tail: str | None = None
         raw_summary = event.get("summary")
-        if (
-            isinstance(raw_summary, str)
-            and raw_summary.strip()
-            and subagent_name in ("claude", "browser", "research")
-        ):
+        if isinstance(raw_summary, str) and raw_summary.strip() and subagent_name:
             answer_tail = preview_first(raw_summary.strip(), 120)
 
         return [
@@ -323,7 +319,7 @@ class StreamDisplayPipeline:
 
         Args:
             event: Event dictionary.
-            subagent_name: Subagent name (explore, browser, claude, research).
+            subagent_name: Subagent id (e.g. explore, plan, research, or a plugin id).
 
         Returns:
             Formatted summary string with key metrics.
@@ -342,7 +338,7 @@ class StreamDisplayPipeline:
                 return summary
             return "done"
 
-        # Claude: cost_usd, claude_session_id
+        # Claude Code / plugin id `claude`: cost_usd, claude_session_id
         if subagent_name == "claude":
             cost = event.get("cost_usd", 0.0)
             session_id = event.get("claude_session_id")
@@ -353,7 +349,7 @@ class StreamDisplayPipeline:
                 return summary
             return "done"
 
-        # Browser: success status
+        # Browser-use / plugin id `browser`: success status
         if subagent_name == "browser":
             success = event.get("success", True)
             return "✓ success" if success else "✗ failed"

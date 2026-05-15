@@ -21,6 +21,7 @@ from soothe_sdk.core.subagent_wire import (
     SUBAGENT_EXPLORE_COMPLETED,
     SUBAGENT_EXPLORE_MILESTONE,
     SUBAGENT_EXPLORE_STARTED,
+    SUBAGENT_EXPLORE_STEP_COMPLETED,
     SUBAGENT_RESEARCH_COMPLETED,
     SUBAGENT_RESEARCH_GATHER_SUMMARY,
     SUBAGENT_RESEARCH_STARTED,
@@ -104,6 +105,12 @@ def summarize_subagent_wire_activity(event_type: str, data: Mapping[str, Any]) -
         it = int(data.get("iterations_used", 0) or 0)
         base = decision or "milestone"
         return f"{base} ({fc} findings, {it} iter)"
+    if event_type == SUBAGENT_EXPLORE_STEP_COMPLETED:
+        tn = str(data.get("tool_name", "") or "").strip()
+        ap = preview_first(str(data.get("args_preview", "")), 60)
+        if tn and ap:
+            return f"{tn}({ap})"
+        return tn or "tool"
     if event_type == SUBAGENT_EXPLORE_COMPLETED:
         tf = int(data.get("total_findings", 0) or 0)
         ms = int(data.get("duration_ms", 0) or 0)

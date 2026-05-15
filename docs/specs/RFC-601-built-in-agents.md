@@ -16,7 +16,7 @@
 
 This RFC defines the architecture of Soothe's built-in plugin agent: **Research** (deep information gathering with iterative reflection).
 
-> **Note**: Skillify and Weaver agents have been migrated to the [soothe-community](https://github.com/OpenSoothe/soothe-community) project as community plugins. Their spec content is maintained in that repository at `docs/RFC-601-community-agents.md`.
+> **Note**: Skillify, Weaver, **Browser**, and **Claude Code** agents are maintained in the [soothe-community](https://github.com/OpenSoothe/soothe-community) project. See `docs/RFC-601-community-agents.md` in that repository (IG-415 for Browser/Claude).
 
 ---
 
@@ -38,7 +38,7 @@ This RFC does **not** define:
 - Protocol interfaces (see RFC-301)
 - Event processing (see RFC-400)
 - Tool interfaces (see RFC-101)
-- Skillify or Weaver agents (see community docs)
+- Skillify, Weaver, Browser, or Claude Code agents (see community docs)
 
 ---
 

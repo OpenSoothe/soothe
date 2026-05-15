@@ -188,7 +188,7 @@ models:
   fast: openai:gpt-4o-mini
 
 tools: [execution, websearch, research]
-subagents: [browser, claude, skillify, weaver]
+subagents: [explore, plan, research]
 
 mcp_servers:
   filesystem:
