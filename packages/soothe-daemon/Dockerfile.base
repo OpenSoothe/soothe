@@ -57,9 +57,15 @@ RUN mkdir -p packages/soothe/src/soothe \
 # Install all extras + Playwright (EXPENSIVE)
 # Note: No cache mount to avoid disk space buildup in multi-platform builds
 RUN uv sync --frozen --no-dev \
-    && uv pip install 'soothe[all]' soothe-daemon playwright \
+    && uv pip install 'soothe[all]' soothe-daemon playwright sentence_transformers \
     && .venv/bin/python -m playwright install chromium \
     && rm -rf /root/.cache/uv /root/.cache/pip
+
+# Warmup embedding model cache (standalone script, no soothe imports)
+ENV SOOTHE_HF_CACHE=/root/.cache/soothe/models/huggingface
+COPY scripts/warmup_embedding_model.py /tmp/warmup_embedding_model.py
+RUN .venv/bin/python /tmp/warmup_embedding_model.py --verbose \
+    && rm /tmp/warmup_embedding_model.py
 
 # Install system deps for Playwright + ffmpeg
 RUN apt-get update \
