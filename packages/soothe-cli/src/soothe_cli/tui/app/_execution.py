@@ -18,6 +18,9 @@ from textual.content import Content
 from textual.css.query import NoMatches
 from textual.style import Style as TStyle
 
+from soothe_cli.shared.daemon_errors import (
+    friendly_daemon_execution_error as _friendly_agent_execution_error,
+)
 from soothe_cli.tui import theme
 from soothe_cli.tui._cli_context import CLIContext
 from soothe_cli.tui._session_stats import SessionStats, format_token_count
@@ -45,19 +48,6 @@ _monotonic = time.monotonic
 InputMode = Literal["normal", "shell", "command"]
 
 logger = logging.getLogger(__name__)
-
-# Partial match for daemon pool_runner RuntimeError when an OS worker exits mid-turn.
-_DAEMON_WORKER_SUBPROCESS_LOST = "Worker subprocess exited unexpectedly during query execution"
-
-
-def _friendly_agent_execution_error(exc: BaseException) -> str:
-    """Map known daemon failures to concise TUI copy."""
-    if isinstance(exc, RuntimeError) and _DAEMON_WORKER_SUBPROCESS_LOST in str(exc):
-        return (
-            "The daemon execution worker stopped unexpectedly (for example after the pool "
-            "recycled an idle subprocess). Send your message again."
-        )
-    return str(exc)
 
 
 class _ExecutionMixin:

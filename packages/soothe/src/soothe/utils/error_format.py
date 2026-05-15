@@ -93,6 +93,15 @@ def _simplify_error_message(error_type: str, error_msg: str) -> str:
         # Generic timeout (IG-295: may be initial attempt)
         return "Operation timed out - retrying automatically"
 
+    # Worker pool: subprocess exited while handling a request (dispatch race or crash).
+    if error_type == "RuntimeError" and (
+        "Worker subprocess exited unexpectedly during query execution" in error_msg
+    ):
+        return (
+            "The daemon execution worker stopped unexpectedly (for example after the pool "
+            "recycled an idle subprocess). Send your message again."
+        )
+
     # ConnectionError simplifications
     if error_type in ("ConnectionError", "ConnectionRefusedError"):
         if "Connection refused" in error_msg:
