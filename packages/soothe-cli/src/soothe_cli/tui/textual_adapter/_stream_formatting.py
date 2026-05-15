@@ -11,7 +11,11 @@ if TYPE_CHECKING:
 
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.utils import get_tool_display_name
-from soothe_sdk.ux.task_namespace import resolve_task_scope_for_namespace
+from soothe_sdk.ux.task_namespace import (
+    resolve_task_parent_lookup,
+    resolve_task_scope_for_namespace,
+    scoped_subgraph_tool_key,
+)
 
 from soothe_cli.cli.stream.display_line import DisplayLine
 from soothe_cli.shared.events.essential_events import is_essential_progress_event_type
@@ -194,7 +198,7 @@ def _try_register_task_scoped_inner_tool_pending(
     parsed_args: dict[str, Any],
     is_main_agent: bool,
     ns_key: tuple[str, ...],
-    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str]],
+    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str, str]],
     show_tool_ui: bool,
     presentation: Any,
 ) -> None:
@@ -206,7 +210,11 @@ def _try_register_task_scoped_inner_tool_pending(
     ts_r = resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
     if not ts_r or not ts_r[0]:
         return
-    parent = adapter._tool_display_by_call_id.get(ts_r[0])
+    parent = resolve_task_parent_lookup(
+        ts_r,
+        step_cards=adapter._current_step_messages,
+        tool_display_by_call_id=adapter._tool_display_by_call_id,
+    )
     if parent is None:
         return
     # IG-403: Skip text-based pending line when parent has tool row infrastructure
@@ -215,14 +223,13 @@ def _try_register_task_scoped_inner_tool_pending(
         return
     if not show_tool_ui or not presentation.tier_visible(VerbosityTier.NORMAL):
         return
-    adapter._task_inner_tool_pending_lines[str(lookup_id)] = (
-        _format_task_scoped_tool_invocation_line(
-            ts_r,
-            buffer_name,
-            parsed_args,
-        )
+    row_key = scoped_subgraph_tool_key(ns_key, str(lookup_id))
+    adapter._task_inner_tool_pending_lines[row_key] = _format_task_scoped_tool_invocation_line(
+        ts_r,
+        buffer_name,
+        parsed_args,
     )
-    adapter._task_inner_tool_start_times[str(lookup_id)] = time.time()
+    adapter._task_inner_tool_start_times[row_key] = time.time()
 
 
 async def _mount_subagent_inner_tool_row_if_resolved(
@@ -233,7 +240,7 @@ async def _mount_subagent_inner_tool_row_if_resolved(
     parsed_args: dict[str, Any],
     buffer_id: Any,
     ns_key: tuple[Any, ...],
-    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str]],
+    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str, str]],
     show_tool_ui: bool,
     is_main_agent: bool,
     pending_tool_calls_lc: dict[str, dict[str, Any]],
@@ -250,7 +257,13 @@ async def _mount_subagent_inner_tool_row_if_resolved(
     """
     ts_inner = resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
     parent_for_inner = (
-        adapter._tool_display_by_call_id.get(ts_inner[0]) if ts_inner and ts_inner[0] else None
+        resolve_task_parent_lookup(
+            ts_inner,
+            step_cards=adapter._current_step_messages,
+            tool_display_by_call_id=adapter._tool_display_by_call_id,
+        )
+        if ts_inner
+        else None
     )
     if (
         not show_tool_ui
@@ -259,6 +272,7 @@ async def _mount_subagent_inner_tool_row_if_resolved(
         or (buffer_name or "") == "task"
     ):
         return False
+    row_key = scoped_subgraph_tool_key(ns_key, str(lookup_id))
     file_op_tracker.start_operation(buffer_name, parsed_args, buffer_id)
     if adapter._set_spinner:
         await adapter._set_spinner("Tools")
@@ -267,13 +281,13 @@ async def _mount_subagent_inner_tool_row_if_resolved(
     if isinstance(pend, dict):
         raw = str(pend.get("args_str", ""))
     parent_for_inner.add_tool_call(
-        str(lookup_id),
+        row_key,
         buffer_name or "tool",
         parsed_args,
         raw_args=raw,
     )
-    adapter._tool_to_step[str(lookup_id)] = parent_for_inner
-    adapter._tool_display_by_call_id[str(lookup_id)] = parent_for_inner
+    adapter._tool_to_step[row_key] = parent_for_inner
+    adapter._tool_display_by_call_id[row_key] = parent_for_inner
     import logging as _logging
 
     _logging.getLogger(__name__).debug(

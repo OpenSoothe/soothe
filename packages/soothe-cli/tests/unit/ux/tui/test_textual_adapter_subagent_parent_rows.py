@@ -10,6 +10,7 @@ from soothe_cli.tui.textual_adapter import (
     _mount_subagent_inner_tool_row_if_resolved,
 )
 from soothe_cli.tui.widgets.messages import ToolCallMessage
+from soothe_sdk.ux.task_namespace import scoped_subgraph_tool_key
 
 
 @pytest.mark.asyncio
@@ -28,7 +29,7 @@ async def test_mount_subagent_inner_tool_row_resolves_parent_task_card() -> None
     )
     adapter._tool_display_by_call_id["tc-task"] = task_card
     ns_key = ("delegated:subgraph-1",)
-    bindings = {ns_key: ("tc-task", "explore")}
+    bindings = {ns_key: ("tc-task", "explore", "")}
     tracker = FileOpTracker(assistant_id="asst-1")
 
     ok = await _mount_subagent_inner_tool_row_if_resolved(
@@ -46,9 +47,10 @@ async def test_mount_subagent_inner_tool_row_resolves_parent_task_card() -> None
     )
 
     assert ok is True
-    assert task_card.has_tool_call_row("inner-grep-1")
-    assert adapter._tool_to_step["inner-grep-1"] is task_card
-    assert adapter._tool_display_by_call_id["inner-grep-1"] is task_card
+    row_id = scoped_subgraph_tool_key(ns_key, "inner-grep-1")
+    assert task_card.has_tool_call_row(row_id)
+    assert adapter._tool_to_step[row_id] is task_card
+    assert adapter._tool_display_by_call_id[row_id] is task_card
     adapter._set_spinner.assert_awaited_once_with("Tools")
 
 
@@ -63,7 +65,7 @@ async def test_mount_subagent_inner_noop_for_main_namespace() -> None:
     task_card = ToolCallMessage("task", {"subagent_type": "x"}, tool_call_id="tc-1")
     adapter._tool_display_by_call_id["tc-1"] = task_card
     ns_key = ("delegated",)
-    bindings = {ns_key: ("tc-1", "x")}
+    bindings = {ns_key: ("tc-1", "x", "")}
 
     ok = await _mount_subagent_inner_tool_row_if_resolved(
         adapter,

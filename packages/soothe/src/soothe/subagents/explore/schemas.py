@@ -51,6 +51,8 @@ class ExploreAgentState(AgentState[ExploreResult]):
     findings: NotRequired[Annotated[list[dict[str, Any]], operator.add]]
     explore_wire_started: NotRequired[bool]
     explore_model_invocations: NotRequired[int]
+    explore_completion_status: NotRequired[str]
+    explore_failure_reason: NotRequired[str]
 
 
 def _md_single_line(text: str, max_len: int) -> str:
@@ -147,6 +149,7 @@ class ExploreSubagentConfig(BaseModel):
         max_findings_for_synthesis: Max findings sent to synthesis model (default 15, configurable).
         enable_semantic_similarity: Use semantic similarity for relevance scoring (requires sentence_transformers).
         semantic_similarity_timeout_seconds: Wall-clock cap for async synthesis relevance scoring (embedding + rank).
+        synthesis_timeout_seconds: Wall-clock cap for LLM structured synthesis before partial fallback.
     """
 
     thoroughness: str = "medium"
@@ -182,6 +185,13 @@ class ExploreSubagentConfig(BaseModel):
         ge=1.0,
         le=120.0,
         description="Async synthesis: max seconds for semantic relevance scoring before keyword fallback.",
+    )
+
+    synthesis_timeout_seconds: float = Field(
+        default=120.0,
+        ge=5.0,
+        le=600.0,
+        description="Max seconds for LLM structured synthesis; partial fallback uses findings on timeout/error.",
     )
 
     # Tool call limit overrides for explore subagent

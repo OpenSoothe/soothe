@@ -6,6 +6,8 @@ import asyncio
 import logging
 import time
 from collections.abc import Awaitable, Callable
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware
@@ -29,6 +31,7 @@ from soothe.utils.subagent_emit import emit_subagent_wire_event
 
 from .events import ExploreCompletedEvent, ExploreStartedEvent, ExploreStepCompletedEvent
 from .findings import extract_findings_from_tool_result, should_record_findings
+from .partial import build_explore_result_from_findings
 from .prompts import SYNTHESIZE, format_explore_agent_system
 from .schemas import (
     ExploreAgentState,
@@ -351,7 +354,27 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             findings_so_far=findings_so_far,
         )
         req = request.override(messages=messages, system_message=SystemMessage(content=body))
-        response = handler(req)
+        try:
+            response = handler(req)
+        except Exception as exc:
+            if not findings:
+                logger.error(
+                    "Explore: model turn failed with no findings (%s)",
+                    exc,
+                    exc_info=True,
+                )
+                raise
+            logger.warning(
+                "Explore: model turn failed (%s); returning partial results from %d findings",
+                exc,
+                len(findings),
+            )
+            return self._synthesize_findings(
+                findings,
+                search_target,
+                current,
+                failure_reason=str(exc),
+            )
         return ExtendedModelResponse(
             model_response=response,
             command=Command(
@@ -363,11 +386,168 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             ),
         )
 
+    def _rank_findings_for_synthesis(
+        self,
+        findings: list[dict[str, Any]],
+        search_target: str,
+    ) -> list[dict[str, Any]]:
+        """Apply optional semantic ranking before synthesis (sync)."""
+        if not self._explore_config.enable_semantic_similarity:
+            return findings
+        try:
+            if embedding_model_ready_without_download():
+                for finding in findings:
+                    finding["relevance"] = calculate_relevance_score(
+                        finding,
+                        search_target,
+                        enable_semantic=True,
+                    )
+                logger.debug("Explore: calculated relevance scores for %d findings", len(findings))
+            ranked = rank_by_similarity(
+                findings,
+                search_target,
+                content_key="snippet",
+                enable_semantic=True,
+            )
+            if embedding_model_ready_without_download():
+                logger.debug("Explore: ranked findings by relevance")
+            return ranked
+        except Exception as exc:
+            logger.warning(
+                "Explore: semantic similarity failed (%s); using findings in original order",
+                exc,
+            )
+            return findings
+
+    async def _arank_findings_for_synthesis(
+        self,
+        findings: list[dict[str, Any]],
+        search_target: str,
+    ) -> list[dict[str, Any]]:
+        """Apply optional semantic ranking before synthesis (async)."""
+        if not self._explore_config.enable_semantic_similarity:
+            return findings
+        sem_timeout = self._explore_config.semantic_similarity_timeout_seconds
+        try:
+            async with asyncio.timeout(sem_timeout):
+                if embedding_model_ready_without_download():
+                    for finding in findings:
+                        finding["relevance"] = await async_calculate_relevance_score(
+                            finding,
+                            search_target,
+                            enable_semantic=True,
+                            timeout_seconds=max(1.0, sem_timeout),
+                        )
+                    logger.debug(
+                        "Explore: calculated relevance scores for %d findings", len(findings)
+                    )
+                ranked = await async_rank_by_similarity(
+                    findings,
+                    search_target,
+                    content_key="snippet",
+                    enable_semantic=True,
+                    timeout_seconds=max(1.0, sem_timeout),
+                )
+                if embedding_model_ready_without_download():
+                    logger.debug("Explore: ranked findings by relevance")
+                return ranked
+        except TimeoutError:
+            logger.warning(
+                "Explore: semantic similarity timed out; using findings in original order"
+            )
+        except Exception as exc:
+            logger.warning(
+                "Explore: semantic similarity failed (%s); using findings in original order",
+                exc,
+            )
+        return findings
+
+    def _build_synthesis_prompt(
+        self,
+        findings: list[dict[str, Any]],
+        search_target: str,
+    ) -> tuple[str, int]:
+        max_findings = self._explore_config.max_findings_for_synthesis
+        detail_lines = [
+            f"- {f.get('path', 'unknown')}: {(f.get('snippet') or '')[:100] or '(no snippet)'}"
+            for f in findings[:max_findings]
+        ]
+        findings_detail = "\n".join(detail_lines) if detail_lines else "No findings"
+        prompt = SYNTHESIZE.format(
+            search_target=search_target,
+            findings_detail=findings_detail,
+            max_matches=self._max_matches,
+        )
+        logger.debug(
+            "Explore: synthesis prompt size: %d chars (%d findings, max=%d)",
+            len(prompt),
+            len(detail_lines),
+            max_findings,
+        )
+        return prompt, len(detail_lines)
+
+    def _invoke_synthesis_llm_sync(self, prompt: str) -> ExploreResult:
+        timeout = self._explore_config.synthesis_timeout_seconds
+        structured_llm = self._synthesis_model.with_structured_output(ExploreResult)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(structured_llm.invoke, [HumanMessage(content=prompt)])
+            try:
+                result = future.result(timeout=timeout)
+            except FuturesTimeoutError as exc:
+                raise TimeoutError(f"synthesis timed out after {timeout:.0f}s") from exc
+        if not isinstance(result, ExploreResult):
+            return ExploreResult.model_validate(result)
+        return result
+
+    async def _invoke_synthesis_llm_async(self, prompt: str) -> ExploreResult:
+        timeout = self._explore_config.synthesis_timeout_seconds
+        structured_llm = self._synthesis_model.with_structured_output(ExploreResult)
+        async with asyncio.timeout(timeout):
+            result = await structured_llm.ainvoke([HumanMessage(content=prompt)])
+        if not isinstance(result, ExploreResult):
+            return ExploreResult.model_validate(result)
+        return result
+
+    def _partial_synthesis_response(
+        self,
+        findings: list[dict[str, Any]],
+        search_target: str,
+        current_iter: int,
+        *,
+        failure_reason: str,
+        ai_message: str,
+    ) -> ExtendedModelResponse[ExploreResult]:
+        structured = build_explore_result_from_findings(
+            findings,
+            search_target=search_target,
+            thoroughness=self._explore_config.thoroughness,
+            max_matches=self._max_matches,
+            status="partial",
+            failure_reason=failure_reason,
+        )
+        return ExtendedModelResponse(
+            model_response=ModelResponse(
+                result=[AIMessage(content=ai_message)],
+                structured_response=structured,
+            ),
+            command=Command(
+                update={
+                    "explore_model_invocations": current_iter + 1,
+                    "prev_findings_count": len(findings),
+                    "findings_stall_counter": 0,
+                    "explore_completion_status": "partial",
+                    "explore_failure_reason": failure_reason[:500],
+                }
+            ),
+        )
+
     def _synthesize_findings(
         self,
         findings: list[dict[str, Any]],
         search_target: str,
         current_iter: int,
+        *,
+        failure_reason: str = "",
     ) -> ExtendedModelResponse[ExploreResult]:
         """Synthesize findings into structured result (IG-399).
 
@@ -386,63 +566,38 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             current_iter,
         )
 
-        if self._explore_config.enable_semantic_similarity:
-            try:
-                if embedding_model_ready_without_download():
-                    for finding in findings:
-                        finding["relevance"] = calculate_relevance_score(
-                            finding,
-                            search_target,
-                            enable_semantic=True,
-                        )
-                    logger.debug(
-                        "Explore: calculated relevance scores for %d findings", len(findings)
-                    )
-                findings = rank_by_similarity(
-                    findings,
-                    search_target,
-                    content_key="snippet",
-                    enable_semantic=True,
-                )
-                if embedding_model_ready_without_download():
-                    logger.debug("Explore: ranked findings by relevance")
-            except Exception as exc:
-                logger.warning(
-                    "Explore: semantic similarity failed (%s); using findings in original order",
-                    exc,
-                )
+        ranked = self._rank_findings_for_synthesis(findings, search_target)
+        prompt, _detail_count = self._build_synthesis_prompt(ranked, search_target)
 
-        # Reduce payload size for faster synthesis (configurable max_findings_for_synthesis)
-        max_findings = self._explore_config.max_findings_for_synthesis
-        detail_lines = [
-            f"- {f.get('path', 'unknown')}: {(f.get('snippet') or '')[:100] or '(no snippet)'}"
-            for f in findings[:max_findings]  # Configurable limit (default 15)
-        ]
-        findings_detail = "\n".join(detail_lines) if detail_lines else "No findings"
-        prompt = SYNTHESIZE.format(
-            search_target=search_target,
-            findings_detail=findings_detail,
-            max_matches=self._max_matches,
-        )
-
-        logger.debug(
-            "Explore: synthesis prompt size: %d chars (%d findings, max=%d)",
-            len(prompt),
-            len(detail_lines),
-            max_findings,
-        )
-
-        # Use fast model for structured output (optimization)
-        structured = self._synthesis_model.with_structured_output(ExploreResult).invoke(
-            [HumanMessage(content=prompt)]
-        )
+        completion_status = "complete"
+        explore_failure = failure_reason
+        try:
+            structured = self._invoke_synthesis_llm_sync(prompt)
+        except Exception as exc:
+            reason = failure_reason or str(exc)
+            logger.warning(
+                "Explore: synthesis failed (%s); returning partial results from %d findings",
+                reason,
+                len(ranked),
+                exc_info=True,
+            )
+            if not ranked:
+                raise
+            return self._partial_synthesis_response(
+                ranked,
+                search_target,
+                current_iter,
+                failure_reason=reason,
+                ai_message="Returning partial explore results (synthesis failed).",
+            )
 
         elapsed = time.perf_counter() - start_time
         logger.info(
-            "Explore: synthesis completed in %.1fs (%d findings → %d matches)",
+            "Explore: synthesis completed in %.1fs (%d findings → %d matches, status=%s)",
             elapsed,
             len(findings),
             len(structured.matches),
+            completion_status,
         )
 
         return ExtendedModelResponse(
@@ -455,6 +610,8 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
                     "explore_model_invocations": current_iter + 1,
                     "prev_findings_count": len(findings),
                     "findings_stall_counter": 0,
+                    "explore_completion_status": completion_status,
+                    "explore_failure_reason": explore_failure[:500],
                 }
             ),
         )
@@ -480,94 +637,11 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             )
 
         if current >= self._max_iterations:
-            start_time = time.perf_counter()
             logger.info(
-                "Explore: starting synthesis with %d findings (iter=%d, budget exhausted)",
-                len(findings),
+                "Explore: budget exhausted after %d model turns — synthesizing result",
                 current,
             )
-
-            if self._explore_config.enable_semantic_similarity:
-                sem_timeout = self._explore_config.semantic_similarity_timeout_seconds
-                try:
-                    async with asyncio.timeout(sem_timeout):
-                        if embedding_model_ready_without_download():
-                            for finding in findings:
-                                finding["relevance"] = await async_calculate_relevance_score(
-                                    finding,
-                                    search_target,
-                                    enable_semantic=True,
-                                    timeout_seconds=max(1.0, sem_timeout),
-                                )
-                            logger.debug(
-                                "Explore: calculated relevance scores for %d findings",
-                                len(findings),
-                            )
-                        findings = await async_rank_by_similarity(
-                            findings,
-                            search_target,
-                            content_key="snippet",
-                            enable_semantic=True,
-                            timeout_seconds=max(1.0, sem_timeout),
-                        )
-                        if embedding_model_ready_without_download():
-                            logger.debug("Explore: ranked findings by relevance")
-                except TimeoutError:
-                    logger.warning(
-                        "Explore: semantic similarity timed out; using findings in original order"
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "Explore: semantic similarity failed (%s); using findings in original order",
-                        exc,
-                    )
-
-            # Reduce payload size for faster synthesis (configurable max_findings_for_synthesis)
-            max_findings = self._explore_config.max_findings_for_synthesis
-            detail_lines = [
-                f"- {f.get('path', 'unknown')}: {(f.get('snippet') or '')[:100] or '(no snippet)'}"
-                for f in findings[:max_findings]  # Configurable limit (default 15)
-            ]
-            findings_detail = "\n".join(detail_lines) if detail_lines else "No findings"
-            prompt = SYNTHESIZE.format(
-                search_target=search_target,
-                findings_detail=findings_detail,
-                max_matches=self._max_matches,
-            )
-
-            logger.debug(
-                "Explore: synthesis prompt size: %d chars (%d findings, max=%d)",
-                len(prompt),
-                len(detail_lines),
-                max_findings,
-            )
-
-            # Use fast model for structured output (optimization)
-            structured = await self._synthesis_model.with_structured_output(ExploreResult).ainvoke(
-                [HumanMessage(content=prompt)]
-            )
-
-            elapsed = time.perf_counter() - start_time
-            logger.info(
-                "Explore: synthesis completed in %.1fs (%d findings → %d matches)",
-                elapsed,
-                len(findings),
-                len(structured.matches),
-            )
-
-            return ExtendedModelResponse(
-                model_response=ModelResponse(
-                    result=[
-                        AIMessage(
-                            content="Iteration budget reached; returning synthesized summary."
-                        )
-                    ],
-                    structured_response=structured,
-                ),
-                command=Command(
-                    update={"explore_model_invocations": current + 1},
-                ),
-            )
+            return await self._asynthesize_findings(findings, search_target, current)
 
         body = format_explore_agent_system(
             search_target=search_target,
@@ -578,10 +652,91 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             findings_so_far=findings_so_far,
         )
         req = request.override(system_message=SystemMessage(content=body))
-        response = await handler(req)
+        try:
+            response = await handler(req)
+        except Exception as exc:
+            if not findings:
+                logger.error(
+                    "Explore: model turn failed with no findings (%s)",
+                    exc,
+                    exc_info=True,
+                )
+                raise
+            logger.warning(
+                "Explore: model turn failed (%s); returning partial results from %d findings",
+                exc,
+                len(findings),
+            )
+            return await self._asynthesize_findings(
+                findings,
+                search_target,
+                current,
+                failure_reason=str(exc),
+            )
         return ExtendedModelResponse(
             model_response=response,
             command=Command(update={"explore_model_invocations": current + 1}),
+        )
+
+    async def _asynthesize_findings(
+        self,
+        findings: list[dict[str, Any]],
+        search_target: str,
+        current_iter: int,
+        *,
+        failure_reason: str = "",
+    ) -> ExtendedModelResponse[ExploreResult]:
+        """Async synthesis with timeout and partial fallback."""
+        start_time = time.perf_counter()
+        logger.info(
+            "Explore: starting synthesis with %d findings (iter=%d)",
+            len(findings),
+            current_iter,
+        )
+        ranked = await self._arank_findings_for_synthesis(findings, search_target)
+        prompt, _detail_count = self._build_synthesis_prompt(ranked, search_target)
+        try:
+            structured = await self._invoke_synthesis_llm_async(prompt)
+        except Exception as exc:
+            reason = failure_reason or str(exc)
+            logger.warning(
+                "Explore: synthesis failed (%s); returning partial results from %d findings",
+                reason,
+                len(ranked),
+                exc_info=True,
+            )
+            if not ranked:
+                raise
+            return self._partial_synthesis_response(
+                ranked,
+                search_target,
+                current_iter,
+                failure_reason=reason,
+                ai_message="Returning partial explore results (synthesis failed).",
+            )
+
+        elapsed = time.perf_counter() - start_time
+        logger.info(
+            "Explore: synthesis completed in %.1fs (%d findings → %d matches, status=complete)",
+            elapsed,
+            len(findings),
+            len(structured.matches),
+        )
+        return ExtendedModelResponse(
+            model_response=ModelResponse(
+                result=[
+                    AIMessage(content="Iteration budget reached; returning synthesized summary.")
+                ],
+                structured_response=structured,
+            ),
+            command=Command(
+                update={
+                    "explore_model_invocations": current_iter + 1,
+                    "prev_findings_count": len(findings),
+                    "explore_completion_status": "complete",
+                    "explore_failure_reason": failure_reason[:500],
+                }
+            ),
         )
 
 
@@ -594,23 +749,17 @@ class ExploreFinalizeMiddleware(AgentMiddleware[ExploreAgentState, None]):
         self,
         *,
         thoroughness: str,
+        max_matches: int,
     ) -> None:
         super().__init__()
         self._thoroughness = thoroughness
+        self._max_matches = max_matches
 
     def after_agent(
         self,
         state: ExploreAgentState,
         runtime: Any,
     ) -> dict[str, Any] | None:
-        structured = state.get("structured_response")
-        if structured is None:
-            return None
-        result = (
-            structured
-            if isinstance(structured, ExploreResult)
-            else ExploreResult.model_validate(structured)
-        )
         messages = state.get("messages") or []
         search_target = resolve_explore_search_target(
             messages,
@@ -618,6 +767,59 @@ class ExploreFinalizeMiddleware(AgentMiddleware[ExploreAgentState, None]):
         )
         findings = state.get("findings") or []
         iterations_used = state.get("explore_model_invocations", 0)
+        completion_status = str(state.get("explore_completion_status") or "complete")
+        failure_reason = str(state.get("explore_failure_reason") or "")
+
+        structured = state.get("structured_response")
+        if structured is None:
+            if findings:
+                completion_status = "partial"
+                failure_reason = failure_reason or "explore ended without structured synthesis"
+                logger.warning(
+                    "Explore: finalize recovery — %d findings, no structured_response (%s)",
+                    len(findings),
+                    failure_reason,
+                )
+                structured = build_explore_result_from_findings(
+                    findings,
+                    search_target=search_target,
+                    thoroughness=self._thoroughness,
+                    max_matches=self._max_matches,
+                    status="partial",
+                    failure_reason=failure_reason,
+                )
+            else:
+                completion_status = "failed"
+                failure_reason = failure_reason or "no findings collected"
+                logger.error(
+                    "Explore: failed with no findings (reason=%s)",
+                    failure_reason,
+                )
+                md = (
+                    "# Explore results\n\n"
+                    "_Explore did not complete successfully; no findings were collected._\n"
+                )
+                if failure_reason:
+                    md += f"\n**Reason:** {failure_reason}\n"
+                emit_subagent_wire_event(
+                    ExploreCompletedEvent(
+                        total_findings=0,
+                        thoroughness=self._thoroughness,
+                        iterations_used=iterations_used,
+                        duration_ms=0,
+                        search_target=search_target,
+                        completion_status=completion_status,
+                        failure_reason=failure_reason,
+                    ).to_dict(),
+                    logger,
+                )
+                return {"messages": Overwrite([AIMessage(content=md)])}
+
+        result = (
+            structured
+            if isinstance(structured, ExploreResult)
+            else ExploreResult.model_validate(structured)
+        )
         start_time = time.perf_counter()
         md = format_explore_result_markdown(result)
         elapsed_ms = int((time.perf_counter() - start_time) * 1000)
@@ -628,11 +830,40 @@ class ExploreFinalizeMiddleware(AgentMiddleware[ExploreAgentState, None]):
                 iterations_used=iterations_used,
                 duration_ms=elapsed_ms,
                 search_target=search_target,
+                completion_status=completion_status,
+                failure_reason=failure_reason,
             ).to_dict(),
             logger,
         )
-        logger.info("Explore: completed %d matches in %dms", len(result.matches), elapsed_ms)
-        return {"messages": Overwrite([AIMessage(content=md)])}
+        if completion_status == "partial":
+            logger.warning(
+                "Explore: completed partial result (%d findings, %d matches, %dms) reason=%s",
+                len(findings),
+                len(result.matches),
+                elapsed_ms,
+                failure_reason or "unknown",
+            )
+        elif completion_status == "failed":
+            logger.error(
+                "Explore: completed failed (%d findings, %d matches, %dms) reason=%s",
+                len(findings),
+                len(result.matches),
+                elapsed_ms,
+                failure_reason or "unknown",
+            )
+        else:
+            logger.info(
+                "Explore: completed %d matches in %dms (%d findings)",
+                len(result.matches),
+                elapsed_ms,
+                len(findings),
+            )
+        updates: dict[str, Any] = {"messages": Overwrite([AIMessage(content=md)])}
+        if completion_status != "complete":
+            updates["structured_response"] = result
+            updates["explore_completion_status"] = completion_status
+            updates["explore_failure_reason"] = failure_reason
+        return updates
 
     async def aafter_agent(
         self,
@@ -716,5 +947,6 @@ def build_explore_middleware_stack(
         ),
         ExploreFinalizeMiddleware(
             thoroughness=explore_config.thoroughness,
+            max_matches=max_matches,
         ),
     ]

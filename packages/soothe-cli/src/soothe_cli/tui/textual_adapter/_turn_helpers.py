@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import uuid
 from typing import TYPE_CHECKING, Any
 
@@ -13,13 +14,19 @@ if TYPE_CHECKING:
     from soothe_cli.tui.textual_adapter._adapter import TextualUIAdapter
     from soothe_cli.tui.widgets.messages import AssistantMessage
 
-from soothe_sdk.ux.task_namespace import resolve_task_scope_for_namespace
+from soothe_sdk.ux.task_namespace import (
+    resolve_task_parent_lookup,
+    resolve_task_scope_for_namespace,
+)
 
 from soothe_cli.shared.rendering.renderer_base import RendererBase
 from soothe_cli.tui._session_stats import SessionStats
+from soothe_cli.tui.formatting import format_duration
 from soothe_cli.tui.widgets.messages import AppMessage, AssistantMessage
 
 logger = logging.getLogger(__name__)
+
+_GOAL_COMPLETION_TIME_MARKER = "**Total time:**"
 
 
 def _loop_id_for_remote_state(config: RunnableConfig, daemon_session: Any) -> str:
@@ -126,6 +133,22 @@ def _read_mentioned_file(file_path: Any, max_embed_bytes: int) -> str:
     return f"\n### {file_path.name}\nPath: `{file_path}`\n```\n{content}\n```"
 
 
+def _goal_completion_time_footer_if_needed(
+    content: str,
+    *,
+    goal_loop_start_monotonic: float | None,
+    turn_start_monotonic: float | None,
+) -> str | None:
+    """Build a markdown footer with total elapsed time for goal completion cards."""
+    if _GOAL_COMPLETION_TIME_MARKER in (content or ""):
+        return None
+    start = goal_loop_start_monotonic if goal_loop_start_monotonic is not None else turn_start_monotonic
+    if start is None:
+        return None
+    elapsed = max(0.0, time.monotonic() - start)
+    return f"\n\n---\n\n{_GOAL_COMPLETION_TIME_MARKER} {format_duration(elapsed)}"
+
+
 async def _finalize_goal_completion_stream(
     adapter: TextualUIAdapter,
     stream_msg: AssistantMessage,
@@ -134,13 +157,19 @@ async def _finalize_goal_completion_stream(
     goal_completion_stream_by_namespace: dict[tuple[Any, ...], AssistantMessage],
     assistant_message_by_namespace: dict[tuple[Any, ...], Any],
     extra_text: str,
+    goal_loop_start_monotonic: float | None = None,
+    turn_start_monotonic: float | None = None,
 ) -> None:
     """Stop the goal_completion ``AssistantMessage`` stream and record it under ``ns_key``."""
     if extra_text and extra_text not in getattr(stream_msg, "_content", ""):
         await stream_msg.append_content(extra_text)
-    # Expand before ending the stream so the first post-stream layout is full
-    # body text (avoids a collapsed preview flash for long synthesis text).
-    stream_msg.set_body_expanded(True)
+    footer = _goal_completion_time_footer_if_needed(
+        getattr(stream_msg, "_content", "") or "",
+        goal_loop_start_monotonic=goal_loop_start_monotonic,
+        turn_start_monotonic=turn_start_monotonic,
+    )
+    if footer:
+        await stream_msg.append_content(footer)
     await stream_msg.stop_stream()
     if adapter._sync_message_content and stream_msg.id:
         adapter._sync_message_content(stream_msg.id, stream_msg._content)
@@ -320,7 +349,7 @@ async def _flush_assistant_text_ns(
     ns_key: tuple,
     assistant_message_by_namespace: dict[tuple, Any],
     *,
-    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str]] | None = None,
+    namespace_task_bindings: dict[tuple[str, ...], tuple[str, str, str]] | None = None,
 ) -> None:
     """Flush accumulated assistant text for a specific namespace.
 
@@ -342,7 +371,11 @@ async def _flush_assistant_text_ns(
     if namespace_task_bindings is not None and ns_key:
         ts_card = resolve_task_scope_for_namespace(namespace_task_bindings, ns_key)
     if ts_card and ts_card[0]:
-        parent_tool = adapter._tool_display_by_call_id.get(ts_card[0])
+        parent_tool = resolve_task_parent_lookup(
+            ts_card,
+            step_cards=adapter._current_step_messages,
+            tool_display_by_call_id=adapter._tool_display_by_call_id,
+        )
         if parent_tool is not None:
             line = f"⚙ {format_task_scope_prefix(ts_card[0], ts_card[1])} {repaired_text.strip()}"
             parent_tool.append_subagent_activity(line)
@@ -362,9 +395,10 @@ async def _flush_assistant_text_ns(
     else:
         # Stop the stream to finalize the content
         await current_msg.stop_stream()
-        # Normalize final rendered content after stream completion.
+        # Sync normalized text for persistence without re-rendering: MarkdownStream
+        # already displayed the streamed body; repair can disturb fenced blocks/tables.
         if repaired_text != current_msg._content:
-            await current_msg.set_content(repaired_text)
+            current_msg._content = repaired_text
 
     # When the AssistantMessage was first mounted and recorded in the
     # MessageStore, it had empty content (streaming hadn't started yet).

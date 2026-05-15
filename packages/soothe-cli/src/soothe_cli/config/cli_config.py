@@ -27,6 +27,10 @@ class CLIConfig:
     # logging_level: DEBUG/INFO/… for ~/.soothe/logs/cli.log; None = default INFO.
     logging_level: str | None = None
 
+    # TUI rendering options
+    render_markdown: bool = True
+    """Render assistant messages as Markdown in TUI (default True)."""
+
     # Output streaming overrides (RFC-614)
     output_streaming_enabled: bool | None = None
     """Override daemon streaming enabled setting."""
@@ -110,10 +114,17 @@ class CLIConfig:
         if raw_level is not None and not isinstance(raw_level, str):
             raw_level = None
 
+        # TUI options from 'tui' section
+        tui_section = data.get("tui", {})
+        render_markdown = tui_section.get("render_markdown", True)
+        if not isinstance(render_markdown, bool):
+            render_markdown = True
+
         return cls(
             daemon_host=websocket.get("host", websocket_legacy.get("host", "127.0.0.1")),
             daemon_port=websocket.get("port", websocket_legacy.get("port", 8765)),
             logging_level=raw_level,
+            render_markdown=render_markdown,
             soothe_home=Path(data.get("home", str(Path.home() / ".soothe"))),
         )
 

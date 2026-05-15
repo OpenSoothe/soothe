@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from soothe.config import SootheConfig, SubagentConfig
 
 from .engine import build_explore_engine
+from .recovery import ExploreRunnableRecoveryWrapper
 from .schemas import ExploreSubagentConfig
 
 if TYPE_CHECKING:
@@ -53,13 +54,18 @@ def create_explore_subagent(
         synthesis_model = model
         logger.warning("Fast model not configured, using primary model for synthesis")
 
-    runnable = build_explore_engine(
+    graph = build_explore_engine(
         model,
         explore_config,
         initial_workspace,
         allow_paths_outside_workspace=config.security.allow_paths_outside_workspace,
         synthesis_model=synthesis_model,
         soothe_config=config,
+    )
+    runnable = ExploreRunnableRecoveryWrapper(
+        graph,
+        thoroughness=explore_config.thoroughness,
+        max_matches=explore_config.max_matches_returned,
     )
 
     return {
