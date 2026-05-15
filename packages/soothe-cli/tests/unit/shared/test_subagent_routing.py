@@ -37,7 +37,9 @@ async def test_handle_routing_command_sets_subagent_for_research() -> None:
     client.send_input = AsyncMock()
     console = MagicMock()
 
-    await handle_routing_command("/research summarize pyproject.toml", console, client, loop_id="loop-a")
+    await handle_routing_command(
+        "/research summarize pyproject.toml", console, client, loop_id="loop-a"
+    )
 
     client.send_input.assert_awaited_once_with(
         "loop-a", "summarize pyproject.toml", preferred_subagent="research"
