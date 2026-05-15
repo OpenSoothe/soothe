@@ -472,7 +472,7 @@ class MessageData:
                 type=MessageType.ASSISTANT,
                 content=widget._content,
                 id=widget_id,
-                is_streaming=widget._stream is not None,
+                is_streaming=widget._streaming_active,
             )
 
         if isinstance(widget, ToolCallMessage):
