@@ -43,7 +43,7 @@ Route queries to specialized subagents:
 | `/research <query>` | Research | Multi-source investigation |
 | `/explore <query>` | Explore | Readonly repo search |
 | `/plan` | Plan | Plan-mode routing |
-| `/«id» <query>` | Configured id | Optional plugins (e.g. soothe-community: skillify, weaver, browser, claude) |
+| `/«id» <query>` | Configured id | Optional plugins from soothe-community (see that repo for ids) |
 
 ## Keyboard Shortcuts
 
@@ -66,17 +66,16 @@ Prefix your message with a number to route to a specific subagent:
 | Prefix | Subagent | Best For |
 |--------|----------|----------|
 | `1` | Main | General tasks (default) |
-| `5` | Browser | Web browsing and automation |
-| `6` | Claude | Tasks requiring Claude's strengths |
 | `7` | Skillify | Retrieving relevant skills |
 | `8` | Weaver | Generating specialized agents |
+
+Numeric slots `2`–`6` are reserved for optional installs; see soothe-community for the current mapping on your distribution.
 
 **Examples:**
 
 ```
-5 Open https://example.com and take a screenshot
-6 Analyze this complex reasoning problem
 7 Find relevant skills for data processing
+8 Generate a specialized agent for monitoring uptime
 ```
 
 ## Multi-Line Input

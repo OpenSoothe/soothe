@@ -16,7 +16,7 @@
   🎥 [Watch the demo video on Vimeo](https://player.vimeo.com/video/1185023866?h=72febe1ed2)
 </div>
 
-Soothe is **not** another Claude Code / OpenClaw clone. 
+Soothe is **not** another single-vendor coding-agent shell clone. 
 
 Its ambition is to become an **agent-harnessing framework**, an *Agentic OS*, designed to push humans **out of the execution loop**.
 
@@ -39,7 +39,7 @@ In short, Soothe shifts the paradigm from *human-in-the-loop* to **agent-in-the-
 ## 🚀 Key Features
 
 - ✨ **Thinks Ahead** — Plans multi-step workflows and adapts dynamically based on outcomes  
-- 🚀 **Acts Autonomously** — Executes tasks across research, coding, file ops, and browser automation  
+- 🚀 **Acts Autonomously** — Executes tasks across research, coding, file ops, and optional plugin-driven automation  
 - 🧠 **Learns & Remembers** — Persistent memory across sessions—no more repeating yourself  
 - 🔒 **Stays Secure** — Enforces least-privilege access and keeps data under your control  
 - 🔌 **Extends Easily** — Plugin system for custom tools and specialized sub-agents  
@@ -59,13 +59,13 @@ In short, Soothe shifts the paradigm from *human-in-the-loop* to **agent-in-the-
 
 **Security First**: Local execution with least-privilege policies. Your infrastructure, your data, your control.
 
-**Plugin Architecture**: Built-in tools for web search, code execution, and browser automation. Extend with custom plugins via decorator APIs.
+**Plugin Architecture**: Built-in tools for web search, code execution, and extension via plugins. Extend with custom plugins via decorator APIs.
 
 ## What Can Soothe Do?
 
 **Deep Research**: Multi-source web search, academic papers, document analysis with automatic synthesis and citations.
 
-**Autonomous Execution**: Multi-step workflows with automatic planning, file operations, code execution, and browser automation.
+**Autonomous Execution**: Multi-step workflows with automatic planning, file operations, code execution, and optional automation through plugins.
 
 **Long-Running Operations**: Background daemon mode with thread management, persistent state, and resume capabilities.
 
@@ -76,7 +76,7 @@ In short, Soothe shifts the paradigm from *human-in-the-loop* to **agent-in-the-
 - ✅ **Single-Session Autonomy** — Solve a complex goal end-to-end within a single session, fully out of the human loop  
 - ✅ **Cross-Thread Continuity** — Sustain and complete complex tasks across multiple threads with persistent context  
 - ⏳ **Multi-Goal Orchestration** — Handle multiple interdependent goals over long-horizon workflows  
-- ⏳ **Benchmark Reproduction** — Reproduce the Anthropic C Compiler [experiment](https://github.com/anthropics/claudes-c-compiler)  
+- ⏳ **Benchmark Reproduction** — Reproduce a public [compiler experiment](https://github.com/anthropics/claudes-c-compiler) from upstream research tooling  
 
 ## Getting Started
 

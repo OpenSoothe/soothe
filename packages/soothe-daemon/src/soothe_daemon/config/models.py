@@ -168,7 +168,7 @@ class WorkerPoolConfig(BaseModel):
         description="Time since last heartbeat before marking worker as stuck (seconds)",
     )
     dispatch_wait_stats_enabled: bool = Field(
-        default=False,
+        default=True,
         description="Log periodic worker pool dispatch wait-time and wait-queue histograms",
     )
     dispatch_wait_stats_interval_seconds: int = Field(

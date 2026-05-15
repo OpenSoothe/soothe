@@ -265,12 +265,12 @@ def test_minimal_task_complexity_uses_compact_prompt():
 
 
 def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
-    """Explicit /browser-style routing narrows root tools to ``task`` on first hop."""
+    """Explicit slash-style routing narrows root tools to ``task`` on first hop."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="browser",
+        preferred_subagent="research",
         routing_hint="subagent",
     )
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
@@ -295,7 +295,7 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
     middleware = SystemPromptOptimizationMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="browser",
+        preferred_subagent="research",
         routing_hint="subagent",
     )
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
@@ -344,7 +344,7 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
     middleware = SystemPromptOptimizationMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="browser",
+        preferred_subagent="research",
         routing_hint="subagent",
     )
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
@@ -361,7 +361,7 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
         modified = middleware.modify_request(request)
     content = modified.system_message.content
     assert "subagent_type='explore'" in content
-    assert "subagent_type='browser'" not in content
+    assert "subagent_type='research'" not in content
 
 
 def test_memory_section_uses_memory_summary_tag():

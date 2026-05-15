@@ -66,7 +66,7 @@ class TestExecutionHintsEnvelopeIntegration:
 
     def test_envelope_includes_subagent_and_expected_output(self) -> None:
         """Executor-format hints appear inside <EXECUTION_HINTS>."""
-        hints = _execution_hints_text(subagent="browser", expected_output="Page summary")
+        hints = _execution_hints_text(subagent="research", expected_output="Page summary")
         assert hints is not None
         envelope = build_execute_step_envelope(
             goal="Test goal",
@@ -75,7 +75,7 @@ class TestExecutionHintsEnvelopeIntegration:
         )
         assert "<EXECUTION_HINTS>" in envelope
         assert "</EXECUTION_HINTS>" in envelope
-        assert "Suggested subagent: browser" in envelope
+        assert "Suggested subagent: research" in envelope
         assert "Expected output: Page summary" in envelope
         assert "Consider using the suggested approach first" in envelope
         gq = envelope.find("<CURRENT_GOAL>")

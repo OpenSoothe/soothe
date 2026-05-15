@@ -159,7 +159,7 @@ packages/
 |---------|------------|
 | `backends/context/` | ContextProtocol (KeywordContext, VectorContext) |
 | `backends/memory/` | MemoryProtocol (KeywordMemory, VectorMemory) |
-| `cognition/planning/` | PlannerProtocol (Simple, Subagent, Claude, Auto) |
+| `cognition/planning/` | PlannerProtocol (Simple, Subagent, model-specific, Auto) |
 | `backends/policy/` | PolicyProtocol (ConfigDrivenPolicy) |
 | `backends/durability/` | DurabilityProtocol (Json, RocksDB, PostgreSQL) |
 | `backends/persistence/` | PersistStore for context/memory/durability |

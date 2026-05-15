@@ -111,12 +111,14 @@ router:
 workspace_dir: "."
 progress_verbosity: normal
 
-# Subagents
+# Subagents (core defaults; optional agents from soothe-community)
 subagents:
-  browser:
+  explore:
     enabled: true
-  claude:
-    enabled: false
+  plan:
+    enabled: true
+  research:
+    enabled: true
 ```
 
 ## Configuration Locations
@@ -319,11 +321,7 @@ Learn more: [Daemon Management Guide](daemon-management.md)
 Install additional capabilities as needed:
 
 ```bash
-# Optional plugin subagents (soothe-community; requires core soothe installed)
-pip install "soothe-community[browser]"
-pip install "soothe-community[claude]"
-
-# Vector stores
+# Optional: install soothe-community for additional delegated agents (see that repo).
 pip install soothe[pgvector]
 
 # Local models with Ollama
