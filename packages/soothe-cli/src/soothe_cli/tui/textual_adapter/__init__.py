@@ -52,14 +52,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "execute_task_textual": ("soothe_cli.tui.textual_adapter._turn", "execute_task_textual"),
     "print_usage_table": ("soothe_cli.tui.textual_adapter._stream_formatting", "print_usage_table"),
     # --- test / internal re-exports (historically imported from package root) ---
-    "_defer_first_tool_card_mount_until_final_stream_chunk": (
-        "soothe_cli.tui.textual_adapter._stream_messages",
-        "_defer_first_tool_card_mount_until_final_stream_chunk",
-    ),
-    "_defer_tool_card_for_empty_streaming_args": (
-        "soothe_cli.tui.textual_adapter._stream_messages",
-        "_defer_tool_card_for_empty_streaming_args",
-    ),
     "_expand_nonstandard_tool_blocks": (
         "soothe_cli.tui.textual_adapter._stream_messages",
         "_expand_nonstandard_tool_blocks",

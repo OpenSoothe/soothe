@@ -103,34 +103,6 @@ def _expand_nonstandard_tool_blocks(blocks: list[dict[str, Any]]) -> list[dict[s
     return out
 
 
-def _defer_tool_card_for_empty_streaming_args(message: Any) -> bool:
-    """True when more tool args may arrive on a later ``AIMessageChunk``."""
-    from langchain_core.messages import AIMessageChunk
-
-    if not isinstance(message, AIMessageChunk):
-        return False
-    return getattr(message, "chunk_position", None) != "last"
-
-
-def _defer_first_tool_card_mount_until_final_stream_chunk(message: Any) -> bool:
-    """True when the first tool card for this call should wait for a terminal chunk.
-
-    Mounting only on the final ``AIMessageChunk`` avoids header flicker when name/args
-    are refined across chunks. Chunks with no ``chunk_position`` use legacy behavior
-    (mount as soon as args are meaningful) so streams that never mark ``last`` still work.
-    """
-    from langchain_core.messages import AIMessageChunk
-
-    if not isinstance(message, AIMessageChunk):
-        return False
-    pos = getattr(message, "chunk_position", None)
-    if pos == "last":
-        return False
-    if pos is None:
-        return False
-    return True
-
-
 def _assistant_message_terminal_for_empty_tool_arg_mount(message: Any) -> bool:
     """True when streamed tool-call kwargs will not be refined by a later chunk.
 
