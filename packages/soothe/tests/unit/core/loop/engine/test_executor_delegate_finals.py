@@ -148,6 +148,42 @@ async def test_stream_and_collect_rewrites_tool_call_ids_to_unified() -> None:
                     assert tc_id.startswith("GHT-01:s:")
 
 
+@pytest.mark.asyncio
+async def test_stream_and_collect_rewrites_root_tool_message_to_unified_id() -> None:
+    """Root ToolMessage.tool_call_id matches rewritten AI ids for TUI result binding (IG-416)."""
+    tool_msg = ToolMessage(
+        content="done",
+        tool_call_id="functions.grep:0",
+        name="grep",
+    )
+    chunk: tuple = (
+        (),
+        "messages",
+        (tool_msg, {}),
+    )
+    mock_agent = MagicMock()
+
+    async def fake_stream():
+        yield chunk
+
+    executor = Executor(mock_agent)
+    rows: list = []
+    async for row in executor._stream_and_collect(
+        fake_stream(),
+        budget=None,
+        step_id="GHT-01",
+    ):
+        rows.append(row)
+    assert len(rows) >= 2
+    _out, event, _tc, _msgs, _df = rows[0]
+    assert isinstance(event, tuple) and len(event) == 3
+    _ns, mode, data = event
+    assert mode == "messages"
+    msg = data[0]
+    assert isinstance(msg, ToolMessage)
+    assert msg.tool_call_id == "GHT-01:s:grep:0"
+
+
 def test_record_execute_wave_parallel_multi_clears_when_no_delegate() -> None:
     """Parallel wave with no task returns keeps assistant text empty."""
     from soothe.core.loop.state.schemas import LoopState
