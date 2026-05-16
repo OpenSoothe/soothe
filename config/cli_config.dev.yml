@@ -1,0 +1,10 @@
+# Local CLI/TUI defaults — install: ~/.soothe/config/cli_config.yml
+# Enables tool_stream_diag lines in ~/.soothe/logs/cli.log (grep tool_stream_diag).
+
+logging_level: DEBUG
+
+daemon:
+  transports:
+    websocket:
+      host: "127.0.0.1"
+      port: 8765

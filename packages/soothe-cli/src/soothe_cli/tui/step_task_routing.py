@@ -17,6 +17,7 @@ from typing import Any, TypeAlias
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
     maybe_bind_namespace,
+    parse_unified_tool_call_id,
     register_task_spawn_for_step,
     resolve_task_parent_lookup,
     resolve_task_scope_for_namespace,
@@ -107,8 +108,18 @@ class StepTaskRouter:
             self.tool_call_to_step_id[tcid] = sid
 
     def step_id_for_tool(self, tool_call_id: str) -> str:
-        """Return bound execute step id for a root tool call, if any."""
-        return self.tool_call_to_step_id.get(str(tool_call_id).strip(), "")
+        """Return bound execute step id for a root tool call, if any.
+
+        First checks explicit binding, then parses unified tool_call_id format.
+        """
+        tcid = str(tool_call_id).strip()
+        # Check explicit binding first
+        bound = self.tool_call_to_step_id.get(tcid, "")
+        if bound:
+            return bound
+        # Parse unified ID format as fallback: {step_id}:s:{tool}.{idx}
+        parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
+        return parsed_sid
 
     # --- Namespace / task spawn ---
 

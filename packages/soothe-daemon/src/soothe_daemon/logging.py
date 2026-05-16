@@ -18,6 +18,19 @@ DEFAULT_MAX_BYTES = 5_242_880  # 5 MB
 DEFAULT_BACKUP_COUNT = 3
 
 
+def _daemon_log_level_from_soothe_config(cfg: object) -> str:
+    """Resolve daemon file log level from ``SootheConfig`` (``debug`` / ``observability``)."""
+    if bool(getattr(cfg, "debug", False)):
+        return "DEBUG"
+    obs = getattr(cfg, "observability", None)
+    level = getattr(obs, "log_file_level", None) if obs is not None else None
+    if not level:
+        logging_view = getattr(cfg, "logging", None)
+        file_cfg = getattr(logging_view, "file", None) if logging_view is not None else None
+        level = getattr(file_cfg, "level", "INFO") if file_cfg is not None else "INFO"
+    return str(level or "INFO").upper()
+
+
 def setup_daemon_logging(
     level: str = "INFO",
     log_file: str | None = None,
@@ -87,4 +100,8 @@ def _suppress_daemon_noisy_loggers() -> None:
         logging.getLogger(name).setLevel(logging.WARNING)
 
 
-__all__ = ["setup_daemon_logging", "DEFAULT_DAEMON_LOG"]
+__all__ = [
+    "DEFAULT_DAEMON_LOG",
+    "_daemon_log_level_from_soothe_config",
+    "setup_daemon_logging",
+]

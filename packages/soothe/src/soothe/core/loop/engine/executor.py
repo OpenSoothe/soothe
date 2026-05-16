@@ -26,8 +26,9 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 from langgraph.types import Command, Interrupt
+from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 
 from soothe.core.context.model_override import (
     attach_stream_model_override,
@@ -206,6 +207,36 @@ def _rewrite_tool_call_ids_to_unified(msg: BaseMessage, step_id: str) -> BaseMes
             modified.__dict__["tool_calls"] = new_calls
 
     return modified
+
+
+def _rewrite_root_tool_message_tool_call_id(msg: BaseMessage, step_id: str) -> BaseMessage:
+    """Align root-graph ``ToolMessage.tool_call_id`` with unified AIMessage ids (IG-416).
+
+    The execute stream rewrites root AI ``tool_call_id`` values to
+    ``{step_id}:s:{tool_fragment}`` (same fragment as :func:`_make_step_tool_call_id`).
+    Tool results must use the same identifiers or clients cannot match completions to rows.
+
+    Args:
+        msg: Stream message (typically ``ToolMessage``).
+        step_id: Current execute step id.
+
+    Returns:
+        Original message when unchanged, or a shallow-copied ``ToolMessage`` with a
+        unified ``tool_call_id``.
+    """
+    if not isinstance(msg, ToolMessage):
+        return msg
+    sid = str(step_id).strip()
+    if not sid:
+        return msg
+    raw_id = str(getattr(msg, "tool_call_id", "") or "").strip()
+    if not raw_id:
+        return msg
+    parsed_sid, type_code, _, _ = parse_unified_tool_call_id(raw_id)
+    if parsed_sid == sid and type_code in ("s", "t"):
+        return msg
+    unified = _make_step_tool_call_id(sid, raw_id, 0)
+    return msg.model_copy(update={"tool_call_id": unified})
 
 
 def _extract_tool_name_from_ai_chunk(msg: BaseMessage, tool_call_id: str) -> str:
@@ -1691,13 +1722,14 @@ class Executor:
         IG-151: Collects AIMessage objects for token usage extraction.
         IG-355: Collects ``task`` tool return text (delegate finals) for goal completion when
         subgraph AIMessages are not folded into root-graph act aggregation.
-        IG-416: Rewrites tool_call_ids to unified format with step_id prefix (no separate binding).
+        IG-416: Rewrites root-graph AI and ``ToolMessage`` ``tool_call_id`` values to unified
+        ``{step_id}:s:{tool_fragment}`` so streamed tool rows and tool results share stable ids.
 
         Args:
             stream: Async iterator from agent.astream()
             budget: Optional Act wave budget (subagent ``task`` cap, IG-130).
             step_id: When set, rewrite root-graph tool_call_ids to unified format
-                '{step_id}:s:{tool}.{idx}' for consistent TUI rendering.
+                ``{step_id}:s:{tool_fragment}`` for consistent TUI rendering.
 
         Yields:
             Tuple of ``(output, event, tool_call_count, messages, delegate_final_text)``:
@@ -1706,7 +1738,7 @@ class Executor:
               subgraph ``ToolMessage`` totals), root AIMessages list, and joined ``task``
               tool bodies (ordered, capped)—empty string when no ``task`` tools ran.
         """
-        from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+        from langchain_core.messages import AIMessage, AIMessageChunk
 
         from soothe.core.loop.engine.metadata_generator import (
             generate_outcome_metadata,
@@ -1755,7 +1787,8 @@ class Executor:
             # Handle tuple format (namespace, mode, data) - deepagents canonical
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                 _ns_chunk, mode_chunk, data_chunk = chunk
-                # IG-416: For root-graph AI messages, rewrite tool_call_ids to unified format
+                # IG-416: Unify root-graph message tool_call_ids for client row/result matching.
+                emit_chunk = chunk
                 if (
                     step_id
                     and not _ns_chunk  # Only root graph
@@ -1763,19 +1796,17 @@ class Executor:
                     and isinstance(data_chunk, (list, tuple))
                     and len(data_chunk) >= 2
                 ):
-                    msg = data_chunk[0]
-                    if isinstance(msg, (AIMessage, AIMessageChunk)):
-                        # Rewrite tool_call_ids to unified format
-                        modified_msg = _rewrite_tool_call_ids_to_unified(msg, step_id)
-                        if modified_msg is not msg:
-                            # Create new chunk with modified message
-                            modified_data = (modified_msg, data_chunk[1])
-                            modified_chunk = (_ns_chunk, mode_chunk, modified_data)
-                            yield None, modified_chunk, 0, [], ""
-                            continue
-
-                # Yield original chunk if not modified
-                yield None, chunk, 0, [], ""
+                    msg0 = data_chunk[0]
+                    if isinstance(msg0, (AIMessage, AIMessageChunk)):
+                        modified_msg = _rewrite_tool_call_ids_to_unified(msg0, step_id)
+                        if modified_msg is not msg0:
+                            emit_chunk = (_ns_chunk, mode_chunk, (modified_msg, data_chunk[1]))
+                    elif isinstance(msg0, ToolMessage):
+                        modified_msg = _rewrite_root_tool_message_tool_call_id(msg0, step_id)
+                        if modified_msg is not msg0:
+                            emit_chunk = (_ns_chunk, mode_chunk, (modified_msg, data_chunk[1]))
+                yield None, emit_chunk, 0, [], ""
+                chunk = emit_chunk
 
             stop_act_stream = False
             for msg in iter_messages_for_act_aggregation(chunk):

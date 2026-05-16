@@ -49,3 +49,38 @@ def test_register_task_spawn_is_idempotent_per_step_and_tool() -> None:
     router = StepTaskRouter()
     assert router.register_task_spawn("tc-1", "explore", step_id="S1") is True
     assert router.register_task_spawn("tc-1", "explore", step_id="S1") is False
+
+
+def test_step_id_for_tool_parses_unified_format() -> None:
+    """Unified tool_call_id format encodes step_id directly."""
+    router = StepTaskRouter()
+    # Unified format: {step_id}:s:{tool}.{idx}
+    assert router.step_id_for_tool("ABC-01:s:grep.0") == "ABC-01"
+    assert router.step_id_for_tool("XYZ-99:s:bash.1") == "XYZ-99"
+    # Task-level format: {step_id}:t{task_idx}:{tool}.{idx}
+    assert router.step_id_for_tool("GHT-01:t0:read_file.0") == "GHT-01"
+    # Non-unified ID returns empty string (no binding)
+    assert router.step_id_for_tool("legacy_tool_call_id") == ""
+    # Explicit binding takes precedence
+    router.bind_tool_to_step("ABC-01:s:grep.0", "override-step")
+    assert router.step_id_for_tool("ABC-01:s:grep.0") == "override-step"
+
+
+def test_route_pending_main_tools_uses_unified_id_parsing() -> None:
+    """route_pending_main_tools extracts step_id from unified IDs."""
+    router = StepTaskRouter()
+    step_card = MagicMock()
+    step_card.has_tool_call_row.return_value = False
+    step_cards = {"GHT-01": step_card}
+    tool_to_step: dict[str, object] = {}
+    display: dict[str, object] = {}
+
+    # Buffer tool with unified ID format (no explicit binding)
+    router.buffer_main_tool("GHT-01:s:grep.0", "grep", {"pattern": "test"})
+    # route_pending_main_tools should parse the unified ID and find the step card
+    routed = router.route_pending_main_tools(step_cards, tool_to_step, display)
+    assert routed == 1
+    step_card.add_tool_call.assert_called_once_with(
+        "GHT-01:s:grep.0", "grep", {"pattern": "test"}, raw_args=""
+    )
+    assert tool_to_step["GHT-01:s:grep.0"] is step_card
