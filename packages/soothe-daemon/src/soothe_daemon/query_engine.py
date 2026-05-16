@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,10 @@ from soothe.foundation import extract_text_from_ai_message
 from soothe.logging import ThreadLogger
 from soothe.utils.error_format import emit_error_event
 from soothe_sdk.client.protocol import _serialize_for_json
+from soothe_sdk.ux.stream_tool_diag import (
+    is_tool_visible_messages_summary,
+    summarize_messages_stream_payload,
+)
 
 from soothe_daemon.image_understanding import enrich_user_text_with_vision
 from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn, run_image_to_text_turn
@@ -427,6 +432,18 @@ class QueryEngine:
                                     "data": data,
                                 },
                             )
+                            if mode == "messages" and is_msg_pair:
+                                _sm = summarize_messages_stream_payload(data)
+                                if is_tool_visible_messages_summary(_sm):
+                                    logger.debug(
+                                        "[tool_stream_diag] daemon_broadcast ts=%.3f "
+                                        "loop=%s chunk=%d ns_len=%d %s",
+                                        time.time(),
+                                        str(effective_loop_id)[:16],
+                                        chunk_count,
+                                        len(namespace),
+                                        _sm,
+                                    )
                             await d._broadcast(event_msg)
 
                     logger.debug("runner.astream() completed, total chunks: %d", chunk_count)

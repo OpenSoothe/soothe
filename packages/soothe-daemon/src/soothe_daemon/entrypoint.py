@@ -60,7 +60,7 @@ def main() -> None:
     """CLI entry point for the daemon module."""
     from soothe.logging import setup_logging
 
-    from soothe_daemon.logging import setup_daemon_logging
+    from soothe_daemon.logging import _daemon_log_level_from_soothe_config, setup_daemon_logging
 
     parser = argparse.ArgumentParser(description="Soothe daemon")
     parser.add_argument(
@@ -107,7 +107,10 @@ def main() -> None:
 
     # Soothe library logs to soothe.log; daemon logs to daemon.log
     setup_logging(cfg, foreground=args.foreground)
-    setup_daemon_logging(foreground=args.foreground)
+    setup_daemon_logging(
+        level=_daemon_log_level_from_soothe_config(cfg),
+        foreground=args.foreground,
+    )
 
     # Migrate runtime data files from root to data/ subdirectory
     from soothe_sdk.client.config import migrate_data_to_subdir

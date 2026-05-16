@@ -18,6 +18,10 @@ if TYPE_CHECKING:
 from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
+from soothe_sdk.ux.stream_tool_diag import (
+    is_tool_visible_messages_summary,
+    summarize_messages_stream_payload,
+)
 from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id, scoped_subgraph_tool_key
 
 from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
@@ -327,6 +331,16 @@ async def execute_task_textual(
 
                 # Convert namespace to hashable tuple for dict keys
                 ns_key = tuple(namespace) if namespace else ()
+
+                if current_stream_mode == "messages":
+                    _sm_diag = summarize_messages_stream_payload(data)
+                    if is_tool_visible_messages_summary(_sm_diag):
+                        logger.debug(
+                            "[tool_stream_diag] tui_render ts=%.3f ns_len=%d %s",
+                            time.time(),
+                            len(ns_key),
+                            _sm_diag,
+                        )
 
                 # IG-416 debug: Log every chunk arrival
                 if current_stream_mode == "custom" and isinstance(data, dict):

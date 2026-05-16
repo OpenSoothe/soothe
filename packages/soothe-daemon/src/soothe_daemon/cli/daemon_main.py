@@ -61,11 +61,11 @@ def daemon_start(
     if foreground:
         from soothe.logging import setup_logging
 
-        from soothe_daemon.logging import setup_daemon_logging
+        from soothe_daemon.logging import _daemon_log_level_from_soothe_config, setup_daemon_logging
 
         typer.echo("Starting daemon in foreground...")
         setup_logging(cfg, foreground=True)
-        setup_daemon_logging(foreground=True)
+        setup_daemon_logging(level=_daemon_log_level_from_soothe_config(cfg), foreground=True)
         run_daemon(cfg, daemon_config=daemon_cfg, detached=False)
         return
 
