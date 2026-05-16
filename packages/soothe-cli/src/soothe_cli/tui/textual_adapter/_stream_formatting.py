@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.utils import get_tool_display_name
-from soothe_sdk.ux.task_namespace import scoped_subgraph_tool_key
+from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id, scoped_subgraph_tool_key
 
 from soothe_cli.cli.stream.display_line import DisplayLine
 from soothe_cli.shared.events.essential_events import is_essential_progress_event_type
@@ -185,6 +185,126 @@ def _raw_tool_content_for_presentation(message: Any) -> str:
     if isinstance(message, Mapping):
         return format_tool_message_content(dict(message).get("content"))
     return ""
+
+
+async def _ensure_early_tool_row_mount(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    *,
+    lookup_id: str,
+    buffer_name: str,
+    parsed_args: dict[str, Any],
+    raw_args: str,
+    ns_key: tuple[str, ...],
+    is_main_agent: bool,
+    show_tool_ui: bool,
+    pending_tool_calls_lc: dict[str, dict[str, Any]],
+    file_op_tracker: FileOpTracker,
+) -> bool:
+    """Mount or refresh a tool row as soon as ``tool_call_id`` and name are known.
+
+    Uses empty args when kwargs are still streaming so step/task cards update in real time.
+    """
+    import logging as _logging
+
+    if not show_tool_ui or not lookup_id or not buffer_name:
+        return False
+
+    _log = _logging.getLogger(__name__)
+
+    if is_main_agent and buffer_name == "task":
+        parsed_step_id, _, _, _ = parse_unified_tool_call_id(lookup_id)
+        bound_step_id = parsed_step_id or router.step_id_for_tool(lookup_id)
+        raw_st = parsed_args.get("subagent_type", "")
+        subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
+        router.register_task_spawn(
+            lookup_id,
+            subagent_type or "?",
+            step_id=bound_step_id,
+        )
+        if bound_step_id:
+            step_w = adapter._current_step_messages.get(bound_step_id)
+            if step_w is not None:
+                if not step_w.has_tool_call_row(lookup_id):
+                    step_w.add_tool_call(
+                        lookup_id,
+                        buffer_name,
+                        parsed_args,
+                        raw_args=raw_args,
+                    )
+                    _log.debug(
+                        "Task tool row mounted early on step: id=%s step_id=%s",
+                        lookup_id,
+                        bound_step_id,
+                    )
+                elif parsed_args:
+                    step_w.update_tool_args(lookup_id, parsed_args)
+                adapter._tool_to_step[lookup_id] = step_w
+                adapter._tool_display_by_call_id[lookup_id] = step_w
+                return True
+        return False
+
+    if is_main_agent:
+        parsed_sid, _, _, _ = parse_unified_tool_call_id(lookup_id)
+        bound_step_id = parsed_sid or router.step_id_for_tool(lookup_id)
+        if bound_step_id:
+            step_w = adapter._current_step_messages.get(bound_step_id)
+            if step_w is not None:
+                if adapter._set_spinner:
+                    await adapter._set_spinner("Tools")
+                if not step_w.has_tool_call_row(lookup_id):
+                    step_w.add_tool_call(
+                        lookup_id,
+                        buffer_name,
+                        parsed_args,
+                        raw_args=raw_args,
+                    )
+                    adapter._tool_to_step[lookup_id] = step_w
+                    _log.debug(
+                        "Tool row mounted early on step: name=%s id=%s step_id=%s",
+                        buffer_name,
+                        lookup_id,
+                        bound_step_id,
+                    )
+                elif parsed_args:
+                    step_w.update_tool_args(lookup_id, parsed_args)
+                return True
+        if buffer_name != "task":
+            router.buffer_main_tool(
+                lookup_id,
+                buffer_name,
+                parsed_args,
+                raw_args=raw_args,
+            )
+            adapter._tool_display_by_call_id[lookup_id] = None
+            return True
+        return False
+
+    if await _mount_subagent_inner_tool_row_if_resolved(
+        adapter,
+        router,
+        lookup_id=lookup_id,
+        buffer_name=buffer_name,
+        parsed_args=parsed_args,
+        buffer_id=lookup_id,
+        ns_key=ns_key,
+        show_tool_ui=show_tool_ui,
+        is_main_agent=False,
+        pending_tool_calls_lc=pending_tool_calls_lc,
+        file_op_tracker=file_op_tracker,
+    ):
+        return True
+    display_key = scoped_subgraph_tool_key(ns_key, lookup_id)
+    if display_key:
+        router.buffer_subgraph_tool(
+            ns_key=ns_key,
+            lookup_id=lookup_id,
+            display_key=display_key,
+            tool_name=buffer_name,
+            args=parsed_args,
+            raw_args=raw_args,
+        )
+    return False
 
 
 def _try_register_task_scoped_inner_tool_pending(

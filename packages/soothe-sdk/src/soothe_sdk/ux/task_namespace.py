@@ -126,7 +126,12 @@ def scoped_subgraph_tool_key(
     Returns:
         Unified tool call ID; empty namespace returns shortened tool_call_id.
     """
-    short_tid = _shorten_tool_call_id(tool_call_id)
+    tid = str(tool_call_id).strip()
+    parsed_sid, type_code, _, _ = parse_unified_tool_call_id(tid)
+    if parsed_sid and type_code == "t":
+        return tid
+
+    short_tid = _shorten_tool_call_id(tid)
     if not namespace:
         return short_tid
 

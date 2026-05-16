@@ -193,9 +193,7 @@ def _forward_messages_chunk_for_tool_ui(
 ) -> bool:
     """Whether to forward a ``stream_event`` chunk to WebSocket / TUI.
 
-    Forwards:
-    - ``messages`` mode: ``ToolMessage`` and ``AIMessage`` / ``AIMessageChunk`` (IG-330)
-    - ``custom`` mode: ``step.tool_binding`` events for real-time tool row display (IG-416)
+    Forwards ``messages`` mode: ``ToolMessage`` and ``AIMessage`` / ``AIMessageChunk`` (IG-330).
 
     Args:
         chunk: Deepagents stream chunk ``(namespace, mode, data)``.
@@ -203,26 +201,7 @@ def _forward_messages_chunk_for_tool_ui(
     Returns:
         True if chunk should be forwarded.
     """
-    if _is_tool_stream_chunk(chunk) or _is_ai_messages_stream_chunk(chunk):
-        return True
-    # IG-416: Forward custom mode binding events for real-time tool row display
-    if _is_step_tool_binding_chunk(chunk):
-        return True
-    return False
-
-
-def _is_step_tool_binding_chunk(chunk: object) -> bool:
-    """True for ``custom`` mode chunks containing step.tool_binding events (IG-416)."""
-    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
-        return False
-    _namespace, mode, data = chunk
-    if mode != "custom":
-        return False
-    if not isinstance(data, dict):
-        return False
-    event_type = data.get("type", "")
-    # Forward step tool binding events
-    return event_type == "soothe.cognition.agent_loop.step.tool_binding"
+    return _is_tool_stream_chunk(chunk) or _is_ai_messages_stream_chunk(chunk)
 
 
 def _clip_agentic_step_description(
