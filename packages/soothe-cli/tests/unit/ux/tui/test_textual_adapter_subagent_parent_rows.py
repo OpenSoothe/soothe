@@ -9,7 +9,7 @@ from soothe_cli.tui.textual_adapter import (
     TextualUIAdapter,
     _mount_subagent_inner_tool_row_if_resolved,
 )
-from soothe_cli.tui.widgets.messages import ToolCallMessage
+from soothe_cli.tui.widgets.messages import CognitionStepMessage, ToolCallMessage
 from soothe_sdk.ux.task_namespace import scoped_subgraph_tool_key
 
 
@@ -112,3 +112,41 @@ async def test_mount_subagent_inner_noop_when_task_scope_unbound() -> None:
     )
 
     assert ok is False
+
+
+@pytest.mark.asyncio
+async def test_mount_subagent_inner_unified_id_on_task_card_without_namespace() -> None:
+    """Task-level unified ids mount on the Task card when namespace binding lags."""
+    adapter = TextualUIAdapter(
+        mount_message=AsyncMock(),
+        update_status=MagicMock(),
+        request_approval=AsyncMock(),
+        set_spinner=AsyncMock(),
+    )
+    router = adapter._step_router
+    task_card = ToolCallMessage(
+        "task",
+        {"subagent_type": "explore"},
+        tool_call_id="FJS-02:s:task:0",
+    )
+    adapter._tool_display_by_call_id["FJS-02:s:task:0"] = task_card
+    router._spawns_by_step_id["FJS-02"] = ("FJS-02:s:task:0", "explore", "FJS-02")
+    unified = "FJS-02:t0:grep.0"
+
+    ok = await _mount_subagent_inner_tool_row_if_resolved(
+        adapter,
+        router,
+        lookup_id=unified,
+        buffer_name="grep",
+        parsed_args={"pattern": "TODO"},
+        buffer_id=unified,
+        ns_key=("tools:unbound",),
+        show_tool_ui=True,
+        is_main_agent=False,
+        pending_tool_calls_lc={},
+        file_op_tracker=FileOpTracker(assistant_id="a"),
+    )
+
+    assert ok is True
+    assert task_card.has_tool_call_row(unified)
+    assert adapter._tool_to_step[unified] is task_card

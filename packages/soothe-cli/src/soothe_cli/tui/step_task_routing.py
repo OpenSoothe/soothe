@@ -19,9 +19,11 @@ from soothe_sdk.ux.task_namespace import (
     maybe_bind_namespace,
     parse_unified_tool_call_id,
     register_task_spawn_for_step,
+    resolve_task_parent_for_unified_tool_id,
     resolve_task_parent_lookup,
     resolve_task_scope_for_namespace,
     task_scope_step_id,
+    try_bind_namespace_to_unlinked_spawn,
 )
 
 StepWidget: TypeAlias = Any
@@ -133,6 +135,12 @@ class StepTaskRouter:
             namespace,
             pending_unscoped_namespaces=self._pending_unscoped_namespaces,
         )
+        try_bind_namespace_to_unlinked_spawn(
+            self._namespace_bindings,
+            self._spawns_by_step_id,
+            namespace,
+            pending_unscoped_namespaces=self._pending_unscoped_namespaces,
+        )
 
     def register_task_spawn(
         self,
@@ -179,6 +187,19 @@ class StepTaskRouter:
         return resolve_task_parent_lookup(
             scope,
             step_cards=step_cards,
+            tool_display_by_call_id=tool_display_by_call_id,
+        )
+
+    def resolve_task_parent_for_unified_inner_tool(
+        self,
+        tool_call_id: str,
+        *,
+        tool_display_by_call_id: dict[str, ParentWidget],
+    ) -> ParentWidget | None:
+        """Task card parent for a task-level unified subgraph tool id."""
+        return resolve_task_parent_for_unified_tool_id(
+            tool_call_id,
+            spawns_by_step=self._spawns_by_step_id,
             tool_display_by_call_id=tool_display_by_call_id,
         )
 

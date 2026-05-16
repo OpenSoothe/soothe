@@ -108,6 +108,82 @@ def task_scope_task_idx(scope: TaskScope | None, step_id: str) -> int:
     return 0
 
 
+def resolve_task_parent_for_unified_tool_id(
+    tool_call_id: str,
+    *,
+    spawns_by_step: dict[str, TaskScope],
+    tool_display_by_call_id: dict[str, Any],
+) -> Any | None:
+    """Return the Task delegation card for a task-level unified inner tool id.
+
+    Subgraph tools use ``{step_id}:t{idx}:{tool}`` ids; map ``step_id`` to the
+    registered main-graph ``task`` spawn and its ``ToolCallMessage`` parent.
+
+    Args:
+        tool_call_id: Stream tool call id (unified or legacy).
+        spawns_by_step: ``step_id`` → task scope from main-graph ``task`` spawns.
+        tool_display_by_call_id: ``task_tool_call_id`` → parent widget map.
+
+    Returns:
+        Task parent widget, or ``None`` when unresolved.
+    """
+    step_id, type_code, _, _ = parse_unified_tool_call_id(tool_call_id)
+    if not step_id or type_code != "t":
+        return None
+    scope = spawns_by_step.get(step_id)
+    if scope is None:
+        return None
+    return tool_display_by_call_id.get(scope[0])
+
+
+def row_key_for_subgraph_tool(
+    namespace: tuple[str, ...],
+    tool_call_id: str,
+    *,
+    task_scope: TaskScope | None = None,
+) -> str:
+    """Row key for a subgraph tool on a parent step/task card.
+
+    Task-level unified ids are used as-is; legacy ids are scoped via namespace.
+    """
+    tid = str(tool_call_id).strip()
+    _, type_code, _, _ = parse_unified_tool_call_id(tid)
+    if type_code == "t":
+        return tid
+    return scoped_subgraph_tool_key(namespace, tid, task_scope=task_scope)
+
+
+def try_bind_namespace_to_unlinked_spawn(
+    bindings: dict[tuple[str, ...], TaskScope],
+    spawns_by_step: dict[str, TaskScope],
+    namespace: tuple[str, ...],
+    *,
+    pending_unscoped_namespaces: deque[tuple[str, ...]] | None = None,
+) -> bool:
+    """Bind a subgraph namespace to a spawn that has no namespace yet.
+
+    Used when the namespace arrives after :func:`register_task_spawn_for_step` drained
+    the FIFO pending queue (parallel execute: one task per step).
+
+    Returns:
+        True when ``namespace`` was bound.
+    """
+    if not namespace or namespace in bindings:
+        return False
+    linked_spawn_ids = {scope[0] for scope in bindings.values()}
+    for _step_id, scope in spawns_by_step.items():
+        if scope[0] in linked_spawn_ids:
+            continue
+        bindings[namespace] = scope
+        if pending_unscoped_namespaces is not None:
+            try:
+                pending_unscoped_namespaces.remove(namespace)
+            except ValueError:
+                pass
+        return True
+    return False
+
+
 def scoped_subgraph_tool_key(
     namespace: tuple[str, ...],
     tool_call_id: str,
@@ -237,24 +313,25 @@ def resolve_task_parent_lookup(
     step_cards: dict[str, Any],
     tool_display_by_call_id: dict[str, Any],
 ) -> Any | None:
-    """Resolve the UI parent card for a task scope (step card preferred).
+    """Resolve the UI parent for subgraph tools (Task card preferred over step).
 
     Args:
         scope: Task scope from :func:`resolve_task_scope_for_namespace`.
         step_cards: ``step_id`` → step widget (e.g. ``CognitionStepMessage``).
-        tool_display_by_call_id: Fallback ``tool_call_id`` → card map.
+        tool_display_by_call_id: Main-graph ``task`` ``tool_call_id`` → card map.
 
     Returns:
         Parent widget, or ``None`` when unresolved.
     """
     if scope is None:
         return None
+    task_parent = tool_display_by_call_id.get(scope[0])
+    if task_parent is not None:
+        return task_parent
     step_id = task_scope_step_id(scope)
     if step_id:
-        parent = step_cards.get(step_id)
-        if parent is not None:
-            return parent
-    return tool_display_by_call_id.get(scope[0])
+        return step_cards.get(step_id)
+    return None
 
 
 __all__ = [
@@ -264,9 +341,12 @@ __all__ = [
     "maybe_bind_namespace",
     "parse_unified_tool_call_id",
     "register_task_spawn_for_step",
+    "resolve_task_parent_for_unified_tool_id",
     "resolve_task_parent_lookup",
     "resolve_task_scope_for_namespace",
+    "row_key_for_subgraph_tool",
     "scoped_subgraph_tool_key",
     "task_scope_step_id",
     "task_scope_task_idx",
+    "try_bind_namespace_to_unlinked_spawn",
 ]
