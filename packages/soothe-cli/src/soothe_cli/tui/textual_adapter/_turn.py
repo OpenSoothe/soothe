@@ -35,7 +35,10 @@ from soothe_cli.shared.tools.message_processing import (
     accumulate_tool_call_chunks,
     extract_tool_args_dict,
 )
-from soothe_cli.shared.tools.tool_call_resolution import build_streaming_args_overlay
+from soothe_cli.shared.tools.tool_call_resolution import (
+    build_streaming_args_overlay,
+    tool_args_meaningful,
+)
 from soothe_cli.shared.tools.tool_card_payload import extract_tool_result_card_payload
 from soothe_cli.shared.tools.tool_card_visibility import (
     should_elide_completed_tool_call_message,
@@ -62,6 +65,7 @@ from soothe_cli.tui.textual_adapter._adapter import (
     _get_hitl_request_adapter,
 )
 from soothe_cli.tui.textual_adapter._stream_formatting import (
+    _ensure_early_tool_row_mount,
     _flush_router_pending_subgraph_tools,
     _format_display_line_for_tui,
     _format_progress_event_lines_for_tui,
@@ -72,8 +76,6 @@ from soothe_cli.tui.textual_adapter._stream_formatting import (
 )
 from soothe_cli.tui.textual_adapter._stream_messages import (
     _assistant_message_terminal_for_empty_tool_arg_mount,
-    _defer_first_tool_card_mount_until_final_stream_chunk,
-    _defer_tool_card_for_empty_streaming_args,
     _normalize_lc_stream_message,
     _tui_effective_ai_blocks,
     _tui_goal_completion_matches_prior_main_visible_answer,
@@ -473,11 +475,15 @@ async def execute_task_textual(
 
                         # Update tool call status with output (unified ToolMessage / wire dict)
                         sid = str(tool_id) if tool_id else ""
-                        row_key = (
-                            scoped_subgraph_tool_key(ns_key, sid)
-                            if sid and not is_main_agent
-                            else sid
-                        )
+                        if sid and not is_main_agent:
+                            _p_sid, _p_type, _, _ = parse_unified_tool_call_id(sid)
+                            row_key = (
+                                sid
+                                if _p_sid and _p_type == "t"
+                                else scoped_subgraph_tool_key(ns_key, sid)
+                            )
+                        else:
+                            row_key = sid
                         output_str = tool_card.output_display
                         handled_step = False
                         if row_key:
@@ -574,8 +580,53 @@ async def execute_task_textual(
                             # tool widgets (except the dedicated ``task`` delegation card).
                             tname = tool_card.tool_name or "tool"
                             output_str = tool_card.output_display
-                            # Subgraph tool results without a parent row stay suppressed.
                             if not is_main_agent:
+                                ts_orphan = router.resolve_task_scope(ns_key)
+                                parent_orphan = (
+                                    router.resolve_parent(
+                                        ts_orphan,
+                                        step_cards=adapter._current_step_messages,
+                                        tool_display_by_call_id=adapter._tool_display_by_call_id,
+                                    )
+                                    if ts_orphan
+                                    else None
+                                )
+                                if parent_orphan is not None and sid:
+                                    row_orphan = scoped_subgraph_tool_key(
+                                        ns_key, sid, task_scope=ts_orphan
+                                    )
+                                    if not getattr(
+                                        parent_orphan, "has_tool_call_row", lambda _x: False
+                                    )(row_orphan):
+                                        parent_orphan.add_tool_call(
+                                            row_orphan,
+                                            tname,
+                                            {},
+                                            raw_args="",
+                                        )
+                                        adapter._tool_to_step[row_orphan] = parent_orphan
+                                    o_dur = parent_orphan.row_duration_ms_since_started(row_orphan)
+                                    logger.debug(
+                                        "Tool result attached on task/step parent: "
+                                        "tool_call_id=%s name=%s",
+                                        tool_id,
+                                        tname,
+                                    )
+                                    if not tool_card.is_error:
+                                        parent_orphan.set_tool_success(
+                                            row_orphan, output_str, duration_ms=o_dur
+                                        )
+                                    else:
+                                        parent_orphan.set_tool_error(
+                                            row_orphan,
+                                            output_str or "Error",
+                                            duration_ms=o_dur,
+                                        )
+                                        await dispatch_hook(
+                                            "tool.error",
+                                            {"tool_names": [tname]},
+                                        )
+                                    continue
                                 logger.debug(
                                     "Tool result orphan suppressed (subagent): "
                                     "tool_call_id=%s name=%s",
@@ -961,24 +1012,40 @@ async def execute_task_textual(
                             if buffer_name is None:
                                 continue
 
-                            parsed_args = buffer.get("args")
-                            if isinstance(parsed_args, str):
-                                if not parsed_args:
-                                    continue
-                                try:
-                                    parsed_args = json.loads(parsed_args)
-                                except json.JSONDecodeError:
-                                    continue
-                            elif parsed_args is None:
-                                continue
+                            lookup_id = str(buffer_id) if buffer_id is not None else ""
+                            raw_args_stream = ""
+                            pend_stream = (
+                                pending_tool_calls_lc.get(lookup_id) if lookup_id else None
+                            )
+                            if isinstance(pend_stream, dict):
+                                raw_args_stream = str(pend_stream.get("args_str", ""))
 
-                            if not isinstance(parsed_args, dict):
-                                parsed_args = {"value": parsed_args}
+                            parsed_args: dict[str, Any] = {}
+                            args_still_streaming = False
+                            raw_args_field = buffer.get("args")
+                            if isinstance(raw_args_field, str):
+                                if not raw_args_field.strip():
+                                    args_still_streaming = True
+                                else:
+                                    try:
+                                        loaded = json.loads(raw_args_field)
+                                        parsed_args = (
+                                            loaded
+                                            if isinstance(loaded, dict)
+                                            else {"value": loaded}
+                                        )
+                                    except json.JSONDecodeError:
+                                        args_still_streaming = True
+                                        parsed_args = {}
+                            elif raw_args_field is None:
+                                args_still_streaming = True
+                            elif isinstance(raw_args_field, dict):
+                                parsed_args = raw_args_field
+                            else:
+                                parsed_args = {"value": raw_args_field}
 
                             if isinstance(parsed_args, dict):
                                 parsed_args = extract_tool_args_dict(parsed_args)
-
-                            lookup_id = str(buffer_id) if buffer_id is not None else ""
 
                             # Flush pending text before tool call
                             pending_text = pending_text_by_namespace.get(ns_key, "")
@@ -993,31 +1060,23 @@ async def execute_task_textual(
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
 
-                            args_meaningful = bool(parsed_args)
+                            args_meaningful = tool_args_meaningful(parsed_args)
 
-                            # IG-403: Per-step task spawn + namespace bind (not global FIFO).
-                            # IG-416: Extract step_id from unified tool_call_id format.
-                            if (
-                                lookup_id
-                                and is_main_agent
-                                and buffer_name == "task"
-                                and args_meaningful
-                            ):
-                                # Parse unified tool_call_id to get step_id directly
-                                parsed_step_id, parsed_type, _, _ = parse_unified_tool_call_id(
-                                    str(lookup_id)
+                            if lookup_id and buffer_name:
+                                await _ensure_early_tool_row_mount(
+                                    adapter,
+                                    router,
+                                    lookup_id=lookup_id,
+                                    buffer_name=buffer_name,
+                                    parsed_args=parsed_args,
+                                    raw_args=raw_args_stream,
+                                    ns_key=ns_key,
+                                    is_main_agent=is_main_agent,
+                                    show_tool_ui=show_tool_ui,
+                                    pending_tool_calls_lc=pending_tool_calls_lc,
+                                    file_op_tracker=file_op_tracker,
                                 )
-                                # Use parsed step_id from unified ID, fallback to router
-                                bound_step_id = parsed_step_id or router.step_id_for_tool(
-                                    str(lookup_id)
-                                )
-                                raw_st = parsed_args.get("subagent_type", "")
-                                subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
-                                if router.register_task_spawn(
-                                    str(lookup_id),
-                                    subagent_type,
-                                    step_id=bound_step_id,
-                                ):
+                                if is_main_agent and buffer_name == "task":
                                     await _flush_router_pending_subgraph_tools(
                                         adapter,
                                         router,
@@ -1025,43 +1084,51 @@ async def execute_task_textual(
                                         pending_tool_calls_lc=pending_tool_calls_lc,
                                         file_op_tracker=file_op_tracker,
                                     )
-                                    if bound_step_id:
-                                        step_w = adapter._current_step_messages.get(bound_step_id)
-                                        if step_w is not None:
-                                            raw_spawn = ""
-                                            pend_spawn = pending_tool_calls_lc.get(str(lookup_id))
-                                            if isinstance(pend_spawn, dict):
-                                                raw_spawn = str(pend_spawn.get("args_str", ""))
-                                            if not step_w.has_tool_call_row(str(lookup_id)):
-                                                step_w.add_tool_call(
-                                                    str(lookup_id),
-                                                    buffer_name or "task",
-                                                    parsed_args,
-                                                    raw_args=raw_spawn,
-                                                )
-                                            adapter._tool_to_step[str(lookup_id)] = step_w
-                                    elif lookup_id not in adapter._current_tool_messages:
-                                        task_card = ToolCallMessage(
-                                            buffer_name,
-                                            parsed_args,
-                                            tool_call_id=lookup_id,
-                                        )
-                                        await adapter._mount_message(task_card)
-                                        task_card.set_running()
-                                        adapter._current_tool_messages[lookup_id] = task_card
-                                        adapter._tool_display_by_call_id[str(lookup_id)] = task_card
 
-                            if not args_meaningful and _defer_tool_card_for_empty_streaming_args(
-                                message
+                            # IG-403: Refresh task spawn/subagent_type when args complete.
+                            if (
+                                lookup_id
+                                and is_main_agent
+                                and buffer_name == "task"
+                                and args_meaningful
                             ):
-                                # Keep buffer; a later chunk should carry real kwargs.
-                                logger.debug(
-                                    "Tool call card deferred (streaming args incomplete): "
-                                    "name=%s id=%r chunk_position=%r",
-                                    buffer_name,
-                                    chunk_id,
-                                    getattr(message, "chunk_position", None),
+                                parsed_step_id, _, _, _ = parse_unified_tool_call_id(str(lookup_id))
+                                bound_step_id = parsed_step_id or router.step_id_for_tool(
+                                    str(lookup_id)
                                 )
+                                raw_st = parsed_args.get("subagent_type", "")
+                                subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
+                                if subagent_type:
+                                    router.register_task_spawn(
+                                        str(lookup_id),
+                                        subagent_type,
+                                        step_id=bound_step_id,
+                                    )
+                                    await _flush_router_pending_subgraph_tools(
+                                        adapter,
+                                        router,
+                                        show_tool_ui=show_tool_ui,
+                                        pending_tool_calls_lc=pending_tool_calls_lc,
+                                        file_op_tracker=file_op_tracker,
+                                    )
+                                if bound_step_id:
+                                    step_w = adapter._current_step_messages.get(bound_step_id)
+                                    if step_w is not None and step_w.has_tool_call_row(
+                                        str(lookup_id)
+                                    ):
+                                        step_w.update_tool_args(str(lookup_id), parsed_args)
+                                elif lookup_id not in adapter._current_tool_messages:
+                                    task_card = ToolCallMessage(
+                                        buffer_name,
+                                        parsed_args,
+                                        tool_call_id=lookup_id,
+                                    )
+                                    await adapter._mount_message(task_card)
+                                    task_card.set_running()
+                                    adapter._current_tool_messages[lookup_id] = task_card
+                                    adapter._tool_display_by_call_id[str(lookup_id)] = task_card
+
+                            if args_still_streaming and not args_meaningful:
                                 continue
 
                             existing_tool = None
@@ -1137,46 +1204,6 @@ async def execute_task_textual(
                                             )
                                             tool_call_buffers.pop(buffer_key, None)
                                             continue
-                                # IG-416: Parse unified ID for step_id
-                                parsed_sid_early = ""
-                                if lookup_id:
-                                    parsed_sid_early, _, _, _ = parse_unified_tool_call_id(
-                                        str(lookup_id)
-                                    )
-                                bound_early = parsed_sid_early or (
-                                    router.step_id_for_tool(str(lookup_id)) if lookup_id else ""
-                                )
-                                step_card_early = (
-                                    adapter._current_step_messages.get(bound_early)
-                                    if bound_early
-                                    else None
-                                )
-                                parent_early = None
-                                if not is_main_agent:
-                                    ts_early = router.resolve_task_scope(ns_key)
-                                    if ts_early:
-                                        parent_early = router.resolve_parent(
-                                            ts_early,
-                                            step_cards=adapter._current_step_messages,
-                                            tool_display_by_call_id=adapter._tool_display_by_call_id,
-                                        )
-                                skip_defer_mount = (
-                                    is_main_agent and step_card_early is not None
-                                ) or (not is_main_agent and parent_early is not None)
-                                if (
-                                    not skip_defer_mount
-                                    and _defer_first_tool_card_mount_until_final_stream_chunk(
-                                        message
-                                    )
-                                ):
-                                    logger.debug(
-                                        "Tool call first mount deferred (non-final stream chunk): "
-                                        "name=%s tool_call_id=%r chunk_position=%r",
-                                        buffer_name,
-                                        lookup_id,
-                                        getattr(message, "chunk_position", None),
-                                    )
-                                    continue
                                 elide_empty_args_card = should_elide_stream_tool_card_mount(
                                     tool_name=buffer_name or "",
                                     args=parsed_args,

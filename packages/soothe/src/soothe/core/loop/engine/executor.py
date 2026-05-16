@@ -112,29 +112,56 @@ def _make_task_inner_tool_call_id(
     return f"{step_id}:t{task_idx}:{short_tid}"
 
 
-def _rewrite_tool_call_ids_to_unified(msg: BaseMessage, step_id: str) -> BaseMessage:
+def _unified_tool_call_id_for_stream(
+    step_id: str,
+    raw_tid: str,
+    *,
+    task_idx: int | None,
+) -> str:
+    """Build step- or task-level unified tool_call_id for stream rewriting."""
+    if task_idx is None:
+        return _make_step_tool_call_id(step_id, raw_tid, 0)
+    return _make_task_inner_tool_call_id(step_id, task_idx, raw_tid, 0)
+
+
+def _rewrite_tool_call_ids_to_unified(
+    msg: BaseMessage,
+    step_id: str,
+    *,
+    task_idx: int | None = None,
+) -> BaseMessage:
     """Rewrite tool_call_ids in AI message/chunk to unified format.
 
-    IG-416: Transforms provider tool_call_ids like 'functions.task:0'
-    to unified format like 'GHT-01:s:task:0' for step-level tool calls.
+    IG-416: Transforms provider tool_call_ids like ``functions.task:0`` to
+    ``{step_id}:s:{tool}`` (root) or ``{step_id}:t{idx}:{tool}`` (subgraph).
 
     Returns the original message if no modifications needed, or a new
     message object with rewritten IDs.
     """
     from copy import deepcopy
 
+    sid = str(step_id).strip()
+    if not sid:
+        return msg
+
+    def _needs_unified(raw_id: str) -> bool:
+        if not raw_id:
+            return False
+        parsed_sid, type_code, _, _ = parse_unified_tool_call_id(raw_id)
+        if parsed_sid == sid and type_code in ("s", "t"):
+            return False
+        return ":" not in raw_id or not raw_id.startswith(sid)
+
     needs_rewrite = False
     seen_ids: set[str] = set()
 
-    # Check if any tool_call_ids need rewriting
     if isinstance(msg, AIMessageChunk):
         for tc in getattr(msg, "tool_call_chunks", None) or []:
             if isinstance(tc, dict) and "id" in tc:
                 raw_id = str(tc.get("id", ""))
                 if raw_id and raw_id not in seen_ids:
                     seen_ids.add(raw_id)
-                    # Check if already unified (contains ':')
-                    if ":" not in raw_id or not raw_id.startswith(step_id):
+                    if _needs_unified(raw_id):
                         needs_rewrite = True
                         break
         if not needs_rewrite:
@@ -143,7 +170,7 @@ def _rewrite_tool_call_ids_to_unified(msg: BaseMessage, step_id: str) -> BaseMes
                     raw_id = str(tc.get("id", ""))
                     if raw_id and raw_id not in seen_ids:
                         seen_ids.add(raw_id)
-                        if ":" not in raw_id or not raw_id.startswith(step_id):
+                        if _needs_unified(raw_id):
                             needs_rewrite = True
                             break
     elif isinstance(msg, AIMessage):
@@ -152,56 +179,51 @@ def _rewrite_tool_call_ids_to_unified(msg: BaseMessage, step_id: str) -> BaseMes
                 raw_id = str(tc.get("id", ""))
                 if raw_id and raw_id not in seen_ids:
                     seen_ids.add(raw_id)
-                    if ":" not in raw_id or not raw_id.startswith(step_id):
+                    if _needs_unified(raw_id):
                         needs_rewrite = True
                         break
 
     if not needs_rewrite:
         return msg
 
-    # Create modified copy with unified IDs
     modified = deepcopy(msg)
 
+    def _unified(raw_id: str) -> str:
+        return _unified_tool_call_id_for_stream(sid, raw_id, task_idx=task_idx)
+
     if isinstance(modified, AIMessageChunk):
-        # Rewrite tool_call_chunks
         new_chunks = []
         for tc in getattr(modified, "tool_call_chunks", None) or []:
             if isinstance(tc, dict):
                 new_tc = dict(tc)
                 raw_id = str(tc.get("id", ""))
                 if raw_id:
-                    unified_id = _make_step_tool_call_id(step_id, raw_id, 0)
-                    new_tc["id"] = unified_id
+                    new_tc["id"] = _unified(raw_id)
                 new_chunks.append(new_tc)
         if hasattr(modified, "tool_call_chunks") and new_chunks:
-            # AIMessageChunk doesn't allow direct assignment, need to update internal dict
             if hasattr(modified, "__dict__"):
                 modified.__dict__["tool_call_chunks"] = new_chunks
 
-        # Rewrite tool_calls
         new_calls = []
         for tc in getattr(modified, "tool_calls", None) or []:
             if isinstance(tc, dict):
                 new_tc = dict(tc)
                 raw_id = str(tc.get("id", ""))
                 if raw_id:
-                    unified_id = _make_step_tool_call_id(step_id, raw_id, 0)
-                    new_tc["id"] = unified_id
+                    new_tc["id"] = _unified(raw_id)
                 new_calls.append(new_tc)
         if hasattr(modified, "tool_calls") and new_calls:
             if hasattr(modified, "__dict__"):
                 modified.__dict__["tool_calls"] = new_calls
 
     elif isinstance(modified, AIMessage):
-        # Rewrite tool_calls
         new_calls = []
         for tc in getattr(modified, "tool_calls", None) or []:
             if isinstance(tc, dict):
                 new_tc = dict(tc)
                 raw_id = str(tc.get("id", ""))
                 if raw_id:
-                    unified_id = _make_step_tool_call_id(step_id, raw_id, 0)
-                    new_tc["id"] = unified_id
+                    new_tc["id"] = _unified(raw_id)
                 new_calls.append(new_tc)
         if hasattr(modified, "__dict__"):
             modified.__dict__["tool_calls"] = new_calls
@@ -209,20 +231,21 @@ def _rewrite_tool_call_ids_to_unified(msg: BaseMessage, step_id: str) -> BaseMes
     return modified
 
 
-def _rewrite_root_tool_message_tool_call_id(msg: BaseMessage, step_id: str) -> BaseMessage:
-    """Align root-graph ``ToolMessage.tool_call_id`` with unified AIMessage ids (IG-416).
-
-    The execute stream rewrites root AI ``tool_call_id`` values to
-    ``{step_id}:s:{tool_fragment}`` (same fragment as :func:`_make_step_tool_call_id`).
-    Tool results must use the same identifiers or clients cannot match completions to rows.
+def _rewrite_tool_message_tool_call_id(
+    msg: BaseMessage,
+    step_id: str,
+    *,
+    task_idx: int | None = None,
+) -> BaseMessage:
+    """Align ``ToolMessage.tool_call_id`` with unified AIMessage ids (IG-416).
 
     Args:
         msg: Stream message (typically ``ToolMessage``).
         step_id: Current execute step id.
+        task_idx: When set, use task-level ``{step_id}:t{idx}:…`` ids (subgraph).
 
     Returns:
-        Original message when unchanged, or a shallow-copied ``ToolMessage`` with a
-        unified ``tool_call_id``.
+        Original message when unchanged, or a shallow-copied ``ToolMessage``.
     """
     if not isinstance(msg, ToolMessage):
         return msg
@@ -235,8 +258,13 @@ def _rewrite_root_tool_message_tool_call_id(msg: BaseMessage, step_id: str) -> B
     parsed_sid, type_code, _, _ = parse_unified_tool_call_id(raw_id)
     if parsed_sid == sid and type_code in ("s", "t"):
         return msg
-    unified = _make_step_tool_call_id(sid, raw_id, 0)
+    unified = _unified_tool_call_id_for_stream(sid, raw_id, task_idx=task_idx)
     return msg.model_copy(update={"tool_call_id": unified})
+
+
+def _rewrite_root_tool_message_tool_call_id(msg: BaseMessage, step_id: str) -> BaseMessage:
+    """Align root-graph ``ToolMessage.tool_call_id`` with unified AIMessage ids."""
+    return _rewrite_tool_message_tool_call_id(msg, step_id, task_idx=None)
 
 
 def _extract_tool_name_from_ai_chunk(msg: BaseMessage, tool_call_id: str) -> str:
@@ -1787,22 +1815,26 @@ class Executor:
             # Handle tuple format (namespace, mode, data) - deepagents canonical
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                 _ns_chunk, mode_chunk, data_chunk = chunk
-                # IG-416: Unify root-graph message tool_call_ids for client row/result matching.
+                # IG-416: Unify message tool_call_ids for client row/result matching.
                 emit_chunk = chunk
                 if (
                     step_id
-                    and not _ns_chunk  # Only root graph
                     and mode_chunk == "messages"
                     and isinstance(data_chunk, (list, tuple))
                     and len(data_chunk) >= 2
                 ):
                     msg0 = data_chunk[0]
+                    task_idx = 0 if _ns_chunk else None
                     if isinstance(msg0, (AIMessage, AIMessageChunk)):
-                        modified_msg = _rewrite_tool_call_ids_to_unified(msg0, step_id)
+                        modified_msg = _rewrite_tool_call_ids_to_unified(
+                            msg0, step_id, task_idx=task_idx
+                        )
                         if modified_msg is not msg0:
                             emit_chunk = (_ns_chunk, mode_chunk, (modified_msg, data_chunk[1]))
                     elif isinstance(msg0, ToolMessage):
-                        modified_msg = _rewrite_root_tool_message_tool_call_id(msg0, step_id)
+                        modified_msg = _rewrite_tool_message_tool_call_id(
+                            msg0, step_id, task_idx=task_idx
+                        )
                         if modified_msg is not msg0:
                             emit_chunk = (_ns_chunk, mode_chunk, (modified_msg, data_chunk[1]))
                 yield None, emit_chunk, 0, [], ""

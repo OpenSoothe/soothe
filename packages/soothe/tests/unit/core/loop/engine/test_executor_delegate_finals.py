@@ -149,6 +149,44 @@ async def test_stream_and_collect_rewrites_tool_call_ids_to_unified() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stream_and_collect_rewrites_subgraph_tool_ids_to_task_level() -> None:
+    """Namespaced AI tool-call ids use ``{step_id}:t{idx}:…`` for TUI binding."""
+    from langchain_core.messages import AIMessageChunk
+
+    chunk: tuple = (
+        ("tools:subgraph-1",),
+        "messages",
+        (
+            AIMessageChunk(
+                content="",
+                tool_call_chunks=[{"name": "grep", "id": "functions.grep:0", "args": "{}"}],
+            ),
+            {},
+        ),
+    )
+    mock_agent = MagicMock()
+
+    async def fake_stream():
+        yield chunk
+
+    executor = Executor(mock_agent)
+    rows = [
+        r
+        async for r in executor._stream_and_collect(
+            fake_stream(),
+            budget=None,
+            step_id="GHT-01",
+        )
+    ]
+    modified_chunk = rows[0][1]
+    _ns, mode, data = modified_chunk
+    assert mode == "messages"
+    msg = data[0]
+    tc_chunks = getattr(msg, "tool_call_chunks", None) or []
+    assert tc_chunks[0]["id"].startswith("GHT-01:t0:")
+
+
+@pytest.mark.asyncio
 async def test_stream_and_collect_rewrites_root_tool_message_to_unified_id() -> None:
     """Root ToolMessage.tool_call_id matches rewritten AI ids for TUI result binding (IG-416)."""
     tool_msg = ToolMessage(

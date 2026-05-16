@@ -148,3 +148,12 @@ def test_parse_unified_tool_call_id_non_unified() -> None:
 def test_parse_unified_tool_call_id_empty() -> None:
     """Empty IDs return empty tuple."""
     assert parse_unified_tool_call_id("") == ("", "", None, "")
+
+
+def test_scoped_subgraph_tool_key_passes_through_task_level_id() -> None:
+    """Already-unified task-level ids are not double-prefixed."""
+    unified = "GHT-01:t0:grep.2"
+    assert (
+        scoped_subgraph_tool_key(("tools:abc",), unified, task_scope=("tc", "explore", "GHT-01"))
+        == unified
+    )
