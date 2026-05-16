@@ -8,7 +8,7 @@ from soothe_cli.tui.textual_adapter import _format_task_scoped_tool_invocation_l
 def test_task_scoped_tool_invocation_line_includes_task_prefix() -> None:
     """Mirrors Task subgraph tool line prefix (⚙ Task(type):#N …)."""
     line = _format_task_scoped_tool_invocation_line(
-        ("functions.task:2", "explore"),
+        ("functions.task:2", "explore", "LEN-02"),
         "glob",
         {"glob_pattern": "**/*.py"},
     )

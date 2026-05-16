@@ -11,7 +11,12 @@ if TYPE_CHECKING:
 
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.utils import get_tool_display_name
-from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id, scoped_subgraph_tool_key
+from soothe_sdk.ux.task_namespace import (
+    TaskScope,
+    parse_unified_tool_call_id,
+    row_key_for_subgraph_tool,
+    scoped_subgraph_tool_key,
+)
 
 from soothe_cli.cli.stream.display_line import DisplayLine
 from soothe_cli.shared.events.essential_events import is_essential_progress_event_type
@@ -128,7 +133,7 @@ def _format_progress_event_lines_for_tui(
     namespace: tuple[str, ...],
     *,
     pipeline: Any,
-    task_scope: tuple[str, str] | None = None,
+    task_scope: TaskScope | None = None,
 ) -> list[str]:
     """Format progress events with the same pipeline as CLI.
 
@@ -155,7 +160,7 @@ def _format_progress_event_lines_for_tui(
 
 
 def _format_task_scoped_tool_invocation_line(
-    task_scope: tuple[str, str],
+    task_scope: TaskScope,
     tool_name: str,
     tool_args: dict[str, Any],
 ) -> str:
@@ -167,7 +172,7 @@ def _format_task_scoped_tool_invocation_line(
     raw_fallback = raw_fb if isinstance(raw_fb, str) else ""
     args_str = format_tool_call_args(tool_name, {"args": tool_args, "_raw": raw_fallback})
     core = f"{display_name}({args_str})"
-    tcid, st = task_scope
+    tcid, st = task_scope[0], task_scope[1]
     core = f"{format_task_scope_prefix(tcid, st)} {core}"
     return f"⚙ {core}"
 
@@ -185,6 +190,31 @@ def _raw_tool_content_for_presentation(message: Any) -> str:
     if isinstance(message, Mapping):
         return format_tool_message_content(dict(message).get("content"))
     return ""
+
+
+async def _ensure_task_delegation_card(
+    adapter: TextualUIAdapter,
+    *,
+    lookup_id: str,
+    parsed_args: dict[str, Any],
+    show_tool_ui: bool,
+) -> ToolCallMessage | None:
+    """Mount or refresh a standalone Task subagent card (not a step row)."""
+    if not show_tool_ui or not lookup_id:
+        return None
+    existing = adapter._current_tool_messages.get(
+        lookup_id
+    ) or adapter._tool_display_by_call_id.get(lookup_id)
+    if isinstance(existing, ToolCallMessage):
+        if parsed_args:
+            existing.refresh_tool_args(parsed_args)
+        return existing
+    task_card = ToolCallMessage("task", parsed_args, tool_call_id=lookup_id)
+    await adapter._mount_message(task_card)
+    task_card.set_running()
+    adapter._current_tool_messages[lookup_id] = task_card
+    adapter._tool_display_by_call_id[lookup_id] = task_card
+    return task_card
 
 
 async def _ensure_early_tool_row_mount(
@@ -222,26 +252,21 @@ async def _ensure_early_tool_row_mount(
             subagent_type or "?",
             step_id=bound_step_id,
         )
-        if bound_step_id:
-            step_w = adapter._current_step_messages.get(bound_step_id)
-            if step_w is not None:
-                if not step_w.has_tool_call_row(lookup_id):
-                    step_w.add_tool_call(
-                        lookup_id,
-                        buffer_name,
-                        parsed_args,
-                        raw_args=raw_args,
-                    )
-                    _log.debug(
-                        "Task tool row mounted early on step: id=%s step_id=%s",
-                        lookup_id,
-                        bound_step_id,
-                    )
-                elif parsed_args:
-                    step_w.update_tool_args(lookup_id, parsed_args)
-                adapter._tool_to_step[lookup_id] = step_w
-                adapter._tool_display_by_call_id[lookup_id] = step_w
-                return True
+        if adapter._set_spinner:
+            await adapter._set_spinner("Tools")
+        task_card = await _ensure_task_delegation_card(
+            adapter,
+            lookup_id=lookup_id,
+            parsed_args=parsed_args,
+            show_tool_ui=show_tool_ui,
+        )
+        if task_card is not None:
+            _log.debug(
+                "Task delegation card mounted early: id=%s step_id=%s",
+                lookup_id,
+                bound_step_id,
+            )
+            return True
         return False
 
     if is_main_agent:
@@ -382,6 +407,11 @@ async def _mount_subagent_inner_tool_row_if_resolved(
         if ts_inner
         else None
     )
+    if parent_for_inner is None:
+        parent_for_inner = router.resolve_task_parent_for_unified_inner_tool(
+            str(lookup_id),
+            tool_display_by_call_id=adapter._tool_display_by_call_id,
+        )
     if (
         not show_tool_ui
         or is_main_agent
@@ -389,7 +419,7 @@ async def _mount_subagent_inner_tool_row_if_resolved(
         or (buffer_name or "") == "task"
     ):
         return False
-    row_key = scoped_subgraph_tool_key(ns_key, str(lookup_id))
+    row_key = row_key_for_subgraph_tool(ns_key, str(lookup_id), task_scope=ts_inner)
     file_op_tracker.start_operation(buffer_name, parsed_args, buffer_id)
     if adapter._set_spinner:
         await adapter._set_spinner("Tools")
