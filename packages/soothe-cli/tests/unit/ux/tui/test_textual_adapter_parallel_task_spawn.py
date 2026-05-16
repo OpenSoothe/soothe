@@ -12,8 +12,8 @@ from soothe_cli.tui.textual_adapter import TextualUIAdapter
 from soothe_cli.tui.textual_adapter._stream_formatting import (
     _mount_subagent_inner_tool_row_if_resolved,
 )
-from soothe_cli.tui.widgets.messages import CognitionStepMessage
-from soothe_sdk.ux.task_namespace import scoped_subgraph_tool_key
+from soothe_cli.tui.widgets.messages import ToolCallMessage
+from soothe_sdk.ux.task_namespace import row_key_for_subgraph_tool
 
 
 def test_step_scoped_namespace_bind_not_fifo_mismatch() -> None:
@@ -26,8 +26,8 @@ def test_step_scoped_namespace_bind_not_fifo_mismatch() -> None:
 
 
 @pytest.mark.asyncio
-async def test_step_card_gets_inner_tool_row_for_bound_step() -> None:
-    """Inner explore tools attach to the step card named in task scope."""
+async def test_task_card_gets_inner_tool_row_for_bound_step() -> None:
+    """Inner explore tools attach to the Task delegation card, not the step card."""
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=MagicMock(),
@@ -35,9 +35,12 @@ async def test_step_card_gets_inner_tool_row_for_bound_step() -> None:
         set_spinner=AsyncMock(),
     )
     router = adapter._step_router
-    step = CognitionStepMessage(step_id="YKF-01", description="Explore goal engine")
-    adapter._current_step_messages["YKF-01"] = step
-    step.add_tool_call("functions.task:0", "task", {"subagent_type": "explore"})
+    task_card = ToolCallMessage(
+        "task",
+        {"subagent_type": "explore"},
+        tool_call_id="functions.task:0",
+    )
+    adapter._tool_display_by_call_id["functions.task:0"] = task_card
     router._namespace_bindings[("tools:sub",)] = ("functions.task:0", "explore", "YKF-01")
 
     ok = await _mount_subagent_inner_tool_row_if_resolved(
@@ -54,6 +57,9 @@ async def test_step_card_gets_inner_tool_row_for_bound_step() -> None:
         file_op_tracker=FileOpTracker(assistant_id="a"),
     )
     assert ok is True
-    row_id = scoped_subgraph_tool_key(("tools:sub",), "functions.grep:2")
-    assert step.has_tool_call_row(row_id)
-    assert adapter._tool_to_step[row_id] is step
+    scope = ("functions.task:0", "explore", "YKF-01")
+    row_id = row_key_for_subgraph_tool(
+        ("tools:sub",), "functions.grep:2", task_scope=scope
+    )
+    assert task_card.has_tool_call_row(row_id)
+    assert adapter._tool_to_step[row_id] is task_card

@@ -66,6 +66,15 @@ def test_step_id_for_tool_parses_unified_format() -> None:
     assert router.step_id_for_tool("ABC-01:s:grep.0") == "override-step"
 
 
+def test_late_subgraph_namespace_binds_to_unlinked_spawn() -> None:
+    """Namespace after register_task_spawn attaches via unlinked-spawn fallback."""
+    router = StepTaskRouter()
+    router.register_task_spawn("FJS-02:s:task:0", "explore", step_id="FJS-02")
+    ns = ("tools:late-arrival",)
+    router.on_subgraph_namespace(ns)
+    assert router.resolve_task_scope(ns) == ("FJS-02:s:task:0", "explore", "FJS-02")
+
+
 def test_route_pending_main_tools_uses_unified_id_parsing() -> None:
     """route_pending_main_tools extracts step_id from unified IDs."""
     router = StepTaskRouter()

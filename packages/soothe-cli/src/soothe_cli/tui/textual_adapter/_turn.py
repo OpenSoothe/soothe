@@ -22,7 +22,11 @@ from soothe_sdk.ux.stream_tool_diag import (
     is_tool_visible_messages_summary,
     summarize_messages_stream_payload,
 )
-from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id, scoped_subgraph_tool_key
+from soothe_sdk.ux.task_namespace import (
+    parse_unified_tool_call_id,
+    row_key_for_subgraph_tool,
+    scoped_subgraph_tool_key,
+)
 
 from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.shared.core.presentation_engine import PresentationEngine
@@ -66,6 +70,7 @@ from soothe_cli.tui.textual_adapter._adapter import (
 )
 from soothe_cli.tui.textual_adapter._stream_formatting import (
     _ensure_early_tool_row_mount,
+    _ensure_task_delegation_card,
     _flush_router_pending_subgraph_tools,
     _format_display_line_for_tui,
     _format_progress_event_lines_for_tui,
@@ -591,8 +596,13 @@ async def execute_task_textual(
                                     if ts_orphan
                                     else None
                                 )
+                                if parent_orphan is None and sid:
+                                    parent_orphan = router.resolve_task_parent_for_unified_inner_tool(
+                                        sid,
+                                        tool_display_by_call_id=adapter._tool_display_by_call_id,
+                                    )
                                 if parent_orphan is not None and sid:
-                                    row_orphan = scoped_subgraph_tool_key(
+                                    row_orphan = row_key_for_subgraph_tool(
                                         ns_key, sid, task_scope=ts_orphan
                                     )
                                     if not getattr(
@@ -1111,22 +1121,12 @@ async def execute_task_textual(
                                         pending_tool_calls_lc=pending_tool_calls_lc,
                                         file_op_tracker=file_op_tracker,
                                     )
-                                if bound_step_id:
-                                    step_w = adapter._current_step_messages.get(bound_step_id)
-                                    if step_w is not None and step_w.has_tool_call_row(
-                                        str(lookup_id)
-                                    ):
-                                        step_w.update_tool_args(str(lookup_id), parsed_args)
-                                elif lookup_id not in adapter._current_tool_messages:
-                                    task_card = ToolCallMessage(
-                                        buffer_name,
-                                        parsed_args,
-                                        tool_call_id=lookup_id,
-                                    )
-                                    await adapter._mount_message(task_card)
-                                    task_card.set_running()
-                                    adapter._current_tool_messages[lookup_id] = task_card
-                                    adapter._tool_display_by_call_id[str(lookup_id)] = task_card
+                                await _ensure_task_delegation_card(
+                                    adapter,
+                                    lookup_id=str(lookup_id),
+                                    parsed_args=parsed_args,
+                                    show_tool_ui=show_tool_ui,
+                                )
 
                             if args_still_streaming and not args_meaningful:
                                 continue
@@ -1315,8 +1315,19 @@ async def execute_task_textual(
                                     else:
                                         # Fallback to namespace lookup (existing behavior)
                                         active_step = adapter._step_by_namespace.get(ns_key)
-                                    use_step_aggregator = is_main_agent and active_step is not None
-                                    if use_step_aggregator:
+                                    use_step_aggregator = (
+                                        is_main_agent
+                                        and active_step is not None
+                                        and buffer_name != "task"
+                                    )
+                                    if is_main_agent and buffer_name == "task":
+                                        await _ensure_task_delegation_card(
+                                            adapter,
+                                            lookup_id=str(lookup_id),
+                                            parsed_args=parsed_args,
+                                            show_tool_ui=show_tool_ui,
+                                        )
+                                    elif use_step_aggregator:
                                         # IG-402: Pass _raw from streaming accumulator so
                                         # format_tool_call_args can use its regex fallback.
                                         raw = ""
