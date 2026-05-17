@@ -69,6 +69,7 @@ AGENT_LOOP_STARTED = "soothe.cognition.agent_loop.started"
 AGENT_LOOP_COMPLETED = "soothe.cognition.agent_loop.completed"
 AGENT_LOOP_STEP_STARTED = "soothe.cognition.agent_loop.step.started"
 AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
+AGENT_LOOP_PLAN_DECISION = "soothe.cognition.agent_loop.plan.decision"
 
 # Branch cognition (NEW)
 BRANCH_CREATED = "soothe.cognition.branch.created"
@@ -161,6 +162,7 @@ __all__ = [
     "AGENT_LOOP_COMPLETED",
     "AGENT_LOOP_STEP_STARTED",
     "AGENT_LOOP_STEP_COMPLETED",
+    "AGENT_LOOP_PLAN_DECISION",
     # Cognition - Branch
     "BRANCH_CREATED",
     "BRANCH_ANALYZED",
