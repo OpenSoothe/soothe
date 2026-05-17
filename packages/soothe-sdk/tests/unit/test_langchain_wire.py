@@ -27,6 +27,42 @@ def test_messages_from_wire_dicts_mixed_with_message_to_dict() -> None:
     assert isinstance(out[1], HumanMessage)
 
 
+def test_messages_from_wire_dicts_coerces_dict_tool_call_chunk_args() -> None:
+    """Dict chunk args (executor enrich) must deserialize as AIMessageChunk."""
+    from langchain_core.messages import AIMessageChunk
+
+    flat = {
+        "type": "AIMessageChunk",
+        "content": "",
+        "tool_calls": [
+            {
+                "name": "task",
+                "id": "WAA-01:s:task:0",
+                "args": {
+                    "description": "Explore repository structure",
+                    "subagent_type": "explore",
+                },
+            }
+        ],
+        "tool_call_chunks": [
+            {
+                "name": "task",
+                "id": "WAA-01:s:task:0",
+                "args": {
+                    "description": "Explore repository structure",
+                    "subagent_type": "explore",
+                },
+            }
+        ],
+    }
+    out = messages_from_wire_dicts([flat])
+    assert len(out) == 1
+    assert isinstance(out[0], AIMessageChunk)
+    assert out[0].tool_calls[0]["args"]["description"] == "Explore repository structure"
+    assert isinstance(out[0].tool_call_chunks[0]["args"], str)
+    assert "Explore" in out[0].tool_call_chunks[0]["args"]
+
+
 def test_envelope_idempotent_message_to_dict() -> None:
     m = AIMessage(content="x")
     good = message_to_dict(m)

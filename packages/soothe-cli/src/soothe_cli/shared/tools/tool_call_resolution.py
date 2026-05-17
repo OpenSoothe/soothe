@@ -105,6 +105,70 @@ def _pick_args_from_sources(
     return {}
 
 
+def merge_tool_display_args(
+    tool_call_id: str,
+    *,
+    block_args: dict[str, Any] | None = None,
+    streaming_overlay: Mapping[str, dict[str, Any]] | None = None,
+    pending_tool_calls_lc: Mapping[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Merge kwargs from block buffer, ``tool_call_chunks`` overlay, and pending JSON.
+
+    CoreAgent executes with complete args; the stream often splits them across channels.
+    The TUI must prefer the richest source on every chunk so task descriptions and tool
+    kwargs appear as soon as they are available.
+    """
+    tcid = str(tool_call_id).strip()
+    stream_args: dict[str, Any] = {}
+    if tcid and streaming_overlay:
+        raw = streaming_overlay.get(tcid)
+        if isinstance(raw, dict):
+            stream_args = raw
+    pend_parsed: dict[str, Any] = {}
+    if tcid and pending_tool_calls_lc:
+        pend = pending_tool_calls_lc.get(tcid)
+        if isinstance(pend, dict):
+            parsed = try_parse_pending_tool_call_args(pend)
+            if parsed:
+                pend_parsed = parsed
+    block = block_args if isinstance(block_args, dict) else {}
+    return _pick_args_from_sources(
+        from_streaming=stream_args,
+        from_tool_call_attr=pend_parsed,
+        from_block=block,
+    )
+
+
+def resolve_stream_tool_name(
+    tool_call_id: str,
+    *,
+    chunk_name: str | None,
+    pending_tool_calls_lc: Mapping[str, dict[str, Any]] | None = None,
+) -> str:
+    """Resolve display tool name when the chunk uses a placeholder ``tool`` label."""
+    from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
+
+    name = (chunk_name or "").strip()
+    if name and name != "tool":
+        return name
+    tcid = str(tool_call_id).strip()
+    if tcid and pending_tool_calls_lc:
+        pend = pending_tool_calls_lc.get(tcid)
+        if isinstance(pend, dict):
+            pend_name = str(pend.get("name") or "").strip()
+            if pend_name and pend_name != "tool":
+                return pend_name
+    inferred = infer_tool_name_from_call_id(tcid)
+    if inferred:
+        return inferred
+    _sid, _type_code, _, tool_info = parse_unified_tool_call_id(tcid)
+    if tool_info:
+        head = tool_info.split(":")[0].split(".")[0].strip()
+        if head and head != "tool":
+            return head
+    return name or "tool"
+
+
 def resolve_tool_invocations_for_display(
     message: Any,
     expanded_tool_blocks: list[dict[str, Any]],
@@ -291,6 +355,8 @@ __all__ = [
     "infer_tool_name_from_call_id",
     "is_toolish_display_block",
     "materialize_ai_blocks_with_resolved_tools",
+    "merge_tool_display_args",
+    "resolve_stream_tool_name",
     "resolve_tool_invocations_for_display",
     "tool_args_meaningful",
 ]

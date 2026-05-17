@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from soothe_cli.tui.textual_adapter._adapter import TextualUIAdapter
 
-from soothe_sdk.client.wire import envelope_langchain_message_dict
 
 from soothe_cli.shared.rendering.renderer_base import RendererBase
 
@@ -16,18 +15,13 @@ logger = logging.getLogger(__name__)
 
 
 def _normalize_lc_stream_message(message: Any) -> Any:
-    """Turn daemon JSON dicts into LangChain message objects when possible.
-
-    ``DaemonSession._normalize_stream_data`` already does this; this is a safety net
-    for any path that still yields a raw dict (restore failure, alternate transports).
-    """
+    """Turn daemon JSON dicts into LangChain message objects when possible."""
     if not isinstance(message, dict):
         return message
     try:
-        from langchain_core.messages import messages_from_dict
+        from soothe_sdk.langchain_wire import messages_from_wire_dicts
 
-        wrapped = envelope_langchain_message_dict(message)
-        restored = messages_from_dict([wrapped])
+        restored = messages_from_wire_dicts([message])
         if restored:
             return restored[0]
     except Exception:
@@ -42,15 +36,15 @@ def _coerce_ai_message_for_blocks(message: Any) -> Any:
     :func:`messages_from_dict` would fail; :func:`envelope_langchain_message_dict`
     canonicalizes first (see ``daemon_session``).
     """
-    from langchain_core.messages import AIMessage, AIMessageChunk, messages_from_dict
+    from langchain_core.messages import AIMessage, AIMessageChunk
+    from soothe_sdk.langchain_wire import messages_from_wire_dicts
 
     if isinstance(message, (AIMessage, AIMessageChunk)):
         return message
     if not isinstance(message, dict):
         return message
     try:
-        wrapped = envelope_langchain_message_dict(message)
-        restored = messages_from_dict([wrapped])
+        restored = messages_from_wire_dicts([message])
         if restored and isinstance(restored[0], (AIMessage, AIMessageChunk)):
             return restored[0]
     except Exception:
