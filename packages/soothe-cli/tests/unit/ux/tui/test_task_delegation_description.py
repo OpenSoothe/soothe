@@ -6,13 +6,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from soothe_cli.tui.textual_adapter import TextualUIAdapter
 from soothe_cli.tui.textual_adapter._stream_formatting import (
     _ensure_task_delegation_card,
     enrich_task_delegation_args,
     refresh_task_cards_for_step,
     sync_task_delegation_cards_from_stream,
 )
-from soothe_cli.tui.textual_adapter import TextualUIAdapter
 from soothe_cli.tui.widgets.messages import CognitionStepMessage, ToolCallMessage
 
 

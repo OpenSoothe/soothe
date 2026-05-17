@@ -94,12 +94,18 @@ class ResolvedToolInvocation:
 
 def _pick_args_from_sources(
     *,
+    from_message_tool_calls: dict[str, Any],
     from_streaming: dict[str, Any],
     from_tool_call_attr: dict[str, Any],
     from_block: dict[str, Any],
 ) -> dict[str, Any]:
-    """Prefer streaming, then ``tool_calls`` attribute, then block copy."""
-    for cand in (from_streaming, from_tool_call_attr, from_block):
+    """Prefer complete ``tool_calls`` on the message, then stream overlay, pending, block."""
+    for cand in (
+        from_message_tool_calls,
+        from_streaming,
+        from_tool_call_attr,
+        from_block,
+    ):
         if tool_args_meaningful(cand):
             return extract_tool_args_dict(cand)
     return {}
@@ -111,6 +117,8 @@ def merge_tool_display_args(
     block_args: dict[str, Any] | None = None,
     streaming_overlay: Mapping[str, dict[str, Any]] | None = None,
     pending_tool_calls_lc: Mapping[str, dict[str, Any]] | None = None,
+    message: Any = None,
+    tool_name: str | None = None,
 ) -> dict[str, Any]:
     """Merge kwargs from block buffer, ``tool_call_chunks`` overlay, and pending JSON.
 
@@ -126,13 +134,26 @@ def merge_tool_display_args(
             stream_args = raw
     pend_parsed: dict[str, Any] = {}
     if tcid and pending_tool_calls_lc:
-        pend = pending_tool_calls_lc.get(tcid)
-        if isinstance(pend, dict):
-            parsed = try_parse_pending_tool_call_args(pend)
-            if parsed:
-                pend_parsed = parsed
+        from soothe_cli.shared.tools.message_processing import richest_pending_args_for_lookup
+
+        pend_parsed = richest_pending_args_for_lookup(
+            pending_tool_calls_lc,
+            tcid,
+            tool_name=tool_name,
+        )
+    message_args: dict[str, Any] = {}
+    if tcid and message is not None:
+        raw_tc = getattr(message, "tool_calls", None)
+        if raw_tc is None and isinstance(message, dict):
+            raw_tc = message.get("tool_calls")
+        if isinstance(raw_tc, list):
+            for tc in normalize_tool_calls_list(raw_tc):
+                if str(tc.get("id") or "").strip() == tcid:
+                    message_args = extract_tool_args_dict(tc)
+                    break
     block = block_args if isinstance(block_args, dict) else {}
     return _pick_args_from_sources(
+        from_message_tool_calls=message_args,
         from_streaming=stream_args,
         from_tool_call_attr=pend_parsed,
         from_block=block,
@@ -238,8 +259,9 @@ def resolve_tool_invocations_for_display(
         if not name:
             name = "tool"
         merged = _pick_args_from_sources(
+            from_message_tool_calls=tc_args,
             from_streaming=stream_args,
-            from_tool_call_attr=tc_args,
+            from_tool_call_attr={},
             from_block=block_args,
         )
         out.append(ResolvedToolInvocation(tool_call_id=tid, name=name, args=merged))

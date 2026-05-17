@@ -19,11 +19,11 @@ def _normalize_lc_stream_message(message: Any) -> Any:
     if not isinstance(message, dict):
         return message
     try:
-        from soothe_sdk.langchain_wire import messages_from_wire_dicts
+        from soothe_sdk.langchain_wire import deserialize_langchain_message_from_wire
 
-        restored = messages_from_wire_dicts([message])
-        if restored:
-            return restored[0]
+        restored = deserialize_langchain_message_from_wire(message)
+        if restored is not message:
+            return restored
     except Exception:
         logger.debug("TUI could not restore LangChain message from dict", exc_info=True)
     return message

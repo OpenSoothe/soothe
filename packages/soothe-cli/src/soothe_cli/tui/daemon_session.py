@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -15,10 +14,6 @@ from soothe_sdk.client import (
     websocket_url_from_config,
 )
 from soothe_sdk.client.protocol import _serialize_for_json
-from soothe_sdk.ux.stream_tool_diag import (
-    is_tool_visible_messages_summary,
-    summarize_messages_stream_payload,
-)
 
 if TYPE_CHECKING:
     pass
@@ -28,33 +23,6 @@ logger = logging.getLogger(__name__)
 # Match headless daemon client: brief read window after ``idle`` so stream events
 # that arrive slightly after status are not dropped (``cli/execution/daemon.py``).
 _POST_IDLE_DRAIN_DEADLINE_S = 2.5
-
-
-def _log_tool_stream_tui_recv(
-    *,
-    phase: str,
-    expected_loop_id: str | None,
-    namespace: tuple[Any, ...],
-    mode: str,
-    data: Any,
-) -> None:
-    """DEBUG: correlate daemon broadcast time with TUI receive (grep ``tool_stream_diag``)."""
-    if mode != "messages":
-        return
-    if not isinstance(data, (list, tuple)) or len(data) < 1:
-        return
-    sm = summarize_messages_stream_payload(data)
-    if not is_tool_visible_messages_summary(sm):
-        return
-    lid = (expected_loop_id or "?")[:16]
-    logger.debug(
-        "[tool_stream_diag] tui_ws_recv phase=%s ts=%.3f loop=%s ns_len=%d %s",
-        phase,
-        time.time(),
-        lid,
-        len(namespace),
-        sm,
-    )
 
 
 class TuiDaemonSession:
@@ -192,13 +160,6 @@ class TuiDaemonSession:
                 continue
             namespace = tuple(event.get("namespace", []) or [])
             mode = str(event.get("mode", ""))
-            _log_tool_stream_tui_recv(
-                phase="post_idle_drain",
-                expected_loop_id=exp,
-                namespace=namespace,
-                mode=mode,
-                data=data,
-            )
             yield (namespace, mode, data)
             if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
                 return
@@ -265,13 +226,6 @@ class TuiDaemonSession:
 
                     namespace = tuple(event.get("namespace", []) or [])
                     mode = str(event.get("mode", ""))
-                    _log_tool_stream_tui_recv(
-                        phase="main",
-                        expected_loop_id=expected_loop_id,
-                        namespace=namespace,
-                        mode=mode,
-                        data=data,
-                    )
                     yield (namespace, mode, data)
                     if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
                         break

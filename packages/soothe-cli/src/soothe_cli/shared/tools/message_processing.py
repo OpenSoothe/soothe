@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import json
 import re
+from collections.abc import Mapping
 from typing import Any
 
 from soothe_sdk.ux.internal import (
@@ -137,6 +138,95 @@ def accumulate_tool_call_chunks(
                 if not pending["emitted"]:
                     pending["args_str"] += tc_args
                     break
+
+
+def ingest_tool_call_stream_state(
+    pending_tool_calls: dict[str, dict[str, Any]],
+    message: Any,
+    *,
+    is_main: bool = True,
+) -> None:
+    """Accumulate ``tool_call_chunks`` and seed ``tool_calls`` from one stream message.
+
+    Works for LangChain message objects and wire dicts (daemon WebSocket path).
+    """
+    if isinstance(message, dict):
+        chunks = message.get("tool_call_chunks")
+        if isinstance(chunks, list):
+            accumulate_tool_call_chunks(pending_tool_calls, chunks, is_main=is_main)
+        seed_pending_tool_calls_from_message(pending_tool_calls, message, is_main=is_main)
+        return
+    accumulate_tool_call_chunks(
+        pending_tool_calls,
+        getattr(message, "tool_call_chunks", None) or [],
+        is_main=is_main,
+    )
+    seed_pending_tool_calls_from_message(pending_tool_calls, message, is_main=is_main)
+
+
+def _resolve_pending_lookup_tool_name(
+    tool_call_id: str,
+    *,
+    tool_name: str | None = None,
+) -> str:
+    """Resolve the tool name used to match pending stream buffers to a logical call."""
+    name = (tool_name or "").strip()
+    if name and name != "tool":
+        return name
+    tcid = str(tool_call_id).strip()
+    if tcid:
+        from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
+
+        _, _, _, tool_info = parse_unified_tool_call_id(tcid)
+        if tool_info:
+            head = tool_info.split(".")[0].split(":")[0].strip()
+            if head and head != "tool":
+                return head
+        from soothe_cli.shared.tools.tool_call_resolution import infer_tool_name_from_call_id
+
+        inferred = infer_tool_name_from_call_id(tcid)
+        if inferred:
+            return inferred
+    return name
+
+
+def richest_pending_args_for_lookup(
+    pending_tool_calls: Mapping[str, dict[str, Any]],
+    tool_call_id: str,
+    *,
+    tool_name: str | None = None,
+) -> dict[str, Any]:
+    """Return parsed args for ``tool_call_id`` from the pending buffer.
+
+    When the worker rewrites provider ids to unified step ids, early chunks may still
+    be keyed by ``functions.tool:N`` while the UI row uses ``{step}:t0:grep.0``. Only
+    pending entries with the same tool **name** are considered — never the largest
+    unrelated pending dict (e.g. a parallel ``task`` description).
+    """
+    if not isinstance(pending_tool_calls, Mapping):
+        return {}
+    tcid = str(tool_call_id).strip()
+    if tcid:
+        direct = pending_tool_calls.get(tcid)
+        if isinstance(direct, dict):
+            parsed = try_parse_pending_tool_call_args(direct)
+            if parsed:
+                return parsed
+    name = _resolve_pending_lookup_tool_name(tcid, tool_name=tool_name)
+    if not name or name == "tool":
+        return {}
+    best: dict[str, Any] = {}
+    for pend in pending_tool_calls.values():
+        if not isinstance(pend, dict):
+            continue
+        if str(pend.get("name") or "").strip() != name:
+            continue
+        parsed = try_parse_pending_tool_call_args(pend)
+        if not parsed:
+            continue
+        if len(parsed) > len(best):
+            best = parsed
+    return best
 
 
 def try_parse_pending_tool_call_args(
