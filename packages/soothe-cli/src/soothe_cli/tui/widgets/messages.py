@@ -2700,6 +2700,8 @@ class CognitionStepMessage(Vertical):
         elif self._deferred_running:
             self._deferred_running = False
             self.set_running()
+        elif self._status == "pending":
+            self._refresh_pending_display()
 
         self._maybe_auto_collapse_step_card()
 
@@ -3180,6 +3182,21 @@ class CognitionStepMessage(Vertical):
             self._bump_stat(name)
         self._refresh_header_title()
         self._refresh_tools_display()
+
+    def _refresh_pending_display(self) -> None:
+        """Show waiting state for planned steps that are not executing yet."""
+        if self._status != "pending" or self._status_widget is None:
+            return
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
+        g = get_glyphs()
+        gutter = f"{g.output_prefix} "
+        line = f"{gutter}{g.circle_empty} Pending..."
+        self._status_widget.add_class("pending")
+        self._status_widget.update(Content.styled(line, colors.cognition))
+        self._status_widget.display = True
 
     def set_running(self) -> None:
         """Show animated running state (call after mount)."""

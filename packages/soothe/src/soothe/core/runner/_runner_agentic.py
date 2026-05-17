@@ -18,6 +18,7 @@ from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.events import (
     AgenticLoopCompletedEvent,
     AgenticLoopStartedEvent,
+    AgenticPlanDecisionEvent,
     AgenticStepCompletedEvent,
     AgenticStepStartedEvent,
 )
@@ -406,11 +407,17 @@ class AgenticMixin:
                 logger.debug("[Loop] Iteration %d started", event_data["iteration"])
 
             elif event_type == "plan_decision":
-                # Internal - used for debugging only
                 logger.debug(
                     "[Loop] Plan: %d steps (%s mode)",
-                    len(event_data["steps"]),
-                    event_data["execution_mode"],
+                    len(event_data.get("steps", [])),
+                    event_data.get("execution_mode", ""),
+                )
+                yield _custom(
+                    AgenticPlanDecisionEvent(
+                        iteration=int(event_data.get("iteration", 0)),
+                        steps=list(event_data.get("steps") or []),
+                        execution_mode=str(event_data.get("execution_mode", "")),
+                    ).to_dict()
                 )
 
             elif event_type == "step_started":

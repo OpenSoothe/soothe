@@ -65,6 +65,7 @@ from soothe_cli.tui.media_utils import create_multimodal_content
 from soothe_cli.tui.textual_adapter._adapter import (
     AGENT_LOOP_GOAL_COMPLETED,
     AGENT_LOOP_GOAL_STARTED,
+    AGENT_LOOP_PLAN_DECISION,
     AGENT_LOOP_STEP_COMPLETED,
     AGENT_LOOP_STEP_STARTED,
     TextualUIAdapter,
@@ -83,6 +84,7 @@ from soothe_cli.tui.textual_adapter._stream_formatting import (
     _try_register_task_scoped_inner_tool_pending,
     enrich_task_delegation_args,
     refresh_task_cards_for_step,
+    sync_pending_step_cards_from_plan,
     sync_task_delegation_cards_from_stream,
 )
 from soothe_cli.tui.textual_adapter._stream_messages import (
@@ -1537,6 +1539,15 @@ async def execute_task_textual(
                         if event_type == AGENT_LOOP_GOAL_COMPLETED:
                             continue
 
+                        if event_type == AGENT_LOOP_PLAN_DECISION and not ns_key:
+                            raw_steps = data.get("steps")
+                            if isinstance(raw_steps, list):
+                                await sync_pending_step_cards_from_plan(
+                                    adapter,
+                                    steps=raw_steps,
+                                )
+                            continue
+
                         if event_type == AGENT_LOOP_STEP_STARTED:
                             step_id = str(data.get("step_id", "")).strip()
                             description = str(data.get("description", "")).strip()
@@ -1558,14 +1569,16 @@ async def execute_task_textual(
                                     )
                                     pending_text_by_namespace[ns_key] = ""
                                     assistant_message_by_namespace.pop(ns_key, None)
-                                step_widget = CognitionStepMessage(
-                                    step_id=step_id,
-                                    description=description or "(step)",
-                                    id=f"step-{uuid.uuid4().hex[:8]}",
-                                )
-                                await adapter._mount_message(step_widget)
+                                step_widget = adapter._current_step_messages.get(step_id)
+                                if step_widget is None:
+                                    step_widget = CognitionStepMessage(
+                                        step_id=step_id,
+                                        description=description or "(step)",
+                                        id=f"step-{uuid.uuid4().hex[:8]}",
+                                    )
+                                    await adapter._mount_message(step_widget)
+                                    adapter._current_step_messages[step_id] = step_widget
                                 step_widget.set_running()
-                                adapter._current_step_messages[step_id] = step_widget
                                 adapter._step_by_namespace[ns_key] = step_widget
                                 router.on_step_started(step_id)
                                 # IG-416 debug: Log step card creation

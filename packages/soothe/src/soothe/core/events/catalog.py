@@ -45,6 +45,7 @@ from soothe_sdk.core.verbosity import VerbosityTier
 # Import ALL event type constants from single source of truth
 from .constants import (
     AGENT_LOOP_COMPLETED,
+    AGENT_LOOP_PLAN_DECISION,
     AGENT_LOOP_STARTED,
     AGENT_LOOP_STEP_COMPLETED,
     AGENT_LOOP_STEP_STARTED,
@@ -224,6 +225,17 @@ class AgenticLoopCompletedEvent(LifecycleEvent):
     completion_summary: str = ""
     # Layer-2 act steps completed in this thread (for goal-done line when pipeline has 0).
     total_steps: int = 0
+
+
+class AgenticPlanDecisionEvent(LifecycleEvent):
+    """Planned act steps for this iteration (includes not-yet-ready steps)."""
+
+    type: Literal["soothe.cognition.agent_loop.plan.decision"] = (
+        "soothe.cognition.agent_loop.plan.decision"
+    )
+    iteration: int = 0
+    steps: list[dict[str, Any]] = []  # noqa: RUF012
+    execution_mode: str = ""
 
 
 class AgenticStepStartedEvent(LifecycleEvent):
@@ -655,6 +667,12 @@ _reg(
     AgenticLoopCompletedEvent,
     verbosity=VerbosityTier.QUIET,
     summary_template="Done: {completion_summary}",
+)
+_reg(
+    AGENT_LOOP_PLAN_DECISION,
+    AgenticPlanDecisionEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="Act plan · {execution_mode}",
 )
 _reg(
     AGENT_LOOP_STEP_STARTED,
