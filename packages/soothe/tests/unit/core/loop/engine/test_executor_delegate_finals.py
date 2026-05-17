@@ -187,6 +187,234 @@ async def test_stream_and_collect_rewrites_subgraph_tool_ids_to_task_level() -> 
 
 
 @pytest.mark.asyncio
+async def test_backfill_tool_calls_args_from_chunks_by_index() -> None:
+    """Chunks without ``id`` still backfill ``tool_calls`` via ``index``."""
+    from langchain_core.messages import AIMessage
+
+    from soothe.core.loop.engine.executor import _backfill_tool_calls_args_from_chunks
+
+    msg = AIMessage(
+        content="",
+        tool_calls=[{"name": "task", "args": {}, "id": "call-1", "type": "tool_call"}],
+        tool_call_chunks=[
+            {
+                "index": 0,
+                "args": {
+                    "description": "Indexed chunk args",
+                    "subagent_type": "explore",
+                },
+            },
+        ],
+    )
+    out = _backfill_tool_calls_args_from_chunks(msg)
+    assert out.tool_calls[0]["args"]["description"] == "Indexed chunk args"
+
+
+@pytest.mark.asyncio
+async def test_stream_injects_step_description_on_empty_task_args() -> None:
+    """Main-graph ``task`` with ``{}`` args receives execute-step description on the wire."""
+    from langchain_core.messages import AIMessageChunk
+
+    chunk: tuple = (
+        (),
+        "messages",
+        (
+            AIMessageChunk(
+                content="",
+                tool_calls=[{"name": "task", "args": {}, "id": "functions.task:0"}],
+            ),
+            {},
+        ),
+    )
+    mock_agent = MagicMock()
+
+    async def fake_stream():
+        yield chunk
+
+    executor = Executor(mock_agent)
+    rows = [
+        r
+        async for r in executor._stream_and_collect(
+            fake_stream(),
+            budget=None,
+            step_id="JPV-01",
+            step_description="Map goal engine to agentloop boundaries",
+            step_subagent="explore",
+        )
+    ]
+    _ns, _mode, data = rows[0][1]
+    msg = data[0]
+    tc = msg.tool_calls[0]
+    assert tc["id"] == "JPV-01:s:task:0"
+    assert "agentloop" in str(tc["args"].get("description", ""))
+    assert tc["args"].get("subagent_type") == "explore"
+
+
+@pytest.mark.asyncio
+async def test_stream_preserves_model_task_description_over_step_brief() -> None:
+    """Model-provided ``description`` is not replaced by the execute-step brief."""
+    from langchain_core.messages import AIMessageChunk
+
+    chunk: tuple = (
+        (),
+        "messages",
+        (
+            AIMessageChunk(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "task",
+                        "args": {
+                            "description": "Model-specific delegation brief",
+                            "subagent_type": "explore",
+                        },
+                        "id": "functions.task:0",
+                    }
+                ],
+            ),
+            {},
+        ),
+    )
+    mock_agent = MagicMock()
+
+    async def fake_stream():
+        yield chunk
+
+    executor = Executor(mock_agent)
+    rows = [
+        r
+        async for r in executor._stream_and_collect(
+            fake_stream(),
+            budget=None,
+            step_id="JPV-02",
+            step_description="Step plan text only",
+            step_subagent="explore",
+        )
+    ]
+    msg = rows[0][1][2][0]
+    assert msg.tool_calls[0]["args"]["description"] == "Model-specific delegation brief"
+
+
+@pytest.mark.asyncio
+async def test_stream_emits_string_tool_call_chunk_args_after_enrich() -> None:
+    """Wire-safe stream: chunk args are JSON strings, not dicts."""
+    import json
+
+    from langchain_core.messages import AIMessageChunk
+
+    chunk_args = json.dumps(
+        {"description": "From chunks", "subagent_type": "explore"},
+        separators=(",", ":"),
+    )
+    chunk: tuple = (
+        (),
+        "messages",
+        (
+            AIMessageChunk(
+                content="",
+                tool_calls=[{"name": "task", "args": {}, "id": "functions.task:0"}],
+                tool_call_chunks=[
+                    {
+                        "name": "task",
+                        "id": "functions.task:0",
+                        "args": chunk_args,
+                    }
+                ],
+            ),
+            {},
+        ),
+    )
+    mock_agent = MagicMock()
+
+    async def fake_stream():
+        yield chunk
+
+    executor = Executor(mock_agent)
+    rows = [
+        r
+        async for r in executor._stream_and_collect(
+            fake_stream(),
+            budget=None,
+            step_id="WAA-04",
+            step_description="Step fallback brief",
+            step_subagent="explore",
+        )
+    ]
+    msg = rows[0][1][2][0]
+    tc_chunks = getattr(msg, "tool_call_chunks", None) or []
+    assert tc_chunks
+    assert isinstance(tc_chunks[0]["args"], str)
+    assert "description" in tc_chunks[0]["args"]
+
+
+@pytest.mark.asyncio
+async def test_backfill_tool_calls_args_from_chunks_on_same_message() -> None:
+    """Terminal AIMessage with empty tool_calls gets args from tool_call_chunks."""
+    from langchain_core.messages import AIMessage
+
+    from soothe.core.loop.engine.executor import _backfill_tool_calls_args_from_chunks
+
+    msg = AIMessage(
+        content="",
+        tool_calls=[{"name": "task", "args": {}, "id": "call-1", "type": "tool_call"}],
+        tool_call_chunks=[
+            {
+                "name": "task",
+                "args": {
+                    "description": "Explore the repo",
+                    "subagent_type": "explore",
+                },
+                "id": "call-1",
+            },
+        ],
+    )
+    out = _backfill_tool_calls_args_from_chunks(msg)
+    assert out.tool_calls[0]["args"]["description"] == "Explore the repo"
+
+
+@pytest.mark.asyncio
+async def test_subgraph_rewrite_skips_already_unified_step_level_ids() -> None:
+    """Subgraph stream must not double-prefix step-level unified task ids."""
+    from langchain_core.messages import AIMessageChunk
+
+    chunk: tuple = (
+        ("tools:subgraph-1",),
+        "messages",
+        (
+            AIMessageChunk(
+                content="",
+                tool_call_chunks=[
+                    {
+                        "name": "task",
+                        "id": "EZJ-07:s:task:0",
+                        "args": '{"subagent_type": "explore"}',
+                    },
+                ],
+            ),
+            {},
+        ),
+    )
+    mock_agent = MagicMock()
+
+    async def fake_stream():
+        yield chunk
+
+    executor = Executor(mock_agent)
+    rows = [
+        r
+        async for r in executor._stream_and_collect(
+            fake_stream(),
+            budget=None,
+            step_id="EZJ-07",
+        )
+    ]
+    _ns, _mode, data = rows[0][1]
+    msg = data[0]
+    tc_chunks = getattr(msg, "tool_call_chunks", None) or []
+    assert tc_chunks[0]["id"] == "EZJ-07:s:task:0"
+
+
+@pytest.mark.asyncio
 async def test_stream_and_collect_rewrites_root_tool_message_to_unified_id() -> None:
     """Root ToolMessage.tool_call_id matches rewritten AI ids for TUI result binding (IG-416)."""
     tool_msg = ToolMessage(

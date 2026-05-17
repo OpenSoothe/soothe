@@ -21,6 +21,10 @@ from soothe_sdk.ux.task_namespace import (
 from soothe_cli.cli.stream.display_line import DisplayLine
 from soothe_cli.shared.events.essential_events import is_essential_progress_event_type
 from soothe_cli.shared.tools.message_processing import format_tool_call_args
+from soothe_cli.shared.tools.tool_call_resolution import (
+    merge_tool_display_args,
+    tool_args_meaningful,
+)
 from soothe_cli.tui._session_stats import SessionStats
 from soothe_cli.tui.formatting import format_duration
 from soothe_cli.tui.step_task_routing import StepTaskRouter
@@ -192,29 +196,290 @@ def _raw_tool_content_for_presentation(message: Any) -> str:
     return ""
 
 
+_TASK_DESC_KEYS = ("description", "prompt", "task", "instruction")
+
+
+def _task_args_has_description(args: dict[str, Any]) -> bool:
+    for key in _TASK_DESC_KEYS:
+        val = args.get(key)
+        if isinstance(val, str) and val.strip():
+            return True
+    return False
+
+
+def _step_description_for_task_card(adapter: TextualUIAdapter, step_id: str) -> str:
+    """Use execute-step prose when the model has not streamed task kwargs yet."""
+    step_w = adapter._current_step_messages.get(step_id.strip())
+    if step_w is None:
+        return ""
+    desc = getattr(step_w, "_description", None)
+    if isinstance(desc, str) and desc.strip():
+        return desc.strip()
+    return ""
+
+
+def enrich_task_delegation_args(
+    adapter: TextualUIAdapter,
+    lookup_id: str,
+    parsed_args: dict[str, Any],
+    *,
+    streaming_overlay: dict[str, dict[str, Any]] | None = None,
+    pending_tool_calls_lc: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Merge stream sources and fall back to step description for task cards."""
+    merged = merge_tool_display_args(
+        lookup_id,
+        block_args=parsed_args,
+        streaming_overlay=streaming_overlay,
+        pending_tool_calls_lc=pending_tool_calls_lc,
+    )
+    if _task_args_has_description(merged):
+        return merged
+    step_id, type_code, _, _ = parse_unified_tool_call_id(lookup_id)
+    if type_code != "s" or not step_id:
+        return merged
+    fallback = _step_description_for_task_card(adapter, step_id)
+    if fallback:
+        out = dict(merged)
+        out.setdefault("description", fallback)
+        return out
+    return merged
+
+
+def _sync_task_delegation_step_row(
+    adapter: TextualUIAdapter,
+    *,
+    lookup_id: str,
+    display_args: dict[str, Any],
+    raw_args: str = "",
+    bound_step_id: str = "",
+) -> bool:
+    """Mirror the main-graph ``task`` delegation on the execute step card.
+
+    Inner subagent tools stay on the dedicated ``ToolCallMessage`` task card; the step
+    card gets a summary row (``explore: …``) so parallel execute waves show delegation
+    activity next to other step-level tools.
+    """
+    import logging as _logging
+
+    _log = _logging.getLogger(__name__)
+    tcid = str(lookup_id).strip()
+    if not tcid:
+        return False
+    sid = (bound_step_id or "").strip()
+    if not sid:
+        parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
+        sid = parsed_sid or ""
+    if not sid:
+        return False
+    step_w = adapter._current_step_messages.get(sid)
+    if step_w is None:
+        return False
+    row_args = dict(display_args or {})
+    if raw_args:
+        row_args.setdefault("_raw", raw_args)
+    if step_w.has_tool_call_row(tcid):
+        if row_args:
+            step_w.update_tool_args(tcid, row_args)
+    else:
+        step_w.add_tool_call(tcid, "task", row_args, raw_args=raw_args)
+        _log.debug(
+            "Task delegation row on step card: id=%s step_id=%s",
+            tcid,
+            sid,
+        )
+    adapter._tool_to_step[tcid] = step_w
+    # ``tool_display_by_call_id`` stays on the task card for subgraph parent resolution.
+    return True
+
+
 async def _ensure_task_delegation_card(
     adapter: TextualUIAdapter,
     *,
     lookup_id: str,
     parsed_args: dict[str, Any],
     show_tool_ui: bool,
+    streaming_overlay: dict[str, dict[str, Any]] | None = None,
+    pending_tool_calls_lc: dict[str, dict[str, Any]] | None = None,
 ) -> ToolCallMessage | None:
     """Mount or refresh a standalone Task subagent card (not a step row)."""
     if not show_tool_ui or not lookup_id:
         return None
+    display_args = enrich_task_delegation_args(
+        adapter,
+        lookup_id,
+        parsed_args,
+        streaming_overlay=streaming_overlay,
+        pending_tool_calls_lc=pending_tool_calls_lc,
+    )
+    if not _task_args_has_description(display_args) and not tool_args_meaningful(display_args):
+        return None
     existing = adapter._current_tool_messages.get(
         lookup_id
     ) or adapter._tool_display_by_call_id.get(lookup_id)
+    parsed_sid, _, _, _ = parse_unified_tool_call_id(lookup_id)
     if isinstance(existing, ToolCallMessage):
-        if parsed_args:
-            existing.refresh_tool_args(parsed_args)
+        if display_args:
+            existing.refresh_tool_args(display_args)
+        _sync_task_delegation_step_row(
+            adapter,
+            lookup_id=lookup_id,
+            display_args=display_args,
+            bound_step_id=parsed_sid or "",
+        )
         return existing
-    task_card = ToolCallMessage("task", parsed_args, tool_call_id=lookup_id)
+    task_card = ToolCallMessage("task", display_args, tool_call_id=lookup_id)
     await adapter._mount_message(task_card)
     task_card.set_running()
     adapter._current_tool_messages[lookup_id] = task_card
     adapter._tool_display_by_call_id[lookup_id] = task_card
+    raw = ""
+    if pending_tool_calls_lc:
+        pend = pending_tool_calls_lc.get(lookup_id)
+        if isinstance(pend, dict):
+            raw = str(pend.get("args_str", ""))
+    _sync_task_delegation_step_row(
+        adapter,
+        lookup_id=lookup_id,
+        display_args=display_args,
+        raw_args=raw,
+        bound_step_id=parsed_sid or "",
+    )
     return task_card
+
+
+def _is_step_level_task_tool_id(tool_call_id: str) -> bool:
+    """True for unified main-graph ``task`` delegation ids (``{step}:s:task…``)."""
+    _, type_code, _, tool_info = parse_unified_tool_call_id(tool_call_id)
+    if type_code != "s":
+        return False
+    head = (tool_info or "").split(":")[0].split(".")[0]
+    return head == "task"
+
+
+def _task_tool_call_ids_for_step(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    step_id: str,
+    *,
+    pending_tool_calls_lc: dict[str, dict[str, Any]] | None = None,
+) -> set[str]:
+    """Collect task delegation tool_call_ids associated with an execute step."""
+    sid = step_id.strip()
+    if not sid:
+        return set()
+    out: set[str] = set()
+    scope = router._spawns_by_step_id.get(sid)
+    if scope and scope[0]:
+        out.add(str(scope[0]))
+    for tcid in list((pending_tool_calls_lc or {}).keys()):
+        parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
+        if parsed_sid == sid and _is_step_level_task_tool_id(tcid):
+            out.add(tcid)
+    for tcid in adapter._current_tool_messages:
+        parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
+        if parsed_sid == sid and _is_step_level_task_tool_id(tcid):
+            out.add(tcid)
+    for tcid in adapter._tool_display_by_call_id:
+        parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
+        if parsed_sid == sid and _is_step_level_task_tool_id(tcid):
+            out.add(tcid)
+    return out
+
+
+async def refresh_task_cards_for_step(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    step_id: str,
+    *,
+    streaming_overlay: dict[str, dict[str, Any]] | None,
+    pending_tool_calls_lc: dict[str, dict[str, Any]] | None,
+    show_tool_ui: bool,
+) -> None:
+    """Mount or refresh task cards once the step card exists (step description fallback)."""
+    import logging as _logging
+
+    if not show_tool_ui:
+        return
+    _log = _logging.getLogger(__name__)
+    pending = pending_tool_calls_lc or {}
+    overlay = streaming_overlay
+    if overlay is None and pending:
+        from langchain_core.messages import AIMessageChunk
+
+        from soothe_cli.shared.tools.tool_call_resolution import build_streaming_args_overlay
+
+        overlay = build_streaming_args_overlay(AIMessageChunk(content=""), pending)
+    overlay = overlay or {}
+    for tcid in _task_tool_call_ids_for_step(
+        adapter, router, step_id, pending_tool_calls_lc=pending
+    ):
+        display_args = enrich_task_delegation_args(
+            adapter,
+            tcid,
+            overlay.get(tcid, {}),
+            streaming_overlay=overlay,
+            pending_tool_calls_lc=pending,
+        )
+        if not _task_args_has_description(display_args) and not tool_args_meaningful(display_args):
+            continue
+        card = await _ensure_task_delegation_card(
+            adapter,
+            lookup_id=tcid,
+            parsed_args=display_args,
+            show_tool_ui=show_tool_ui,
+            streaming_overlay=overlay,
+            pending_tool_calls_lc=pending,
+        )
+        if card is not None:
+            _log.debug(
+                "Task card refreshed for step: step_id=%s tool_call_id=%s",
+                step_id,
+                tcid,
+            )
+
+
+async def sync_task_delegation_cards_from_stream(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    *,
+    streaming_overlay: dict[str, dict[str, Any]],
+    pending_tool_calls_lc: dict[str, dict[str, Any]],
+    show_tool_ui: bool,
+) -> None:
+    """Refresh task delegation cards whenever streaming overlay gains task kwargs."""
+    import logging as _logging
+
+    if not show_tool_ui:
+        return
+    _log = _logging.getLogger(__name__)
+    for tcid, overlay_args in streaming_overlay.items():
+        if not _is_step_level_task_tool_id(tcid):
+            continue
+        if not tool_args_meaningful(overlay_args):
+            continue
+        step_id, _, _, _ = parse_unified_tool_call_id(tcid)
+        raw_st = overlay_args.get("subagent_type", "")
+        subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
+        router.register_task_spawn(
+            tcid,
+            subagent_type or "?",
+            step_id=step_id or router.step_id_for_tool(tcid),
+        )
+        card = await _ensure_task_delegation_card(
+            adapter,
+            lookup_id=tcid,
+            parsed_args=overlay_args,
+            show_tool_ui=show_tool_ui,
+            streaming_overlay=streaming_overlay,
+            pending_tool_calls_lc=pending_tool_calls_lc,
+        )
+        if card is not None:
+            _log.debug(
+                "Task card synced from stream overlay: id=%s keys=%s",
+                tcid,
+                sorted(overlay_args.keys()),
+            )
 
 
 async def _ensure_early_tool_row_mount(
@@ -230,6 +495,7 @@ async def _ensure_early_tool_row_mount(
     show_tool_ui: bool,
     pending_tool_calls_lc: dict[str, dict[str, Any]],
     file_op_tracker: FileOpTracker,
+    streaming_overlay: dict[str, dict[str, Any]] | None = None,
 ) -> bool:
     """Mount or refresh a tool row as soon as ``tool_call_id`` and name are known.
 
@@ -254,11 +520,20 @@ async def _ensure_early_tool_row_mount(
         )
         if adapter._set_spinner:
             await adapter._set_spinner("Tools")
+        display_args = enrich_task_delegation_args(
+            adapter,
+            lookup_id,
+            parsed_args,
+            streaming_overlay=streaming_overlay,
+            pending_tool_calls_lc=pending_tool_calls_lc,
+        )
         task_card = await _ensure_task_delegation_card(
             adapter,
             lookup_id=lookup_id,
-            parsed_args=parsed_args,
+            parsed_args=display_args,
             show_tool_ui=show_tool_ui,
+            streaming_overlay=streaming_overlay,
+            pending_tool_calls_lc=pending_tool_calls_lc,
         )
         if task_card is not None:
             _log.debug(
@@ -420,19 +695,29 @@ async def _mount_subagent_inner_tool_row_if_resolved(
     ):
         return False
     row_key = row_key_for_subgraph_tool(ns_key, str(lookup_id), task_scope=ts_inner)
-    file_op_tracker.start_operation(buffer_name, parsed_args, buffer_id)
+    merged_args = merge_tool_display_args(
+        str(lookup_id),
+        block_args=parsed_args,
+        pending_tool_calls_lc=pending_tool_calls_lc,
+    )
+    file_op_tracker.start_operation(buffer_name, merged_args, buffer_id)
     if adapter._set_spinner:
         await adapter._set_spinner("Tools")
     raw = ""
     pend = pending_tool_calls_lc.get(str(lookup_id))
     if isinstance(pend, dict):
         raw = str(pend.get("args_str", ""))
-    parent_for_inner.add_tool_call(
-        row_key,
-        buffer_name or "tool",
-        parsed_args,
-        raw_args=raw,
-    )
+    if getattr(parent_for_inner, "has_tool_call_row", lambda _x: False)(row_key):
+        update_fn = getattr(parent_for_inner, "update_tool_args", None)
+        if callable(update_fn):
+            update_fn(row_key, merged_args)
+    else:
+        parent_for_inner.add_tool_call(
+            row_key,
+            buffer_name or "tool",
+            merged_args,
+            raw_args=raw,
+        )
     adapter._tool_to_step[row_key] = parent_for_inner
     adapter._tool_display_by_call_id[row_key] = parent_for_inner
     import logging as _logging

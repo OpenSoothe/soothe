@@ -38,9 +38,12 @@ from soothe_cli.shared.tools.message_processing import (
     _normalize_tool_name_for_arg_map,
     accumulate_tool_call_chunks,
     extract_tool_args_dict,
+    seed_pending_tool_calls_from_message,
 )
 from soothe_cli.shared.tools.tool_call_resolution import (
     build_streaming_args_overlay,
+    merge_tool_display_args,
+    resolve_stream_tool_name,
     tool_args_meaningful,
 )
 from soothe_cli.shared.tools.tool_card_payload import extract_tool_result_card_payload
@@ -78,6 +81,9 @@ from soothe_cli.tui.textual_adapter._stream_formatting import (
     _mount_subagent_inner_tool_row_if_resolved,
     _raw_tool_content_for_presentation,
     _try_register_task_scoped_inner_tool_pending,
+    enrich_task_delegation_args,
+    refresh_task_cards_for_step,
+    sync_task_delegation_cards_from_stream,
 )
 from soothe_cli.tui.textual_adapter._stream_messages import (
     _assistant_message_terminal_for_empty_tool_arg_mount,
@@ -751,9 +757,22 @@ async def execute_task_textual(
                             getattr(message, "tool_call_chunks", None) or [],
                             is_main=(ns_key == ()),
                         )
+                        seed_pending_tool_calls_from_message(
+                            pending_tool_calls_lc,
+                            message,
+                            is_main=(ns_key == ()),
+                        )
                         streaming_overlay = build_streaming_args_overlay(
                             message, pending_tool_calls_lc
                         )
+                        if is_main_agent and streaming_overlay:
+                            await sync_task_delegation_cards_from_stream(
+                                adapter,
+                                router,
+                                streaming_overlay=streaming_overlay,
+                                pending_tool_calls_lc=pending_tool_calls_lc,
+                                show_tool_ui=show_tool_ui,
+                            )
 
                     blocks = _tui_effective_ai_blocks(
                         message,
@@ -1057,6 +1076,25 @@ async def execute_task_textual(
                             if isinstance(parsed_args, dict):
                                 parsed_args = extract_tool_args_dict(parsed_args)
 
+                            if lookup_id:
+                                parsed_args = merge_tool_display_args(
+                                    lookup_id,
+                                    block_args=parsed_args,
+                                    streaming_overlay=streaming_overlay,
+                                    pending_tool_calls_lc=pending_tool_calls_lc,
+                                )
+                                resolved_tool_name = resolve_stream_tool_name(
+                                    lookup_id,
+                                    chunk_name=buffer_name,
+                                    pending_tool_calls_lc=pending_tool_calls_lc,
+                                )
+                                if resolved_tool_name:
+                                    buffer_name = resolved_tool_name
+                                    buffer["name"] = resolved_tool_name
+
+                            if tool_args_meaningful(parsed_args):
+                                args_still_streaming = False
+
                             # Flush pending text before tool call
                             pending_text = pending_text_by_namespace.get(ns_key, "")
                             if pending_text:
@@ -1085,6 +1123,7 @@ async def execute_task_textual(
                                     show_tool_ui=show_tool_ui,
                                     pending_tool_calls_lc=pending_tool_calls_lc,
                                     file_op_tracker=file_op_tracker,
+                                    streaming_overlay=streaming_overlay,
                                 )
                                 if is_main_agent and buffer_name == "task":
                                     await _flush_router_pending_subgraph_tools(
@@ -1124,8 +1163,32 @@ async def execute_task_textual(
                                 await _ensure_task_delegation_card(
                                     adapter,
                                     lookup_id=str(lookup_id),
-                                    parsed_args=parsed_args,
+                                    parsed_args=enrich_task_delegation_args(
+                                        adapter,
+                                        str(lookup_id),
+                                        parsed_args,
+                                        streaming_overlay=streaming_overlay,
+                                        pending_tool_calls_lc=pending_tool_calls_lc,
+                                    ),
                                     show_tool_ui=show_tool_ui,
+                                    streaming_overlay=streaming_overlay,
+                                    pending_tool_calls_lc=pending_tool_calls_lc,
+                                )
+
+                            if lookup_id and is_main_agent and buffer_name == "task":
+                                await _ensure_task_delegation_card(
+                                    adapter,
+                                    lookup_id=str(lookup_id),
+                                    parsed_args=enrich_task_delegation_args(
+                                        adapter,
+                                        str(lookup_id),
+                                        parsed_args,
+                                        streaming_overlay=streaming_overlay,
+                                        pending_tool_calls_lc=pending_tool_calls_lc,
+                                    ),
+                                    show_tool_ui=show_tool_ui,
+                                    streaming_overlay=streaming_overlay,
+                                    pending_tool_calls_lc=pending_tool_calls_lc,
                                 )
 
                             if args_still_streaming and not args_meaningful:
@@ -1137,6 +1200,7 @@ async def execute_task_textual(
                                 if (
                                     step_agg is not None
                                     and is_main_agent
+                                    and buffer_name != "task"
                                     and step_agg.has_tool_call_row(lookup_id)
                                 ):
                                     step_agg.update_tool_args(lookup_id, parsed_args)
@@ -1150,12 +1214,7 @@ async def execute_task_textual(
                                 existing_tool = adapter._current_tool_messages.get(
                                     lookup_id
                                 ) or adapter._tool_display_by_call_id.get(lookup_id)
-                            if (
-                                lookup_id
-                                and args_meaningful
-                                and existing_tool is not None
-                                and not (is_main_agent and buffer_name == "task")
-                            ):
+                            if lookup_id and args_meaningful and existing_tool is not None:
                                 if isinstance(existing_tool, ToolCallMessage):
                                     existing_tool.refresh_tool_args(parsed_args)
                                 elif isinstance(existing_tool, CognitionStepMessage):
@@ -1180,14 +1239,33 @@ async def execute_task_textual(
                                     bound_step = parsed_sid or router.step_id_for_tool(
                                         str(lookup_id)
                                     )
+                                    if bound_step and buffer_name == "task":
+                                        task_card_bound = adapter._current_tool_messages.get(
+                                            str(lookup_id)
+                                        ) or adapter._tool_display_by_call_id.get(str(lookup_id))
+                                        if isinstance(task_card_bound, ToolCallMessage):
+                                            task_card_bound.refresh_tool_args(parsed_args)
+                                            displayed_tool_ids.add(display_key)
+                                            logger.debug(
+                                                "Task card args refreshed: id=%s step_id=%s",
+                                                lookup_id,
+                                                bound_step,
+                                            )
+                                            tool_call_buffers.pop(buffer_key, None)
+                                            continue
                                     if bound_step:
                                         step_card_bound = adapter._current_step_messages.get(
                                             bound_step
                                         )
-                                        if step_card_bound and getattr(
-                                            step_card_bound, "has_tool_call_row", lambda _x: False
-                                        )(str(lookup_id)):
-                                            # Already mounted via binding event, just update args
+                                        if (
+                                            buffer_name != "task"
+                                            and step_card_bound
+                                            and getattr(
+                                                step_card_bound,
+                                                "has_tool_call_row",
+                                                lambda _x: False,
+                                            )(str(lookup_id))
+                                        ):
                                             if parsed_args:
                                                 update_fn = getattr(
                                                     step_card_bound, "update_tool_args", None
@@ -1509,6 +1587,14 @@ async def execute_task_textual(
                                     show_tool_ui=show_tool_ui,
                                     pending_tool_calls_lc=pending_tool_calls_lc,
                                     file_op_tracker=file_op_tracker,
+                                )
+                                await refresh_task_cards_for_step(
+                                    adapter,
+                                    router,
+                                    step_id,
+                                    streaming_overlay=None,
+                                    pending_tool_calls_lc=pending_tool_calls_lc,
+                                    show_tool_ui=show_tool_ui,
                                 )
 
                                 continue

@@ -20,6 +20,61 @@ from soothe_sdk.ux.internal import (
 # ============================================================================
 
 
+def seed_pending_tool_calls_from_message(
+    pending_tool_calls: dict[str, dict[str, Any]],
+    message: Any,
+    *,
+    is_main: bool = True,
+) -> None:
+    """Register ``message.tool_calls`` entries when chunks did not stream args yet.
+
+      Parallel execute waves sometimes emit a final ``AIMessage`` with ``tool_calls``
+    but empty ``tool_call_chunks``; seeding preserves full kwargs for the TUI overlay.
+    """
+    raw = getattr(message, "tool_calls", None)
+    if not raw and isinstance(message, dict):
+        raw = message.get("tool_calls")
+    if not isinstance(raw, list):
+        return
+    for tc in normalize_tool_calls_list(raw):
+        tc_id = str(tc.get("id") or "").strip()
+        if not tc_id:
+            continue
+        tc_name = str(tc.get("name") or "").strip()
+        args = tc.get("args")
+        if isinstance(args, str) and args.strip():
+            try:
+                parsed = json.loads(args)
+                args_dict = parsed if isinstance(parsed, dict) else {}
+            except json.JSONDecodeError:
+                args_dict = {}
+            args_str = args
+            is_complete = bool(args_dict)
+        elif isinstance(args, dict) and args:
+            args_dict = args
+            args_str = json.dumps(args)
+            is_complete = True
+        else:
+            args_dict = {}
+            args_str = ""
+            is_complete = False
+        existing = pending_tool_calls.get(tc_id)
+        if existing:
+            if is_complete and args_str:
+                existing["args_str"] = args_str
+                existing["is_complete_json"] = True
+            if tc_name and not existing.get("name"):
+                existing["name"] = tc_name
+            continue
+        pending_tool_calls[tc_id] = {
+            "name": tc_name,
+            "args_str": args_str,
+            "is_complete_json": is_complete,
+            "emitted": False,
+            "is_main": is_main,
+        }
+
+
 def accumulate_tool_call_chunks(
     pending_tool_calls: dict[str, dict[str, Any]],
     tool_call_chunks: list[dict[str, Any]],
