@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -20,10 +19,8 @@ from soothe.foundation import extract_text_from_ai_message
 from soothe.logging import ThreadLogger
 from soothe.utils.error_format import emit_error_event
 from soothe_sdk.client.protocol import _serialize_for_json
-from soothe_sdk.ux.stream_tool_diag import (
-    is_tool_visible_messages_summary,
-    summarize_messages_stream_payload,
-)
+from soothe_sdk.client.wire import prepare_stream_data_for_wire
+from soothe_sdk.ux.stream_tool_wire import extract_tool_call_updates_from_wire_message
 
 from soothe_daemon.image_understanding import enrich_user_text_with_vision
 from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn, run_image_to_text_turn
@@ -423,27 +420,39 @@ class QueryEngine:
                             full_response.extend(extract_text_from_ai_message(msg))
 
                         if effective_loop_id:
+                            wire_data = data
+                            if mode == "messages":
+                                wire_data = prepare_stream_data_for_wire(data)
+                            if mode == "messages" and is_msg_pair:
+                                msg_wire = (
+                                    wire_data[0]
+                                    if isinstance(wire_data, (list, tuple)) and wire_data
+                                    else None
+                                )
+                                if isinstance(msg_wire, dict):
+                                    for tool_ev in extract_tool_call_updates_from_wire_message(
+                                        msg_wire
+                                    ):
+                                        await d._broadcast(
+                                            self._loop_scoped_client_message(
+                                                effective_loop_id,
+                                                {
+                                                    "type": "event",
+                                                    "namespace": list(namespace),
+                                                    "mode": "custom",
+                                                    "data": tool_ev,
+                                                },
+                                            )
+                                        )
                             event_msg = self._loop_scoped_client_message(
                                 effective_loop_id,
                                 {
                                     "type": "event",
                                     "namespace": list(namespace),
                                     "mode": mode,
-                                    "data": data,
+                                    "data": wire_data,
                                 },
                             )
-                            if mode == "messages" and is_msg_pair:
-                                _sm = summarize_messages_stream_payload(data)
-                                if is_tool_visible_messages_summary(_sm):
-                                    logger.debug(
-                                        "[tool_stream_diag] daemon_broadcast ts=%.3f "
-                                        "loop=%s chunk=%d ns_len=%d %s",
-                                        time.time(),
-                                        str(effective_loop_id)[:16],
-                                        chunk_count,
-                                        len(namespace),
-                                        _sm,
-                                    )
                             await d._broadcast(event_msg)
 
                     logger.debug("runner.astream() completed, total chunks: %d", chunk_count)

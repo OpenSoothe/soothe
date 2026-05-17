@@ -18,10 +18,6 @@ if TYPE_CHECKING:
 from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
-from soothe_sdk.ux.stream_tool_diag import (
-    is_tool_visible_messages_summary,
-    summarize_messages_stream_payload,
-)
 from soothe_sdk.ux.task_namespace import (
     parse_unified_tool_call_id,
     row_key_for_subgraph_tool,
@@ -36,9 +32,8 @@ from soothe_cli.shared.events.essential_events import (
 from soothe_cli.shared.rendering.renderer_base import RendererBase
 from soothe_cli.shared.tools.message_processing import (
     _normalize_tool_name_for_arg_map,
-    accumulate_tool_call_chunks,
     extract_tool_args_dict,
-    seed_pending_tool_calls_from_message,
+    ingest_tool_call_stream_state,
 )
 from soothe_cli.shared.tools.tool_call_resolution import (
     build_streaming_args_overlay,
@@ -93,6 +88,7 @@ from soothe_cli.tui.textual_adapter._stream_messages import (
     _tui_effective_ai_blocks,
     _tui_goal_completion_matches_prior_main_visible_answer,
 )
+from soothe_cli.tui.textual_adapter._stream_tool_wire import apply_tool_call_wire_update
 from soothe_cli.tui.textual_adapter._turn_helpers import (
     _adapter_has_pending_tools,
     _finalize_goal_completion_stream,
@@ -346,26 +342,6 @@ async def execute_task_textual(
 
                 # Convert namespace to hashable tuple for dict keys
                 ns_key = tuple(namespace) if namespace else ()
-
-                if current_stream_mode == "messages":
-                    _sm_diag = summarize_messages_stream_payload(data)
-                    if is_tool_visible_messages_summary(_sm_diag):
-                        logger.debug(
-                            "[tool_stream_diag] tui_render ts=%.3f ns_len=%d %s",
-                            time.time(),
-                            len(ns_key),
-                            _sm_diag,
-                        )
-
-                # IG-416 debug: Log every chunk arrival
-                if current_stream_mode == "custom" and isinstance(data, dict):
-                    event_type = str(data.get("type", ""))
-                    logger.info(
-                        "[TUI_CHUNK] mode=%s ns=%r event_type=%s",
-                        current_stream_mode,
-                        ns_key,
-                        event_type,
-                    )
 
                 # Root graph uses namespace ``()``; delegated subgraphs use non-empty
                 # namespaces. Assistant *text* from subgraphs is suppressed (avoid duplicate
@@ -753,19 +729,20 @@ async def execute_task_textual(
                                 captured_input_tokens = max(captured_input_tokens, total_toks)
 
                     streaming_overlay: dict[str, dict[str, Any]] = {}
-                    if isinstance(message, (AIMessage, AIMessageChunk)):
-                        accumulate_tool_call_chunks(
-                            pending_tool_calls_lc,
-                            getattr(message, "tool_call_chunks", None) or [],
-                            is_main=(ns_key == ()),
-                        )
-                        seed_pending_tool_calls_from_message(
-                            pending_tool_calls_lc,
-                            message,
-                            is_main=(ns_key == ()),
-                        )
+                    ingest_tool_call_stream_state(
+                        pending_tool_calls_lc,
+                        message,
+                        is_main=(ns_key == ()),
+                    )
+                    if isinstance(message, (AIMessage, AIMessageChunk)) or (
+                        isinstance(message, dict)
+                        and (message.get("tool_call_chunks") or message.get("tool_calls"))
+                    ):
+                        overlay_msg = message
+                        if isinstance(message, dict):
+                            overlay_msg = AIMessageChunk(content="")
                         streaming_overlay = build_streaming_args_overlay(
-                            message, pending_tool_calls_lc
+                            overlay_msg, pending_tool_calls_lc
                         )
                         if is_main_agent and streaming_overlay:
                             await sync_task_delegation_cards_from_stream(
@@ -1084,6 +1061,8 @@ async def execute_task_textual(
                                     block_args=parsed_args,
                                     streaming_overlay=streaming_overlay,
                                     pending_tool_calls_lc=pending_tool_calls_lc,
+                                    message=message,
+                                    tool_name=buffer_name,
                                 )
                                 resolved_tool_name = resolve_stream_tool_name(
                                     lookup_id,
@@ -1316,6 +1295,7 @@ async def execute_task_textual(
                                         is_main_agent=is_main_agent,
                                         pending_tool_calls_lc=pending_tool_calls_lc,
                                         file_op_tracker=file_op_tracker,
+                                        streaming_overlay=streaming_overlay,
                                     ):
                                         logger.debug(
                                             "Tool call card skipped (IG-300 terminal empty args); "
@@ -1368,6 +1348,7 @@ async def execute_task_textual(
                                         is_main_agent=is_main_agent,
                                         pending_tool_calls_lc=pending_tool_calls_lc,
                                         file_op_tracker=file_op_tracker,
+                                        streaming_overlay=streaming_overlay,
                                     ):
                                         tool_call_buffers.pop(buffer_key, None)
                                         continue
@@ -1507,6 +1488,15 @@ async def execute_task_textual(
                 elif current_stream_mode == "custom":
                     if isinstance(data, dict):
                         event_type = str(data.get("type", ""))
+                        if await apply_tool_call_wire_update(
+                            adapter,
+                            router,
+                            data=data,
+                            ns_key=ns_key,
+                            show_tool_ui=show_tool_ui,
+                            pending_tool_calls_lc=pending_tool_calls_lc,
+                        ):
+                            continue
                         if event_type.startswith("soothe.error"):
                             error_text = str(
                                 data.get("error") or data.get("message") or "Agent error"

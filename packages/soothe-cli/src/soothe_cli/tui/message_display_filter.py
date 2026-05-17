@@ -4,20 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from soothe_sdk.client.wire import envelope_langchain_message_dict
-
 
 def normalize_stream_message(message: Any) -> Any:
     """Best-effort conversion of wire dict payloads to LangChain message objects."""
     if not isinstance(message, dict):
         return message
     try:
-        from langchain_core.messages import messages_from_dict
+        from soothe_sdk.langchain_wire import deserialize_langchain_message_from_wire
 
-        wrapped = envelope_langchain_message_dict(message)
-        restored = messages_from_dict([wrapped])
-        if restored:
-            return restored[0]
+        restored = deserialize_langchain_message_from_wire(message)
+        if restored is not message:
+            return restored
     except Exception:
         return message
     return message

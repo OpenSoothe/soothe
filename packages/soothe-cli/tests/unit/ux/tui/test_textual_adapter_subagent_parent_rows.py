@@ -3,14 +3,14 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from soothe_sdk.ux.task_namespace import scoped_subgraph_tool_key
 
 from soothe_cli.tui.file_ops import FileOpTracker
 from soothe_cli.tui.textual_adapter import (
     TextualUIAdapter,
     _mount_subagent_inner_tool_row_if_resolved,
 )
-from soothe_cli.tui.widgets.messages import CognitionStepMessage, ToolCallMessage
-from soothe_sdk.ux.task_namespace import scoped_subgraph_tool_key
+from soothe_cli.tui.widgets.messages import ToolCallMessage
 
 
 @pytest.mark.asyncio

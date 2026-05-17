@@ -6,13 +6,7 @@ Implements Plan → Execute loop using AgentLoop (RFC-201).
 from __future__ import annotations
 
 import logging
-import time
 from typing import TYPE_CHECKING, Any
-
-from soothe_sdk.ux.stream_tool_diag import (
-    is_tool_visible_messages_summary,
-    summarize_messages_stream_payload,
-)
 
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.events import (
@@ -463,21 +457,6 @@ class AgenticMixin:
                     and isinstance(event_data[2], dict)
                     else "n/a",
                 )
-                if (
-                    forward
-                    and isinstance(event_data, tuple)
-                    and len(event_data) >= 3
-                    and event_data[1] == "messages"
-                ):
-                    _pair = event_data[2]
-                    if isinstance(_pair, (list, tuple)) and len(_pair) >= 1:
-                        _sm_r = summarize_messages_stream_payload(_pair)
-                        if is_tool_visible_messages_summary(_sm_r):
-                            logger.debug(
-                                "[tool_stream_diag] runner_yield ts=%.3f %s",
-                                time.time(),
-                                _sm_r,
-                            )
                 if forward:
                     yield event_data
 
