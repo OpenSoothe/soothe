@@ -1265,7 +1265,16 @@ class ToolCallMessage(Vertical):
         kwargs follow on later chunks. The adapter may mount early and then call
         this when a fuller argument dict is available.
         """
-        self._args = args or {}
+        from soothe_cli.shared.tools.message_processing import extract_tool_args_dict
+        from soothe_cli.shared.tools.tool_call_resolution import tool_args_meaningful
+
+        incoming = extract_tool_args_dict(args or {})
+        merged = dict(self._args or {})
+        if incoming:
+            merged.update(incoming)
+        if not tool_args_meaningful(merged):
+            return
+        self._args = merged
         try:
             header = self.query_one(".tool-header", Static)
         except Exception:  # noqa: BLE001  # Widget tree not ready or query miss

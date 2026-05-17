@@ -72,19 +72,14 @@ def test_envelope_idempotent_when_data_present() -> None:
     assert envelope_langchain_message_dict(good) is good
 
 
-def test_normalize_stream_data_restores_ai_message() -> None:
-    """``_normalize_stream_data`` must yield AIMessage instances for flat wire dicts."""
-    session = object.__new__(TuiDaemonSession)
+def test_normalize_lc_stream_message_restores_ai_message() -> None:
+    """``_normalize_lc_stream_message`` must yield AIMessage for flat wire dicts."""
+    from soothe_cli.tui.textual_adapter._stream_messages import _normalize_lc_stream_message
+
     flat = _serialize_for_json(AIMessage(content="wire"))
-    out = session._normalize_stream_data(
-        "messages",
-        (flat, {"langgraph_step": 1}),
-    )
-    assert isinstance(out, tuple) and len(out) == 2
-    msg, meta = out
+    msg = _normalize_lc_stream_message(flat)
     assert isinstance(msg, AIMessage)
     assert msg.content == "wire"
-    assert meta == {"langgraph_step": 1}
 
 
 @pytest.mark.asyncio
