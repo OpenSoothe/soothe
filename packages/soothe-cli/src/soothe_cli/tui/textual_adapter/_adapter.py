@@ -56,6 +56,7 @@ logger = logging.getLogger(__name__)
 
 AGENT_LOOP_STEP_STARTED = "soothe.cognition.agent_loop.step.started"
 AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
+AGENT_LOOP_PLAN_DECISION = "soothe.cognition.agent_loop.plan.decision"
 AGENT_LOOP_GOAL_STARTED = "soothe.cognition.agent_loop.started"
 AGENT_LOOP_GOAL_COMPLETED = "soothe.cognition.agent_loop.completed"
 

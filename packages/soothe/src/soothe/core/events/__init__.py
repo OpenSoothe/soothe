@@ -36,6 +36,7 @@ from .catalog import (
     AgenticLoopCompletedEvent,
     # Agentic loop events
     AgenticLoopStartedEvent,
+    AgenticPlanDecisionEvent,
     AgenticStepCompletedEvent,
     AgenticStepStartedEvent,
     CheckpointSavedEvent,
@@ -83,6 +84,7 @@ from .catalog import (
 # Import all event type constants
 from .constants import (
     AGENT_LOOP_COMPLETED,
+    AGENT_LOOP_PLAN_DECISION,
     AGENT_LOOP_STARTED,
     AGENT_LOOP_STEP_COMPLETED,
     AGENT_LOOP_STEP_STARTED,
@@ -169,6 +171,7 @@ __all__ = [
     "PLAN_DAG_SNAPSHOT",
     "AGENT_LOOP_STARTED",
     "AGENT_LOOP_COMPLETED",
+    "AGENT_LOOP_PLAN_DECISION",
     "AGENT_LOOP_STEP_STARTED",
     "AGENT_LOOP_STEP_COMPLETED",
     "BRANCH_CREATED",
@@ -217,6 +220,7 @@ __all__ = [
     "DaemonHeartbeatEvent",
     "AgenticLoopStartedEvent",
     "AgenticLoopCompletedEvent",
+    "AgenticPlanDecisionEvent",
     "AgenticStepStartedEvent",
     "AgenticStepCompletedEvent",
     "MemoryRecalledEvent",

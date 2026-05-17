@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -28,7 +29,7 @@ from soothe_cli.shared.tools.tool_call_resolution import (
 from soothe_cli.tui._session_stats import SessionStats
 from soothe_cli.tui.formatting import format_duration
 from soothe_cli.tui.step_task_routing import StepTaskRouter
-from soothe_cli.tui.widgets.messages import ToolCallMessage
+from soothe_cli.tui.widgets.messages import CognitionStepMessage, ToolCallMessage
 
 
 def _is_summarization_chunk(metadata: dict | None) -> bool:
@@ -244,6 +245,46 @@ def enrich_task_delegation_args(
         out.setdefault("description", fallback)
         return out
     return merged
+
+
+async def sync_pending_step_cards_from_plan(
+    adapter: TextualUIAdapter,
+    *,
+    steps: list[dict[str, Any]],
+) -> None:
+    """Mount step cards in ``pending`` state for planned steps not yet executing.
+
+    Dependency-blocked steps appear here before ``step.started``; ready steps transition
+    to running when execution begins.
+    """
+    planned_ids = {
+        str(row.get("id", "")).strip()
+        for row in steps
+        if isinstance(row, dict) and str(row.get("id", "")).strip()
+    }
+    for sid, widget in list(adapter._current_step_messages.items()):
+        if widget._status == "pending" and sid not in planned_ids:
+            if widget.is_mounted:
+                await widget.remove()
+            adapter._current_step_messages.pop(sid, None)
+            for ns, bound in list(adapter._step_by_namespace.items()):
+                if bound is widget:
+                    adapter._step_by_namespace.pop(ns, None)
+
+    for row in steps:
+        if not isinstance(row, dict):
+            continue
+        sid = str(row.get("id", "")).strip()
+        if not sid or sid in adapter._current_step_messages:
+            continue
+        desc = str(row.get("description", "")).strip() or "(step)"
+        step_widget = CognitionStepMessage(
+            step_id=sid,
+            description=desc,
+            id=f"step-{uuid.uuid4().hex[:8]}",
+        )
+        await adapter._mount_message(step_widget)
+        adapter._current_step_messages[sid] = step_widget
 
 
 def _sync_task_delegation_step_row(
