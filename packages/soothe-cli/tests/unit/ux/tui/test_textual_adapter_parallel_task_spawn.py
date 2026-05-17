@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from soothe_sdk.ux.task_namespace import row_key_for_subgraph_tool
 
 from soothe_cli.tui.file_ops import FileOpTracker
 from soothe_cli.tui.step_task_routing import StepTaskRouter
@@ -13,7 +14,6 @@ from soothe_cli.tui.textual_adapter._stream_formatting import (
     _mount_subagent_inner_tool_row_if_resolved,
 )
 from soothe_cli.tui.widgets.messages import ToolCallMessage
-from soothe_sdk.ux.task_namespace import row_key_for_subgraph_tool
 
 
 def test_step_scoped_namespace_bind_not_fifo_mismatch() -> None:
@@ -58,8 +58,6 @@ async def test_task_card_gets_inner_tool_row_for_bound_step() -> None:
     )
     assert ok is True
     scope = ("functions.task:0", "explore", "YKF-01")
-    row_id = row_key_for_subgraph_tool(
-        ("tools:sub",), "functions.grep:2", task_scope=scope
-    )
+    row_id = row_key_for_subgraph_tool(("tools:sub",), "functions.grep:2", task_scope=scope)
     assert task_card.has_tool_call_row(row_id)
     assert adapter._tool_to_step[row_id] is task_card

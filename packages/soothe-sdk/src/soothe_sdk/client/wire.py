@@ -1,9 +1,8 @@
 """Normalize LangChain message dicts for JSON wire transport.
 
-``model_dump()`` / :func:`soothe_sdk.client.protocol._serialize_for_json` produce flat
-dicts like ``{"type": "human", "content": ...}``. :func:`langchain_core.messages.messages_from_dict`
-expects ``{"type": "...", "data": {...}}`` (from :func:`message_to_dict`). This module
-bridges the two shapes for daemon and client code paths.
+Canonical serialization uses :func:`langchain_core.messages.message_to_dict` (enveloped)
+then flattens to ``{type, content, tool_calls, …}`` with short wire type tags (``ai``,
+``human``, …). Deserialization uses :func:`messages_from_wire_dicts`.
 """
 
 from __future__ import annotations
@@ -16,7 +15,9 @@ from typing import Any
 # ``AIMessage``. Some serializers emit class names; normalize before enveloping.
 _LC_MESSAGE_CLASS_TO_WIRE: dict[str, str] = {
     "AIMessage": "ai",
+    "AIMessageChunk": "ai",
     "HumanMessage": "human",
+    "HumanMessageChunk": "human",
     "SystemMessage": "system",
     "ToolMessage": "tool",
     "FunctionMessage": "function",
@@ -92,6 +93,75 @@ def coerce_tool_call_chunk_args_for_wire(message: dict[str, Any]) -> dict[str, A
     return message
 
 
+def _wire_type_tag(raw_type: Any) -> Any:
+    if isinstance(raw_type, str):
+        return _LC_MESSAGE_CLASS_TO_WIRE.get(raw_type, raw_type)
+    return raw_type
+
+
+def flatten_enveloped_message_dict(message: dict[str, Any]) -> dict[str, Any]:
+    """Flatten ``{type, data: body}`` to ``{type, …body fields}`` for JSON wire."""
+    if "data" in message and isinstance(message.get("data"), dict):
+        body = dict(message["data"])
+        body.pop("type", None)
+        wire_type = _wire_type_tag(message.get("type"))
+        body = coerce_tool_call_chunk_args_for_wire(body)
+        if isinstance(wire_type, str):
+            return {"type": wire_type, **body}
+        return body
+    if isinstance(message, dict):
+        body = dict(message)
+        if "type" in body:
+            body["type"] = _wire_type_tag(body["type"])
+        return coerce_tool_call_chunk_args_for_wire(body)
+    return message
+
+
+def serialize_langchain_message_for_wire(message: Any) -> dict[str, Any]:
+    """Canonical JSON-ready dict for one LangChain message (RFC-450 wire)."""
+    if isinstance(message, dict):
+        return flatten_enveloped_message_dict(message)
+    try:
+        from langchain_core.messages import BaseMessage, message_to_dict
+    except ImportError:
+        from soothe_sdk.client.protocol import _serialize_for_json
+
+        flat = _serialize_for_json(message)
+        return flatten_enveloped_message_dict(flat) if isinstance(flat, dict) else {}
+    if isinstance(message, BaseMessage):
+        return flatten_enveloped_message_dict(message_to_dict(message))
+    from soothe_sdk.client.protocol import _serialize_for_json
+
+    flat = _serialize_for_json(message)
+    return flatten_enveloped_message_dict(flat) if isinstance(flat, dict) else {}
+
+
+def deserialize_langchain_message_from_wire(message: Any) -> Any:
+    """Restore a LangChain message from a wire dict (flat or enveloped)."""
+    if not isinstance(message, dict):
+        return message
+    restored = messages_from_wire_dicts([message])
+    if restored:
+        return restored[0]
+    return message
+
+
+def prepare_stream_message_for_wire(message: Any) -> Any:
+    """Serialize a LangChain stream message for WebSocket/JSON clients."""
+    return serialize_langchain_message_for_wire(message)
+
+
+def prepare_stream_data_for_wire(data: Any) -> Any:
+    """Serialize a LangGraph ``messages`` stream pair ``(message, metadata)``."""
+    if not isinstance(data, (list, tuple)) or len(data) != 2:
+        return data
+    msg, meta = data[0], data[1]
+    from soothe_sdk.client.protocol import _serialize_for_json
+
+    out_meta = _serialize_for_json(meta) if meta is not None else {}
+    return (prepare_stream_message_for_wire(msg), out_meta)
+
+
 def messages_from_wire_dicts(messages: list[Any]) -> list[Any]:
     """Deserialize LangChain messages from daemon/JSON list payloads.
 
@@ -114,6 +184,11 @@ def messages_from_wire_dicts(messages: list[Any]) -> list[Any]:
 
 __all__ = [
     "coerce_tool_call_chunk_args_for_wire",
+    "deserialize_langchain_message_from_wire",
     "envelope_langchain_message_dict",
+    "flatten_enveloped_message_dict",
     "messages_from_wire_dicts",
+    "prepare_stream_data_for_wire",
+    "prepare_stream_message_for_wire",
+    "serialize_langchain_message_for_wire",
 ]

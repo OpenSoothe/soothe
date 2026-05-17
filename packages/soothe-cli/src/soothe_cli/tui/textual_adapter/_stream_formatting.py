@@ -233,6 +233,7 @@ def enrich_task_delegation_args(
         block_args=parsed_args,
         streaming_overlay=streaming_overlay,
         pending_tool_calls_lc=pending_tool_calls_lc,
+        tool_name="task",
     )
     if _task_args_has_description(merged):
         return merged
@@ -633,6 +634,7 @@ async def _ensure_early_tool_row_mount(
         is_main_agent=False,
         pending_tool_calls_lc=pending_tool_calls_lc,
         file_op_tracker=file_op_tracker,
+        streaming_overlay=streaming_overlay,
     ):
         return True
     display_key = scoped_subgraph_tool_key(ns_key, lookup_id)
@@ -703,6 +705,7 @@ async def _mount_subagent_inner_tool_row_if_resolved(
     is_main_agent: bool,
     pending_tool_calls_lc: dict[str, dict[str, Any]],
     file_op_tracker: FileOpTracker,
+    streaming_overlay: dict[str, dict[str, Any]] | None = None,
 ) -> bool:
     """Attach a subgraph tool as a row on the parent Task/step card when scope resolves.
 
@@ -736,16 +739,27 @@ async def _mount_subagent_inner_tool_row_if_resolved(
     ):
         return False
     row_key = row_key_for_subgraph_tool(ns_key, str(lookup_id), task_scope=ts_inner)
+    tool_name = (buffer_name or "").strip() or "tool"
     merged_args = merge_tool_display_args(
         str(lookup_id),
         block_args=parsed_args,
+        streaming_overlay=streaming_overlay,
         pending_tool_calls_lc=pending_tool_calls_lc,
+        tool_name=tool_name,
     )
     file_op_tracker.start_operation(buffer_name, merged_args, buffer_id)
     if adapter._set_spinner:
         await adapter._set_spinner("Tools")
     raw = ""
     pend = pending_tool_calls_lc.get(str(lookup_id))
+    if not isinstance(pend, dict):
+        for candidate in pending_tool_calls_lc.values():
+            if (
+                isinstance(candidate, dict)
+                and str(candidate.get("name") or "").strip() == tool_name
+            ):
+                pend = candidate
+                break
     if isinstance(pend, dict):
         raw = str(pend.get("args_str", ""))
     if getattr(parent_for_inner, "has_tool_call_row", lambda _x: False)(row_key):
