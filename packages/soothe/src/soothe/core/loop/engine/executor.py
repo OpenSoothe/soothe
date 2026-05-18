@@ -28,7 +28,11 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 from langgraph.types import Command, Interrupt
-from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
+from soothe_sdk.ux.task_namespace import (
+    _shorten_tool_call_id,
+    normalize_unified_tool_call_id,
+    parse_unified_tool_call_id,
+)
 
 from soothe.core.context.model_override import (
     attach_stream_model_override,
@@ -65,25 +69,6 @@ if TYPE_CHECKING:
     from .goal_context_manager import GoalContextManager
 
 logger = logging.getLogger(__name__)
-
-
-def _shorten_tool_call_id(raw_tid: str) -> str:
-    """Shorten provider tool_call_id for compact display.
-
-    Strips 'functions.' prefix and keeps last numeric index.
-
-    Examples:
-        'functions.task:0' → 'task.0'
-        'functions.read_file:18' → 'read_file.18'
-        'call_abc123' → 'call_abc123' (no pattern match, return as-is)
-    """
-    tid = str(raw_tid).strip()
-    _parsed_sid, type_code, _, tool_info = parse_unified_tool_call_id(tid)
-    if _parsed_sid and type_code in ("s", "t") and tool_info:
-        return tool_info
-    if tid.startswith("functions."):
-        tid = tid[len("functions.") :]
-    return tid
 
 
 def _make_step_tool_call_id(step_id: str, raw_tid: str, call_idx: int) -> str:
@@ -161,6 +146,50 @@ def _chunk_args_dict(chunk: dict[str, Any]) -> dict[str, Any]:
     if isinstance(cargs, str) and cargs.strip():
         return _coerce_tool_call_args_mapping(cargs)
     return {}
+
+
+def _tool_call_update_custom_events_from_ai_message(msg: BaseMessage) -> list[dict[str, Any]]:
+    """Build ``soothe.stream.tool_call.update`` payloads from a post-backfill AI message."""
+    from langchain_core.messages import AIMessage, AIMessageChunk
+    from soothe_sdk.ux.stream_tool_wire import tool_call_update_event
+
+    if not isinstance(msg, (AIMessage, AIMessageChunk)):
+        return []
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def _append(tid: str, name: str, args: dict[str, Any]) -> None:
+        key = tid.strip()
+        if not key or key in seen or not args:
+            return
+        seen.add(key)
+        out.append(
+            tool_call_update_event(
+                tool_call_id=key,
+                name=name.strip() or "tool",
+                args=dict(args),
+            )
+        )
+
+    for tc in getattr(msg, "tool_calls", None) or []:
+        if not isinstance(tc, dict):
+            continue
+        tid = str(tc.get("id") or "").strip()
+        args = _coerce_tool_call_args_mapping(tc.get("args"))
+        if args:
+            _append(tid, str(tc.get("name") or ""), args)
+
+    for ch in getattr(msg, "tool_call_chunks", None) or []:
+        if not isinstance(ch, dict):
+            continue
+        tid = str(ch.get("id") or "").strip()
+        if not tid or tid in seen:
+            continue
+        args = _chunk_args_dict(ch)
+        if args:
+            _append(tid, str(ch.get("name") or ""), args)
+
+    return out
 
 
 def _backfill_tool_calls_args_from_chunks(msg: BaseMessage) -> BaseMessage:
@@ -390,6 +419,8 @@ def _rewrite_tool_call_ids_to_unified(
     def _needs_unified(raw_id: str) -> bool:
         if not raw_id:
             return False
+        if normalize_unified_tool_call_id(raw_id) != raw_id:
+            return True
         parsed_sid, type_code, _, _ = parse_unified_tool_call_id(raw_id)
         if parsed_sid == sid and type_code in ("s", "t"):
             return False
@@ -432,14 +463,15 @@ def _rewrite_tool_call_ids_to_unified(
     modified = deepcopy(msg)
 
     def _unified(raw_id: str) -> str:
-        parsed_sid, type_code, _, _ = parse_unified_tool_call_id(raw_id)
+        normalized = normalize_unified_tool_call_id(raw_id)
+        parsed_sid, type_code, _, _ = parse_unified_tool_call_id(normalized)
         if parsed_sid == sid:
             if type_code == "s" and task_idx is not None:
-                return raw_id
+                return normalized
             if type_code == "s" and task_idx is None:
-                return raw_id
+                return normalized
             if type_code == "t" and task_idx is not None:
-                return raw_id
+                return normalized
         return _unified_tool_call_id_for_stream(sid, raw_id, task_idx=task_idx)
 
     if isinstance(modified, AIMessageChunk):
@@ -2075,6 +2107,7 @@ class Executor:
                 _ns_chunk, mode_chunk, data_chunk = chunk
                 # IG-416: Unify message tool_call_ids for client row/result matching.
                 emit_chunk = chunk
+                tool_update_events: list[dict[str, Any]] = []
                 if (
                     step_id
                     and mode_chunk == "messages"
@@ -2097,6 +2130,9 @@ class Executor:
                         wire_msg = _stringify_tool_call_chunk_args_on_message(enriched_msg)
                         if wire_msg is not msg0:
                             emit_chunk = (_ns_chunk, mode_chunk, (wire_msg, data_chunk[1]))
+                        tool_update_events = _tool_call_update_custom_events_from_ai_message(
+                            enriched_msg
+                        )
                     elif isinstance(msg0, ToolMessage):
                         modified_msg = _rewrite_tool_message_tool_call_id(
                             msg0, step_id, task_idx=task_idx
@@ -2104,6 +2140,8 @@ class Executor:
                         if modified_msg is not msg0:
                             emit_chunk = (_ns_chunk, mode_chunk, (modified_msg, data_chunk[1]))
                 yield None, emit_chunk, 0, [], ""
+                for tool_ev in tool_update_events:
+                    yield None, (_ns_chunk, "custom", tool_ev), 0, [], ""
                 chunk = emit_chunk
 
             stop_act_stream = False

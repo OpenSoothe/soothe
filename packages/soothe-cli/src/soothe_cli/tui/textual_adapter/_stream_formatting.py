@@ -200,6 +200,162 @@ def _raw_tool_content_for_presentation(message: Any) -> str:
 _TASK_DESC_KEYS = ("description", "prompt", "task", "instruction")
 
 
+def _resolve_existing_subgraph_row_key(parent: Any, row_key: str) -> str:
+    """Return a row key that exists on ``parent``, trying legacy colon/dot variants."""
+    from soothe_sdk.ux.task_namespace import alternate_subgraph_row_keys
+
+    key = str(row_key).strip()
+    if not key:
+        return key
+    has_row = getattr(parent, "has_tool_call_row", lambda _x: False)
+    if has_row(key):
+        return key
+    for alt in alternate_subgraph_row_keys(key):
+        if alt != key and has_row(alt):
+            return alt
+    return key
+
+
+def canonical_subgraph_tool_ids(
+    ns_key: tuple[str, ...],
+    raw_tool_call_id: str,
+    *,
+    task_scope: TaskScope | None,
+) -> tuple[str, str]:
+    """Return ``(merge_lookup_id, row_key)`` for a subgraph tool invocation.
+
+    When the execute step is known, ``row_key`` uses unified ``{step}:t{n}:{tool}`` form
+    so pending buffers, wire updates, and task-card rows share one id.
+    """
+    raw = str(raw_tool_call_id).strip()
+    if not raw:
+        return "", ""
+    row_key = row_key_for_subgraph_tool(ns_key, raw, task_scope=task_scope)
+    _, type_code, _, _ = parse_unified_tool_call_id(row_key)
+    if type_code == "t":
+        return row_key, row_key
+    return raw, row_key
+
+
+def refresh_subgraph_tool_rows_from_overlay(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    *,
+    ns_key: tuple[str, ...],
+    streaming_overlay: dict[str, dict[str, Any]],
+    pending_tool_calls_lc: dict[str, dict[str, Any]],
+    message: Any = None,
+) -> None:
+    """Push overlay kwargs onto existing task-card tool rows when they arrive late."""
+    from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
+
+    if not ns_key or not streaming_overlay:
+        return
+    for tcid, oargs in streaming_overlay.items():
+        if not isinstance(oargs, dict) or not oargs:
+            continue
+        _, type_code, _, _ = parse_unified_tool_call_id(str(tcid))
+        if type_code != "t":
+            continue
+        merged = merge_tool_display_args(
+            str(tcid),
+            block_args=oargs,
+            streaming_overlay=streaming_overlay,
+            pending_tool_calls_lc=pending_tool_calls_lc,
+            message=message,
+        )
+        if refresh_subgraph_parent_tool_row(
+            adapter,
+            router,
+            ns_key=ns_key,
+            lookup_id=str(tcid),
+            parsed_args=merged,
+        ):
+            import logging as _logging
+
+            _logging.getLogger(__name__).debug(
+                "Subagent tool row args refreshed from overlay: id=%s keys=%s",
+                tcid,
+                sorted(merged.keys()) if isinstance(merged, dict) else [],
+            )
+
+
+def refresh_subgraph_parent_tool_row(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    *,
+    ns_key: tuple[str, ...],
+    lookup_id: str,
+    parsed_args: dict[str, Any],
+) -> bool:
+    """Update an existing task-card tool row when fuller args arrive on a later chunk."""
+    from soothe_cli.shared.tools.tool_call_resolution import tool_args_meaningful
+
+    if not tool_args_meaningful(parsed_args):
+        return False
+    ts = router.resolve_task_scope(ns_key)
+    _merge_id, row_key = canonical_subgraph_tool_ids(ns_key, str(lookup_id).strip(), task_scope=ts)
+    if not row_key:
+        return False
+    parent = (
+        router.resolve_parent(
+            ts,
+            step_cards=adapter._current_step_messages,
+            tool_display_by_call_id=adapter._tool_display_by_call_id,
+        )
+        if ts
+        else None
+    )
+    if parent is None:
+        parent = router.resolve_task_parent_for_unified_inner_tool(
+            str(lookup_id).strip(),
+            tool_display_by_call_id=adapter._tool_display_by_call_id,
+        )
+    if parent is None:
+        return False
+    resolved_key = _resolve_existing_subgraph_row_key(parent, row_key)
+    if not getattr(parent, "has_tool_call_row", lambda _x: False)(resolved_key):
+        return False
+    update_fn = getattr(parent, "update_tool_args", None)
+    if not callable(update_fn):
+        return False
+    update_fn(resolved_key, parsed_args)
+    return True
+
+
+def alias_subgraph_pending_and_overlay(
+    pending_tool_calls_lc: dict[str, dict[str, Any]],
+    streaming_overlay: dict[str, dict[str, Any]],
+    router: StepTaskRouter,
+    ns_key: tuple[str, ...],
+) -> None:
+    """Mirror provider tool-call ids under unified task-level ids when scope is bound."""
+    ts = router.resolve_task_scope(ns_key)
+    if ts is None:
+        return
+    for oid, pend in list(pending_tool_calls_lc.items()):
+        if not isinstance(pend, dict):
+            continue
+        merge_id, _row = canonical_subgraph_tool_ids(ns_key, oid, task_scope=ts)
+        if not merge_id or merge_id == oid:
+            continue
+        from soothe_sdk.ux.task_namespace import alternate_subgraph_row_keys
+
+        for alias_id in alternate_subgraph_row_keys(merge_id):
+            if alias_id not in pending_tool_calls_lc:
+                pending_tool_calls_lc[alias_id] = dict(pend)
+        oargs = streaming_overlay.get(oid)
+        if isinstance(oargs, dict) and oargs:
+            for alias_id in alternate_subgraph_row_keys(merge_id):
+                prev = streaming_overlay.get(alias_id)
+                if isinstance(prev, dict) and prev:
+                    merged = dict(prev)
+                    merged.update(oargs)
+                    streaming_overlay[alias_id] = merged
+                else:
+                    streaming_overlay[alias_id] = dict(oargs)
+
+
 def _task_args_has_description(args: dict[str, Any]) -> bool:
     for key in _TASK_DESC_KEYS:
         val = args.get(key)
@@ -637,7 +793,8 @@ async def _ensure_early_tool_row_mount(
         streaming_overlay=streaming_overlay,
     ):
         return True
-    display_key = scoped_subgraph_tool_key(ns_key, lookup_id)
+    ts_buf = router.resolve_task_scope(ns_key)
+    _merge_buf, display_key = canonical_subgraph_tool_ids(ns_key, lookup_id, task_scope=ts_buf)
     if display_key:
         router.buffer_subgraph_tool(
             ns_key=ns_key,
@@ -738,10 +895,10 @@ async def _mount_subagent_inner_tool_row_if_resolved(
         or (buffer_name or "") == "task"
     ):
         return False
-    row_key = row_key_for_subgraph_tool(ns_key, str(lookup_id), task_scope=ts_inner)
+    merge_id, row_key = canonical_subgraph_tool_ids(ns_key, str(lookup_id), task_scope=ts_inner)
     tool_name = (buffer_name or "").strip() or "tool"
     merged_args = merge_tool_display_args(
-        str(lookup_id),
+        merge_id or str(lookup_id),
         block_args=parsed_args,
         streaming_overlay=streaming_overlay,
         pending_tool_calls_lc=pending_tool_calls_lc,
@@ -751,7 +908,9 @@ async def _mount_subagent_inner_tool_row_if_resolved(
     if adapter._set_spinner:
         await adapter._set_spinner("Tools")
     raw = ""
-    pend = pending_tool_calls_lc.get(str(lookup_id))
+    pend = pending_tool_calls_lc.get(merge_id or str(lookup_id))
+    if not isinstance(pend, dict):
+        pend = pending_tool_calls_lc.get(str(lookup_id))
     if not isinstance(pend, dict):
         for candidate in pending_tool_calls_lc.values():
             if (
@@ -762,10 +921,11 @@ async def _mount_subagent_inner_tool_row_if_resolved(
                 break
     if isinstance(pend, dict):
         raw = str(pend.get("args_str", ""))
-    if getattr(parent_for_inner, "has_tool_call_row", lambda _x: False)(row_key):
+    resolved_row_key = _resolve_existing_subgraph_row_key(parent_for_inner, row_key)
+    if getattr(parent_for_inner, "has_tool_call_row", lambda _x: False)(resolved_row_key):
         update_fn = getattr(parent_for_inner, "update_tool_args", None)
         if callable(update_fn):
-            update_fn(row_key, merged_args)
+            update_fn(resolved_row_key, merged_args)
     else:
         parent_for_inner.add_tool_call(
             row_key,

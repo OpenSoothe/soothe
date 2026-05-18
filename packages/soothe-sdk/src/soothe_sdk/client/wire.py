@@ -93,6 +93,69 @@ def coerce_tool_call_chunk_args_for_wire(message: dict[str, Any]) -> dict[str, A
     return message
 
 
+def _backfill_tool_calls_on_wire_body(body: dict[str, Any]) -> dict[str, Any]:
+    """Copy complete chunk kwargs onto empty ``tool_calls[].args`` in a wire dict."""
+    chunks = body.get("tool_call_chunks")
+    calls = body.get("tool_calls")
+    if not isinstance(chunks, list) or not isinstance(calls, list):
+        return body
+    args_by_id: dict[str, dict[str, Any]] = {}
+    args_by_index: dict[int, dict[str, Any]] = {}
+    for tc in chunks:
+        if not isinstance(tc, dict):
+            continue
+        raw = tc.get("args")
+        parsed: dict[str, Any] = {}
+        if isinstance(raw, dict) and raw:
+            parsed = dict(raw)
+        elif isinstance(raw, str) and raw.strip():
+            try:
+                loaded = json.loads(raw)
+                if isinstance(loaded, dict):
+                    parsed = loaded
+            except json.JSONDecodeError:
+                parsed = {}
+        if not parsed:
+            continue
+        tid = str(tc.get("id") or "").strip()
+        if tid:
+            args_by_id[tid] = parsed
+        idx_raw = tc.get("index")
+        if idx_raw is not None:
+            try:
+                args_by_index[int(idx_raw)] = parsed
+            except (TypeError, ValueError):
+                pass
+    if not args_by_id and not args_by_index:
+        return body
+    new_calls: list[Any] = []
+    changed = False
+    for call_idx, tc in enumerate(calls):
+        if not isinstance(tc, dict):
+            new_calls.append(tc)
+            continue
+        tid = str(tc.get("id") or "").strip()
+        existing = tc.get("args")
+        empty = existing is None or existing == {} or existing == ""
+        fill: dict[str, Any] | None = None
+        if empty and tid and tid in args_by_id:
+            fill = args_by_id[tid]
+        elif empty and call_idx in args_by_index:
+            fill = args_by_index[call_idx]
+        if fill is not None:
+            patched = dict(tc)
+            patched["args"] = fill
+            new_calls.append(patched)
+            changed = True
+        else:
+            new_calls.append(tc)
+    if not changed:
+        return body
+    out = dict(body)
+    out["tool_calls"] = new_calls
+    return out
+
+
 def _wire_type_tag(raw_type: Any) -> Any:
     if isinstance(raw_type, str):
         return _LC_MESSAGE_CLASS_TO_WIRE.get(raw_type, raw_type)
@@ -106,6 +169,7 @@ def flatten_enveloped_message_dict(message: dict[str, Any]) -> dict[str, Any]:
         body.pop("type", None)
         wire_type = _wire_type_tag(message.get("type"))
         body = coerce_tool_call_chunk_args_for_wire(body)
+        body = _backfill_tool_calls_on_wire_body(body)
         if isinstance(wire_type, str):
             return {"type": wire_type, **body}
         return body
@@ -113,7 +177,8 @@ def flatten_enveloped_message_dict(message: dict[str, Any]) -> dict[str, Any]:
         body = dict(message)
         if "type" in body:
             body["type"] = _wire_type_tag(body["type"])
-        return coerce_tool_call_chunk_args_for_wire(body)
+        body = coerce_tool_call_chunk_args_for_wire(body)
+        return _backfill_tool_calls_on_wire_body(body)
     return message
 
 

@@ -84,6 +84,57 @@ def test_merge_tool_display_args_prefers_streaming_overlay() -> None:
     assert "autopilot" in str(merged.get("description", ""))
 
 
+def test_merge_tool_display_args_combines_overlay_and_pending() -> None:
+    """Partial overlay must not hide fuller pending JSON (same tool_call_id)."""
+    pending = {
+        "abc:0": {
+            "name": "read_file",
+            "args_str": '{"path":"/full.py","limit":500}',
+            "is_complete_json": True,
+            "emitted": False,
+            "is_main": True,
+        },
+    }
+    overlay = build_streaming_args_overlay(
+        AIMessageChunk(content="", chunk_position="last"),
+        pending,
+    )
+    overlay["abc:0"] = {"path": "/partial"}
+    merged = merge_tool_display_args(
+        "abc:0",
+        block_args={},
+        streaming_overlay=overlay,
+        pending_tool_calls_lc=pending,
+        tool_name="read_file",
+    )
+    assert merged["path"] == "/full.py"
+    assert merged["limit"] == 500
+
+
+def test_merge_tool_display_args_matches_message_by_tool_name() -> None:
+    """Unified lookup id must still read provider ``tool_calls`` on the message."""
+    msg = AIMessageChunk(
+        content="",
+        tool_calls=[
+            {
+                "name": "grep",
+                "id": "functions.grep:0",
+                "args": {"pattern": "autopilot", "path": "/src"},
+            }
+        ],
+    )
+    merged = merge_tool_display_args(
+        "STEP-01:t0:grep.0",
+        block_args={},
+        streaming_overlay={},
+        pending_tool_calls_lc={},
+        message=msg,
+        tool_name="grep",
+    )
+    assert merged["pattern"] == "autopilot"
+    assert merged["path"] == "/src"
+
+
 def test_merge_tool_display_args_prefers_message_tool_calls() -> None:
     """Wire dict ``tool_calls`` wins when pending buffer used a legacy provider id."""
     msg = {
@@ -114,6 +165,40 @@ def test_merge_tool_display_args_prefers_message_tool_calls() -> None:
         tool_name="read_file",
     )
     assert merged["path"] == "/full/path/to/file.py"
+
+
+def test_richest_pending_task_args_scoped_to_execute_step() -> None:
+    """Parallel ``task`` spawns must not reuse another step's pending description."""
+    from soothe_cli.shared.tools.message_processing import richest_pending_args_for_lookup
+
+    pending = {
+        "AAA-01:s:task:0": {
+            "name": "task",
+            "args_str": (
+                '{"description": "First step explores the repository", '
+                '"subagent_type": "explore"}'
+            ),
+            "is_complete_json": True,
+            "emitted": False,
+            "is_main": True,
+        },
+        "BBB-02:s:task:0": {
+            "name": "task",
+            "args_str": (
+                '{"description": "Second step maps architecture", "subagent_type": "plan"}'
+            ),
+            "is_complete_json": True,
+            "emitted": False,
+            "is_main": True,
+        },
+    }
+    merged = richest_pending_args_for_lookup(
+        pending,
+        "BBB-02:s:task:0",
+        tool_name="task",
+    )
+    assert "Second step" in str(merged.get("description", ""))
+    assert "First step" not in str(merged.get("description", ""))
 
 
 def test_richest_pending_does_not_steal_task_args_for_inner_tool() -> None:

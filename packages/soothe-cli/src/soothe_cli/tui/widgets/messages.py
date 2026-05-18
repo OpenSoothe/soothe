@@ -1463,10 +1463,19 @@ class ToolCallMessage(Vertical):
 
     def update_tool_args(self, tool_call_id: str, args: dict[str, Any]) -> None:
         """Refresh kwargs when streaming fills in arguments."""
+        from soothe_cli.shared.tools.message_processing import extract_tool_args_dict
+        from soothe_cli.shared.tools.tool_call_resolution import tool_args_meaningful
+
         row = self._row_index.get(str(tool_call_id))
         if row is None:
             return
-        row.args = dict(args or {})
+        incoming = extract_tool_args_dict(args or {})
+        merged = dict(row.args or {})
+        if incoming:
+            merged.update(incoming)
+        if not tool_args_meaningful(merged):
+            return
+        row.args = merged
         self._refresh_tools_display()
 
     def set_tool_running(self, tool_call_id: str) -> None:
@@ -3061,10 +3070,19 @@ class CognitionStepMessage(Vertical):
 
     def update_tool_args(self, tool_call_id: str, args: dict[str, Any]) -> None:
         """Refresh kwargs when streaming fills in arguments."""
+        from soothe_cli.shared.tools.message_processing import extract_tool_args_dict
+        from soothe_cli.shared.tools.tool_call_resolution import tool_args_meaningful
+
         row = self._row_index.get(str(tool_call_id))
         if row is None:
             return
-        row.args = dict(args or {})
+        incoming = extract_tool_args_dict(args or {})
+        merged = dict(row.args or {})
+        if incoming:
+            merged.update(incoming)
+        if not tool_args_meaningful(merged):
+            return
+        row.args = merged
         self._refresh_tools_display()
 
     def set_tool_running(self, tool_call_id: str) -> None:
