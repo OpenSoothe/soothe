@@ -1478,6 +1478,9 @@ class ToolCallMessage(Vertical):
             merged.update(incoming)
         if not tool_args_meaningful(merged):
             return
+        # IG-419: Skip refresh if args unchanged (performance optimization)
+        if merged == row.args:
+            return
         row.args = merged
         self._refresh_tools_display()
 
@@ -2477,7 +2480,12 @@ class DiffMessage(_TimestampClickMixin, Static):
 
 @dataclass
 class _StepToolRow:
-    """One tool invocation row on the step card (IG-402)."""
+    """One tool invocation row on the step card (IG-402, IG-419).
+
+    IG-419: Supports nesting via parent_tool_call_id for inner subagent tools.
+    Task delegation rows (is_task_row=True) are parent headers; inner tools
+    nest underneath with indentation.
+    """
 
     tool_call_id: str
     tool_name: str
@@ -2486,6 +2494,8 @@ class _StepToolRow:
     output: str = ""
     duration_ms: int = 0
     started_at: float | None = None
+    parent_tool_call_id: str | None = None  # IG-419: Link to parent task row for nesting
+    is_task_row: bool = False  # IG-419: Mark as task delegation parent row
 
 
 class CognitionStepMessage(Vertical):
@@ -2897,6 +2907,10 @@ class CognitionStepMessage(Vertical):
             branch_glyph=branch,
         )
         gutter = self._step_goal_tree_gutter()
+        # IG-419: Indent child rows under parent task delegation
+        if row.parent_tool_call_id:
+            indent = "    "  # 4 spaces for visual nesting
+            return Content.assemble(Content.styled(gutter + indent, "dim"), inner)
         return Content.assemble(Content.styled(gutter, "dim"), inner)
 
     def _step_branched_execute_body(self, body: str, *, muted: bool = True) -> Content:
@@ -2974,6 +2988,36 @@ class CognitionStepMessage(Vertical):
                 parts.append(Content.styled(f"{sub}{ln}", colors.error))
         return Content.assemble(*parts)
 
+    def _build_nested_row_order(self) -> list[_StepToolRow]:
+        """Build ordered list: task rows followed by their nested children (IG-419).
+
+        Inner subagent tools (with parent_tool_call_id) appear indented under
+        their parent task delegation row. Non-task, non-child rows appear at end.
+        """
+        task_rows = [r for r in self._rows if r.is_task_row]
+        child_by_parent: dict[str, list[_StepToolRow]] = {}
+        other_rows: list[_StepToolRow] = []
+
+        for r in self._rows:
+            if r.is_task_row:
+                continue
+            if r.parent_tool_call_id:
+                child_by_parent.setdefault(r.parent_tool_call_id, []).append(r)
+            else:
+                other_rows.append(r)
+
+        result: list[_StepToolRow] = []
+        for task_row in task_rows:
+            result.append(task_row)
+            children = child_by_parent.get(task_row.tool_call_id, [])
+            # Sort children by tool_call_id to maintain order
+            children.sort(key=lambda x: x.tool_call_id)
+            result.extend(children)
+
+        # Append remaining non-task rows at the end
+        result.extend(other_rows)
+        return result
+
     def _refresh_tools_display(self) -> None:
         if self._tools_widget is None:
             self._maybe_auto_fold_step_tool_list()
@@ -2986,8 +3030,10 @@ class CognitionStepMessage(Vertical):
             return
         self._maybe_auto_fold_step_tool_list()
         self._tools_widget.display = True
-        show_all = len(self._rows) <= _STEP_TOOL_PREVIEW_ROWS or not self._tools_body_collapsed
-        visible = self._rows if show_all else self._rows[:_STEP_TOOL_PREVIEW_ROWS]
+        # IG-419: Use nested ordering for display (task rows + children)
+        ordered_rows = self._build_nested_row_order()
+        show_all = len(ordered_rows) <= _STEP_TOOL_PREVIEW_ROWS or not self._tools_body_collapsed
+        visible = ordered_rows if show_all else ordered_rows[:_STEP_TOOL_PREVIEW_ROWS]
         lines = [self._row_to_content(r) for r in visible]
         self._tools_widget.update(Content("\n").join(lines))
 
@@ -3001,6 +3047,8 @@ class CognitionStepMessage(Vertical):
         args: dict[str, Any],
         *,
         raw_args: str = "",
+        parent_tool_call_id: str | None = None,  # IG-419
+        is_task_row: bool = False,  # IG-419
     ) -> None:
         """Register a new tool row (pending).
 
@@ -3010,6 +3058,8 @@ class CognitionStepMessage(Vertical):
             args: Parsed tool arguments.
             raw_args: Raw JSON args string from streaming (for regex fallback
                 in ``format_tool_call_args`` when ``args`` is empty/partial).
+            parent_tool_call_id: IG-419: Link to parent task row for nesting.
+            is_task_row: IG-419: Mark as task delegation parent row.
         """
         tcid = str(tool_call_id).strip()
         if not tcid:
@@ -3025,6 +3075,8 @@ class CognitionStepMessage(Vertical):
             tool_name=(tool_name or "tool").strip() or "tool",
             args=row_args,
             phase="pending",
+            parent_tool_call_id=parent_tool_call_id,
+            is_task_row=is_task_row,
         )
         self._rows.append(row)
         self._row_index[tcid] = row
@@ -3084,6 +3136,9 @@ class CognitionStepMessage(Vertical):
         if incoming:
             merged.update(incoming)
         if not tool_args_meaningful(merged):
+            return
+        # IG-419: Skip refresh if args unchanged (performance optimization)
+        if merged == row.args:
             return
         row.args = merged
         self._refresh_tools_display()

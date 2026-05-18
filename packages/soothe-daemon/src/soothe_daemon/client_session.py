@@ -13,14 +13,14 @@ from typing import TYPE_CHECKING, Any
 import websockets.exceptions
 from soothe_sdk.core.types import VerbosityLevel
 
-from soothe_daemon.loop_isolation import loop_event_topic
+from soothe_daemon.event import loop_event_topic
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
     from soothe.config.models import OutputStreamingConfig
     from soothe.core.events import EventMeta
 
-    from soothe_daemon.event_bus import EventBus
+    from soothe_daemon.event import EventBus
     from soothe_daemon.transports.base import TransportServer
 
 logger = logging.getLogger(__name__)

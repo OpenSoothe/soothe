@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 from soothe.core.events import EventPriority
 
-from soothe_daemon.event_bus import EventBus
+from soothe_daemon.event import EventBus
 
 
 @pytest.mark.asyncio

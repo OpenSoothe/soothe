@@ -10,8 +10,7 @@ from soothe_sdk.core.events import SootheEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 
 from soothe_daemon.client_session import ClientSessionManager
-from soothe_daemon.event_bus import EventBus
-from soothe_daemon.loop_isolation import loop_event_topic
+from soothe_daemon.event import EventBus, loop_event_topic
 
 
 @pytest.mark.asyncio

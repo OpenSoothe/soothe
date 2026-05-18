@@ -207,6 +207,33 @@ class StepTaskRouter:
         """Step id from a resolved task scope."""
         return task_scope_step_id(scope)
 
+    def resolve_parent_task_call_id(self, ns_key: tuple[Any, ...]) -> str | None:
+        """Resolve parent task's tool_call_id for inner tool nesting (IG-419).
+
+        Args:
+            ns_key: Namespace tuple for the inner tool (e.g., ("step-01", "t", "task.0")).
+
+        Returns:
+            The parent task's tool_call_id (e.g., "step-01:s:task.0") or None.
+        """
+        if not ns_key or len(ns_key) < 3:
+            return None
+        step_id = str(ns_key[0])
+        if ns_key[1] == "t":
+            # ns_key format: (step_id, "t", task_comp, ...)
+            # task_comp e.g., "task.0" or "task:0"
+            task_comp = str(ns_key[2])
+            # Normalize task:N to task.N
+            if ":" in task_comp:
+                name, _, idx = task_comp.rpartition(":")
+                if name == "task" and idx.isdigit():
+                    return f"{step_id}:s:task.{idx}"
+            if "." in task_comp:
+                name, _, idx = task_comp.rpartition(".")
+                if name == "task" and idx.isdigit():
+                    return f"{step_id}:s:task.{idx}"
+        return None
+
     # --- Pending main-graph tools ---
 
     def buffer_main_tool(
