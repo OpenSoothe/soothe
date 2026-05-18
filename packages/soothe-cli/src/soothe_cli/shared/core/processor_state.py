@@ -32,6 +32,9 @@ class ProcessorState:
     # Maps tool_call_id -> {'name': str, 'args_str': str, 'emitted': bool, 'is_main': bool}
     pending_tool_calls: dict[str, dict[str, Any]] = field(default_factory=dict)
 
+    # Last active tool_call_id for orphan chunk attachment (chunks without explicit id)
+    last_active_tool_call_id: str = ""
+
     # Namespace -> display name mapping for subagents
     name_map: dict[str, str] = field(default_factory=dict)
 
@@ -77,6 +80,7 @@ class ProcessorState:
         Clears streaming buffers but preserves session state.
         """
         self.pending_tool_calls.clear()
+        self.last_active_tool_call_id = ""
         self.tool_call_start_times.clear()
         self.emitted_tool_call_ids.clear()
         self.emitted_tool_result_ids.clear()
