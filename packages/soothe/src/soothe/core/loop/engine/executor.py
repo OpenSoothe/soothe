@@ -1604,13 +1604,22 @@ class Executor:
             tool_call_count = 0
             messages: list[BaseMessage] = []
             output = ""
+            # IG-418: Pass first step_id for unified tool_call_id rewriting
+            # Sequential mode runs all steps together, use first step ID
+            first_step_id = steps[0].id if steps else ""
             async for (
                 final_output,
                 event,
                 tc_count,
                 msg_list,
                 _,
-            ) in self._stream_and_collect(stream, budget=budget):
+            ) in self._stream_and_collect(
+                stream,
+                budget=budget,
+                step_id=first_step_id,
+                step_description=steps[0].description if steps else "",
+                step_subagent=steps[0].subagent if steps else None,
+            ):
                 if event is not None:
                     event_count += 1
                     yield event

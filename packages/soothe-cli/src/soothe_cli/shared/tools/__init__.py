@@ -15,7 +15,6 @@ from soothe_cli.shared.tools.message_processing import (
 from soothe_cli.shared.tools.rendering import update_name_map_from_tool_calls
 from soothe_cli.shared.tools.tool_call_resolution import (
     build_streaming_args_overlay,
-    infer_tool_name_from_call_id,
     materialize_ai_blocks_with_resolved_tools,
     tool_args_meaningful,
 )
@@ -64,7 +63,6 @@ __all__ = [
     "update_name_map_from_tool_calls",
     # Tool call resolution
     "build_streaming_args_overlay",
-    "infer_tool_name_from_call_id",
     "materialize_ai_blocks_with_resolved_tools",
     "tool_args_meaningful",
     # Tool card payload
