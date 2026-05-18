@@ -57,6 +57,20 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
     intent_hint = (
         raw_hint.strip().lower() if isinstance(raw_hint, str) and raw_hint.strip() else None
     )
+    raw_schema = msg.get("response_schema")
+    response_schema = raw_schema if isinstance(raw_schema, dict) and raw_schema else None
+    raw_schema_name = msg.get("response_schema_name")
+    response_schema_name = (
+        raw_schema_name.strip()
+        if isinstance(raw_schema_name, str) and raw_schema_name.strip()
+        else None
+    )
+    raw_schema_strict = msg.get("response_schema_strict")
+    response_schema_strict: bool | None
+    if isinstance(raw_schema_strict, bool):
+        response_schema_strict = raw_schema_strict
+    else:
+        response_schema_strict = None
     return {
         "autonomous": bool(msg.get("autonomous", False)),
         "max_iterations": parsed_max,
@@ -65,6 +79,9 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         "model": model,
         "model_params": model_params,
         "intent_hint": intent_hint,
+        "response_schema": response_schema,
+        "response_schema_name": response_schema_name,
+        "response_schema_strict": response_schema_strict,
     }
 
 
@@ -1288,6 +1305,35 @@ class MessageRouter:
                 },
             )
             return
+
+        response_schema = q_opts.get("response_schema")
+        if response_schema is not None:
+            if intent_hint_preview not in (None, "direct_llm"):
+                await d._send_client_message(
+                    client_id,
+                    {
+                        "type": "error",
+                        "code": "INVALID_REQUEST",
+                        "message": "response_schema is only supported with intent_hint direct_llm",
+                        "request_id": request_id,
+                    },
+                )
+                return
+            try:
+                from soothe.utils.llm.schema_wire import validate_response_schema
+
+                q_opts["response_schema"] = validate_response_schema(response_schema)
+            except ValueError as exc:
+                await d._send_client_message(
+                    client_id,
+                    {
+                        "type": "error",
+                        "code": "INVALID_REQUEST",
+                        "message": str(exc),
+                        "request_id": request_id,
+                    },
+                )
+                return
 
         text_for_queue = prompt_text if prompt_text is not None else ""
         logger.info(

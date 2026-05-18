@@ -120,6 +120,9 @@ class QueryEngine:
         attachments: list[dict[str, str]] | None = None,
         checkpoint_thread_id: str | None = None,
         intent_hint: str | None = None,
+        response_schema: dict[str, Any] | None = None,
+        response_schema_name: str | None = None,
+        response_schema_strict: bool | None = None,
     ) -> None:
         """Stream a query through subprocess workers and broadcast events."""
         d = self._daemon
@@ -218,6 +221,9 @@ class QueryEngine:
                 model_params=model_params,
                 attachments=attachments,
                 thread_logger=thread_logger,
+                response_schema=response_schema,
+                response_schema_name=response_schema_name,
+                response_schema_strict=response_schema_strict,
             )
             return
 
@@ -600,6 +606,9 @@ class QueryEngine:
         model_params: dict[str, Any] | None,
         attachments: list[dict[str, str]] | None,
         thread_logger: ThreadLogger,
+        response_schema: dict[str, Any] | None = None,
+        response_schema_name: str | None = None,
+        response_schema_strict: bool | None = None,
     ) -> None:
         """Spawn background task for ``intent_hint`` direct LLM turns (no agent subprocess)."""
         d = self._daemon
@@ -615,6 +624,9 @@ class QueryEngine:
                 model_params=model_params,
                 attachments=attachments,
                 thread_logger=thread_logger,
+                response_schema=response_schema,
+                response_schema_name=response_schema_name,
+                response_schema_strict=response_schema_strict,
             )
 
         try:
@@ -647,6 +659,9 @@ class QueryEngine:
         model_params: dict[str, Any] | None,
         attachments: list[dict[str, str]] | None,
         thread_logger: ThreadLogger,
+        response_schema: dict[str, Any] | None = None,
+        response_schema_name: str | None = None,
+        response_schema_strict: bool | None = None,
     ) -> None:
         """Execute one direct model call and broadcast a single assistant ``messages`` event."""
         d = self._daemon
@@ -696,6 +711,9 @@ class QueryEngine:
                     model=model,
                     model_params=model_params,
                     session_id=thread_id,
+                    response_schema=response_schema,
+                    response_schema_name=response_schema_name,
+                    response_schema_strict=response_schema_strict,
                 )
             else:
                 raise ValueError(

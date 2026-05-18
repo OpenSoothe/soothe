@@ -236,6 +236,9 @@ class DaemonHandlersMixin:
                     attachments=attachments,
                     checkpoint_thread_id=checkpoint_thread_id,
                     intent_hint=intent_hint,
+                    response_schema=qo.get("response_schema"),
+                    response_schema_name=qo.get("response_schema_name"),
+                    response_schema_strict=qo.get("response_schema_strict"),
                 )
         except Exception:
             logger.exception("Daemon loop input handler error")
