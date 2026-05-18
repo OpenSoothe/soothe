@@ -48,7 +48,28 @@ def test_queue_options_from_daemon_message_defaults() -> None:
         "model": None,
         "model_params": None,
         "intent_hint": None,
+        "response_schema": None,
+        "response_schema_name": None,
+        "response_schema_strict": None,
     }
+
+
+def test_queue_options_from_daemon_message_response_schema() -> None:
+    schema = {
+        "type": "object",
+        "properties": {"word": {"type": "string"}},
+        "required": ["word"],
+    }
+    out = _queue_options_from_daemon_message(
+        {
+            "response_schema": schema,
+            "response_schema_name": " WordReply ",
+            "response_schema_strict": False,
+        }
+    )
+    assert out["response_schema"] == schema
+    assert out["response_schema_name"] == "WordReply"
+    assert out["response_schema_strict"] is False
 
 
 @pytest.mark.parametrize(
