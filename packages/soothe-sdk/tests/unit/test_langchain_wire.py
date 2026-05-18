@@ -73,6 +73,21 @@ def test_messages_from_wire_dicts_coerces_dict_tool_call_chunk_args() -> None:
     assert "Explore" in out[0].tool_call_chunks[0]["args"]
 
 
+def test_wire_backfills_empty_tool_calls_from_chunks() -> None:
+    from langchain_core.messages import AIMessage
+
+    msg = AIMessage(
+        content="",
+        tool_calls=[{"name": "read_file", "id": "abc", "args": {}}],
+        tool_call_chunks=[
+            {"name": "read_file", "id": "abc", "args": '{"path":"/x.py","limit":99}'}
+        ],
+    )
+    flat = prepare_stream_message_for_wire(msg)
+    assert flat["tool_calls"][0]["args"]["path"] == "/x.py"
+    assert flat["tool_calls"][0]["args"]["limit"] == 99
+
+
 def test_prepare_stream_message_preserves_tool_call_args() -> None:
     msg = AIMessage(
         content="",

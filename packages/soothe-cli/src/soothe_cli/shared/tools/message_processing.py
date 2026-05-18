@@ -164,6 +164,38 @@ def ingest_tool_call_stream_state(
     seed_pending_tool_calls_from_message(pending_tool_calls, message, is_main=is_main)
 
 
+def tool_lookup_step_id(tool_call_id: str) -> str:
+    """Return the execute-step id encoded in a unified tool_call_id, if any."""
+    from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
+
+    sid, _, _, _ = parse_unified_tool_call_id(str(tool_call_id).strip())
+    return sid or ""
+
+
+def _pending_or_overlay_id_matches_lookup(
+    candidate_id: str,
+    lookup_id: str,
+    *,
+    tool_name: str,
+) -> bool:
+    """True when a pending/overlay key refers to the same logical tool call as ``lookup_id``."""
+    cid = str(candidate_id).strip()
+    lid = str(lookup_id).strip()
+    if not cid or not lid:
+        return False
+    if cid == lid:
+        return True
+    if tool_name == "task":
+        step = tool_lookup_step_id(lid)
+        return bool(step) and tool_lookup_step_id(cid) == step
+    lookup_step = tool_lookup_step_id(lid)
+    cand_step = tool_lookup_step_id(cid)
+    if lookup_step and cand_step:
+        return lookup_step == cand_step
+    # Provider id (``functions.grep:0``) vs unified ``{step}:t0:grep.0`` — match by tool name.
+    return True
+
+
 def _resolve_pending_lookup_tool_name(
     tool_call_id: str,
     *,
@@ -216,10 +248,12 @@ def richest_pending_args_for_lookup(
     if not name or name == "tool":
         return {}
     best: dict[str, Any] = {}
-    for pend in pending_tool_calls.values():
+    for pid, pend in pending_tool_calls.items():
         if not isinstance(pend, dict):
             continue
         if str(pend.get("name") or "").strip() != name:
+            continue
+        if not _pending_or_overlay_id_matches_lookup(str(pid), tcid, tool_name=name):
             continue
         parsed = try_parse_pending_tool_call_args(pend)
         if not parsed:

@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections import deque
 
 from soothe_sdk.ux.task_namespace import (
+    _shorten_tool_call_id,
+    alternate_subgraph_row_keys,
     maybe_bind_namespace,
     parse_unified_tool_call_id,
     register_task_spawn_for_step,
@@ -91,7 +93,7 @@ def test_scoped_subgraph_tool_key_is_unique_per_namespace() -> None:
     b = scoped_subgraph_tool_key(("tools:bbb",), "functions.grep:1")
     assert a != b
     # IG-416: Empty namespace returns shortened tool_call_id (strips 'functions.')
-    assert scoped_subgraph_tool_key((), "functions.grep:1") == "grep:1"
+    assert scoped_subgraph_tool_key((), "functions.grep:1") == "grep.1"
 
 
 def test_resolve_task_scope_prefix_match() -> None:
@@ -194,6 +196,17 @@ def test_resolve_task_parent_for_unified_task_level_id() -> None:
     )
 
 
+def test_shorten_tool_call_id_normalizes_provider_colon_index() -> None:
+    assert _shorten_tool_call_id("functions.grep:0") == "grep.0"
+    assert _shorten_tool_call_id("GHT-01:t0:read_file.1") == "read_file.1"
+
+
+def test_alternate_subgraph_row_keys_colon_dot_variants() -> None:
+    keys = alternate_subgraph_row_keys("STEP-01:t0:grep.0")
+    assert "STEP-01:t0:grep.0" in keys
+    assert "STEP-01:t0:grep:0" in keys
+
+
 def test_row_key_for_subgraph_tool_unified_passthrough() -> None:
     unified = "FJS-02:t0:read_file.1"
     assert row_key_for_subgraph_tool(("tools:x",), unified) == unified
@@ -202,7 +215,7 @@ def test_row_key_for_subgraph_tool_unified_passthrough() -> None:
         "grep:0",
         task_scope=("tc", "explore", "FJS-02"),
     )
-    assert legacy == "FJS-02:t0:grep:0"
+    assert legacy == "FJS-02:t0:grep.0"
 
 
 def test_try_bind_namespace_to_unlinked_spawn_after_register() -> None:
