@@ -961,7 +961,7 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message with loop_id.
         """
-        from soothe_daemon.reattachment_handler import handle_loop_reattach
+        from soothe_daemon.event import handle_loop_reattach
 
         d = self._daemon
         request_id = msg.get("request_id")
@@ -992,7 +992,7 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message with loop_id.
         """
-        from soothe_daemon.reattachment_handler import handle_loop_reattach
+        from soothe_daemon.event import handle_loop_reattach
 
         d = self._daemon
         request_id = msg.get("request_id")

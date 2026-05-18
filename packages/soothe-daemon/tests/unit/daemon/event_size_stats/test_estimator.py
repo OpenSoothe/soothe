@@ -7,10 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from soothe_daemon.event_size_stats import (
-    EventSizeDistributionCollector,
-    _StreamingWindow,
-)
+from soothe_daemon.event import EventSizeDistributionCollector
+from soothe_daemon.event.size_stats import _StreamingWindow
 
 
 def test_welford_matches_batch_statistics() -> None:
@@ -40,28 +38,28 @@ def test_emit_logs_and_resets_window() -> None:
     c = EventSizeDistributionCollector()
     c.record_event_dict({"type": "ping", "n": 1})
     lines: list[str] = []
-    with patch("soothe_daemon.event_size_stats.time.monotonic", return_value=10.0):
+    with patch("soothe_daemon.event.size_stats.time.monotonic", return_value=10.0):
         assert c.emit_log_if_active(idle_pause_seconds=120.0, log_fn=lines.append)
     assert len(lines) == 1
     assert lines[0].startswith("[event_size_stats]")
     assert "n=1" in lines[0]
     lines.clear()
-    with patch("soothe_daemon.event_size_stats.time.monotonic", return_value=20.0):
+    with patch("soothe_daemon.event.size_stats.time.monotonic", return_value=20.0):
         assert not c.emit_log_if_active(idle_pause_seconds=120.0, log_fn=lines.append)
     assert lines == []
 
 
 def test_idle_discards_window_without_log() -> None:
     c = EventSizeDistributionCollector()
-    with patch("soothe_daemon.event_size_stats.time.monotonic", return_value=0.0):
+    with patch("soothe_daemon.event.size_stats.time.monotonic", return_value=0.0):
         c.record_event_dict({"type": "a"})
     lines: list[str] = []
-    with patch("soothe_daemon.event_size_stats.time.monotonic", return_value=200.0):
+    with patch("soothe_daemon.event.size_stats.time.monotonic", return_value=200.0):
         assert not c.emit_log_if_active(idle_pause_seconds=120.0, log_fn=lines.append)
     assert lines == []
-    with patch("soothe_daemon.event_size_stats.time.monotonic", return_value=300.0):
+    with patch("soothe_daemon.event.size_stats.time.monotonic", return_value=300.0):
         c.record_event_dict({"type": "b"})
-    with patch("soothe_daemon.event_size_stats.time.monotonic", return_value=350.0):
+    with patch("soothe_daemon.event.size_stats.time.monotonic", return_value=350.0):
         assert c.emit_log_if_active(idle_pause_seconds=120.0, log_fn=lines.append)
     assert len(lines) == 1
     assert "n=1" in lines[0]

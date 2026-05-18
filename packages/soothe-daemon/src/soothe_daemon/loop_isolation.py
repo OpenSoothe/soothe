@@ -1,7 +1,6 @@
 """Loop-scoped isolation for the daemon client plane (IG-408).
 
 Minimal API for other modules:
-    - ``loop_event_topic``: event-bus topic string for a loop
     - ``bind_execution_thread_for_loop``: align runner + registry with loop metadata
     - ``LoopInputDispatcher``: per-loop asyncio queues and workers
 """
@@ -21,11 +20,6 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
-
-
-def loop_event_topic(loop_id: str) -> str:
-    """Return the event-bus topic for loop-scoped delivery."""
-    return f"loop:{loop_id}"
 
 
 async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
@@ -173,5 +167,4 @@ class LoopInputDispatcher:
 __all__ = [
     "LoopInputDispatcher",
     "bind_execution_thread_for_loop",
-    "loop_event_topic",
 ]
