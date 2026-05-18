@@ -81,7 +81,8 @@ def accumulate_tool_call_chunks(
     tool_call_chunks: list[dict[str, Any]],
     *,
     is_main: bool = True,
-) -> None:
+    last_active_id: str = "",
+) -> str:
     """Accumulate streaming tool call chunks into pending_tool_calls.
 
     LangChain streams tool args in chunks - first chunk has the tool name but
@@ -92,7 +93,14 @@ def accumulate_tool_call_chunks(
         pending_tool_calls: Dict to store pending tool calls (tool_call_id -> state).
         tool_call_chunks: List of tool_call_chunk dicts from AIMessageChunk.
         is_main: Whether this is from the main agent.
+        last_active_id: Previous last active tool_call_id for orphan chunk attachment.
+
+    Returns:
+        Updated last_active_id (tool_call_id of most recently seen chunk with id).
     """
+    # Track the most recently active tool_call_id for orphan chunk attachment
+    current_last_active = last_active_id
+
     for tcc in tool_call_chunks:
         if not isinstance(tcc, dict):
             continue
@@ -119,10 +127,12 @@ def accumulate_tool_call_chunks(
                 "emitted": False,
                 "is_main": is_main,
             }
+            current_last_active = tc_id  # Track most recently registered tool
         # Some providers send final args as a dict on a later chunk (replace previous)
         elif tc_id and tc_id in pending_tool_calls and isinstance(tc_args, dict) and tc_args:
             pending_tool_calls[tc_id]["args_str"] = json.dumps(tc_args)
             pending_tool_calls[tc_id]["is_complete_json"] = True
+            current_last_active = tc_id
         # Subsequent chunks: accumulate partial JSON strings for this tool call id
         elif tc_id and tc_id in pending_tool_calls and isinstance(tc_args, str) and tc_args:
             # If args_str already contains complete JSON, provider refined args → restart
@@ -132,12 +142,15 @@ def accumulate_tool_call_chunks(
             else:
                 # Normal partial accumulation
                 pending_tool_calls[tc_id]["args_str"] += tc_args
+            current_last_active = tc_id
         elif tc_args and isinstance(tc_args, str) and tc_args:
-            # Legacy: chunks missing ``id`` — attach to the first non-emitted pending call
-            for pending in pending_tool_calls.values():
-                if not pending["emitted"]:
-                    pending["args_str"] += tc_args
-                    break
+            # Orphan chunks (no id) — attach to the most recently active tool call
+            # NOT the first pending tool, which would mix args across tools
+            if current_last_active and current_last_active in pending_tool_calls:
+                if not pending_tool_calls[current_last_active].get("emitted"):
+                    pending_tool_calls[current_last_active]["args_str"] += tc_args
+
+    return current_last_active
 
 
 def ingest_tool_call_stream_state(
@@ -145,23 +158,37 @@ def ingest_tool_call_stream_state(
     message: Any,
     *,
     is_main: bool = True,
-) -> None:
+    last_active_id: str = "",
+) -> str:
     """Accumulate ``tool_call_chunks`` and seed ``tool_calls`` from one stream message.
 
     Works for LangChain message objects and wire dicts (daemon WebSocket path).
+
+    Args:
+        pending_tool_calls: Dict to store pending tool calls.
+        message: Message with tool_call_chunks and/or tool_calls.
+        is_main: Whether this is from the main agent.
+        last_active_id: Previous last active tool_call_id for orphan attachment.
+
+    Returns:
+        Updated last_active_id for subsequent calls.
     """
     if isinstance(message, dict):
         chunks = message.get("tool_call_chunks")
         if isinstance(chunks, list):
-            accumulate_tool_call_chunks(pending_tool_calls, chunks, is_main=is_main)
+            last_active_id = accumulate_tool_call_chunks(
+                pending_tool_calls, chunks, is_main=is_main, last_active_id=last_active_id
+            )
         seed_pending_tool_calls_from_message(pending_tool_calls, message, is_main=is_main)
-        return
-    accumulate_tool_call_chunks(
+        return last_active_id
+    last_active_id = accumulate_tool_call_chunks(
         pending_tool_calls,
         getattr(message, "tool_call_chunks", None) or [],
         is_main=is_main,
+        last_active_id=last_active_id,
     )
     seed_pending_tool_calls_from_message(pending_tool_calls, message, is_main=is_main)
+    return last_active_id
 
 
 def tool_lookup_step_id(tool_call_id: str) -> str:

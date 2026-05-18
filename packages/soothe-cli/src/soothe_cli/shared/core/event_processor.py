@@ -541,10 +541,11 @@ class EventProcessor:
 
         # Accumulate streaming tool args (IG-053)
         tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
-        accumulate_tool_call_chunks(
+        self._state.last_active_tool_call_id = accumulate_tool_call_chunks(
             self._state.pending_tool_calls,
             tool_call_chunks,
             is_main=is_main,
+            last_active_id=self._state.last_active_tool_call_id,
         )
 
         # Emit pending tool calls with complete args
@@ -782,10 +783,11 @@ class EventProcessor:
         # Accumulate streaming tool args from tool_call_chunks (IG-053)
         tool_call_chunks = msg.get("tool_call_chunks", [])
         if isinstance(tool_call_chunks, list) and tool_call_chunks:
-            accumulate_tool_call_chunks(
+            self._state.last_active_tool_call_id = accumulate_tool_call_chunks(
                 self._state.pending_tool_calls,
                 tool_call_chunks,
                 is_main=is_main,
+                last_active_id=self._state.last_active_tool_call_id,
             )
 
         self._emit_pending_tool_calls(namespace)

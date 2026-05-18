@@ -71,6 +71,16 @@ class EventStats:
     # Stream tool wire events
     stream_tool_updates: list[dict[str, Any]] = field(default_factory=list)
 
+    # Args accumulation tracking (like TUI's pending_tool_calls)
+    pending_tool_calls: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # tool_call_id -> {"name": str, "args_str": str, "is_complete_json": bool}
+
+    # Track last active tool_call_id for orphan chunk attachment
+    last_active_tool_call_id: str = ""
+
+    # Final accumulated args per tool_call_id
+    accumulated_args: dict[str, dict[str, Any]] = field(default_factory=dict)
+
     # Validation errors
     errors: list[str] = field(default_factory=list)
 
@@ -117,31 +127,95 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                     # Log the message structure with full tool_calls content
                     tool_calls = msg.get("tool_calls", [])
                     chunks = msg.get("tool_call_chunks", [])
+                    msg_type = msg.get("type", "unknown")
+
+                    # Distinguish AIMessage vs AIMessageChunk
                     logger.info(
                         "Messages event: type=%s tool_calls=%d chunks=%d",
-                        msg.get("type", "unknown"),
+                        msg_type,
                         len(tool_calls),
                         len(chunks)
                     )
 
-                    # Log actual tool_call content for debugging
-                    if tool_calls:
-                        for tc in tool_calls:
-                            if isinstance(tc, dict):
-                                logger.info(
-                                    "tool_calls entry: id=%s name=%s args_keys=%s",
-                                    tc.get("id", ""),
-                                    tc.get("name", ""),
-                                    list(tc.get("args", {}).keys()) if isinstance(tc.get("args"), dict) else "N/A"
+                    # --- Args accumulation (like TUI's accumulate_tool_call_chunks) ---
+                    for tcc in chunks:
+                        if not isinstance(tcc, dict):
+                            continue
+                        tc_id_raw = tcc.get("id")
+                        tc_id = str(tc_id_raw) if tc_id_raw not in (None, "") else ""
+                        tc_name = tcc.get("name")
+                        tc_args = tcc.get("args", "")
+
+                        # First chunk with a tool name: register the pending tool call
+                        if tc_name and tc_id and tc_id not in stats.pending_tool_calls:
+                            if isinstance(tc_args, str):
+                                args_str = tc_args
+                                is_complete = False  # String may be partial JSON
+                            elif isinstance(tc_args, dict) and tc_args:
+                                args_str = json.dumps(tc_args)
+                                is_complete = True  # Dict yields complete JSON
+                            else:
+                                args_str = ""
+                                is_complete = False  # Empty or missing args
+                            stats.pending_tool_calls[tc_id] = {
+                                "name": tc_name,
+                                "args_str": args_str,
+                                "is_complete_json": is_complete,
+                            }
+                            stats.last_active_tool_call_id = tc_id
+                            logger.debug(
+                                "Registered pending tool: id=%s name=%s args_str='%s'",
+                                tc_id, tc_name, args_str[:50]
+                            )
+                        # Some providers send final args as a dict on a later chunk
+                        elif tc_id and tc_id in stats.pending_tool_calls and isinstance(tc_args, dict) and tc_args:
+                            stats.pending_tool_calls[tc_id]["args_str"] = json.dumps(tc_args)
+                            stats.pending_tool_calls[tc_id]["is_complete_json"] = True
+                            logger.debug(
+                                "Updated pending tool with dict args: id=%s args=%s",
+                                tc_id, str(tc_args)[:50]
+                            )
+                        # Subsequent chunks: accumulate partial JSON strings
+                        elif tc_id and tc_id in stats.pending_tool_calls and isinstance(tc_args, str) and tc_args:
+                            if stats.pending_tool_calls[tc_id].get("is_complete_json"):
+                                # Provider refined args → restart accumulation
+                                stats.pending_tool_calls[tc_id]["args_str"] = tc_args
+                                stats.pending_tool_calls[tc_id]["is_complete_json"] = False
+                            else:
+                                # Normal partial accumulation
+                                stats.pending_tool_calls[tc_id]["args_str"] += tc_args
+                                logger.debug(
+                                    "Accumulated chunk: id=%s args_str='%s'",
+                                    tc_id, stats.pending_tool_calls[tc_id]["args_str"][:50]
                                 )
-                    if chunks:
-                        for ch in chunks[:3]:  # Log first 3 chunks only
-                            if isinstance(ch, dict):
+                        # Chunks without id: attach to last active tool (the one being streamed currently)
+                        elif tc_args and isinstance(tc_args, str) and tc_args:
+                            last_id = stats.last_active_tool_call_id
+                            if last_id and last_id in stats.pending_tool_calls:
+                                if not stats.pending_tool_calls[last_id].get("_emitted"):
+                                    stats.pending_tool_calls[last_id]["args_str"] += tc_args
+                                    logger.debug(
+                                        "Attached orphan chunk to last active: id=%s args_str='%s'",
+                                        last_id, stats.pending_tool_calls[last_id]["args_str"][:50]
+                                    )
+
+                    # Also check tool_calls for complete args (terminal message)
+                    for tc in tool_calls:
+                        if not isinstance(tc, dict):
+                            continue
+                        tc_id = str(tc.get("id") or "").strip()
+                        if not tc_id:
+                            continue
+                        tc_args = tc.get("args")
+                        if isinstance(tc_args, dict) and tc_args:
+                            # This is a terminal message with complete args
+                            if tc_id in stats.pending_tool_calls:
+                                stats.pending_tool_calls[tc_id]["args_str"] = json.dumps(tc_args)
+                                stats.pending_tool_calls[tc_id]["is_complete_json"] = True
+                                stats.pending_tool_calls[tc_id]["_from_terminal"] = True
                                 logger.info(
-                                    "chunk entry: id=%s name=%s args_type=%s",
-                                    ch.get("id", ""),
-                                    ch.get("name", ""),
-                                    type(ch.get("args")).__name__
+                                    "Terminal tool_call with args: id=%s args=%s",
+                                    tc_id, str(tc_args)[:100]
                                 )
 
                     # Extract tool_call_ids from message (using standard function)
@@ -376,6 +450,39 @@ def print_summary(stats: EventStats) -> None:
         by_name[update.get("name", "unknown")].append(update)
     for name, updates in sorted(by_name.items(), key=lambda x: -len(x[1])):
         print(f"  {name}: {len(updates)} updates")
+
+    # --- Args Accumulation Summary ---
+    print("\n--- Args Accumulation (Streaming Chunk Merge) ---")
+    if stats.pending_tool_calls:
+        print(f"  Pending tool calls tracked: {len(stats.pending_tool_calls)}")
+        for tc_id, state in sorted(stats.pending_tool_calls.items()):
+            args_str = state.get("args_str", "")
+            is_complete = state.get("is_complete_json", False)
+            name = state.get("name", "unknown")
+            from_terminal = state.get("_from_terminal", False)
+
+            # Try to parse accumulated args
+            parsed_args = {}
+            parse_error = None
+            if args_str:
+                try:
+                    parsed = json.loads(args_str)
+                    if isinstance(parsed, dict):
+                        parsed_args = parsed
+                except json.JSONDecodeError as e:
+                    parse_error = str(e)[:50]
+
+            status = "✓ complete" if is_complete else ("✓ terminal" if from_terminal else "⏳ partial")
+            if parse_error:
+                status = f"⚠ parse error: {parse_error}"
+
+            args_preview = str(parsed_args)[:80] if parsed_args else args_str[:80]
+            print(f"  {tc_id}:")
+            print(f"    name: {name}")
+            print(f"    status: {status}")
+            print(f"    args: {args_preview if args_preview else '(empty)'}")
+    else:
+        print("  No tool calls tracked for args accumulation")
 
     print("\n--- Subagent Wire Events ---")
     print(f"  Total: {sum(stats.subagent_events_by_type.values())}")
