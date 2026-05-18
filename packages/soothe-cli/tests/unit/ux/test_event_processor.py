@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from unittest.mock import MagicMock
 
-from soothe.core.events import PLAN_CREATED
+from soothe_sdk.core.events import PLAN_CREATED
 
 from soothe_cli.shared import EventProcessor, ProcessorState
 

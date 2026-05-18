@@ -245,7 +245,7 @@ setup_workspace() {
     fi
 
     print_info "Syncing workspace packages with dev dependencies..."
-    uv sync --all-extras 2>&1 || true
+    uv sync --all-packages --all-extras 2>&1 || true
     print_success "Workspace synced (with dev dependencies)"
 }
 
