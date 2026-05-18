@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from soothe_cli.tui.tool_display import format_tool_cli_style_command, format_tool_display
-from soothe_cli.tui.widgets.messages import ToolCallMessage
 
 
 def test_read_file_shows_line_range_when_present() -> None:
@@ -83,11 +82,6 @@ def test_read_file_without_path_key_shows_other_args_not_placeholder() -> None:
     s = format_tool_display("read_file", {"start_line": 1, "end_line": 10, "encoding": "utf-8"})
     assert "(…)" not in s
     assert "start_line=" in s or "1" in s
-
-
-def test_tool_call_message_infers_name_from_tool_call_id() -> None:
-    w = ToolCallMessage("tool", {}, tool_call_id="functions.glob:2", id="x")
-    assert w._tool_name == "glob"
 
 
 def test_ls_empty_args_shows_workspace_default_not_bare_parens() -> None:

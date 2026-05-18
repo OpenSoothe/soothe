@@ -1043,7 +1043,15 @@ class MessageRouter:
         await handle_loop_reattach(loop_id, d, client_id)
 
         verbosity = msg.get("verbosity", "normal")
-        await d._session_manager.subscribe_loop(client_id, loop_id, verbosity=verbosity)
+        stream_delivery = msg.get("stream_delivery", "batch")
+        if stream_delivery not in ("batch", "merged", "full"):
+            stream_delivery = "batch"
+        await d._session_manager.subscribe_loop(
+            client_id,
+            loop_id,
+            verbosity=verbosity,
+            stream_delivery=stream_delivery,
+        )
         session = await d._session_manager.get_session(client_id)
         if session:
             await session.transport.send(

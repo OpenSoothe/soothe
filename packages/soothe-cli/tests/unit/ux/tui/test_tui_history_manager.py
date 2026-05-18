@@ -57,4 +57,4 @@ def test_history_manager_writes_unified_dict_format(tmp_path) -> None:
     payload = json.loads(lines[-1])
     assert isinstance(payload, dict)
     assert payload.get("text") == "count README files"
-    assert payload.get("thread_id") == "tui"
+    assert payload.get("loop_id") == "tui"

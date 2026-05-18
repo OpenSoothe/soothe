@@ -6,6 +6,7 @@ import contextlib
 import json
 import logging
 import os
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 _LOG_CONTENT_LIMIT = 2000
 _MESSAGE_TUPLE_LENGTH = 2
+_BUFFER_FLUSH_THRESHOLD = 100
+_BUFFER_FLUSH_INTERVAL_SECONDS = 1.0
 
 
 def _truncate_for_log(text: str, limit: int = _LOG_CONTENT_LIMIT) -> str:
@@ -60,6 +63,9 @@ class ThreadLogger:
         self._retention_days = retention_days
         self._max_size_mb = max_size_mb
         self._initialized = False
+        # Buffer for batched writes (performance optimization)
+        self._buffer: list[str] = []
+        self._last_flush_time: float = time.time()
 
     @property
     def thread_dir(self) -> Path:
@@ -232,16 +238,39 @@ class ThreadLogger:
         return items[-limit:]
 
     def _write_record(self, record: dict[str, Any]) -> None:
-        """Append a single JSONL record to the thread log."""
+        """Append a single JSONL record to the thread log (buffered)."""
         try:
             self._ensure_dir()
+            # Buffer the record
+            self._buffer.append(json.dumps(record, default=str))
+            # Flush if threshold reached or time interval elapsed
+            current_time = time.time()
+            if (
+                len(self._buffer) >= _BUFFER_FLUSH_THRESHOLD
+                or current_time - self._last_flush_time >= _BUFFER_FLUSH_INTERVAL_SECONDS
+            ):
+                self._flush_buffer()
+        except OSError:
+            logger.debug("ThreadLogger write failed", exc_info=True)
+
+    def _flush_buffer(self) -> None:
+        """Flush buffered records to disk."""
+        if not self._buffer:
+            return
+        try:
             with self.log_path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(record, default=str) + "\n")
+                fh.write("\n".join(self._buffer) + "\n")
                 fh.flush()
                 with contextlib.suppress(OSError):
                     os.fsync(fh.fileno())
+            self._buffer.clear()
+            self._last_flush_time = time.time()
         except OSError:
-            logger.debug("ThreadLogger write failed", exc_info=True)
+            logger.debug("ThreadLogger flush failed", exc_info=True)
+
+    def flush(self) -> None:
+        """Public flush method for explicit buffer clearing."""
+        self._flush_buffer()
 
     def _ensure_dir(self) -> None:
         if not self._initialized:

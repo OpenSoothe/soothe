@@ -57,6 +57,7 @@ class TuiDaemonSession:
             self._client,
             resume_loop_id=resume_loop_id,
             verbosity="normal",
+            stream_delivery="merged",
             workspace=self._workspace,
         )
         if status_event.get("type") == "error":

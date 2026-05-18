@@ -14,6 +14,7 @@ import websockets.exceptions
 from soothe_sdk.core.types import VerbosityLevel
 
 from soothe_daemon.event import loop_event_topic
+from soothe_daemon.query.stream_delivery import StreamDeliveryMode
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
@@ -104,6 +105,7 @@ class ClientSessionManager:
         self._sessions: dict[str, ClientSession] = {}
         self._lock = asyncio.Lock()
         self._client_loop_ownership: dict[str, str] = {}  # client_id → loop_id
+        self._loop_stream_delivery: dict[str, StreamDeliveryMode] = {}
         self._cancel_callback = cancel_callback
         self._dispatch_cleanup_callback = dispatch_cleanup_callback
 
@@ -134,11 +136,17 @@ class ClientSessionManager:
 
         return client_id
 
+    def get_stream_delivery(self, loop_id: str) -> StreamDeliveryMode:
+        """Return stream shaping mode for a loop (``batch``, ``merged``, or ``full``)."""
+        return self._loop_stream_delivery.get(loop_id, "batch")
+
     async def subscribe_loop(
         self,
         client_id: str,
         loop_id: str,
         verbosity: VerbosityLevel = "normal",
+        *,
+        stream_delivery: StreamDeliveryMode = "batch",
     ) -> bool:
         """Subscribe client to loop event topic; replaces prior loop subscriptions.
 
@@ -158,6 +166,10 @@ class ClientSessionManager:
             return False
 
         session.verbosity = verbosity
+        delivery: StreamDeliveryMode = (
+            stream_delivery if stream_delivery in ("batch", "merged", "full") else "batch"
+        )
+        self._loop_stream_delivery[loop_id] = delivery
 
         # Strict single-loop subscription per client for isolation
         for prev in list(session.subscriptions):
@@ -174,10 +186,11 @@ class ClientSessionManager:
         await self._event_bus.unsubscribe(_GLOBAL_TOPIC, session.event_queue)
 
         logger.info(
-            "[Session] Client %s → loop %s (verbosity=%s)",
+            "[Session] Client %s → loop %s (verbosity=%s, stream_delivery=%s)",
             client_id[:8],
             loop_id[:8],
             verbosity,
+            delivery,
         )
         return True
 

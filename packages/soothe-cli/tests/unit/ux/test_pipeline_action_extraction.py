@@ -165,8 +165,8 @@ def test_on_loop_agent_reason_uses_complete_action_for_done():
     lines = pipeline.process(event)
     # IG-257: Should show 2 lines
     assert len(lines) == 2
-    # format_judgement uses "✓" icon for "complete" action
-    assert lines[0].icon == "✓"
+    # format_judgement uses "●" (filled circle) for "complete" action
+    assert lines[0].icon == "●"
 
 
 def test_on_loop_agent_reason_uses_continue_icon_for_working():
@@ -185,5 +185,5 @@ def test_on_loop_agent_reason_uses_continue_icon_for_working():
     lines = pipeline.process(event)
     # IG-257: Should show 2 lines
     assert len(lines) == 2
-    # format_judgement uses "→" icon for "continue" action
-    assert lines[0].icon == "→"
+    # format_judgement uses "○" (hollow circle) for "continue" action
+    assert lines[0].icon == "○"

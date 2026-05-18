@@ -100,6 +100,7 @@ def test_merge_history_sources_handles_mixed_timestamp_awareness() -> None:
 async def test_fetch_loop_history_prefers_checkpoint_cards() -> None:
     """Resumed history should prioritize checkpoint conversion over event fallback."""
     app = object.__new__(SootheApp)
+    app._daemon_session = None  # Required attribute for method
     app._get_loop_state_values = AsyncMock(
         return_value={
             "_context_tokens": 7,
