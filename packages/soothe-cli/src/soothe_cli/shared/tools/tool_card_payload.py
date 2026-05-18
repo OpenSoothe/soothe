@@ -13,8 +13,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
+
 from soothe_cli.shared.tools._utils import text_looks_like_error
-from soothe_cli.shared.tools.tool_call_resolution import infer_tool_name_from_call_id
 from soothe_cli.shared.tools.tool_message_format import (
     format_tool_message_content,
     run_python_envelope_indicates_failure,
@@ -101,9 +102,12 @@ def extract_tool_result_card_payload(message: Any) -> ToolResultCardPayload | No
     tool_call_id = str(data.get("tool_call_id") or "").strip()
     tool_name = str(data.get("name") or "").strip()
     if tool_call_id and (not tool_name or tool_name == "tool"):
-        inferred = infer_tool_name_from_call_id(tool_call_id)
-        if inferred:
-            tool_name = inferred
+        # IG-418: Extract tool name from unified format
+        _, _, _, tool_info = parse_unified_tool_call_id(tool_call_id)
+        if tool_info:
+            head = tool_info.split(".")[0].strip()
+            if head and head != "tool":
+                tool_name = head
     if not tool_name:
         tool_name = "tool"
     raw_status = data.get("status")

@@ -6,7 +6,6 @@ from collections import deque
 
 from soothe_sdk.ux.task_namespace import (
     _shorten_tool_call_id,
-    alternate_subgraph_row_keys,
     maybe_bind_namespace,
     parse_unified_tool_call_id,
     register_task_spawn_for_step,
@@ -199,12 +198,6 @@ def test_resolve_task_parent_for_unified_task_level_id() -> None:
 def test_shorten_tool_call_id_normalizes_provider_colon_index() -> None:
     assert _shorten_tool_call_id("functions.grep:0") == "grep.0"
     assert _shorten_tool_call_id("GHT-01:t0:read_file.1") == "read_file.1"
-
-
-def test_alternate_subgraph_row_keys_colon_dot_variants() -> None:
-    keys = alternate_subgraph_row_keys("STEP-01:t0:grep.0")
-    assert "STEP-01:t0:grep.0" in keys
-    assert "STEP-01:t0:grep:0" in keys
 
 
 def test_row_key_for_subgraph_tool_unified_passthrough() -> None:

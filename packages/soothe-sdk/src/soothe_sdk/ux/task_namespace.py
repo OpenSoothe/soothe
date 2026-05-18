@@ -71,33 +71,6 @@ def normalize_unified_tool_call_id(tool_call_id: str) -> str:
     return tid
 
 
-def alternate_subgraph_row_keys(row_key: str) -> tuple[str, ...]:
-    """Return ``row_key`` plus legacy colon/dot fragment variants for row lookup."""
-    key = str(row_key).strip()
-    if not key:
-        return ()
-    out: list[str] = [key]
-    parts = key.split(":")
-    if len(parts) < 3 or not parts[1].startswith("t"):
-        return tuple(out)
-    prefix = ":".join(parts[:2])
-    if len(parts) == 3:
-        frag = parts[2]
-        if "." in frag:
-            tool, _, idx = frag.partition(".")
-            if tool and idx.isdigit():
-                out.append(f"{prefix}:{tool}:{idx}")
-        elif ":" not in frag:
-            pass
-        else:
-            tool, _, idx = frag.rpartition(":")
-            if tool and idx.isdigit():
-                out.append(f"{prefix}:{tool}.{idx}")
-    elif len(parts) == 4 and parts[3].isdigit():
-        out.append(f"{prefix}:{parts[2]}.{parts[3]}")
-    return tuple(dict.fromkeys(out))
-
-
 def parse_unified_tool_call_id(tool_call_id: str) -> tuple[str, str, int | None, str]:
     """Parse unified tool_call_id format into components.
 
@@ -400,7 +373,6 @@ def resolve_task_parent_lookup(
 
 __all__ = [
     "TaskScope",
-    "alternate_subgraph_row_keys",
     "normalize_unified_tool_call_id",
     "_shorten_tool_call_id",
     "enqueue_task_spawn",
