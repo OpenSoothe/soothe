@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage
+from soothe.utils.llm.structured_invoke import StructuredOutputError, invoke_structured_chat
 from soothe.utils.text_preview import log_preview
 
 from soothe_daemon.image_understanding import _build_vision_invoke_config
@@ -105,6 +107,9 @@ async def run_direct_llm_turn(
     model: str | None = None,
     model_params: dict[str, Any] | None = None,
     session_id: str | None = None,
+    response_schema: dict[str, Any] | None = None,
+    response_schema_name: str | None = None,
+    response_schema_strict: bool | None = None,
 ) -> str:
     """Run the configured ``default`` role model (or an explicit ``provider:model`` spec).
 
@@ -114,11 +119,15 @@ async def run_direct_llm_turn(
         model: Optional ``provider:model`` override (same wire field as agent turns).
         model_params: Optional extra kwargs for ``init_chat_model`` when using override.
         session_id: Optional Langfuse session id.
+        response_schema: Optional client JSON Schema for structured output (``direct_llm`` only).
+        response_schema_name: Optional provider schema name override.
+        response_schema_strict: When set, controls strict json_schema mode (default True).
 
     Returns:
-        Stripped model text, or a short placeholder if empty.
+        Stripped model text, or canonical JSON string when ``response_schema`` is set.
 
     Raises:
+        StructuredOutputError: When structured output was requested but could not be produced.
         Exception: Propagated from the underlying model provider.
     """
     stripped = (user_text or "").strip()
@@ -139,20 +148,47 @@ async def run_direct_llm_turn(
         session_id=session_id,
     )
     model_label = m if m else "default"
+    structured = response_schema is not None
+    strict = True if response_schema_strict is None else bool(response_schema_strict)
     logger.info(
-        "[intent_hint direct_llm] request session_id=%s model=%s user_text=%s",
+        "[intent_hint direct_llm] request session_id=%s model=%s structured=%s user_text=%s",
         session_id,
         model_label,
+        structured,
         log_preview(stripped, chars=_LOG_PREVIEW_CHARS),
     )
-    response = await chat.ainvoke([HumanMessage(content=stripped)], config=invoke_cfg)
-    out = str(response.content).strip()
-    if not out:
-        out = "(Model returned empty content.)"
+
+    if structured:
+        # Some providers (e.g. Dashscope) require the word "json" when using json response_format.
+        structured_prompt = stripped
+        if "json" not in stripped.lower():
+            structured_prompt = f"{stripped}\n\nRespond with JSON matching the provided schema."
+        try:
+            data = await invoke_structured_chat(
+                chat,
+                [HumanMessage(content=structured_prompt)],
+                json_schema=response_schema,
+                schema_name=response_schema_name,
+                strict=strict,
+                config=invoke_cfg,
+            )
+            out = json.dumps(data, ensure_ascii=False)
+        except StructuredOutputError:
+            raise
+        except Exception as exc:
+            msg = f"structured direct_llm failed: {exc}"
+            raise StructuredOutputError(msg) from exc
+    else:
+        response = await chat.ainvoke([HumanMessage(content=stripped)], config=invoke_cfg)
+        out = str(response.content).strip()
+        if not out:
+            out = "(Model returned empty content.)"
+
     logger.info(
-        "[intent_hint direct_llm] response session_id=%s model=%s content=%s",
+        "[intent_hint direct_llm] response session_id=%s model=%s structured=%s content=%s",
         session_id,
         model_label,
+        structured,
         log_preview(out, chars=_LOG_PREVIEW_CHARS),
     )
     return out

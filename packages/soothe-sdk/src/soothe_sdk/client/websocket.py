@@ -213,6 +213,9 @@ class WebSocketClient:
         model_params: dict[str, Any] | None = None,
         attachments: list[dict[str, str]] | None = None,
         intent_hint: str | None = None,
+        response_schema: dict[str, Any] | None = None,
+        response_schema_name: str | None = None,
+        response_schema_strict: bool | None = None,
     ) -> None:
         """Send user input to the daemon for a subscribed loop (``loop_input``).
 
@@ -230,7 +233,8 @@ class WebSocketClient:
                 ``quiz``, ``continue_thread``, ``new_goal``. Daemon-only
                 values ``direct_llm`` and ``image_to_text`` invoke a configured chat
                 model directly (no Soothe agent graph); ``image_to_text`` requires
-                ``attachments``.
+                ``attachments``. With ``intent_hint=direct_llm``, ``response_schema`` requests
+                strict JSON output matching the client JSON Schema.
         """
         payload: dict[str, Any] = {
             "type": "loop_input",
@@ -253,6 +257,12 @@ class WebSocketClient:
             payload["attachments"] = attachments
         if intent_hint:
             payload["intent_hint"] = intent_hint
+        if response_schema:
+            payload["response_schema"] = response_schema
+        if response_schema_name:
+            payload["response_schema_name"] = response_schema_name
+        if response_schema_strict is not None:
+            payload["response_schema_strict"] = response_schema_strict
         await self.send(payload)
 
     async def send_command(self, cmd: str) -> None:
