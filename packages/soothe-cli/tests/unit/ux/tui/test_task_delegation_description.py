@@ -30,6 +30,50 @@ def test_enrich_task_delegation_args_uses_step_description_fallback() -> None:
     assert "goal engine" in str(out.get("description", ""))
 
 
+def test_enrich_task_delegation_args_parallel_steps_use_own_step_brief() -> None:
+    """When a step starts, its task card must not show a sibling step's task description."""
+    adapter = TextualUIAdapter(
+        mount_message=AsyncMock(),
+        update_status=AsyncMock(),
+        request_approval=AsyncMock(),
+    )
+    adapter._current_step_messages["AAA-01"] = CognitionStepMessage(
+        "AAA-01",
+        "First step explores the repository",
+    )
+    adapter._current_step_messages["BBB-02"] = CognitionStepMessage(
+        "BBB-02",
+        "Second step maps architecture",
+    )
+    pending = {
+        "AAA-01:s:task:0": {
+            "name": "task",
+            "args_str": (
+                '{"description": "First step explores the repository", '
+                '"subagent_type": "explore"}'
+            ),
+            "is_complete_json": True,
+            "emitted": False,
+            "is_main": True,
+        },
+        "BBB-02:s:task:0": {
+            "name": "task",
+            "args_str": "{}",
+            "is_complete_json": False,
+            "emitted": False,
+            "is_main": True,
+        },
+    }
+    out = enrich_task_delegation_args(
+        adapter,
+        "BBB-02:s:task:0",
+        {},
+        pending_tool_calls_lc=pending,
+    )
+    assert "Second step maps" in str(out.get("description", ""))
+    assert "First step explores" not in str(out.get("description", ""))
+
+
 def test_enrich_task_delegation_args_prefers_stream_overlay() -> None:
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),

@@ -187,6 +187,55 @@ async def test_stream_and_collect_rewrites_subgraph_tool_ids_to_task_level() -> 
 
 
 @pytest.mark.asyncio
+async def test_stream_and_collect_emits_tool_call_update_custom_events() -> None:
+    """Namespaced tool kwargs are also sent as ``soothe.stream.tool_call.update`` events."""
+    from langchain_core.messages import AIMessageChunk
+    from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
+
+    chunk: tuple = (
+        ("tools:subgraph-1",),
+        "messages",
+        (
+            AIMessageChunk(
+                content="",
+                tool_calls=[{"name": "grep", "args": {}, "id": "functions.grep:0"}],
+                tool_call_chunks=[
+                    {
+                        "name": "grep",
+                        "id": "functions.grep:0",
+                        "args": '{"pattern": "TODO"}',
+                    },
+                ],
+            ),
+            {},
+        ),
+    )
+    mock_agent = MagicMock()
+
+    async def fake_stream():
+        yield chunk
+
+    executor = Executor(mock_agent)
+    custom_payloads: list[dict] = []
+    async for _out, event, _tc, _msgs, _df in executor._stream_and_collect(
+        fake_stream(),
+        budget=None,
+        step_id="GHT-01",
+    ):
+        if isinstance(event, tuple) and len(event) == 3 and event[1] == "custom":  # noqa: PLR2004
+            data = event[2]
+            if isinstance(data, dict):
+                custom_payloads.append(data)
+
+    assert any(
+        p.get("type") == STREAM_TOOL_CALL_UPDATE
+        and p.get("tool_call_id", "").startswith("GHT-01:t0:grep")
+        and p.get("args", {}).get("pattern") == "TODO"
+        for p in custom_payloads
+    )
+
+
+@pytest.mark.asyncio
 async def test_backfill_tool_calls_args_from_chunks_by_index() -> None:
     """Chunks without ``id`` still backfill ``tool_calls`` via ``index``."""
     from langchain_core.messages import AIMessage
@@ -245,7 +294,7 @@ async def test_stream_injects_step_description_on_empty_task_args() -> None:
     _ns, _mode, data = rows[0][1]
     msg = data[0]
     tc = msg.tool_calls[0]
-    assert tc["id"] == "JPV-01:s:task:0"
+    assert tc["id"] == "JPV-01:s:task.0"
     assert "agentloop" in str(tc["args"].get("description", ""))
     assert tc["args"].get("subagent_type") == "explore"
 
@@ -411,7 +460,7 @@ async def test_subgraph_rewrite_skips_already_unified_step_level_ids() -> None:
     _ns, _mode, data = rows[0][1]
     msg = data[0]
     tc_chunks = getattr(msg, "tool_call_chunks", None) or []
-    assert tc_chunks[0]["id"] == "EZJ-07:s:task:0"
+    assert tc_chunks[0]["id"] == "EZJ-07:s:task.0"
 
 
 @pytest.mark.asyncio
@@ -447,7 +496,7 @@ async def test_stream_and_collect_rewrites_root_tool_message_to_unified_id() -> 
     assert mode == "messages"
     msg = data[0]
     assert isinstance(msg, ToolMessage)
-    assert msg.tool_call_id == "GHT-01:s:grep:0"
+    assert msg.tool_call_id == "GHT-01:s:grep.0"
 
 
 def test_record_execute_wave_parallel_multi_clears_when_no_delegate() -> None:

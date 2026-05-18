@@ -77,7 +77,11 @@ from soothe_cli.tui.textual_adapter._stream_formatting import (
     _mount_subagent_inner_tool_row_if_resolved,
     _raw_tool_content_for_presentation,
     _try_register_task_scoped_inner_tool_pending,
+    alias_subgraph_pending_and_overlay,
+    canonical_subgraph_tool_ids,
     enrich_task_delegation_args,
+    refresh_subgraph_parent_tool_row,
+    refresh_subgraph_tool_rows_from_overlay,
     refresh_task_cards_for_step,
     sync_pending_step_cards_from_plan,
     sync_task_delegation_cards_from_stream,
@@ -268,6 +272,7 @@ async def execute_task_textual(
     tool_call_buffers: dict[str | int, dict] = {}
     # Streaming tool-call args (``tool_call_chunks``) — mirrors EventProcessor / IG-053
     pending_tool_calls_lc: dict[str, dict[str, Any]] = {}
+    streaming_overlay: dict[str, dict[str, Any]] = {}
 
     # Track pending text and assistant messages PER NAMESPACE to avoid interleaving
     # when multiple subagents stream in parallel
@@ -728,7 +733,6 @@ async def execute_task_textual(
                                 turn_stats.record_request(active_model, total_toks, 0)
                                 captured_input_tokens = max(captured_input_tokens, total_toks)
 
-                    streaming_overlay: dict[str, dict[str, Any]] = {}
                     ingest_tool_call_stream_state(
                         pending_tool_calls_lc,
                         message,
@@ -741,9 +745,25 @@ async def execute_task_textual(
                         overlay_msg = message
                         if isinstance(message, dict):
                             overlay_msg = AIMessageChunk(content="")
-                        streaming_overlay = build_streaming_args_overlay(
+                        chunk_overlay = build_streaming_args_overlay(
                             overlay_msg, pending_tool_calls_lc
                         )
+                        streaming_overlay.update(chunk_overlay)
+                        if ns_key:
+                            alias_subgraph_pending_and_overlay(
+                                pending_tool_calls_lc,
+                                streaming_overlay,
+                                router,
+                                ns_key,
+                            )
+                            refresh_subgraph_tool_rows_from_overlay(
+                                adapter,
+                                router,
+                                ns_key=ns_key,
+                                streaming_overlay=streaming_overlay,
+                                pending_tool_calls_lc=pending_tool_calls_lc,
+                                message=message,
+                            )
                         if is_main_agent and streaming_overlay:
                             await sync_task_delegation_cards_from_stream(
                                 adapter,
@@ -1055,9 +1075,16 @@ async def execute_task_textual(
                             if isinstance(parsed_args, dict):
                                 parsed_args = extract_tool_args_dict(parsed_args)
 
-                            if lookup_id:
+                            merge_lookup_id = lookup_id
+                            if lookup_id and not is_main_agent:
+                                ts_merge = router.resolve_task_scope(ns_key)
+                                merge_lookup_id, _rk = canonical_subgraph_tool_ids(
+                                    ns_key, str(lookup_id), task_scope=ts_merge
+                                )
+                                merge_lookup_id = merge_lookup_id or lookup_id
+                            if merge_lookup_id:
                                 parsed_args = merge_tool_display_args(
-                                    lookup_id,
+                                    merge_lookup_id,
                                     block_args=parsed_args,
                                     streaming_overlay=streaming_overlay,
                                     pending_tool_calls_lc=pending_tool_calls_lc,
@@ -1175,6 +1202,21 @@ async def execute_task_textual(
                             if args_still_streaming and not args_meaningful:
                                 continue
 
+                            if (
+                                lookup_id
+                                and args_meaningful
+                                and not is_main_agent
+                                and refresh_subgraph_parent_tool_row(
+                                    adapter,
+                                    router,
+                                    ns_key=ns_key,
+                                    lookup_id=str(lookup_id),
+                                    parsed_args=parsed_args,
+                                )
+                            ):
+                                tool_call_buffers.pop(buffer_key, None)
+                                continue
+
                             existing_tool = None
                             if lookup_id:
                                 step_agg = adapter._step_by_namespace.get(ns_key)
@@ -1208,11 +1250,35 @@ async def execute_task_textual(
                                 tool_call_buffers.pop(buffer_key, None)
                                 continue
 
-                            display_key = (
-                                scoped_subgraph_tool_key(ns_key, str(lookup_id))
-                                if lookup_id and not is_main_agent
-                                else str(lookup_id)
-                            )
+                            if lookup_id and not is_main_agent:
+                                ts_disp = router.resolve_task_scope(ns_key)
+                                _merge_disp, display_key = canonical_subgraph_tool_ids(
+                                    ns_key, str(lookup_id), task_scope=ts_disp
+                                )
+                                display_key = display_key or str(lookup_id)
+                            else:
+                                display_key = str(lookup_id) if lookup_id else ""
+                            if (
+                                display_key
+                                and display_key in displayed_tool_ids
+                                and args_meaningful
+                                and not is_main_agent
+                                and refresh_subgraph_parent_tool_row(
+                                    adapter,
+                                    router,
+                                    ns_key=ns_key,
+                                    lookup_id=str(lookup_id),
+                                    parsed_args=parsed_args,
+                                )
+                            ):
+                                logger.debug(
+                                    "Subagent tool row args refreshed (already displayed): "
+                                    "id=%s name=%s",
+                                    lookup_id,
+                                    buffer_name,
+                                )
+                                tool_call_buffers.pop(buffer_key, None)
+                                continue
                             if display_key and display_key not in displayed_tool_ids:
                                 # IG-416: Extract step_id from unified tool_call_id
                                 if lookup_id and is_main_agent:
@@ -1495,6 +1561,8 @@ async def execute_task_textual(
                             ns_key=ns_key,
                             show_tool_ui=show_tool_ui,
                             pending_tool_calls_lc=pending_tool_calls_lc,
+                            streaming_overlay=streaming_overlay,
+                            file_op_tracker=file_op_tracker,
                         ):
                             continue
                         if event_type.startswith("soothe.error"):

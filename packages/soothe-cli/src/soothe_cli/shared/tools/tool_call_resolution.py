@@ -99,16 +99,25 @@ def _pick_args_from_sources(
     from_tool_call_attr: dict[str, Any],
     from_block: dict[str, Any],
 ) -> dict[str, Any]:
-    """Prefer complete ``tool_calls`` on the message, then stream overlay, pending, block."""
+    """Merge kwargs from all sources; later sources override earlier partial values.
+
+    Order (lowest → highest priority): block buffer, streaming overlay, pending
+    buffer, ``message.tool_calls``. This keeps early partial stream args visible until
+    complete JSON arrives on pending or the wire message.
+    """
+    merged: dict[str, Any] = {}
     for cand in (
-        from_message_tool_calls,
+        from_block,
         from_streaming,
         from_tool_call_attr,
-        from_block,
+        from_message_tool_calls,
     ):
-        if tool_args_meaningful(cand):
-            return extract_tool_args_dict(cand)
-    return {}
+        if not isinstance(cand, dict):
+            continue
+        parsed = extract_tool_args_dict(cand)
+        if parsed:
+            merged.update(parsed)
+    return merged
 
 
 def merge_tool_display_args(
@@ -131,7 +140,34 @@ def merge_tool_display_args(
     if tcid and streaming_overlay:
         raw = streaming_overlay.get(tcid)
         if isinstance(raw, dict):
-            stream_args = raw
+            stream_args = dict(raw)
+        if not stream_args:
+            from soothe_cli.shared.tools.message_processing import (
+                _resolve_pending_lookup_tool_name,
+            )
+
+            lookup_name = _resolve_pending_lookup_tool_name(tcid, tool_name=tool_name)
+            if lookup_name and pending_tool_calls_lc:
+                from soothe_cli.shared.tools.message_processing import (
+                    _pending_or_overlay_id_matches_lookup,
+                )
+
+                best: dict[str, Any] = {}
+                for oid, oargs in streaming_overlay.items():
+                    if oid == tcid or not isinstance(oargs, dict) or not oargs:
+                        continue
+                    if not _pending_or_overlay_id_matches_lookup(
+                        str(oid), tcid, tool_name=lookup_name
+                    ):
+                        continue
+                    pend = pending_tool_calls_lc.get(str(oid))
+                    if (
+                        isinstance(pend, dict)
+                        and str(pend.get("name") or "").strip() == lookup_name
+                        and len(oargs) > len(best)
+                    ):
+                        best = dict(oargs)
+                stream_args = best
     pend_parsed: dict[str, Any] = {}
     if tcid and pending_tool_calls_lc:
         from soothe_cli.shared.tools.message_processing import richest_pending_args_for_lookup
@@ -147,10 +183,44 @@ def merge_tool_display_args(
         if raw_tc is None and isinstance(message, dict):
             raw_tc = message.get("tool_calls")
         if isinstance(raw_tc, list):
-            for tc in normalize_tool_calls_list(raw_tc):
+            normalized = normalize_tool_calls_list(raw_tc)
+            for tc in normalized:
                 if str(tc.get("id") or "").strip() == tcid:
                     message_args = extract_tool_args_dict(tc)
                     break
+            if not message_args:
+                from soothe_cli.shared.tools.message_processing import (
+                    _resolve_pending_lookup_tool_name,
+                )
+
+                lookup_name = _resolve_pending_lookup_tool_name(tcid, tool_name=tool_name)
+                if lookup_name:
+                    matches = [
+                        tc for tc in normalized if str(tc.get("name") or "").strip() == lookup_name
+                    ]
+                    if len(matches) == 1:
+                        message_args = extract_tool_args_dict(matches[0])
+                    elif matches:
+                        from soothe_cli.shared.tools.message_processing import (
+                            _pending_or_overlay_id_matches_lookup,
+                        )
+
+                        scoped = [
+                            tc
+                            for tc in matches
+                            if _pending_or_overlay_id_matches_lookup(
+                                str(tc.get("id") or ""),
+                                tcid,
+                                tool_name=lookup_name,
+                            )
+                        ]
+                        pool = scoped if scoped else matches
+                        best: dict[str, Any] = {}
+                        for tc in pool:
+                            cand = extract_tool_args_dict(tc)
+                            if len(cand) > len(best):
+                                best = cand
+                        message_args = best
     block = block_args if isinstance(block_args, dict) else {}
     return _pick_args_from_sources(
         from_message_tool_calls=message_args,

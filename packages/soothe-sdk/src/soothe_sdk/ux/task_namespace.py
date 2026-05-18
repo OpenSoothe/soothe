@@ -18,20 +18,84 @@ TaskScope: TypeAlias = tuple[str, str, str]
 _TASK_SCOPE_SEP = "\x1e"
 
 
-def _shorten_tool_call_id(raw_tid: str) -> str:
-    """Shorten provider tool_call_id for compact display.
+def _normalize_provider_tool_fragment(tid: str) -> str:
+    """Convert provider ``tool:N`` fragments to unified ``tool.N`` form."""
+    if ":" in tid:
+        name, _, idx = tid.rpartition(":")
+        if name and idx.isdigit():
+            return f"{name}.{idx}"
+    return tid
 
-    Strips 'functions.' prefix.
+
+def _shorten_tool_call_id(raw_tid: str) -> str:
+    """Shorten provider tool_call_id for compact unified fragments.
+
+    Strips ``functions.`` and normalizes ``tool:N`` → ``tool.N``.
 
     Examples:
-        'functions.task:0' → 'task:0'
-        'functions.read_file:18' → 'read_file:18'
+        'functions.task:0' → 'task.0'
+        'functions.read_file:18' → 'read_file.18'
+        'GHT-01:t0:grep.1' → 'grep.1' (already unified)
         'call_abc123' → 'call_abc123' (no pattern match, return as-is)
     """
     tid = str(raw_tid).strip()
+    normalized = normalize_unified_tool_call_id(tid)
+    if normalized != tid:
+        _parsed_sid, type_code, _, tool_info = parse_unified_tool_call_id(normalized)
+        if _parsed_sid and type_code in ("s", "t") and tool_info:
+            return tool_info
+    parsed_sid, type_code, _, tool_info = parse_unified_tool_call_id(tid)
+    if parsed_sid and type_code in ("s", "t") and tool_info:
+        return _normalize_provider_tool_fragment(tool_info)
     if tid.startswith("functions."):
         tid = tid[len("functions.") :]
+    return _normalize_provider_tool_fragment(tid)
+
+
+def normalize_unified_tool_call_id(tool_call_id: str) -> str:
+    """Normalize unified ids that use a legacy ``tool:N`` fragment to ``tool.N``."""
+    tid = str(tool_call_id).strip()
+    if not tid:
+        return tid
+    parts = tid.split(":")
+    if len(parts) >= 4 and parts[-1].isdigit():
+        type_part = parts[1]
+        if type_part == "s" or (type_part.startswith("t") and len(type_part) > 1):
+            return f"{parts[0]}:{type_part}:{parts[-2]}.{parts[-1]}"
+    parsed_sid, type_code, _, tool_info = parse_unified_tool_call_id(tid)
+    if parsed_sid and type_code in ("s", "t") and tool_info and ":" in tool_info:
+        type_part = parts[1] if len(parts) > 1 else ""
+        norm = _normalize_provider_tool_fragment(tool_info)
+        if type_part:
+            return f"{parsed_sid}:{type_part}:{norm}"
     return tid
+
+
+def alternate_subgraph_row_keys(row_key: str) -> tuple[str, ...]:
+    """Return ``row_key`` plus legacy colon/dot fragment variants for row lookup."""
+    key = str(row_key).strip()
+    if not key:
+        return ()
+    out: list[str] = [key]
+    parts = key.split(":")
+    if len(parts) < 3 or not parts[1].startswith("t"):
+        return tuple(out)
+    prefix = ":".join(parts[:2])
+    if len(parts) == 3:
+        frag = parts[2]
+        if "." in frag:
+            tool, _, idx = frag.partition(".")
+            if tool and idx.isdigit():
+                out.append(f"{prefix}:{tool}:{idx}")
+        elif ":" not in frag:
+            pass
+        else:
+            tool, _, idx = frag.rpartition(":")
+            if tool and idx.isdigit():
+                out.append(f"{prefix}:{tool}.{idx}")
+    elif len(parts) == 4 and parts[3].isdigit():
+        out.append(f"{prefix}:{parts[2]}.{parts[3]}")
+    return tuple(dict.fromkeys(out))
 
 
 def parse_unified_tool_call_id(tool_call_id: str) -> tuple[str, str, int | None, str]:
@@ -336,6 +400,8 @@ def resolve_task_parent_lookup(
 
 __all__ = [
     "TaskScope",
+    "alternate_subgraph_row_keys",
+    "normalize_unified_tool_call_id",
     "_shorten_tool_call_id",
     "enqueue_task_spawn",
     "maybe_bind_namespace",
