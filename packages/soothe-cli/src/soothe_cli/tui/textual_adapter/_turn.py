@@ -21,7 +21,6 @@ from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_ou
 from soothe_sdk.ux.task_namespace import (
     parse_unified_tool_call_id,
     row_key_for_subgraph_tool,
-    scoped_subgraph_tool_key,
 )
 
 from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
@@ -76,6 +75,7 @@ from soothe_cli.tui.textual_adapter._stream_formatting import (
     _is_summarization_chunk,
     _mount_subagent_inner_tool_row_if_resolved,
     _raw_tool_content_for_presentation,
+    _should_append_subagent_wire_line_to_parent,
     _try_register_task_scoped_inner_tool_pending,
     alias_subgraph_pending_and_overlay,
     canonical_subgraph_tool_ids,
@@ -471,12 +471,8 @@ async def execute_task_textual(
                         # Update tool call status with output (unified ToolMessage / wire dict)
                         sid = str(tool_id) if tool_id else ""
                         if sid and not is_main_agent:
-                            _p_sid, _p_type, _, _ = parse_unified_tool_call_id(sid)
-                            row_key = (
-                                sid
-                                if _p_sid and _p_type == "t"
-                                else scoped_subgraph_tool_key(ns_key, sid)
-                            )
+                            ts_row = router.resolve_task_scope(ns_key)
+                            row_key = row_key_for_subgraph_tool(ns_key, sid, task_scope=ts_row)
                         else:
                             row_key = sid
                         output_str = tool_card.output_display
@@ -549,21 +545,28 @@ async def execute_task_textual(
                                         tool_display_by_call_id=adapter._tool_display_by_call_id,
                                     )
                                     if parent_task is not None:
-                                        duration_ms = (
-                                            int((time.time() - start_tm) * 1000) if start_tm else 0
-                                        )
-                                        raw_body = _raw_tool_content_for_presentation(message)
-                                        tname = tool_card.tool_name or "tool"
-                                        status_ln = presentation.format_tool_result_status_line(
-                                            tname,
-                                            raw_body,
-                                            is_error=tool_card.is_error,
-                                            duration_ms=duration_ms,
-                                        )
-                                        parent_task.append_subagent_activity(
-                                            f"{pending_ln} -> {status_ln}"
-                                        )
-                                        handled_task_inner = True
+                                        if getattr(
+                                            parent_task, "has_tool_call_row", lambda _x: False
+                                        )(row_key):
+                                            handled_task_inner = True
+                                        else:
+                                            duration_ms = (
+                                                int((time.time() - start_tm) * 1000)
+                                                if start_tm
+                                                else 0
+                                            )
+                                            raw_body = _raw_tool_content_for_presentation(message)
+                                            tname = tool_card.tool_name or "tool"
+                                            status_ln = presentation.format_tool_result_status_line(
+                                                tname,
+                                                raw_body,
+                                                is_error=tool_card.is_error,
+                                                duration_ms=duration_ms,
+                                            )
+                                            parent_task.append_subagent_activity(
+                                                f"{pending_ln} -> {status_ln}"
+                                            )
+                                            handled_task_inner = True
 
                         if (
                             tool_id
@@ -1638,6 +1641,8 @@ async def execute_task_textual(
                                     )
                                     await adapter._mount_message(step_widget)
                                     adapter._current_step_messages[step_id] = step_widget
+                                elif description:
+                                    step_widget.set_description(description)
                                 step_widget.set_running()
                                 adapter._step_by_namespace[ns_key] = step_widget
                                 router.on_step_started(step_id)
@@ -1786,7 +1791,10 @@ async def execute_task_textual(
                             wire_lines = [ln for ln in wire_lines if ln]
                             if card is not None:
                                 for line_text in wire_lines:
-                                    card.append_subagent_activity(line_text)
+                                    if _should_append_subagent_wire_line_to_parent(
+                                        card, event_type=event_type
+                                    ):
+                                        card.append_subagent_activity(line_text)
                                 continue
 
                         progress_lines = _format_progress_event_lines_for_tui(

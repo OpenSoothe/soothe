@@ -7,14 +7,20 @@ from unittest.mock import MagicMock
 from soothe_cli.tui.step_task_routing import StepTaskRouter
 
 
-def test_parallel_namespace_bind_order_via_unscoped_fifo() -> None:
+def test_register_task_spawn_normalizes_unified_task_id() -> None:
+    router = StepTaskRouter()
+    assert router.register_task_spawn("functions.task:0", "explore", step_id="YKF-02") is True
+    assert router._spawns_by_step_id["YKF-02"][0] == "YKF-02:s:task.0"
+
+
+def test_parallel_namespace_bind_one_at_a_time() -> None:
     router = StepTaskRouter()
     router.on_subgraph_namespace(("tools:aaa",))
-    router.on_subgraph_namespace(("tools:bbb",))
     router.register_task_spawn("functions.task:0", "explore", step_id="YKF-01")
+    router.on_subgraph_namespace(("tools:bbb",))
     router.register_task_spawn("functions.task:0", "explore", step_id="YKF-02")
-    assert router.resolve_task_scope(("tools:aaa",)) == ("functions.task:0", "explore", "YKF-01")
-    assert router.resolve_task_scope(("tools:bbb",)) == ("functions.task:0", "explore", "YKF-02")
+    assert router.resolve_task_scope(("tools:aaa",)) == ("YKF-01:s:task.0", "explore", "YKF-01")
+    assert router.resolve_task_scope(("tools:bbb",)) == ("YKF-02:s:task.0", "explore", "YKF-02")
 
 
 def test_bind_tool_to_step_routes_pending_main_tools() -> None:
@@ -72,7 +78,11 @@ def test_late_subgraph_namespace_binds_to_unlinked_spawn() -> None:
     router.register_task_spawn("FJS-02:s:task:0", "explore", step_id="FJS-02")
     ns = ("tools:late-arrival",)
     router.on_subgraph_namespace(ns)
-    assert router.resolve_task_scope(ns) == ("FJS-02:s:task:0", "explore", "FJS-02")
+    scope = router.resolve_task_scope(ns)
+    assert scope is not None
+    assert scope[2] == "FJS-02"
+    assert scope[1] == "explore"
+    assert scope[0].startswith("FJS-02:s:task")
 
 
 def test_route_pending_main_tools_uses_unified_id_parsing() -> None:

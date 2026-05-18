@@ -14,9 +14,13 @@ from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.utils import get_tool_display_name
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
+    is_step_level_task_tool_id,
+    normalize_step_task_tool_call_id,
     parse_unified_tool_call_id,
+    resolve_step_id_from_subgraph_tool,
     row_key_for_subgraph_tool,
     scoped_subgraph_tool_key,
+    step_level_parent_task_call_id,
     task_scope_step_id,
 )
 
@@ -30,7 +34,30 @@ from soothe_cli.shared.tools.tool_call_resolution import (
 from soothe_cli.tui._session_stats import SessionStats
 from soothe_cli.tui.formatting import format_duration
 from soothe_cli.tui.step_task_routing import StepTaskRouter
-from soothe_cli.tui.widgets.messages import CognitionStepMessage, ToolCallMessage
+from soothe_cli.tui.widgets.messages import CognitionStepMessage
+
+_SUBAGENT_TOOL_WIRE_SUFFIXES = (
+    ".step_completed",
+    ".tool_started",
+    ".tool_completed",
+)
+
+
+def _parent_supports_tool_row_aggregation(parent: Any) -> bool:
+    """True when the parent renders subgraph tools as nested rows (step or task card)."""
+    return callable(getattr(parent, "add_tool_call", None)) and callable(
+        getattr(parent, "has_tool_call_row", None)
+    )
+
+
+def _should_append_subagent_wire_line_to_parent(parent: Any, *, event_type: str) -> bool:
+    """Skip tool-shaped wire echoes on step cards that already use nested tool rows."""
+    if not isinstance(parent, CognitionStepMessage):
+        return True
+    et = (event_type or "").strip()
+    if any(et.endswith(suffix) for suffix in _SUBAGENT_TOOL_WIRE_SUFFIXES):
+        return False
+    return True
 
 
 def _is_summarization_chunk(metadata: dict | None) -> bool:
@@ -472,10 +499,10 @@ def _sync_task_delegation_step_row(
         return False
     sid = (bound_step_id or "").strip()
     if not sid:
-        parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
-        sid = parsed_sid or ""
+        sid = resolve_step_id_from_subgraph_tool(tcid)
     if not sid:
         return False
+    tcid = normalize_step_task_tool_call_id(sid, tcid)
     step_w = adapter._current_step_messages.get(sid)
     if step_w is None:
         return False
@@ -555,15 +582,6 @@ async def _ensure_task_delegation_card(
     return None
 
 
-def _is_step_level_task_tool_id(tool_call_id: str) -> bool:
-    """True for unified main-graph ``task`` delegation ids (``{step}:s:task…``)."""
-    _, type_code, _, tool_info = parse_unified_tool_call_id(tool_call_id)
-    if type_code != "s":
-        return False
-    head = (tool_info or "").split(":")[0].split(".")[0]
-    return head == "task"
-
-
 def _task_tool_call_ids_for_step(
     adapter: TextualUIAdapter,
     router: StepTaskRouter,
@@ -581,15 +599,15 @@ def _task_tool_call_ids_for_step(
         out.add(str(scope[0]))
     for tcid in list((pending_tool_calls_lc or {}).keys()):
         parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
-        if parsed_sid == sid and _is_step_level_task_tool_id(tcid):
+        if parsed_sid == sid and is_step_level_task_tool_id(tcid):
             out.add(tcid)
     for tcid in adapter._current_tool_messages:
         parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
-        if parsed_sid == sid and _is_step_level_task_tool_id(tcid):
+        if parsed_sid == sid and is_step_level_task_tool_id(tcid):
             out.add(tcid)
     for tcid in adapter._tool_display_by_call_id:
         parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
-        if parsed_sid == sid and _is_step_level_task_tool_id(tcid):
+        if parsed_sid == sid and is_step_level_task_tool_id(tcid):
             out.add(tcid)
     return out
 
@@ -661,7 +679,7 @@ async def sync_task_delegation_cards_from_stream(
         return
     _log = _logging.getLogger(__name__)
     for tcid, overlay_args in streaming_overlay.items():
-        if not _is_step_level_task_tool_id(tcid):
+        if not is_step_level_task_tool_id(tcid):
             continue
         if not tool_args_meaningful(overlay_args):
             continue
@@ -843,9 +861,8 @@ def _try_register_task_scoped_inner_tool_pending(
     )
     if parent is None:
         return
-    # IG-403: Skip text-based pending line when parent has tool row infrastructure
-    # (tool rows render the invocation directly — text fallback would duplicate it).
-    if isinstance(parent, ToolCallMessage):
+    # IG-403 / IG-419: Nested tool rows on step/task cards replace text pending lines.
+    if _parent_supports_tool_row_aggregation(parent):
         return
     if not show_tool_ui or not presentation.tier_visible(VerbosityTier.NORMAL):
         return
@@ -883,14 +900,10 @@ async def _mount_subagent_inner_tool_row_if_resolved(
         True if a parent card was found and the row was attached.
     """
     ts_inner = router.resolve_task_scope(ns_key)
-    step_id = task_scope_step_id(ts_inner) if ts_inner else ""
+    lookup = str(lookup_id).strip()
+    step_id = resolve_step_id_from_subgraph_tool(lookup) or task_scope_step_id(ts_inner)
     # IG-419: Inner subagent tools go directly to step card as nested rows
     parent_for_inner = adapter._current_step_messages.get(step_id) if step_id else None
-    if parent_for_inner is None:
-        # Fallback: try to resolve step_id from unified tool call id
-        parsed_sid, type_code, _, _ = parse_unified_tool_call_id(str(lookup_id))
-        if parsed_sid and type_code == "t":
-            parent_for_inner = adapter._current_step_messages.get(parsed_sid)
     if (
         not show_tool_ui
         or is_main_agent
@@ -918,8 +931,16 @@ async def _mount_subagent_inner_tool_row_if_resolved(
     # Multiple calls like ls.0, ls.1, ls.2 should NOT share the same pending args
     if isinstance(pend, dict):
         raw = str(pend.get("args_str", ""))
-    # IG-419: Resolve parent task tool_call_id for nesting
-    parent_task_call_id = router.resolve_parent_task_call_id(ns_key)
+    # IG-419: Resolve parent task tool_call_id for nesting (prefer unified inner id)
+    parent_task_call_id = router.resolve_parent_task_call_id(ns_key, inner_tool_call_id=lookup)
+    if not parent_task_call_id and step_id:
+        _, type_code, task_idx, _ = parse_unified_tool_call_id(lookup)
+        if type_code == "t":
+            parent_task_call_id = step_level_parent_task_call_id(step_id, task_idx)
+        else:
+            spawn = router._spawns_by_step_id.get(step_id)
+            if spawn and spawn[0]:
+                parent_task_call_id = str(spawn[0])
     resolved_row_key = _resolve_existing_subgraph_row_key(parent_for_inner, row_key)
     if getattr(parent_for_inner, "has_tool_call_row", lambda _x: False)(resolved_row_key):
         update_fn = getattr(parent_for_inner, "update_tool_args", None)

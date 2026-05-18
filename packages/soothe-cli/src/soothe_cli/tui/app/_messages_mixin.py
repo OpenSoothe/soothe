@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from textual.containers import Container
-    from textual.events import Click, MouseUp, Paste
+    from textual.events import Click, Paste, TextSelected
     from textual.widgets import Static
     from textual.worker import Worker
 
@@ -390,16 +390,28 @@ class _MessagesMixin:
         if worker is not None:
             self._cancel_worker(worker)
 
+    def action_copy_selection(self) -> None:
+        """Copy the current text selection to the system clipboard (Ctrl+Y)."""
+        from soothe_cli.tui.widgets.clipboard import copy_selection_to_clipboard
+
+        copy_selection_to_clipboard(self, notify_if_empty=True)
+
     def action_quit_or_interrupt(self) -> None:
         """Handle Ctrl+C - interrupt agent, reject approval, or quit on double press.
 
         Priority order:
+        0. If text is selected, copy it (Textual screen.copy_text semantics)
         1. If shell command is running, kill it
         2. If approval menu is active, reject it
         3. If agent is running, interrupt it (preserve input)
         4. If double press (quit_pending), quit
         5. Otherwise show quit hint
         """
+        from soothe_cli.tui.widgets.clipboard import copy_selection_to_clipboard
+
+        if copy_selection_to_clipboard(self):
+            self._quit_pending = False
+            return
         # If shell command is running, cancel the worker
         if self._shell_running and self._shell_worker:
             self._cancel_worker(self._shell_worker)
@@ -759,20 +771,25 @@ class _MessagesMixin:
         # Don't steal focus from approval or ask_user widgets
         if self._pending_approval_widget or self._pending_ask_user_widget:
             return
+        # Preserve an active text selection (focus would clear highlight for copy).
+        screen = self.screen
+        if screen is not None and screen.get_selected_text():
+            return
         self.call_after_refresh(self._chat_input.focus_input)
 
-    def on_mouse_up(self, event: MouseUp) -> None:  # noqa: ARG002  # Textual event handler signature
-        """Copy selection to clipboard on mouse release."""
+    def on_text_selected(self, _event: TextSelected) -> None:
+        """Copy selected transcript text on mouse release.
+
+        Must run synchronously here: ``TextSelected`` is posted before the
+        synthesized ``Click``, but ``call_after_refresh`` would run after card
+        collapse handlers clear the selection.
+        """
         from soothe_cli.tui.widgets.clipboard import copy_selection_to_clipboard
 
-        # Only primary-button mouse up participates in text selection copy.
-        if event.button != 1:
+        screen = self.screen
+        if screen is None or not screen.get_selected_text():
             return
-
-        copy_selection_to_clipboard(
-            self,
-            candidate_widgets=(event.widget, self.focused),
-        )
+        copy_selection_to_clipboard(self)
 
     # =========================================================================
     # Model Switching

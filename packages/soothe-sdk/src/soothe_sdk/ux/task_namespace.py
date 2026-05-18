@@ -127,6 +127,55 @@ def parse_unified_tool_call_id(tool_call_id: str) -> tuple[str, str, int | None,
     return ("", "", None, tid)
 
 
+def is_step_level_task_tool_id(tool_call_id: str) -> bool:
+    """True for unified main-graph ``task`` delegation ids (``{step}:s:task…``)."""
+    _, type_code, _, tool_info = parse_unified_tool_call_id(tool_call_id)
+    if type_code != "s":
+        return False
+    head = (tool_info or "").split(":")[0].split(".")[0]
+    return head == "task"
+
+
+def normalize_step_task_tool_call_id(step_id: str, tool_call_id: str) -> str:
+    """Return step-scoped unified id for a main-graph ``task`` delegation.
+
+    Embeds ``step_id`` so parallel execute steps never share ``functions.task:0``.
+
+    Args:
+        step_id: AgentLoop execute step id.
+        tool_call_id: Provider or unified tool call id from the stream.
+
+    Returns:
+        ``{step_id}:s:task.{idx}`` (normalized).
+    """
+    sid = str(step_id).strip()
+    tcid = str(tool_call_id).strip()
+    if not sid:
+        return normalize_unified_tool_call_id(tcid)
+    normalized = normalize_unified_tool_call_id(tcid)
+    parsed_sid, type_code, _, tool_info = parse_unified_tool_call_id(normalized)
+    if parsed_sid == sid and type_code == "s" and is_step_level_task_tool_id(normalized):
+        return normalized
+    short = _shorten_tool_call_id(tcid)
+    if not short.startswith("task"):
+        short = "task.0"
+    return f"{sid}:s:{short}"
+
+
+def step_level_parent_task_call_id(step_id: str, task_idx: int | None = None) -> str:
+    """Parent ``task`` row id for inner tools under ``{step_id}:t{idx}:…``."""
+    idx = 0 if task_idx is None else int(task_idx)
+    return f"{step_id}:s:task.{idx}"
+
+
+def resolve_step_id_from_subgraph_tool(tool_call_id: str) -> str:
+    """Extract execute ``step_id`` from a unified step- or task-level tool call id."""
+    step_id, type_code, _, _ = parse_unified_tool_call_id(str(tool_call_id).strip())
+    if step_id and type_code in ("s", "t"):
+        return step_id
+    return ""
+
+
 def task_scope_step_id(scope: TaskScope | None) -> str:
     """Return the AgentLoop step id from a task scope tuple, if present."""
     if not scope:
@@ -208,17 +257,17 @@ def try_bind_namespace_to_unlinked_spawn(
     if not namespace or namespace in bindings:
         return False
     linked_spawn_ids = {scope[0] for scope in bindings.values()}
-    for _step_id, scope in spawns_by_step.items():
-        if scope[0] in linked_spawn_ids:
-            continue
-        bindings[namespace] = scope
-        if pending_unscoped_namespaces is not None:
-            try:
-                pending_unscoped_namespaces.remove(namespace)
-            except ValueError:
-                pass
-        return True
-    return False
+    unlinked = [scope for scope in spawns_by_step.values() if scope[0] not in linked_spawn_ids]
+    if len(unlinked) != 1:
+        return False
+    scope = unlinked[0]
+    bindings[namespace] = scope
+    if pending_unscoped_namespaces is not None:
+        try:
+            pending_unscoped_namespaces.remove(namespace)
+        except ValueError:
+            pass
+    return True
 
 
 def scoped_subgraph_tool_key(
@@ -277,6 +326,34 @@ def enqueue_task_spawn(
     queue.append((tool_call_id, subagent_type or "?", ""))
 
 
+def _maybe_bind_one_pending_namespace(
+    bindings: dict[tuple[str, ...], TaskScope],
+    pending_unscoped_namespaces: deque[tuple[str, ...]],
+    scope: TaskScope,
+    spawns_by_step: dict[str, TaskScope],
+) -> None:
+    """Bind a deferred namespace only when there is a single unambiguous pending ns.
+
+    Parallel execute may register multiple spawns while several namespaces are queued;
+    FIFO pairing would attach the wrong subgraph to the wrong step.
+    """
+    task_call_id = scope[0]
+    if any(bound == scope for bound in bindings.values()):
+        return
+    unbound = [ns for ns in pending_unscoped_namespaces if ns not in bindings]
+    if len(unbound) != 1:
+        return
+    linked_task_ids = {s[0] for s in bindings.values()}
+    unlinked = [s for s in spawns_by_step.values() if s[0] not in linked_task_ids]
+    if len(unlinked) != 1 or unlinked[0][0] != task_call_id:
+        return
+    ns = unbound[0]
+    bindings[ns] = scope
+    remaining = deque(n for n in pending_unscoped_namespaces if n != ns)
+    pending_unscoped_namespaces.clear()
+    pending_unscoped_namespaces.extend(remaining)
+
+
 def register_task_spawn_for_step(
     bindings: dict[tuple[str, ...], TaskScope],
     queue: deque[TaskScope],
@@ -291,7 +368,7 @@ def register_task_spawn_for_step(
         bindings: LangGraph namespace → task scope map (updated in place).
         queue: FIFO fallback queue (also appended for headless clients).
         spawns_by_step: Authoritative ``step_id`` → spawn map for AgentLoop execute.
-        scope: ``(tool_call_id, subagent_type, step_id)``.
+        scope: ``(tool_call_id, subagent_type, step_id)`` with unified ``tool_call_id``.
         pending_unscoped_namespaces: FIFO of namespaces seen before spawn (parallel-safe).
     """
     queue.append(scope)
@@ -300,11 +377,9 @@ def register_task_spawn_for_step(
         return
     spawns_by_step[step_id] = scope
     if pending_unscoped_namespaces is not None:
-        while pending_unscoped_namespaces:
-            ns = pending_unscoped_namespaces.popleft()
-            if ns not in bindings:
-                bindings[ns] = scope
-                break
+        _maybe_bind_one_pending_namespace(
+            bindings, pending_unscoped_namespaces, scope, spawns_by_step
+        )
 
 
 def maybe_bind_namespace(
@@ -373,17 +448,21 @@ def resolve_task_parent_lookup(
 
 __all__ = [
     "TaskScope",
+    "is_step_level_task_tool_id",
+    "normalize_step_task_tool_call_id",
     "normalize_unified_tool_call_id",
     "_shorten_tool_call_id",
     "enqueue_task_spawn",
     "maybe_bind_namespace",
     "parse_unified_tool_call_id",
     "register_task_spawn_for_step",
+    "resolve_step_id_from_subgraph_tool",
     "resolve_task_parent_for_unified_tool_id",
     "resolve_task_parent_lookup",
     "resolve_task_scope_for_namespace",
     "row_key_for_subgraph_tool",
     "scoped_subgraph_tool_key",
+    "step_level_parent_task_call_id",
     "task_scope_step_id",
     "task_scope_task_idx",
     "try_bind_namespace_to_unlinked_spawn",

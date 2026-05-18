@@ -160,7 +160,7 @@ KEYBOARD_SHORTCUTS: dict[str, str] = {
     "Ctrl+D": "Detach TUI: Leave the loop running (confirm) and exit client",
     "Ctrl+C": "Cancel running job, press twice within 1s to quit",
     "Ctrl+E": "Focus chat input",
-    "Ctrl+Y": "Copy last message to clipboard",
+    "Ctrl+Y": "Copy selected text to clipboard (or show hint if none)",
 }
 
 

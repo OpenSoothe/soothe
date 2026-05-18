@@ -11,7 +11,6 @@ from soothe.core.loop.state.schemas import (
     allocate_plan_id,
     assign_plan_step_ids,
 )
-from soothe.utils.text_preview import preview_first
 
 from ..runtime_context import LoopRuntimeContext
 
@@ -81,7 +80,10 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
         {
             "iteration": state.iteration,
             "steps": [
-                {"id": s.id, "description": preview_first(s.description, 80)}
+                {
+                    "id": s.id,
+                    "description": (s.description or "").strip().replace("\n", " "),
+                }
                 for s in decision.steps
             ],
             "execution_mode": decision.execution_mode,

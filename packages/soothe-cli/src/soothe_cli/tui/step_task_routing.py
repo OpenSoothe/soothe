@@ -16,12 +16,15 @@ from typing import Any, TypeAlias
 
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
+    is_step_level_task_tool_id,
     maybe_bind_namespace,
+    normalize_step_task_tool_call_id,
     parse_unified_tool_call_id,
     register_task_spawn_for_step,
     resolve_task_parent_for_unified_tool_id,
     resolve_task_parent_lookup,
     resolve_task_scope_for_namespace,
+    step_level_parent_task_call_id,
     task_scope_step_id,
     try_bind_namespace_to_unlinked_spawn,
 )
@@ -157,11 +160,21 @@ class StepTaskRouter:
         tcid = str(tool_call_id).strip()
         if not tcid:
             return False
-        sid = (step_id or self.step_id_for_tool(tcid)).strip()
-        spawn_key = (sid, tcid)
+        parsed_sid, type_code, _, _ = parse_unified_tool_call_id(tcid)
+        sid = parsed_sid if (parsed_sid and type_code == "s") else ""
+        if not sid:
+            sid = (step_id or self.step_id_for_tool(tcid)).strip()
+        if not sid:
+            return False
+        normalized_tcid = normalize_step_task_tool_call_id(sid, tcid)
+        spawn_key = (sid, normalized_tcid)
         if spawn_key in self._spawn_recorded:
             return False
-        scope: TaskScope = (tcid, (subagent_type or "?").strip() or "?", sid)
+        scope: TaskScope = (
+            normalized_tcid,
+            (subagent_type or "?").strip() or "?",
+            sid,
+        )
         register_task_spawn_for_step(
             self._namespace_bindings,
             self._task_spawn_queue,
@@ -207,23 +220,45 @@ class StepTaskRouter:
         """Step id from a resolved task scope."""
         return task_scope_step_id(scope)
 
-    def resolve_parent_task_call_id(self, ns_key: tuple[Any, ...]) -> str | None:
+    def resolve_parent_task_call_id(
+        self,
+        ns_key: tuple[Any, ...],
+        *,
+        inner_tool_call_id: str = "",
+    ) -> str | None:
         """Resolve parent task's tool_call_id for inner tool nesting (IG-419).
 
+        Prefer the bound :class:`TaskScope` (main-graph ``task`` tool_call_id). LangGraph
+        subgraph namespaces are opaque (e.g. ``("tools:abc",)``); inner unified ids embed
+        ``step_id`` directly.
+
         Args:
-            ns_key: Namespace tuple for the inner tool (e.g., ("step-01", "t", "task.0")).
+            ns_key: Stream namespace tuple for the inner tool.
+            inner_tool_call_id: Optional subgraph tool id (``{step}:t0:…``).
 
         Returns:
-            The parent task's tool_call_id (e.g., "step-01:s:task.0") or None.
+            The parent task's tool_call_id (e.g., ``step-01:s:task.0``) or None.
         """
+        parsed_sid, type_code, task_idx, _ = parse_unified_tool_call_id(
+            str(inner_tool_call_id).strip()
+        )
+        if parsed_sid and type_code == "t":
+            return step_level_parent_task_call_id(parsed_sid, task_idx)
+        scope = self.resolve_task_scope(ns_key)
+        if scope and scope[0]:
+            return str(scope[0]).strip() or None
+        if (
+            parsed_sid
+            and type_code == "s"
+            and is_step_level_task_tool_id(str(inner_tool_call_id).strip())
+        ):
+            return str(inner_tool_call_id).strip()
         if not ns_key or len(ns_key) < 3:
             return None
         step_id = str(ns_key[0])
         if ns_key[1] == "t":
-            # ns_key format: (step_id, "t", task_comp, ...)
-            # task_comp e.g., "task.0" or "task:0"
+            # Legacy ns_key format: (step_id, "t", task_comp, ...)
             task_comp = str(ns_key[2])
-            # Normalize task:N to task.N
             if ":" in task_comp:
                 name, _, idx = task_comp.rpartition(":")
                 if name == "task" and idx.isdigit():

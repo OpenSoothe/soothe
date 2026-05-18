@@ -16,43 +16,26 @@ from soothe_cli.tui.widgets.messages import (
 )
 
 
-def test_all_message_widgets_have_can_select_enabled() -> None:
-    """Verify all message widgets support text selection for clipboard copy.
-
-    This ensures users can select and copy text from message widgets in the TUI.
-    The can_select attribute must be True for the copy_selection_to_clipboard()
-    function in widgets/clipboard.py to work correctly.
-    """
-    # Static-based widgets
-    assert UserMessage.can_select is True, "UserMessage must support text selection"
-    assert QueuedUserMessage.can_select is True, "QueuedUserMessage must support text selection"
-    assert DiffMessage.can_select is True, "DiffMessage must support text selection"
-    assert ErrorMessage.can_select is True, "ErrorMessage must support text selection"
-    assert AppMessage.can_select is True, "AppMessage must support text selection"
-
-    # Vertical-based widgets
-    assert AssistantMessage.can_select is True, "AssistantMessage must support text selection"
-    assert SkillMessage.can_select is True, "SkillMessage must support text selection"
-    assert ToolCallMessage.can_select is True, "ToolCallMessage must support text selection"
-    assert CognitionStepMessage.can_select is True, (
-        "CognitionStepMessage must support text selection"
-    )
+def test_all_message_widgets_allow_select() -> None:
+    """Verify message widgets opt in to Textual text selection."""
+    assert UserMessage.ALLOW_SELECT is True
+    assert QueuedUserMessage.ALLOW_SELECT is True
+    assert DiffMessage.ALLOW_SELECT is True
+    assert ErrorMessage.ALLOW_SELECT is True
+    assert AppMessage.ALLOW_SELECT is True
+    assert AssistantMessage.ALLOW_SELECT is True
+    assert SkillMessage.ALLOW_SELECT is True
+    assert ToolCallMessage.ALLOW_SELECT is True
+    assert CognitionStepMessage.ALLOW_SELECT is True
 
 
-def test_widget_instances_preserve_can_select() -> None:
-    """Verify widget instances inherit can_select from class attribute."""
-    # Create instances and verify they have the attribute
+def test_widget_instances_inherit_allow_select() -> None:
+    """Widget instances use the class-level ALLOW_SELECT flag."""
     user_msg = UserMessage("test content")
-    assert hasattr(user_msg, "can_select"), "UserMessage instance must have can_select attribute"
+    assert user_msg.ALLOW_SELECT is True
 
-    # Verify it's inherited from class, not instance-level override
-    assert UserMessage.can_select is True
-    assert user_msg.__class__.can_select is True
-
-    # Test one Vertical-based widget
     assistant_msg = AssistantMessage("test")
-    assert hasattr(assistant_msg, "can_select"), "AssistantMessage instance must have can_select"
-    assert AssistantMessage.can_select is True
+    assert assistant_msg.ALLOW_SELECT is True
 
 
 def test_queued_user_message_store_roundtrip() -> None:

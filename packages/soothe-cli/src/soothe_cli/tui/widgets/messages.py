@@ -55,6 +55,18 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+def _click_has_text_selection(widget: Static | Vertical) -> bool:
+    """Return True when the screen still has an active text selection."""
+    screen = widget.screen
+    if screen is None:
+        return False
+    try:
+        return bool(screen.get_selected_text())
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
 _STEP_TOOL_PREVIEW_ROWS = STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
 """Collapsed step/task activity preview shows this many rows (IG-402)."""
 
@@ -227,6 +239,8 @@ class _TimestampClickMixin:
 
     def on_click(self, event: Click) -> None:  # noqa: ARG002  # Textual event handler
         """Show timestamp toast on click."""
+        if _click_has_text_selection(self):  # type: ignore[arg-type]
+            return
         _show_timestamp_toast(self)  # type: ignore[arg-type]
 
 
@@ -291,7 +305,7 @@ def _strip_success_exit_line(text: str) -> str:
 class UserMessage(_TimestampClickMixin, Static):
     """Widget displaying a user message with enhanced styling."""
 
-    can_select = True
+    ALLOW_SELECT = True
     """Enable text selection for copy functionality."""
 
     DEFAULT_CSS = """
@@ -395,7 +409,7 @@ class QueuedUserMessage(Static):
     This is an ephemeral widget that gets removed when the message is dequeued.
     """
 
-    can_select = True
+    ALLOW_SELECT = True
     """Enable text selection for copy functionality."""
 
     DEFAULT_CSS = """
@@ -479,7 +493,7 @@ class SkillMessage(Vertical):
     expansion toggles (preserving text selection, for instance).
     """
 
-    can_select = True
+    ALLOW_SELECT = True
     """Enable text selection for copy functionality."""
 
     DEFAULT_CSS = """
@@ -720,7 +734,7 @@ class AssistantMessage(Vertical):
     are always shown in full (no truncation or collapse).
     """
 
-    can_select = True
+    ALLOW_SELECT = True
     """Enable text selection for copy functionality."""
 
     DEFAULT_CSS = """
@@ -819,6 +833,8 @@ class AssistantMessage(Vertical):
     def on_click(self, event: Click) -> None:
         """Show timestamp toast on click."""
         event.stop()
+        if _click_has_text_selection(self):
+            return
         _show_timestamp_toast(self)
 
     async def _flush_pending_content(self) -> None:
@@ -915,7 +931,7 @@ class ToolCallMessage(Vertical):
     until the user expands (click or Ctrl+O). While pending, shows a running spinner.
     """
 
-    can_select = True
+    ALLOW_SELECT = True
     """Enable text selection for copy functionality."""
 
     DEFAULT_CSS = """
@@ -1847,6 +1863,8 @@ class ToolCallMessage(Vertical):
     def on_click(self, event: Click) -> None:
         """Toggle tool row collapse, output expansion, or show timestamp."""
         event.stop()  # Prevent click from bubbling up and scrolling
+        if _click_has_text_selection(self):
+            return
         # Priority 1: Toggle tool row collapse if there are enough activity items
         if self._activity and len(self._activity) > _STEP_TOOL_PREVIEW_ROWS:
             was_collapsed = self._tools_body_collapsed
@@ -2458,7 +2476,7 @@ class ToolCallMessage(Vertical):
 class DiffMessage(_TimestampClickMixin, Static):
     """Widget displaying a diff with syntax highlighting."""
 
-    can_select = True
+    ALLOW_SELECT = True
     """Enable text selection for copy functionality."""
 
     DEFAULT_CSS = """
@@ -2568,7 +2586,7 @@ class CognitionStepMessage(Vertical):
     ``⎿ ○`` continuation lines.
     """
 
-    can_select = True
+    ALLOW_SELECT = True
 
     DEFAULT_CSS = """
     CognitionStepMessage {
@@ -2641,10 +2659,7 @@ class CognitionStepMessage(Vertical):
     ) -> None:
         super().__init__(**kwargs)
         self._step_id = step_id
-        raw = description.strip()
-        if len(raw) > TOOL_CARD_PREVIEW_CHARS:
-            raw = raw[: TOOL_CARD_PREVIEW_CHARS - 3].rstrip() + "..."
-        self._description = raw
+        self._description = description.strip()
         self._status = "pending"  # pending | running | success | error
         self._spinner_position = 0
         self._start_time: float | None = None
@@ -2722,6 +2737,14 @@ class CognitionStepMessage(Vertical):
         """Prose accumulated from ``execute_step`` for this step when it completed."""
         return self._last_completed_execute_prose
 
+    def set_description(self, description: str) -> None:
+        """Update the step title (full plan/execute brief, no abbreviation)."""
+        text = (description or "").strip() or "(step)"
+        if text == self._description:
+            return
+        self._description = text
+        self._refresh_header_title()
+
     def _step_header_content(self) -> Content:
         return _assemble_card_header(
             self,
@@ -2785,6 +2808,8 @@ class CognitionStepMessage(Vertical):
     def on_click(self, event: Click) -> None:  # noqa: ARG002
         """Toggle tool-row folding, card collapse, or show timestamp."""
         event.stop()
+        if _click_has_text_selection(self):
+            return
         if self._rows and len(self._rows) > _STEP_TOOL_PREVIEW_ROWS:
             was_collapsed = self._tools_body_collapsed
             self._tools_body_collapsed = not self._tools_body_collapsed
@@ -2960,12 +2985,13 @@ class CognitionStepMessage(Vertical):
             running_spinner=spin,
             running_elapsed_secs=elapsed,
             branch_glyph=branch,
+            is_task_row=row.is_task_row,
         )
         gutter = self._step_goal_tree_gutter()
-        # IG-419: Indent child rows under parent task delegation
+        # IG-419: Child branch under task delegation (extra tree gutter per level)
         if row.parent_tool_call_id:
-            indent = "    "  # 4 spaces for visual nesting
-            return Content.assemble(Content.styled(gutter + indent, "dim"), inner)
+            child_gutter = f"{g.output_prefix}   "
+            return Content.assemble(Content.styled(child_gutter, "dim"), inner)
         return Content.assemble(Content.styled(gutter, "dim"), inner)
 
     def _step_branched_execute_body(self, body: str, *, muted: bool = True) -> Content:
@@ -3529,7 +3555,7 @@ class CognitionReasonMessage(_TimestampClickMixin, Vertical):
     Header uses the same cognition-colored label plus foreground body as ``CognitionStepMessage``.
     """
 
-    can_select = True
+    ALLOW_SELECT = True
 
     DEFAULT_CSS = """
     CognitionReasonMessage {
@@ -3667,7 +3693,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
     ``{prefix} 📍 …`` with optional ``· iter<=N`` when ``max_iterations`` is set.
     """
 
-    can_select = True
+    ALLOW_SELECT = True
 
     DEFAULT_CSS = """
     CognitionGoalTreeMessage {
@@ -4002,7 +4028,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
 class ErrorMessage(_TimestampClickMixin, Static):
     """Widget displaying an error message."""
 
-    can_select = True
+    ALLOW_SELECT = True
     """Enable text selection for copy functionality."""
 
     DEFAULT_CSS = """
@@ -4056,7 +4082,7 @@ class AppMessage(Static):
     # infinite hover-refresh loop.
     auto_links = False
 
-    can_select = True
+    ALLOW_SELECT = True
     """Enable text selection for copy functionality."""
 
     DEFAULT_CSS = """
@@ -4085,6 +4111,8 @@ class AppMessage(Static):
 
     def on_click(self, event: Click) -> None:
         """Open style-embedded hyperlinks on single click and show timestamp."""
+        if _click_has_text_selection(self):
+            return
         open_style_link(event)
         _show_timestamp_toast(self)
 
