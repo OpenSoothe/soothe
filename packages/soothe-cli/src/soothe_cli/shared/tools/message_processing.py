@@ -214,11 +214,6 @@ def _resolve_pending_lookup_tool_name(
             head = tool_info.split(".")[0].split(":")[0].strip()
             if head and head != "tool":
                 return head
-        from soothe_cli.shared.tools.tool_call_resolution import infer_tool_name_from_call_id
-
-        inferred = infer_tool_name_from_call_id(tcid)
-        if inferred:
-            return inferred
     return name
 
 

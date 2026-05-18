@@ -12,6 +12,7 @@ from time import monotonic, time
 from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.utils import get_tool_display_name
+from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 from textual import on
 from textual.containers import Vertical
 from textual.content import Content
@@ -21,7 +22,6 @@ from textual.widgets import Static
 
 from soothe_cli.shared.core.presentation_engine import PresentationEngine
 from soothe_cli.shared.tools.message_processing import _normalize_tool_name_for_arg_map
-from soothe_cli.shared.tools.tool_call_resolution import infer_tool_name_from_call_id
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import (
     MODE_DISPLAY_GLYPHS,
@@ -1008,9 +1008,12 @@ class ToolCallMessage(Vertical):
         tn = (tool_name or "").strip()
         tcid = (tool_call_id or "").strip()
         if tcid and (not tn or tn == "tool"):
-            inferred = infer_tool_name_from_call_id(tcid)
-            if inferred:
-                tn = inferred
+            # IG-418: Extract tool name from unified format
+            _sid, _type_code, _, tool_info = parse_unified_tool_call_id(tcid)
+            if tool_info:
+                head = tool_info.split(".")[0].strip()
+                if head and head != "tool":
+                    tn = head
         if not tn:
             tn = "tool"
         self._tool_name = tn

@@ -201,18 +201,11 @@ _TASK_DESC_KEYS = ("description", "prompt", "task", "instruction")
 
 
 def _resolve_existing_subgraph_row_key(parent: Any, row_key: str) -> str:
-    """Return a row key that exists on ``parent``, trying legacy colon/dot variants."""
-    from soothe_sdk.ux.task_namespace import alternate_subgraph_row_keys
-
+    """Return the row key if it exists on parent (IG-418: unified IDs only)."""
     key = str(row_key).strip()
     if not key:
         return key
-    has_row = getattr(parent, "has_tool_call_row", lambda _x: False)
-    if has_row(key):
-        return key
-    for alt in alternate_subgraph_row_keys(key):
-        if alt != key and has_row(alt):
-            return alt
+    # IG-418: Unified IDs are canonical; no legacy fallback needed
     return key
 
 
@@ -339,21 +332,18 @@ def alias_subgraph_pending_and_overlay(
         merge_id, _row = canonical_subgraph_tool_ids(ns_key, oid, task_scope=ts)
         if not merge_id or merge_id == oid:
             continue
-        from soothe_sdk.ux.task_namespace import alternate_subgraph_row_keys
-
-        for alias_id in alternate_subgraph_row_keys(merge_id):
-            if alias_id not in pending_tool_calls_lc:
-                pending_tool_calls_lc[alias_id] = dict(pend)
+        # IG-418: Unified IDs are canonical; single alias only
+        if merge_id not in pending_tool_calls_lc:
+            pending_tool_calls_lc[merge_id] = dict(pend)
         oargs = streaming_overlay.get(oid)
         if isinstance(oargs, dict) and oargs:
-            for alias_id in alternate_subgraph_row_keys(merge_id):
-                prev = streaming_overlay.get(alias_id)
-                if isinstance(prev, dict) and prev:
-                    merged = dict(prev)
-                    merged.update(oargs)
-                    streaming_overlay[alias_id] = merged
-                else:
-                    streaming_overlay[alias_id] = dict(oargs)
+            prev = streaming_overlay.get(merge_id)
+            if isinstance(prev, dict) and prev:
+                merged = dict(prev)
+                merged.update(oargs)
+                streaming_overlay[merge_id] = merged
+            else:
+                streaming_overlay[merge_id] = dict(oargs)
 
 
 def _task_args_has_description(args: dict[str, Any]) -> bool:

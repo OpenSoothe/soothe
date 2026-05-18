@@ -17,6 +17,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
+
 from soothe_cli.shared.tools.message_processing import (
     extract_tool_args_dict,
     normalize_tool_calls_list,
@@ -24,33 +26,6 @@ from soothe_cli.shared.tools.message_processing import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def infer_tool_name_from_call_id(tool_call_id: str) -> str | None:
-    """Recover a real tool name from common ``functions.<name>:<idx>`` id shapes.
-
-    Some transports set ``name`` to the literal ``\"tool\"`` or leave it empty while
-    the id still encodes the actual tool (e.g. ``functions.ls:0`` → ``ls``).
-
-    Args:
-        tool_call_id: LangChain / provider tool call id.
-
-    Returns:
-        Inferred snake_case tool name, or ``None`` if not recognized.
-    """
-    tid = (tool_call_id or "").strip()
-    if not tid:
-        return None
-    prefix = "functions."
-    if not tid.startswith(prefix):
-        return None
-    rest = tid[len(prefix) :]
-    if ":" in rest:
-        rest = rest.split(":", 1)[0]
-    name = rest.strip()
-    if not name or name == "tool":
-        return None
-    return name
 
 
 def tool_args_meaningful(raw: Any) -> bool:
@@ -237,8 +212,6 @@ def resolve_stream_tool_name(
     pending_tool_calls_lc: Mapping[str, dict[str, Any]] | None = None,
 ) -> str:
     """Resolve display tool name when the chunk uses a placeholder ``tool`` label."""
-    from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
-
     name = (chunk_name or "").strip()
     if name and name != "tool":
         return name
@@ -249,12 +222,11 @@ def resolve_stream_tool_name(
             pend_name = str(pend.get("name") or "").strip()
             if pend_name and pend_name != "tool":
                 return pend_name
-    inferred = infer_tool_name_from_call_id(tcid)
-    if inferred:
-        return inferred
+    # IG-418: Extract tool name from unified format
     _sid, _type_code, _, tool_info = parse_unified_tool_call_id(tcid)
     if tool_info:
-        head = tool_info.split(":")[0].split(".")[0].strip()
+        # tool_info is like "ls.0" or "task.5" - extract the tool name
+        head = tool_info.split(".")[0].strip()
         if head and head != "tool":
             return head
     return name or "tool"
@@ -323,9 +295,12 @@ def resolve_tool_invocations_for_display(
         stream_args = streaming_overlay.get(tid, {})
         name = tc_name or block_name or ""
         if not name or name == "tool":
-            inferred = infer_tool_name_from_call_id(tid)
-            if inferred:
-                name = inferred
+            # IG-418: Extract tool name from unified format
+            _sid, _type_code, _, tool_info = parse_unified_tool_call_id(tid)
+            if tool_info:
+                head = tool_info.split(".")[0].strip()
+                if head and head != "tool":
+                    name = head
         if not name:
             name = "tool"
         merged = _pick_args_from_sources(
@@ -444,7 +419,6 @@ def build_streaming_args_overlay(
 __all__ = [
     "ResolvedToolInvocation",
     "build_streaming_args_overlay",
-    "infer_tool_name_from_call_id",
     "is_toolish_display_block",
     "materialize_ai_blocks_with_resolved_tools",
     "merge_tool_display_args",
