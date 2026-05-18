@@ -17,6 +17,7 @@ from soothe_sdk.ux.task_namespace import (
     parse_unified_tool_call_id,
     row_key_for_subgraph_tool,
     scoped_subgraph_tool_key,
+    task_scope_step_id,
 )
 
 from soothe_cli.cli.stream.display_line import DisplayLine
@@ -458,11 +459,10 @@ def _sync_task_delegation_step_row(
     raw_args: str = "",
     bound_step_id: str = "",
 ) -> bool:
-    """Mirror the main-graph ``task`` delegation on the execute step card.
+    """Mirror the main-graph ``task`` delegation on the execute step card (IG-419).
 
-    Inner subagent tools stay on the dedicated ``ToolCallMessage`` task card; the step
-    card gets a summary row (``explore: …``) so parallel execute waves show delegation
-    activity next to other step-level tools.
+    Shows subagent_type (e.g., "explore") as the row label instead of "task".
+    Inner subagent tools nest under this row via parent_tool_call_id.
     """
     import logging as _logging
 
@@ -482,18 +482,33 @@ def _sync_task_delegation_step_row(
     row_args = dict(display_args or {})
     if raw_args:
         row_args.setdefault("_raw", raw_args)
+
+    # IG-419: Extract subagent_type for display label (e.g., "explore" instead of "task")
+    subagent_type = ""
+    raw_st = row_args.get("subagent_type", "")
+    if isinstance(raw_st, str):
+        subagent_type = raw_st.strip()
+    display_name = subagent_type if subagent_type else "task"
+
     if step_w.has_tool_call_row(tcid):
         if row_args:
             step_w.update_tool_args(tcid, row_args)
     else:
-        step_w.add_tool_call(tcid, "task", row_args, raw_args=raw_args)
+        # IG-419: Mark as task row for nesting, use subagent_type as label
+        step_w.add_tool_call(
+            tcid,
+            display_name,
+            row_args,
+            raw_args=raw_args,
+            is_task_row=True,  # Mark as parent task row for nesting
+        )
         _log.debug(
-            "Task delegation row on step card: id=%s step_id=%s",
+            "Task delegation row on step card: id=%s step_id=%s subagent_type=%s",
             tcid,
             sid,
+            subagent_type,
         )
     adapter._tool_to_step[tcid] = step_w
-    # ``tool_display_by_call_id`` stays on the task card for subgraph parent resolution.
     return True
 
 
@@ -505,8 +520,13 @@ async def _ensure_task_delegation_card(
     show_tool_ui: bool,
     streaming_overlay: dict[str, dict[str, Any]] | None = None,
     pending_tool_calls_lc: dict[str, dict[str, Any]] | None = None,
-) -> ToolCallMessage | None:
-    """Mount or refresh a standalone Task subagent card (not a step row)."""
+) -> None:
+    """Sync task delegation row to step card (IG-419: no standalone card).
+
+    Task delegations display as parent rows on step cards, with inner tools
+    nested underneath via parent_tool_call_id. No separate ToolCallMessage
+    is created for task subagents.
+    """
     if not show_tool_ui or not lookup_id:
         return None
     display_args = enrich_task_delegation_args(
@@ -518,30 +538,13 @@ async def _ensure_task_delegation_card(
     )
     if not _task_args_has_description(display_args) and not tool_args_meaningful(display_args):
         return None
-    existing = adapter._current_tool_messages.get(
-        lookup_id
-    ) or adapter._tool_display_by_call_id.get(lookup_id)
     parsed_sid, _, _, _ = parse_unified_tool_call_id(lookup_id)
-    if isinstance(existing, ToolCallMessage):
-        if display_args:
-            existing.refresh_tool_args(display_args)
-        _sync_task_delegation_step_row(
-            adapter,
-            lookup_id=lookup_id,
-            display_args=display_args,
-            bound_step_id=parsed_sid or "",
-        )
-        return existing
-    task_card = ToolCallMessage("task", display_args, tool_call_id=lookup_id)
-    await adapter._mount_message(task_card)
-    task_card.set_running()
-    adapter._current_tool_messages[lookup_id] = task_card
-    adapter._tool_display_by_call_id[lookup_id] = task_card
     raw = ""
     if pending_tool_calls_lc:
         pend = pending_tool_calls_lc.get(lookup_id)
         if isinstance(pend, dict):
             raw = str(pend.get("args_str", ""))
+    # IG-419: Only sync step row, no standalone ToolCallMessage
     _sync_task_delegation_step_row(
         adapter,
         lookup_id=lookup_id,
@@ -549,7 +552,7 @@ async def _ensure_task_delegation_card(
         raw_args=raw,
         bound_step_id=parsed_sid or "",
     )
-    return task_card
+    return None
 
 
 def _is_step_level_task_tool_id(tool_call_id: str) -> bool:
@@ -870,30 +873,24 @@ async def _mount_subagent_inner_tool_row_if_resolved(
     file_op_tracker: FileOpTracker,
     streaming_overlay: dict[str, dict[str, Any]] | None = None,
 ) -> bool:
-    """Attach a subgraph tool as a row on the parent Task/step card when scope resolves.
+    """Attach a subgraph tool as a row on the parent step card when scope resolves.
 
-    Used for subagent tools when no standalone card is mounted (including IG-300 stream
-    elision): :func:`_try_register_task_scoped_inner_tool_pending` skips text fallback for
-    ``ToolCallMessage`` parents, so rows must still be registered here.
+    IG-419: Inner subagent tools appear on step cards as nested rows under the task
+    delegation row. No separate Task cards are created. The task row on step card
+    serves as the parent branch header.
 
     Returns:
         True if a parent card was found and the row was attached.
     """
     ts_inner = router.resolve_task_scope(ns_key)
-    parent_for_inner = (
-        router.resolve_parent(
-            ts_inner,
-            step_cards=adapter._current_step_messages,
-            tool_display_by_call_id=adapter._tool_display_by_call_id,
-        )
-        if ts_inner
-        else None
-    )
+    step_id = task_scope_step_id(ts_inner) if ts_inner else ""
+    # IG-419: Inner subagent tools go directly to step card as nested rows
+    parent_for_inner = adapter._current_step_messages.get(step_id) if step_id else None
     if parent_for_inner is None:
-        parent_for_inner = router.resolve_task_parent_for_unified_inner_tool(
-            str(lookup_id),
-            tool_display_by_call_id=adapter._tool_display_by_call_id,
-        )
+        # Fallback: try to resolve step_id from unified tool call id
+        parsed_sid, type_code, _, _ = parse_unified_tool_call_id(str(lookup_id))
+        if parsed_sid and type_code == "t":
+            parent_for_inner = adapter._current_step_messages.get(parsed_sid)
     if (
         not show_tool_ui
         or is_main_agent

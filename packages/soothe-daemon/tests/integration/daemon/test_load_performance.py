@@ -439,7 +439,7 @@ async def test_event_priority_overflow_strategy():
     """
     from soothe.core.events import EventPriority
 
-    from soothe_daemon.event_bus import EventBus
+    from soothe_daemon.event import EventBus
 
     bus = EventBus()
     metrics = LoadTestMetrics()
@@ -541,7 +541,7 @@ async def test_sender_loop_batching():
     """
     from soothe_daemon.client_session import ClientSessionManager
     from soothe_daemon.config.models import WebSocketConfig
-    from soothe_daemon.event_bus import EventBus
+    from soothe_daemon.event import EventBus
     from soothe_daemon.transports.websocket import WebSocketTransport
 
     config = WebSocketConfig(enabled=True, host="127.0.0.1", port=8765)
@@ -686,7 +686,7 @@ async def test_phase1_full_integration():
     from soothe.core.events import EventPriority
 
     from soothe_daemon.config import SootheDaemonConfig
-    from soothe_daemon.event_bus import EventBus
+    from soothe_daemon.event import EventBus
     from soothe_daemon.server import SootheDaemon
 
     agent_config = SootheConfig()
