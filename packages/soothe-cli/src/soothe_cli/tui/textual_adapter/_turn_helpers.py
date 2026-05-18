@@ -206,7 +206,6 @@ async def _handle_interrupt_cleanup(
     import time
 
     from langchain_core.messages import HumanMessage
-    from langchain_core.messages.base import messages_to_dict
 
     # Clear active message immediately so it won't block pruning.
     # If we don't do this, the store still thinks it's active and protects
@@ -235,12 +234,12 @@ async def _handle_interrupt_cleanup(
             if interrupted_msg:
                 await daemon_session.aupdate_loop_state(
                     loop_id,
-                    {"messages": messages_to_dict([interrupted_msg])},
+                    {"messages": [interrupted_msg.model_dump()]},
                     timeout=2.0,
                 )
             await daemon_session.aupdate_loop_state(
                 loop_id,
-                {"messages": messages_to_dict([cancellation_msg])},
+                {"messages": [cancellation_msg.model_dump()]},
                 timeout=2.0,
             )
     except Exception:

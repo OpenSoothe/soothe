@@ -40,19 +40,23 @@ class WebSource:
     def _ensure_tools(self) -> None:
         if self._search_tool is not None:
             return
-        from soothe.toolkits.wizsearch import WizsearchSearchTool
+        try:
+            from soothe.toolkits.wizsearch import WizsearchSearchTool
 
-        web_search_config: dict[str, Any] = {}
-        if self._config and hasattr(self._config, "tools"):
-            ws = getattr(self._config.tools, "wizsearch", None)
-            if ws:
-                web_search_config = {
-                    "default_engines": ws.default_engines,
-                    "max_results_per_engine": ws.max_results_per_engine,
-                    "timeout": ws.timeout,
-                }
+            web_search_config: dict[str, Any] = {}
+            if self._config and hasattr(self._config, "tools"):
+                ws = getattr(self._config.tools, "wizsearch", None)
+                if ws:
+                    web_search_config = {
+                        "default_engines": ws.default_engines,
+                        "max_results_per_engine": ws.max_results_per_engine,
+                        "timeout": ws.timeout,
+                    }
 
-        self._search_tool = WizsearchSearchTool(config=web_search_config)
+            self._search_tool = WizsearchSearchTool(config=web_search_config)
+        except ImportError:
+            logger.debug("WizsearchSearchTool not available - wizsearch package not installed")
+            self._search_tool = None
 
     # -- InformationSource protocol ------------------------------------------
 
@@ -78,8 +82,10 @@ class WebSource:
         """
         _ = context
         self._ensure_tools()
-        results: list[SourceResult] = []
+        if not self._search_tool:
+            return []
 
+        results: list[SourceResult] = []
         raw = await self._search_tool._arun(query=query)
         results.extend(self._parse_search_output(raw, query))
 
