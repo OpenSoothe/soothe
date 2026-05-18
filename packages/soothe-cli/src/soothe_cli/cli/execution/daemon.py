@@ -65,10 +65,17 @@ async def _run_headless_session_once(
     try:
         await connect_websocket_with_retries(client)
         cli_ws = os.environ.get("SOOTHE_CLI_WORKSPACE", "").strip() or os.getcwd()
+        stream_delivery = "batch"
+        if getattr(cfg, "output_streaming_mode", None) == "streaming":
+            stream_delivery = "full"
+        elif getattr(cfg, "output_streaming_mode", None) == "merged":
+            stream_delivery = "merged"
+
         status_event = await bootstrap_loop_session(
             client,
             resume_loop_id=resume_loop_id,
             verbosity="normal",
+            stream_delivery=stream_delivery,
             workspace=cli_ws,
             subscribe_timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S,
         )
@@ -102,6 +109,7 @@ async def _run_headless_session_once(
             renderer,
             presentation_engine=presentation,
             headless_output=True,
+            streaming_mode="batch" if stream_delivery == "batch" else "streaming",
         )
 
         query_started = False

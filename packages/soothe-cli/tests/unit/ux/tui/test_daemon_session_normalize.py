@@ -35,10 +35,12 @@ def test_envelope_wraps_flat_ai_message_dict() -> None:
 
 
 def test_envelope_wraps_flat_chunk_dict() -> None:
+    """AIMessageChunk type is normalized to 'ai' (chunks not distinguished in wire format)."""
     flat = _serialize_for_json(AIMessageChunk(content="partial"))
     wrapped = envelope_langchain_message_dict(flat)
     restored = messages_from_dict([wrapped])
-    assert isinstance(restored[0], AIMessageChunk)
+    # AIMessageChunk is normalized to AIMessage in wire format (intentional)
+    assert isinstance(restored[0], AIMessage)
     assert restored[0].content == "partial"
 
 

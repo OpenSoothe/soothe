@@ -19,6 +19,9 @@ _CLIENT_INITIALIZED_FOR_PUBLIC_KEY: set[str] = set()
 _HANDLERS: dict[str, Any] = {}
 # Thread pool for non-blocking Langfuse initialization (prevents event loop blocking)
 _LANGFUSE_EXECUTOR: ThreadPoolExecutor | None = None
+# Cache warning state - emit once per session instead of 15+ times per query
+_LANGFUSE_NOT_INSTALLED_WARNED = False
+_LANGFUSE_HANDLER_UNAVAILABLE_WARNED = False
 
 
 def _resolved_langfuse_tags(soothe_config: SootheConfig) -> list[str] | None:
@@ -116,14 +119,17 @@ async def _ensure_langfuse_client_async(soothe_config: SootheConfig) -> None:
 
 
 def _langfuse_callback_handler(soothe_config: SootheConfig) -> Any | None:
+    global _LANGFUSE_NOT_INSTALLED_WARNED, _LANGFUSE_HANDLER_UNAVAILABLE_WARNED
     lf = soothe_config.observability.langfuse
     try:
         import langfuse.langchain  # noqa: F401 - optional extra soothe[langfuse]
     except ImportError:
-        logger.warning(
-            "observability.langfuse.enabled is true but langfuse is not installed; "
-            "install optional dependency (e.g. pip install 'soothe[langfuse]')"
-        )
+        if not _LANGFUSE_NOT_INSTALLED_WARNED:
+            logger.warning(
+                "observability.langfuse.enabled is true but langfuse is not installed; "
+                "install optional dependency (e.g. pip install 'soothe[langfuse]')"
+            )
+            _LANGFUSE_NOT_INSTALLED_WARNED = True
         return None
 
     _ensure_langfuse_client(soothe_config)
@@ -137,10 +143,12 @@ def _langfuse_callback_handler(soothe_config: SootheConfig) -> Any | None:
             )
 
             if not LANGFUSE_AVAILABLE:
-                logger.warning(
-                    "observability.langfuse.enabled is true but Langfuse callback handler "
-                    "is unavailable; ensure langfuse and langchain are both installed"
-                )
+                if not _LANGFUSE_HANDLER_UNAVAILABLE_WARNED:
+                    logger.warning(
+                        "observability.langfuse.enabled is true but Langfuse callback handler "
+                        "is unavailable; ensure langfuse and langchain are both installed"
+                    )
+                    _LANGFUSE_HANDLER_UNAVAILABLE_WARNED = True
                 return None
 
             if pub_resolved:

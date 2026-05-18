@@ -731,8 +731,11 @@ class _ActStreamBudget:
     """Mutable counters for a single CoreAgent stream (IG-130)."""
 
     max_subagent_tasks_per_wave: int = 0
+    max_tool_calls_per_step: int = 30  # Prevent runaway tool usage
     subagent_task_completions: int = 0
+    tool_call_count: int = 0
     hit_subagent_cap: bool = False
+    hit_tool_budget: bool = False
 
 
 @dataclass(slots=True)
@@ -1567,7 +1570,10 @@ class Executor:
 
         start = time.perf_counter()
         event_count = 0
-        budget = _ActStreamBudget(max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave())
+        budget = _ActStreamBudget(
+            max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave(),
+            max_tool_calls_per_step=30,
+        )
 
         try:
             configurable: dict[str, Any] = {"thread_id": state.thread_id}
@@ -1802,7 +1808,10 @@ class Executor:
         start = time.perf_counter()
         events: list[StreamEvent] = []
         output = ""  # Still collect for Layer 1 final report
-        budget = _ActStreamBudget(max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave())
+        budget = _ActStreamBudget(
+            max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave(),
+            max_tool_calls_per_step=30,
+        )
         outcomes: list[dict] = []  # RFC-211: Collect outcome metadata
 
         try:
@@ -2159,6 +2168,18 @@ class Executor:
                     tool_call_count += 1
                     tool_call_id = msg.tool_call_id
                     tool_name = msg.name or "unknown"
+
+                    # Check tool budget (IG-XXX: prevent runaway tool usage)
+                    if budget is not None and budget.max_tool_calls_per_step > 0:
+                        budget.tool_call_count = tool_call_count
+                        if tool_call_count > budget.max_tool_calls_per_step:
+                            budget.hit_tool_budget = True
+                            logger.warning(
+                                "Tool budget exceeded (count=%d, max=%d), stopping stream",
+                                tool_call_count,
+                                budget.max_tool_calls_per_step,
+                            )
+                            break
 
                     if _maybe_cap_subagent_tasks(msg):
                         stop_act_stream = True
