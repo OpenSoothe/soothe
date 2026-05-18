@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from soothe_daemon import query_engine as query_engine_module
-from soothe_daemon.query_engine import QueryEngine
+from soothe_daemon.query import QueryEngine
+from soothe_daemon.query import engine as query_engine_module
 
 
 @pytest.mark.asyncio

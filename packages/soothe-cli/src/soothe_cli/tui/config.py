@@ -1318,7 +1318,7 @@ class SessionState:
     writes/edits, web search, URL fetch) require user confirmation before running.
     """
 
-    def __init__(self, auto_approve: bool = False, no_splash: bool = False) -> None:
+    def __init__(self, auto_approve: bool = True, no_splash: bool = False) -> None:
         """Initialize session state with optional flags.
 
         Args:

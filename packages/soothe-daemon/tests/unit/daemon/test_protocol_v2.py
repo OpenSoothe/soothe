@@ -5,7 +5,7 @@ Legacy global "input" message type was removed in favor of loop_input.
 
 from __future__ import annotations
 
-from soothe_daemon.protocol_v2 import (
+from soothe_daemon.protocol import (
     ERROR_INVALID_MESSAGE,
     ERROR_RATE_LIMITED,
     ProtocolError,

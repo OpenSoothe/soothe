@@ -54,3 +54,10 @@ SHELL_ALLOW_LIST = "SOOTHE_CLI_SHELL_ALLOW_LIST"
 
 USER_ID = "SOOTHE_CLI_USER_ID"
 """Attach a user identifier to stream metadata (when set)."""
+
+TUI_REFRESH_INTERVAL_MS = "SOOTHE_CLI_TUI_REFRESH_INTERVAL_MS"
+"""Minimum interval between TUI widget refreshes in milliseconds (default: 800).
+
+Set to throttle frequent refreshes during streaming, reducing UI lag.
+Lower values = more responsive but more CPU load; higher values = smoother.
+"""

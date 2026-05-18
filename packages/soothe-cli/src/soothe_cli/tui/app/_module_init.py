@@ -332,7 +332,7 @@ class TextualSessionState:
     def __init__(
         self,
         *,
-        auto_approve: bool = False,
+        auto_approve: bool = True,
         loop_id: str | None = None,
     ) -> None:
         """Initialize session state.
@@ -383,7 +383,7 @@ async def run_textual_app(
     *,
     daemon_config: Any,  # noqa: ANN401
     assistant_id: str | None = None,
-    auto_approve: bool = False,
+    auto_approve: bool = True,
     cwd: str | Path | None = None,
     resume_loop_id: str | None = None,
     initial_prompt: str | None = None,

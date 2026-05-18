@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 from soothe.config import SootheConfig
 
-from soothe_daemon.message_router import MessageRouter
+from soothe_daemon.protocol import MessageRouter
 
 
 @pytest.mark.asyncio

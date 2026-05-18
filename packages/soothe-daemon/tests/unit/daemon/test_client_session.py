@@ -9,8 +9,8 @@ from soothe.core.events import EventMeta
 from soothe_sdk.core.events import SootheEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 
-from soothe_daemon.client_session import ClientSessionManager
 from soothe_daemon.event import EventBus, loop_event_topic
+from soothe_daemon.session import ClientSessionManager
 
 
 @pytest.mark.asyncio

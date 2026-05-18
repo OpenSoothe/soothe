@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 import logging
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,7 @@ from textual.widgets import Static
 from soothe_cli.shared.core.presentation_engine import PresentationEngine
 from soothe_cli.shared.tools.message_processing import _normalize_tool_name_for_arg_map
 from soothe_cli.tui import theme
+from soothe_cli.tui._env_vars import TUI_REFRESH_INTERVAL_MS
 from soothe_cli.tui.config import (
     MODE_DISPLAY_GLYPHS,
     PREFIX_TO_MODE,
@@ -58,6 +60,50 @@ _STEP_TOOL_PREVIEW_ROWS = STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
 
 _MAX_STEP_STAT_TOOL_KINDS = 4
 """Max distinct tool display names in the running-line stats suffix before ``+N more``."""
+
+# IG-420: TUI refresh throttling - minimum interval between widget refreshes
+_DEFAULT_TUI_REFRESH_INTERVAL_MS = 800
+"""Default minimum interval between TUI refreshes in milliseconds."""
+
+_global_refresh_interval_ms: int | None = None
+
+
+def _get_tui_refresh_interval_ms() -> int:
+    """Get the TUI refresh interval from environment or default.
+
+    Returns:
+        Minimum interval between refreshes in milliseconds.
+    """
+    global _global_refresh_interval_ms
+    if _global_refresh_interval_ms is not None:
+        return _global_refresh_interval_ms
+    env_val = os.environ.get(TUI_REFRESH_INTERVAL_MS)
+    if env_val:
+        try:
+            parsed = int(env_val.strip())
+            if parsed >= 50:  # Minimum 50ms to prevent UI lockup
+                _global_refresh_interval_ms = parsed
+                return parsed
+        except ValueError:
+            pass
+    _global_refresh_interval_ms = _DEFAULT_TUI_REFRESH_INTERVAL_MS
+    return _DEFAULT_TUI_REFRESH_INTERVAL_MS
+
+
+def _should_refresh_now(last_refresh_time: float | None) -> bool:
+    """Check if enough time has passed since last refresh for throttling.
+
+    Args:
+        last_refresh_time: Monotonic time of last refresh, or None if never refreshed.
+
+    Returns:
+        True if refresh should proceed, False if throttled.
+    """
+    if last_refresh_time is None:
+        return True
+    interval_secs = _get_tui_refresh_interval_ms() / 1000.0
+    return (monotonic() - last_refresh_time) >= interval_secs
+
 
 _RUNNING_SPINNER_INTERVAL_SECONDS = 0.2
 """Spinner/status animation cadence for running cards."""
@@ -1033,6 +1079,8 @@ class ToolCallMessage(Vertical):
         self._start_time: float | None = None
         self._animation_timer: Timer | None = None
         self._last_rows_animation_refresh: float = 0.0
+        # IG-420: Throttling for refresh methods
+        self._last_activity_refresh: float | None = None
         # Deferred state for hydration (set by MessageData.to_widget)
         self._deferred_status: str | None = None
         self._deferred_output: str | None = None
@@ -1358,6 +1406,10 @@ class ToolCallMessage(Vertical):
 
     def _refresh_activity_display(self) -> None:
         """Update the unified activity widget with interleaved text lines and tool rows."""
+        # IG-420: Throttle refreshes to prevent UI lag during streaming
+        if not _should_refresh_now(self._last_activity_refresh):
+            return
+        self._last_activity_refresh = monotonic()
         if self._activity_widget is None:
             self._maybe_auto_fold_task_activity_list()
             self._maybe_auto_collapse_task_card()
@@ -2598,6 +2650,9 @@ class CognitionStepMessage(Vertical):
         self._start_time: float | None = None
         self._animation_timer: Timer | None = None
         self._last_rows_animation_refresh: float = 0.0
+        # IG-420: Throttling for refresh methods
+        self._last_tools_refresh: float | None = None
+        self._last_header_refresh: float | None = None
         self._status_widget: Static | None = None
         self._header_widget: Static | None = None
         self._tools_widget: Static | None = None
@@ -3019,6 +3074,10 @@ class CognitionStepMessage(Vertical):
         return result
 
     def _refresh_tools_display(self) -> None:
+        # IG-420: Throttle refreshes to prevent UI lag during streaming
+        if not _should_refresh_now(self._last_tools_refresh):
+            return
+        self._last_tools_refresh = monotonic()
         if self._tools_widget is None:
             self._maybe_auto_fold_step_tool_list()
             self._maybe_auto_collapse_step_card()

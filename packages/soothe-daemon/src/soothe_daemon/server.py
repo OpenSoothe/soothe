@@ -18,13 +18,13 @@ from soothe.logging import ThreadLogger
 from soothe_sdk.client.protocol import encode
 
 from soothe_daemon._handlers import DaemonHandlersMixin
-from soothe_daemon.client_session import ClientSessionManager
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.event import EventBus, EventSizeDistributionCollector, loop_event_topic
 from soothe_daemon.loop_isolation import LoopInputDispatcher
-from soothe_daemon.message_router import MessageRouter
 from soothe_daemon.paths import pid_path
-from soothe_daemon.query_engine import QueryEngine
+from soothe_daemon.protocol import MessageRouter
+from soothe_daemon.query import QueryEngine
+from soothe_daemon.session import ClientSessionManager
 from soothe_daemon.singleton import (
     acquire_pid_lock,
     cleanup_pid,
