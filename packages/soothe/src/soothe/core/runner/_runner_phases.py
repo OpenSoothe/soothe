@@ -100,31 +100,18 @@ class PhasesMixin:
     ) -> AsyncGenerator[StreamChunk]:
         """Fast path for quiz-style queries (greetings, thanks, brief trivia).
 
-        Uses piggybacked ``quiz_response`` from classification when available.
-        Otherwise invokes the configured **default** role chat model.
+        Invokes the configured **default** role chat model for the answer.
+        Classification supplies routing only (``intent_type=quiz``).
 
         Args:
             user_input: User message.
             thread_id: Thread ID for state tracking.
-            classification: IntentClassification with ``quiz_response`` when present.
+            classification: IntentClassification from classifier (routing only).
 
         Yields:
             StreamChunk events for quiz response.
         """
         logger.info("Quiz: %s", user_input[:50])
-
-        piggybacked = getattr(classification, "quiz_response", None)
-        if piggybacked:
-            yield loop_assistant_messages_chunk(
-                content=piggybacked,
-                phase="quiz",
-                thread_id=thread_id,
-            )
-            logger.debug("Quiz completed (piggybacked) for query: %s", user_input[:50])
-            await self._save_quiz_to_state(user_input, piggybacked, thread_id)
-            return
-
-        logger.warning("Quiz classification missing piggybacked quiz_response, spawning LLM call")
 
         quiz_model = getattr(self, "_default_chat_model", None)
         model_label = "default"
@@ -144,11 +131,12 @@ class PhasesMixin:
             logger.debug("Quiz completed (no model fallback): %s", user_input[:50])
             return
 
-        quiz_prompt = f"""Answer this question accurately and concisely:
+        quiz_prompt = f"""Answer this question accurately and concisely using only your training knowledge.
 
 Question: {user_input}
 
-Provide a direct, factual answer. Do not use tools or search."""
+Provide a direct, factual answer for static facts, greetings, or simple math.
+Do not use tools or search. If the question needs live/real-time data (weather, news, stocks, etc.), say you cannot provide current data and suggest checking an authoritative source."""
 
         try:
             from soothe.utils.observability.langfuse import build_traced_config

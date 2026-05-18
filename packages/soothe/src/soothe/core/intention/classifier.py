@@ -15,7 +15,12 @@ from pydantic import BaseModel
 
 from soothe.utils.text_preview import preview_first
 
-from .models import IntentClassification, IntentHint, TaskComplexity
+from .models import (
+    IntentClassification,
+    IntentClassificationLLMResult,
+    IntentHint,
+    TaskComplexity,
+)
 from .prompts import (
     INTENT_CLASSIFICATION_PROMPT,
     INTENT_CLASSIFICATION_RETRY_PROMPT,
@@ -67,7 +72,7 @@ class IntentClassifier:
 
         # Pre-create structured output model for performance
         if model:
-            self._intent_model = self._create_structured_model(model, IntentClassification)
+            self._intent_model = self._create_structured_model(model, IntentClassificationLLMResult)
 
             logger.info("[IntentClassifier] Initialized with structured output model")
         else:
@@ -207,19 +212,19 @@ class IntentClassifier:
         )
 
         try:
-            result = await self._intent_model.ainvoke(prompt, config=config)
+            llm_result = await self._intent_model.ainvoke(prompt, config=config)
         except Exception:
             logger.exception("LLM intent classification call failed")
             raise
 
         # Validate result
-        if result is None:
+        if llm_result is None:
             raise ValueError("LLM returned None - structured output parsing failed")
 
-        if result.intent_type not in ("continue_thread", "new_goal", "quiz"):
-            raise ValueError(f"Invalid intent_type from LLM: {result.intent_type!r}")
+        if llm_result.intent_type not in ("continue_thread", "new_goal", "quiz"):
+            raise ValueError(f"Invalid intent_type from LLM: {llm_result.intent_type!r}")
 
-        return result
+        return llm_result.to_intent_classification()
 
     # -- Model creation ----------------------------------------------------
 
@@ -398,11 +403,6 @@ class IntentClassifier:
         Returns:
             IntentClassification with patched fields.
         """
-        # Patch missing quiz_response (greetings and factual piggyback)
-        if intent.intent_type == "quiz" and not intent.quiz_response:
-            intent.quiz_response = self._generate_quiz_response(query)
-            logger.debug("Patched missing quiz_response")
-
         # Patch missing goal_description
         if intent.intent_type == "new_goal" and not intent.goal_description:
             intent.goal_description = query
@@ -414,10 +414,6 @@ class IntentClassifier:
             logger.debug("Patched missing friendly_message")
 
         return intent
-
-    def _generate_quiz_response(self, query: str) -> str:
-        """Template fallback when classification omits ``quiz_response``."""
-        return f"Hello! I'm {self._assistant_name}. How can I help you today?"
 
     def _generate_friendly_message(self, query: str) -> str:
         """Generate friendly message fallback (IG-287).
