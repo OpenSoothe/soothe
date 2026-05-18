@@ -175,8 +175,7 @@ def test_richest_pending_task_args_scoped_to_execute_step() -> None:
         "AAA-01:s:task:0": {
             "name": "task",
             "args_str": (
-                '{"description": "First step explores the repository", '
-                '"subagent_type": "explore"}'
+                '{"description": "First step explores the repository", "subagent_type": "explore"}'
             ),
             "is_complete_json": True,
             "emitted": False,

@@ -10,7 +10,7 @@
 #    - soothe (in-proc core) must NOT depend on soothe-daemon (one-way dep)
 # 3. Code formatting check (make format)
 # 4. Linting (make lint) - checks ALL packages
-# 5. Unit tests (soothe + soothe-daemon package tests)
+# 5. Unit tests (all packages)
 #
 # Exit codes:
 #   0 - All checks passed
@@ -85,35 +85,52 @@ for arg in "$@"; do
     esac
 done
 
-# Function to print section headers
+# All packages in dependency order
+ALL_PACKAGES=(soothe-sdk soothe-cli soothe soothe-daemon)
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# HELPER FUNCTIONS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 print_header() {
     echo ""
     echo -e "${BLUE}╔══════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${BLUE}║           $1${NC}"
-    echo -e "${BLUE}╚══════════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${BLUE}╚══════════════━━══════════════════════════════════════════════════╝${NC}"
     echo ""
 }
 
-# Function to print success message
 print_success() {
     echo -e "${GREEN}✓ $1${NC}"
 }
 
-# Function to print failure message
 print_failure() {
     echo -e "${RED}✗ $1${NC}"
     FAILED_CHECKS+=("$1")
     OVERALL_STATUS=1
 }
 
-# Function to print warning
 print_warning() {
     echo -e "${YELLOW}⚠ $1${NC}"
 }
 
-# Function to print info
 print_info() {
     echo -e "${CYAN}ℹ $1${NC}"
+}
+
+# Sync a single package (idempotent, skips if already synced)
+_sync_package() {
+    local pkg="$1"
+    cd "$PROJECT_ROOT/packages/$pkg"
+    uv sync --all-extras >/dev/null 2>&1 || true
+    cd "$PROJECT_ROOT"
+}
+
+# Sync all packages once
+_sync_all_packages() {
+    for pkg in "${ALL_PACKAGES[@]}"; do
+        _sync_package "$pkg"
+    done
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -228,14 +245,7 @@ setup_workspace() {
     fi
 
     print_info "Syncing workspace packages with dev dependencies..."
-
-    if ! uv sync --all-extras 2>&1 | tail -5 | grep -q "Audited"; then
-        # uv sync might take time, show progress
-        uv sync --all-extras &
-        UV_PID=$!
-        wait $UV_PID 2>/dev/null || true
-    fi
-
+    uv sync --all-extras 2>&1 || true
     print_success "Workspace synced (with dev dependencies)"
 }
 
@@ -246,7 +256,6 @@ setup_workspace() {
 check_formatting() {
     print_header "Code Formatting Check"
 
-    # Save project root
     PROJECT_ROOT="$(pwd)"
 
     if $AUTO_FIX; then
@@ -259,59 +268,25 @@ check_formatting() {
     else
         print_info "Checking code formatting across all packages..."
 
-        # Sync dev dependencies first so ruff is available
-        print_info "  Syncing dev dependencies..."
-        for pkg in soothe-sdk soothe-cli soothe soothe-daemon; do
-            cd "$PROJECT_ROOT/packages/$pkg" && uv sync --all-extras >/dev/null 2>&1
-            cd "$PROJECT_ROOT"
-        done
-
-        # Check each package individually
         local format_failed=false
 
-        # SDK package
-        print_info "  SDK package..."
-        cd "$PROJECT_ROOT/packages/soothe-sdk"
-        if uv run ruff format --check src/ >/dev/null 2>&1; then
-            print_success "    SDK formatting OK"
-        else
-            print_failure "    SDK formatting issues found"
-            format_failed=true
-        fi
-        cd "$PROJECT_ROOT"
-
-        # CLI package
-        print_info "  CLI package..."
-        cd "$PROJECT_ROOT/packages/soothe-cli"
-        if uv run ruff format --check src/ >/dev/null 2>&1; then
-            print_success "    CLI formatting OK"
-        else
-            print_failure "    CLI formatting issues found"
-            format_failed=true
-        fi
-        cd "$PROJECT_ROOT"
-
-        # soothe (in-proc agent core)
-        print_info "  soothe (in-proc agent core)..."
-        cd "$PROJECT_ROOT/packages/soothe"
-        if uv run ruff format --check src/ tests/ >/dev/null 2>&1; then
-            print_success "    soothe formatting OK"
-        else
-            print_failure "    soothe formatting issues found"
-            format_failed=true
-        fi
-        cd "$PROJECT_ROOT"
-
-        # soothe-daemon package
-        print_info "  soothe-daemon package..."
-        cd "$PROJECT_ROOT/packages/soothe-daemon"
-        if uv run ruff format --check src/ tests/ >/dev/null 2>&1; then
-            print_success "    soothe-daemon formatting OK"
-        else
-            print_failure "    soothe-daemon formatting issues found"
-            format_failed=true
-        fi
-        cd "$PROJECT_ROOT"
+        for pkg in "${ALL_PACKAGES[@]}"; do
+            print_info "  $pkg..."
+            _sync_package "$pkg"
+            cd "$PROJECT_ROOT/packages/$pkg"
+            local paths="src/"
+            if [ -d "tests/" ]; then
+                paths="src/ tests/"
+            fi
+            if uv run ruff format --check $paths >/dev/null 2>&1; then
+                cd "$PROJECT_ROOT"
+                print_success "    $pkg formatting OK"
+            else
+                cd "$PROJECT_ROOT"
+                print_failure "    $pkg formatting issues found"
+                format_failed=true
+            fi
+        done
 
         if $format_failed; then
             print_failure "Code formatting check failed (run with --fix to auto-fix)"
@@ -329,7 +304,6 @@ check_formatting() {
 check_linting() {
     print_header "Linting Check"
 
-    # Save project root
     PROJECT_ROOT="$(pwd)"
 
     if $AUTO_FIX; then
@@ -342,57 +316,25 @@ check_linting() {
     else
         print_info "Running linter across all packages..."
 
-        # Sync dev dependencies first so ruff is available
-        for pkg in soothe-sdk soothe-cli soothe soothe-daemon; do
-            cd "$PROJECT_ROOT/packages/$pkg" && uv sync --all-extras >/dev/null 2>&1
-            cd "$PROJECT_ROOT"
-        done
-
         local lint_failed=false
 
-        # SDK package
-        print_info "  SDK package..."
-        cd "$PROJECT_ROOT/packages/soothe-sdk"
-        if uv run ruff check src/ >/dev/null 2>&1; then
-            print_success "    SDK linting OK"
-        else
-            print_failure "    SDK linting errors found"
-            lint_failed=true
-        fi
-        cd "$PROJECT_ROOT"
-
-        # CLI package
-        print_info "  CLI package..."
-        cd "$PROJECT_ROOT/packages/soothe-cli"
-        if uv run ruff check src/ >/dev/null 2>&1; then
-            print_success "    CLI linting OK"
-        else
-            print_failure "    CLI linting errors found"
-            lint_failed=true
-        fi
-        cd "$PROJECT_ROOT"
-
-        # soothe (in-proc agent core)
-        print_info "  soothe (in-proc agent core)..."
-        cd "$PROJECT_ROOT/packages/soothe"
-        if uv run ruff check src/ tests/ >/dev/null 2>&1; then
-            print_success "    soothe linting OK (zero errors)"
-        else
-            print_failure "    soothe linting errors found"
-            lint_failed=true
-        fi
-        cd "$PROJECT_ROOT"
-
-        # soothe-daemon package
-        print_info "  soothe-daemon package..."
-        cd "$PROJECT_ROOT/packages/soothe-daemon"
-        if uv run ruff check src/ tests/ >/dev/null 2>&1; then
-            print_success "    soothe-daemon linting OK (zero errors)"
-        else
-            print_failure "    soothe-daemon linting errors found"
-            lint_failed=true
-        fi
-        cd "$PROJECT_ROOT"
+        for pkg in "${ALL_PACKAGES[@]}"; do
+            print_info "  $pkg..."
+            _sync_package "$pkg"
+            cd "$PROJECT_ROOT/packages/$pkg"
+            local paths="src/"
+            if [ -d "tests/" ]; then
+                paths="src/ tests/"
+            fi
+            if uv run ruff check $paths >/dev/null 2>&1; then
+                cd "$PROJECT_ROOT"
+                print_success "    $pkg linting OK"
+            else
+                cd "$PROJECT_ROOT"
+                print_failure "    $pkg linting errors found"
+                lint_failed=true
+            fi
+        done
 
         if $lint_failed; then
             print_failure "Linting check failed (run with --fix to auto-fix)"
@@ -415,38 +357,27 @@ run_tests() {
 
     print_header "Unit Tests"
 
-    # Save project root
     PROJECT_ROOT="$(pwd)"
 
     local tests_failed=false
 
-    # soothe (in-proc agent core)
-    print_info "Running unit tests for soothe (in-proc agent core)..."
-    cd "$PROJECT_ROOT/packages/soothe"
-    uv sync --all-extras >/dev/null 2>&1 || true
-    if uv run python -m pytest tests/unit/ -v --tb=short; then
-        cd "$PROJECT_ROOT"
-        print_success "soothe unit tests passed"
-    else
-        cd "$PROJECT_ROOT"
-        print_failure "soothe unit tests failed"
-        tests_failed=true
-    fi
+    for pkg in "${ALL_PACKAGES[@]}"; do
+        if [ ! -d "$PROJECT_ROOT/packages/$pkg/tests/unit" ]; then
+            continue
+        fi
 
-    # soothe-daemon (server + transports + runner)
-    if [ -d "$PROJECT_ROOT/packages/soothe-daemon/tests/unit" ]; then
-        print_info "Running unit tests for soothe-daemon..."
-        cd "$PROJECT_ROOT/packages/soothe-daemon"
-        uv sync --all-extras >/dev/null 2>&1 || true
+        print_info "Running unit tests for $pkg..."
+        _sync_package "$pkg"
+        cd "$PROJECT_ROOT/packages/$pkg"
         if uv run python -m pytest tests/unit/ -v --tb=short; then
             cd "$PROJECT_ROOT"
-            print_success "soothe-daemon unit tests passed"
+            print_success "$pkg unit tests passed"
         else
             cd "$PROJECT_ROOT"
-            print_failure "soothe-daemon unit tests failed"
+            print_failure "$pkg unit tests failed"
             tests_failed=true
         fi
-    fi
+    done
 
     if $tests_failed; then
         return 1
@@ -461,7 +392,7 @@ run_tests() {
 
 print_header "Soothe Pre-Commit Verification Suite"
 
-# Always setup workspace first
+# Always setup workspace first (single sync, no hanging pipe)
 setup_workspace
 
 # Dependency validation only mode
