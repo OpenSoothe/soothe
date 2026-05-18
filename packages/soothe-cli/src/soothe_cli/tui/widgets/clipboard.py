@@ -124,38 +124,77 @@ def _copy_texts_to_clipboard(app: App, selected_texts: list[str]) -> None:
     )
 
 
+def _selected_text_from_screen(app: App) -> str | None:
+    """Return selected text via Textual's screen-level selection API."""
+    screen = app.screen
+    if screen is None:
+        return None
+    try:
+        selected = screen.get_selected_text()
+    except (AttributeError, TypeError, ValueError) as exc:
+        logger.debug("screen.get_selected_text failed: %s", exc, exc_info=True)
+        return None
+    if not selected:
+        return None
+    text = selected.strip()
+    return text or None
+
+
+def _collect_selected_texts(
+    app: App,
+    *,
+    candidate_widgets: Iterable[Widget] | None = None,
+) -> list[str]:
+    """Gather non-empty selected text fragments from the screen or widgets."""
+    screen_text = _selected_text_from_screen(app)
+    if screen_text:
+        return [screen_text]
+
+    selected_texts: list[str] = []
+    seen_ids: set[int] = set()
+
+    def _append_from_widget(widget: Widget | None) -> None:
+        if widget is None:
+            return
+        marker = id(widget)
+        if marker in seen_ids:
+            return
+        seen_ids.add(marker)
+        selected = _get_selected_text(widget)
+        if selected:
+            selected_texts.append(selected)
+
+    if candidate_widgets is not None:
+        for widget in candidate_widgets:
+            _append_from_widget(widget)
+        if selected_texts:
+            return selected_texts
+
+    for widget in app.query("*"):
+        _append_from_widget(widget)
+    return selected_texts
+
+
 def copy_selection_to_clipboard(
     app: App,
     *,
     candidate_widgets: Iterable[Widget] | None = None,
-) -> None:
-    """Copy selected text from app widgets to clipboard.
+    notify_if_empty: bool = False,
+) -> bool:
+    """Copy selected text from the TUI to the system clipboard.
 
-    This queries all widgets for their text_selection and copies
-    any selected text to the system clipboard.
+    Args:
+        app: The running Textual app.
+        candidate_widgets: Optional widgets to inspect before a full DOM scan.
+        notify_if_empty: When True, show a hint if nothing is selected.
+
+    Returns:
+        True when text was copied, False otherwise.
     """
-    # Fast path: focus/event candidates usually contain the active selection.
-    if candidate_widgets is not None:
-        seen_ids: set[int] = set()
-        selected_texts: list[str] = []
-        for widget in candidate_widgets:
-            if widget is None:
-                continue
-            marker = id(widget)
-            if marker in seen_ids:
-                continue
-            seen_ids.add(marker)
-            selected = _get_selected_text(widget)
-            if selected:
-                selected_texts.append(selected)
-        if selected_texts:
-            _copy_texts_to_clipboard(app, selected_texts)
-            return
-
-    # Fallback: full DOM scan when selection owner isn't obvious.
-    selected_texts = []
-    for widget in app.query("*"):
-        selected = _get_selected_text(widget)
-        if selected:
-            selected_texts.append(selected)
+    selected_texts = _collect_selected_texts(app, candidate_widgets=candidate_widgets)
+    if not selected_texts:
+        if notify_if_empty:
+            app.notify("No text selected", severity="warning", timeout=2, markup=False)
+        return False
     _copy_texts_to_clipboard(app, selected_texts)
+    return True

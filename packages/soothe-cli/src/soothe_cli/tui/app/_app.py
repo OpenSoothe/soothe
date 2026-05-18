@@ -116,6 +116,12 @@ class SootheApp(
             show=False,
             priority=True,
         ),
+        Binding(
+            "ctrl+y",
+            "copy_selection",
+            "Copy Selection",
+            show=False,
+        ),
         # Approval menu keys (handled at App level for reliability)
         Binding("up", "approval_up", "Up", show=False),
         Binding("k", "approval_up", "Up", show=False),

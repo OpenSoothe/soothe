@@ -20,6 +20,7 @@ from soothe_cli.shared.tools.message_processing import (
 )
 from soothe_cli.tui.config import MAX_ARG_LENGTH, get_glyphs
 from soothe_cli.tui.formatting import format_duration
+from soothe_cli.tui.preview_limits import STEP_TASK_DELEGATION_DESC_MAX_CHARS
 from soothe_cli.tui.unicode_security import strip_dangerous_unicode
 
 _HIDDEN_CHAR_MARKER = " [hidden chars removed]"
@@ -116,6 +117,38 @@ def _first_nonempty_str_arg(tool_args: dict[str, Any], keys: tuple[str, ...]) ->
         if s:
             return s
     return None
+
+
+_TASK_DELEGATION_DESC_KEYS: tuple[str, ...] = (
+    "description",
+    "prompt",
+    "task",
+    "instruction",
+)
+
+
+def format_task_delegation_cli_command(
+    subagent_type: str,
+    tool_args: dict[str, Any] | None,
+) -> str:
+    """Step-card task row: ``Explore(full brief)`` — subagent label + description only.
+
+    Avoids generic ``format_tool_call_args`` output like
+    ``Explore(abbreviated desc, explore)`` when ``tool_name`` is the subagent id.
+    """
+    args_in = tool_args or {}
+    inner = extract_tool_args_dict(args_in)
+    st = (subagent_type or str(inner.get("subagent_type", "")) or "task").strip()
+    agent_label = get_tool_display_name(_normalize_tool_name_for_arg_map(st))
+    desc = _first_nonempty_str_arg(inner, _TASK_DELEGATION_DESC_KEYS)
+    prefix = get_glyphs().tool_prefix
+    if desc is not None:
+        body = truncate_value(
+            strip_dangerous_unicode(str(desc)),
+            STEP_TASK_DELEGATION_DESC_MAX_CHARS,
+        )
+        return f"{prefix} {agent_label}({body})"
+    return f"{prefix} {agent_label}(…)"
 
 
 def format_tool_cli_style_command(tool_name: str, tool_args: dict[str, Any] | None) -> str:
@@ -347,11 +380,11 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         if agent_type:
             agent_shown = _sanitize_display_value(str(agent_type), max_length=40)
             if desc is not None:
-                d = _sanitize_display_value(desc, max_length=80)
+                d = _sanitize_display_value(desc, max_length=500)
                 return f"{prefix} {pascal_name}({agent_shown}, {d})"
             return f"{prefix} {pascal_name}({agent_shown})"
         if desc is not None:
-            d = _sanitize_display_value(desc, max_length=100)
+            d = _sanitize_display_value(desc, max_length=500)
             return f"{prefix} {pascal_name}({d})"
         return f"{prefix} {pascal_name}(…)"
 
@@ -390,6 +423,7 @@ def format_tool_call_row(
     running_spinner: str | None = None,
     running_elapsed_secs: float | None = None,
     branch_glyph: str | None = None,
+    is_task_row: bool = False,
 ) -> Content:
     """One-line tool row: CLI-style invocation, arrow, status/result (IG-402).
 
@@ -407,6 +441,7 @@ def format_tool_call_row(
         branch_glyph: When set (e.g. step card / goal-tree parity), replaces ``tool_prefix`` on the
             LHS with this glyph plus the stripped command — ``circle_empty`` while pending/running,
             ``circle_filled`` when finished. Suppresses the Braille spinner while running.
+        is_task_row: When True, format as ``SubAgentName(full description)`` (IG-419 step card).
 
     Returns:
         Styled ``Content`` for a single row.
@@ -414,7 +449,11 @@ def format_tool_call_row(
     if phase not in ("pending", "running", "success", "error", "rejected", "skipped"):
         phase = "pending"
 
-    lhs_plain = format_tool_cli_style_command(tool_name, tool_args)
+    lhs_plain = (
+        format_task_delegation_cli_command(tool_name, tool_args)
+        if is_task_row
+        else format_tool_cli_style_command(tool_name, tool_args)
+    )
     tool_prefix = get_glyphs().tool_prefix
 
     if branch_glyph is not None:
