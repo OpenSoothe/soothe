@@ -41,7 +41,7 @@ def test_short_level_letter_unknown_level() -> None:
         ("soothe.core", "soothe.core"),
         (
             "soothe.core.loop.state.state_manager",
-            "s.c.a.state.state_manager",
+            "s.c.l.state.state_manager",
         ),
         ("a.b.c.d", "a.b.c.d"),
     ],
@@ -62,7 +62,7 @@ def test_short_level_formatter_abbreviates_name_in_output() -> None:
         exc_info=None,
     )
     line = fmt.format(record)
-    assert line == "s.c.a.state.state_manager x"
+    assert line == "s.c.l.state.state_manager x"
     assert record.name == "soothe.core.loop.state.state_manager"
 
 

@@ -49,8 +49,7 @@ def test_enrich_task_delegation_args_parallel_steps_use_own_step_brief() -> None
         "AAA-01:s:task:0": {
             "name": "task",
             "args_str": (
-                '{"description": "First step explores the repository", '
-                '"subagent_type": "explore"}'
+                '{"description": "First step explores the repository", "subagent_type": "explore"}'
             ),
             "is_complete_json": True,
             "emitted": False,

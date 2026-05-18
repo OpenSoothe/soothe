@@ -36,12 +36,18 @@ def test_step_card_keeps_full_description() -> None:
 
 def test_should_skip_tool_wire_echo_on_step_card() -> None:
     step = CognitionStepMessage("s1", "Work", id="st-wire")
-    assert _should_append_subagent_wire_line_to_parent(
-        step, event_type="soothe.subagent.explore.step_completed"
-    ) is False
-    assert _should_append_subagent_wire_line_to_parent(
-        step, event_type="soothe.subagent.explore.milestone"
-    ) is True
+    assert (
+        _should_append_subagent_wire_line_to_parent(
+            step, event_type="soothe.subagent.explore.step_completed"
+        )
+        is False
+    )
+    assert (
+        _should_append_subagent_wire_line_to_parent(
+            step, event_type="soothe.subagent.explore.milestone"
+        )
+        is True
+    )
 
 
 @pytest.mark.asyncio

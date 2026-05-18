@@ -166,7 +166,16 @@ _register(
     ToolMeta(
         name="grep",
         display_name="Grep",
-        arg_keys=("pattern", "path", "regex", "regexp"),
+        arg_keys=(
+            "pattern",
+            "path",
+            "file_path",
+            "directory",
+            "target_directory",
+            "dir",
+            "regex",
+            "regexp",
+        ),
         path_arg_keys=("path", "file_path", "directory", "target_directory", "dir"),
         category="file_ops",
         outcome_type="file_read",

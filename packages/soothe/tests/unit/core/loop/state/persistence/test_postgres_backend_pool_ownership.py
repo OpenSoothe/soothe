@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+pytest.importorskip("psycopg_pool")
+
 from soothe.core.loop.state.persistence.postgres_backend import (
     PostgreSQLPersistenceBackend,
 )

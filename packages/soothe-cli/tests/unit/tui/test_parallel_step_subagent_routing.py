@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe_cli.tui.file_ops import FileOpTracker
-from soothe_cli.tui.step_task_routing import StepTaskRouter
 from soothe_cli.tui.textual_adapter import TextualUIAdapter
 from soothe_cli.tui.textual_adapter._stream_formatting import (
     _mount_subagent_inner_tool_row_if_resolved,
