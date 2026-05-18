@@ -78,7 +78,7 @@ class IntentClassification(BaseModel):
         friendly_message: User-friendly reinterpretation for display (IG-287).
         task_complexity: Routing complexity level (minimal | simple | medium | complex).
             For quiz intents, task_complexity is always "minimal".
-        quiz_response: Direct reply for quiz path (greetings, thanks, or brief factual text).
+        quiz_response: Optional direct reply after quiz answer generation (not set by classifier).
     """
 
     intent_type: Literal["continue_thread", "new_goal", "quiz"] = Field(
@@ -101,7 +101,7 @@ class IntentClassification(BaseModel):
     )
     quiz_response: str | None = Field(
         default=None,
-        description="Direct reply for quiz path (piggybacked from classification)",
+        description="Direct reply for quiz path (set by quiz answer step, not classification)",
     )
 
     def to_routing_classification(self) -> RoutingClassification:
@@ -113,6 +113,52 @@ class IntentClassification(BaseModel):
         return RoutingClassification(
             task_complexity=self.task_complexity,
             routing_hint="intent_based",
+        )
+
+
+class IntentClassificationLLMResult(BaseModel):
+    """Structured output from intent classifier LLM (routing only, no answer text).
+
+    Args:
+        intent_type: Primary intent (continue_thread | new_goal | quiz).
+        reuse_current_goal: Whether to reuse active goal in current thread.
+        goal_description: Normalized goal description for GoalEngine.
+        friendly_message: User-friendly reinterpretation for display.
+        task_complexity: Routing complexity level.
+    """
+
+    intent_type: Literal["continue_thread", "new_goal", "quiz"] = Field(
+        description="Primary intent: quiz (greeting/thanks/static trivia without tools), "
+        "continue_thread (follow-up), new_goal (tool-requiring task)"
+    )
+    reuse_current_goal: bool = Field(
+        default=False,
+        description="Whether to reuse active goal in current thread (continue_thread only)",
+    )
+    goal_description: str | None = Field(
+        default=None, description="Normalized goal description extracted from query (new_goal only)"
+    )
+    friendly_message: str | None = Field(
+        default=None,
+        description="User-friendly task reinterpretation for display (new_goal only)",
+    )
+    task_complexity: TaskComplexity = Field(
+        description="Routing complexity: minimal (quiz), simple, medium, or complex"
+    )
+
+    def to_intent_classification(self) -> IntentClassification:
+        """Convert LLM routing result to runtime IntentClassification.
+
+        Returns:
+            IntentClassification with quiz_response unset (filled by quiz answer step).
+        """
+        return IntentClassification(
+            intent_type=self.intent_type,
+            reuse_current_goal=self.reuse_current_goal,
+            goal_description=self.goal_description,
+            friendly_message=self.friendly_message,
+            task_complexity=self.task_complexity,
+            quiz_response=None,
         )
 
 
