@@ -443,22 +443,7 @@ class AgenticMixin:
 
             elif event_type == "stream_event":
                 # IG-330: Forward full ``messages`` stream for AI + tool payloads (no strip).
-                # IG-416: Debug logging to trace binding events
-                forward = _forward_messages_chunk_for_tool_ui(event_data)
-                logger.debug(
-                    "[Runner] stream_event forward=%s chunk_type=%s mode=%s event_type_in_data=%s",
-                    forward,
-                    type(event_data).__name__,
-                    event_data[1]
-                    if isinstance(event_data, tuple) and len(event_data) >= 2
-                    else "n/a",
-                    event_data[2].get("type", "n/a")
-                    if isinstance(event_data, tuple)
-                    and len(event_data) >= 3
-                    and isinstance(event_data[2], dict)
-                    else "n/a",
-                )
-                if forward:
+                if _forward_messages_chunk_for_tool_ui(event_data):
                     yield event_data
 
             elif event_type == "assess":

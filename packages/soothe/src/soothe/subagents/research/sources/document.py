@@ -29,7 +29,7 @@ class DocumentSource:
             config: Optional SootheConfig for tool configuration.
         """
         self._config = config
-        self._doc_tool: Any | None = None
+        self._doc_qa_func: Any | None = None
         self._loaded = False
 
     def _ensure_tool(self) -> None:
@@ -37,12 +37,13 @@ class DocumentSource:
             return
         self._loaded = True
         try:
-            # Use plain functions from _internal/document.py
+            # Import the sync function from _internal/document.py
             from soothe.toolkits._internal.document import document_qa
 
-            self._doc_tool = lambda path, question: document_qa(path, question, config=self._config)
+            self._doc_qa_func = document_qa
         except Exception:
             logger.debug("Document QA tool not available", exc_info=True)
+            self._doc_qa_func = None
 
     # -- InformationSource protocol ------------------------------------------
 
@@ -70,9 +71,11 @@ class DocumentSource:
         Returns:
             List of SourceResult with document content.
         """
+        import asyncio
+
         _ = context
         self._ensure_tool()
-        if not self._doc_tool:
+        if not self._doc_qa_func:
             return []
 
         file_path, question = self._split_path_question(query)
@@ -81,7 +84,10 @@ class DocumentSource:
 
         results: list[SourceResult] = []
         try:
-            raw = await self._doc_tool._arun(file_path=file_path, question=question)
+            # document_qa is a sync function, run in thread pool
+            raw = await asyncio.to_thread(
+                self._doc_qa_func, file_path, question, config=self._config
+            )
             if raw and not raw.startswith("Error"):
                 results.append(
                     SourceResult(

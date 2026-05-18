@@ -278,11 +278,9 @@ class _HistoryMixin:
             return None
 
         try:
-            from langchain_core.messages.base import messages_to_dict
-
             await self._daemon_session.aupdate_loop_state(
                 loop_id,
-                {"messages": messages_to_dict(recovered_messages)},
+                {"messages": [m.model_dump() for m in recovered_messages]},
                 timeout=10.0,
             )
             logger.info(

@@ -46,15 +46,19 @@ class FilesystemSource:
     def _ensure_tools(self) -> None:
         if self._search_tool is not None:
             return
-        # Import from deepagents FilesystemMiddleware (these are always available)
+        # Get tools from deepagents FilesystemMiddleware (these are always available)
         try:
-            from deepagents.middleware.filesystem import GlobTool, GrepTool, ReadFileTool
+            from deepagents.middleware.filesystem import FilesystemMiddleware
 
-            self._search_tool = GrepTool(path=self._work_dir)
-            self._read_tool = ReadFileTool(
-                file_path=self._work_dir, allow_outside_workdir=self._allow_outside
-            )
-            self._list_tool = GlobTool(path=self._work_dir)
+            middleware = FilesystemMiddleware()
+            # Find the tools by name from middleware.tools list
+            for tool in middleware.tools:
+                if tool.name == "grep":
+                    self._search_tool = tool
+                elif tool.name == "read_file":
+                    self._read_tool = tool
+                elif tool.name == "glob":
+                    self._list_tool = tool
         except ImportError:
             # Fallback: use direct file operations if deepagents is not available
             logger.warning("deepagents not available, using direct file operations")
@@ -94,7 +98,7 @@ class FilesystemSource:
         results: list[SourceResult] = []
 
         if self._looks_like_path(query):
-            content = await self._read_tool._arun(query)
+            content = await self._read_tool.ainvoke({"file_path": query})
             if content and not content.startswith("Error:"):
                 results.append(
                     SourceResult(
@@ -107,7 +111,7 @@ class FilesystemSource:
                 return results
 
         search_pattern = self._query_to_pattern(query)
-        raw = await self._search_tool._arun(search_pattern)
+        raw = await self._search_tool.ainvoke({"pattern": search_pattern})
 
         if raw and not raw.startswith("No matches") and not raw.startswith("Error:"):
             for line in raw.split("\n")[:20]:
@@ -125,7 +129,9 @@ class FilesystemSource:
                     )
 
         if not results:
-            listing = await self._list_tool._arun(pattern=f"*{self._extract_extension(query)}*")
+            listing = await self._list_tool.ainvoke(
+                {"pattern": f"*{self._extract_extension(query)}*"}
+            )
             if listing and not listing.startswith("No files") and not listing.startswith("Error:"):
                 results.append(
                     SourceResult(
