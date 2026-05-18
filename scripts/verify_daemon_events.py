@@ -60,6 +60,11 @@ class EventStats:
     # Step association
     tool_calls_by_step: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))
 
+    # Step description tracking (step_id -> description)
+    step_descriptions: dict[str, str] = field(default_factory=dict)
+    step_started_events: list[dict[str, Any]] = field(default_factory=list)  # Raw events for analysis
+    plan_decision_events: list[dict[str, Any]] = field(default_factory=list)  # Plan decision events
+
     # Task delegation tracking
     task_tool_calls: set[str] = field(default_factory=set)
     task_scopes: dict[str, tuple[str, str, str]] = field(default_factory=dict)  # tool_call_id -> (id, subagent_type, step_id)
@@ -326,6 +331,38 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                             inner_type, agent, step_id
                         )
 
+                elif inner_type == "soothe.cognition.agent_loop.plan.decision":
+                    stats.plan_decision_events.append(data)
+                    steps = data.get("steps", [])
+                    for step in steps:
+                        step_id = step.get("id", "")
+                        description = step.get("description", "")
+                        if step_id:
+                            logger.info(
+                                "Plan decision: step_id=%s description='%s'",
+                                step_id, description[:80]
+                            )
+
+                elif inner_type == "soothe.cognition.agent_loop.step.started":
+                    stats.step_started_events.append(data)
+                    step_id = data.get("step_id", "")
+                    description = data.get("description", "")
+                    if step_id:
+                        # Track step descriptions
+                        stats.step_descriptions[step_id] = description
+                        logger.info(
+                            "Step started: step_id=%s description='%s'",
+                            step_id, description[:80]
+                        )
+
+                elif inner_type == "soothe.cognition.agent_loop.step.completed":
+                    step_id = data.get("step_id", "")
+                    if step_id:
+                        logger.info(
+                            "Step completed: step_id=%s success=%s",
+                            step_id, data.get("success", "?")
+                        )
+
                 elif inner_type:
                     logger.debug("Custom inner event type: %s", inner_type)
 
@@ -428,11 +465,45 @@ def print_summary(stats: EventStats) -> None:
 
     print("\n--- Tool Calls by Step ---")
     for step_id, tids in sorted(stats.tool_calls_by_step.items()):
+        description = stats.step_descriptions.get(step_id, "(no description)")
         print(f"  Step {step_id}: {len(tids)} tool calls")
+        print(f"    description: '{description[:60]}...'" if len(description) > 60 else f"    description: '{description}'")
         for tid in sorted(tids)[:5]:
             _, type_code, task_idx, tool_info = classify_tool_call_id(tid)
             type_label = "step" if type_code == "s" else f"task[{task_idx}]"
             print(f"    - {tid} ({type_label}: {tool_info})")
+
+    # --- Step Description Analysis ---
+    print("\n--- Step Description Analysis ---")
+    print(f"  Plan decision events: {len(stats.plan_decision_events)}")
+    print(f"  Step started events: {len(stats.step_started_events)}")
+    print(f"  Unique step_ids tracked: {len(stats.step_descriptions)}")
+
+    # Check for duplicate descriptions (potential issue)
+    desc_to_steps: dict[str, list[str]] = defaultdict(list)
+    for step_id, desc in stats.step_descriptions.items():
+        desc_to_steps[desc].append(step_id)
+
+    duplicates = {desc: steps for desc, steps in desc_to_steps.items() if len(steps) > 1}
+    if duplicates:
+        print("\n  ⚠ DUPLICATE DESCRIPTIONS DETECTED (multiple steps share same description):")
+        for desc, steps in sorted(duplicates.items(), key=lambda x: -len(x[1])):
+            print(f"    Description: '{desc[:50]}...'")
+            print(f"    Used by steps: {', '.join(steps)}")
+        stats.errors.append("Multiple steps share identical descriptions")
+
+    # Show all plan decision steps
+    if stats.plan_decision_events:
+        print("\n  Plan decisions breakdown:")
+        for i, plan in enumerate(stats.plan_decision_events[:3]):
+            steps = plan.get("steps", [])
+            execution_mode = plan.get("execution_mode", "unknown")
+            iteration = plan.get("iteration", -1)
+            print(f"    Plan #{i+1} (iteration={iteration}, mode={execution_mode}):")
+            for step in steps[:5]:
+                step_id = step.get("id", "?")
+                desc = step.get("description", "")
+                print(f"      - {step_id}: '{desc[:50]}...'" if len(desc) > 50 else f"      - {step_id}: '{desc}'")
 
     print("\n--- Task Delegation ---")
     print(f"  Task tool calls: {len(stats.task_tool_calls)}")
