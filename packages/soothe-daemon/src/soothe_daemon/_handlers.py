@@ -15,8 +15,13 @@ import websockets.exceptions
 from soothe.core.events import ERROR
 from soothe_sdk.client.protocol import decode, encode
 
+from soothe_daemon.protocol.router import (
+    _coerce_loop_input_text,
+    _queue_options_from_daemon_message,
+)
+
 # Import RPC command handlers (RFC-404)
-from soothe_daemon._rpc_handlers import (
+from soothe_daemon.rpc import (
     _cmd_autopilot_dashboard,
     _cmd_cancel,
     _cmd_clear,
@@ -33,10 +38,6 @@ from soothe_daemon._rpc_handlers import (
     _cmd_thread,
     _handle_command_request,
     _send_command_response,
-)
-from soothe_daemon.message_router import (
-    _coerce_loop_input_text,
-    _queue_options_from_daemon_message,
 )
 
 logger = logging.getLogger(__name__)

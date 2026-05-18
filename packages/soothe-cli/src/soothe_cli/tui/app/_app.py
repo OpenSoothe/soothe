@@ -152,7 +152,7 @@ class SootheApp(
         *,
         daemon_config: Any,
         assistant_id: str | None = None,
-        auto_approve: bool = False,
+        auto_approve: bool = True,
         cwd: str | Path | None = None,
         resume_loop_id: str | None = None,
         initial_prompt: str | None = None,

@@ -21,7 +21,7 @@ from starlette.websockets import WebSocketDisconnect
 from websockets.frames import Close
 
 from soothe_daemon.config.models import WebSocketConfig
-from soothe_daemon.protocol_v2 import create_error_response, validate_message
+from soothe_daemon.protocol import create_error_response, validate_message
 from soothe_daemon.transports.base import TransportServer
 
 logger = logging.getLogger(__name__)

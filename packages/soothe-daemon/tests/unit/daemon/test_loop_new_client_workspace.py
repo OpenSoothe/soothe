@@ -19,7 +19,7 @@ from soothe.core.loop.state.persistence.manager import (
 )
 
 from soothe_daemon.loop_isolation import bind_execution_thread_for_loop
-from soothe_daemon.message_router import MessageRouter
+from soothe_daemon.protocol import MessageRouter
 
 
 async def _read_metadata(loop_id: str, config: Any) -> dict[str, Any]:
@@ -269,7 +269,7 @@ async def test_checkpoint_thread_id_overrides_stale_runner_for_workspace_resolut
     Without passing the bound checkpoint into ``run_query``, workspace resolution could read
     a stale singleton id and pass the wrong directory into ``LoopRunRequest``.
     """
-    from soothe_daemon.query_engine import QueryEngine
+    from soothe_daemon.query import QueryEngine
 
     class _Runner:
         def __init__(self) -> None:

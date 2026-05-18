@@ -15,7 +15,7 @@ from soothe_cli.cli.execution import headless as headless_exec
 from soothe_sdk.client import session as sdk_session  # For retry logic (moved from CLI)
 
 from soothe_daemon import SootheDaemon, WebSocketClient
-from soothe_daemon.message_router import MessageRouter
+from soothe_daemon.protocol import MessageRouter
 from soothe_daemon.server import _ClientConn
 
 
