@@ -272,6 +272,7 @@ async def execute_task_textual(
     tool_call_buffers: dict[str | int, dict] = {}
     # Streaming tool-call args (``tool_call_chunks``) — mirrors EventProcessor / IG-053
     pending_tool_calls_lc: dict[str, dict[str, Any]] = {}
+    last_active_tool_call_id: str = ""  # For orphan chunk attachment
     streaming_overlay: dict[str, dict[str, Any]] = {}
 
     # Track pending text and assistant messages PER NAMESPACE to avoid interleaving
@@ -733,10 +734,11 @@ async def execute_task_textual(
                                 turn_stats.record_request(active_model, total_toks, 0)
                                 captured_input_tokens = max(captured_input_tokens, total_toks)
 
-                    ingest_tool_call_stream_state(
+                    last_active_tool_call_id = ingest_tool_call_stream_state(
                         pending_tool_calls_lc,
                         message,
                         is_main=(ns_key == ()),
+                        last_active_id=last_active_tool_call_id,
                     )
                     if isinstance(message, (AIMessage, AIMessageChunk)) or (
                         isinstance(message, dict)
