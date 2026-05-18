@@ -539,9 +539,9 @@ async def test_sender_loop_batching():
 
     Scenario: Send 100 rapid events; all are delivered without loss.
     """
-    from soothe_daemon.client_session import ClientSessionManager
     from soothe_daemon.config.models import WebSocketConfig
     from soothe_daemon.event import EventBus
+    from soothe_daemon.session import ClientSessionManager
     from soothe_daemon.transports.websocket import WebSocketTransport
 
     config = WebSocketConfig(enabled=True, host="127.0.0.1", port=8765)

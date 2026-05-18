@@ -8,7 +8,7 @@ import pytest
 
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.config.models import HttpRestConfig, TransportConfig, WebSocketConfig
-from soothe_daemon.protocol_v2 import (
+from soothe_daemon.protocol import (
     ERROR_INVALID_MESSAGE,
     create_error_response,
     validate_message,

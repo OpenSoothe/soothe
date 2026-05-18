@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from soothe_daemon.config import SootheDaemonConfig
-from soothe_daemon.query_engine import QueryEngine
+from soothe_daemon.query import QueryEngine
 
 
 class _FakeRunner:

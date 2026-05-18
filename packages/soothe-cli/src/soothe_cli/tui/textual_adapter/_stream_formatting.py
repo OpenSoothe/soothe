@@ -918,6 +918,8 @@ async def _mount_subagent_inner_tool_row_if_resolved(
     # Multiple calls like ls.0, ls.1, ls.2 should NOT share the same pending args
     if isinstance(pend, dict):
         raw = str(pend.get("args_str", ""))
+    # IG-419: Resolve parent task tool_call_id for nesting
+    parent_task_call_id = router.resolve_parent_task_call_id(ns_key)
     resolved_row_key = _resolve_existing_subgraph_row_key(parent_for_inner, row_key)
     if getattr(parent_for_inner, "has_tool_call_row", lambda _x: False)(resolved_row_key):
         update_fn = getattr(parent_for_inner, "update_tool_args", None)
@@ -929,16 +931,17 @@ async def _mount_subagent_inner_tool_row_if_resolved(
             buffer_name or "tool",
             merged_args,
             raw_args=raw,
+            parent_tool_call_id=parent_task_call_id,  # Nest under task row
         )
     adapter._tool_to_step[row_key] = parent_for_inner
     adapter._tool_display_by_call_id[row_key] = parent_for_inner
     import logging as _logging
 
     _logging.getLogger(__name__).debug(
-        "Subagent tool row on parent: name=%s tool_call_id=%s parent=%s",
+        "Subagent tool row nested under task: name=%s tool_call_id=%s parent_task=%s",
         buffer_name,
         lookup_id,
-        type(parent_for_inner).__name__,
+        parent_task_call_id,
     )
     return True
 
