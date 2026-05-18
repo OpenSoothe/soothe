@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -14,7 +13,6 @@ from soothe.config import SootheConfig
 from soothe_sdk.client import WebSocketClient
 
 from soothe_daemon import SootheDaemon
-from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn
 from tests.integration.conftest import (
     alloc_ephemeral_port,

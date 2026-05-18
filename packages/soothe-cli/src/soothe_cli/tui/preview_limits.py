@@ -13,6 +13,9 @@ from typing import Final
 # Matches the step/task activity preview row cap (`_STEP_TOOL_PREVIEW_ROWS`).
 STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD: Final[int] = 3
 
+# Explore/task delegation row inside a step card (single-line ``Explore(desc)``).
+STEP_TASK_DELEGATION_DESC_MAX_CHARS: Final[int] = 100
+
 # --- Tool call cards (`ToolCallMessage` collapsed output) ---
 TOOL_CARD_PREVIEW_LINES: Final[int] = 1
 TOOL_CARD_PREVIEW_CHARS: Final[int] = 120

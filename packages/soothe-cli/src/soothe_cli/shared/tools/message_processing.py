@@ -525,6 +525,10 @@ def _normalize_tool_name_for_arg_map(tool_name: str) -> str:
 
 _ARG_SUMMARY_SKIP_KEYS: frozenset[str] = frozenset({"_raw", "_internal", "raw_args_str"})
 
+_TASK_KWARG_DESC_KEYS: frozenset[str] = frozenset(
+    ("description", "prompt", "task", "instruction"),
+)
+
 
 def _compact_tool_args_display_values(
     args: dict[str, Any],
@@ -599,6 +603,7 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
         return _PATH_ARG_PATTERN.match(key) is not None
 
     max_value_length = 50  # Max length for displayed values
+    task_desc_max_length = 500  # Task delegation brief on step cards (full step text)
 
     def _display_path_value(raw: str) -> str:
         out = convert_and_abbreviate_path(raw)
@@ -656,8 +661,13 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
             if _is_path_arg_name(key_arg):
                 value = _display_path_value(value)
             elif len(value) > max_value_length:
-                # Truncate non-path long values
-                value = value[: max_value_length - 3] + "..."
+                cap = (
+                    task_desc_max_length
+                    if internal == "task" and key_arg in _TASK_KWARG_DESC_KEYS
+                    else max_value_length
+                )
+                if len(value) > cap:
+                    value = value[: cap - 3] + "..."
             # IG-261: Quote string arguments for Task tool (except subagent_type)
             # Only quote if the original value is a string and not already quoted
             if (

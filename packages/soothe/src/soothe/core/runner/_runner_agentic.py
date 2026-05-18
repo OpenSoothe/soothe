@@ -37,7 +37,8 @@ logger = logging.getLogger(__name__)
 _AGENTIC_FINAL_STDOUT_CAP = 50_000
 _DEFAULT_GOAL_ACHIEVED_MESSAGE = "Goal achieved successfully"
 
-_AGENTIC_STEP_DESC_UI_MAX = 220
+# TUI step cards show the full brief; avoid mid-string abbr markers on long plans.
+_AGENTIC_STEP_DESC_UI_MAX = 4000
 
 _STREAM_CHUNK_LEN = 3
 _MSG_PAIR_LEN = 2

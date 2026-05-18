@@ -6,8 +6,8 @@ import json
 
 import pytest
 from langchain_core.messages import HumanMessage
-from soothe.config import SootheConfig
 
+from soothe.config import SootheConfig
 from soothe.utils.llm.structured_invoke import StructuredOutputError, invoke_structured_chat
 
 WORD_REPLY_SCHEMA = {

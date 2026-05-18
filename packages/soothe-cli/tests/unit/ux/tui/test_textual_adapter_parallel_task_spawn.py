@@ -21,8 +21,8 @@ def test_step_scoped_namespace_bind_not_fifo_mismatch() -> None:
     router = StepTaskRouter()
     ns = ("tools:wrong-order",)
     router.on_subgraph_namespace(ns)
-    router.register_task_spawn("functions.task:0", "explore", step_id="YKF-02")
-    assert router.resolve_task_scope(ns) == ("functions.task:0", "explore", "YKF-02")
+    router.register_task_spawn("YKF-02:s:task.0", "explore", step_id="YKF-02")
+    assert router.resolve_task_scope(ns) == ("YKF-02:s:task.0", "explore", "YKF-02")
 
 
 @pytest.mark.asyncio

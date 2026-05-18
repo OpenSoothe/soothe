@@ -7,13 +7,16 @@ from collections import deque
 from soothe_sdk.ux.task_namespace import (
     _shorten_tool_call_id,
     maybe_bind_namespace,
+    normalize_step_task_tool_call_id,
     parse_unified_tool_call_id,
     register_task_spawn_for_step,
+    resolve_step_id_from_subgraph_tool,
     resolve_task_parent_for_unified_tool_id,
     resolve_task_parent_lookup,
     resolve_task_scope_for_namespace,
     row_key_for_subgraph_tool,
     scoped_subgraph_tool_key,
+    step_level_parent_task_call_id,
     try_bind_namespace_to_unlinked_spawn,
 )
 
@@ -35,7 +38,7 @@ def test_register_task_spawn_binds_deferred_unscoped_namespace() -> None:
     assert ns not in bindings
     assert list(pending_unscoped) == [ns]
 
-    scope = ("functions.task:0", "explore", "YKF-02")
+    scope = ("YKF-02:s:task.0", "explore", "YKF-02")
     register_task_spawn_for_step(
         bindings,
         queue,
@@ -47,8 +50,8 @@ def test_register_task_spawn_binds_deferred_unscoped_namespace() -> None:
     assert spawns["YKF-02"] == scope
 
 
-def test_parallel_spawns_bind_namespaces_in_order() -> None:
-    """Three step-scoped spawns bind three namespaces without cross-talk."""
+def test_parallel_spawns_bind_one_namespace_per_register_when_interleaved() -> None:
+    """Each spawn binds its namespace when only one is pending (parallel-safe)."""
     bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
     queue: deque[tuple[str, str, str]] = deque()
     spawns: dict[str, tuple[str, str, str]] = {}
@@ -69,13 +72,58 @@ def test_parallel_spawns_bind_namespaces_in_order() -> None:
             bindings,
             queue,
             spawns,
-            ("functions.task:0", "explore", step_id),
+            (f"{step_id}:s:task.0", "explore", step_id),
             pending_unscoped_namespaces=pending_unscoped,
         )
 
     assert bindings[("tools:aaa",)][2] == "YKF-01"
     assert bindings[("tools:bbb",)][2] == "YKF-02"
     assert bindings[("tools:ccc",)][2] == "YKF-03"
+
+
+def test_parallel_spawns_skip_fifo_when_multiple_namespaces_pending() -> None:
+    """Queued namespaces are not paired by arrival order when several are pending."""
+    bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
+    queue: deque[tuple[str, str, str]] = deque()
+    spawns: dict[str, tuple[str, str, str]] = {}
+    pending_unscoped: deque[tuple[str, ...]] = deque()
+
+    maybe_bind_namespace(
+        bindings, queue, ("tools:aaa",), pending_unscoped_namespaces=pending_unscoped
+    )
+    maybe_bind_namespace(
+        bindings, queue, ("tools:bbb",), pending_unscoped_namespaces=pending_unscoped
+    )
+    register_task_spawn_for_step(
+        bindings,
+        queue,
+        spawns,
+        ("YKF-01:s:task.0", "explore", "YKF-01"),
+        pending_unscoped_namespaces=pending_unscoped,
+    )
+    register_task_spawn_for_step(
+        bindings,
+        queue,
+        spawns,
+        ("YKF-02:s:task.0", "explore", "YKF-02"),
+        pending_unscoped_namespaces=pending_unscoped,
+    )
+    assert ("tools:aaa",) not in bindings
+    assert ("tools:bbb",) not in bindings
+
+
+def test_normalize_step_task_tool_call_id_embeds_step() -> None:
+    assert normalize_step_task_tool_call_id("YKF-02", "functions.task:0") == "YKF-02:s:task.0"
+    assert normalize_step_task_tool_call_id("YKF-02", "YKF-02:s:task.0") == "YKF-02:s:task.0"
+
+
+def test_resolve_step_id_from_subgraph_tool() -> None:
+    assert resolve_step_id_from_subgraph_tool("YKF-02:t0:glob.1") == "YKF-02"
+    assert resolve_step_id_from_subgraph_tool("YKF-02:s:task.0") == "YKF-02"
+
+
+def test_step_level_parent_task_call_id() -> None:
+    assert step_level_parent_task_call_id("ABC-01", 0) == "ABC-01:s:task.0"
 
 
 def test_headless_maybe_bind_uses_spawn_queue_fifo() -> None:
