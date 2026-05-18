@@ -29,7 +29,25 @@ class NormalizedPathBackend(FilesystemBackend):
     ``_resolve_path`` is overridden so ``read``, ``write``, ``edit``, and other
     path-based operations use the same normalization as ``ls_info`` / ``glob_info``
     (IG-300).
+
+    Glob optimization (IG-XXX): limits results to 50 and excludes large/irrelevant
+    directories using .gitignore patterns + essential hardcoded excludes.
     """
+
+    DEFAULT_GLOB_MAX_RESULTS = 50
+
+    ESSENTIAL_GLOB_EXCLUDES = [
+        ".venv",
+        "venv",
+        "env",
+        "__pycache__",
+        "node_modules",
+        ".git",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+        "site-packages",
+    ]
 
     def _normalize_path(self, path: str) -> str:
         """Normalize path to be workspace-relative (RFC-103).
@@ -67,6 +85,59 @@ class NormalizedPathBackend(FilesystemBackend):
 
         return path.strip()
 
+    def _load_gitignore_patterns(self) -> set[str]:
+        """Load .gitignore patterns from workspace root (cached per instance)."""
+        if hasattr(self, "_gitignore_cache") and self._gitignore_cache is not None:
+            return self._gitignore_cache
+
+        workspace = Path(self.cwd)
+        gitignore_path = workspace / ".gitignore"
+        self._gitignore_cache = set()
+
+        if gitignore_path.exists():
+            try:
+                for line in gitignore_path.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        self._gitignore_cache.add(line)
+            except OSError:
+                pass
+
+        return self._gitignore_cache
+
+    def _should_exclude_path(self, path: str, name: str, excludes: set[str]) -> bool:
+        """Check if a path/name should be excluded based on patterns."""
+        for pattern in excludes:
+            if pattern in name or pattern in path:
+                return True
+            if pattern.startswith("*") and name.endswith(pattern[1:]):
+                return True
+            if pattern.endswith("*") and name.startswith(pattern[:-1]):
+                return True
+        return False
+
+    def _apply_glob_limits(self, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Apply gitignore + essential excludes and max_results limit to glob results."""
+        all_excludes = set(self.ESSENTIAL_GLOB_EXCLUDES) | self._load_gitignore_patterns()
+
+        filtered = [
+            r
+            for r in results
+            if not self._should_exclude_path(r.get("path", ""), r.get("name", ""), all_excludes)
+        ]
+
+        if len(filtered) > self.DEFAULT_GLOB_MAX_RESULTS:
+            truncated = filtered[: self.DEFAULT_GLOB_MAX_RESULTS]
+            truncated.append(
+                {
+                    "name": f"... truncated {len(filtered) - self.DEFAULT_GLOB_MAX_RESULTS} more results",
+                    "path": "",
+                    "truncated": True,
+                }
+            )
+            return truncated
+        return filtered
+
     def _resolve_path(self, key: str) -> Path:
         """Apply RFC-103 normalization before deepagents virtual/host resolution (IG-300)."""
         return super()._resolve_path(self._normalize_path(key))
@@ -80,14 +151,16 @@ class NormalizedPathBackend(FilesystemBackend):
         return await super().als_info(self._normalize_path(path))
 
     def glob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
-        """Glob with file info, normalizing path first."""
+        """Glob with file info, applying excludes and max_results limit."""
         normalized = self._normalize_path(path)
-        return super().glob_info(pattern, normalized)
+        results = super().glob_info(pattern, normalized)
+        return self._apply_glob_limits(results)
 
     async def aglob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
-        """Async glob with file info, normalizing path first."""
+        """Async glob with file info, applying excludes and max_results limit."""
         normalized = self._normalize_path(path)
-        return await super().aglob_info(pattern, normalized)
+        results = await super().aglob_info(pattern, normalized)
+        return self._apply_glob_limits(results)
 
 
 def get_workspace_backend(

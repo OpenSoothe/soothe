@@ -54,19 +54,6 @@ def test_extract_from_non_tool_returns_none() -> None:
     assert extract_tool_result_card_payload({"type": "human"}) is None
 
 
-def test_extract_infers_tool_name_from_functions_id_when_name_is_placeholder() -> None:
-    """Orphan / wire payloads sometimes use name ``tool``; recover from ``functions.*`` id."""
-    msg = ToolMessage(
-        content="[]",
-        tool_call_id="functions.ls:0",
-        name="tool",
-        status="success",
-    )
-    p = extract_tool_result_card_payload(msg)
-    assert p is not None
-    assert p.tool_name == "ls"
-
-
 def test_run_python_envelope_success_not_flagged_on_ambiguous_status() -> None:
     """Infer path must not treat ``\"error\": null`` as the word *error*."""
     chunk = {

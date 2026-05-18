@@ -369,7 +369,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_mode_accepts_goal_completion_chunk(self) -> None:
         """Goal-completion chunks route to assistant text in streaming mode."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer)
+        processor = EventProcessor(renderer, streaming_mode="streaming")
 
         processor.process_event(
             _stream_messages_event(
@@ -411,7 +411,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_goal_completion_preserves_markdown_chunk_boundaries(self) -> None:
         """Streaming markdown chunks should preserve whitespace/newlines exactly."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer)
+        processor = EventProcessor(renderer, streaming_mode="streaming")
 
         chunk_1 = "# README Files Count Report\n\n## 1. Executive Summary\n\nThis report "
         chunk_2 = "documents the comprehensive count.\n\n## 2. Methodology\n"
@@ -447,7 +447,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_goal_completion_preserves_boundaries_when_is_chunk_false(self) -> None:
         """Non-chunk ``ai`` payloads still stream as incremental text for goal completion."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer)
+        processor = EventProcessor(renderer, streaming_mode="streaming")
 
         tid = {"thread_id": "tid", "phase": "goal_completion"}
         processor.process_event(
@@ -471,7 +471,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_goal_completion_keeps_raw_cross_chunk_heading_boundaries(self) -> None:
         """Streaming should preserve raw heading chunk boundaries without repair."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer)
+        processor = EventProcessor(renderer, streaming_mode="streaming")
 
         tid = {"thread_id": "tid", "phase": "goal_completion"}
         for content in (
@@ -497,7 +497,7 @@ class TestEventProcessorOutputEventRouting:
     def test_streaming_goal_completion_keeps_raw_heading_and_bold_boundaries(self) -> None:
         """Streaming should preserve raw chunk boundaries for heading/body and bold/body."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer)
+        processor = EventProcessor(renderer, streaming_mode="streaming")
 
         tid = {"thread_id": "tid", "phase": "goal_completion"}
         chunks = [

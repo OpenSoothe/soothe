@@ -85,6 +85,7 @@ class EventProcessor:
         presentation_engine: PresentationEngine | None = None,
         tui_debug: bool = False,
         headless_output: bool = False,
+        streaming_mode: str | None = "batch",
     ) -> None:
         """Initialize processor with renderer.
 
@@ -94,10 +95,12 @@ class EventProcessor:
                 ``presentation_engine`` when present, else a new instance.
             tui_debug: When True, emit INFO logs on logger ``soothe.ux.tui.trace`` (IG-129).
             headless_output: Headless CLI: loop-tagged main answers only, no tool/progress UI.
+            streaming_mode: Client display mode — ``batch`` (default), ``merged``, or ``streaming``.
         """
         self._renderer = renderer
         self._headless_output = headless_output
         self._tui_debug = tui_debug
+        self._streaming_mode_override = streaming_mode
 
         rebind = getattr(renderer, "_rebind_presentation", None)
         shared_from_renderer = getattr(renderer, "presentation_engine", None)
@@ -1104,12 +1107,16 @@ class EventProcessor:
         Returns:
             Dict with enabled, mode, and synthesis_streaming fields.
         """
-        # Use defaults - streaming is enabled by default per RFC-614
-        # Always use streaming mode
-        config = {
-            "enabled": True,
-            "mode": "streaming",
-            "synthesis_streaming": True,
-        }
+        override = getattr(self, "_streaming_mode_override", None) or "batch"
+        if override in ("streaming", "full"):
+            mode = "streaming"
+        elif override in ("batch", "merged"):
+            mode = override
+        else:
+            mode = "batch"
 
-        return config
+        return {
+            "enabled": True,
+            "mode": mode,
+            "synthesis_streaming": mode in ("streaming", "merged"),
+        }

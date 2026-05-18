@@ -1422,14 +1422,15 @@ class ToolCallMessage(Vertical):
 
     def _refresh_activity_display(self) -> None:
         """Update the unified activity widget with interleaved text lines and tool rows."""
-        # IG-420: Throttle refreshes to prevent UI lag during streaming
-        if not _should_refresh_now(self._last_activity_refresh):
-            return
-        self._last_activity_refresh = monotonic()
+        # IG-420: When widget not mounted, always run auto-collapse checks (no throttling)
         if self._activity_widget is None:
             self._maybe_auto_fold_task_activity_list()
             self._maybe_auto_collapse_task_card()
             return
+        # IG-420: Throttle refreshes to prevent UI lag during streaming (only when mounted)
+        if not _should_refresh_now(self._last_activity_refresh):
+            return
+        self._last_activity_refresh = monotonic()
         if not self._activity:
             self._activity_widget.display = False
             self._maybe_auto_collapse_task_card()
@@ -3100,14 +3101,15 @@ class CognitionStepMessage(Vertical):
         return result
 
     def _refresh_tools_display(self) -> None:
-        # IG-420: Throttle refreshes to prevent UI lag during streaming
-        if not _should_refresh_now(self._last_tools_refresh):
-            return
-        self._last_tools_refresh = monotonic()
+        # IG-420: When widget not mounted, always run auto-collapse checks (no throttling)
         if self._tools_widget is None:
             self._maybe_auto_fold_step_tool_list()
             self._maybe_auto_collapse_step_card()
             return
+        # IG-420: Throttle refreshes to prevent UI lag during streaming (only when mounted)
+        if not _should_refresh_now(self._last_tools_refresh):
+            return
+        self._last_tools_refresh = monotonic()
         if not self._rows:
             self._tools_widget.display = False
             self._maybe_auto_collapse_step_card()

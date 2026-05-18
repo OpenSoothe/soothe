@@ -23,6 +23,7 @@ from soothe_sdk.client.wire import prepare_stream_data_for_wire
 from soothe_sdk.ux.stream_tool_wire import extract_tool_call_updates_from_wire_message
 
 from soothe_daemon.image_understanding import enrich_user_text_with_vision
+from soothe_daemon.query.stream_delivery import StreamDeliveryCoalescer
 from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn, run_image_to_text_turn
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,60 @@ class QueryEngine:
         out["loop_id"] = str(loop_id).strip()
         out.pop("thread_id", None)
         return out
+
+    async def _signal_turn_idle(self, loop_id: str) -> None:
+        """Mark query idle and notify clients (unblocks CLI/TUI waiting on ``status: idle``)."""
+        d = self._daemon
+        async with d._query_state_lock:
+            was_running = d._query_running
+            d._query_running = False
+        if was_running:
+            await d._broadcast(
+                self._loop_scoped_client_message(loop_id, {"type": "status", "state": "idle"})
+            )
+
+    async def _broadcast_stream_tuple(
+        self,
+        loop_id: str,
+        namespace: tuple[str, ...],
+        mode: str,
+        data: Any,
+    ) -> None:
+        """Broadcast one runner stream tuple to loop subscribers."""
+        d = self._daemon
+        wire_data = data
+        if mode == "messages":
+            wire_data = prepare_stream_data_for_wire(data)
+        if (
+            mode == "messages"
+            and isinstance(wire_data, (tuple, list))
+            and len(wire_data) == _MSG_PAIR_LENGTH
+        ):
+            msg_wire = wire_data[0] if wire_data else None
+            if isinstance(msg_wire, dict):
+                for tool_ev in extract_tool_call_updates_from_wire_message(msg_wire):
+                    await d._broadcast(
+                        self._loop_scoped_client_message(
+                            loop_id,
+                            {
+                                "type": "event",
+                                "namespace": list(namespace),
+                                "mode": "custom",
+                                "data": tool_ev,
+                            },
+                        )
+                    )
+        await d._broadcast(
+            self._loop_scoped_client_message(
+                loop_id,
+                {
+                    "type": "event",
+                    "namespace": list(namespace),
+                    "mode": mode,
+                    "data": wire_data,
+                },
+            )
+        )
 
     async def _enrich_with_vision_throttled(
         self,
@@ -362,6 +417,13 @@ class QueryEngine:
                     async for item in loop_runner.run(run_request):
                         yield item
 
+                delivery_mode = (
+                    d._session_manager.get_stream_delivery(effective_loop_id)
+                    if effective_loop_id
+                    else "batch"
+                )
+                coalescer = StreamDeliveryCoalescer(delivery_mode)
+
                 async def _process_stream() -> None:
                     nonlocal chunk_count, warning_sent
 
@@ -426,40 +488,21 @@ class QueryEngine:
                             full_response.extend(extract_text_from_ai_message(msg))
 
                         if effective_loop_id:
-                            wire_data = data
-                            if mode == "messages":
-                                wire_data = prepare_stream_data_for_wire(data)
-                            if mode == "messages" and is_msg_pair:
-                                msg_wire = (
-                                    wire_data[0]
-                                    if isinstance(wire_data, (list, tuple)) and wire_data
-                                    else None
+                            ns_tuple = tuple(namespace) if namespace else ()
+                            for out_ns, out_mode, out_data in coalescer.ingest(
+                                ns_tuple, mode, data
+                            ):
+                                await self._broadcast_stream_tuple(
+                                    effective_loop_id, out_ns, out_mode, out_data
                                 )
-                                if isinstance(msg_wire, dict):
-                                    for tool_ev in extract_tool_call_updates_from_wire_message(
-                                        msg_wire
-                                    ):
-                                        await d._broadcast(
-                                            self._loop_scoped_client_message(
-                                                effective_loop_id,
-                                                {
-                                                    "type": "event",
-                                                    "namespace": list(namespace),
-                                                    "mode": "custom",
-                                                    "data": tool_ev,
-                                                },
-                                            )
-                                        )
-                            event_msg = self._loop_scoped_client_message(
-                                effective_loop_id,
-                                {
-                                    "type": "event",
-                                    "namespace": list(namespace),
-                                    "mode": mode,
-                                    "data": wire_data,
-                                },
+                            if coalescer.consume_turn_complete_pending():
+                                await self._signal_turn_idle(effective_loop_id)
+
+                    for out_ns, out_mode, out_data in coalescer.flush():
+                        if effective_loop_id:
+                            await self._broadcast_stream_tuple(
+                                effective_loop_id, out_ns, out_mode, out_data
                             )
-                            await d._broadcast(event_msg)
 
                     logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
 
