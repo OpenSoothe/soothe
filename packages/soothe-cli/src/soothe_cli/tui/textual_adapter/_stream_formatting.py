@@ -239,16 +239,32 @@ def refresh_subgraph_tool_rows_from_overlay(
     pending_tool_calls_lc: dict[str, dict[str, Any]],
     message: Any = None,
 ) -> None:
-    """Push overlay kwargs onto existing task-card tool rows when they arrive late."""
+    """Push overlay kwargs onto existing task-card tool rows when they arrive late.
+
+    IG-418: Only process tool rows that belong to the current namespace.
+    Parallel execution means multiple namespaces share streaming_overlay, but each
+    namespace should only refresh its own tool rows.
+    """
     from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 
     if not ns_key or not streaming_overlay:
         return
+    # Get the task scope for this namespace to filter relevant tool_call_ids
+    ts = router.resolve_task_scope(ns_key)
+    if ts is None:
+        return
+    step_id = ts[2] if ts else ""
+    if not step_id:
+        return
+
     for tcid, oargs in streaming_overlay.items():
         if not isinstance(oargs, dict) or not oargs:
             continue
-        _, type_code, _, _ = parse_unified_tool_call_id(str(tcid))
+        parsed_sid, type_code, _, _ = parse_unified_tool_call_id(str(tcid))
         if type_code != "t":
+            continue
+        # IG-418: Only process tool rows for this namespace's step
+        if parsed_sid != step_id:
             continue
         merged = merge_tool_display_args(
             str(tcid),
@@ -901,14 +917,8 @@ async def _mount_subagent_inner_tool_row_if_resolved(
     pend = pending_tool_calls_lc.get(merge_id or str(lookup_id))
     if not isinstance(pend, dict):
         pend = pending_tool_calls_lc.get(str(lookup_id))
-    if not isinstance(pend, dict):
-        for candidate in pending_tool_calls_lc.values():
-            if (
-                isinstance(candidate, dict)
-                and str(candidate.get("name") or "").strip() == tool_name
-            ):
-                pend = candidate
-                break
+    # IG-416: Don't fallback to tool_name lookup - each tool_call_id is unique
+    # Multiple calls like ls.0, ls.1, ls.2 should NOT share the same pending args
     if isinstance(pend, dict):
         raw = str(pend.get("args_str", ""))
     resolved_row_key = _resolve_existing_subgraph_row_key(parent_for_inner, row_key)

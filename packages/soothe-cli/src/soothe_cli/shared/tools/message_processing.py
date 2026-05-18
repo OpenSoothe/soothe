@@ -218,9 +218,14 @@ def _pending_or_overlay_id_matches_lookup(
     lookup_step = tool_lookup_step_id(lid)
     cand_step = tool_lookup_step_id(cid)
     if lookup_step and cand_step:
-        return lookup_step == cand_step
-    # Provider id (``functions.grep:0``) vs unified ``{step}:t0:grep.0`` — match by tool name.
-    return True
+        # Both are unified IDs - match by full tool_info (name AND index)
+        from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
+
+        _, _, _, cand_tool_info = parse_unified_tool_call_id(cid)
+        _, _, _, lookup_tool_info = parse_unified_tool_call_id(lid)
+        return cand_tool_info == lookup_tool_info
+    # Provider id vs unified: daemon may have reassigned indices, match by tool name only
+    return tool_name and tool_name != "tool"
 
 
 def _resolve_pending_lookup_tool_name(
