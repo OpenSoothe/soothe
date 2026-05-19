@@ -67,14 +67,6 @@ class SootheDaemonConfig(BaseSettings):
             "Seconds to await in-flight query after /cancel before logging slow-unwind warning"
         ),
     )
-    hitl_timeout_seconds: int = Field(
-        default=30,
-        ge=0,
-        description=(
-            "HITL wait for client resume_interrupts in seconds (0 = unlimited). "
-            "On timeout, resume with default-first choices (approve tools; first ask_user choice)."
-        ),
-    )
     query_timeout_action: str = Field(
         default="cancel", description="Action on timeout: cancel | suspend"
     )

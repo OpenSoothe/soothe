@@ -39,7 +39,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
 
     Returns:
         Keys to merge into the internal queue payload: ``autonomous``,
-        ``max_iterations``, ``preferred_subagent``, ``interactive``, ``model``,
+        ``max_iterations``, ``preferred_subagent``, ``model``,
         ``model_params``, ``intent_hint`` (normalized to lowercase when set).
     """
     max_iterations = msg.get("max_iterations")
@@ -76,7 +76,6 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         "autonomous": bool(msg.get("autonomous", False)),
         "max_iterations": parsed_max,
         "preferred_subagent": preferred_norm,
-        "interactive": bool(msg.get("interactive", False)),
         "model": model,
         "model_params": model_params,
         "intent_hint": intent_hint,
@@ -194,10 +193,6 @@ class MessageRouter:
             await d._send_client_message(client_id, d.daemon_ready_message())
             return
 
-        if msg_type == "resume_interrupts":
-            await self._handle_resume_interrupts(client_id, msg)
-            return
-
         # Loop RPC handlers (RFC-504 Loop Management CLI Commands)
         if msg_type == "loop_list":
             await self._handle_loop_list(client_id, msg)
@@ -298,64 +293,6 @@ class MessageRouter:
             return
 
         logger.debug("Unknown client message type: %s", msg_type)
-
-    async def _handle_resume_interrupts(self, client_id: str, msg: dict[str, Any]) -> None:
-        """Resume an interactive daemon turn paused on HITL or ask_user."""
-        d = self._daemon
-        loop_id = str(msg.get("loop_id", "")).strip()
-        resume_payload = msg.get("resume_payload")
-        if not loop_id or not isinstance(resume_payload, dict):
-            logger.warning(
-                "[MsgRouter] resume_interrupts rejected from client %s: missing loop_id or payload",
-                client_id,
-            )
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "INVALID_MESSAGE",
-                    "message": "resume_interrupts requires loop_id and resume_payload",
-                    "request_id": msg.get("request_id"),
-                },
-            )
-            return
-
-        session = await d._session_manager.get_session(client_id)
-        if not session or loop_id not in session.subscriptions:
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "LOOP_NOT_SUBSCRIBED",
-                    "message": "loop_subscribe required before resume_interrupts",
-                    "request_id": msg.get("request_id"),
-                },
-            )
-            return
-
-        future = d._pending_interrupt_responses.get(loop_id)
-        if future is None or future.done():
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "NO_PENDING_INTERRUPT",
-                    "message": f"No pending interrupt for loop {loop_id}",
-                    "request_id": msg.get("request_id"),
-                },
-            )
-            return
-
-        future.set_result(resume_payload)
-        await d._send_client_message(
-            client_id,
-            {
-                "type": "interrupts_resumed",
-                "loop_id": loop_id,
-                "success": True,
-                "request_id": msg.get("request_id"),
-            },
-        )
 
     async def _handle_skills_list(self, client_id: str, msg: dict[str, Any]) -> None:
         """Return wire-safe skill metadata for the daemon's agent config."""
@@ -481,7 +418,6 @@ class MessageRouter:
                 "max_iterations": None,
                 "preferred_subagent": None,
                 "client_id": client_id,
-                "interactive": True,
             },
         )
 
@@ -907,9 +843,7 @@ class MessageRouter:
         try:
             await d._query_engine.cancel_loop(loop_id)
         except Exception:
-            logger.warning(
-                "Failed to cancel running queries for loop %s", loop_id, exc_info=True
-            )
+            logger.warning("Failed to cancel running queries for loop %s", loop_id, exc_info=True)
 
         # 2. Unsubscribe all clients from this loop's topic
         for cid in list(d._session_manager._sessions.keys()):
@@ -1126,13 +1060,6 @@ class MessageRouter:
             )
         except Exception as e:
             logger.warning("Failed to update metadata for detachment: %s", str(e))
-
-        # Resolve any pending interrupt future for this loop
-        # (Bug 5.5: prevent loop from blocking forever on HITL after client detach)
-        pending = d._pending_interrupt_responses.pop(loop_id, None)
-        if pending and not pending.done():
-            pending.set_result({"action": "cancel", "reason": "client_detached"})
-            logger.debug("Resolved pending interrupt future for detached loop %s", loop_id)
 
         await d._session_manager.unsubscribe_loop(client_id, loop_id)
 

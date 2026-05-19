@@ -30,11 +30,6 @@ def test_validate_message_command_missing_cmd() -> None:
     assert "cmd" in errors[0]
 
 
-def test_validate_message_resume_interrupts_requires_loop_id() -> None:
-    errors = validate_message({"type": "resume_interrupts", "resume_payload": {}})
-    assert errors and "loop_id" in errors[0].lower()
-
-
 def test_validate_message_detach_valid() -> None:
     """Test valid detach message validation."""
     msg = {"type": "detach"}

@@ -70,7 +70,7 @@ class ModelLabel(Widget):
 
 
 class StatusBar(Horizontal):
-    """Status bar showing mode, auto-approve, cwd, git branch, tokens, and model."""
+    """Status bar showing input mode badge, session tip, cwd, branch, tokens, and model."""
 
     DEFAULT_CSS = """
     StatusBar {
@@ -100,19 +100,13 @@ class StatusBar(Horizontal):
         color: white;
     }
 
-    StatusBar .status-auto-approve {
-        width: auto;
+    StatusBar .status-tip {
+        width: 1fr;
+        min-width: 0;
         padding: 0 1;
-    }
-
-    StatusBar .status-auto-approve.on {
-        background: $success;
-        color: $background;
-    }
-
-    StatusBar .status-auto-approve.off {
-        background: $warning;
-        color: $background;
+        color: $text-muted;
+        text-overflow: ellipsis;
+        overflow: hidden;
     }
 
     StatusBar .status-message {
@@ -157,11 +151,9 @@ class StatusBar(Horizontal):
         text-align: right;
     }
     """
-    """Mode badges and auto-approve pills use distinct colors for at-a-glance status."""
-
     mode: reactive[str] = reactive("normal", init=False)
     status_message: reactive[str] = reactive("", init=False)
-    auto_approve: reactive[bool] = reactive(default=True, init=False)
+    session_tip: reactive[str] = reactive("", init=False)
     cwd: reactive[str] = reactive("", init=False)
     branch: reactive[str] = reactive("", init=False)
     tokens: reactive[int] = reactive(0, init=False)
@@ -181,15 +173,10 @@ class StatusBar(Horizontal):
         """Compose the status bar layout.
 
         Yields:
-            Widgets for mode, auto-approve, message, cwd, branch, tokens, and
-                model display.
+            Widgets for mode badge, session tip, message, cwd, branch, tokens, and model.
         """
         yield Static("", classes="status-mode normal", id="mode-indicator")
-        yield Static(
-            "auto | shift+tab to cycle",
-            classes="status-auto-approve on",
-            id="auto-approve-indicator",
-        )
+        yield Static("", classes="status-tip", id="session-tip")
         with Horizontal(classes="status-left-collapsible"):
             yield Static("", classes="status-message", id="status-message")
             yield Static("", classes="status-cwd", id="cwd-display")
@@ -243,20 +230,13 @@ class StatusBar(Horizontal):
             indicator.update("")
             indicator.add_class("normal")
 
-    def watch_auto_approve(self, new_value: bool) -> None:
-        """Update auto-approve indicator when state changes."""
+    def watch_session_tip(self, new_value: str) -> None:
+        """Update the rotating session tip below the input."""
         try:
-            indicator = self.query_one("#auto-approve-indicator", Static)
+            tip_widget = self.query_one("#session-tip", Static)
         except NoMatches:
             return
-        indicator.remove_class("on", "off")
-
-        if new_value:
-            indicator.update("auto | shift+tab to cycle")
-            indicator.add_class("on")
-        else:
-            indicator.update("manual | shift+tab to cycle")
-            indicator.add_class("off")
+        tip_widget.update((new_value or "").strip())
 
     def watch_cwd(self, new_value: str) -> None:
         """Update cwd display when it changes."""
@@ -314,13 +294,9 @@ class StatusBar(Horizontal):
         """
         self.mode = mode
 
-    def set_auto_approve(self, *, enabled: bool) -> None:
-        """Set the auto-approve state.
-
-        Args:
-            enabled: Whether auto-approve is enabled
-        """
-        self.auto_approve = enabled
+    def set_session_tip(self, tip: str) -> None:
+        """Set the session tip shown next to the input (migrated from welcome banner)."""
+        self.session_tip = (tip or "").strip()
 
     def set_status_message(self, message: str) -> None:
         """Set the status message.

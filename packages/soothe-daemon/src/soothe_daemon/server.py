@@ -150,7 +150,6 @@ class SootheDaemon(DaemonHandlersMixin):
         )
         # Keys: LangGraph checkpoint id (``configurable.thread_id``), not ``loop_id``.
         self._active_threads: dict[str, asyncio.Task] = {}
-        self._pending_interrupt_responses: dict[str, asyncio.Future[dict[str, Any]]] = {}
         #: Loop ids for all in-flight streams (heartbeats; internal only).
         self._active_stream_loop_ids: set[str] = set()
         # Lock protecting query state transitions (_active_threads, _query_running, _current_query_task)

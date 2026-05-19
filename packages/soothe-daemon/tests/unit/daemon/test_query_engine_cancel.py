@@ -29,10 +29,6 @@ class _FakeRunner:
     def set_current_thread_id(self, thread_id: str | None) -> None:
         self.current_thread_id = thread_id
 
-    def set_interrupt_resolver(self, loop_id: str, _resolver: Any) -> None:
-        del loop_id
-        return None
-
     async def astream(self, _text: str, **_kwargs: Any):  # type: ignore[override]
         # Brief sleep so run_query's asyncio.sleep(0) yield does not return after the
         # stream has already completed (would leave _current_query_task cleared).
@@ -131,7 +127,6 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
         _active_threads={},
         _query_running=False,
         _current_query_task=None,
-        _pending_interrupt_responses={},
         _active_stream_loop_ids=set(),
         _broadcast=_broadcast,
         _session_manager=SimpleNamespace(
@@ -199,7 +194,6 @@ def _daemon_factory(
         _active_threads={},
         _query_running=False,
         _current_query_task=None,
-        _pending_interrupt_responses={},
         _active_stream_loop_ids=set(),
         _broadcast=_broadcast,
         _session_manager=SimpleNamespace(
@@ -330,7 +324,6 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
         _active_threads={},
         _query_running=False,
         _current_query_task=None,
-        _pending_interrupt_responses={},
         _active_stream_loop_ids=set(),
         _broadcast=_broadcast,
         _session_manager=SimpleNamespace(

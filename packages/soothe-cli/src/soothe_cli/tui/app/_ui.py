@@ -1,4 +1,4 @@
-"""UI interaction mixin: status bar, tokens, scroll hydration, spinner, approval, ask_user, interrupt/quit."""
+"""UI interaction mixin: status bar, tokens, scroll hydration, spinner, ask_user, interrupt/quit."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import asyncio
 import logging
 import time
 import uuid
-from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -15,18 +14,14 @@ if TYPE_CHECKING:
     from textual.widgets._scrollbar import ScrollUp
 
     from soothe_cli.tui._ask_user_types import AskUserWidgetResult, Question
-    from soothe_cli.tui.widgets.approval import ApprovalMenu
     from soothe_cli.tui.widgets.ask_user import AskUserMenu
 
-from textual.app import ScreenStackError
 from textual.containers import Container, VerticalScroll
 from textual.css.query import NoMatches
-from textual.widgets import Static
 
 from soothe_cli.tui._session_stats import SpinnerStatus
-from soothe_cli.tui.app._module_init import _DEFERRED_APPROVAL_TIMEOUT_SECONDS
 from soothe_cli.tui.widgets.loading import LoadingWidget
-from soothe_cli.tui.widgets.messages import AppMessage, AssistantMessage
+from soothe_cli.tui.widgets.messages import AssistantMessage
 
 logger = logging.getLogger(__name__)
 _monotonic = time.monotonic
@@ -36,7 +31,7 @@ _HYDRATION_CHECK_INTERVAL_SECONDS = 0.08
 
 
 class _UIMixin:
-    """UI interaction: status, tokens, hydration, spinner, approval, ask_user, quit/interrupt."""
+    """UI interaction: status, tokens, hydration, spinner, ask_user, quit/interrupt."""
 
     def on_scroll_up(self, _event: ScrollUp) -> None:
         """Handle scroll up to check if we need to hydrate older messages."""
@@ -299,206 +294,6 @@ class _UIMixin:
             self._loading_widget.set_status(status)
         # NOTE: Don't call anchor() here - it would re-anchor and drag user back
         # to bottom if they've scrolled away during streaming
-
-    async def _request_approval(
-        self,
-        action_requests: Any,  # noqa: ANN401  # ActionRequest uses dynamic typing
-        assistant_id: str | None,
-    ) -> asyncio.Future:
-        """Request user approval inline in the messages area.
-
-        Mounts ApprovalMenu in the messages area (inline with chat).
-        ChatInput stays visible - user can still see it.
-
-        If another approval is already pending, queue this one.
-
-        Auto-approves shell commands that are in the configured allow-list.
-
-        Args:
-            action_requests: List of action request dicts to approve
-            assistant_id: The assistant ID for display purposes
-
-        Returns:
-            A Future that resolves to the user's decision.
-        """
-        from soothe_cli.tui.config import (
-            SHELL_TOOL_NAMES,
-            is_shell_command_allowed,
-            settings,
-        )
-
-        loop = asyncio.get_running_loop()
-        result_future: asyncio.Future = loop.create_future()
-
-        # Check if ALL actions in the batch are auto-approvable shell commands
-        if settings.shell_allow_list and action_requests:
-            all_auto_approved = True
-            approved_commands = []
-
-            for req in action_requests:
-                if req.get("name") in SHELL_TOOL_NAMES:
-                    command = req.get("args", {}).get("command", "")
-                    if is_shell_command_allowed(command, settings.shell_allow_list):
-                        approved_commands.append(command)
-                    else:
-                        all_auto_approved = False
-                        break
-                else:
-                    # Non-shell commands need normal approval
-                    all_auto_approved = False
-                    break
-
-            if all_auto_approved and approved_commands:
-                # Auto-approve all commands in the batch
-                result_future.set_result({"type": "approve"})
-
-                # Mount system messages showing the auto-approvals
-                try:
-                    messages = self.query_one("#messages", Container)
-                    for command in approved_commands:
-                        auto_msg = AppMessage(
-                            f"✓ Auto-approved shell command (allow-list): {command}"
-                        )
-                        await self._mount_before_queued(messages, auto_msg)
-                    with suppress(NoMatches, ScreenStackError):
-                        self.query_one("#chat", VerticalScroll).anchor()
-                except Exception:  # noqa: S110, BLE001  # Resilient auto-message display
-                    pass  # Don't fail if we can't show the message
-
-                return result_future
-
-        # If there's already a pending approval, wait for it to complete first
-        if self._pending_approval_widget is not None:
-            while self._pending_approval_widget is not None:  # noqa: ASYNC110  # Simple polling is sufficient here
-                await asyncio.sleep(0.1)
-
-        # Create menu with unique ID to avoid conflicts
-        from soothe_cli.tui.widgets.approval import ApprovalMenu
-
-        unique_id = f"approval-menu-{uuid.uuid4().hex[:8]}"
-        menu = ApprovalMenu(action_requests, assistant_id, id=unique_id)
-        menu.set_future(result_future)
-
-        self._pending_approval_widget = menu
-
-        if self._is_user_typing():
-            # Show a placeholder until the user stops typing, then swap in the
-            # real ApprovalMenu.  This prevents accidental key presses (e.g.
-            # 'y', 'n') from triggering approval decisions mid-sentence.
-            placeholder = Static(
-                "Waiting for typing to finish...",
-                classes="approval-placeholder",
-            )
-            self._approval_placeholder = placeholder
-            try:
-                messages = self.query_one("#messages", Container)
-                await self._mount_before_queued(messages, placeholder)
-                self.call_after_refresh(placeholder.scroll_visible)
-            except Exception:
-                logger.exception("Failed to mount approval placeholder")
-                # Placeholder failed — fall back to showing the menu directly
-                # so the future is always resolvable.
-                self._approval_placeholder = None
-                await self._mount_approval_widget(menu, result_future)
-                return result_future
-
-            self.run_worker(
-                self._deferred_show_approval(placeholder, menu, result_future),
-                exclusive=False,
-            )
-        else:
-            await self._mount_approval_widget(menu, result_future)
-
-        return result_future
-
-    async def _mount_approval_widget(
-        self,
-        menu: ApprovalMenu,
-        result_future: asyncio.Future[dict[str, str]],
-    ) -> None:
-        """Mount the approval menu widget inline in the messages area.
-
-        If mounting fails, clears `_pending_approval_widget` and propagates
-        the exception via `result_future`.
-
-        Args:
-            menu: The `ApprovalMenu` instance to mount.
-            result_future: The future to resolve/reject for the caller.
-        """
-        try:
-            messages = self.query_one("#messages", Container)
-            await self._mount_before_queued(messages, menu)
-            self.call_after_refresh(menu.scroll_visible)
-            self.call_after_refresh(menu.focus)
-        except Exception as e:
-            logger.exception(
-                "Failed to mount approval menu (id=%s) in messages container",
-                menu.id,
-            )
-            self._pending_approval_widget = None
-            if not result_future.done():
-                result_future.set_exception(e)
-
-    async def _deferred_show_approval(
-        self,
-        placeholder: Static,
-        menu: ApprovalMenu,
-        result_future: asyncio.Future[dict[str, str]],
-    ) -> None:
-        """Wait until the user is idle, then swap the placeholder for the real menu.
-
-        Exits early if the placeholder has already been detached (e.g. the
-        approval was cancelled while waiting).  In that case the future is
-        cancelled so the caller is not left hanging.
-
-        Args:
-            placeholder: The temporary placeholder widget currently mounted.
-            menu: The `ApprovalMenu` to show once the user stops typing.
-            result_future: The future backing this approval flow.
-        """
-        deadline = _monotonic() + _DEFERRED_APPROVAL_TIMEOUT_SECONDS
-        while self._is_user_typing():  # Simple polling
-            if _monotonic() > deadline:
-                logger.warning("Timed out waiting for user to stop typing; showing approval now")
-                break
-            await asyncio.sleep(0.2)
-
-        # Guard: if the placeholder was already removed (e.g. agent cancelled
-        # the approval while we were waiting), clean up and cancel the future.
-        if not placeholder.is_attached:
-            logger.warning(
-                "Approval placeholder detached before menu shown (id=%s)",
-                menu.id,
-            )
-            self._approval_placeholder = None
-            self._pending_approval_widget = None
-            if not result_future.done():
-                result_future.cancel()
-            return
-
-        self._approval_placeholder = None
-        try:
-            await placeholder.remove()
-        except Exception:
-            logger.warning(
-                "Failed to remove approval placeholder during swap",
-                exc_info=True,
-            )
-        await self._mount_approval_widget(menu, result_future)
-
-    def _on_auto_approve_enabled(self) -> None:
-        """Handle auto-approve being enabled via the HITL approval menu.
-
-        Called when the user selects "Auto-approve all" from an approval
-        dialog. Syncs the auto-approve state across the app flag, status
-        bar indicator, and session state so subsequent tool calls skip
-        the approval prompt.
-        """
-        self._auto_approve = True
-        if self._status_bar:
-            self._status_bar.set_auto_approve(enabled=True)
-        if self._session_state:
-            self._session_state.auto_approve = True
 
     async def _remove_ask_user_widget(  # noqa: PLR6301  # Shared helper used by ask_user event handlers
         self,

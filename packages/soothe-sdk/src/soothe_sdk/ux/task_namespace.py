@@ -198,9 +198,25 @@ def task_scope_step_id(scope: TaskScope | None) -> str:
 
 
 def task_scope_task_idx(scope: TaskScope | None, step_id: str) -> int:
-    """Derive task index within a step from TaskScope and spawns_by_step tracking."""
+    """Derive task index within a step from TaskScope's task_tool_call_id.
+
+    Parses the task index from ``scope[0]`` (e.g., ``ABC_01:s:task:0`` → 0).
+    Returns 0 if the scope is empty or the task index cannot be parsed.
+    """
     if not scope:
         return 0
+    task_tool_call_id = str(scope[0] or "").strip()
+    if not task_tool_call_id:
+        return 0
+    _, type_code, _, tool_info = parse_unified_tool_call_id(task_tool_call_id)
+    if type_code != "s":
+        return 0
+    head = (tool_info or "").split(":")[0]
+    if head != "task":
+        return 0
+    tail = (tool_info or "").split(":")[-1]
+    if tail.isdigit():
+        return int(tail)
     return 0
 
 

@@ -16,7 +16,6 @@ async def test_interrupt_cleanup_cancels_remote_query_not_detach() -> None:
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=lambda _s: None,
-        request_approval=AsyncMock(),
         set_spinner=AsyncMock(),
         set_active_message=MagicMock(),
     )
@@ -46,7 +45,6 @@ async def test_interrupt_cleanup_daemon_uses_aupdate_loop_state() -> None:
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=lambda _s: None,
-        request_approval=AsyncMock(),
         set_spinner=AsyncMock(),
         set_active_message=MagicMock(),
     )
@@ -91,7 +89,6 @@ async def test_interrupt_cleanup_daemon_falls_back_to_session_loop_id() -> None:
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=lambda _s: None,
-        request_approval=AsyncMock(),
         set_spinner=AsyncMock(),
         set_active_message=MagicMock(),
     )

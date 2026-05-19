@@ -85,11 +85,6 @@ class RayLoopRunner:
             pass
         self._actor = None
 
-    async def forward_interrupt_resume(self, loop_id: str, payload: dict[str, Any]) -> None:
-        """Not supported for Ray runner."""
-        logger.warning("RayLoopRunner: interrupt resume not supported (loop=%s)", loop_id)
-
-
 # Structural protocol check.
 def _assert_protocol() -> None:
     _: LoopRunnerProtocol = RayLoopRunner.__new__(RayLoopRunner)  # type: ignore[assignment]

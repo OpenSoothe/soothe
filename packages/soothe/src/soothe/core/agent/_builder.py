@@ -112,8 +112,7 @@ class AgentBuilder:
             checkpointer: LangGraph checkpointer for persistence.
             store: LangGraph store for persistent storage.
             backend: deepagents backend for file/execution operations.
-            interrupt_on: Tool interrupt configuration for HITL. When None, resolved
-                from ``config.hitl.tools`` list.
+            interrupt_on: Optional tool interrupt configuration for deepagents.
             memory_store: Override MemoryProtocol implementation. None uses config.
             planner: Override PlannerProtocol implementation. None uses config.
             policy: Override PolicyProtocol implementation. None uses config.
@@ -203,7 +202,6 @@ class AgentBuilder:
 
         # Create deep_agent graph
         deep_agent_start = time.perf_counter()
-        resolved_interrupt_on = self._resolve_interrupt_on(interrupt_on)
         graph = create_deep_agent(
             model=resolved_model,
             tools=all_tools or None,
@@ -215,7 +213,7 @@ class AgentBuilder:
             checkpointer=checkpointer,
             store=store,
             backend=resolved_backend,
-            interrupt_on=resolved_interrupt_on,
+            interrupt_on=interrupt_on,
             debug=self._config.debug,
         )
         deep_agent_ms = (time.perf_counter() - deep_agent_start) * 1000
@@ -235,41 +233,6 @@ class AgentBuilder:
         logger.info("[Init] ✓ CoreAgent ready (%.1fms total)", total_ms)
 
         return agent
-
-    def _resolve_interrupt_on(
-        self,
-        override: dict[str, bool | InterruptOnConfig] | None = None,
-    ) -> dict[str, bool | InterruptOnConfig] | None:
-        """Resolve interrupt_on configuration for HITL approval.
-
-        Converts the list of tool names from ``config.hitl.tools`` into the
-        ``interrupt_on`` dict format expected by deepagents' ``create_deep_agent()``.
-        Shell tool aliases (bash, shell) are normalized to "execute".
-
-        Args:
-            override: Explicit interrupt_on dict from caller. When provided,
-                config-based resolution is skipped.
-
-        Returns:
-            dict mapping tool names to True (always interrupt), or None if
-            HITL is disabled or no tools configured.
-        """
-        if override is not None:
-            return override
-
-        hitl_config = self._config.hitl
-        if not hitl_config.enabled or not hitl_config.tools:
-            return None
-
-        interrupt_on: dict[str, bool | InterruptOnConfig] = {}
-        for tool_name in hitl_config.tools:
-            # Normalize shell tool aliases to "execute" (the actual registered name)
-            if tool_name in ("bash", "shell", "execute"):
-                tool_name = "execute"
-            interrupt_on[tool_name] = True
-
-        logger.info("[Init] HITL enabled for tools: %s", list(interrupt_on.keys()))
-        return interrupt_on
 
     def _resolve_memory(self) -> MemoryProtocol | None:
         """Resolve MemoryProtocol with parallel resolution support (always enabled)."""
@@ -383,7 +346,7 @@ def create_soothe_agent(
         checkpointer: LangGraph checkpointer for persistence.
         store: LangGraph store for persistent storage.
         backend: deepagents backend for file/execution operations.
-        interrupt_on: Tool interrupt configuration for HITL.
+        interrupt_on: Optional tool interrupt configuration for deepagents.
         memory_store: Override MemoryProtocol implementation.
         planner: Override PlannerProtocol implementation.
         policy: Override PolicyProtocol implementation.

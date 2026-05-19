@@ -8,9 +8,9 @@ import pytest
 from langchain_core.messages import ToolMessage
 
 from soothe.core.loop.engine.executor import (
+    _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     Executor,
     _ActStreamBudget,
-    _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
 )
 from soothe.core.loop.state.schemas import LoopState, StepAction, StepResult
 

@@ -265,18 +265,6 @@ def _extract_model_params_flag(raw_arg: str) -> tuple[str, dict[str, Any] | None
 
 InputMode = Literal["normal", "shell", "command"]
 
-_TYPING_IDLE_THRESHOLD_SECONDS: float = 2.0
-"""Seconds since the last keystroke after which the user is considered idle and
-a pending approval widget can be shown.
-
-Two seconds balances responsiveness with avoiding accidental approval
-key presses.
-"""
-
-_DEFERRED_APPROVAL_TIMEOUT_SECONDS: float = 30.0
-"""Maximum seconds the deferred-approval worker will wait for the user to stop
-typing before showing the approval widget regardless."""
-
 
 @dataclass(frozen=True, slots=True)
 class QueuedMessage:
@@ -332,16 +320,13 @@ class TextualSessionState:
     def __init__(
         self,
         *,
-        auto_approve: bool = True,
         loop_id: str | None = None,
     ) -> None:
         """Initialize session state.
 
         Args:
-            auto_approve: Whether to auto-approve tool calls
             loop_id: Optional loop ID (generates UUID7 if not provided)
         """
-        self.auto_approve = auto_approve
         self.loop_id = loop_id or _new_loop_id()
 
     def reset_loop(self) -> str:
@@ -383,7 +368,6 @@ async def run_textual_app(
     *,
     daemon_config: Any,  # noqa: ANN401
     assistant_id: str | None = None,
-    auto_approve: bool = True,
     cwd: str | Path | None = None,
     resume_loop_id: str | None = None,
     initial_prompt: str | None = None,
@@ -396,7 +380,6 @@ async def run_textual_app(
     Args:
         daemon_config: Loaded Soothe configuration used for WebSocket bootstrap.
         assistant_id: Agent identifier for memory storage.
-        auto_approve: Whether to start with auto-approve enabled.
         cwd: Current working directory to display.
         resume_loop_id: Initial loop id when attaching to an existing conversation.
         initial_prompt: Optional prompt to auto-submit when session starts.
@@ -412,7 +395,6 @@ async def run_textual_app(
     app = SootheApp(
         daemon_config=daemon_config,
         assistant_id=assistant_id,
-        auto_approve=auto_approve,
         cwd=cwd,
         resume_loop_id=resume_loop_id,
         initial_prompt=initial_prompt,

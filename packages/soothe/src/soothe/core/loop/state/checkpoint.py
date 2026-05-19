@@ -12,11 +12,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+
 _AGENT_LOOP_CHECKPOINT_STATUSES = frozenset(
     {"running", "ready_for_next_goal", "finalized", "cancelled"}
 )
-
-from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 class WorkingMemoryEntry(BaseModel):

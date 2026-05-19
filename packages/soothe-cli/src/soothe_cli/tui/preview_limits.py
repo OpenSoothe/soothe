@@ -29,6 +29,13 @@ TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES: Final[int] = 15
 # --- Clipboard copy toast ---
 CLIPBOARD_TOAST_PREVIEW_CHARS: Final[int] = 40
 
+# --- Chat input: large paste abbreviation (display only; submit uses full text) ---
+CHAT_INPUT_PASTE_ABBREVIATE_LINE_COUNT: Final[int] = 4
+CHAT_INPUT_PASTE_ABBREVIATE_CHAR_COUNT: Final[int] = 240
+CHAT_INPUT_PASTE_PREVIEW_HEAD_LINES: Final[int] = 2
+CHAT_INPUT_PASTE_PREVIEW_TAIL_LINES: Final[int] = 1
+CHAT_INPUT_PASTE_PREVIEW_LINE_MAX_CHARS: Final[int] = 76
+
 # --- Security warnings list on approval flows (`approval`) ---
 APPROVAL_WARNING_PREVIEW_COUNT: Final[int] = 3
 APPROVAL_SHELL_COMMAND_TRUNCATE_CHARS: Final[int] = 120

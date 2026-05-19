@@ -19,6 +19,10 @@ from textual.css.query import NoMatches
 from textual.style import Style as TStyle
 
 from soothe_cli.cli.execution.daemon_errors import (
+    friendly_daemon_connection_error,
+    is_daemon_connection_error,
+)
+from soothe_cli.cli.execution.daemon_errors import (
     friendly_daemon_execution_error as _friendly_agent_execution_error,
 )
 from soothe_cli.tui import theme
@@ -27,7 +31,6 @@ from soothe_cli.tui._session_stats import SessionStats, format_token_count
 from soothe_cli.tui._version import DOCS_URL
 from soothe_cli.tui.app._module_init import (
     _COMMAND_URLS,
-    _TYPING_IDLE_THRESHOLD_SECONDS,
     DeferredAction,
     QueuedMessage,
     _extract_model_params_flag,
@@ -184,51 +187,6 @@ class _ExecutionMixin:
         """Update status bar when input mode changes."""
         if self._status_bar:
             self._status_bar.set_mode(event.mode)
-
-    def on_chat_input_typing(
-        self,
-        event: ChatInput.Typing,  # noqa: ARG002  # Textual event handler signature
-    ) -> None:
-        """Record the most recent keystroke time for typing-aware approval deferral."""
-        self._last_typed_at = _monotonic()
-
-    def _is_user_typing(self) -> bool:
-        """Return whether the user typed recently (within the idle threshold).
-
-        Returns:
-            `True` if the last recorded typing event occurred within the last
-                `_TYPING_IDLE_THRESHOLD_SECONDS` seconds, `False` otherwise.
-        """
-        if self._last_typed_at is None:
-            return False
-        return (_monotonic() - self._last_typed_at) < _TYPING_IDLE_THRESHOLD_SECONDS
-
-    async def on_approval_menu_decided(
-        self,
-        event: Any,  # noqa: ARG002, ANN401  # Textual event handler signature
-    ) -> None:
-        """Handle approval menu decision - remove from messages and refocus input."""
-        # Defensively remove any lingering placeholder (should already be gone
-        # once the deferred worker swaps it, but guard against edge cases).
-        if self._approval_placeholder is not None:
-            if self._approval_placeholder.is_attached:
-                try:
-                    await self._approval_placeholder.remove()
-                except Exception:
-                    logger.warning(
-                        "Failed to remove approval placeholder during cleanup",
-                        exc_info=True,
-                    )
-            self._approval_placeholder = None
-
-        # Remove ApprovalMenu using stored reference
-        if self._pending_approval_widget:
-            await self._pending_approval_widget.remove()
-            self._pending_approval_widget = None
-
-        # Refocus the chat input
-        if self._chat_input:
-            self.call_after_refresh(self._chat_input.focus_input)
 
     async def _handle_shell_command(self, command: str) -> None:
         """Handle a shell command (! prefix).
@@ -477,7 +435,7 @@ class _ExecutionMixin:
                 "  Enter           Submit your message\n"
                 f"  {newline_shortcut():<15} Insert newline\n"
                 "  Ctrl+X          Open prompt in external editor\n"
-                "  Shift+Tab       Toggle auto-approve mode\n"
+                "  Shift+Tab       Cycle loop selector\n"
                 "  @filename       Auto-complete files and inject content\n"
                 "  /command        Slash commands (/help, /clear, /quit)\n"
                 "  !command        Run shell commands directly\n\n"
@@ -789,6 +747,16 @@ class _ExecutionMixin:
 
         # Check if agent is available
         if self._runtime_backend_ready() and self._ui_adapter and self._session_state:
+            if self._daemon_session is not None:
+                try:
+                    await self._daemon_session.ensure_connected()
+                except (ConnectionError, OSError, TimeoutError) as exc:
+                    await self._mount_message(
+                        ErrorMessage(
+                            f"Daemon connection error. {friendly_daemon_connection_error(exc)}"
+                        )
+                    )
+                    return
             self._agent_running = True
 
             if self._chat_input:
@@ -862,14 +830,19 @@ class _ExecutionMixin:
             )
         except Exception as e:  # Resilient tool rendering
             logger.exception("Agent execution failed")
-            display_err = _friendly_agent_execution_error(e)
+            if is_daemon_connection_error(e):
+                display_err = friendly_daemon_connection_error(e)
+                error_title = "Daemon connection error"
+            else:
+                display_err = _friendly_agent_execution_error(e)
+                error_title = "Agent error"
             # Ensure any in-flight tool calls don't remain stuck in "Running..."
             # when streaming aborts before tool results arrive.
             if self._ui_adapter:
-                self._ui_adapter.finalize_pending_tools_with_error(f"Agent error: {display_err}")
-                self._ui_adapter.finalize_pending_steps_with_error(f"Agent error: {display_err}")
+                self._ui_adapter.finalize_pending_tools_with_error(f"{error_title}: {display_err}")
+                self._ui_adapter.finalize_pending_steps_with_error(f"{error_title}: {display_err}")
             try:
-                await self._mount_message(ErrorMessage(f"Agent error: {display_err}"))
+                await self._mount_message(ErrorMessage(f"{error_title}. {display_err}"))
             except Exception:
                 logger.debug("Could not mount error message (app closing?)", exc_info=True)
         finally:
