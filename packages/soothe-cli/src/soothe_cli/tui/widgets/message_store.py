@@ -234,7 +234,6 @@ class MessageData:
             QueuedUserMessage,
             SkillMessage,
             SummarizationMessage,
-            ToolCallMessage,
             UserMessage,
         )
 
@@ -249,27 +248,8 @@ class MessageData:
                 return AssistantMessage(self.content, id=self.id)
 
             case MessageType.TOOL:
-                widget = ToolCallMessage(
-                    self.tool_name or "unknown",
-                    self.tool_args,
-                    id=self.id,
-                )
-                # Deferred state is restored automatically during on_mount
-                # via _restore_deferred_state
-                widget._deferred_status = self.tool_status
-                widget._deferred_output = self.tool_output
-                widget._deferred_expanded = self.tool_expanded
-                if self.tool_rows_json:
-                    try:
-                        raw_rows = json.loads(self.tool_rows_json)
-                        if isinstance(raw_rows, list) and raw_rows:
-                            widget.apply_tool_rows_snapshot(raw_rows)
-                    except json.JSONDecodeError:
-                        logger.warning(
-                            "Invalid tool_rows_json for %s",
-                            self.id,
-                        )
-                return widget
+                name = self.tool_name or "tool"
+                return AppMessage(f"[{name}]", id=self.id)
 
             case MessageType.SKILL:
                 widget = SkillMessage(
@@ -393,7 +373,6 @@ class MessageData:
             QueuedUserMessage,
             SkillMessage,
             SummarizationMessage,
-            ToolCallMessage,
             UserMessage,
         )
 
@@ -473,30 +452,6 @@ class MessageData:
                 content=widget._content,
                 id=widget_id,
                 is_streaming=widget._streaming_active,
-            )
-
-        if isinstance(widget, ToolCallMessage):
-            tool_status: ToolStatus | None = None
-            if widget._status:
-                try:
-                    tool_status = ToolStatus(widget._status)
-                except ValueError:
-                    logger.warning(
-                        "Unknown tool status %r for widget %s",
-                        widget._status,
-                        widget_id,
-                    )
-
-            return cls(
-                type=MessageType.TOOL,
-                content="",  # Tool messages don't have simple content
-                id=widget_id,
-                tool_name=widget._tool_name,
-                tool_args=widget._args,
-                tool_status=tool_status,
-                tool_output=widget._output,
-                tool_expanded=widget._expanded,
-                tool_rows_json=json.dumps(widget.snapshot_tool_rows()) if widget._rows else None,
             )
 
         if isinstance(widget, ErrorMessage):

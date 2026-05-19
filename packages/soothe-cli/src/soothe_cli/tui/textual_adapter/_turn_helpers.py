@@ -447,10 +447,10 @@ async def _flush_assistant_text_ns(
     Finalizes the streaming state on the assistant card.
     If no message exists yet, creates one with the full content.
     """
-    from soothe_cli.events.stream.task_scope import format_task_scope_prefix
     from soothe_cli.events.policy.explore_task_display import (
         format_explore_task_json_blob_for_display,
     )
+    from soothe_cli.events.task_scope import format_task_scope_prefix
     from soothe_cli.tui.textual_adapter._stream_messages import _tui_main_assistant_body_for_dedupe
 
     repaired_text = RendererBase.repair_concatenated_output(text)

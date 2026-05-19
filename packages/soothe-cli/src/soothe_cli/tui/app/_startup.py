@@ -504,7 +504,7 @@ class _StartupMixin:
             import importlib
 
             importlib.import_module("soothe_cli.tui.textual_adapter._turn")
-            importlib.import_module("soothe_cli.events.stream.pipeline")
+            importlib.import_module("soothe_cli.events.turn.turn_stream_prepare")
         except Exception:
             logger.warning("Could not prewarm first-turn execute path", exc_info=True)
 

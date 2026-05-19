@@ -18,11 +18,10 @@ if TYPE_CHECKING:
 
 from textual.content import Content
 
-from soothe_cli.events.tools.tool_card_payload import extract_tool_result_card_payload
+from soothe_cli.events.tools.tool_result import extract_tool_result_payload
 from soothe_cli.tui.app._module_init import _LoopHistoryPayload
 from soothe_cli.tui.message_display_filter import (
     extract_ai_text_for_display,
-    extract_message_tool_calls,
     extract_user_text_for_display,
     normalize_stream_message,
 )
@@ -34,7 +33,6 @@ from soothe_cli.tui.widgets.message_store import (
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
-    ToolCallMessage,
     UserMessage,
 )
 
@@ -188,7 +186,7 @@ class _HistoryMixin:
                 if tc_id and tc_id in pending_tool_indices:
                     idx = pending_tool_indices.pop(tc_id)
                     data = result[idx]
-                    payload = extract_tool_result_card_payload(msg)
+                    payload = extract_tool_result_payload(msg)
                     if payload is not None:
                         data.tool_status = (
                             ToolStatus.ERROR if payload.is_error else ToolStatus.SUCCESS
@@ -784,11 +782,6 @@ class _HistoryMixin:
         logger.info("Starting background event consumer for subscribed loop")
         from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-        from soothe_cli.events.stream.pipeline import StreamDisplayPipeline
-        from soothe_cli.events.tools.message_processing import extract_tool_args_dict
-
-        progress_pipeline = StreamDisplayPipeline()
-        tool_cards: dict[str, ToolCallMessage] = {}
         assistant_cards_by_ns: dict[tuple[Any, ...], AssistantMessage] = {}
         last_user_text_by_ns: dict[tuple[Any, ...], str] = {}
         last_ai_chunk_by_ns: dict[tuple[Any, ...], str] = {}
@@ -829,29 +822,7 @@ class _HistoryMixin:
                         continue
 
                     if isinstance(message, ToolMessage):
-                        call_id = str(getattr(message, "tool_call_id", "") or "").strip()
-                        if call_id and call_id in tool_cards:
-                            tool_cards[call_id].set_success(
-                                str(getattr(message, "content", "") or "")
-                            )
                         continue
-
-                    # Render tool calls as cards in background mode too.
-                    for raw_call in extract_message_tool_calls(message):
-                        call_id = str(
-                            raw_call.get("id") or raw_call.get("tool_call_id") or ""
-                        ).strip()
-                        tool_name = str(raw_call.get("name") or "").strip()
-                        if not call_id or not tool_name or call_id in tool_cards:
-                            continue
-                        tool_msg = ToolCallMessage(
-                            tool_name,
-                            extract_tool_args_dict(raw_call),
-                            tool_call_id=call_id,
-                        )
-                        tool_msg.set_running()
-                        await self._mount_message(tool_msg)
-                        tool_cards[call_id] = tool_msg
 
                     if isinstance(message, (AIMessage, AIMessageChunk)):
                         extracted = extract_ai_text_for_display(message)
@@ -885,15 +856,6 @@ class _HistoryMixin:
                 for value in data.values():
                     if isinstance(value, dict) and isinstance(value.get("type"), str):
                         payloads.append(value)
-
-                for event_payload in payloads:
-                    event_for_pipeline = dict(event_payload)
-                    event_for_pipeline["namespace"] = list(namespace)
-                    lines = progress_pipeline.process(event_for_pipeline)
-                    for line in lines:
-                        rendered = line.format().lstrip("\n").rstrip()
-                        if rendered:
-                            await self._mount_message(AppMessage(rendered))
 
         except asyncio.CancelledError:
             logger.info("Background event consumer cancelled")
