@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from soothe_cli.tui.file_ops import FileOpTracker
     from soothe_cli.tui.step_task_routing import StepTaskRouter
     from soothe_cli.tui.textual_adapter._adapter import TextualUIAdapter
+    from soothe_cli.tui.textual_adapter._turn_ui_batch import TurnToolUiCoalescer
 
 
 async def apply_tool_call_wire_update(
@@ -35,6 +36,7 @@ async def apply_tool_call_wire_update(
     pending_tool_calls_lc: dict[str, dict[str, Any]],
     streaming_overlay: dict[str, dict[str, Any]] | None = None,
     file_op_tracker: FileOpTracker | None = None,
+    ui_coalesce: TurnToolUiCoalescer | None = None,
 ) -> bool:
     """Seed pending tool state and refresh cards from a wire tool-call update event.
 
@@ -56,6 +58,9 @@ async def apply_tool_call_wire_update(
     name = str(data.get("name") or "").strip() or "tool"
     raw_args = data.get("args")
     if not isinstance(raw_args, dict) or not raw_args:
+        return True
+
+    if ui_coalesce is not None and ui_coalesce.note_wire_apply(tcid, raw_args):
         return True
 
     overlay = streaming_overlay if streaming_overlay is not None else {}

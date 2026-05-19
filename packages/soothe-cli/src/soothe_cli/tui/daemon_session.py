@@ -15,6 +15,8 @@ from soothe_sdk.client import (
 )
 from soothe_sdk.client.protocol import _serialize_for_json
 
+from soothe_cli.tui._session_stats import TurnEventStats
+
 if TYPE_CHECKING:
     pass
 
@@ -39,6 +41,7 @@ class TuiDaemonSession:
         self._rpc_lock = asyncio.Lock()
         self._rpc_connected = False
         self._streaming = False
+        self.turn_event_stats = TurnEventStats()
 
     @property
     def loop_id(self) -> str | None:
@@ -158,15 +161,18 @@ class TuiDaemonSession:
                 continue
             data = event.get("data")
             if isinstance(data, dict) and data.get("type") == "soothe.system.daemon.heartbeat":
+                self.turn_event_stats.heartbeats_dropped += 1
                 continue
             namespace = tuple(event.get("namespace", []) or [])
             mode = str(event.get("mode", ""))
+            self.turn_event_stats.post_idle_drained += 1
             yield (namespace, mode, data)
             if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
                 return
 
     async def iter_turn_chunks(self) -> Any:
         """Yield `(namespace, mode, data)` chunks for the active daemon turn."""
+        self.turn_event_stats = TurnEventStats()
         query_started = False
         expected_loop_id = self._loop_id
         self._streaming = True
@@ -223,6 +229,7 @@ class TuiDaemonSession:
                         isinstance(data, dict)
                         and data.get("type") == "soothe.system.daemon.heartbeat"
                     ):
+                        self.turn_event_stats.heartbeats_dropped += 1
                         continue
 
                     namespace = tuple(event.get("namespace", []) or [])

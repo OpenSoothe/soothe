@@ -31,7 +31,7 @@ class StreamDeliveryCoalescer:
     """Shape runner stream tuples before daemon broadcast to clients."""
 
     def __init__(self, mode: StreamDeliveryMode) -> None:
-        self._mode: StreamDeliveryMode = mode if mode in ("batch", "merged", "full") else "batch"
+        self._mode: StreamDeliveryMode = mode if mode in ("batch", "merged", "full") else "merged"
         self._gc: _GoalCompletionBuffer | None = None
         self._turn_complete_pending = False
 

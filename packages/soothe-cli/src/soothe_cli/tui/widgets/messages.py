@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import weakref
 from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic, time
@@ -122,6 +123,41 @@ _RUNNING_SPINNER_INTERVAL_SECONDS = 0.2
 
 _RUNNING_ROWS_REFRESH_INTERVAL_SECONDS = 0.5
 """Minimum interval between expensive running-row re-renders."""
+
+# Deferred tool-list refresh (turn-level coalescing + global repaint budget).
+_DEFERRED_TOOL_REFRESH_WIDGETS: weakref.WeakSet[Any] = weakref.WeakSet()
+_global_tools_list_refresh_at: float = 0.0
+
+
+def reset_turn_tool_refresh_state() -> None:
+    """Clear deferred refresh registry at the start of a new agent turn."""
+    global _global_tools_list_refresh_at
+    _global_tools_list_refresh_at = 0.0
+    _DEFERRED_TOOL_REFRESH_WIDGETS.clear()
+
+
+def request_deferred_tools_refresh(widget: Any) -> None:
+    """Queue a card for batched tool-list repaint."""
+    _DEFERRED_TOOL_REFRESH_WIDGETS.add(widget)
+
+
+def flush_deferred_tools_refreshes(*, force: bool = False) -> None:
+    """Repaint queued tool cards (global budget unless ``force``)."""
+    global _global_tools_list_refresh_at
+    pending = list(_DEFERRED_TOOL_REFRESH_WIDGETS)
+    if not pending:
+        return
+    now = monotonic()
+    if not force:
+        interval = _get_tui_refresh_interval_ms() / 1000.0
+        if now - _global_tools_list_refresh_at < interval:
+            return
+    _global_tools_list_refresh_at = now
+    _DEFERRED_TOOL_REFRESH_WIDGETS.clear()
+    for widget in pending:
+        flush_fn = getattr(widget, "_flush_deferred_tools_refresh", None)
+        if callable(flush_fn):
+            flush_fn()
 
 
 def _tui_hint_expand_body(ellipsis_glyph: str) -> str:
@@ -1097,6 +1133,7 @@ class ToolCallMessage(Vertical):
         self._last_rows_animation_refresh: float = 0.0
         # IG-420: Throttling for refresh methods
         self._last_activity_refresh: float | None = None
+        self._activity_refresh_pending = False
         # Deferred state for hydration (set by MessageData.to_widget)
         self._deferred_status: str | None = None
         self._deferred_output: str | None = None
@@ -1386,6 +1423,21 @@ class ToolCallMessage(Vertical):
         """Alias for _refresh_activity_display (kept for compat)."""
         self._refresh_activity_display()
 
+    def request_tools_display_refresh(self, *, immediate: bool = False) -> None:
+        """Queue or run activity-list repaint (batched during streaming)."""
+        if immediate:
+            self._activity_refresh_pending = False
+            self._refresh_activity_display()
+            return
+        self._activity_refresh_pending = True
+        request_deferred_tools_refresh(self)
+
+    def _flush_deferred_tools_refresh(self) -> None:
+        if not self._activity_refresh_pending:
+            return
+        self._activity_refresh_pending = False
+        self._refresh_activity_display()
+
     def _invalidate_output_render_cache(self) -> None:
         """Clear cached preview/full render content for tool output."""
         self._cached_preview_output_key = None
@@ -1551,7 +1603,7 @@ class ToolCallMessage(Vertical):
         if merged == row.args:
             return
         row.args = merged
-        self._refresh_tools_display()
+        self.request_tools_display_refresh()
 
     def set_tool_running(self, tool_call_id: str) -> None:
         """Mark a tool row as executing (after approval)."""
@@ -1560,7 +1612,7 @@ class ToolCallMessage(Vertical):
             return
         row.phase = "running"
         row.started_at = time()
-        self._refresh_tools_display()
+        self.request_tools_display_refresh(immediate=True)
 
     def set_tool_success(self, tool_call_id: str, result: str, *, duration_ms: int = 0) -> None:
         """Finalize a tool row as success."""
@@ -1571,7 +1623,7 @@ class ToolCallMessage(Vertical):
         row.output = _strip_success_exit_line(result)
         row.duration_ms = duration_ms
         row.started_at = None
-        self._refresh_tools_display()
+        self.request_tools_display_refresh(immediate=True)
 
     def set_tool_error(self, tool_call_id: str, error: str, *, duration_ms: int = 0) -> None:
         """Finalize a tool row as error."""
@@ -1582,7 +1634,7 @@ class ToolCallMessage(Vertical):
         row.output = error
         row.duration_ms = duration_ms
         row.started_at = None
-        self._refresh_tools_display()
+        self.request_tools_display_refresh(immediate=True)
 
     def set_tool_rejected(self, tool_call_id: str) -> None:
         """Mark a tool row as rejected (HITL)."""
@@ -1591,7 +1643,7 @@ class ToolCallMessage(Vertical):
             return
         row.phase = "rejected"
         row.started_at = None
-        self._refresh_tools_display()
+        self.request_tools_display_refresh(immediate=True)
 
     def set_tool_skipped(self, tool_call_id: str) -> None:
         """Mark a tool row skipped."""
@@ -1600,7 +1652,7 @@ class ToolCallMessage(Vertical):
             return
         row.phase = "skipped"
         row.started_at = None
-        self._refresh_tools_display()
+        self.request_tools_display_refresh(immediate=True)
 
     def mark_unfinished_tools_skipped(self) -> None:
         """Mark pending/running rows skipped when the parent ends without results."""
@@ -1608,7 +1660,7 @@ class ToolCallMessage(Vertical):
             if row.phase in ("pending", "running"):
                 row.phase = "skipped"
                 row.started_at = None
-        self._refresh_tools_display()
+        self.request_tools_display_refresh(immediate=True)
 
     def snapshot_tool_rows(self) -> list[dict[str, Any]]:
         """Serialize tool rows for ``MessageData``."""
@@ -1703,13 +1755,7 @@ class ToolCallMessage(Vertical):
             toggle_icon = f" {g.expand if self._card_collapsed else g.collapse}"
         line = f"{gutter}{frame} Running...{elapsed}{toggle_icon}"
         self._status_widget.update(Content.styled(line, colors.cognition))
-        # Throttle expensive row re-rendering while keeping status spinner smooth.
-        now = monotonic()
-        if any(row.phase == "running" for row in self._rows) and (
-            now - self._last_rows_animation_refresh >= _RUNNING_ROWS_REFRESH_INTERVAL_SECONDS
-        ):
-            self._last_rows_animation_refresh = now
-            self._refresh_tools_display()
+        # Status line only — tool rows refresh on coalesced stream updates, not per spinner tick.
 
     def _stop_animation(self) -> None:
         """Stop the running animation."""
@@ -2669,6 +2715,10 @@ class CognitionStepMessage(Vertical):
         # IG-420: Throttling for refresh methods
         self._last_tools_refresh: float | None = None
         self._last_header_refresh: float | None = None
+        self._tools_refresh_pending = False
+        self._row_cache_key_by_id: dict[str, tuple[Any, ...]] = {}
+        self._row_content_by_id: dict[str, Content] = {}
+        self._tools_panel_cache_key: tuple[Any, ...] | None = None
         self._status_widget: Static | None = None
         self._header_widget: Static | None = None
         self._tools_widget: Static | None = None
@@ -3100,6 +3150,39 @@ class CognitionStepMessage(Vertical):
         result.extend(other_rows)
         return result
 
+    def request_tools_display_refresh(self, *, immediate: bool = False) -> None:
+        """Queue or run a tool-list repaint (batched across cards during streaming)."""
+        if immediate:
+            self._tools_refresh_pending = False
+            self._refresh_tools_display(force=True)
+            return
+        self._tools_refresh_pending = True
+        request_deferred_tools_refresh(self)
+
+    def _flush_deferred_tools_refresh(self) -> None:
+        if not self._tools_refresh_pending:
+            return
+        self._tools_refresh_pending = False
+        self._refresh_tools_display(force=False)
+
+    def _row_content_cache_key(self, row: _StepToolRow) -> tuple[Any, ...]:
+        args_key: tuple[tuple[str, Any], ...] = ()
+        if row.args:
+            try:
+                args_key = tuple(sorted((str(k), v) for k, v in row.args.items()))
+            except TypeError:
+                args_key = (repr(row.args),)
+        return (
+            row.tool_call_id,
+            row.phase,
+            row.tool_name,
+            row.duration_ms,
+            row.output,
+            args_key,
+            row.parent_tool_call_id,
+            row.is_task_row,
+        )
+
     def _refresh_tools_display(self, *, force: bool = False) -> None:
         # IG-420: When widget not mounted, always run auto-collapse checks (no throttling)
         if self._tools_widget is None:
@@ -3112,16 +3195,35 @@ class CognitionStepMessage(Vertical):
         self._last_tools_refresh = monotonic()
         if not self._rows:
             self._tools_widget.display = False
+            self._row_cache_key_by_id.clear()
+            self._row_content_by_id.clear()
+            self._tools_panel_cache_key = None
             self._maybe_auto_collapse_step_card()
             self._sync_step_footer_hint()
             return
         self._maybe_auto_fold_step_tool_list()
         self._tools_widget.display = True
-        # IG-419: Use nested ordering for display (task rows + children)
         ordered_rows = self._build_nested_row_order()
         show_all = len(ordered_rows) <= _STEP_TOOL_PREVIEW_ROWS or not self._tools_body_collapsed
         visible = ordered_rows if show_all else ordered_rows[:_STEP_TOOL_PREVIEW_ROWS]
-        lines = [self._row_to_content(r) for r in visible]
+        panel_key: tuple[Any, ...] = (
+            tuple(self._row_content_cache_key(r) for r in visible),
+            show_all,
+            self._tools_body_collapsed,
+        )
+        if not force and panel_key == self._tools_panel_cache_key:
+            self._maybe_auto_collapse_step_card()
+            self._sync_step_footer_hint()
+            return
+        lines: list[Content] = []
+        for row in visible:
+            rk = self._row_content_cache_key(row)
+            if self._row_cache_key_by_id.get(row.tool_call_id) != rk:
+                content = self._row_to_content(row)
+                self._row_cache_key_by_id[row.tool_call_id] = rk
+                self._row_content_by_id[row.tool_call_id] = content
+            lines.append(self._row_content_by_id[row.tool_call_id])
+        self._tools_panel_cache_key = panel_key
         self._tools_widget.update(Content("\n").join(lines))
 
         self._maybe_auto_collapse_step_card()
@@ -3169,7 +3271,7 @@ class CognitionStepMessage(Vertical):
         self._row_index[tcid] = row
         self._bump_stat(row.tool_name)
         self._refresh_header_title()
-        self._refresh_tools_display()
+        self.request_tools_display_refresh(immediate=True)
 
     def has_tool_call_row(self, tool_call_id: str) -> bool:
         """Return True if this step card already tracks ``tool_call_id``."""
@@ -3186,8 +3288,7 @@ class CognitionStepMessage(Vertical):
         self._rows = [r for r in self._rows if r.tool_call_id != tcid]
         self._decrement_tool_stat_for_row(row.tool_name)
         self._refresh_header_title()
-        self._refresh_tools_display()
-        return row
+        self.request_tools_display_refresh(immediate=True)
 
     def ingest_tool_row(self, row: _StepToolRow) -> None:
         """Attach a tool row moved from another step card."""
@@ -3201,7 +3302,7 @@ class CognitionStepMessage(Vertical):
         self._row_index[tcid] = row
         self._bump_stat(row.tool_name)
         self._refresh_header_title()
-        self._refresh_tools_display()
+        self.request_tools_display_refresh(immediate=True)
 
     def row_duration_ms_since_started(self, tool_call_id: str) -> int:
         """Elapsed ms since this row entered running state (for result lines)."""
@@ -3224,11 +3325,10 @@ class CognitionStepMessage(Vertical):
             merged.update(incoming)
         if not tool_args_meaningful(merged):
             return
-        # IG-419: Skip refresh if args unchanged (performance optimization)
         if merged == row.args:
             return
         row.args = merged
-        self._refresh_tools_display()
+        self.request_tools_display_refresh()
 
     def set_tool_running(self, tool_call_id: str) -> None:
         """Mark a tool row as executing (after approval)."""
@@ -3237,7 +3337,7 @@ class CognitionStepMessage(Vertical):
             return
         row.phase = "running"
         row.started_at = time()
-        self._refresh_tools_display()
+        self.request_tools_display_refresh(immediate=True)
 
     def set_tool_success(self, tool_call_id: str, result: str, *, duration_ms: int = 0) -> None:
         """Finalize a tool row as success."""
@@ -3248,7 +3348,7 @@ class CognitionStepMessage(Vertical):
         row.output = _strip_success_exit_line(result)
         row.duration_ms = duration_ms
         row.started_at = None
-        self._refresh_tools_display()
+        self.request_tools_display_refresh(immediate=True)
 
     def set_tool_error(self, tool_call_id: str, error: str, *, duration_ms: int = 0) -> None:
         """Finalize a tool row as error."""
@@ -3259,7 +3359,7 @@ class CognitionStepMessage(Vertical):
         row.output = error
         row.duration_ms = duration_ms
         row.started_at = None
-        self._refresh_tools_display()
+        self.request_tools_display_refresh(immediate=True)
 
     def set_tool_rejected(self, tool_call_id: str) -> None:
         """Mark a tool row as rejected (HITL)."""
@@ -3268,7 +3368,7 @@ class CognitionStepMessage(Vertical):
             return
         row.phase = "rejected"
         row.started_at = None
-        self._refresh_tools_display()
+        self.request_tools_display_refresh(immediate=True)
 
     def set_tool_skipped(self, tool_call_id: str) -> None:
         """Mark a tool row skipped (batch reject / incomplete)."""
@@ -3277,7 +3377,7 @@ class CognitionStepMessage(Vertical):
             return
         row.phase = "skipped"
         row.started_at = None
-        self._refresh_tools_display()
+        self.request_tools_display_refresh(immediate=True)
 
     def mark_unfinished_tools_skipped(self) -> None:
         """Mark pending/running rows skipped when the step ends without results."""
@@ -3409,12 +3509,6 @@ class CognitionStepMessage(Vertical):
         stats_suffix = self._stats_title_suffix()
         line = f"{gutter}{frame} Running...{elapsed}{stats_suffix}{toggle_icon}"
         self._status_widget.update(Content.styled(line, colors.cognition))
-        now = monotonic()
-        if any(r.phase == "running" for r in self._rows) and (
-            now - self._last_rows_animation_refresh >= _RUNNING_ROWS_REFRESH_INTERVAL_SECONDS
-        ):
-            self._last_rows_animation_refresh = now
-            self._refresh_tools_display()
 
     def set_complete(
         self,

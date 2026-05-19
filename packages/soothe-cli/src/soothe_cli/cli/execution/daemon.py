@@ -65,11 +65,11 @@ async def _run_headless_session_once(
     try:
         await connect_websocket_with_retries(client)
         cli_ws = os.environ.get("SOOTHE_CLI_WORKSPACE", "").strip() or os.getcwd()
-        stream_delivery = "batch"
+        stream_delivery = "merged"
         if getattr(cfg, "output_streaming_mode", None) == "streaming":
             stream_delivery = "full"
-        elif getattr(cfg, "output_streaming_mode", None) == "merged":
-            stream_delivery = "merged"
+        elif getattr(cfg, "output_streaming_mode", None) == "batch":
+            stream_delivery = "batch"
 
         status_event = await bootstrap_loop_session(
             client,

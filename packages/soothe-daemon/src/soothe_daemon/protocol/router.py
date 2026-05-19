@@ -1043,9 +1043,9 @@ class MessageRouter:
         await handle_loop_reattach(loop_id, d, client_id)
 
         verbosity = msg.get("verbosity", "normal")
-        stream_delivery = msg.get("stream_delivery", "batch")
+        stream_delivery = msg.get("stream_delivery", "merged")
         if stream_delivery not in ("batch", "merged", "full"):
-            stream_delivery = "batch"
+            stream_delivery = "merged"
         await d._session_manager.subscribe_loop(
             client_id,
             loop_id,

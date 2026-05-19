@@ -376,28 +376,41 @@ def materialize_ai_blocks_with_resolved_tools(
 def build_streaming_args_overlay(
     message: Any,
     pending_tool_calls_lc: dict[str, dict[str, Any]],
+    *,
+    only_ids: set[str] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Map ``tool_call_id`` → parsed args dict from ``tool_call_chunks`` accumulation.
 
-    Updates the overlay on every chunk whenever JSON parses successfully. A prior
-    version stopped after the first parse (``tui_stream_mounted``), which froze the
-    overlay when ``args_str`` grew across chunks so the TUI kept ``read_file(…)``
-    headers even after the path arrived in the accumulated string.
+    When ``only_ids`` is set, only those pending entries are parsed (incremental path).
+    Otherwise every pending entry is considered (legacy / final flush).
     """
     from langchain_core.messages import AIMessageChunk
+
+    from soothe_cli.shared.tools.message_processing import tool_ids_touched_by_stream_message
 
     overlay: dict[str, dict[str, Any]] = {}
     chunk_pos = getattr(message, "chunk_position", None)
     is_final_chunk = (not isinstance(message, AIMessageChunk)) or chunk_pos == "last"
 
-    for tc_id, pend in list(pending_tool_calls_lc.items()):
+    if only_ids is not None:
+        ids_to_scan = only_ids
+    else:
+        ids_to_scan = tool_ids_touched_by_stream_message(message)
+        if not ids_to_scan:
+            ids_to_scan = set(pending_tool_calls_lc.keys())
+    if not ids_to_scan:
+        return overlay
+
+    for tc_id in ids_to_scan:
+        pend = pending_tool_calls_lc.get(str(tc_id))
+        if not isinstance(pend, dict):
+            continue
         parsed = try_parse_pending_tool_call_args(pend)
         if parsed is None:
             continue
         name = str(pend.get("name") or "")
         if not name:
             continue
-        # Omit empty dicts — they are non-meaningful for merge/display (IG-300).
         if not parsed:
             continue
         str_id = str(tc_id)

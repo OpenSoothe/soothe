@@ -70,7 +70,7 @@ class TransportServer(ABC):
         """Return transport type identifier.
 
         Returns:
-            Transport type string (e.g., "unix_socket", "websocket", "http_rest").
+            Transport type string (e.g., "websocket", "http_rest").
         """
 
     @property
@@ -89,7 +89,7 @@ class TransportClient(ABC):
     A transport client connects to a daemon server and exchanges
     messages over a persistent connection.
 
-    Each transport implementation (Unix socket, WebSocket) must
+    Each transport implementation (WebSocket, HTTP REST) must
     implement this interface.
     """
 
