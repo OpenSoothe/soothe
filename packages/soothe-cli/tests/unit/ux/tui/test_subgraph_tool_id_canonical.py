@@ -111,7 +111,7 @@ async def test_wire_update_mounts_subgraph_row_with_args() -> None:
     from soothe_cli.tui.file_ops import FileOpTracker
     from soothe_cli.tui.textual_adapter import TextualUIAdapter
     from soothe_cli.tui.textual_adapter._stream_tool_wire import apply_tool_call_wire_update
-    from soothe_cli.tui.widgets.messages import ToolCallMessage
+    from soothe_cli.tui.widgets.messages import CognitionStepMessage, ToolCallMessage
 
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
@@ -121,6 +121,9 @@ async def test_wire_update_mounts_subgraph_row_with_args() -> None:
     router = adapter._step_router
     ns = ("graphs", "sub-1")
     router._namespace_bindings[ns] = ("task-tcid", "explore", "STEP-01")
+    # IG-419: Inner subagent tools mount on step cards, not task cards
+    step_card = CognitionStepMessage("STEP-01", "Explore workspace")
+    adapter._current_step_messages["STEP-01"] = step_card
     task_card = ToolCallMessage(
         "task",
         {"subagent_type": "explore", "description": "scan"},
@@ -148,4 +151,5 @@ async def test_wire_update_mounts_subgraph_row_with_args() -> None:
     )
 
     assert handled is True
-    assert task_card.has_tool_call_row("STEP-01:t0:grep.0")
+    # IG-419: Row now mounts on step card, not task card
+    assert step_card.has_tool_call_row("STEP-01:t0:grep.0")

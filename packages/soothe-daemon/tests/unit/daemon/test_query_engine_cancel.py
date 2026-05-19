@@ -138,6 +138,7 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
             claim_loop_ownership=lambda *_args, **_kwargs: None,
             release_loop_ownership=lambda *_args, **_kwargs: None,
             subscribe_loop=lambda *_args, **_kwargs: True,
+            get_stream_delivery=lambda *_args, **_kwargs: "batch",
         ),
     )
 
@@ -205,6 +206,7 @@ def _daemon_factory(
             claim_loop_ownership=lambda *_args, **_kwargs: None,
             release_loop_ownership=lambda *_args, **_kwargs: None,
             subscribe_loop=lambda *_args, **_kwargs: True,
+            get_stream_delivery=lambda *_args, **_kwargs: "batch",
         ),
     )
 
@@ -335,6 +337,7 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
             claim_loop_ownership=lambda *_args, **_kwargs: None,
             release_loop_ownership=lambda *_args, **_kwargs: None,
             subscribe_loop=lambda *_args, **_kwargs: True,
+            get_stream_delivery=lambda *_args, **_kwargs: "batch",
         ),
     )
 

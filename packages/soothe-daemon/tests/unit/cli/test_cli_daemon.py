@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -126,6 +127,25 @@ class _FakeRunnerThatSwapsThread:
 
     async def touch_thread_activity_timestamp(self, thread_id: str) -> None:
         self.touched_thread_ids.append(thread_id)
+
+
+class _FakeThreadRegistry:
+    """Minimal thread registry stub for daemon query tests."""
+
+    def get(self, _thread_id: str) -> None:
+        return None
+
+    def get_thread_loop(self, _thread_id: str) -> str:
+        return ""
+
+    def get_workspace(self, _thread_id: str) -> Path:
+        return Path.cwd()
+
+    def ensure(self, _thread_id: str, *, is_draft: bool = False) -> None:
+        del is_draft
+
+    def set_workspace(self, _thread_id: str, _workspace: Path) -> None:
+        return None
 
 
 @pytest.mark.asyncio
@@ -295,6 +315,13 @@ async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
     fake_runner = _FakeRunnerWithMessages()
     daemon._runner = fake_runner  # type: ignore[attr-defined]
     daemon._runner_factory = _FakeRunnerFactory(fake_runner)  # type: ignore[attr-defined]
+    daemon._session_manager = SimpleNamespace(  # type: ignore[attr-defined]
+        claim_loop_ownership=lambda *_args, **_kwargs: None,
+        release_loop_ownership=lambda *_args, **_kwargs: None,
+        subscribe_loop=lambda *_args, **_kwargs: True,
+        get_stream_delivery=lambda *_args, **_kwargs: "batch",
+    )
+    daemon._thread_registry = _FakeThreadRegistry()  # type: ignore[attr-defined]
 
     sent: list[dict] = []
 
@@ -316,6 +343,9 @@ async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
         for task in tasks:
             if task and not task.done():
                 await task
+
+    # Flush buffered writes before reading
+    thread_logger.flush()
 
     # Verify thread was logged
     records = thread_logger.read_recent_records(limit=20)

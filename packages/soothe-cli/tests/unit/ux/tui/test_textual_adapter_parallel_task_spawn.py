@@ -13,7 +13,7 @@ from soothe_cli.tui.textual_adapter import TextualUIAdapter
 from soothe_cli.tui.textual_adapter._stream_formatting import (
     _mount_subagent_inner_tool_row_if_resolved,
 )
-from soothe_cli.tui.widgets.messages import ToolCallMessage
+from soothe_cli.tui.widgets.messages import CognitionStepMessage, ToolCallMessage
 
 
 def test_step_scoped_namespace_bind_not_fifo_mismatch() -> None:
@@ -27,7 +27,7 @@ def test_step_scoped_namespace_bind_not_fifo_mismatch() -> None:
 
 @pytest.mark.asyncio
 async def test_task_card_gets_inner_tool_row_for_bound_step() -> None:
-    """Inner explore tools attach to the Task delegation card, not the step card."""
+    """IG-419: Inner explore tools attach to step card (nested under task row)."""
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=MagicMock(),
@@ -35,6 +35,9 @@ async def test_task_card_gets_inner_tool_row_for_bound_step() -> None:
         set_spinner=AsyncMock(),
     )
     router = adapter._step_router
+    # IG-419: Need a step card for inner tools to mount on
+    step_card = CognitionStepMessage("YKF-01", "Explore workspace")
+    adapter._current_step_messages["YKF-01"] = step_card
     task_card = ToolCallMessage(
         "task",
         {"subagent_type": "explore"},
@@ -59,5 +62,6 @@ async def test_task_card_gets_inner_tool_row_for_bound_step() -> None:
     assert ok is True
     scope = ("functions.task:0", "explore", "YKF-01")
     row_id = row_key_for_subgraph_tool(("tools:sub",), "functions.grep:2", task_scope=scope)
-    assert task_card.has_tool_call_row(row_id)
-    assert adapter._tool_to_step[row_id] is task_card
+    # IG-419: Row is on step card, not task card
+    assert step_card.has_tool_call_row(row_id)
+    assert adapter._tool_to_step[row_id] is step_card
