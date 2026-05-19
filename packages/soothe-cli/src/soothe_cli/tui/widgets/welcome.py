@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import random
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -22,27 +21,8 @@ from soothe_cli.tui.config import (
     get_banner,
     get_glyphs,
 )
+from soothe_cli.tui.tips import pick_session_tip
 from soothe_cli.tui.widgets._links import open_style_link
-
-_TIPS: list[str] = [
-    "Use @ to reference files and / for commands",
-    "Try /loops to resume a previous AgentLoop instance",
-    "Use /tokens to check context usage",
-    "Use /mcp to see your loaded tools and servers",
-    "Use /remember to save learnings from this conversation",
-    "Use /model to switch models mid-conversation",
-    "Press ctrl+x to compose prompts in your external editor",
-    "Press ctrl+u to delete to the start of the line in the chat input",
-    "Use /skill:<name> to invoke a skill directly",
-    "Type /update to check for and install updates",
-    "Use /theme to customize the CLI colors and style",
-    "Use /skill:skill-creator to build reusable agent skills",
-    "Use /auto-update to toggle automatic CLI updates",
-]
-"""Rotating tips shown under the Loop line when the session is ready.
-
-One is picked per session.
-"""
 
 
 class WelcomeBanner(Static):
@@ -89,11 +69,16 @@ class WelcomeBanner(Static):
         self._connecting = connecting
         self._failed = False
         self._failure_error: str = ""
-        self._tip: str = random.choice(_TIPS)  # noqa: S311
+        self._tip: str = pick_session_tip()
         self._update_latest: str | None = None
         """PyPI version string when an update is available; drives banner line only."""
 
         super().__init__(self._build_banner(), **kwargs)
+
+    @property
+    def session_tip(self) -> str:
+        """Tip chosen for this session (shown in the status bar when ready)."""
+        return self._tip
 
     def update_loop_id(self, loop_id: str) -> None:
         """Update the displayed loop ID and re-render the banner.
@@ -184,14 +169,8 @@ class WelcomeBanner(Static):
         if source_path:
             parts.extend([("Source: ", "dim"), (source_path, "dim"), "\n"])
 
-        tip_ready = not self._failed and not self._connecting
-        tip_line: str | None = f"{self._tip}\n" if tip_ready else None
-
         if self._cli_loop_id:
             parts.append((f"Loop: {self._cli_loop_id}\n", "dim"))
-            if tip_line is not None:
-                parts.append((tip_line, "dim"))
-                tip_line = None
 
         if self._mcp_tool_count > 0:
             parts.append((f"{get_glyphs().checkmark} ", success_color))
@@ -208,9 +187,6 @@ class WelcomeBanner(Static):
             )
             update_style = "yellow" if ansi else colors.warning
             parts.append((update_line, update_style))
-
-        if tip_line is not None:
-            parts.append((tip_line, "dim"))
 
         if self._failed:
             parts.append(build_failure_footer(self._failure_error))

@@ -188,11 +188,6 @@ class LocalLoopRunner:
             )
             self._process.kill()
 
-    async def forward_interrupt_resume(self, loop_id: str, payload: dict[str, Any]) -> None:
-        """Not supported for single-subprocess runner."""
-        logger.warning("LocalLoopRunner: interrupt resume not supported (loop=%s)", loop_id)
-
-
 # Verify structural compliance at import time (no overhead at runtime).
 def _assert_protocol() -> None:
     _: LoopRunnerProtocol = LocalLoopRunner.__new__(LocalLoopRunner)  # type: ignore[assignment]

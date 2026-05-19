@@ -27,7 +27,12 @@ from soothe_cli.tui.config import (
     PREFIX_TO_MODE,
     is_ascii_mode,
 )
-from soothe_cli.tui.input import IMAGE_PLACEHOLDER_PATTERN, VIDEO_PLACEHOLDER_PATTERN
+from soothe_cli.tui.input import (
+    IMAGE_PLACEHOLDER_PATTERN,
+    VIDEO_PLACEHOLDER_PATTERN,
+    abbreviate_pasted_input_display,
+    should_abbreviate_pasted_input,
+)
 from soothe_cli.tui.widgets.autocomplete import (
     CompletionResult,
     FuzzyFileController,
@@ -381,6 +386,14 @@ class ChatTextArea(TextArea):
             self.paths = paths
             super().__init__()
 
+    class PastedLongText(Message):
+        """Message sent when a large paste should display abbreviated in the input."""
+
+        def __init__(self, full_text: str) -> None:
+            """Initialize with the full pasted payload (used on submit)."""
+            self.full_text = full_text
+            super().__init__()
+
     class Typing(Message):
         """Posted when the user presses a printable key or backspace.
 
@@ -513,6 +526,10 @@ class ChatTextArea(TextArea):
             parsed = None
         if parsed is not None:
             self.post_message(self.PastedPaths(payload, parsed.paths))
+            return
+
+        if should_abbreviate_pasted_input(payload):
+            self.post_message(self.PastedLongText(payload))
             return
 
         self.insert(payload)
@@ -745,6 +762,11 @@ class ChatTextArea(TextArea):
         except Exception:  # noqa: BLE001  # Treat thread failure as non-path text
             parsed = None
         if parsed is None:
+            if should_abbreviate_pasted_input(event.text):
+                event.prevent_default()
+                event.stop()
+                self.post_message(self.PastedLongText(event.text))
+                return
             # Don't call super() here — Textual's MRO dispatch already calls
             # TextArea._on_paste after this handler returns. Calling super()
             # would insert the text a second time, duplicating the paste.
@@ -947,6 +969,10 @@ class ChatInput(Vertical):
         # immediately recurse into the same replacement path.
         self._applying_inline_path_replacement = False
 
+        # Full submit payload when the input shows an abbreviated paste preview.
+        self._pending_submit_text: str | None = None
+        self._setting_abbreviated_display = False
+
         # Track current suggestions for click handling
         self._current_suggestions: list[tuple[str, str]] = []
         self._current_selected_index = 0
@@ -1036,6 +1062,14 @@ class ChatInput(Vertical):
             self._applying_inline_path_replacement = False
         elif self._apply_inline_dropped_path_replacement(text):
             return
+
+        if self._setting_abbreviated_display:
+            self._setting_abbreviated_display = False
+            self.scroll_visible()
+            return
+
+        if self._pending_submit_text is not None:
+            self._pending_submit_text = None
 
         # Checked after the guards above so we skip the (potentially slow)
         # filesystem lookup when the text change came from history navigation
@@ -1241,6 +1275,32 @@ class ChatInput(Vertical):
             )
         return max(0, min(mapped, text_len))
 
+    def _resolve_submit_text(self, display_value: str) -> str:
+        """Return text to submit, using the full paste when display is abbreviated.
+
+        Args:
+            display_value: Stripped text currently shown in the input widget.
+
+        Returns:
+            Full pasted payload when an abbreviation is active, else ``display_value``.
+        """
+        if self._pending_submit_text is not None:
+            full = self._pending_submit_text.strip()
+            self._pending_submit_text = None
+            return full
+        return display_value
+
+    def _apply_abbreviated_paste_display(self, full_text: str) -> None:
+        """Show an abbreviated preview while retaining the full paste for submit."""
+        if not self._text_area:
+            return
+        self._pending_submit_text = full_text
+        self._setting_abbreviated_display = True
+        preview = abbreviate_pasted_input_display(full_text)
+        self._text_area.text = preview
+        lines = preview.split("\n")
+        self._text_area.move_cursor((len(lines) - 1, len(lines[-1])))
+
     def _submit_value(self, value: str) -> None:
         """Prepend mode prefix, save to history, post message, and reset input.
 
@@ -1250,6 +1310,7 @@ class ChatInput(Vertical):
         Args:
             value: The stripped text to submit (without mode prefix).
         """
+        value = self._resolve_submit_text(value)
         if not value:
             return
 
@@ -1272,6 +1333,7 @@ class ChatInput(Vertical):
         if self._text_area:
             # Preserve submission-time attachments until adapter consumes them.
             self._skip_media_sync_events += 1
+            self._pending_submit_text = None
             self._text_area.clear_text()
         self.mode = "normal"
 
@@ -1348,6 +1410,10 @@ class ChatInput(Vertical):
 
         self._insert_pasted_paths(event.raw_text, event.paths)
 
+    def on_chat_text_area_pasted_long_text(self, event: ChatTextArea.PastedLongText) -> None:
+        """Handle large paste payloads with abbreviated on-screen preview."""
+        self._apply_abbreviated_paste_display(event.full_text)
+
     def handle_external_paste(self, pasted: str) -> bool:
         """Handle paste text from app-level routing when input is not focused.
 
@@ -1366,7 +1432,10 @@ class ChatInput(Vertical):
 
         parsed = self._parse_dropped_path_payload(pasted)
         if parsed is None:
-            self._text_area.insert(pasted)
+            if should_abbreviate_pasted_input(pasted):
+                self._apply_abbreviated_paste_display(pasted)
+            else:
+                self._text_area.insert(pasted)
         else:
             self._insert_pasted_paths(pasted, parsed.paths)
 

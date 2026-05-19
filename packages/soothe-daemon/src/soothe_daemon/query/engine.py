@@ -170,7 +170,6 @@ class QueryEngine:
         max_iterations: int | None = None,
         preferred_subagent: str | None = None,
         client_id: str | None = None,
-        interactive: bool = False,
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
         attachments: list[dict[str, str]] | None = None,
@@ -396,12 +395,10 @@ class QueryEngine:
                 if preferred_subagent is not None:
                     stream_kwargs["preferred_subagent"] = preferred_subagent
 
-                # All queries (interactive and non-interactive) use subprocess
-                # isolation via the runner factory. Interactive HITL is supported
-                # through interrupt_queue IPC on the pool worker.
+                # All queries use subprocess isolation via the runner factory.
                 _runner_key = effective_loop_id or thread_id
 
-                from soothe.protocols.runner import InterruptPending, LoopRunRequest
+                from soothe.protocols.runner import LoopRunRequest
 
                 run_request = LoopRunRequest(
                     loop_id=effective_loop_id or thread_id,
@@ -414,7 +411,6 @@ class QueryEngine:
                     model=model,
                     model_params=model_params or {},
                     intent_hint=intent_hint,
-                    interactive=bool(interactive and client_id and effective_loop_id),
                 )
                 loop_runner = d._runner_factory.create_runner(_runner_key)
                 self._active_runners[_runner_key] = loop_runner
@@ -437,13 +433,6 @@ class QueryEngine:
                         if d._current_query_task and d._current_query_task.done():
                             logger.info("Stream loop detected cancelled task, stopping")
                             break
-
-                        # Handle HITL interrupt from subprocess worker
-                        if isinstance(chunk, InterruptPending):
-                            await self._bridge_subprocess_interrupt(
-                                d, chunk, loop_runner, thread_id, client_id, effective_loop_id
-                            )
-                            continue
 
                         chunk_count += 1
 
@@ -586,8 +575,6 @@ class QueryEngine:
                             "QueryEngine: loop_runner.cancel during stream finally failed",
                             exc_info=True,
                         )
-                if effective_loop_id:  # Flaw 4.8: guard against None key
-                    d._pending_interrupt_responses.pop(effective_loop_id, None)
                 if effective_loop_id:
                     d._active_stream_loop_ids.discard(effective_loop_id)  # Bug 4.3
 
@@ -1019,67 +1006,3 @@ class QueryEngine:
         d._thread_registry.set_workspace(tid, Path(d._daemon_workspace))
         return tid
 
-    async def _bridge_subprocess_interrupt(
-        self,
-        d: Any,
-        marker: Any,
-        loop_runner: Any,
-        thread_id: str,
-        client_id: str | None,
-        loop_id: str | None,
-    ) -> None:
-        """Bridge an HITL interrupt from a subprocess worker to the client.
-
-        Creates an ``asyncio.Future`` for the interrupt. When the client sends
-        ``resume_interrupts``, the future resolves and the payload is forwarded
-        to the subprocess worker through ``loop_runner.forward_interrupt_resume``.
-
-        Args:
-            d: The daemon instance.
-            marker: The ``InterruptPending`` marker yielded by the runner.
-            loop_runner: The loop runner that can forward the resume payload.
-            thread_id: Checkpoint thread identifier.
-            client_id: Connected client identifier.
-            loop_id: Active loop identifier.
-        """
-        from soothe.core.loop.engine.hitl_scope import timeout_default_hitl_resume_payload
-
-        if not loop_id:
-            from soothe.core.loop.engine.hitl_scope import auto_approve_interrupt_resume_payload
-
-            payload = auto_approve_interrupt_resume_payload(marker.pending_interrupts)
-            await loop_runner.forward_interrupt_resume(marker.loop_id, payload)
-            return
-
-        event_loop = asyncio.get_running_loop()
-        future: asyncio.Future[dict[str, Any]] = event_loop.create_future()
-        d._pending_interrupt_responses[loop_id] = future
-        timeout_s = int(getattr(d._daemon_config, "hitl_timeout_seconds", 0) or 0)
-
-        logger.debug(
-            "Subprocess interrupt pending (loop=%s checkpoint=%s client=%s hitl_timeout=%s)",
-            loop_id[:16],
-            thread_id[:16] if thread_id else "?",
-            client_id,
-            timeout_s if timeout_s > 0 else "unlimited",
-        )
-
-        try:
-            if timeout_s > 0:
-                try:
-                    resume_payload = await asyncio.wait_for(future, timeout=float(timeout_s))
-                except TimeoutError:
-                    logger.warning(
-                        "HITL timed out after %ds (loop=%s); resuming with default-first choices",
-                        timeout_s,
-                        loop_id[:16],
-                    )
-                    if not future.done():
-                        future.cancel()
-                    resume_payload = timeout_default_hitl_resume_payload(marker.pending_interrupts)
-            else:
-                resume_payload = await future
-        finally:
-            d._pending_interrupt_responses.pop(loop_id, None)
-
-        await loop_runner.forward_interrupt_resume(marker.loop_id, resume_payload)

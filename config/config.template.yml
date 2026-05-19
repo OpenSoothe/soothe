@@ -325,9 +325,6 @@ security:
   - .crt
   whitelist_paths_bypass: []
   whitelist_commands_bypass: []
-hitl:
-  enabled: false
-  tools: []
 filesystem_middleware:
   backup_enabled: true
   backup_dir: null

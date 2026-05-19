@@ -71,7 +71,13 @@ async def bootstrap_loop_session(
     Raises:
         TimeoutError: If a waited step times out.
         RuntimeError: If daemon reports not-ready during handshake.
+        ConnectionError: If the WebSocket is closed and cannot be re-established.
     """
+    alive_check = getattr(client, "is_connection_alive", None)
+    if alive_check is not None and not alive_check():
+        await client.close()
+        await connect_websocket_with_retries(client)
+
     await client.request_daemon_ready()
     await client.wait_for_daemon_ready(ready_timeout_s=daemon_ready_timeout_s)
 

@@ -11,7 +11,11 @@ from time import monotonic, time
 from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.utils import get_tool_display_name
-from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
+from soothe_sdk.ux.task_namespace import (
+    is_step_level_task_tool_id,
+    normalize_step_task_tool_call_id,
+    parse_unified_tool_call_id,
+)
 from textual import on
 from textual.containers import Vertical
 from textual.content import Content
@@ -23,6 +27,7 @@ from soothe_cli.events.duration_format import format_duration, format_duration_m
 from soothe_cli.events.tools.message_processing import _normalize_tool_name_for_arg_map
 from soothe_cli.tui import theme
 from soothe_cli.tui._env_vars import TUI_REFRESH_INTERVAL_MS
+from soothe_cli.tui.commands.subagent_routing import get_subagent_display_name
 from soothe_cli.tui.config import (
     MODE_DISPLAY_GLYPHS,
     PREFIX_TO_MODE,
@@ -64,6 +69,7 @@ _STEP_TOOL_PREVIEW_ROWS = STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
 """Collapsed step/task activity preview shows this many rows (IG-402)."""
 
 _MAX_STEP_STAT_TOOL_KINDS = 4
+_MAX_TASK_DELEGATION_DESC_CHARS = 80
 """Max distinct tool display names in the running-line stats suffix before ``+N more``."""
 
 # IG-420: TUI refresh throttling - minimum interval between widget refreshes
@@ -1062,15 +1068,16 @@ class _StepToolRow:
 class CognitionStepMessage(Vertical):
     """Agent-loop act step card: aggregates main-agent tool calls (IG-402).
 
-    Header is the step description only. Per-tool-kind counts of distinct unified
-    ``tool_call_id`` values for this step appear on the running status line via
-    :meth:`_stats_title_suffix` (e.g. ``Glob(10)``);
-    individual CLI-style
-    tool rows are optional (``STEP_CARD_SHOW_TOOL_ROW_DETAILS``). When tool rows are
-    enabled and exceed ``_STEP_TOOL_PREVIEW_ROWS``, click first folds or unfolds the
-    tool list; otherwise click toggles whole-card collapse. Subagent notes and execute
-    prose can auto-collapse the card body until the user expands it (a new
-    ``set_running`` clears that preference).
+    Header is the step description only. Task delegations render in a branch panel
+    (``Name(desc)`` plus nested tool lines with phase). Per-tool-kind counts of direct
+    main-agent tools appear on the footer status line via :meth:`_stats_title_suffix`
+    (e.g. ``Glob(10)``). The status line is always the last body line (running,
+    pending, completed, failed). Individual CLI-style tool rows are optional
+    (``STEP_CARD_SHOW_TOOL_ROW_DETAILS``). When tool rows are enabled and exceed
+    ``_STEP_TOOL_PREVIEW_ROWS``, click first folds or unfolds the tool list; otherwise
+    click toggles whole-card collapse. Subagent notes and execute prose can
+    auto-collapse the card body until the user expands it (a new ``set_running`` clears
+    that preference).
 
     Tool rows use the goal-tree gutter (``⎿``) plus hollow/filled circles when shown.
     Prose / notes keep ``⎿ ○`` continuation lines.
@@ -1180,6 +1187,7 @@ class CognitionStepMessage(Vertical):
         self._stats_counts: dict[str, int] = {}
         self._tools_body_collapsed: bool = False
         self._subagent_notes: list[str] = []
+        self._subagent_notes_by_task: dict[str, list[str]] = {}
         self._execute_assistant_buffer: str = ""
         self._last_completed_execute_prose: str = ""
         """Execute-step prose frozen when ``set_complete`` runs (TUI dedupe vs goal_completion)."""
@@ -1195,6 +1203,12 @@ class CognitionStepMessage(Vertical):
     def _step_body_line_estimate(self) -> int:
         """Approximate expanded-body line count for auto-collapse."""
         n = len(self._subagent_notes)
+        for notes in self._subagent_notes_by_task.values():
+            n += len(notes)
+        for task_row in self._iter_task_delegation_rows():
+            n += 1
+            n += len(self._child_rows_for_task(task_row))
+            n += len(self._subagent_notes_by_task.get(str(task_row.tool_call_id).strip(), []))
         if STEP_CARD_SHOW_TOOL_ROW_DETAILS:
             n += len(self._rows)
         buf = (self._execute_assistant_buffer or "").strip()
@@ -1257,7 +1271,6 @@ class CognitionStepMessage(Vertical):
             id="step-cognition-header",
         )
         yield Static("", classes="step-tools", id="step-cognition-tools", markup=False)
-        yield Static("", classes="step-status", id="step-cognition-status")
         yield Static(
             "",
             markup=False,
@@ -1265,6 +1278,7 @@ class CognitionStepMessage(Vertical):
             id="step-cognition-subagent-notes",
         )
         yield Static("", classes="step-detail", id="step-cognition-detail")
+        yield Static("", classes="step-status", id="step-cognition-status")
         yield Static("", classes="step-collapse-hint", id="step-collapse-hint")
 
     def on_mount(self) -> None:
@@ -1321,7 +1335,7 @@ class CognitionStepMessage(Vertical):
             return
         has_collapsible_content = (
             (STEP_CARD_SHOW_TOOL_ROW_DETAILS and self._rows)
-            or self._subagent_notes
+            or self._has_task_activity_body()
             or self._execute_assistant_buffer.strip()
             or self._status in ("success", "error")
         )
@@ -1366,15 +1380,22 @@ class CognitionStepMessage(Vertical):
             tool_part = self._status_tool_stats_suffix(self._last_tool_call_count)
             if self._last_success:
                 status_body = f"Completed ({dur_str}){tool_part}"
-                self._detail_widget.update(
-                    self._step_branched_completion_detail(
-                        success=True,
-                        status_line_body=status_body,
-                        prose=self._last_completed_execute_prose,
-                    )
+                self._update_step_footer_status_line(
+                    status_body,
+                    success=True,
                 )
+                prose = (self._last_completed_execute_prose or "").strip()
+                if prose and self._detail_widget:
+                    self._detail_widget.update(self._step_branched_execute_body(prose, muted=True))
+                    self._detail_widget.display = True
+                elif self._detail_widget:
+                    self._detail_widget.display = False
             else:
                 err_text = self._last_summary.strip() or "Step failed"
+                self._update_step_footer_status_line(
+                    f"Failed · {dur_str}",
+                    success=False,
+                )
                 self._detail_widget.update(self._step_branched_error_detail(err_text))
 
     def append_execute_assistant_delta(self, delta: str) -> None:
@@ -1393,36 +1414,329 @@ class CognitionStepMessage(Vertical):
         self._detail_widget.update(self._step_branched_execute_body(body, muted=True))
         self._detail_widget.display = True
 
-    def _step_subagent_notes_content(self) -> Content:
-        """All subagent activity lines with goal-tree gutters."""
+    def _has_task_activity_body(self) -> bool:
+        """True when the step card should show the task-activity tree panel."""
+        if self._subagent_notes or self._subagent_notes_by_task:
+            return True
+        return bool(self._iter_task_delegation_rows())
+
+    def _task_delegation_dedupe_key(self, row: _StepToolRow) -> str:
+        """Stable key for one main-graph task delegation (aliases share one branch)."""
+        tcid = str(row.tool_call_id).strip()
+        if not tcid:
+            return ""
+        if row.is_task_row or is_step_level_task_tool_id(tcid):
+            return normalize_step_task_tool_call_id(self._step_id, tcid)
+        return tcid
+
+    @staticmethod
+    def _prefer_task_delegation_row(candidate: _StepToolRow, incumbent: _StepToolRow) -> bool:
+        """True when ``candidate`` should replace ``incumbent`` for the same task key."""
+        if candidate.is_task_row and not incumbent.is_task_row:
+            return True
+        if incumbent.is_task_row and not candidate.is_task_row:
+            return False
+        return len(candidate.args or {}) >= len(incumbent.args or {})
+
+    def _iter_task_delegation_rows(self) -> list[_StepToolRow]:
+        """Task delegation rows on this step (unified ``{step}:s:task:…`` ids)."""
+        by_key: dict[str, _StepToolRow] = {}
+        for row in self._rows:
+            if not row.is_task_row and not is_step_level_task_tool_id(row.tool_call_id):
+                continue
+            key = self._task_delegation_dedupe_key(row)
+            if not key:
+                continue
+            prev = by_key.get(key)
+            if prev is None or self._prefer_task_delegation_row(row, prev):
+                by_key[key] = row
+        return sorted(by_key.values(), key=lambda r: r.tool_call_id)
+
+    def _task_idx_from_delegation_row(self, task_row: _StepToolRow) -> int | None:
+        """Task index encoded in a step-level ``task`` unified id (``task:0`` → 0)."""
+        _, type_code, _, tool_info = parse_unified_tool_call_id(task_row.tool_call_id)
+        if type_code != "s":
+            return None
+        head = (tool_info or "").split(":")[0]
+        if head != "task":
+            return None
+        tail = (tool_info or "").split(":")[-1]
+        if tail.isdigit():
+            return int(tail)
+        return 0
+
+    def _task_parent_ids_match(self, parent_id: str, row_parent_id: str) -> bool:
+        """True when two tool_call_ids refer to the same step-level task delegation."""
+        if not row_parent_id:
+            return False
+        if row_parent_id == parent_id:
+            return True
+        if is_step_level_task_tool_id(parent_id) or is_step_level_task_tool_id(row_parent_id):
+            return normalize_step_task_tool_call_id(
+                self._step_id, row_parent_id
+            ) == normalize_step_task_tool_call_id(self._step_id, parent_id)
+        return False
+
+    def _child_rows_for_task(self, task_row: _StepToolRow) -> list[_StepToolRow]:
+        """Subgraph tool rows for one task (``parent_tool_call_id`` or ``{step}:t{n}:…``)."""
+        parent_id = normalize_step_task_tool_call_id(
+            self._step_id,
+            str(task_row.tool_call_id).strip(),
+        )
+        task_idx = self._task_idx_from_delegation_row(task_row)
+        by_id: dict[str, _StepToolRow] = {}
+        for row in self._rows:
+            if row.is_task_row or is_step_level_task_tool_id(row.tool_call_id):
+                continue
+            tcid = str(row.tool_call_id).strip()
+            if not tcid:
+                continue
+            row_parent = str(row.parent_tool_call_id or "").strip()
+            if self._task_parent_ids_match(parent_id, row_parent):
+                by_id[tcid] = row
+                continue
+            if task_idx is not None:
+                sid, type_code, idx, _ = parse_unified_tool_call_id(tcid)
+                if (
+                    sid == self._step_id
+                    and type_code == "t"
+                    and idx is not None
+                    and idx == task_idx
+                ):
+                    by_id[tcid] = row
+        return sorted(by_id.values(), key=lambda r: r.tool_call_id)
+
+    def _task_delegation_label(self, task_row: _StepToolRow) -> str:
+        """Display label ``SubAgentName(description)`` for a task delegation row."""
+        args = dict(task_row.args or {})
+        raw_type = args.get("subagent_type", "")
+        if isinstance(raw_type, str):
+            st = raw_type.strip()
+        else:
+            st = str(raw_type or "").strip()
+        name = get_subagent_display_name(st) if st else "Task"
+        desc = args.get("description") or args.get("prompt") or ""
+        if isinstance(desc, str):
+            desc_text = desc.strip()
+        else:
+            desc_text = str(desc or "").strip()
+        if len(desc_text) > _MAX_TASK_DELEGATION_DESC_CHARS:
+            desc_text = desc_text[: _MAX_TASK_DELEGATION_DESC_CHARS - 3].rstrip() + "..."
+        if desc_text:
+            return f"{name}({desc_text})"
+        return name
+
+    def _task_tool_phase_icon(self, row: _StepToolRow, g: Any) -> str:
+        """Glyph for a task-branch tool row from its lifecycle phase."""
+        phase = (row.phase or "pending").strip().lower()
+        if phase == "success":
+            return g.checkmark
+        if phase in ("error", "rejected"):
+            return g.error
+        return g.circle_empty
+
+    def _task_tool_status_tail(self, row: _StepToolRow) -> str:
+        """Trailing status text for a task-branch tool row (duration, failure, etc.)."""
+        phase = (row.phase or "pending").strip().lower()
+        if phase == "success" and row.duration_ms > 0:
+            return f" ({format_duration_ms(row.duration_ms)})"
+        if phase == "error":
+            return " · failed"
+        if phase == "rejected":
+            return " · rejected"
+        if phase == "skipped":
+            return " · skipped"
+        if phase == "running":
+            return " · running"
+        return ""
+
+    def _task_tool_row_tone(self, row: _StepToolRow, colors: Any) -> str:
+        phase = (row.phase or "pending").strip().lower()
+        if phase == "success":
+            return colors.cognition
+        if phase in ("error", "rejected"):
+            return colors.error
+        if phase == "running":
+            return colors.cognition
+        return colors.muted
+
+    def _task_children_aggregate_status(self, rows: list[_StepToolRow]) -> str:
+        """Status suffix for nested tools under one task (running / failed / done)."""
+        if not rows:
+            return ""
+        phases = {(r.phase or "pending").strip().lower() for r in rows}
+        if "running" in phases:
+            return " · running"
+        if "error" in phases or "rejected" in phases:
+            return " · failed"
+        if phases <= {"success"}:
+            return " · done"
+        if phases <= {"skipped"}:
+            return " · skipped"
+        if "pending" in phases:
+            return " · pending"
+        return ""
+
+    def _task_children_stats_tone(self, rows: list[_StepToolRow], colors: Any) -> str:
+        phases = {(r.phase or "pending").strip().lower() for r in rows}
+        if "running" in phases:
+            return colors.cognition
+        if "error" in phases or "rejected" in phases:
+            return colors.error
+        if phases <= {"success"} and rows:
+            return colors.cognition
+        return colors.muted
+
+    def _update_step_footer_status_line(self, status_line_body: str, *, success: bool) -> None:
+        """Paint the step card footer status (always the last visible body line)."""
+        if self._status_widget is None:
+            return
         g = get_glyphs()
-        gutter = f"{g.output_prefix} {g.circle_empty} "
+        gutter = self._step_goal_tree_gutter()
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
+        icon = g.checkmark if success else g.error
+        tone = colors.cognition if success else colors.error
+        has_collapsible = (
+            (STEP_CARD_SHOW_TOOL_ROW_DETAILS and self._rows)
+            or self._has_task_activity_body()
+            or bool((self._last_completed_execute_prose or "").strip())
+            or bool((self._execute_assistant_buffer or "").strip())
+        )
+        collapse_icon = (
+            f" {g.expand if self._card_collapsed else g.collapse}" if has_collapsible else ""
+        )
+        self._status_widget.remove_class("pending")
+        self._status_widget.update(
+            Content.styled(
+                f"{gutter}{icon} {status_line_body}{collapse_icon}",
+                tone,
+            )
+        )
+        self._status_widget.display = True
+
+    def _tool_stats_suffix_for_rows(self, rows: list[_StepToolRow]) -> str:
+        """Per-tool-kind counts for a set of tool rows (e.g. nested task children)."""
+        ids_by_display: dict[str, set[str]] = {}
+        order: list[str] = []
+        for row in rows:
+            tcid = str(row.tool_call_id).strip()
+            if not tcid:
+                continue
+            display = get_tool_display_name(_normalize_tool_name_for_arg_map(row.tool_name or ""))
+            if display not in ids_by_display:
+                ids_by_display[display] = set()
+                order.append(display)
+            ids_by_display[display].add(tcid)
+        if not order:
+            return ""
+        parts: list[str] = []
+        for name in order[:_MAX_STEP_STAT_TOOL_KINDS]:
+            parts.append(f"{name}({len(ids_by_display[name])})")
+        text = ", ".join(parts)
+        extra = len(order) - _MAX_STEP_STAT_TOOL_KINDS
+        if extra > 0:
+            text += f" +{extra} more"
+        return text
+
+    def _normalized_task_note_key(self, task_tool_call_id: str) -> str:
+        tcid = str(task_tool_call_id).strip()
+        if not tcid:
+            return ""
+        if is_step_level_task_tool_id(tcid):
+            return normalize_step_task_tool_call_id(self._step_id, tcid)
+        return tcid
+
+    def _step_task_activity_content(self) -> Content:
+        """Task delegations under the step title: ``Name(desc)`` and child tool stats."""
+        g = get_glyphs()
+        branch_gutter = f"{g.output_prefix} "
+        child_gutter = f"{g.output_prefix}   "
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
         parts: list[object] = []
-        first = True
+        first_block = True
+
+        for task_row in self._iter_task_delegation_rows():
+            if not first_block:
+                parts.append("\n")
+            first_block = False
+            task_icon = self._task_tool_phase_icon(task_row, g)
+            task_tail = self._task_tool_status_tail(task_row)
+            task_tone = self._task_tool_row_tone(task_row, colors)
+            label = self._task_delegation_label(task_row)
+            parts.append(
+                Content.styled(
+                    f"{branch_gutter}{task_icon} {label}{task_tail}",
+                    task_tone if task_row.phase != "pending" else colors.foreground,
+                )
+            )
+            child_rows = self._child_rows_for_task(task_row)
+            child_stats = self._tool_stats_suffix_for_rows(child_rows)
+            if child_stats:
+                child_status = self._task_children_aggregate_status(child_rows)
+                parts.append("\n")
+                parts.append(
+                    Content.styled(
+                        f"{child_gutter}{child_stats}{child_status}",
+                        self._task_children_stats_tone(child_rows, colors),
+                    )
+                )
+            task_key = self._task_delegation_dedupe_key(task_row)
+            for note in self._subagent_notes_by_task.get(task_key, []):
+                text = (note or "").strip()
+                if not text:
+                    continue
+                parts.append("\n")
+                parts.append(Content.styled(f"{child_gutter}{text}", colors.muted))
+
         for note in self._subagent_notes:
             t = (note or "").strip()
             if not t:
                 continue
-            if not first:
+            if not first_block:
                 parts.append("\n")
-            first = False
-            parts.append(Content.styled(f"{gutter}{t}", "dim"))
+            first_block = False
+            parts.append(Content.styled(f"{branch_gutter}{t}", colors.muted))
+
         return Content.assemble(*parts) if parts else Content("")
 
-    def append_subagent_activity(self, line: str) -> None:
-        """Append one metadata line (task subgraph tools, wire events, same as tool card)."""
-        text = (line or "").strip()
-        if not text:
-            return
-        self._subagent_notes.append(text)
+    def _refresh_task_activity_display(self) -> None:
+        """Repaint the task-activity tree under the step header."""
+        show = self._has_task_activity_body()
         try:
             w = self.query_one("#step-cognition-subagent-notes", Static)
         except Exception:  # noqa: BLE001
-            self._maybe_auto_collapse_step_card()
+            if show:
+                self._maybe_auto_collapse_step_card()
             return
-        w.update(self._step_subagent_notes_content())
-        w.display = True
+        if show:
+            w.update(self._step_task_activity_content())
+            w.display = True
+        else:
+            w.display = False
         self._maybe_auto_collapse_step_card()
+
+    def append_subagent_activity(
+        self,
+        line: str,
+        *,
+        task_tool_call_id: str | None = None,
+    ) -> None:
+        """Append prose or metadata for a delegated task (optional unified parent id)."""
+        text = (line or "").strip()
+        if not text:
+            return
+        task_key = self._normalized_task_note_key(task_tool_call_id or "")
+        if task_key:
+            self._subagent_notes_by_task.setdefault(task_key, []).append(text)
+        else:
+            self._subagent_notes.append(text)
+        self._refresh_task_activity_display()
 
     def _row_belongs_to_step(self, row: _StepToolRow) -> bool:
         """True when ``row`` belongs to this step card (unified id encodes step)."""
@@ -1431,12 +1745,28 @@ class CognitionStepMessage(Vertical):
             return parsed_sid == self._step_id
         return True
 
+    def _row_counts_for_step_status_line(self, row: _StepToolRow) -> bool:
+        """True for main-agent tools on this step (excludes task rows and nested subgraph tools)."""
+        if row.is_task_row or row.parent_tool_call_id:
+            return False
+        if not self._row_belongs_to_step(row):
+            return False
+        tcid = str(row.tool_call_id).strip()
+        if not tcid:
+            return False
+        if is_step_level_task_tool_id(tcid):
+            return False
+        _, type_code, _, _ = parse_unified_tool_call_id(tcid)
+        if type_code == "t":
+            return False
+        return True
+
     def _rebuild_tool_stats(self) -> None:
-        """Recompute per-tool display counts: one per ``tool_call_id`` on this step."""
+        """Recompute per-tool display counts for the step status line (direct tools only)."""
         ids_by_display: dict[str, set[str]] = {}
         order: list[str] = []
         for row in self._rows:
-            if row.is_task_row or not self._row_belongs_to_step(row):
+            if not self._row_counts_for_step_status_line(row):
                 continue
             tcid = str(row.tool_call_id).strip()
             if not tcid:
@@ -1448,6 +1778,7 @@ class CognitionStepMessage(Vertical):
             ids_by_display[display].add(tcid)
         self._stats_order = order
         self._stats_counts = {name: len(ids_by_display[name]) for name in order}
+        self._refresh_task_activity_display()
 
     def _stats_title_suffix(self) -> str:
         if not self._stats_order:
@@ -1702,6 +2033,22 @@ class CognitionStepMessage(Vertical):
         tcid = str(tool_call_id).strip()
         if not tcid:
             return
+        if not is_task_row and (
+            (tool_name or "").strip() == "task" or is_step_level_task_tool_id(tcid)
+        ):
+            is_task_row = True
+        if is_task_row:
+            canonical_tcid = normalize_step_task_tool_call_id(self._step_id, tcid)
+            for existing_id, existing_row in list(self._row_index.items()):
+                if self._task_delegation_dedupe_key(existing_row) != canonical_tcid:
+                    continue
+                if existing_id == canonical_tcid:
+                    self.update_tool_args(canonical_tcid, args)
+                    return
+                self._migrate_tool_row_id(existing_id, canonical_tcid)
+                self.update_tool_args(canonical_tcid, args)
+                return
+            tcid = canonical_tcid
         if tcid in self._row_index:
             self.update_tool_args(tcid, args)
             return
@@ -1736,9 +2083,49 @@ class CognitionStepMessage(Vertical):
         self._start_time = time()
         self._deferred_running = True
 
+    def _canonical_task_lookup_key(self, tool_call_id: str) -> str | None:
+        """Normalized task row key when ``tool_call_id`` denotes a step-level delegation."""
+        tcid = str(tool_call_id).strip()
+        if not tcid:
+            return None
+        if is_step_level_task_tool_id(tcid):
+            return normalize_step_task_tool_call_id(self._step_id, tcid)
+        return None
+
     def has_tool_call_row(self, tool_call_id: str) -> bool:
-        """Return True if this step card already tracks ``tool_call_id``."""
-        return str(tool_call_id) in self._row_index
+        """Return True if this step card already tracks ``tool_call_id`` (or its task alias)."""
+        tcid = str(tool_call_id).strip()
+        if not tcid:
+            return False
+        if tcid in self._row_index:
+            return True
+        task_key = self._canonical_task_lookup_key(tcid)
+        if not task_key:
+            return False
+        if task_key in self._row_index:
+            return True
+        return any(
+            self._task_delegation_dedupe_key(row) == task_key for row in self._row_index.values()
+        )
+
+    def _migrate_tool_row_id(self, old_id: str, new_id: str) -> None:
+        """Rename a tracked tool row (e.g. provider id → unified step task id)."""
+        old = str(old_id).strip()
+        new = str(new_id).strip()
+        if not old or not new or old == new:
+            return
+        row = self._row_index.pop(old, None)
+        if row is None:
+            return
+        row.tool_call_id = new
+        self._row_index[new] = row
+        self._rows = [row if r.tool_call_id == old else r for r in self._rows]
+        cache = self._row_content_by_id.pop(old, None)
+        if cache is not None:
+            self._row_content_by_id[new] = cache
+        cache_key = self._row_cache_key_by_id.pop(old, None)
+        if cache_key is not None:
+            self._row_cache_key_by_id[new] = cache_key
 
     def pop_tool_row(self, tool_call_id: str) -> _StepToolRow | None:
         """Remove and return a tool row so another step card can adopt it (parallel routing)."""
@@ -1795,6 +2182,8 @@ class CognitionStepMessage(Vertical):
             return
         row.args = merged
         self._rebuild_tool_stats()
+        if row.is_task_row or is_step_level_task_tool_id(str(tool_call_id)):
+            self._refresh_task_activity_display()
         self._sync_running_status_line()
         self.request_tools_display_refresh()
 
@@ -1805,6 +2194,7 @@ class CognitionStepMessage(Vertical):
             return
         row.phase = "running"
         row.started_at = time()
+        self._refresh_task_activity_display()
         self.request_tools_display_refresh(immediate=True)
 
     def set_tool_success(self, tool_call_id: str, result: str, *, duration_ms: int = 0) -> None:
@@ -1816,6 +2206,7 @@ class CognitionStepMessage(Vertical):
         row.output = _strip_success_exit_line(result)
         row.duration_ms = duration_ms
         row.started_at = None
+        self._refresh_task_activity_display()
         self.request_tools_display_refresh(immediate=True)
 
     def set_tool_error(self, tool_call_id: str, error: str, *, duration_ms: int = 0) -> None:
@@ -1827,6 +2218,7 @@ class CognitionStepMessage(Vertical):
         row.output = error
         row.duration_ms = duration_ms
         row.started_at = None
+        self._refresh_task_activity_display()
         self.request_tools_display_refresh(immediate=True)
 
     def set_tool_rejected(self, tool_call_id: str) -> None:
@@ -1836,6 +2228,7 @@ class CognitionStepMessage(Vertical):
             return
         row.phase = "rejected"
         row.started_at = None
+        self._refresh_task_activity_display()
         self.request_tools_display_refresh(immediate=True)
 
     def set_tool_skipped(self, tool_call_id: str) -> None:
@@ -1845,6 +2238,7 @@ class CognitionStepMessage(Vertical):
             return
         row.phase = "skipped"
         row.started_at = None
+        self._refresh_task_activity_display()
         self.request_tools_display_refresh(immediate=True)
 
     def mark_unfinished_tools_skipped(self) -> None:
@@ -1853,6 +2247,7 @@ class CognitionStepMessage(Vertical):
             if row.phase in ("pending", "running"):
                 row.phase = "skipped"
                 row.started_at = None
+        self._refresh_task_activity_display()
         self._refresh_tools_display()
 
     def iter_open_tool_calls_for_interrupt(self) -> list[dict[str, Any]]:
@@ -1880,6 +2275,8 @@ class CognitionStepMessage(Vertical):
                 "output": r.output,
                 "duration_ms": r.duration_ms,
                 "started_at": r.started_at,
+                "parent_tool_call_id": r.parent_tool_call_id,
+                "is_task_row": r.is_task_row,
             }
             for r in self._rows
         ]
@@ -1899,6 +2296,9 @@ class CognitionStepMessage(Vertical):
             if not isinstance(args, dict):
                 args = {}
             phase = str(raw.get("phase", "pending"))
+            is_task = bool(raw.get("is_task_row")) or is_step_level_task_tool_id(tcid)
+            parent = raw.get("parent_tool_call_id")
+            parent_id = str(parent).strip() if parent else None
             row = _StepToolRow(
                 tool_call_id=tcid,
                 tool_name=name,
@@ -1907,6 +2307,8 @@ class CognitionStepMessage(Vertical):
                 output=str(raw.get("output", "") or ""),
                 duration_ms=int(raw.get("duration_ms", 0) or 0),
                 started_at=raw.get("started_at"),
+                parent_tool_call_id=parent_id,
+                is_task_row=is_task,
             )
             self._rows.append(row)
             self._row_index[tcid] = row
@@ -1976,7 +2378,7 @@ class CognitionStepMessage(Vertical):
         # Expand/collapse affordance: collapsed → expand glyph; expanded → collapse glyph.
         has_collapsible = (
             (STEP_CARD_SHOW_TOOL_ROW_DETAILS and self._rows)
-            or self._subagent_notes
+            or self._has_task_activity_body()
             or self._execute_assistant_buffer.strip()
         )
         g = get_glyphs()
@@ -2017,42 +2419,18 @@ class CognitionStepMessage(Vertical):
         self._execute_assistant_buffer = ""
 
         if success:
-            if self._status_widget:
-                self._status_widget.remove_class("pending")
-                self._status_widget.display = False
             status_body = f"Completed ({dur_str}){tool_part}"
-            self._detail_widget.update(
-                self._step_branched_completion_detail(
-                    success=True,
-                    status_line_body=status_body,
-                    prose=prose,
-                )
-            )
-            self._detail_widget.display = True
+            self._update_step_footer_status_line(status_body, success=True)
+            if prose:
+                self._detail_widget.update(self._step_branched_execute_body(prose, muted=True))
+                self._detail_widget.display = True
+            else:
+                self._detail_widget.display = False
             self._maybe_auto_collapse_step_card()
             return
 
         err_text = summary.strip() or "Step failed"
-        colors = theme.get_theme_colors(self)
-        if self._status_widget:
-            self._status_widget.remove_class("pending")
-            self._status_widget.add_class("error")
-            g = get_glyphs()
-            # Add expand/collapse icon at the end of status line
-            has_collapsible = (
-                (STEP_CARD_SHOW_TOOL_ROW_DETAILS and self._rows) or self._subagent_notes or prose
-            )
-            collapse_icon = (
-                f" {g.expand}"
-                if self._card_collapsed and has_collapsible
-                else f" {g.collapse}"
-                if has_collapsible
-                else ""
-            )
-            self._status_widget.update(
-                Content.styled(f"{g.error} Failed · {dur_str}{collapse_icon}", colors.error)
-            )
-            self._status_widget.display = True
+        self._update_step_footer_status_line(f"Failed · {dur_str}", success=False)
         if prose:
             err_text = f"{err_text}\n\n{prose}"
         self._detail_widget.update(self._step_branched_error_detail(err_text))
@@ -2073,21 +2451,12 @@ class CognitionStepMessage(Vertical):
         if self._detail_widget is None:
             return
         g = get_glyphs()
-        gutter = self._step_goal_tree_gutter()
         sub = f"{g.output_prefix} {g.circle_empty} "
         assembled: list[object] = []
         if self._last_success is not None:
             dur_str = format_duration_ms(self._last_duration_ms)
             tool_part = self._status_tool_stats_suffix(self._last_tool_call_count)
-            status_body = f"Completed ({dur_str}){tool_part}"
-            try:
-                pv_colors = theme.get_theme_colors(self)
-            except Exception:  # noqa: BLE001
-                pv_colors = theme.DARK_COLORS
-            assembled.append(
-                Content.styled(f"{gutter}{g.checkmark} {status_body}", pv_colors.cognition),
-            )
-            assembled.append("\n")
+            self._update_step_footer_status_line(f"Completed ({dur_str}){tool_part}", success=True)
         first_pv = True
         for ln in preview.splitlines():
             if not first_pv:

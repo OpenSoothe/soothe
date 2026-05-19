@@ -153,7 +153,7 @@ def get_image_from_path(path: pathlib.Path) -> ImageData | None:
     pil = _import_pil()
     if pil is None:
         return None
-    Image, UnidentifiedImageError = pil
+    Image, UnidentifiedImageError = pil  # noqa: N806
 
     try:
         file_size = path.stat().st_size
@@ -304,7 +304,7 @@ def _get_macos_clipboard_image() -> ImageData | None:
     pil = _import_pil()
     if pil is None:
         return None
-    Image, UnidentifiedImageError = pil
+    Image, UnidentifiedImageError = pil  # noqa: N806
 
     # Try pngpaste first (fast if installed)
     pngpaste_path = _get_executable("pngpaste")
@@ -355,7 +355,7 @@ def _get_clipboard_via_osascript() -> ImageData | None:
     pil = _import_pil()
     if pil is None:
         return None
-    Image, UnidentifiedImageError = pil
+    Image, UnidentifiedImageError = pil  # noqa: N806
 
     # Get osascript path - it's a macOS builtin so should always exist
     osascript_path = _get_executable("osascript")

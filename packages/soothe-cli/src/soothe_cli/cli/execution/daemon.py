@@ -234,9 +234,9 @@ async def _run_headless_session_once(
         raise
     except (ConnectionError, OSError, TimeoutError) as e:
         logger.exception("Daemon connection failed")
-        from soothe_sdk.utils import format_cli_error
+        from soothe_cli.cli.execution.daemon_errors import friendly_daemon_connection_error
 
-        _emit_headless_error(format_cli_error(e))
+        _emit_headless_error(friendly_daemon_connection_error(e))
         return _DAEMON_FALLBACK_EXIT_CODE, False
     except Exception as e:
         logger.exception("Failed to run via daemon")

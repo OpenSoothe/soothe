@@ -395,12 +395,12 @@ class _MessagesMixin:
         copy_selection_to_clipboard(self, notify_if_empty=True)
 
     def action_quit_or_interrupt(self) -> None:
-        """Handle Ctrl+C - interrupt agent, reject approval, or quit on double press.
+        """Handle Ctrl+C - interrupt agent or quit on double press.
 
         Priority order:
         0. If text is selected, copy it (Textual screen.copy_text semantics)
         1. If shell command is running, kill it
-        2. If approval menu is active, reject it
+        2. If ask_user menu is active, cancel it
         3. If agent is running, interrupt it (preserve input)
         4. If double press (quit_pending), quit
         5. Otherwise show quit hint
@@ -416,17 +416,7 @@ class _MessagesMixin:
             self._quit_pending = False
             return
 
-        # If approval menu is active, reject it before cancelling the agent worker.
-        # During HITL the agent worker remains active while awaiting approval,
-        # so this must be checked before the worker cancellation branch to
-        # avoid leaving a stale approval widget interactive after interruption.
-        if self._pending_approval_widget:
-            self._pending_approval_widget.action_select_reject()
-            self._quit_pending = False
-            return
-
-        # If ask_user menu is active, cancel it before cancelling the agent
-        # worker, following the same pattern as the approval widget above.
+        # If ask_user menu is active, cancel it before cancelling the agent worker.
         if self._pending_ask_user_widget:
             self._pending_ask_user_widget.action_cancel()
             self._quit_pending = False
@@ -470,10 +460,9 @@ class _MessagesMixin:
         2. If completion popup is open, dismiss it
         3. If input is in command/shell mode, exit to normal mode
         4. If shell command is running, kill it
-        5. If approval menu is active, reject it
-        6. If ask-user menu is active, cancel it
-        7. If queued messages exist, pop the last one (LIFO)
-        8. If agent is running, interrupt it
+        5. If ask-user menu is active, cancel it
+        6. If queued messages exist, pop the last one (LIFO)
+        7. If agent is running, interrupt it
         """
         # If a modal screen is active, let it cancel itself (so it can
         # restore state, e.g. the theme selector reverts the previewed theme).
@@ -498,16 +487,7 @@ class _MessagesMixin:
             self._cancel_worker(self._shell_worker)
             return
 
-        # If approval menu is active, reject it before cancelling the agent worker.
-        # During HITL the agent worker remains active while awaiting approval,
-        # so this must be checked before the worker cancellation branch to
-        # avoid leaving a stale approval widget interactive after interruption.
-        if self._pending_approval_widget:
-            self._pending_approval_widget.action_select_reject()
-            return
-
-        # If ask_user menu is active, cancel it before cancelling the agent
-        # worker, following the same pattern as the approval widget above.
+        # If ask_user menu is active, cancel it before cancelling the agent worker.
         if self._pending_ask_user_widget:
             self._pending_ask_user_widget.action_cancel()
             return
@@ -604,31 +584,17 @@ class _MessagesMixin:
         _write_iterm_escape(_ITERM_CURSOR_GUIDE_ON)
         super().exit(result=result, return_code=return_code, message=message)
 
-    def action_toggle_auto_approve(self) -> None:
-        """Toggle auto-approve mode for the current session.
-
-        When enabled, all tool calls (shell execution, file writes/edits,
-        web search, URL fetch) run without prompting. Updates the status
-        bar indicator and session state.
-        """
+    def action_shift_tab(self) -> None:
+        """Shift+Tab: navigate loop selector filters or ask_user questions."""
         from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen
 
         if isinstance(self.screen, LoopSelectorScreen):
             self.screen.action_focus_previous_filter()
             return
-        # shift+tab is reused for navigation inside modal screens (e.g.
-        # ModelSelectorScreen); skip the toggle so it doesn't fire through.
         if self.screen.is_modal:
             return
-        # Delegate shift+tab to ask_user navigation when interview is active.
         if self._pending_ask_user_widget is not None:
             self._pending_ask_user_widget.action_previous_question()
-            return
-        self._auto_approve = not self._auto_approve
-        if self._status_bar:
-            self._status_bar.set_auto_approve(enabled=self._auto_approve)
-        if self._session_state:
-            self._session_state.auto_approve = self._auto_approve
 
     def action_toggle_tool_output(self) -> None:
         """Toggle expand/collapse of the most recent skill or tool card."""
@@ -639,27 +605,6 @@ class _MessagesMixin:
                 if skill_msg._stripped_body.strip():
                     skill_msg.toggle_body()
                     return
-
-    # Approval menu action handlers (delegated from App-level bindings)
-    # NOTE: These only activate when approval widget is pending
-    # AND input is not focused
-    def action_approval_up(self) -> None:
-        """Handle up arrow in approval menu."""
-        # Only handle if approval is active
-        # (input handles its own up for history/completion)
-        if self._pending_approval_widget and not self._is_input_focused():
-            self._pending_approval_widget.action_move_up()
-
-    def action_approval_down(self) -> None:
-        """Handle down arrow in approval menu."""
-        if self._pending_approval_widget and not self._is_input_focused():
-            self._pending_approval_widget.action_move_down()
-
-    def action_approval_select(self) -> None:
-        """Handle enter in approval menu."""
-        # Only handle if approval is active AND input is not focused
-        if self._pending_approval_widget and not self._is_input_focused():
-            self._pending_approval_widget.action_select()
 
     def _is_input_focused(self) -> bool:
         """Check if the chat input (or its text area) has focus.
@@ -674,26 +619,6 @@ class _MessagesMixin:
             return False
         # Check if focused widget is the text area inside chat input
         return focused.id == "chat-input" or focused in self._chat_input.walk_children()
-
-    def action_approval_yes(self) -> None:
-        """Handle yes/1 in approval menu."""
-        if self._pending_approval_widget:
-            self._pending_approval_widget.action_select_approve()
-
-    def action_approval_auto(self) -> None:
-        """Handle auto/2 in approval menu."""
-        if self._pending_approval_widget:
-            self._pending_approval_widget.action_select_auto()
-
-    def action_approval_no(self) -> None:
-        """Handle no/3 in approval menu."""
-        if self._pending_approval_widget:
-            self._pending_approval_widget.action_select_reject()
-
-    def action_approval_escape(self) -> None:
-        """Handle escape in approval menu - reject."""
-        if self._pending_approval_widget:
-            self._pending_approval_widget.action_select_reject()
 
     async def action_open_editor(self) -> None:
         """Open the current prompt text in an external editor ($VISUAL/$EDITOR)."""
@@ -729,11 +654,7 @@ class _MessagesMixin:
         """Route unfocused paste events to chat input for drag/drop reliability."""
         if not self._chat_input:
             return
-        if (
-            self._pending_approval_widget
-            or self._pending_ask_user_widget
-            or self._is_input_focused()
-        ):
+        if self._pending_ask_user_widget or self._is_input_focused():
             return
         if self._chat_input.handle_external_paste(event.text):
             event.prevent_default()
@@ -751,7 +672,7 @@ class _MessagesMixin:
             return
         if self.screen.is_modal:
             return
-        if self._pending_approval_widget or self._pending_ask_user_widget:
+        if self._pending_ask_user_widget:
             return
         self._chat_input.focus_input()
 
@@ -759,8 +680,8 @@ class _MessagesMixin:
         """Handle clicks anywhere in the terminal to focus on the command line."""
         if not self._chat_input:
             return
-        # Don't steal focus from approval or ask_user widgets
-        if self._pending_approval_widget or self._pending_ask_user_widget:
+        # Don't steal focus from ask_user widgets
+        if self._pending_ask_user_widget:
             return
         # Preserve an active text selection (focus would clear highlight for copy).
         screen = self.screen

@@ -76,6 +76,32 @@ class TuiDaemonSession:
         """Subscribe to an existing loop (re-bootstrap on the same connection)."""
         return await self._bootstrap_loop(resume_loop_id=loop_id)
 
+    async def ensure_connected(self) -> None:
+        """Reconnect and re-subscribe to the active loop when the WebSocket died.
+
+        No-op when the main client socket is still open. Used after daemon restart so
+        the TUI can resume the current loop without exiting.
+
+        Raises:
+            ConnectionError: If reconnect or loop subscribe fails.
+            RuntimeError: If bootstrap returns an error-shaped status event.
+        """
+        if self._client.is_connection_alive():
+            return
+
+        resume_loop_id = self._loop_id
+        logger.info(
+            "Daemon WebSocket closed; reconnecting%s",
+            f" to loop {resume_loop_id[:8]}..." if resume_loop_id else "",
+        )
+        await self._client.close()
+        if self._rpc_connected:
+            await self._rpc_client.close()
+            self._rpc_connected = False
+
+        await connect_websocket_with_retries(self._client)
+        await self._bootstrap_loop(resume_loop_id=resume_loop_id)
+
     async def close(self) -> None:
         """Close the daemon websocket."""
         await self._client.close()
@@ -93,7 +119,6 @@ class TuiDaemonSession:
         autonomous: bool = False,
         max_iterations: int | None = None,
         preferred_subagent: str | None = None,
-        interactive: bool = True,
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
         attachments: list[dict[str, str]] | None = None,
@@ -107,7 +132,6 @@ class TuiDaemonSession:
             autonomous=autonomous,
             max_iterations=max_iterations,
             preferred_subagent=preferred_subagent,
-            interactive=interactive,
             model=model,
             model_params=model_params,
             attachments=attachments,
@@ -116,12 +140,6 @@ class TuiDaemonSession:
     async def cancel_remote_query(self) -> None:
         """Ask the daemon to cancel the in-flight query (same wire path as ``/cancel``)."""
         await self._client.send_command("/cancel")
-
-    async def resume_interrupts(self, resume_payload: dict[str, Any]) -> None:
-        """Resume a paused interactive turn."""
-        if not self._loop_id:
-            raise RuntimeError("No active loop for interrupt resume")
-        await self._client.send_resume_interrupts(self._loop_id, resume_payload)
 
     async def _drain_stream_events_after_idle(
         self,
@@ -181,6 +199,8 @@ class TuiDaemonSession:
                 while True:
                     event = await self._client.read_event()
                     if not event:
+                        if query_started and not self._client.is_connection_alive():
+                            raise ConnectionError("Daemon connection lost")
                         break
 
                     event_type = event.get("type", "")

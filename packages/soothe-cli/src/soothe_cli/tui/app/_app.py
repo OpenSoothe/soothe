@@ -15,14 +15,12 @@ if TYPE_CHECKING:
 
     from soothe_cli.tui.skills.load import ExtendedSkillMetadata
     from soothe_cli.tui.textual_adapter import TextualUIAdapter
-    from soothe_cli.tui.widgets.approval import ApprovalMenu
     from soothe_cli.tui.widgets.ask_user import AskUserMenu
 
 from textual.app import App
 from textual.binding import Binding, BindingType
 from textual.containers import Container, Vertical, VerticalScroll
 from textual.message import Message
-from textual.widgets import Static
 
 from soothe_cli.tui import theme
 from soothe_cli.tui._session_stats import SessionStats
@@ -94,11 +92,10 @@ class SootheApp(
             priority=True,
         ),
         Binding("ctrl+d", "quit_app", "Quit", show=False, priority=True),
-        Binding("ctrl+t", "toggle_auto_approve", "Toggle Auto-Approve", show=False),
         Binding(
             "shift+tab",
-            "toggle_auto_approve",
-            "Toggle Auto-Approve",
+            "shift_tab",
+            "Previous filter / question",
             show=False,
             priority=True,
         ),
@@ -122,21 +119,8 @@ class SootheApp(
             "Copy Selection",
             show=False,
         ),
-        # Approval menu keys (handled at App level for reliability)
-        Binding("up", "approval_up", "Up", show=False),
-        Binding("k", "approval_up", "Up", show=False),
-        Binding("down", "approval_down", "Down", show=False),
-        Binding("j", "approval_down", "Down", show=False),
-        Binding("enter", "approval_select", "Select", show=False),
-        Binding("y", "approval_yes", "Yes", show=False),
-        Binding("1", "approval_yes", "Yes", show=False),
-        Binding("2", "approval_auto", "Auto", show=False),
-        Binding("a", "approval_auto", "Auto", show=False),
-        Binding("3", "approval_no", "No", show=False),
-        Binding("n", "approval_no", "No", show=False),
     ]
-    """App-level keybindings for interrupt, quit, toggles, and approval menu
-    navigation."""
+    """App-level keybindings for interrupt, quit, and navigation."""
 
     class ServerStartFailed(Message):
         """Posted when daemon bootstrap or background connection fails."""
@@ -158,7 +142,6 @@ class SootheApp(
         *,
         daemon_config: Any,
         assistant_id: str | None = None,
-        auto_approve: bool = True,
         cwd: str | Path | None = None,
         resume_loop_id: str | None = None,
         initial_prompt: str | None = None,
@@ -172,7 +155,6 @@ class SootheApp(
         Args:
             daemon_config: Loaded Soothe configuration (WebSocket URL, etc.).
             assistant_id: Agent identifier for memory storage.
-            auto_approve: Whether to start with auto-approve enabled.
             cwd: Current working directory to display.
             resume_loop_id: Initial AgentLoop id when attaching to an existing loop.
             initial_prompt: Optional prompt to auto-submit when session starts.
@@ -189,8 +171,6 @@ class SootheApp(
         self.theme = _load_theme_preference()
 
         self._assistant_id = assistant_id
-
-        self._auto_approve = auto_approve
 
         self._cwd = str(cwd) if cwd else str(Path.cwd())
 
@@ -235,8 +215,6 @@ class SootheApp(
 
         self._ui_adapter: TextualUIAdapter | None = None
 
-        self._pending_approval_widget: ApprovalMenu | None = None
-
         self._pending_ask_user_widget: AskUserMenu | None = None
         # Agent task tracking for interruption
 
@@ -265,11 +243,6 @@ class SootheApp(
 
         self._tokens_approximate: bool = False
         """Whether the cached token count is stale (interrupted generation)."""
-
-        self._last_typed_at: float | None = None
-        """Typing-aware approval deferral state."""
-
-        self._approval_placeholder: Static | None = None
 
         self._update_available: tuple[bool, str | None] = (False, None)
         """Update availability state — set by _check_for_updates, read on exit."""

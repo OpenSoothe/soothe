@@ -39,7 +39,6 @@ transports:
 max_concurrent_threads: 100
 max_query_duration_minutes: 4320  # 3 days (0 = unlimited)
 cancel_grace_seconds: 30
-hitl_timeout_seconds: 30
 query_timeout_action: cancel
 thread_max_age_hours: 24
 auto_cancel_on_startup: true

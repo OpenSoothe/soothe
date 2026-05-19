@@ -76,12 +76,16 @@ class WebSocketClient:
         Raises:
             ConnectionError: If connection fails.
         """
+        if self._ws is not None:
+            await self.close()
+
         try:
-            # Disable WebSocket ping/pong to use application-level heartbeats (RFC-0013)
+            # Transport-level keepalive: daemon heartbeats are loop-scoped and only
+            # while a query runs; without client pings, long idle TCP can be dropped.
             self._ws = await websockets.asyncio.client.connect(
                 self._url,
-                ping_interval=None,  # Disable client-side ping/pong
-                ping_timeout=None,  # Use daemon heartbeats instead
+                ping_interval=30,
+                ping_timeout=60,
                 max_size=self._max_frame_size,
             )
             self._connected = True
@@ -130,6 +134,10 @@ class WebSocketClient:
         """
         if not self._ws or not self._connected:
             raise ConnectionError("Not connected to daemon")
+
+        if not self.is_connection_alive():
+            self._connected = False
+            raise ConnectionError("Connection closed")
 
         try:
             await self._ws.send(encode_websocket_text(message))
@@ -208,7 +216,6 @@ class WebSocketClient:
         autonomous: bool = False,
         max_iterations: int | None = None,
         preferred_subagent: str | None = None,
-        interactive: bool = False,
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
         attachments: list[dict[str, str]] | None = None,
@@ -225,7 +232,6 @@ class WebSocketClient:
             autonomous: Enable autonomous iteration mode.
             max_iterations: Maximum iterations for autonomous mode.
             preferred_subagent: Preferred subagent hint for routing.
-            interactive: Enable interactive HITL mode.
             model: Provider:model override string.
             model_params: Additional model parameters.
             attachments: Image attachments (mime_type + base64 data).
@@ -247,8 +253,6 @@ class WebSocketClient:
                 payload["max_iterations"] = max_iterations
         if preferred_subagent is not None:
             payload["preferred_subagent"] = preferred_subagent
-        if interactive:
-            payload["interactive"] = True
         if model:
             payload["model"] = model
         if model_params:
@@ -504,23 +508,6 @@ class WebSocketClient:
             payload["request_id"] = request_id
         await self.send(payload)
 
-    async def send_resume_interrupts(
-        self,
-        loop_id: str,
-        resume_payload: dict[str, Any],
-        *,
-        request_id: str | None = None,
-    ) -> None:
-        """Send interactive continuation payload for a paused daemon turn (loop-scoped)."""
-        payload: dict[str, Any] = {
-            "type": "resume_interrupts",
-            "loop_id": loop_id,
-            "resume_payload": resume_payload,
-        }
-        if request_id is not None:
-            payload["request_id"] = request_id
-        await self.send(payload)
-
     async def request_response(
         self,
         payload: dict[str, Any],
@@ -693,8 +680,24 @@ class WebSocketClient:
         )
 
     async def request_daemon_ready(self) -> None:
-        """Request the daemon's readiness state."""
-        await self.send({"type": "daemon_ready"})
+        """Request the daemon's readiness state.
+
+        This method is safe to call even if the connection may be closed.
+        The daemon typically sends daemon_ready during handshake, so this
+        request may be redundant. If the connection is closed, this method
+        silently succeeds - `wait_for_daemon_ready()` will either find a
+        pending handshake event or timeout.
+        """
+        try:
+            await self.send({"type": "daemon_ready"})
+        except ConnectionError:
+            # Connection may be closed after handshake; daemon_ready may already
+            # be in pending events queue. Let wait_for_daemon_ready handle it.
+            logger.debug(
+                "[Client:%s] request_daemon_ready failed (connection closed), "
+                "will check pending events",
+                self._client_id,
+            )
 
     async def wait_for_daemon_ready(self, ready_timeout_s: float = 10.0) -> dict[str, Any]:
         """Wait for a daemon readiness message and require ready state.
@@ -720,7 +723,10 @@ class WebSocketClient:
                         # Test/mocked clients may not initialize websocket transport.
                         event = await self.read_event()
                 if not event:
-                    raise ValueError("No event received")
+                    if not self.is_connection_alive():
+                        self._connected = False
+                        raise ConnectionError("Connection closed")
+                    raise TimeoutError("No daemon_ready event received")
                 if event.get("type") != "daemon_ready":
                     self._pending_events.append(event)
                     continue

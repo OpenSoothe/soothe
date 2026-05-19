@@ -12,6 +12,13 @@ from rich.markup import escape as escape_markup
 
 from soothe_cli.tui.config import console
 from soothe_cli.tui.media_utils import ImageData, VideoData
+from soothe_cli.tui.preview_limits import (
+    CHAT_INPUT_PASTE_ABBREVIATE_CHAR_COUNT,
+    CHAT_INPUT_PASTE_ABBREVIATE_LINE_COUNT,
+    CHAT_INPUT_PASTE_PREVIEW_HEAD_LINES,
+    CHAT_INPUT_PASTE_PREVIEW_LINE_MAX_CHARS,
+    CHAT_INPUT_PASTE_PREVIEW_TAIL_LINES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -780,3 +787,61 @@ def _resolve_with_unicode_space_variants(path: Path) -> Path | None:
         current = matches[0]
 
     return current
+
+
+def should_abbreviate_pasted_input(text: str) -> bool:
+    """Return whether pasted input should use an abbreviated display in the TUI.
+
+    Args:
+        text: Raw pasted payload.
+
+    Returns:
+        True when the paste is large enough to clutter the input widget.
+    """
+    if not text:
+        return False
+    if len(text.splitlines()) > CHAT_INPUT_PASTE_ABBREVIATE_LINE_COUNT:
+        return True
+    return len(text) > CHAT_INPUT_PASTE_ABBREVIATE_CHAR_COUNT
+
+
+def _truncate_paste_preview_line(line: str) -> str:
+    """Truncate a single preview line for the chat input."""
+    if len(line) <= CHAT_INPUT_PASTE_PREVIEW_LINE_MAX_CHARS:
+        return line
+    budget = CHAT_INPUT_PASTE_PREVIEW_LINE_MAX_CHARS - 1
+    return f"{line[:budget]}…"
+
+
+def abbreviate_pasted_input_display(text: str) -> str:
+    """Build a short multi-line preview for a large pasted payload.
+
+    The full ``text`` is retained separately for submission; this string is
+    only for on-screen display in the input widget.
+
+    Args:
+        text: Full pasted content.
+
+    Returns:
+        Abbreviated display text with a header and head/tail line previews.
+    """
+    lines = text.splitlines()
+    if not lines and text:
+        lines = [text]
+    n_lines = len(lines) if lines else 1
+    n_chars = len(text)
+    header = f"[pasted {n_lines} lines, {n_chars} characters]"
+
+    head_n = min(CHAT_INPUT_PASTE_PREVIEW_HEAD_LINES, n_lines)
+    tail_n = min(CHAT_INPUT_PASTE_PREVIEW_TAIL_LINES, max(0, n_lines - head_n))
+    omitted = n_lines - head_n - tail_n
+
+    parts: list[str] = [header]
+    parts.extend(_truncate_paste_preview_line(line) for line in lines[:head_n])
+    if omitted > 0:
+        parts.append(f"… ({omitted} more lines) …")
+    if tail_n > 0:
+        tail_start = n_lines - tail_n
+        if tail_start > head_n:
+            parts.extend(_truncate_paste_preview_line(line) for line in lines[tail_start:])
+    return "\n".join(parts)

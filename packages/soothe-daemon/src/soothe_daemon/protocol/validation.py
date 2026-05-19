@@ -93,14 +93,6 @@ def validate_message(msg: dict[str, Any]) -> list[str]:
         if "args" in msg and not isinstance(msg["args"], str):
             errors.append("invoke_skill args must be a string")
 
-    elif msg_type == "resume_interrupts":
-        if "loop_id" not in msg or not str(msg.get("loop_id", "")).strip():
-            errors.append("resume_interrupts requires non-empty loop_id")
-        elif not isinstance(msg.get("loop_id"), str):
-            errors.append("resume_interrupts loop_id must be a string")
-        if "resume_payload" not in msg or not isinstance(msg.get("resume_payload"), dict):
-            errors.append("resume_interrupts requires resume_payload object")
-
     else:
         # Unknown message type - allow but log warning
         # This provides forward compatibility for new message types

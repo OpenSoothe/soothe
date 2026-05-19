@@ -18,7 +18,6 @@ async def test_plan_decision_mounts_pending_step_cards() -> None:
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=AsyncMock(),
-        request_approval=AsyncMock(),
     )
     steps = [
         {"id": "WAA-01", "description": "Ready step"},
@@ -37,7 +36,6 @@ async def test_plan_decision_replan_removes_stale_pending_cards() -> None:
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=AsyncMock(),
-        request_approval=AsyncMock(),
     )
     await sync_pending_step_cards_from_plan(
         adapter,
@@ -60,7 +58,6 @@ async def test_parallel_plan_marks_all_pending_cards_running() -> None:
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=AsyncMock(),
-        request_approval=AsyncMock(),
     )
     steps = [
         {"id": "WAA-01", "description": "Step one"},
@@ -80,7 +77,6 @@ async def test_mark_parallel_plan_step_cards_running_only_pending() -> None:
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=AsyncMock(),
-        request_approval=AsyncMock(),
     )
     await sync_pending_step_cards_from_plan(
         adapter,
@@ -102,7 +98,6 @@ async def test_pending_card_transitions_to_running() -> None:
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=AsyncMock(),
-        request_approval=AsyncMock(),
     )
     await sync_pending_step_cards_from_plan(
         adapter,

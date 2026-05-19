@@ -12,7 +12,6 @@ def _make_adapter() -> TextualUIAdapter:
     return TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=MagicMock(),
-        request_approval=AsyncMock(),
     )
 
 

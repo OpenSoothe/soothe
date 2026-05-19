@@ -18,6 +18,7 @@ from soothe_sdk.ux.task_namespace import (
     row_key_for_subgraph_tool,
     scoped_subgraph_tool_key,
     step_level_parent_task_call_id,
+    task_scope_task_idx,
     try_bind_namespace_to_unlinked_spawn,
 )
 
@@ -287,3 +288,37 @@ def test_try_bind_namespace_to_unlinked_spawn_after_register() -> None:
     )
     assert bindings[ns] == scope
     assert ns not in pending
+
+
+def test_task_scope_task_idx_parses_from_task_tool_call_id() -> None:
+    """Task index derived from TaskScope's task_tool_call_id element."""
+    # Standard task delegation: ABC_01:s:task:0 → 0
+    scope = ("ABC_01:s:task:0", "explore", "ABC-01")
+    assert task_scope_task_idx(scope, "ABC-01") == 0
+
+    # Task index 1: ABC_01:s:task:1 → 1
+    scope = ("ABC_01:s:task:1", "research", "ABC-01")
+    assert task_scope_task_idx(scope, "ABC-01") == 1
+
+    # Task index 2: GHT_02:s:task:2 → 2
+    scope = ("GHT_02:s:task:2", "plan", "GHT-02")
+    assert task_scope_task_idx(scope, "GHT-02") == 2
+
+
+def test_task_scope_task_idx_returns_zero_for_invalid_scope() -> None:
+    """Zero returned when scope is empty or malformed."""
+    # Empty scope
+    assert task_scope_task_idx(None, "ABC-01") == 0
+    assert task_scope_task_idx(("", "", ""), "ABC-01") == 0
+
+    # Non-task tool_call_id (step-level tool, not task)
+    scope = ("ABC_01:s:grep:0", "explore", "ABC-01")
+    assert task_scope_task_idx(scope, "ABC-01") == 0
+
+    # Non-unified tool_call_id
+    scope = ("call_abc123", "explore", "ABC-01")
+    assert task_scope_task_idx(scope, "ABC-01") == 0
+
+    # Task-level ID (should be step-level)
+    scope = ("ABC_01:t0:grep:0", "explore", "ABC-01")
+    assert task_scope_task_idx(scope, "ABC-01") == 0

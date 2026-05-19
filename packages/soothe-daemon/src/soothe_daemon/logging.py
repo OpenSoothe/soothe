@@ -125,8 +125,7 @@ def setup_daemon_logging(
         )
         file_handler.setFormatter(
             DaemonFormatter(
-                "%(asctime)s %(level_short)s %(name)s:%(lineno)d "
-                "%(context_prefix)s%(message)s"
+                "%(asctime)s %(level_short)s %(name)s:%(lineno)d %(context_prefix)s%(message)s"
             )
         )
         file_handler.setLevel(file_level)
@@ -142,10 +141,7 @@ def setup_daemon_logging(
         ):
             console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setFormatter(
-                DaemonFormatter(
-                    "%(asctime)s %(level_short)s "
-                    "%(context_prefix)s%(message)s"
-                )
+                DaemonFormatter("%(asctime)s %(level_short)s %(context_prefix)s%(message)s")
             )
             console_handler.setLevel(logging.INFO)
             daemon_logger.addHandler(console_handler)

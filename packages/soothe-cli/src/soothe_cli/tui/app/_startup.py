@@ -53,9 +53,9 @@ class _StartupMixin:
         self._status_bar = self.query_one("#status-bar", StatusBar)
         self._chat_input = self.query_one("#input-area", ChatInput)
 
-        # Set initial auto-approve state
-        if self._auto_approve:
-            self._status_bar.set_auto_approve(enabled=True)
+        with suppress(NoMatches):
+            banner = self.query_one("#welcome-banner", WelcomeBanner)
+            self._status_bar.set_session_tip(banner.session_tip)
 
         # Focus the input immediately so the cursor is visible on first paint
         self._chat_input.focus_input()
@@ -127,12 +127,9 @@ class _StartupMixin:
         self._ui_adapter = TextualUIAdapter(
             mount_message=self._mount_message,
             update_status=self._update_status,
-            request_approval=self._request_approval,
-            on_auto_approve_enabled=self._on_auto_approve_enabled,
             set_spinner=self._set_spinner,
             set_active_message=self._set_active_message,
             sync_message_content=self._sync_message_content,
-            request_ask_user=self._request_ask_user,
         )
         # Wire token display callbacks
         self._ui_adapter._on_tokens_update = self._on_tokens_update
@@ -196,10 +193,7 @@ class _StartupMixin:
         """Create session state in a thread (imports soothe.sessions)."""
 
         def _create() -> TextualSessionState:
-            return TextualSessionState(
-                auto_approve=self._auto_approve,
-                loop_id=self._lc_loop_id,
-            )
+            return TextualSessionState(loop_id=self._lc_loop_id)
 
         try:
             self._session_state = await asyncio.to_thread(_create)
@@ -413,6 +407,8 @@ class _StartupMixin:
             banner.set_connected(self._mcp_tool_count)
             if self._lc_loop_id:
                 banner.update_loop_id(self._lc_loop_id)
+            if self._status_bar is not None:
+                self._status_bar.set_session_tip(banner.session_tip)
         except NoMatches:
             logger.warning("Welcome banner not found during daemon ready transition")
 
@@ -513,9 +509,6 @@ class _StartupMixin:
             # tool_display — hit on first message send and first tool
             # approval. Best-effort: missing optional deps should not block the
             # TUI from rendering.
-            from langchain.agents.middleware.human_in_the_loop import (  # noqa: F401
-                ApproveDecision,
-            )
             from langchain_core.messages import AIMessage  # noqa: F401
             from langgraph.types import Command  # noqa: F401
             from soothe_sdk.client.config import DEFAULT_EXECUTE_TIMEOUT  # noqa: F401
@@ -538,7 +531,6 @@ class _StartupMixin:
         # Widgets deferred from app.py module level — a failure here indicates
         # a packaging or code bug (same as the block above), so we let
         # exceptions propagate.
-        from soothe_cli.tui.widgets.approval import ApprovalMenu  # noqa: F401
         from soothe_cli.tui.widgets.ask_user import AskUserMenu  # noqa: F401
         from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen  # noqa: F401
         from soothe_cli.tui.widgets.model_selector import (
