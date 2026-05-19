@@ -13,7 +13,7 @@ from soothe_cli.tui.textual_adapter._stream_formatting import (
     refresh_task_cards_for_step,
     sync_task_delegation_cards_from_stream,
 )
-from soothe_cli.tui.widgets.messages import CognitionStepMessage, ToolCallMessage
+from soothe_cli.tui.widgets.messages import CognitionStepMessage
 
 
 def test_enrich_task_delegation_args_uses_step_description_fallback() -> None:
@@ -101,6 +101,9 @@ def test_enrich_task_delegation_args_prefers_stream_overlay() -> None:
 
 @pytest.mark.asyncio
 async def test_sync_task_cards_from_overlay_updates_header() -> None:
+    """IG-419: Task delegation syncs to step card row, not standalone card."""
+    from soothe_sdk.ux.task_namespace import normalize_step_task_tool_call_id
+
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=AsyncMock(),
@@ -108,10 +111,8 @@ async def test_sync_task_cards_from_overlay_updates_header() -> None:
         set_spinner=AsyncMock(),
     )
     router = adapter._step_router
-    adapter._current_step_messages["JPV-02"] = CognitionStepMessage(
-        "JPV-02",
-        "Find autopilot",
-    )
+    step_card = CognitionStepMessage("JPV-02", "Find autopilot")
+    adapter._current_step_messages["JPV-02"] = step_card
     overlay = {
         "JPV-02:s:task:0": {
             "description": "Explore autopilot_cmd.py surface",
@@ -128,15 +129,22 @@ async def test_sync_task_cards_from_overlay_updates_header() -> None:
         show_tool_ui=True,
     )
 
-    card = adapter._current_tool_messages.get("JPV-02:s:task:0")
-    assert isinstance(card, ToolCallMessage)
-    assert card._args.get("subagent_type") == "explore"
-    assert "autopilot_cmd" in str(card._args.get("description", ""))
+    # IG-419: No standalone card, row is on step card
+    # Note: tool_call_id is normalized to use dots (JPV-02:s:task.0)
+    normalized_tcid = normalize_step_task_tool_call_id("JPV-02", "JPV-02:s:task:0")
+    assert adapter._current_tool_messages.get("JPV-02:s:task:0") is None
+    assert step_card.has_tool_call_row(normalized_tcid)
+    row = step_card._row_index.get(normalized_tcid)
+    assert row is not None
+    assert row.args.get("subagent_type") == "explore"
+    assert "autopilot_cmd" in str(row.args.get("description", ""))
 
 
 @pytest.mark.asyncio
 async def test_refresh_task_cards_for_step_after_early_empty_mount() -> None:
-    """Task card created before step exists gets step description when step starts."""
+    """IG-419: Task row on step card gets step description when refreshed."""
+    from soothe_sdk.ux.task_namespace import normalize_step_task_tool_call_id
+
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=AsyncMock(),
@@ -145,16 +153,16 @@ async def test_refresh_task_cards_for_step_after_early_empty_mount() -> None:
     )
     router = adapter._step_router
     tcid = "JPV-03:s:task:0"
-    adapter._current_step_messages["JPV-03"] = CognitionStepMessage(
+    # Note: normalized form uses dots
+    normalized_tcid = normalize_step_task_tool_call_id("JPV-03", tcid)
+    step_card = CognitionStepMessage(
         "JPV-03",
         "Identify core architecture boundaries",
     )
-    adapter._current_tool_messages[tcid] = ToolCallMessage(
-        "task",
-        {},
-        tool_call_id=tcid,
-    )
-    adapter._tool_display_by_call_id[tcid] = adapter._current_tool_messages[tcid]
+    adapter._current_step_messages["JPV-03"] = step_card
+    # Add an empty task row that will be refreshed (use normalized id)
+    step_card.add_tool_call(normalized_tcid, "explore", {})
+    adapter._tool_display_by_call_id[normalized_tcid] = step_card
     router.register_task_spawn(tcid, "?", step_id="JPV-03")
 
     await refresh_task_cards_for_step(
@@ -166,13 +174,17 @@ async def test_refresh_task_cards_for_step_after_early_empty_mount() -> None:
         show_tool_ui=True,
     )
 
-    card = adapter._current_tool_messages[tcid]
-    assert "architecture" in str(card._args.get("description", ""))
+    # IG-419: Row is on step card, not standalone ToolCallMessage
+    row = step_card._row_index.get(normalized_tcid)
+    assert row is not None
+    assert "architecture" in str(row.args.get("description", ""))
 
 
 @pytest.mark.asyncio
 async def test_task_delegation_card_adds_step_activity_row() -> None:
-    """Main-graph task shows on the step card and as a standalone task card."""
+    """IG-419: Main-graph task shows on the step card row, no standalone card."""
+    from soothe_sdk.ux.task_namespace import normalize_step_task_tool_call_id
+
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=AsyncMock(),
@@ -180,6 +192,8 @@ async def test_task_delegation_card_adds_step_activity_row() -> None:
         set_spinner=AsyncMock(),
     )
     tcid = "WAA-01:s:task:0"
+    # Note: normalized form uses dots
+    normalized_tcid = normalize_step_task_tool_call_id("WAA-01", tcid)
     step_w = CognitionStepMessage("WAA-01", "Search goal engine modules")
     adapter._current_step_messages["WAA-01"] = step_w
     args = {
@@ -187,15 +201,15 @@ async def test_task_delegation_card_adds_step_activity_row() -> None:
         "description": "Find GoalEngine entry points",
     }
 
-    card = await _ensure_task_delegation_card(
+    # IG-419: Returns None, only syncs step row
+    result = await _ensure_task_delegation_card(
         adapter,
         lookup_id=tcid,
         parsed_args=args,
         show_tool_ui=True,
     )
 
-    assert isinstance(card, ToolCallMessage)
-    assert adapter._tool_display_by_call_id[tcid] is card
-    assert step_w.has_tool_call_row(tcid)
-    assert adapter._tool_to_step[tcid] is step_w
-    assert not card.has_tool_call_row(tcid)
+    assert result is None
+    # IG-419: _tool_to_step maps normalized tcid to step widget
+    assert adapter._tool_to_step[normalized_tcid] is step_w
+    assert step_w.has_tool_call_row(normalized_tcid)

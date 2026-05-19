@@ -1,21 +1,21 @@
-"""Tests for subagent tool rows on parent Task cards (IG-300 elide parity)."""
+"""Tests for subagent tool rows on step cards (IG-419: nested under task row)."""
 
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from soothe_sdk.ux.task_namespace import scoped_subgraph_tool_key
+from soothe_sdk.ux.task_namespace import row_key_for_subgraph_tool
 
 from soothe_cli.tui.file_ops import FileOpTracker
 from soothe_cli.tui.textual_adapter import (
     TextualUIAdapter,
     _mount_subagent_inner_tool_row_if_resolved,
 )
-from soothe_cli.tui.widgets.messages import ToolCallMessage
+from soothe_cli.tui.widgets.messages import CognitionStepMessage, ToolCallMessage
 
 
 @pytest.mark.asyncio
 async def test_mount_subagent_inner_tool_row_resolves_parent_task_card() -> None:
-    """Inner subgraph tools attach as rows when task scope binds to a mounted Task card."""
+    """IG-419: Inner subgraph tools attach to step card when task scope resolves."""
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=MagicMock(),
@@ -23,6 +23,9 @@ async def test_mount_subagent_inner_tool_row_resolves_parent_task_card() -> None
         set_spinner=AsyncMock(),
     )
     router = adapter._step_router
+    # IG-419: Need a step card for inner tools to mount on
+    step_card = CognitionStepMessage("STEP-01", "Explore workspace")
+    adapter._current_step_messages["STEP-01"] = step_card
     task_card = ToolCallMessage(
         "task",
         {"subagent_type": "explore", "description": "find files"},
@@ -30,7 +33,7 @@ async def test_mount_subagent_inner_tool_row_resolves_parent_task_card() -> None
     )
     adapter._tool_display_by_call_id["tc-task"] = task_card
     ns_key = ("delegated:subgraph-1",)
-    router._namespace_bindings[ns_key] = ("tc-task", "explore", "")
+    router._namespace_bindings[ns_key] = ("tc-task", "explore", "STEP-01")
     tracker = FileOpTracker(assistant_id="asst-1")
 
     ok = await _mount_subagent_inner_tool_row_if_resolved(
@@ -48,10 +51,12 @@ async def test_mount_subagent_inner_tool_row_resolves_parent_task_card() -> None
     )
 
     assert ok is True
-    row_id = scoped_subgraph_tool_key(ns_key, "inner-grep-1")
-    assert task_card.has_tool_call_row(row_id)
-    assert adapter._tool_to_step[row_id] is task_card
-    assert adapter._tool_display_by_call_id[row_id] is task_card
+    task_scope = ("tc-task", "explore", "STEP-01")
+    row_id = row_key_for_subgraph_tool(ns_key, "inner-grep-1", task_scope=task_scope)
+    # IG-419: Row is on step card, not task card
+    assert step_card.has_tool_call_row(row_id)
+    assert adapter._tool_to_step[row_id] is step_card
+    assert adapter._tool_display_by_call_id[row_id] is step_card
     adapter._set_spinner.assert_awaited_once_with("Tools")
 
 
@@ -116,7 +121,7 @@ async def test_mount_subagent_inner_noop_when_task_scope_unbound() -> None:
 
 @pytest.mark.asyncio
 async def test_mount_subagent_inner_unified_id_on_task_card_without_namespace() -> None:
-    """Task-level unified ids mount on the Task card when namespace binding lags."""
+    """IG-419: Task-level unified ids mount on step card when namespace binding lags."""
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=MagicMock(),
@@ -124,6 +129,9 @@ async def test_mount_subagent_inner_unified_id_on_task_card_without_namespace() 
         set_spinner=AsyncMock(),
     )
     router = adapter._step_router
+    # IG-419: Need a step card for inner tools
+    step_card = CognitionStepMessage("FJS-02", "Explore workspace")
+    adapter._current_step_messages["FJS-02"] = step_card
     task_card = ToolCallMessage(
         "task",
         {"subagent_type": "explore"},
@@ -148,5 +156,6 @@ async def test_mount_subagent_inner_unified_id_on_task_card_without_namespace() 
     )
 
     assert ok is True
-    assert task_card.has_tool_call_row(unified)
-    assert adapter._tool_to_step[unified] is task_card
+    # IG-419: Row is on step card, not task card
+    assert step_card.has_tool_call_row(unified)
+    assert adapter._tool_to_step[unified] is step_card
