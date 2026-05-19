@@ -44,4 +44,6 @@ def test_glob_api_output_size_matches_filtered_cap(tmp_path: Path) -> None:
     raw_paths = [m.get("path", "") for m in raw.matches or []]
     assert len(filtered_paths) <= backend.DEFAULT_GLOB_MAX_RESULTS
     assert len(raw_paths) > backend.DEFAULT_GLOB_MAX_RESULTS
-    assert len(str(truncate_if_too_long(filtered_paths))) < len(str(truncate_if_too_long(raw_paths)))
+    assert len(str(truncate_if_too_long(filtered_paths))) < len(
+        str(truncate_if_too_long(raw_paths))
+    )
