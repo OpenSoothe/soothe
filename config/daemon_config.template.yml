@@ -37,7 +37,7 @@ transports:
 
 # Concurrency and safety
 max_concurrent_threads: 100
-max_query_duration_minutes: 60
+max_query_duration_minutes: 4320  # 3 days (0 = unlimited)
 cancel_grace_seconds: 30
 hitl_timeout_seconds: 30
 query_timeout_action: cancel
@@ -71,7 +71,7 @@ worker_pool:
   max_pool_size: 4
   idle_timeout_seconds: 300
   max_requests_per_worker: 100
-  request_timeout_seconds: 1800
+  request_timeout_seconds: 0  # 0 = no per-request timeout
   heartbeat_interval_seconds: 30
   stuck_worker_timeout_seconds: 180
   dispatch_wait_stats_enabled: true
