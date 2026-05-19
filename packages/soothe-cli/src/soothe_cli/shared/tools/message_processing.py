@@ -153,6 +153,75 @@ def accumulate_tool_call_chunks(
     return current_last_active
 
 
+def _tool_id_from_chunk_dict(tcc: dict[str, Any]) -> str:
+    tc_id_raw = tcc.get("id")
+    return str(tc_id_raw) if tc_id_raw not in (None, "") else ""
+
+
+def _tool_id_from_call_dict(tc: dict[str, Any]) -> str:
+    return str(tc.get("id") or "").strip()
+
+
+def tool_ids_touched_by_stream_message(message: Any) -> set[str]:
+    """Return tool_call_ids referenced on one stream message (chunks, calls, blocks)."""
+    ids: set[str] = set()
+    if isinstance(message, dict):
+        for tcc in message.get("tool_call_chunks") or []:
+            if isinstance(tcc, dict):
+                tid = _tool_id_from_chunk_dict(tcc)
+                if tid:
+                    ids.add(tid)
+        for tc in message.get("tool_calls") or []:
+            if isinstance(tc, dict):
+                tid = _tool_id_from_call_dict(tc)
+                if tid:
+                    ids.add(tid)
+        content = message.get("content")
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") in (
+                    "tool_call",
+                    "tool_call_chunk",
+                    "tool_use",
+                ):
+                    tid = str(block.get("id") or "").strip()
+                    if tid:
+                        ids.add(tid)
+        return ids
+
+    for tcc in getattr(message, "tool_call_chunks", None) or []:
+        if isinstance(tcc, dict):
+            tid = _tool_id_from_chunk_dict(tcc)
+            if tid:
+                ids.add(tid)
+    for tc in getattr(message, "tool_calls", None) or []:
+        if isinstance(tc, dict):
+            tid = _tool_id_from_call_dict(tc)
+            if tid:
+                ids.add(tid)
+    content = getattr(message, "content", None)
+    if isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict) and block.get("type") in (
+                "tool_call",
+                "tool_call_chunk",
+                "tool_use",
+            ):
+                tid = str(block.get("id") or "").strip()
+                if tid:
+                    ids.add(tid)
+    for block in getattr(message, "content_blocks", None) or []:
+        if isinstance(block, dict) and block.get("type") in (
+            "tool_call",
+            "tool_call_chunk",
+            "tool_use",
+        ):
+            tid = str(block.get("id") or "").strip()
+            if tid:
+                ids.add(tid)
+    return ids
+
+
 def ingest_tool_call_stream_state(
     pending_tool_calls: dict[str, dict[str, Any]],
     message: Any,

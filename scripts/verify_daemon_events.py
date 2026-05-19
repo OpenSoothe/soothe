@@ -6,9 +6,14 @@ This script connects to the daemon via SDK WebSocket client and verifies:
 3. Tool call and task instance association
 4. Stream tool wire events (soothe.stream.tool_call.update)
 5. Subagent wire events (soothe.subagent.*)
+6. Streaming mode comparison (batch vs merged vs full)
 
 Usage:
+    # Single-mode run (default: merged)
     python scripts/verify_daemon_events.py [--daemon-url URL] [--timeout SECONDS]
+
+    # Compare all streaming modes (runs the same prompt 3x, one per mode)
+    python scripts/verify_daemon_events.py --compare-modes [--timeout SECONDS]
 
 Requirements:
     - Daemon running at the specified URL (default ws://localhost:8765)
@@ -27,6 +32,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
+from soothe_daemon.query.stream_delivery import StreamDeliveryMode
 from soothe_sdk.client.websocket import WebSocketClient
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, extract_tool_call_updates_from_wire_message
 from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
@@ -34,6 +40,8 @@ from soothe_sdk.core.subagent_wire import (
     ALLOWLISTED_SUBAGENT_EVENT_TYPES,
     parse_subagent_wire_agent,
 )
+
+STREAM_DELIVERY_MODES: list[StreamDeliveryMode] = ["batch", "merged", "full"]
 
 logging.basicConfig(
     level=logging.INFO,
@@ -86,6 +94,14 @@ class EventStats:
     # Validation errors
     errors: list[str] = field(default_factory=list)
 
+    # Streaming mode specific metrics
+    goal_completion_chunks: int = 0  # messages-mode chunks with phase=goal_completion
+    goal_completion_text_chars: int = 0  # total chars across all goal_completion chunks
+    goal_completion_flush_events: int = 0  # number of emitted goal_completion messages (after coalescing)
+    messages_mode_events: int = 0  # total messages-mode events received
+    custom_mode_events: int = 0  # total custom-mode events received
+    event_timestamps: list[float] = field(default_factory=list)  # timestamps for latency analysis
+
 
 def classify_tool_call_id(tool_call_id: str) -> tuple[str, str, int | None, str]:
     """Parse and classify a tool_call_id.
@@ -106,6 +122,7 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
     stats.total_events += 1
     event_type = event.get("type", "unknown")
     stats.events_by_type[event_type] += 1
+    stats.event_timestamps.append(time.monotonic())
 
     # Handle wrapped events (daemon wraps LangGraph stream events in "event" type)
     if event_type == "event":
@@ -122,9 +139,23 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
 
         # Handle messages stream events - data is a tuple (message, metadata)
         if mode == "messages":
+            stats.messages_mode_events += 1
             if isinstance(data, (list, tuple)) and len(data) >= 1:
                 msg = data[0]
                 if isinstance(msg, dict):
+                    # Track goal_completion chunks
+                    phase = msg.get("phase", "")
+                    if phase == "goal_completion":
+                        stats.goal_completion_chunks += 1
+                        stats.goal_completion_flush_events += 1
+                        content = msg.get("content", "")
+                        if isinstance(content, str):
+                            stats.goal_completion_text_chars += len(content)
+                        elif isinstance(content, list):
+                            for part in content:
+                                if isinstance(part, dict) and isinstance(part.get("text"), str):
+                                    stats.goal_completion_text_chars += len(part["text"])
+
                     # Log the message structure with full tool_calls content
                     tool_calls = msg.get("tool_calls", [])
                     chunks = msg.get("tool_call_chunks", [])
@@ -269,6 +300,7 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
 
         # Handle custom mode events (stream tool wire events, subagent events)
         elif mode == "custom":
+            stats.custom_mode_events += 1
             if isinstance(data, dict):
                 inner_type = data.get("type", "")
 
@@ -568,6 +600,21 @@ def print_summary(stats: EventStats) -> None:
     else:
         print("  No validation errors")
 
+    # Streaming mode metrics
+    print("\n--- Streaming Mode Metrics ---")
+    print(f"  messages-mode events:  {stats.messages_mode_events}")
+    print(f"  custom-mode events:    {stats.custom_mode_events}")
+    print(f"  goal_completion chunks received: {stats.goal_completion_chunks}")
+    print(f"  goal_completion flush events:   {stats.goal_completion_flush_events}")
+    print(f"  goal_completion text chars:     {stats.goal_completion_text_chars}")
+    if stats.goal_completion_chunks > 0:
+        ratio = stats.goal_completion_text_chars / stats.goal_completion_flush_events if stats.goal_completion_flush_events else 0
+        print(f"  avg chars per flush:            {ratio:.1f}")
+    if len(stats.event_timestamps) >= 2:
+        duration = stats.event_timestamps[-1] - stats.event_timestamps[0]
+        print(f"  event stream duration:          {duration:.2f}s")
+        print(f"  events/sec:                     {stats.total_events / duration:.1f}" if duration > 0 else "  events/sec: N/A")
+
     print("\n" + "=" * 80)
 
     # Return pass/fail status
@@ -593,6 +640,7 @@ async def run_verification(
     daemon_url: str,
     test_prompt: str,
     timeout: float,
+    stream_delivery: StreamDeliveryMode = "merged",
 ) -> EventStats:
     """Run verification by connecting to daemon and collecting events."""
 
@@ -643,7 +691,7 @@ async def run_verification(
 
         # Subscribe to the loop
         subscribe_request_id = "verify_subscribe"
-        await client.send_loop_subscribe(loop_id, verbosity="debug", request_id=subscribe_request_id)
+        await client.send_loop_subscribe(loop_id, verbosity="debug", stream_delivery=stream_delivery, request_id=subscribe_request_id)
 
         # Wait for subscription confirmation
         subscribed = False
@@ -685,23 +733,14 @@ async def run_verification(
 
             validate_event(event, stats)
 
-            # Log important events
-            event_type = event.get("type", "")
-            if event_type.startswith("soothe.stream.") or event_type.startswith("soothe.subagent."):
-                logger.info(
-                    "Wire event: %s (%s)",
-                    event_type,
-                    json.dumps(event, separators=(",", ":"))[:200]
-                )
-            elif event_type == "step_started":
-                logger.info("Step started: %s", event.get("step_id"))
-            elif event_type == "step_completed":
-                logger.info("Step completed: %s", event.get("step_id"))
-            elif event_type == "loop_completed":
-                logger.info("Loop completed: %s", loop_id)
-                break
-            elif event_type == "error":
-                logger.error("Daemon error: %s", event.get("message"))
+            # Check for agent loop completion (wrapped in custom event envelope)
+            if event.get("type") == "event" and event.get("mode") == "custom":
+                data = event.get("data")
+                if isinstance(data, dict):
+                    inner_type = data.get("type", "")
+                    if inner_type == "soothe.cognition.agent_loop.completed":
+                        logger.info("Agent loop completed: %s", data.get("status"))
+                        break
 
         logger.info("Event collection complete")
 
@@ -719,6 +758,142 @@ async def run_verification(
         logger.info("Disconnected from daemon")
 
     return stats
+
+
+def print_mode_comparison(all_stats: dict[StreamDeliveryMode, EventStats]) -> None:
+    """Print a side-by-side comparison of streaming modes."""
+
+    print("\n" + "=" * 80)
+    print("STREAMING MODE COMPARISON: batch vs merged vs full")
+    print("=" * 80)
+
+    # Header row
+    metrics = [
+        ("Total events", lambda s: s.total_events),
+        ("messages-mode events", lambda s: s.messages_mode_events),
+        ("custom-mode events", lambda s: s.custom_mode_events),
+        ("goal_completion chunks", lambda s: s.goal_completion_chunks),
+        ("goal_completion flush events", lambda s: s.goal_completion_flush_events),
+        ("goal_completion text chars", lambda s: s.goal_completion_text_chars),
+        ("avg chars/flush", lambda s: f"{s.goal_completion_text_chars / s.goal_completion_flush_events:.1f}" if s.goal_completion_flush_events else "N/A"),
+        ("Tool call IDs", lambda s: len(s.tool_call_ids)),
+        ("Unified tool call IDs", lambda s: len(s.unified_tool_call_ids)),
+        ("Stream tool updates", lambda s: len(s.stream_tool_updates)),
+        ("Subagent events", lambda s: sum(s.subagent_events_by_type.values())),
+        ("Event stream duration (s)", lambda s: f"{s.event_timestamps[-1] - s.event_timestamps[0]:.2f}" if len(s.event_timestamps) >= 2 else "N/A"),
+        ("Events/sec", lambda s: f"{s.total_events / (s.event_timestamps[-1] - s.event_timestamps[0]):.1f}" if len(s.event_timestamps) >= 2 and (s.event_timestamps[-1] - s.event_timestamps[0]) > 0 else "N/A"),
+        ("Validation errors", lambda s: len(s.errors)),
+    ]
+
+    # Column widths
+    mode_col_w = max(len(str(all_stats[m].total_events)) for m in STREAM_DELIVERY_MODES if m in all_stats) + 2
+    mode_col_w = max(mode_col_w, 8)
+
+    # Print header
+    header = f"  {'Metric':<30s}"
+    for mode in STREAM_DELIVERY_MODES:
+        if mode in all_stats:
+            header += f" {mode:>{mode_col_w}s}"
+    print(header)
+    print(f"  {'-' * 30}" + ("-" * (mode_col_w + 1)) * sum(1 for m in STREAM_DELIVERY_MODES if m in all_stats))
+
+    # Print rows
+    for label, getter in metrics:
+        row = f"  {label:<30s}"
+        for mode in STREAM_DELIVERY_MODES:
+            if mode in all_stats:
+                val = getter(all_stats[mode])
+                row += f" {str(val):>{mode_col_w}s}"
+        print(row)
+
+    # Coalescing ratio analysis
+    print("\n--- Coalescing Ratio Analysis ---")
+    for mode in STREAM_DELIVERY_MODES:
+        if mode not in all_stats:
+            continue
+        s = all_stats[mode]
+        if s.goal_completion_chunks > 0 and s.goal_completion_flush_events > 0:
+            ratio = s.goal_completion_chunks / s.goal_completion_flush_events
+            print(f"  {mode:>8s}: {s.goal_completion_chunks} raw chunks → {s.goal_completion_flush_events} flush events (coalesce ratio: {ratio:.1f}x)")
+        else:
+            print(f"  {mode:>8s}: no goal_completion events")
+
+    # Explain behavioral expectations
+    print("\n--- Expected Behavior ---")
+    print("  batch:  goal_completion text suppressed until loop completes → 1 flush event")
+    print("  merged: goal_completion text flushed in ~512-char batches → few flush events")
+    print("  full:   every goal_completion chunk emitted individually → flush count ≈ chunk count")
+
+    # Validate expectations
+    print("\n--- Validation ---")
+    all_pass = True
+    for mode in STREAM_DELIVERY_MODES:
+        if mode not in all_stats:
+            continue
+        s = all_stats[mode]
+        gc = s.goal_completion_chunks
+        fl = s.goal_completion_flush_events
+
+        if gc == 0:
+            print(f"  {mode:>8s}: SKIP (no goal_completion events)")
+            continue
+
+        if mode == "batch":
+            if fl <= 1:
+                print(f"  {mode:>8s}: PASS (batch mode produced {fl} flush event(s) for {gc} chunks)")
+            else:
+                print(f"  {mode:>8s}: WARN (batch mode produced {fl} flush events, expected ≤1)")
+                all_pass = False
+        elif mode == "merged":
+            if fl < gc:
+                print(f"  {mode:>8s}: PASS (merged mode coalesced {gc} chunks → {fl} flush events)")
+            else:
+                print(f"  {mode:>8s}: WARN (merged mode did not coalesce: {gc} chunks → {fl} flush events)")
+                all_pass = False
+        elif mode == "full":
+            if fl == gc:
+                print(f"  {mode:>8s}: PASS (full mode: 1:1 chunk-to-flush, {gc} each)")
+            else:
+                print(f"  {mode:>8s}: WARN (full mode: {gc} chunks → {fl} flush events, expected equal)")
+                all_pass = False
+
+    if all_pass:
+        print("\n  ALL MODE VALIDATIONS PASSED")
+    else:
+        print("\n  SOME MODE VALIDATIONS HAD WARNINGS")
+
+    print("\n" + "=" * 80)
+
+
+async def run_mode_comparison(
+    daemon_url: str,
+    test_prompt: str,
+    timeout: float,
+) -> dict[StreamDeliveryMode, EventStats]:
+    """Run verification for all streaming modes and return per-mode stats."""
+
+    all_stats: dict[StreamDeliveryMode, EventStats] = {}
+
+    for i, mode in enumerate(STREAM_DELIVERY_MODES):
+        print(f"\n{'=' * 40}")
+        print(f"  Running mode {i+1}/3: {mode}")
+        print(f"{'=' * 40}")
+
+        logger.info("Starting verification with stream_delivery=%s", mode)
+        stats = await run_verification(
+            daemon_url=daemon_url,
+            test_prompt=test_prompt,
+            timeout=timeout,
+            stream_delivery=mode,
+        )
+        all_stats[mode] = stats
+
+        # Brief pause between runs to let daemon settle
+        if i < len(STREAM_DELIVERY_MODES) - 1:
+            logger.info("Waiting 3s before next mode run...")
+            await asyncio.sleep(3)
+
+    return all_stats
 
 
 def main() -> int:
@@ -744,6 +919,17 @@ def main() -> int:
         help="Timeout in seconds for event collection (default: 60)",
     )
     parser.add_argument(
+        "--stream-delivery",
+        choices=["batch", "merged", "full"],
+        default="merged",
+        help="Stream delivery mode (default: merged)",
+    )
+    parser.add_argument(
+        "--compare-modes",
+        action="store_true",
+        help="Run all 3 streaming modes and compare results side-by-side",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable verbose logging",
@@ -759,20 +945,41 @@ def main() -> int:
     logger.info("Test prompt: %s", args.prompt[:100])
     logger.info("Timeout: %s seconds", args.timeout)
 
-    stats = asyncio.run(run_verification(
-        daemon_url=args.daemon_url,
-        test_prompt=args.prompt,
-        timeout=args.timeout,
-    ))
+    if args.compare_modes:
+        all_stats = asyncio.run(run_mode_comparison(
+            daemon_url=args.daemon_url,
+            test_prompt=args.prompt,
+            timeout=args.timeout,
+        ))
 
-    result = print_summary(stats)
+        # Print individual summaries
+        for mode in STREAM_DELIVERY_MODES:
+            if mode in all_stats:
+                print(f"\n{'#' * 80}")
+                print(f"# INDIVIDUAL SUMMARY: {mode} mode")
+                print(f"{'#' * 80}")
+                print_summary(all_stats[mode])
 
-    if result is True:
+        # Print comparison
+        print_mode_comparison(all_stats)
         return 0
-    elif result is False:
-        return 1
     else:
-        return 2  # Incomplete
+        logger.info("Stream delivery mode: %s", args.stream_delivery)
+        stats = asyncio.run(run_verification(
+            daemon_url=args.daemon_url,
+            test_prompt=args.prompt,
+            timeout=args.timeout,
+            stream_delivery=args.stream_delivery,
+        ))
+
+        result = print_summary(stats)
+
+        if result is True:
+            return 0
+        elif result is False:
+            return 1
+        else:
+            return 2  # Incomplete
 
 
 if __name__ == "__main__":
