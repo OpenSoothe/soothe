@@ -31,4 +31,4 @@ soothed stop
 ## Dependencies
 
 - `soothe>=0.5.0` — In-process agent core
-- `soothe-sdk>=0.5.0` — WebSocket protocol
+- `soothe-sdk>=0.5.10` — WebSocket protocol
