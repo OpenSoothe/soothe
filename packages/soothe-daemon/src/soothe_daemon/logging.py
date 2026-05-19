@@ -6,6 +6,7 @@ for its own transport, session, and orchestration logs.
 
 from __future__ import annotations
 
+import contextvars
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -14,8 +15,53 @@ from soothe.config import SOOTHE_HOME
 from soothe_sdk.utils.logging import ShortLevelFormatter
 
 DEFAULT_DAEMON_LOG = "daemon.log"
+
+
 DEFAULT_MAX_BYTES = 5_242_880  # 5 MB
 DEFAULT_BACKUP_COUNT = 3
+
+# Context variables for loop_id and client_id (always log full IDs)
+loop_id_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar("loop_id", default=None)
+client_id_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "client_id", default=None
+)
+
+
+class DaemonFormatter(ShortLevelFormatter):
+    """Formatter that includes loop_id and client_id from context variables.
+
+    Always logs the full loop ID and client ID (no truncation) when available.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format with loop_id and client_id from context variables."""
+        record.loop_id = loop_id_ctx.get() or "-"
+        record.client_id = client_id_ctx.get() or "-"
+        return super().format(record)
+
+
+def set_loop_id(loop_id: str | None) -> None:
+    """Set the current loop ID for logging context.
+
+    Args:
+        loop_id: The loop ID to set, or None to clear.
+    """
+    loop_id_ctx.set(loop_id)
+
+
+def set_client_id(client_id: str | None) -> None:
+    """Set the current client ID for logging context.
+
+    Args:
+        client_id: The client ID to set, or None to clear.
+    """
+    client_id_ctx.set(client_id)
+
+
+def clear_log_context() -> None:
+    """Clear both loop_id and client_id from logging context."""
+    loop_id_ctx.set(None)
+    client_id_ctx.set(None)
 
 
 def _daemon_log_level_from_soothe_config(cfg: object) -> str:
@@ -64,7 +110,10 @@ def setup_daemon_logging(
             encoding="utf-8",
         )
         file_handler.setFormatter(
-            ShortLevelFormatter("%(asctime)s %(level_short)s %(name)s:%(lineno)d %(message)s")
+            DaemonFormatter(
+                "%(asctime)s %(level_short)s %(name)s:%(lineno)d "
+                "[loop=%(loop_id)s client=%(client_id)s] %(message)s"
+            )
         )
         file_handler.setLevel(file_level)
         daemon_logger.addHandler(file_handler)
@@ -79,7 +128,10 @@ def setup_daemon_logging(
         ):
             console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setFormatter(
-                ShortLevelFormatter("%(asctime)s %(level_short)s %(message)s")
+                DaemonFormatter(
+                    "%(asctime)s %(level_short)s "
+                    "[loop=%(loop_id)s client=%(client_id)s] %(message)s"
+                )
             )
             console_handler.setLevel(logging.INFO)
             daemon_logger.addHandler(console_handler)

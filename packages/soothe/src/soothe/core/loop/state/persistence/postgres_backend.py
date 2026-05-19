@@ -306,10 +306,15 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                 if not result:
                     return None
 
-                # Deserialize checkpoint
-                from soothe.core.loop.state.checkpoint import AgentLoopCheckpoint
+                from soothe.core.loop.state.checkpoint import (
+                    AgentLoopCheckpoint,
+                    normalize_checkpoint_data,
+                )
 
-                checkpoint_data = result["checkpoint_data"]
+                checkpoint_data = normalize_checkpoint_data(
+                    dict(result["checkpoint_data"]),
+                    loop_id=loop_id,
+                )
                 return AgentLoopCheckpoint.model_validate(checkpoint_data)
 
     async def delete_checkpoint(self, loop_id: str) -> None:

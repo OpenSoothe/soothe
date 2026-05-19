@@ -5,7 +5,10 @@ from __future__ import annotations
 import difflib
 from typing import TYPE_CHECKING, Any
 
+from soothe_cli.tui.file_ops import resolve_physical_path
+from soothe_cli.tui.preview_limits import TOOL_APPROVAL_PREVIEW_LINES
 from soothe_cli.tui.widgets.tool_widgets import (
+    DeleteFileApprovalWidget,
     EditFileApprovalWidget,
     GenericApprovalWidget,
     WriteFileApprovalWidget,
@@ -55,10 +58,13 @@ class WriteFileRenderer(ToolRenderer):
         if "." in file_path:
             file_extension = file_path.rsplit(".", 1)[-1]
 
+        physical = resolve_physical_path(file_path, None)
+        existed = bool(physical and physical.exists())
         data = {
             "file_path": file_path,
             "content": content,
             "file_extension": file_extension,
+            "is_new_file": not existed,
         }
         return WriteFileApprovalWidget, data
 
@@ -123,10 +129,34 @@ class EditFileRenderer(ToolRenderer):
         return diff_list[2:] if len(diff_list) > 2 else diff_list  # noqa: PLR2004  # Column count threshold
 
 
+class DeleteFileRenderer(ToolRenderer):
+    """Renderer for delete_file — shows path and a short preview of removed content."""
+
+    @staticmethod
+    def get_approval_widget(  # noqa: D102  # Protocol method — docstring on base class
+        tool_args: dict[str, Any],
+    ) -> tuple[type[ToolApprovalWidget], dict[str, Any]]:
+        file_path = tool_args.get("file_path", "") or tool_args.get("path", "")
+        content = ""
+        physical = resolve_physical_path(str(file_path), None)
+        if physical and physical.is_file():
+            try:
+                content = physical.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                content = ""
+        lines = content.splitlines() if content else []
+        return DeleteFileApprovalWidget, {
+            "file_path": file_path,
+            "preview_lines": lines[:TOOL_APPROVAL_PREVIEW_LINES],
+            "total_lines": len(lines),
+        }
+
+
 _RENDERER_REGISTRY: dict[str, type[ToolRenderer]] = {
     "task": TaskRenderer,
     "write_file": WriteFileRenderer,
     "edit_file": EditFileRenderer,
+    "delete_file": DeleteFileRenderer,
 }
 """Registry mapping tool names to renderers
 

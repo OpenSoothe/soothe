@@ -20,11 +20,11 @@ STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD: Final[int] = 3
 SKILL_CARD_PREVIEW_LINES: Final[int] = 4
 SKILL_CARD_PREVIEW_CHARS: Final[int] = 300
 
-# --- Write / edit tool approval widgets (`tool_widgets`) ---
-TOOL_APPROVAL_PREVIEW_LINES: Final[int] = 20
+# --- Write / edit / delete tool approval widgets (`tool_widgets`) ---
+TOOL_APPROVAL_PREVIEW_LINES: Final[int] = 15
 TOOL_APPROVAL_VALUE_PREVIEW_CHARS: Final[int] = 200
-TOOL_APPROVAL_BODY_MAX_LINES: Final[int] = 30
-TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES: Final[int] = 50
+TOOL_APPROVAL_BODY_MAX_LINES: Final[int] = 15
+TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES: Final[int] = 15
 
 # --- Clipboard copy toast ---
 CLIPBOARD_TOAST_PREVIEW_CHARS: Final[int] = 40
@@ -34,8 +34,8 @@ APPROVAL_WARNING_PREVIEW_COUNT: Final[int] = 3
 APPROVAL_SHELL_COMMAND_TRUNCATE_CHARS: Final[int] = 120
 APPROVAL_WARNING_TEXT_TRUNCATE_CHARS: Final[int] = 220
 
-# --- Unified diff snippets in HITL previews (`file_ops`, diff messages) ---
-APPROVAL_DIFF_MAX_LINES: Final[int] = 100
+# --- Unified diff snippets in chat (`file_ops`, DiffMessage) ---
+APPROVAL_DIFF_MAX_LINES: Final[int] = 15
 
 # --- Autopilot dashboard (`autopilot_dashboard`) ---
 AUTOPILOT_GOAL_DESCRIPTION_PREVIEW_CHARS: Final[int] = 50

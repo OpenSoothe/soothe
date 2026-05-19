@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,20 @@ def test_configure_writes_runner_log(soothe_home_tmp: Path) -> None:
     root.handlers.clear()
 
 
+def test_configure_sets_log_context_to_loop_id(soothe_home_tmp: Path) -> None:
+    """Worker log tags use the daemon loop_id, not a separate checkpoint id."""
+    from soothe.logging.context import get_thread_id
+
+    cfg = SootheConfig()
+    loop_id = "019e0bcd-fead-7531-a0bb-b6d1dfba353f"
+    root = logging.getLogger("soothe")
+    root.handlers.clear()
+
+    configure_loop_runner_worker_logging(cfg, loop_id)
+    assert get_thread_id() == loop_id
+    root.handlers.clear()
+
+
 def test_configure_skips_empty_loop_id(soothe_home_tmp: Path) -> None:
     cfg = SootheConfig()
     root = logging.getLogger("soothe")
@@ -44,6 +59,31 @@ def test_configure_skips_empty_loop_id(soothe_home_tmp: Path) -> None:
 
     assert configure_loop_runner_worker_logging(cfg, "") is None
     assert configure_loop_runner_worker_logging(cfg, "   ") is None
+
+    root.handlers.clear()
+
+
+def test_configure_replaces_handler_when_loop_id_changes(soothe_home_tmp: Path) -> None:
+    """Pooled workers must not accumulate runner.log handlers across loop runs."""
+    cfg = SootheConfig()
+    loop_a = "loop-a-1111"
+    loop_b = "loop-b-2222"
+
+    root = logging.getLogger("soothe")
+    root.handlers.clear()
+
+    path_a = configure_loop_runner_worker_logging(cfg, loop_a)
+    path_b = configure_loop_runner_worker_logging(cfg, loop_b)
+    assert path_a is not None and path_b is not None
+
+    loop_handlers = [
+        h
+        for h in root.handlers
+        if isinstance(h, RotatingFileHandler)
+        and getattr(h, "baseFilename", "").endswith(RUNNER_LOG_FILENAME)
+    ]
+    assert len(loop_handlers) == 1
+    assert Path(loop_handlers[0].baseFilename).resolve() == path_b.resolve()
 
     root.handlers.clear()
 

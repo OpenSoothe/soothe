@@ -14,6 +14,7 @@ from soothe.utils.text_preview import preview_first
 from soothe_sdk.client.protocol import _serialize_for_json
 
 from soothe_daemon.image_understanding import validate_and_normalize_image_attachments
+from soothe_daemon.logging import set_client_id
 
 logger = logging.getLogger(__name__)
 
@@ -137,20 +138,23 @@ class MessageRouter:
         if len(subs) > 1:
             logger.warning(
                 "[MsgRouter] Client %s has %d loop subscriptions (expected 1); using min(loop_id)",
-                _client_label(client_id),
+                client_id,
                 len(subs),
             )
         return min(subs)
 
     async def dispatch(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle a single client message."""
+        # Set client_id in logging context for full ID in daemon.log
+        if isinstance(client_id, str):
+            set_client_id(client_id)
         d = self._daemon
         msg_type = msg.get("type", "")
         if msg_type not in _SKIP_PER_MESSAGE_DEBUG_TYPES:
             logger.debug(
                 "[MsgRouter] Received message type=%s from client=%s",
                 msg_type,
-                _client_label(client_id),
+                client_id,
             )
 
         if msg_type == "command":
@@ -541,9 +545,7 @@ class MessageRouter:
         await asyncio.sleep(0.5)
 
         # Trigger daemon shutdown
-        logger.info(
-            "Daemon shutdown requested via WebSocket RPC from client=%s", _client_label(client_id)
-        )
+        logger.info("Daemon shutdown requested via WebSocket RPC from client=%s", client_id)
         await d.stop()
 
     async def _handle_config_get(self, client_id: Any, msg: dict[str, Any]) -> None:

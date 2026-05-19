@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import errno
+import json
 import logging
 import re
 import time
@@ -69,6 +70,9 @@ if TYPE_CHECKING:
     from .goal_context_manager import GoalContextManager
 
 logger = logging.getLogger(__name__)
+
+# Per execute-step cap on root-graph tool results consumed from the Act stream.
+_DEFAULT_MAX_TOOL_CALLS_PER_STEP = 99
 
 
 def _make_step_tool_call_id(step_id: str, raw_tid: str, call_idx: int) -> str:
@@ -194,6 +198,41 @@ def _tool_call_update_custom_events_from_ai_message(msg: BaseMessage) -> list[di
             _append(tid, str(ch.get("name") or ""), args)
 
     return out
+
+
+def _record_tool_call_args_by_id(
+    msg: BaseMessage,
+    dest: dict[str, dict[str, Any]],
+) -> None:
+    """Merge tool-call kwargs into *dest* keyed by tool_call_id (later writes win)."""
+    if not isinstance(msg, (AIMessage, AIMessageChunk)):
+        return
+    filled = _backfill_tool_calls_args_from_chunks(msg)
+    for tc in getattr(filled, "tool_calls", None) or []:
+        if not isinstance(tc, dict):
+            continue
+        tid = str(tc.get("id") or "").strip()
+        args = _coerce_tool_call_args_mapping(tc.get("args"))
+        if tid and args:
+            dest[tid] = args
+    for ch in getattr(filled, "tool_call_chunks", None) or []:
+        if not isinstance(ch, dict):
+            continue
+        tid = str(ch.get("id") or "").strip()
+        args = _chunk_args_dict(ch)
+        if tid and args:
+            dest[tid] = args
+
+
+def _format_tool_call_args_for_log(args: dict[str, Any], *, max_chars: int = 500) -> str:
+    """Serialize tool kwargs for debug logs (truncated)."""
+    if not args:
+        return "{}"
+    try:
+        text = json.dumps(args, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        text = str(args)
+    return log_preview(text, chars=max_chars)
 
 
 def _backfill_tool_calls_args_from_chunks(msg: BaseMessage) -> BaseMessage:
@@ -731,7 +770,7 @@ class _ActStreamBudget:
     """Mutable counters for a single CoreAgent stream (IG-130)."""
 
     max_subagent_tasks_per_wave: int = 0
-    max_tool_calls_per_step: int = 30  # Prevent runaway tool usage
+    max_tool_calls_per_step: int = _DEFAULT_MAX_TOOL_CALLS_PER_STEP
     subagent_task_completions: int = 0
     tool_call_count: int = 0
     hit_subagent_cap: bool = False
@@ -864,6 +903,43 @@ class Executor:
         if self._config is None:
             return 0
         return max(0, int(self._config.agent_loop.max_subagent_tasks_per_wave))
+
+    @staticmethod
+    def _max_tool_calls_per_step() -> int:
+        return _DEFAULT_MAX_TOOL_CALLS_PER_STEP
+
+    @staticmethod
+    def _build_step_outcome_from_stream(
+        *,
+        outcomes: list[dict[str, Any]],
+        output: str,
+        hit_tool_budget: bool,
+        step_id: str | None = None,
+        fallback_tool_name: str = "unknown",
+    ) -> dict[str, Any]:
+        """Merge streamed tool outcomes and text into one StepResult outcome dict."""
+        if outcomes:
+            primary: dict[str, Any] = dict(outcomes[-1])
+            if len(outcomes) > 1:
+                primary["tools_completed"] = len(outcomes)
+        else:
+            primary = {
+                "type": "generic",
+                "tool_name": fallback_tool_name,
+                "tool_call_id": f"step_{step_id}" if step_id else "",
+                "success_indicators": {},
+                "entities": [],
+                "size_bytes": len(output.encode("utf-8")) if output else 0,
+            }
+        if output.strip():
+            primary["output_summary"] = create_output_summary(output)
+            stripped = output.strip()
+            cap = PLANNER_OUTCOME_PREVIEW_CAP
+            primary["wave_join_preview"] = stripped[:cap] + ("…" if len(stripped) > cap else "")
+        if hit_tool_budget:
+            primary["tool_budget_exhausted"] = True
+            primary["tools_completed"] = primary.get("tools_completed") or len(outcomes)
+        return primary
 
     def _branch_predecessor_message_cap(self) -> int:
         """Max ledger messages to deep-copy into a parallel branch CoreAgent input (RFC-214).
@@ -1089,6 +1165,7 @@ class Executor:
 
         # OR cap hit (any step hit cap)
         hit_cap = any(r.hit_subagent_cap for r in step_results)
+        hit_tool_budget = any(r.hit_tool_budget for r in step_results)
 
         # Count errors
         error_count = sum(1 for r in step_results if not r.success)
@@ -1100,6 +1177,7 @@ class Executor:
         state.last_wave_tool_call_count = total_tool_calls
         state.last_wave_subagent_task_count = total_subagent_tasks
         state.last_wave_hit_subagent_cap = hit_cap
+        state.last_wave_hit_tool_budget = hit_tool_budget
         state.last_wave_output_length = output_length
         state.last_wave_error_count = error_count
 
@@ -1246,6 +1324,7 @@ class Executor:
         thread_id: str,
         subagent_task_completions: int = 0,
         hit_subagent_cap: bool = False,
+        hit_tool_budget: bool = False,
     ) -> list[StepResult]:
         """One ``StepResult`` per step in a combined sequential turn (scheme B)."""
         n = len(steps)
@@ -1289,6 +1368,7 @@ class Executor:
                         tool_call_count=tool_counts[i],
                         subagent_task_completions=subagent_task_completions if i == 0 else 0,
                         hit_subagent_cap=hit_subagent_cap if i == 0 else False,
+                        hit_tool_budget=hit_tool_budget if i == 0 else False,
                     )
                 )
             else:
@@ -1304,6 +1384,7 @@ class Executor:
                         tool_call_count=0,
                         subagent_task_completions=0,
                         hit_subagent_cap=False,
+                        hit_tool_budget=False,
                     )
                 )
         return results
@@ -1495,6 +1576,7 @@ class Executor:
                             thread_id=state.thread_id,
                             subagent_task_completions=0,
                             hit_subagent_cap=False,
+                            hit_tool_budget=False,
                         )
                         all_step_results.append(step_result)
                         yield step_result
@@ -1598,7 +1680,7 @@ class Executor:
         event_count = 0
         budget = _ActStreamBudget(
             max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave(),
-            max_tool_calls_per_step=30,
+            max_tool_calls_per_step=self._max_tool_calls_per_step(),
         )
 
         try:
@@ -1639,12 +1721,14 @@ class Executor:
             # IG-418: Pass first step_id for unified tool_call_id rewriting
             # Sequential mode runs all steps together, use first step ID
             first_step_id = steps[0].id if steps else ""
+            stream_outcomes: list[dict[str, Any]] = []
             async for (
                 final_output,
                 event,
                 tc_count,
                 msg_list,
                 _,
+                chunk_outcomes,
             ) in self._stream_and_collect(
                 stream,
                 budget=budget,
@@ -1659,21 +1743,30 @@ class Executor:
                     output = final_output
                     tool_call_count = tc_count
                     messages = msg_list
+                    stream_outcomes = chunk_outcomes
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
             logger.info(
-                "[Wave-Seq] steps=%d dur=%dms evts=%d tools=%d subagents=%d cap=%s (RFC-214)",
+                "[Wave-Seq] steps=%d dur=%dms evts=%d tools=%d subagents=%d subagent_cap=%s tool_budget=%s (RFC-214)",
                 len(steps),
                 duration_ms,
                 event_count,
                 tool_call_count,
                 budget.subagent_task_completions,
                 budget.hit_subagent_cap,
+                budget.hit_tool_budget,
             )
 
             # RFC-214: Extract N outcomes and record N adjacent pairs in ledger
-            step_outcomes = self._extract_sequential_outcomes(messages, steps, state)
+            step_outcomes = self._extract_sequential_outcomes(
+                messages,
+                steps,
+                state,
+                partial_output=output,
+                hit_tool_budget=budget.hit_tool_budget,
+                stream_outcomes=stream_outcomes,
+            )
             step_results = self._record_batch_ledger_pairs(
                 state,
                 step_messages,
@@ -1682,7 +1775,9 @@ class Executor:
                 duration_ms=duration_ms,
                 subagent_task_completions=budget.subagent_task_completions,
                 hit_subagent_cap=budget.hit_subagent_cap,
+                hit_tool_budget=budget.hit_tool_budget,
                 tool_call_count=tool_call_count,
+                stream_outcomes=stream_outcomes,
             )
 
             # Aggregate metrics into LoopState
@@ -1837,9 +1932,8 @@ class Executor:
         output = ""  # Still collect for Layer 1 final report
         budget = _ActStreamBudget(
             max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave(),
-            max_tool_calls_per_step=30,
+            max_tool_calls_per_step=self._max_tool_calls_per_step(),
         )
-        outcomes: list[dict] = []  # RFC-211: Collect outcome metadata
 
         try:
             logger.debug(
@@ -1953,12 +2047,14 @@ class Executor:
             tool_call_count = 0
             messages: list[BaseMessage] = []
             delegate_final = ""
+            stream_outcomes: list[dict[str, Any]] = []
             async for (
                 final_output,
                 event,
                 tc_count,
                 msg_list,
                 df,
+                chunk_outcomes,
             ) in self._stream_and_collect(
                 stream,
                 budget=budget,
@@ -1973,25 +2069,18 @@ class Executor:
                     tool_call_count = tc_count
                     messages = msg_list
                     delegate_final = df
+                    stream_outcomes = chunk_outcomes
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
             # Note: tool_call_ids are now in unified format within messages chunks
             # No separate binding events needed (IG-416 simplified design)
 
-            # RFC-211: Aggregate outcomes from all tools in this step
-            # Use the first outcome as primary (future: merge multiple)
-            primary_outcome = (
-                outcomes[0]
-                if outcomes
-                else {
-                    "type": "generic",
-                    "tool_name": "unknown",
-                    "tool_call_id": f"step_{step.id}",
-                    "success_indicators": {},
-                    "entities": [],
-                    "size_bytes": len(output.encode("utf-8")),
-                }
+            primary_outcome = self._build_step_outcome_from_stream(
+                outcomes=stream_outcomes,
+                output=output,
+                hit_tool_budget=budget.hit_tool_budget,
+                step_id=step.id,
             )
 
             # IG-148: Add CoreAgent input/output evidence
@@ -1999,11 +2088,12 @@ class Executor:
             primary_outcome["output_summary"] = create_output_summary(output)  # Truncated findings
 
             logger.info(
-                "Step %s completed successfully in %dms (tool_calls: %d, subagent_cap_hit=%s)",
+                "Step %s completed successfully in %dms (tool_calls: %d, subagent_cap_hit=%s, tool_budget_hit=%s)",
                 step.id,
                 duration_ms,
                 tool_call_count,
                 budget.hit_subagent_cap,
+                budget.hit_tool_budget,
             )
 
             return (
@@ -2017,6 +2107,7 @@ class Executor:
                     tool_call_count=tool_call_count,
                     subagent_task_completions=budget.subagent_task_completions,
                     hit_subagent_cap=budget.hit_subagent_cap,
+                    hit_tool_budget=budget.hit_tool_budget,
                 ),
                 messages,
                 delegate_final,
@@ -2063,6 +2154,7 @@ class Executor:
                     thread_id=thread_id,
                     subagent_task_completions=0,
                     hit_subagent_cap=False,
+                    hit_tool_budget=False,
                 ),
                 [],
                 "",
@@ -2077,7 +2169,7 @@ class Executor:
         step_description: str = "",
         step_subagent: str | None = None,
     ) -> AsyncGenerator[
-        tuple[str | None, StreamEvent | None, int, list[BaseMessage], str],
+        tuple[str | None, StreamEvent | None, int, list[BaseMessage], str, list[dict[str, Any]]],
         None,
     ]:
         """Stream events immediately while accumulating output and counting tool calls.
@@ -2103,11 +2195,11 @@ class Executor:
             step_subagent: Optional planner subagent hint for ``subagent_type``.
 
         Yields:
-            Tuple of ``(output, event, tool_call_count, messages, delegate_final_text)``:
-            - When event is not None: immediate display chunk (delegate_final_text empty).
+            Tuple of ``(output, event, tool_call_count, messages, delegate_final_text, outcomes)``:
+            - When event is not None: immediate display chunk (outcomes empty).
             - At end: combined_output, ``tool_call_count`` (root graph plus namespaced
-              subgraph ``ToolMessage`` totals), root AIMessages list, and joined ``task``
-              tool bodies (ordered, capped)—empty string when no ``task`` tools ran.
+              subgraph ``ToolMessage`` totals), root AIMessages list, joined ``task``
+              tool bodies (ordered, capped), and RFC-211 outcome metadata per tool.
         """
         from langchain_core.messages import AIMessage, AIMessageChunk
 
@@ -2128,6 +2220,7 @@ class Executor:
         messages: list[BaseMessage] = []  # IG-151: Collect messages for token extraction
         delegate_task_final_parts: list[str] = []
         delegate_task_ids_seen: set[str] = set()
+        tool_args_by_call_id: dict[str, dict[str, Any]] = {}
 
         # RFC-211: Collect per-tool outcome metadata (structured, no filesystem cache; IG-387)
         outcomes: list[dict] = []
@@ -2192,9 +2285,9 @@ class Executor:
                         )
                         if modified_msg is not msg0:
                             emit_chunk = (_ns_chunk, mode_chunk, (modified_msg, data_chunk[1]))
-                yield None, emit_chunk, 0, [], ""
+                yield None, emit_chunk, 0, [], "", []
                 for tool_ev in tool_update_events:
-                    yield None, (_ns_chunk, "custom", tool_ev), 0, [], ""
+                    yield None, (_ns_chunk, "custom", tool_ev), 0, [], "", []
                 chunk = emit_chunk
 
             stop_act_stream = False
@@ -2203,18 +2296,6 @@ class Executor:
                     tool_call_count += 1
                     tool_call_id = msg.tool_call_id
                     tool_name = msg.name or "unknown"
-
-                    # Check tool budget (IG-XXX: prevent runaway tool usage)
-                    if budget is not None and budget.max_tool_calls_per_step > 0:
-                        budget.tool_call_count = tool_call_count
-                        if tool_call_count > budget.max_tool_calls_per_step:
-                            budget.hit_tool_budget = True
-                            logger.warning(
-                                "Tool budget exceeded (count=%d, max=%d), stopping stream",
-                                tool_call_count,
-                                budget.max_tool_calls_per_step,
-                            )
-                            break
 
                     if _maybe_cap_subagent_tasks(msg):
                         stop_act_stream = True
@@ -2251,21 +2332,36 @@ class Executor:
                                 clipped = clipped[:_DELEGATE_FINAL_PER_TASK_CAP]
                             delegate_task_final_parts.append(clipped)
 
-                    # Log tool outcome (IG-416: args no longer tracked separately)
+                    logged_args = tool_args_by_call_id.get(tool_call_id or "", {})
                     logger.debug(
-                        "Tool #%d %s(%s) → %s, %dB",
+                        "Tool #%d %s(%s) args=%s → %s, %dB",
                         tool_call_count,
                         tool_name,
                         tool_call_id,
+                        _format_tool_call_args_for_log(logged_args),
                         outcome.get("type", "unknown"),
                         outcome.get("size_bytes", 0),
                     )
+
+                    if budget is not None and budget.max_tool_calls_per_step > 0:
+                        budget.tool_call_count = tool_call_count
+                        if tool_call_count >= budget.max_tool_calls_per_step:
+                            budget.hit_tool_budget = True
+                            logger.warning(
+                                "Tool budget reached (count=%d, max=%d), stopping Act stream with partial results",
+                                tool_call_count,
+                                budget.max_tool_calls_per_step,
+                            )
+                            stop_act_stream = True
+                            break
                 elif isinstance(msg, AIMessageChunk):
+                    _record_tool_call_args_by_id(msg, tool_args_by_call_id)
                     messages.append(msg)  # Collect chunks for assistant text extraction
                     t = extract_text_from_message_content(msg.content)
                     if t:
                         chunks.append(t)
                 elif isinstance(msg, AIMessage):
+                    _record_tool_call_args_by_id(msg, tool_args_by_call_id)
                     messages.append(msg)
                     t = extract_text_from_message_content(msg.content)
                     if t:
@@ -2328,6 +2424,7 @@ class Executor:
             total_tool_calls,
             messages,
             delegate_final_text,
+            outcomes,
         )
 
     async def _build_batch_human_messages(
@@ -2425,6 +2522,10 @@ class Executor:
         messages: list[BaseMessage],
         steps: list,
         state: LoopState,
+        *,
+        partial_output: str = "",
+        hit_tool_budget: bool = False,
+        stream_outcomes: list[dict[str, Any]] | None = None,
     ) -> dict[str, LoopAIMessage]:
         """Extract outcomes from sequential batch (RFC-214).
 
@@ -2435,6 +2536,9 @@ class Executor:
             messages: All messages from batch execution stream
             steps: Steps being executed (for step_id matching)
             state: Current loop state
+            partial_output: Aggregated stream text when the Act stream ended early.
+            hit_tool_budget: True when the per-step tool cap stopped the stream.
+            stream_outcomes: RFC-211 tool outcome metadata collected before the cap.
 
         Returns:
             step_id → LoopAIMessage mapping (one outcome per step)
@@ -2442,6 +2546,25 @@ class Executor:
         from langchain_core.messages import AIMessage
 
         ai_messages = [msg for msg in messages if isinstance(msg, AIMessage)]
+
+        def _partial_ledger_body() -> str:
+            if partial_output.strip():
+                return partial_output.strip()
+            if len(steps) == 1:
+                assembled = self._assemble_assistant_text_from_stream_messages(messages).strip()
+                if assembled:
+                    return assembled
+            if stream_outcomes:
+                previews = [
+                    str(o.get("output_summary") or o.get("wave_join_preview") or "")
+                    for o in stream_outcomes
+                    if o.get("output_summary") or o.get("wave_join_preview")
+                ]
+                if previews:
+                    return "\n\n".join(previews)
+            return ""
+
+        partial_body = _partial_ledger_body() if hit_tool_budget else ""
 
         step_outcomes = {}
         if len(ai_messages) >= len(steps):
@@ -2479,8 +2602,15 @@ class Executor:
                         phase="execute_step",
                         step_id=step.id,
                     )
+                elif hit_tool_budget and partial_body:
+                    step_outcomes[step.id] = LoopAIMessage(
+                        content=partial_body,
+                        thread_id=state.thread_id,
+                        iteration=state.iteration,
+                        phase="execute_step",
+                        step_id=step.id,
+                    )
                 else:
-                    # No AIMessage for this step → error outcome
                     step_outcomes[step.id] = LoopAIMessage(
                         content="Step execution failed: no AI response",
                         thread_id=state.thread_id,
@@ -2501,7 +2631,9 @@ class Executor:
         duration_ms: int,
         subagent_task_completions: int = 0,
         hit_subagent_cap: bool = False,
+        hit_tool_budget: bool = False,
         tool_call_count: int = 0,
+        stream_outcomes: list[dict[str, Any]] | None = None,
     ) -> list:
         """Record N adjacent Human-AI pairs in ledger (RFC-214).
 
@@ -2520,6 +2652,7 @@ class Executor:
                 goal duration aggregation.
             subagent_task_completions: Count of completed ``task`` tool returns this wave (IG-130).
             hit_subagent_cap: True when the wave stopped early due to subagent cap.
+            hit_tool_budget: True when the wave stopped early due to tool call cap.
             tool_call_count: Total tool messages observed this wave (first step carries count).
 
         Returns:
@@ -2550,19 +2683,28 @@ class Executor:
         step_results = []
         for idx, step in enumerate(steps):
             ai_msg = step_outcomes[step.id]
+            outcome_meta: dict[str, Any] = {
+                "type": "generic",
+                "output_summary": ai_msg.content[:300] if ai_msg.content else "",
+            }
+            if idx == 0 and hit_tool_budget:
+                outcome_meta = self._build_step_outcome_from_stream(
+                    outcomes=stream_outcomes or [],
+                    output=ai_msg.content or "",
+                    hit_tool_budget=True,
+                    step_id=step.id,
+                )
 
             result = StepResult(
                 step_id=step.id,
-                success=True,  # Or based on AI message content analysis
-                outcome={
-                    "type": "generic",
-                    "output_summary": ai_msg.content[:300] if ai_msg.content else "",
-                },
+                success=True,
+                outcome=outcome_meta,
                 duration_ms=step_durations[idx],
                 thread_id=state.thread_id,
                 tool_call_count=tool_call_count if idx == 0 else 0,
                 subagent_task_completions=subagent_task_completions if idx == 0 else 0,
                 hit_subagent_cap=hit_subagent_cap if idx == 0 else False,
+                hit_tool_budget=hit_tool_budget if idx == 0 else False,
             )
             step_results.append(result)
 

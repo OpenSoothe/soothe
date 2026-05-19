@@ -95,7 +95,13 @@ from soothe_cli.tui._session_stats import (
 )
 from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui.config import build_stream_config
-from soothe_cli.tui.file_ops import FileOpTracker
+from soothe_cli.tui.file_ops import (
+    FILE_CHANGE_TOOLS,
+    FileOpTracker,
+    ensure_hitl_file_ops_tracked,
+    file_change_action_label,
+    track_file_operation,
+)
 from soothe_cli.tui.hooks import dispatch_hook
 from soothe_cli.tui.input import MediaTracker, parse_file_mentions
 from soothe_cli.tui.media_utils import create_multimodal_content
@@ -496,6 +502,28 @@ def alias_subgraph_pending_and_overlay(
                 streaming_overlay[merge_id] = dict(oargs)
 
 
+def _resolve_step_widget_for_tool(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    *,
+    bound_step_id: str,
+    ns_key: tuple[str, ...],
+) -> CognitionStepMessage | None:
+    """Resolve the step card that should own main-namespace tool stats."""
+    sid = str(bound_step_id or "").strip()
+    if sid:
+        step_w = adapter._current_step_messages.get(sid)
+        if step_w is not None:
+            return step_w
+    step_w = adapter._step_by_namespace.get(ns_key)
+    if step_w is not None:
+        return step_w
+    if len(router.active_step_ids) == 1:
+        only_sid = next(iter(router.active_step_ids))
+        return adapter._current_step_messages.get(only_sid)
+    return None
+
+
 def mark_parallel_plan_step_cards_running(adapter: TextualUIAdapter) -> None:
     """Show all pending plan step cards as running during a parallel execute wave."""
     for widget in adapter._current_step_messages.values():
@@ -752,6 +780,7 @@ async def apply_tool_call_wire_update(
     pending_tool_calls_lc: dict[str, dict[str, Any]],
     streaming_overlay: dict[str, dict[str, Any]] | None = None,
     ui_coalesce: TurnToolUiCoalescer | None = None,
+    file_op_tracker: FileOpTracker | None = None,
 ) -> bool:
     """Seed pending tool state from a wire tool-call update event (no tool-card UI)."""
     if str(data.get("type", "")) != STREAM_TOOL_CALL_UPDATE:
@@ -802,6 +831,9 @@ async def apply_tool_call_wire_update(
         tool_name=name,
     )
 
+    if file_op_tracker is not None and name in FILE_CHANGE_TOOLS:
+        track_file_operation(file_op_tracker, name, raw_args, merge_id or tcid)
+
     if is_main and name == "task":
         parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
         bound_step_id = parsed_sid or router.step_id_for_tool(tcid)
@@ -814,24 +846,31 @@ async def apply_tool_call_wire_update(
     if is_main:
         parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
         bound_step_id = parsed_sid or router.step_id_for_tool(tcid)
-        if bound_step_id:
-            step_w = adapter._current_step_messages.get(bound_step_id)
-            if step_w is not None and name != "task":
-                if step_w.has_tool_call_row(tcid):
-                    step_w.update_tool_args(tcid, display_args)
-                else:
-                    step_w.add_tool_call(tcid, name, display_args)
-                adapter._tool_to_step[tcid] = step_w
+        step_w = _resolve_step_widget_for_tool(
+            adapter,
+            router,
+            bound_step_id=bound_step_id,
+            ns_key=ns_key,
+        )
+        if step_w is not None and name != "task":
+            if step_w.has_tool_call_row(tcid):
+                step_w.update_tool_args(tcid, display_args)
+            else:
+                step_w.add_tool_call(tcid, name, display_args)
+            adapter._tool_to_step[tcid] = step_w
         return True
 
     _merge_buf, display_key = canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
     if display_key:
-        router.buffer_subgraph_tool(
+        router.try_route_subgraph_tool(
             ns_key=ns_key,
             lookup_id=tcid,
             display_key=display_key,
             tool_name=name,
             args=display_args,
+            step_cards=adapter._current_step_messages,
+            tool_to_step=adapter._tool_to_step,
+            tool_display_by_call_id=adapter._tool_display_by_call_id,
         )
     return True
 
@@ -1557,6 +1596,7 @@ async def execute_task_textual(
                 nonlocal interrupt_occurred
                 nonlocal suppress_resumed_output
                 nonlocal goal_loop_start_monotonic
+                nonlocal captured_input_tokens
                 if prepared is None or prepared.skip:
                     return
                 for _chunk_once in (0,):
@@ -1730,9 +1770,13 @@ async def execute_task_textual(
                                             router=router,
                                         )
                                         pending_text_by_namespace[ns_key] = ""
-                                    if record.diff:
+                                    if record.diff and record.tool_name in FILE_CHANGE_TOOLS:
                                         await adapter._mount_message(
-                                            DiffMessage(record.diff, record.display_path)
+                                            DiffMessage(
+                                                record.diff,
+                                                record.display_path,
+                                                action_label=file_change_action_label(record),
+                                            )
                                         )
                                 continue
 
@@ -2151,6 +2195,21 @@ async def execute_task_textual(
                                         continue
 
                                     if lookup_id and buffer_name and args_meaningful:
+                                        if buffer_name in FILE_CHANGE_TOOLS:
+                                            file_tcid = str(lookup_id)
+                                            if not is_main_agent:
+                                                ts_file = router.resolve_task_scope(ns_key)
+                                                file_tcid, _fk = canonical_subgraph_tool_ids(
+                                                    ns_key, file_tcid, task_scope=ts_file
+                                                )
+                                                file_tcid = file_tcid or str(lookup_id)
+                                            track_file_operation(
+                                                file_op_tracker,
+                                                buffer_name,
+                                                parsed_args,
+                                                file_tcid,
+                                            )
+
                                         if is_main_agent and buffer_name == "task":
                                             parsed_step_id, _, _, _ = parse_unified_tool_call_id(
                                                 str(lookup_id)
@@ -2169,6 +2228,11 @@ async def execute_task_textual(
                                                     subagent_type,
                                                     step_id=bound_step_id,
                                                 )
+                                                router.route_pending_subgraph_tools(
+                                                    adapter._current_step_messages,
+                                                    adapter._tool_to_step,
+                                                    adapter._tool_display_by_call_id,
+                                                )
                                         elif is_main_agent and buffer_name != "task":
                                             parsed_sid, _, _, _ = parse_unified_tool_call_id(
                                                 str(lookup_id)
@@ -2176,10 +2240,11 @@ async def execute_task_textual(
                                             bound_step_id = parsed_sid or router.step_id_for_tool(
                                                 str(lookup_id)
                                             )
-                                            active_step = (
-                                                adapter._current_step_messages.get(bound_step_id)
-                                                if bound_step_id
-                                                else adapter._step_by_namespace.get(ns_key)
+                                            active_step = _resolve_step_widget_for_tool(
+                                                adapter,
+                                                router,
+                                                bound_step_id=bound_step_id,
+                                                ns_key=ns_key,
                                             )
                                             if active_step is not None:
                                                 if active_step.has_tool_call_row(lookup_id):
@@ -2210,13 +2275,16 @@ async def execute_task_textual(
                                                 ns_key, str(lookup_id), task_scope=ts_disp
                                             )
                                             display_key = display_key or str(lookup_id)
-                                            router.buffer_subgraph_tool(
+                                            router.try_route_subgraph_tool(
                                                 ns_key=ns_key,
                                                 lookup_id=str(lookup_id),
                                                 display_key=display_key,
                                                 tool_name=buffer_name,
                                                 args=parsed_args,
                                                 raw_args=raw_args_stream,
+                                                step_cards=adapter._current_step_messages,
+                                                tool_to_step=adapter._tool_to_step,
+                                                tool_display_by_call_id=adapter._tool_display_by_call_id,
                                             )
 
                                     tool_call_buffers.pop(buffer_key, None)
@@ -2245,6 +2313,7 @@ async def execute_task_textual(
                                     pending_tool_calls_lc=pending_tool_calls_lc,
                                     streaming_overlay=streaming_overlay,
                                     ui_coalesce=ui_coalesce,
+                                    file_op_tracker=file_op_tracker,
                                 ):
                                     continue
                                 if event_type.startswith("soothe.error"):
@@ -2338,6 +2407,11 @@ async def execute_task_textual(
                                             list(adapter._current_step_messages.keys()),
                                         )
                                         router.route_pending_main_tools(
+                                            adapter._current_step_messages,
+                                            adapter._tool_to_step,
+                                            adapter._tool_display_by_call_id,
+                                        )
+                                        router.route_pending_subgraph_tools(
                                             adapter._current_step_messages,
                                             adapter._tool_to_step,
                                             adapter._tool_display_by_call_id,
@@ -2504,6 +2578,16 @@ async def execute_task_textual(
                     "Dropping %d pending main-namespace tool row(s) (no step card)",
                     router.pending_main_tool_count,
                 )
+            routed_sub = router.route_pending_subgraph_tools(
+                adapter._current_step_messages,
+                adapter._tool_to_step,
+                adapter._tool_display_by_call_id,
+            )
+            if routed_sub:
+                logger.debug(
+                    "Routed %d pending subgraph tool row(s) at stream end",
+                    routed_sub,
+                )
             pending_sub = router.pending_subgraph_tools()
             if pending_sub:
                 logger.debug(
@@ -2620,6 +2704,9 @@ async def execute_task_textual(
 
                 for interrupt_id, hitl_request in list(pending_interrupts.items()):
                     action_requests = hitl_request["action_requests"]
+                    ensure_hitl_file_ops_tracked(
+                        file_op_tracker, action_requests, pending_tool_calls_lc
+                    )
 
                     if session_state.auto_approve:
                         decisions: list[HITLDecision] = [
@@ -2649,10 +2736,7 @@ async def execute_task_textual(
                                 _hitl_start_step_tool_rows(adapter)
                                 for action_request in action_requests:
                                     tool_name = action_request.get("name")
-                                    if tool_name in {
-                                        "write_file",
-                                        "edit_file",
-                                    }:
+                                    if tool_name in FILE_CHANGE_TOOLS:
                                         args = action_request.get("args", {})
                                         if isinstance(args, dict):
                                             file_op_tracker.mark_hitl_approved(tool_name, args)
@@ -2664,10 +2748,7 @@ async def execute_task_textual(
                                 _hitl_start_step_tool_rows(adapter)
                                 for action_request in action_requests:
                                     tool_name = action_request.get("name")
-                                    if tool_name in {
-                                        "write_file",
-                                        "edit_file",
-                                    }:
+                                    if tool_name in FILE_CHANGE_TOOLS:
                                         args = action_request.get("args", {})
                                         if isinstance(args, dict):
                                             file_op_tracker.mark_hitl_approved(tool_name, args)

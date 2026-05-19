@@ -136,22 +136,64 @@ class WriteFileApprovalWidget(ToolApprovalWidget):
         file_path = self.data.get("file_path", "")
         content = self.data.get("content", "")
         file_extension = self.data.get("file_extension", "text")
+        is_new_file = bool(self.data.get("is_new_file"))
 
-        # Content with syntax highlighting via Markdown code block
         lines = content.split("\n")
         total_lines = len(lines)
 
-        # File header with line count
-        yield from _file_header(file_path, additions=total_lines if content else 0)
+        if is_new_file:
+            yield Static(
+                Content.from_markup(
+                    "[bold cyan]File:[/bold cyan] $path  [dim](new file)[/dim]",
+                    path=file_path,
+                )
+            )
+            yield Static("")
+        else:
+            yield from _file_header(file_path, additions=total_lines if content else 0)
+
+        if not content:
+            yield Static("Empty file", classes="approval-description")
+            return
 
         if total_lines > TOOL_APPROVAL_BODY_MAX_LINES:
-            # Truncate for display
             shown_lines = lines[:TOOL_APPROVAL_BODY_MAX_LINES]
             remaining = total_lines - TOOL_APPROVAL_BODY_MAX_LINES
             truncated_content = "\n".join(shown_lines) + f"\n... ({remaining} more lines)"
             yield Markdown(f"```{file_extension}\n{truncated_content}\n```")
         else:
             yield Markdown(f"```{file_extension}\n{content}\n```")
+
+
+class DeleteFileApprovalWidget(ToolApprovalWidget):
+    """Approval widget for delete_file — shows path and a short content preview."""
+
+    def compose(self) -> ComposeResult:
+        """Compose the delete confirmation preview.
+
+        Yields:
+            Widgets displaying file path, deletion stats, and preview lines.
+        """
+        file_path = self.data.get("file_path", "")
+        preview_lines: list[str] = self.data.get("preview_lines", [])
+        total_lines = int(self.data.get("total_lines", 0))
+
+        yield from _file_header(file_path, deletions=total_lines)
+        yield Static(Content.styled("Deleting file", "bold"))
+
+        if not preview_lines:
+            yield Static("No preview available", classes="approval-description")
+            return
+
+        yield Static("")
+        for line in preview_lines[:TOOL_APPROVAL_PREVIEW_LINES]:
+            yield Static(
+                Content.from_markup("- $text", text=line),
+                classes="diff-removed",
+            )
+        remaining = total_lines - len(preview_lines[:TOOL_APPROVAL_PREVIEW_LINES])
+        if remaining > 0:
+            yield Static(Content.styled(f"... ({remaining} more lines)", "dim"))
 
 
 class EditFileApprovalWidget(ToolApprovalWidget):

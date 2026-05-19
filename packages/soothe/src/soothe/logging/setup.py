@@ -16,16 +16,18 @@ from soothe.logging.context import get_thread_id
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
-# Prefix length for conversation thread id in log lines (full id stays in context vars).
-_THREAD_ID_LOG_PREFIX_LEN = 4
+# Suffix length for conversation thread id in log lines (full id stays in context vars).
+_THREAD_ID_LOG_SUFFIX_LEN = 4
 
 
 def _short_thread_id_for_log(thread_id: str) -> str:
-    """Return first N characters of thread id for compact log tags."""
+    """Return last N characters of thread id for compact, distinctive log tags."""
     tid = thread_id.strip()
     if not tid:
         return ""
-    return tid[:_THREAD_ID_LOG_PREFIX_LEN]
+    if len(tid) <= _THREAD_ID_LOG_SUFFIX_LEN:
+        return tid
+    return tid[-_THREAD_ID_LOG_SUFFIX_LEN:]
 
 
 class ThreadFormatter(ShortLevelFormatter):
