@@ -8,6 +8,7 @@ from soothe_sdk.ux.task_namespace import (
     _shorten_tool_call_id,
     maybe_bind_namespace,
     normalize_step_task_tool_call_id,
+    normalize_unified_tool_call_id,
     parse_unified_tool_call_id,
     register_task_spawn_for_step,
     resolve_step_id_from_subgraph_tool,
@@ -38,7 +39,7 @@ def test_register_task_spawn_binds_deferred_unscoped_namespace() -> None:
     assert ns not in bindings
     assert list(pending_unscoped) == [ns]
 
-    scope = ("YKF-02:s:task.0", "explore", "YKF-02")
+    scope = ("YKF_02:s:task:0", "explore", "YKF-02")
     register_task_spawn_for_step(
         bindings,
         queue,
@@ -72,7 +73,7 @@ def test_parallel_spawns_bind_one_namespace_per_register_when_interleaved() -> N
             bindings,
             queue,
             spawns,
-            (f"{step_id}:s:task.0", "explore", step_id),
+            (f"{step_id.replace('-', '_')}:s:task:0", "explore", step_id),
             pending_unscoped_namespaces=pending_unscoped,
         )
 
@@ -98,14 +99,14 @@ def test_parallel_spawns_skip_fifo_when_multiple_namespaces_pending() -> None:
         bindings,
         queue,
         spawns,
-        ("YKF-01:s:task.0", "explore", "YKF-01"),
+        ("YKF_01:s:task:0", "explore", "YKF-01"),
         pending_unscoped_namespaces=pending_unscoped,
     )
     register_task_spawn_for_step(
         bindings,
         queue,
         spawns,
-        ("YKF-02:s:task.0", "explore", "YKF-02"),
+        ("YKF_02:s:task:0", "explore", "YKF-02"),
         pending_unscoped_namespaces=pending_unscoped,
     )
     assert ("tools:aaa",) not in bindings
@@ -113,17 +114,24 @@ def test_parallel_spawns_skip_fifo_when_multiple_namespaces_pending() -> None:
 
 
 def test_normalize_step_task_tool_call_id_embeds_step() -> None:
-    assert normalize_step_task_tool_call_id("YKF-02", "functions.task:0") == "YKF-02:s:task.0"
-    assert normalize_step_task_tool_call_id("YKF-02", "YKF-02:s:task.0") == "YKF-02:s:task.0"
+    assert normalize_step_task_tool_call_id("YKF-02", "functions.task:0") == "YKF_02:s:task:0"
+    assert normalize_step_task_tool_call_id("YKF-02", "YKF_02:s:task:0") == "YKF_02:s:task:0"
+
+
+def test_legacy_unified_formats_are_not_accepted() -> None:
+    """Hyphen wire step or dot tool index are not unified."""
+    assert parse_unified_tool_call_id("YKF-02:s:task:0") == ("", "", None, "YKF-02:s:task:0")
+    assert parse_unified_tool_call_id("YKF_02:s:task.0") == ("", "", None, "YKF_02:s:task.0")
+    assert normalize_unified_tool_call_id("YKF-02:s:task.0") == "YKF-02:s:task.0"
 
 
 def test_resolve_step_id_from_subgraph_tool() -> None:
-    assert resolve_step_id_from_subgraph_tool("YKF-02:t0:glob.1") == "YKF-02"
-    assert resolve_step_id_from_subgraph_tool("YKF-02:s:task.0") == "YKF-02"
+    assert resolve_step_id_from_subgraph_tool("YKF_02:t0:glob:1") == "YKF-02"
+    assert resolve_step_id_from_subgraph_tool("YKF_02:s:task:0") == "YKF-02"
 
 
 def test_step_level_parent_task_call_id() -> None:
-    assert step_level_parent_task_call_id("ABC-01", 0) == "ABC-01:s:task.0"
+    assert step_level_parent_task_call_id("ABC-01", 0) == "ABC_01:s:task:0"
 
 
 def test_headless_maybe_bind_uses_spawn_queue_fifo() -> None:
@@ -139,8 +147,7 @@ def test_scoped_subgraph_tool_key_is_unique_per_namespace() -> None:
     a = scoped_subgraph_tool_key(("tools:aaa",), "functions.grep:1")
     b = scoped_subgraph_tool_key(("tools:bbb",), "functions.grep:1")
     assert a != b
-    # IG-416: Empty namespace returns shortened tool_call_id (strips 'functions.')
-    assert scoped_subgraph_tool_key((), "functions.grep:1") == "grep.1"
+    assert scoped_subgraph_tool_key((), "functions.grep:1") == "grep:1"
 
 
 def test_resolve_task_scope_prefix_match() -> None:
@@ -155,34 +162,34 @@ def test_resolve_task_scope_prefix_match() -> None:
 
 
 def test_parse_unified_tool_call_id_step_level() -> None:
-    """Step-level unified IDs: {step_id}:s:{tool}.{idx}"""
-    assert parse_unified_tool_call_id("GHT-01:s:task.0") == (
+    """Step-level unified IDs: {step_wire}:s:{tool}:{idx}"""
+    assert parse_unified_tool_call_id("GHT_01:s:task:0") == (
         "GHT-01",
         "s",
         None,
-        "task.0",
+        "task:0",
     )
-    assert parse_unified_tool_call_id("EMD-02:s:read_file.1") == (
+    assert parse_unified_tool_call_id("EMD_02:s:read_file:1") == (
         "EMD-02",
         "s",
         None,
-        "read_file.1",
+        "read_file:1",
     )
 
 
 def test_parse_unified_tool_call_id_task_level() -> None:
-    """Task-level unified IDs: {step_id}:t{task_idx}:{tool}.{idx}"""
-    assert parse_unified_tool_call_id("GHT-01:t0:read_file.1") == (
+    """Task-level unified IDs: {step_wire}:t{task_idx}:{tool}:{idx}"""
+    assert parse_unified_tool_call_id("GHT_01:t0:read_file:1") == (
         "GHT-01",
         "t",
         0,
-        "read_file.1",
+        "read_file:1",
     )
-    assert parse_unified_tool_call_id("EMD-02:t2:grep.5") == (
+    assert parse_unified_tool_call_id("EMD_02:t2:grep:5") == (
         "EMD-02",
         "t",
         2,
-        "grep.5",
+        "grep:5",
     )
 
 
@@ -205,7 +212,7 @@ def test_parse_unified_tool_call_id_empty() -> None:
 
 def test_scoped_subgraph_tool_key_passes_through_task_level_id() -> None:
     """Already-unified task-level ids are not double-prefixed."""
-    unified = "GHT-01:t0:grep.2"
+    unified = "GHT_01:t0:grep:2"
     assert (
         scoped_subgraph_tool_key(("tools:abc",), unified, task_scope=("tc", "explore", "GHT-01"))
         == unified
@@ -215,48 +222,48 @@ def test_scoped_subgraph_tool_key_passes_through_task_level_id() -> None:
 def test_resolve_task_parent_lookup_prefers_task_card() -> None:
     step = object()
     task_card = object()
-    scope = ("FJS-02:s:task:0", "explore", "FJS-02")
+    scope = ("FJS_02:s:task:0", "explore", "FJS-02")
     parent = resolve_task_parent_lookup(
         scope,
         step_cards={"FJS-02": step},
-        tool_display_by_call_id={"FJS-02:s:task:0": task_card},
+        tool_display_by_call_id={"FJS_02:s:task:0": task_card},
     )
     assert parent is task_card
 
 
 def test_resolve_task_parent_for_unified_task_level_id() -> None:
     task_card = object()
-    spawns = {"FJS-02": ("FJS-02:s:task:0", "explore", "FJS-02")}
+    spawns = {"FJS-02": ("FJS_02:s:task:0", "explore", "FJS-02")}
     parent = resolve_task_parent_for_unified_tool_id(
-        "FJS-02:t0:grep.0",
+        "FJS_02:t0:grep:0",
         spawns_by_step=spawns,
-        tool_display_by_call_id={"FJS-02:s:task:0": task_card},
+        tool_display_by_call_id={"FJS_02:s:task:0": task_card},
     )
     assert parent is task_card
     assert (
         resolve_task_parent_for_unified_tool_id(
             "grep:1",
             spawns_by_step=spawns,
-            tool_display_by_call_id={"FJS-02:s:task:0": task_card},
+            tool_display_by_call_id={"FJS_02:s:task:0": task_card},
         )
         is None
     )
 
 
 def test_shorten_tool_call_id_normalizes_provider_colon_index() -> None:
-    assert _shorten_tool_call_id("functions.grep:0") == "grep.0"
-    assert _shorten_tool_call_id("GHT-01:t0:read_file.1") == "read_file.1"
+    assert _shorten_tool_call_id("functions.grep:0") == "grep:0"
+    assert _shorten_tool_call_id("GHT_01:t0:read_file:1") == "read_file:1"
 
 
 def test_row_key_for_subgraph_tool_unified_passthrough() -> None:
-    unified = "FJS-02:t0:read_file.1"
+    unified = "FJS_02:t0:read_file:1"
     assert row_key_for_subgraph_tool(("tools:x",), unified) == unified
     legacy = row_key_for_subgraph_tool(
         ("tools:x",),
         "grep:0",
         task_scope=("tc", "explore", "FJS-02"),
     )
-    assert legacy == "FJS-02:t0:grep.0"
+    assert legacy == "FJS_02:t0:grep:0"
 
 
 def test_try_bind_namespace_to_unlinked_spawn_after_register() -> None:
@@ -264,7 +271,7 @@ def test_try_bind_namespace_to_unlinked_spawn_after_register() -> None:
     bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
     spawns: dict[str, tuple[str, str, str]] = {}
     pending: deque[tuple[str, ...]] = deque()
-    scope = ("FJS-02:s:task:0", "explore", "FJS-02")
+    scope = ("FJS_02:s:task:0", "explore", "FJS-02")
     register_task_spawn_for_step(
         bindings,
         deque(),

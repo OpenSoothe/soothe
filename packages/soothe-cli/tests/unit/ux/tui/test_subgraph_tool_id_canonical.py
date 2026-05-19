@@ -15,8 +15,8 @@ def test_canonical_subgraph_tool_ids_unifies_provider_id() -> None:
     ns = ("graphs", "sub-1")
     scope = ("task-tcid", "explore", "STEP-01")
     merge_id, row_key = canonical_subgraph_tool_ids(ns, "functions.grep:0", task_scope=scope)
-    assert merge_id == "STEP-01:t0:grep.0"
-    assert row_key == "STEP-01:t0:grep.0"
+    assert merge_id == "STEP_01:t0:grep:0"
+    assert row_key == "STEP_01:t0:grep:0"
 
 
 def test_alias_subgraph_pending_copies_overlay_to_unified_key() -> None:
@@ -33,9 +33,9 @@ def test_alias_subgraph_pending_copies_overlay_to_unified_key() -> None:
     }
     overlay = {"functions.read_file:0": {"path": "/partial"}}
     alias_subgraph_pending_and_overlay(pending, overlay, router, ns)
-    assert "STEP-01:t0:read_file.0" in pending
-    assert pending["STEP-01:t0:read_file.0"]["name"] == "read_file"
-    assert overlay["STEP-01:t0:read_file.0"]["path"] == "/partial"
+    assert "STEP_01:t0:read_file:0" in pending
+    assert pending["STEP_01:t0:read_file:0"]["name"] == "read_file"
+    assert overlay["STEP_01:t0:read_file:0"]["path"] == "/partial"
 
 
 def test_refresh_subgraph_tool_rows_from_overlay_updates_mounted_row() -> None:
@@ -57,8 +57,8 @@ def test_refresh_subgraph_tool_rows_from_overlay_updates_mounted_row() -> None:
     router._namespace_bindings[ns] = ("task-tcid", "explore", "STEP-01")
     task_card = ToolCallMessage("task", {}, tool_call_id="task-tcid")
     adapter._tool_display_by_call_id["task-tcid"] = task_card
-    task_card.add_tool_call("STEP-01:t0:grep.0", "grep", {})
-    overlay = {"STEP-01:t0:grep.0": {"pattern": "TODO"}}
+    task_card.add_tool_call("STEP_01:t0:grep:0", "grep", {})
+    overlay = {"STEP_01:t0:grep:0": {"pattern": "TODO"}}
 
     refresh_subgraph_tool_rows_from_overlay(
         adapter,
@@ -68,7 +68,7 @@ def test_refresh_subgraph_tool_rows_from_overlay_updates_mounted_row() -> None:
         pending_tool_calls_lc={},
     )
 
-    assert task_card._row_index["STEP-01:t0:grep.0"].args.get("pattern") == "TODO"
+    assert task_card._row_index["STEP_01:t0:grep:0"].args.get("pattern") == "TODO"
 
 
 def test_refresh_subgraph_parent_tool_row_updates_existing_row() -> None:
@@ -90,7 +90,7 @@ def test_refresh_subgraph_parent_tool_row_updates_existing_row() -> None:
     router._namespace_bindings[ns] = ("task-tcid", "explore", "STEP-01")
     task_card = ToolCallMessage("task", {}, tool_call_id="task-tcid")
     adapter._tool_display_by_call_id["task-tcid"] = task_card
-    task_card.add_tool_call("STEP-01:t0:grep.0", "grep", {})
+    task_card.add_tool_call("STEP_01:t0:grep:0", "grep", {})
 
     ok = refresh_subgraph_parent_tool_row(
         adapter,
@@ -100,7 +100,7 @@ def test_refresh_subgraph_parent_tool_row_updates_existing_row() -> None:
         parsed_args={"pattern": "TODO"},
     )
     assert ok is True
-    row = task_card._row_index["STEP-01:t0:grep.0"]
+    row = task_card._row_index["STEP_01:t0:grep:0"]
     assert row.args.get("pattern") == "TODO"
 
 
@@ -152,4 +152,4 @@ async def test_wire_update_mounts_subgraph_row_with_args() -> None:
 
     assert handled is True
     # IG-419: Row now mounts on step card, not task card
-    assert step_card.has_tool_call_row("STEP-01:t0:grep.0")
+    assert step_card.has_tool_call_row("STEP_01:t0:grep:0")

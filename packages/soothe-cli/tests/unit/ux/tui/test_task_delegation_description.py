@@ -26,7 +26,7 @@ def test_enrich_task_delegation_args_uses_step_description_fallback() -> None:
         "JPV-01",
         "Search for goal engine files",
     )
-    out = enrich_task_delegation_args(adapter, "JPV-01:s:task:0", {})
+    out = enrich_task_delegation_args(adapter, "JPV_01:s:task:0", {})
     assert "goal engine" in str(out.get("description", ""))
 
 
@@ -46,7 +46,7 @@ def test_enrich_task_delegation_args_parallel_steps_use_own_step_brief() -> None
         "Second step maps architecture",
     )
     pending = {
-        "AAA-01:s:task:0": {
+        "AAA_01:s:task:0": {
             "name": "task",
             "args_str": (
                 '{"description": "First step explores the repository", "subagent_type": "explore"}'
@@ -55,7 +55,7 @@ def test_enrich_task_delegation_args_parallel_steps_use_own_step_brief() -> None
             "emitted": False,
             "is_main": True,
         },
-        "BBB-02:s:task:0": {
+        "BBB_02:s:task:0": {
             "name": "task",
             "args_str": "{}",
             "is_complete_json": False,
@@ -65,7 +65,7 @@ def test_enrich_task_delegation_args_parallel_steps_use_own_step_brief() -> None
     }
     out = enrich_task_delegation_args(
         adapter,
-        "BBB-02:s:task:0",
+        "BBB_02:s:task:0",
         {},
         pending_tool_calls_lc=pending,
     )
@@ -84,14 +84,14 @@ def test_enrich_task_delegation_args_prefers_stream_overlay() -> None:
         "Step plan text",
     )
     overlay = {
-        "JPV-01:s:task:0": {
+        "JPV_01:s:task:0": {
             "description": "Detailed model task brief",
             "subagent_type": "explore",
         },
     }
     out = enrich_task_delegation_args(
         adapter,
-        "JPV-01:s:task:0",
+        "JPV_01:s:task:0",
         {},
         streaming_overlay=overlay,
     )
@@ -114,7 +114,7 @@ async def test_sync_task_cards_from_overlay_updates_header() -> None:
     step_card = CognitionStepMessage("JPV-02", "Find autopilot")
     adapter._current_step_messages["JPV-02"] = step_card
     overlay = {
-        "JPV-02:s:task:0": {
+        "JPV_02:s:task:0": {
             "description": "Explore autopilot_cmd.py surface",
             "subagent_type": "explore",
         },
@@ -130,9 +130,9 @@ async def test_sync_task_cards_from_overlay_updates_header() -> None:
     )
 
     # IG-419: No standalone card, row is on step card
-    # Note: tool_call_id is normalized to use dots (JPV-02:s:task.0)
-    normalized_tcid = normalize_step_task_tool_call_id("JPV-02", "JPV-02:s:task:0")
-    assert adapter._current_tool_messages.get("JPV-02:s:task:0") is None
+    # Note: tool_call_id is normalized to canonical wire form (JPV_02:s:task:0)
+    normalized_tcid = normalize_step_task_tool_call_id("JPV-02", "JPV_02:s:task:0")
+    assert adapter._current_tool_messages.get("JPV_02:s:task:0") is None
     assert step_card.has_tool_call_row(normalized_tcid)
     row = step_card._row_index.get(normalized_tcid)
     assert row is not None
@@ -152,7 +152,7 @@ async def test_refresh_task_cards_for_step_after_early_empty_mount() -> None:
         set_spinner=AsyncMock(),
     )
     router = adapter._step_router
-    tcid = "JPV-03:s:task:0"
+    tcid = "JPV_03:s:task:0"
     # Note: normalized form uses dots
     normalized_tcid = normalize_step_task_tool_call_id("JPV-03", tcid)
     step_card = CognitionStepMessage(
@@ -191,7 +191,7 @@ async def test_task_delegation_card_adds_step_activity_row() -> None:
         request_approval=AsyncMock(),
         set_spinner=AsyncMock(),
     )
-    tcid = "WAA-01:s:task:0"
+    tcid = "WAA_01:s:task:0"
     # Note: normalized form uses dots
     normalized_tcid = normalize_step_task_tool_call_id("WAA-01", tcid)
     step_w = CognitionStepMessage("WAA-01", "Search goal engine modules")

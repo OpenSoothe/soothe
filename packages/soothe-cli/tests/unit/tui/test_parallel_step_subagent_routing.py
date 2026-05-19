@@ -37,29 +37,29 @@ async def test_second_step_explore_row_on_its_own_step_card() -> None:
 
     assert _sync_task_delegation_step_row(
         adapter,
-        lookup_id="AAA-01:s:task.0",
+        lookup_id="AAA_01:s:task:0",
         display_args={"subagent_type": "explore", "description": "Explore structure"},
         bound_step_id="AAA-01",
     )
     assert _sync_task_delegation_step_row(
         adapter,
-        lookup_id="BBB-02:s:task.0",
+        lookup_id="BBB_02:s:task:0",
         display_args={"subagent_type": "explore", "description": "Identify entry points"},
         bound_step_id="BBB-02",
     )
 
-    assert step_a.has_tool_call_row("AAA-01:s:task.0")
-    assert not step_a.has_tool_call_row("BBB-02:s:task.0")
-    assert step_b.has_tool_call_row("BBB-02:s:task.0")
-    assert not step_b.has_tool_call_row("AAA-01:s:task.0")
+    assert step_a.has_tool_call_row("AAA_01:s:task:0")
+    assert not step_a.has_tool_call_row("BBB_02:s:task:0")
+    assert step_b.has_tool_call_row("BBB_02:s:task:0")
+    assert not step_b.has_tool_call_row("AAA_01:s:task:0")
 
     ok_b = await _mount_subagent_inner_tool_row_if_resolved(
         adapter,
         router,
-        lookup_id="BBB-02:t0:read_file.0",
+        lookup_id="BBB_02:t0:read_file:0",
         buffer_name="read_file",
         parsed_args={"file_path": "/pyproject.toml"},
-        buffer_id="BBB-02:t0:read_file.0",
+        buffer_id="BBB_02:t0:read_file:0",
         ns_key=("tools:ns-b",),
         show_tool_ui=True,
         is_main_agent=False,
@@ -67,7 +67,7 @@ async def test_second_step_explore_row_on_its_own_step_card() -> None:
         file_op_tracker=FileOpTracker(assistant_id="a"),
     )
     assert ok_b is True
-    assert step_b.has_tool_call_row("BBB-02:t0:read_file.0")
-    assert not step_a.has_tool_call_row("BBB-02:t0:read_file.0")
-    child = step_b._row_index["BBB-02:t0:read_file.0"]  # noqa: SLF001
-    assert child.parent_tool_call_id == "BBB-02:s:task.0"
+    assert step_b.has_tool_call_row("BBB_02:t0:read_file:0")
+    assert not step_a.has_tool_call_row("BBB_02:t0:read_file:0")
+    child = step_b._row_index["BBB_02:t0:read_file:0"]  # noqa: SLF001
+    assert child.parent_tool_call_id == "BBB_02:s:task:0"

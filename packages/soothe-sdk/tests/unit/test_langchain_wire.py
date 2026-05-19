@@ -47,7 +47,7 @@ def test_messages_from_wire_dicts_coerces_dict_tool_call_chunk_args() -> None:
         "tool_calls": [
             {
                 "name": "task",
-                "id": "WAA-01:s:task:0",
+                "id": "WAA_01:s:task:0",
                 "args": {
                     "description": "Explore repository structure",
                     "subagent_type": "explore",
@@ -57,7 +57,7 @@ def test_messages_from_wire_dicts_coerces_dict_tool_call_chunk_args() -> None:
         "tool_call_chunks": [
             {
                 "name": "task",
-                "id": "WAA-01:s:task:0",
+                "id": "WAA_01:s:task:0",
                 "args": {
                     "description": "Explore repository structure",
                     "subagent_type": "explore",
@@ -94,7 +94,7 @@ def test_prepare_stream_message_preserves_tool_call_args() -> None:
         tool_calls=[
             {
                 "name": "read_file",
-                "id": "ABC-01:s:read_file:0",
+                "id": "ABC_01:s:read_file:0",
                 "args": {"path": "/src/main.py"},
             }
         ],

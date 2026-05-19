@@ -438,10 +438,23 @@ def enrich_task_delegation_args(
     return merged
 
 
+def mark_parallel_plan_step_cards_running(adapter: TextualUIAdapter) -> None:
+    """Show all pending plan step cards as running during a parallel execute wave.
+
+    Parallel waves often emit only one ``step.started`` before tool traffic floods the
+    stream; pending cards from ``sync_pending_step_cards_from_plan`` would otherwise stay
+    on the pending glyph until a late ``step.completed``.
+    """
+    for widget in adapter._current_step_messages.values():
+        if widget._status == "pending":
+            widget.set_running()
+
+
 async def sync_pending_step_cards_from_plan(
     adapter: TextualUIAdapter,
     *,
     steps: list[dict[str, Any]],
+    execution_mode: str = "",
 ) -> None:
     """Mount step cards in ``pending`` state for planned steps not yet executing.
 
@@ -476,6 +489,9 @@ async def sync_pending_step_cards_from_plan(
         )
         await adapter._mount_message(step_widget)
         adapter._current_step_messages[sid] = step_widget
+
+    if execution_mode == "parallel":
+        mark_parallel_plan_step_cards_running(adapter)
 
 
 def _sync_task_delegation_step_row(

@@ -29,10 +29,7 @@ from typing import Any
 
 from soothe_sdk.client.websocket import WebSocketClient
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, extract_tool_call_updates_from_wire_message
-from soothe_sdk.ux.task_namespace import (
-    parse_unified_tool_call_id,
-    normalize_unified_tool_call_id,
-)
+from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 from soothe_sdk.core.subagent_wire import (
     ALLOWLISTED_SUBAGENT_EVENT_TYPES,
     parse_subagent_wire_agent,
@@ -100,8 +97,7 @@ def classify_tool_call_id(tool_call_id: str) -> tuple[str, str, int | None, str]
         - task_idx: None for step-level, int for task-level
         - tool_info: tool name and index fragment
     """
-    normalized = normalize_unified_tool_call_id(tool_call_id)
-    return parse_unified_tool_call_id(normalized)
+    return parse_unified_tool_call_id(tool_call_id)
 
 
 def validate_event(event: dict[str, Any], stats: EventStats) -> None:
