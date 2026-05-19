@@ -97,8 +97,8 @@ def run_impl(
         typer.echo(f"Total running time: {run_elapsed_s:.2f}s", err=True)
 
     except KeyboardInterrupt:
-        typer.echo("\nInterrupted.")
-        sys.exit(0)
+        typer.echo("\nInterrupted. (daemon query cancelled)")
+        sys.exit(130)
     except Exception as e:
         logger.exception("CLI run error")
         from soothe_sdk.utils import format_cli_error

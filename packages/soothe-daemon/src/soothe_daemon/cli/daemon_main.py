@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-
 from soothe.config import SOOTHE_HOME, SootheConfig
+
 from soothe_daemon.config import SootheDaemonConfig, default_daemon_config_path
 from soothe_daemon.entrypoint import run_daemon
 from soothe_daemon.health.checker import HealthChecker
