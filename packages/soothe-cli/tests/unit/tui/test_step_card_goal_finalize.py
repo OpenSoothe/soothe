@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock
 import pytest
 
 from soothe_cli.tui.step_task_routing import StepTaskRouter
-from soothe_cli.tui.textual_adapter import TextualUIAdapter
-from soothe_cli.tui.textual_adapter._stream_formatting import sync_pending_step_cards_from_plan
-from soothe_cli.tui.textual_adapter._turn_helpers import (
+from soothe_cli.tui.textual_adapter import (
+    TextualUIAdapter,
     finalize_tracked_step_cards_on_goal_complete,
+    sync_pending_step_cards_from_plan,
 )
 
 

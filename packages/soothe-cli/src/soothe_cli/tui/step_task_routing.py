@@ -16,15 +16,12 @@ from typing import Any, TypeAlias
 
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
-    is_step_level_task_tool_id,
     maybe_bind_namespace,
     normalize_step_task_tool_call_id,
     parse_unified_tool_call_id,
     register_task_spawn_for_step,
-    resolve_task_parent_for_unified_tool_id,
     resolve_task_parent_lookup,
     resolve_task_scope_for_namespace,
-    step_level_parent_task_call_id,
     task_scope_step_id,
     try_bind_namespace_to_unlinked_spawn,
 )
@@ -33,7 +30,7 @@ StepWidget: TypeAlias = Any
 """``CognitionStepMessage`` or compatible step card (duck-typed)."""
 
 ParentWidget: TypeAlias = Any
-"""Step card or ``ToolCallMessage`` parent for tool rows / subagent activity."""
+"""Step card parent for tool stats and subagent activity."""
 
 
 @dataclass(slots=True)
@@ -184,57 +181,9 @@ class StepTaskRouter:
             tool_display_by_call_id=tool_display_by_call_id,
         )
 
-    def resolve_task_parent_for_unified_inner_tool(
-        self,
-        tool_call_id: str,
-        *,
-        tool_display_by_call_id: dict[str, ParentWidget],
-    ) -> ParentWidget | None:
-        """Task card parent for a task-level unified subgraph tool id."""
-        return resolve_task_parent_for_unified_tool_id(
-            tool_call_id,
-            spawns_by_step=self._spawns_by_step_id,
-            tool_display_by_call_id=tool_display_by_call_id,
-        )
-
     def task_scope_step_id(self, scope: TaskScope | None) -> str:
         """Step id from a resolved task scope."""
         return task_scope_step_id(scope)
-
-    def resolve_parent_task_call_id(
-        self,
-        ns_key: tuple[Any, ...],
-        *,
-        inner_tool_call_id: str = "",
-    ) -> str | None:
-        """Resolve parent task's tool_call_id for inner tool nesting (IG-419).
-
-        Prefer the bound :class:`TaskScope` (main-graph ``task`` tool_call_id). LangGraph
-        subgraph namespaces are opaque (e.g. ``("tools:abc",)``); inner unified ids embed
-        ``step_id`` directly.
-
-        Args:
-            ns_key: Stream namespace tuple for the inner tool.
-            inner_tool_call_id: Optional subgraph tool id (``{step}:t0:…``).
-
-        Returns:
-            The parent task's tool_call_id (e.g., ``step_01:s:task:0``) or None.
-        """
-        parsed_sid, type_code, task_idx, _ = parse_unified_tool_call_id(
-            str(inner_tool_call_id).strip()
-        )
-        if parsed_sid and type_code == "t":
-            return step_level_parent_task_call_id(parsed_sid, task_idx)
-        scope = self.resolve_task_scope(ns_key)
-        if scope and scope[0]:
-            return str(scope[0]).strip() or None
-        if (
-            parsed_sid
-            and type_code == "s"
-            and is_step_level_task_tool_id(str(inner_tool_call_id).strip())
-        ):
-            return str(inner_tool_call_id).strip()
-        return None
 
     # --- Pending main-graph tools ---
 
@@ -337,17 +286,6 @@ class StepTaskRouter:
     def pending_main_tool_count(self) -> int:
         """Number of root tools still awaiting step card routing."""
         return len(self._pending_main_tools)
-
-    def take_routed_subgraph_tools(
-        self,
-        routed_display_keys: set[str],
-    ) -> None:
-        """Remove subgraph pending entries that were mounted (by ``display_key``)."""
-        if not routed_display_keys:
-            return
-        self._pending_subgraph_tools = [
-            p for p in self._pending_subgraph_tools if p.display_key not in routed_display_keys
-        ]
 
     def clear_step_tool_bindings(self, step_id: str) -> None:
         """No-op: step routing uses unified tool_call_id encoding only."""

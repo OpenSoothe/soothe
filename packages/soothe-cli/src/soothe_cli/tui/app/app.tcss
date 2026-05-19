@@ -193,14 +193,6 @@ QueuedUserMessage.-ascii {
     border-left: ascii $panel;
 }
 
-ToolCallMessage.-ascii {
-    border-left: ascii $primary;
-}
-
-ToolCallMessage.-ascii:hover {
-    border-left: ascii $secondary;
-}
-
 /* Approval command — warning color for shell commands */
 .approval-menu .approval-command {
     height: auto;

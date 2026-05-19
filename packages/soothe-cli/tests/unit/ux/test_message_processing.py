@@ -8,10 +8,9 @@ from __future__ import annotations
 from typing import Any
 
 from soothe_cli.events.tools.message_processing import (
+    _normalize_tool_name_for_arg_map,
     accumulate_tool_call_chunks,
-    coerce_tool_call_args_to_dict,
     extract_tool_args_dict,
-    format_tool_call_args,
     strip_internal_tags,
     try_parse_pending_tool_call_args,
 )
@@ -156,75 +155,14 @@ class TestExtractToolArgsDict:
         assert extract_tool_args_dict({"name": "ls", "input": {"path": "/b"}}) == {"path": "/b"}
 
 
-class TestFormatToolCallArgs:
-    """Display strings for tool call arguments (see IG-053)."""
+class TestNormalizeToolNameForArgMap:
+    """Snake_case normalization for step-card tool stats."""
 
-    def test_pascal_case_tool_name_maps_to_arg_display(self) -> None:
-        """Model may emit PascalCase names; lookup uses snake_case map."""
-        assert (
-            format_tool_call_args(
-                "ReadFile",
-                {"args": {"path": "README.md"}},
-            )
-            == "README.md"
-        )
+    def test_pascal_case_to_snake(self) -> None:
+        assert _normalize_tool_name_for_arg_map("ReadFile") == "read_file"
 
     def test_snake_case_unchanged(self) -> None:
-        assert (
-            format_tool_call_args(
-                "read_file",
-                {"args": {"path": "x.txt"}},
-            )
-            == "x.txt"
-        )
-
-    def test_fallback_when_mapped_keys_missing(self) -> None:
-        """If the model uses different parameter names, show raw values."""
-        # Path conversion will convert /tmp to actual OS path and abbreviate
-        result = format_tool_call_args("ls", {"args": {"directory": "/tmp"}})
-        # Should show some form of /tmp (may be converted or abbreviated)
-        assert "tmp" in result or "/private/tmp" in result
-
-    def test_deepagents_read_file_uses_file_path(self) -> None:
-        """Filesystem middleware passes ``file_path``, not ``path``."""
-        result = format_tool_call_args(
-            "read_file",
-            {"args": {"file_path": "/README.md"}},
-        )
-        # Path conversion will convert /README.md to actual OS path and abbreviate
-        assert "README.md" in result
-
-    def test_string_json_args_from_tool_call_chunk(self) -> None:
-        """Streaming chunks encode args as JSON text."""
-        raw = '{"file_path": "/pyproject.toml"}'
-        assert coerce_tool_call_args_to_dict(raw) == {"file_path": "/pyproject.toml"}
-        result = format_tool_call_args("read_file", {"args": raw})
-        # Path conversion will convert /pyproject.toml to actual OS path and abbreviate
-        assert "pyproject.toml" in result
-
-    def test_task_tool_shows_subagent_and_description(self) -> None:
-        out = format_tool_call_args(
-            "task",
-            {
-                "args": {
-                    "subagent_type": "general-purpose",
-                    "description": "Scan the repo",
-                },
-            },
-        )
-        assert "general-purpose" in out
-        assert "Scan the repo" in out
-
-    def test_unmapped_tool_with_args_shows_compact_values(self) -> None:
-        out = format_tool_call_args(
-            "my_custom_plugin_tool",
-            {"args": {"query": "hello world", "limit": 5}},
-        )
-        assert "hello world" in out
-        assert "5" in out
-
-    def test_unmapped_tool_no_args_shows_ellipsis_placeholder(self) -> None:
-        assert format_tool_call_args("my_custom_plugin_tool", {"args": {}}) == "…"
+        assert _normalize_tool_name_for_arg_map("read_file") == "read_file"
 
 
 class TestStripInternalTags:

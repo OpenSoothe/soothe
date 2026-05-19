@@ -7,7 +7,7 @@ from langchain_core.messages import AIMessageChunk
 
 from soothe_cli.events.tools.message_processing import tool_ids_touched_by_stream_message
 from soothe_cli.events.tools.tool_call_resolution import build_streaming_args_overlay
-from soothe_cli.tui.textual_adapter._turn_ui_batch import TurnToolUiCoalescer
+from soothe_cli.tui.textual_adapter import TurnToolUiCoalescer
 
 
 def test_tool_ids_touched_by_stream_message_collects_chunk_ids() -> None:

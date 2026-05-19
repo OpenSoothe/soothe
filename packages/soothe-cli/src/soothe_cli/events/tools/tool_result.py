@@ -134,14 +134,8 @@ def extract_tool_result_payload(message: Any) -> ToolResultPayload | None:
     )
 
 
-# Back-compat aliases (remove when callers are migrated).
-ToolResultCardPayload = ToolResultPayload
-extract_tool_result_card_payload = extract_tool_result_payload
-
 __all__ = [
-    "ToolResultCardPayload",
     "ToolResultPayload",
-    "extract_tool_result_card_payload",
     "extract_tool_result_payload",
     "infer_tool_output_suggests_error",
 ]
