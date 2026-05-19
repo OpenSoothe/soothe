@@ -30,13 +30,27 @@ client_id_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar(
 class DaemonFormatter(ShortLevelFormatter):
     """Formatter that includes loop_id and client_id from context variables.
 
-    Always logs the full loop ID and client ID (no truncation) when available.
+    Only includes loop_id and client_id in the prefix when they are actually set,
+    keeping logs brief and non-verbose.
     """
 
     def format(self, record: logging.LogRecord) -> str:
         """Format with loop_id and client_id from context variables."""
-        record.loop_id = loop_id_ctx.get() or "-"
-        record.client_id = client_id_ctx.get() or "-"
+        loop_id = loop_id_ctx.get()
+        client_id = client_id_ctx.get()
+
+        # Build context prefix only when IDs are actually set
+        context_parts = []
+        if loop_id:
+            context_parts.append(f"loop={loop_id}")
+        if client_id:
+            context_parts.append(f"client={client_id}")
+
+        if context_parts:
+            record.context_prefix = "[" + " ".join(context_parts) + "] "
+        else:
+            record.context_prefix = ""
+
         return super().format(record)
 
 
@@ -112,7 +126,7 @@ def setup_daemon_logging(
         file_handler.setFormatter(
             DaemonFormatter(
                 "%(asctime)s %(level_short)s %(name)s:%(lineno)d "
-                "[loop=%(loop_id)s client=%(client_id)s] %(message)s"
+                "%(context_prefix)s%(message)s"
             )
         )
         file_handler.setLevel(file_level)
@@ -130,7 +144,7 @@ def setup_daemon_logging(
             console_handler.setFormatter(
                 DaemonFormatter(
                     "%(asctime)s %(level_short)s "
-                    "[loop=%(loop_id)s client=%(client_id)s] %(message)s"
+                    "%(context_prefix)s%(message)s"
                 )
             )
             console_handler.setLevel(logging.INFO)
