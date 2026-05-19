@@ -47,7 +47,7 @@ async def bootstrap_loop_session(
     resume_loop_id: str | None,
     verbosity: str,
     workspace: str | Path | None = None,
-    stream_delivery: str = "merged",
+    stream_delivery: str = "streaming",
     daemon_ready_timeout_s: float = _DAEMON_READY_TIMEOUT_S,
     subscribe_timeout_s: float = _SESSION_BOOTSTRAP_TIMEOUT_S,
 ) -> dict[str, Any]:
@@ -57,7 +57,7 @@ async def bootstrap_loop_session(
         client: ``WebSocketClient`` instance (connected).
         resume_loop_id: If set, subscribe to this existing loop. Otherwise create ``loop_new``.
         verbosity: Event verbosity for ``loop_subscribe``.
-        stream_delivery: Daemon stream shaping — ``merged`` (default), ``batch``, or ``full``.
+        stream_delivery: Daemon stream shaping — ``streaming`` (default) or ``batch``.
         workspace: Optional client workspace hint (e.g., user's CWD). Forwarded to the
             daemon on ``loop_new`` so filesystem tools default to the user's project
             directory instead of the per-loop daemon scratch dir (IG-409). Ignored on
@@ -92,7 +92,7 @@ async def bootstrap_loop_session(
         if not loop_id:
             raise ValueError("loop_new_response missing loop_id")
 
-    delivery = stream_delivery if stream_delivery in ("batch", "merged", "full") else "merged"
+    delivery = stream_delivery if stream_delivery in ("batch", "streaming") else "streaming"
     sub_resp = await client.request_response(
         {
             "type": "loop_subscribe",

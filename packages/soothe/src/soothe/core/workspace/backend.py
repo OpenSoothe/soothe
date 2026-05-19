@@ -122,7 +122,9 @@ class NormalizedPathBackend(FilesystemBackend):
         if hasattr(self, "_ignore_spec_cache"):
             return self._ignore_spec_cache
 
-        patterns = [f"{name}/" if "/" not in name else name for name in self.ESSENTIAL_GLOB_EXCLUDES]
+        patterns = [
+            f"{name}/" if "/" not in name else name for name in self.ESSENTIAL_GLOB_EXCLUDES
+        ]
         patterns.extend(self._load_gitignore_lines())
         self._ignore_spec_cache = PathSpec.from_lines("gitignore", patterns)
         return self._ignore_spec_cache
@@ -153,7 +155,9 @@ class NormalizedPathBackend(FilesystemBackend):
             except ValueError:
                 return {}
             except (OSError, RuntimeError):
-                logger.warning("Could not resolve glob result path: %s", matched_path, exc_info=True)
+                logger.warning(
+                    "Could not resolve glob result path: %s", matched_path, exc_info=True
+                )
                 return {}
         else:
             path_key = str(matched_path)
@@ -220,9 +224,7 @@ class NormalizedPathBackend(FilesystemBackend):
 
             for name in files:
                 rel_posix = (
-                    name
-                    if rel_root_posix == "."
-                    else f"{rel_root_posix}/{name}".removeprefix("./")
+                    name if rel_root_posix == "." else f"{rel_root_posix}/{name}".removeprefix("./")
                 )
                 if self._is_ignored(rel_posix):
                     continue
@@ -274,9 +276,9 @@ class NormalizedPathBackend(FilesystemBackend):
             else:
                 match_rel = rel_posix
 
-            if not wcglob.globmatch(match_rel, pattern, flags=_WCMATCH_FLAGS) and not wcglob.globmatch(
-                Path(rel_posix).name, pattern, flags=_WCMATCH_FLAGS
-            ):
+            if not wcglob.globmatch(
+                match_rel, pattern, flags=_WCMATCH_FLAGS
+            ) and not wcglob.globmatch(Path(rel_posix).name, pattern, flags=_WCMATCH_FLAGS):
                 continue
 
             full_path = (workspace / rel_posix).resolve()

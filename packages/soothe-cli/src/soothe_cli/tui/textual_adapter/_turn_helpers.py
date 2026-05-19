@@ -15,9 +15,10 @@ if TYPE_CHECKING:
     from soothe_cli.tui.textual_adapter._adapter import TextualUIAdapter
     from soothe_cli.tui.widgets.messages import AssistantMessage
 
-from soothe_cli.shared.duration_format import format_duration
-from soothe_cli.shared.rendering.renderer_base import RendererBase
+from soothe_cli.events.duration_format import format_duration
+from soothe_cli.events.rendering.renderer_base import RendererBase
 from soothe_cli.tui._session_stats import SessionStats
+from soothe_cli.tui.step_task_routing import StepTaskRouter
 from soothe_cli.tui.widgets.messages import AppMessage, AssistantMessage
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,100 @@ def _loop_id_for_remote_state(config: RunnableConfig, daemon_session: Any) -> st
         return loop_id
     raw = getattr(daemon_session, "loop_id", None)
     return str(raw or "").strip()
+
+
+def _step_card_tool_count(widget: Any) -> int:
+    """Return the number of tool rows tracked on a step card."""
+    rows = getattr(widget, "_rows", None)
+    if isinstance(rows, list):
+        return len(rows)
+    return 0
+
+
+def _ensure_step_card_running_ui(widget: Any) -> None:
+    """Apply deferred running UI before completing a step card."""
+    if getattr(widget, "_deferred_running", False):
+        widget._deferred_running = False  # noqa: SLF001
+    promote = getattr(widget, "_promote_pending_to_running_if_needed", None)
+    if callable(promote):
+        promote()
+    elif getattr(widget, "_status", "") == "pending":  # noqa: SLF001
+        if getattr(widget, "is_mounted", False):
+            widget.set_running()  # noqa: SLF001
+        else:
+            widget._status = "running"  # noqa: SLF001
+            widget._start_time = time.time()  # noqa: SLF001
+            widget._deferred_running = True  # noqa: SLF001
+
+
+def _detach_step_card_from_adapter(
+    adapter: TextualUIAdapter,
+    step_id: str,
+    widget: Any,
+    *,
+    ns_key: tuple[Any, ...],
+    router: StepTaskRouter,
+) -> None:
+    """Clear namespace and tool bindings for a finished step card."""
+    if adapter._step_by_namespace.get(ns_key) is widget:
+        adapter._step_by_namespace.pop(ns_key, None)
+    stale_tool_ids = [k for k, sw in adapter._tool_to_step.items() if sw is widget]
+    for k in stale_tool_ids:
+        adapter._tool_to_step.pop(k, None)
+    router.clear_step_tool_bindings(step_id)
+    for k, parent in list(adapter._tool_display_by_call_id.items()):
+        if parent is widget:
+            adapter._tool_display_by_call_id.pop(k, None)
+
+
+def complete_tracked_step_card(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    *,
+    step_id: str,
+    widget: Any,
+    ns_key: tuple[Any, ...],
+    success: bool,
+    duration_ms: int,
+    tool_call_count: int,
+    summary: str,
+) -> None:
+    """Finalize a step card that is still tracked in ``_current_step_messages``."""
+    _ensure_step_card_running_ui(widget)
+    _detach_step_card_from_adapter(adapter, step_id, widget, ns_key=ns_key, router=router)
+    widget.set_complete(success, duration_ms, tool_call_count, summary)
+    if not ns_key:
+        adapter._last_completed_main_step_execute_prose = getattr(
+            widget, "last_completed_execute_prose", ""
+        )
+
+
+def finalize_tracked_step_cards_on_goal_complete(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+) -> None:
+    """Mark in-flight plan step cards complete when the agent loop goal finishes."""
+    for step_id, widget in list(adapter._current_step_messages.items()):
+        status = getattr(widget, "_status", "")
+        if status not in ("pending", "running"):
+            continue
+        duration_ms = 0
+        start_time = getattr(widget, "_start_time", None)
+        if start_time is not None:
+            duration_ms = int((time.time() - start_time) * 1000)
+        tool_call_count = _step_card_tool_count(widget)
+        adapter._current_step_messages.pop(step_id, None)
+        complete_tracked_step_card(
+            adapter,
+            router,
+            step_id=step_id,
+            widget=widget,
+            ns_key=(),
+            success=True,
+            duration_ms=duration_ms,
+            tool_call_count=tool_call_count,
+            summary="Done",
+        )
 
 
 def _adapter_has_pending_tools(adapter: TextualUIAdapter) -> bool:
@@ -352,8 +447,8 @@ async def _flush_assistant_text_ns(
     Finalizes the streaming state on the assistant card.
     If no message exists yet, creates one with the full content.
     """
-    from soothe_cli.cli.stream.task_scope import format_task_scope_prefix
-    from soothe_cli.shared.events.explore_task_display import (
+    from soothe_cli.events.stream.task_scope import format_task_scope_prefix
+    from soothe_cli.events.policy.explore_task_display import (
         format_explore_task_json_blob_for_display,
     )
     from soothe_cli.tui.textual_adapter._stream_messages import _tui_main_assistant_body_for_dedupe

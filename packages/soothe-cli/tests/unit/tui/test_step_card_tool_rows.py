@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from time import time
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 import pytest
 
@@ -24,6 +24,18 @@ def test_snapshot_apply_roundtrip() -> None:
     w2.apply_tool_rows_snapshot(snap)
     assert w2.has_tool_call_row("c1")
     assert w2._row_index["c1"].phase == "success"  # noqa: SLF001
+
+
+def test_add_tool_call_promotes_mounted_pending_card_to_running() -> None:
+    """Plan pending cards already mounted must not stay on Pending... after tools arrive."""
+    w = CognitionStepMessage("s-pend", "CLI edits", id="st-pend-run")
+    assert w._status == "pending"  # noqa: SLF001
+    with (
+        patch.object(CognitionStepMessage, "is_mounted", new_callable=PropertyMock, return_value=True),
+        patch.object(w, "set_running") as set_running,
+    ):
+        w.add_tool_call("EVK_08:s:task:0", "code", {"subagent_type": "code"}, is_task_row=True)
+    set_running.assert_called_once()
 
 
 def test_mark_unfinished_tools_skipped() -> None:
@@ -86,7 +98,7 @@ def test_step_header_has_no_tool_count_suffix() -> None:
 
 
 def test_format_tool_call_row_smoke() -> None:
-    from soothe_cli.tui.tool_display import format_tool_call_row
+    from soothe_cli.tui.formatting.tool_row import format_tool_call_row
 
     c = format_tool_call_row("grep", {"pattern": "TODO"}, phase="pending")
     assert "grep" in c.plain.lower() or "Grep" in c.plain
@@ -95,7 +107,7 @@ def test_format_tool_call_row_smoke() -> None:
 def test_format_tool_call_row_branch_glyph_hollow_running_no_braille_spinner() -> None:
     """Step-card parity: running uses ○ only, not Braille frames."""
     from soothe_cli.tui.config import get_glyphs
-    from soothe_cli.tui.tool_display import format_tool_call_row
+    from soothe_cli.tui.formatting.tool_row import format_tool_call_row
 
     g = get_glyphs()
     c = format_tool_call_row(
@@ -189,7 +201,7 @@ def test_task_auto_collapses_when_activity_exceeds_threshold() -> None:
 
 def test_format_tool_call_row_branch_glyph_filled_on_success() -> None:
     from soothe_cli.tui.config import get_glyphs
-    from soothe_cli.tui.tool_display import format_tool_call_row
+    from soothe_cli.tui.formatting.tool_row import format_tool_call_row
 
     g = get_glyphs()
     c = format_tool_call_row(

@@ -2,11 +2,11 @@
 
 import pytest
 
-from soothe_cli.shared.tools.tool_formatters import (
+from soothe_cli.events.tools.tool_formatters import (
     FileOpsFormatter,
     WebFormatter,
 )
-from soothe_cli.shared.tools.tool_output_formatter import ToolBrief
+from soothe_cli.events.tools.tool_output_formatter import ToolBrief
 
 
 class TestWebFormatter:
@@ -158,7 +158,7 @@ class TestFormatterRouting:
 
     def test_file_ops_route_to_file_formatter(self) -> None:
         """Test that file_ops tools route to FileOpsFormatter."""
-        from soothe_cli.shared.tools.tool_output_formatter import ToolOutputFormatter
+        from soothe_cli.events.tools.tool_output_formatter import ToolOutputFormatter
 
         formatter = ToolOutputFormatter()
 
@@ -169,7 +169,7 @@ class TestFormatterRouting:
 
     def test_grep_routes_to_file_ops_without_error(self) -> None:
         """grep is file_ops in SDK metadata; FileOpsFormatter must handle it."""
-        from soothe_cli.shared.tools.tool_output_formatter import ToolOutputFormatter
+        from soothe_cli.events.tools.tool_output_formatter import ToolOutputFormatter
 
         formatter = ToolOutputFormatter()
         brief = formatter.format("grep", "a.py:1:match\nb.py:2:match")
@@ -180,7 +180,7 @@ class TestFormatterRouting:
 
     def test_file_info_routes_to_file_ops_without_error(self) -> None:
         """file_info is file_ops in SDK metadata; FileOpsFormatter must handle it."""
-        from soothe_cli.shared.tools.tool_output_formatter import ToolOutputFormatter
+        from soothe_cli.events.tools.tool_output_formatter import ToolOutputFormatter
 
         sample = (
             "Path: /workspace/README.md\n"
@@ -196,7 +196,7 @@ class TestFormatterRouting:
 
     def test_edit_file_routes_to_file_ops_without_error(self) -> None:
         """edit_file is file_ops in SDK metadata; FileOpsFormatter must handle it."""
-        from soothe_cli.shared.tools.tool_output_formatter import ToolOutputFormatter
+        from soothe_cli.events.tools.tool_output_formatter import ToolOutputFormatter
 
         formatter = ToolOutputFormatter()
         brief = formatter.format("edit_file", "Successfully updated foo.py")
@@ -206,7 +206,7 @@ class TestFormatterRouting:
 
     def test_web_tools_route_to_web_formatter(self) -> None:
         """Test that web tools are routed to WebFormatter."""
-        from soothe_cli.shared.tools.tool_output_formatter import ToolOutputFormatter
+        from soothe_cli.events.tools.tool_output_formatter import ToolOutputFormatter
 
         formatter = ToolOutputFormatter()
 
@@ -222,7 +222,7 @@ class TestFormatterRouting:
 
     def test_execution_tools_route_to_execution_formatter(self) -> None:
         """Test that execution tools route to ExecutionFormatter."""
-        from soothe_cli.shared.tools.tool_output_formatter import ToolOutputFormatter
+        from soothe_cli.events.tools.tool_output_formatter import ToolOutputFormatter
 
         formatter = ToolOutputFormatter()
 
@@ -232,7 +232,7 @@ class TestFormatterRouting:
 
     def test_run_python_json_string_success_not_misclassified(self) -> None:
         """JSON string payloads must not match the literal substring ``error`` in ``error``: null."""
-        from soothe_cli.shared.tools.tool_formatters import ExecutionFormatter
+        from soothe_cli.events.tools.tool_formatters import ExecutionFormatter
 
         formatter = ExecutionFormatter()
         payload = '{"success": true, "output": "", "result": null, "error": null}'
@@ -243,7 +243,7 @@ class TestFormatterRouting:
         assert brief.metrics.get("error") is not True
 
     def test_run_python_json_string_real_failure(self) -> None:
-        from soothe_cli.shared.tools.tool_formatters import ExecutionFormatter
+        from soothe_cli.events.tools.tool_formatters import ExecutionFormatter
 
         formatter = ExecutionFormatter()
         payload = '{"success": false, "output": "", "result": null, "error": "SyntaxError: bad"}'
@@ -254,7 +254,7 @@ class TestFormatterRouting:
 
     def test_unknown_category_falls_back(self) -> None:
         """Test that unknown tool category uses FallbackFormatter."""
-        from soothe_cli.shared.tools.tool_output_formatter import ToolOutputFormatter
+        from soothe_cli.events.tools.tool_output_formatter import ToolOutputFormatter
 
         formatter = ToolOutputFormatter()
 

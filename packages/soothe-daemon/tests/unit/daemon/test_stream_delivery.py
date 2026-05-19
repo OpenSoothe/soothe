@@ -31,25 +31,14 @@ def test_batch_mode_suppresses_goal_completion_until_completed() -> None:
     )
     assert len(done) == 2
     assert done[0][1] == "messages"
-    merged = done[0][2][0]
-    assert merged["content"] == "ab"
-    assert merged.get("chunk_position") == "last"
+    coalesced_msg = done[0][2][0]
+    assert coalesced_msg["content"] == "ab"
+    assert coalesced_msg.get("chunk_position") == "last"
     assert done[1][2]["type"] == AGENT_LOOP_COMPLETED
     assert coalescer.turn_complete_pending
 
 
-def test_merged_mode_flushes_on_threshold() -> None:
-    coalescer = StreamDeliveryCoalescer("merged")
-    small = "x" * 100
-    assert coalescer.ingest(*_gc_chunk(small)) == []
-    big = "y" * 500
-    flushed = coalescer.ingest(*_gc_chunk(big))
-    assert len(flushed) == 1
-    assert "x" * 100 in flushed[0][2][0]["content"]
-    assert "y" * 500 in flushed[0][2][0]["content"]
-
-
-def test_full_mode_passthrough() -> None:
-    coalescer = StreamDeliveryCoalescer("full")
+def test_streaming_mode_passthrough() -> None:
+    coalescer = StreamDeliveryCoalescer("streaming")
     chunk = _gc_chunk("passthrough")
     assert coalescer.ingest(*chunk) == [chunk]

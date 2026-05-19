@@ -803,6 +803,28 @@ class Executor:
         self._config = config
         self._goal_context_manager = goal_context_manager
         self._loop_id = loop_id
+        self._project_instructions_lock = asyncio.Lock()
+
+    async def _claim_and_load_project_instructions_for_execute(
+        self,
+        state: LoopState,
+        *,
+        first_human_in_wave: bool,
+    ) -> str | None:
+        """Claim per-iteration injection slot and load project instruction XML."""
+        if not first_human_in_wave:
+            return None
+        async with self._project_instructions_lock:
+            if state.project_instructions_execute_iteration == state.iteration:
+                return None
+            from soothe.core.prompts.project_instructions import (
+                load_workspace_project_instructions,
+            )
+
+            block = load_workspace_project_instructions(state.workspace)
+            if block is not None:
+                state.project_instructions_execute_iteration = state.iteration
+            return block
 
     def _executor_langfuse_merge_for_stream(
         self, base: dict[str, Any], *, thread_id: str | None
@@ -1409,7 +1431,7 @@ class Executor:
         gather_results: list[Any] = [None] * n_steps
         step_wave_index: dict[str, int] = {step.id: i for i, step in enumerate(steps)}
 
-        async def _run_parallel_step(step: StepAction) -> None:
+        async def _run_parallel_step(step: StepAction, *, first_in_wave: bool) -> None:
             sid = step.id
             try:
                 payload = await self._execute_step_collecting_events(
@@ -1422,6 +1444,7 @@ class Executor:
                     intent_type=itype,
                     loop_state=state,
                     live_event_queue=live_queue,
+                    first_human_in_wave=first_in_wave,
                 )
                 live_queue.put_nowait(_ParallelStepDone(sid, payload))
             except asyncio.CancelledError:
@@ -1429,7 +1452,10 @@ class Executor:
             except Exception as exc:
                 live_queue.put_nowait(_ParallelStepDone(sid, exc))
 
-        tasks = [asyncio.create_task(_run_parallel_step(step)) for step in steps]
+        tasks = [
+            asyncio.create_task(_run_parallel_step(step, first_in_wave=(i == 0)))
+            for i, step in enumerate(steps)
+        ]
 
         all_step_results: list[StepResult] = []
         single_wave_messages: list[BaseMessage] = []
@@ -1558,7 +1584,7 @@ class Executor:
             StreamEvent during execution, then one StepResult per step in ``steps``.
         """
         # RFC-214: Build N Human messages (one per step) instead of combined description
-        step_messages = self._build_batch_human_messages(steps, state)
+        step_messages = await self._build_batch_human_messages(steps, state)
 
         # Compact input summary log
         logger.debug(
@@ -1699,7 +1725,7 @@ class Executor:
                 )
 
             # Record error pairs in ledger
-            step_messages_err = self._build_batch_human_messages(steps, state)
+            step_messages_err = await self._build_batch_human_messages(steps, state)
             from soothe.core.loop.state.schemas import StepResult
 
             n_err = len(steps)
@@ -1779,6 +1805,7 @@ class Executor:
         intent_type: str | None = None,
         loop_state: LoopState | None = None,
         live_event_queue: asyncio.Queue[_ParallelLiveQueueItem] | None = None,
+        first_human_in_wave: bool = True,
     ) -> tuple[list[StreamEvent], StepResult, list[BaseMessage], str]:
         """Execute single step, collecting events for the parallel merge queue.
 
@@ -1887,10 +1914,18 @@ class Executor:
                     ". ".join(hints_parts) + ". Consider using the suggested approach first."
                 )
 
+            project_instructions = None
+            if loop_state is not None:
+                project_instructions = await self._claim_and_load_project_instructions_for_execute(
+                    loop_state,
+                    first_human_in_wave=first_human_in_wave,
+                )
+
             envelope = build_execute_step_envelope(
                 goal=goal_for_envelope,
                 step_description=step.description,
                 execution_hints=execution_hints,
+                project_instructions=project_instructions,
                 goal_user_submission=loop_state.goal_user_submission if loop_state else None,
             )
             logger.debug("[Human Message Envelope] %s", log_preview(envelope, chars=150))
@@ -2295,7 +2330,7 @@ class Executor:
             delegate_final_text,
         )
 
-    def _build_batch_human_messages(
+    async def _build_batch_human_messages(
         self,
         steps: list,
         state: LoopState,
@@ -2315,8 +2350,13 @@ class Executor:
         """
         from soothe.core.prompts.user_envelope import build_execute_step_envelope
 
+        project_instructions = await self._claim_and_load_project_instructions_for_execute(
+            state,
+            first_human_in_wave=True,
+        )
+
         messages = []
-        for step in steps:
+        for step_index, step in enumerate(steps):
             # Build execution hints from step metadata (RFC-214: hints in user envelope)
             hints_parts: list[str] = []
             if step.subagent:
@@ -2333,6 +2373,7 @@ class Executor:
                 goal=state.goal,
                 step_description=step.description,
                 execution_hints=execution_hints,
+                project_instructions=project_instructions if step_index == 0 else None,
                 goal_user_submission=state.goal_user_submission,
             )
             msg = LoopHumanMessage(

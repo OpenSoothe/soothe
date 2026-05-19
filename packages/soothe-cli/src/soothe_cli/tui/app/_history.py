@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 from textual.content import Content
 
-from soothe_cli.shared.tools.tool_card_payload import extract_tool_result_card_payload
+from soothe_cli.events.tools.tool_card_payload import extract_tool_result_card_payload
 from soothe_cli.tui.app._module_init import _LoopHistoryPayload
 from soothe_cli.tui.message_display_filter import (
     extract_ai_text_for_display,
@@ -127,7 +127,7 @@ class _HistoryMixin:
         """
         from langchain_core.messages import AIMessage, ToolMessage
 
-        from soothe_cli.shared.tools.message_processing import (
+        from soothe_cli.events.tools.message_processing import (
             extract_tool_args_dict,
             normalize_tool_calls_list,
         )
@@ -784,8 +784,8 @@ class _HistoryMixin:
         logger.info("Starting background event consumer for subscribed loop")
         from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-        from soothe_cli.cli.stream.pipeline import StreamDisplayPipeline
-        from soothe_cli.shared.tools.message_processing import extract_tool_args_dict
+        from soothe_cli.events.stream.pipeline import StreamDisplayPipeline
+        from soothe_cli.events.tools.message_processing import extract_tool_args_dict
 
         progress_pipeline = StreamDisplayPipeline()
         tool_cards: dict[str, ToolCallMessage] = {}

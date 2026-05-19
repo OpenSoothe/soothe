@@ -71,12 +71,21 @@ def _goal_text_for_execute_step_envelope(goal: str | None) -> str:
     return stripped if stripped else "No goal specified"
 
 
+def _append_project_instructions_to_context_info(
+    context_info_parts: list[str],
+    project_instructions: str | None,
+) -> None:
+    if project_instructions:
+        context_info_parts.append(project_instructions)
+
+
 def build_execute_step_envelope(
     goal: str | None,
     step_description: str,
     *,
     execution_hints: str | None = None,
     workspace_state: str | None = None,
+    project_instructions: str | None = None,
     goal_user_submission: str | None = None,
 ) -> str:
     """Build the user message envelope for an execute-step (RFC-214).
@@ -89,6 +98,8 @@ def build_execute_step_envelope(
         step_description: The step's description (what to execute).
         execution_hints: Optional hints text from ExecutionHintsMiddleware.
         workspace_state: Optional lightweight workspace diff summary.
+        project_instructions: Optional ``<project_instructions>`` XML from workspace
+            ``CLAUDE.md`` / ``AGENTS.md`` (first N lines).
         goal_user_submission: When set to the original ``/skill:`` user line (after expansion),
             repeats the short trailing user text in ``<USER_PRIMARY_QUERY>`` before the
             full expanded goal so long SKILL.md bodies do not bury the real query.
@@ -131,6 +142,7 @@ def build_execute_step_envelope(
     ]
     if workspace_state:
         context_info_parts.append(f"<workspace_state>{workspace_state}</workspace_state>")
+    _append_project_instructions_to_context_info(context_info_parts, project_instructions)
     dynamic_parts.append("<CONTEXT_INFO>\n" + "\n".join(context_info_parts) + "\n</CONTEXT_INFO>")
 
     dynamic_context = "<DYNAMIC_CONTEXT>\n" + "\n".join(dynamic_parts) + "\n</DYNAMIC_CONTEXT>"
@@ -145,6 +157,7 @@ def build_plan_context_envelope(
     max_iterations: int | None = None,
     dag_context: str | None = None,
     step_id_hint: str | None = None,
+    project_instructions: str | None = None,
     goal_user_submission: str | None = None,
 ) -> str:
     """Build the user message envelope for plan-assess/plan-generate (RFC-214).
@@ -160,6 +173,8 @@ def build_plan_context_envelope(
         max_iterations: Maximum iterations allowed.
         dag_context: Optional DAG planning context XML.
         step_id_hint: Optional next step ID hint text.
+        project_instructions: Optional ``<project_instructions>`` XML from workspace
+            ``CLAUDE.md`` / ``AGENTS.md`` (plan-generate only at call sites).
         goal_user_submission: Original ``/skill:`` line when applicable; used to surface
             the short user query before long expanded skill content.
 
@@ -198,13 +213,13 @@ def build_plan_context_envelope(
         extra_parts.append(dag_context)
 
     # <CONTEXT_INFO>
-    context_info = (
-        "<CONTEXT_INFO>\n"
-        f"<timestamp>{timestamp}</timestamp>\n"
-        f"<date>{date_str}</date>\n"
-        f"{_RESPONSE_LANGUAGE_HINT}\n"
-        "</CONTEXT_INFO>"
-    )
+    context_info_parts = [
+        f"<timestamp>{timestamp}</timestamp>",
+        f"<date>{date_str}</date>",
+        _RESPONSE_LANGUAGE_HINT,
+    ]
+    _append_project_instructions_to_context_info(context_info_parts, project_instructions)
+    context_info = "<CONTEXT_INFO>\n" + "\n".join(context_info_parts) + "\n</CONTEXT_INFO>"
 
     parts = [goal_progress] + extra_parts + [context_info]
     return "\n".join(parts)

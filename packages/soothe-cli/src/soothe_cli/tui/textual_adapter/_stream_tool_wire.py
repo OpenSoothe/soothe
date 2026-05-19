@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 
-from soothe_cli.shared.tools.tool_call_resolution import merge_tool_display_args
+from soothe_cli.events.tools.tool_call_resolution import merge_tool_display_args
 from soothe_cli.tui.textual_adapter._stream_formatting import (
     _ensure_task_delegation_card,
     _flush_router_pending_subgraph_tools,
