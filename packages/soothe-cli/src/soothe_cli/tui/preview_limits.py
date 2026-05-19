@@ -8,23 +8,13 @@ from __future__ import annotations
 
 from typing import Final
 
-# --- Step / Task cognition cards (`CognitionStepMessage`, task `ToolCallMessage`) ---
+# --- Step cognition cards (`CognitionStepMessage`) ---
 # When False, step cards track tools internally but show only per-kind counts on the
-# running status line (no CLI-style tool rows in the card body).
+# running status line (no per-tool rows in the card body).
 STEP_CARD_SHOW_TOOL_ROW_DETAILS: Final[bool] = False
 
 # When estimated body lines exceed this count, the card auto-collapses (strict `>`).
-# Matches the step/task activity preview row cap (`_STEP_TOOL_PREVIEW_ROWS`).
 STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD: Final[int] = 3
-
-# Explore/task delegation row inside a step card (single-line ``Explore(desc)``).
-STEP_TASK_DELEGATION_DESC_MAX_CHARS: Final[int] = 100
-
-# --- Tool call cards (`ToolCallMessage` collapsed output) ---
-TOOL_CARD_PREVIEW_LINES: Final[int] = 1
-TOOL_CARD_PREVIEW_CHARS: Final[int] = 120
-TOOL_CARD_PREVIEW_TODO_ITEMS: Final[int] = 1
-TOOL_CARD_PREVIEW_WEB_DICT_KEYS: Final[int] = 1
 
 # --- Skill invocation cards (`SkillMessage` collapsed SKILL.md body) ---
 SKILL_CARD_PREVIEW_LINES: Final[int] = 4

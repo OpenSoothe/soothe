@@ -141,7 +141,6 @@ class TestProcessorState:
         state = ProcessorState()
         assert state.seen_message_ids == set()
         assert state.pending_tool_calls == {}
-        assert state.name_map == {}
         assert state.current_plan is None
         assert state.loop_id == ""
 
@@ -552,6 +551,61 @@ class TestEventProcessorMessageDeduplication:
 
 class TestEventProcessorToolAndAssistantFiltering:
     """Tool routing and DisplayPolicy text shaping (fixed client UX; IG-343)."""
+
+    def test_duplicate_tool_call_id_emits_once(self) -> None:
+        """The same tool_call_id must not invoke on_tool_call twice."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer)
+
+        tool_call = {
+            "type": "AIMessage",
+            "id": "msg-dup-tc",
+            "content_blocks": [
+                {
+                    "type": "tool_call",
+                    "name": "read_file",
+                    "id": "tc-dup",
+                    "args": {"path": "a.txt"},
+                }
+            ],
+            "tool_calls": [
+                {
+                    "name": "read_file",
+                    "id": "tc-dup",
+                    "args": {"path": "a.txt"},
+                }
+            ],
+        }
+        processor.process_event(_stream_messages_event(tool_call))
+
+        tool_calls = [c for c in renderer.calls if c[0] == "on_tool_call"]
+        assert len(tool_calls) == 1
+        assert tool_calls[0][1][2] == "tc-dup"
+
+    def test_headless_records_task_spawn_without_on_tool_call(self) -> None:
+        """Headless mode still enqueues task spawns but skips renderer tool UI."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, headless_output=True)
+
+        processor.process_event(
+            _stream_messages_event(
+                {
+                    "type": "AIMessage",
+                    "id": "msg-headless-task",
+                    "tool_calls": [
+                        {
+                            "name": "task",
+                            "id": "tc-task-1",
+                            "args": {"subagent_type": "explore", "description": "scan"},
+                        }
+                    ],
+                }
+            )
+        )
+
+        assert [c for c in renderer.calls if c[0] == "on_tool_call"] == []
+        assert len(processor.state.task_spawn_queue) == 1
+        assert processor.state.emitted_tool_call_ids == {"tc-task-1"}
 
     def test_tool_result_surfaces_to_renderer(self) -> None:
         """Tool results route to on_tool_result when not headless."""

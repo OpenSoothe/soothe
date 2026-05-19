@@ -1,8 +1,12 @@
-"""Remove deepagents ``execute`` when command sandbox is off (IG-sandbox).
+"""Remove deepagents ``execute`` when command sandbox is off.
 
 ``create_deep_agent`` registers ``execute`` only when a sandbox-capable backend is
-available. Soothe's default filesystem backend does not implement command execution;
-``security.sandbox`` gates whether that tool is advertised to the model.
+available. ``security.sandbox`` gates whether that tool is advertised to the model.
+
+Host-execution tools (``run_command``, ``run_python``, ``run_background``,
+``kill_process``) are NOT filtered here — they run on the host via subprocess
+and do not require a sandbox backend. They are always resolved in
+``_resolver_tools.py`` regardless of the sandbox flag.
 """
 
 from __future__ import annotations

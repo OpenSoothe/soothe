@@ -40,7 +40,6 @@ from soothe_cli.events.tools.message_processing import (
     tool_calls_have_any_arg_dict,
     try_parse_pending_tool_call_args,
 )
-from soothe_cli.events.tools.rendering import update_name_map_from_tool_calls
 from soothe_cli.events.tools.tool_result import (
     extract_tool_result_payload,
     infer_tool_output_suggests_error,
@@ -169,10 +168,30 @@ class EventProcessor:
         *,
         is_main: bool,
         namespace: tuple[str, ...],
-    ) -> None:
+    ) -> bool:
+        """Record task spawns and notify the renderer at most once per ``tool_call_id``.
+
+        Task spawn bookkeeping runs even in headless mode (namespace binding). Renderer
+        notification is skipped when headless, below NORMAL tier, or the id was already
+        emitted.
+
+        Returns:
+            True when ``on_tool_call`` was invoked on the renderer.
+        """
+        tc_id = str(tool_call_id or "").strip()
+        if tc_id and tc_id in self._state.emitted_tool_call_ids:
+            return False
+
         self._enqueue_task_spawn_if_needed(name, args, tool_call_id, is_main=is_main)
+        if tc_id:
+            self._state.emitted_tool_call_ids.add(tc_id)
+
+        if self._headless_output or not self._presentation.tier_visible(VerbosityTier.NORMAL):
+            return False
+
         scope = None if is_main else self._resolve_task_scope(namespace)
         self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main, task_scope=scope)
+        return True
 
     def _emit_tool_result_for_renderer(
         self,
@@ -184,6 +203,8 @@ class EventProcessor:
         is_main: bool,
         namespace: tuple[str, ...],
     ) -> None:
+        if self._headless_output:
+            return
         scope = None if is_main else self._resolve_task_scope(namespace)
         self._renderer.on_tool_result(
             name, result, tool_call_id, is_error=is_error, is_main=is_main, task_scope=scope
@@ -527,9 +548,6 @@ class EventProcessor:
             if lo not in LOOP_ASSISTANT_OUTPUT_PHASES:
                 return
 
-        # Update name_map from tool calls
-        update_name_map_from_tool_calls(msg, self._state.name_map)
-
         # Deduplication (complete messages only, chunks share IDs)
         msg_id = msg.id or ""
         is_chunk = isinstance(msg, AIMessageChunk)
@@ -600,22 +618,21 @@ class EventProcessor:
                         if not coerced:
                             continue
                         tool_call_id = block.get("id", "")
-                        self._emit_tool_call_for_renderer(
+                        if self._emit_tool_call_for_renderer(
                             name,
                             coerced,
                             tool_call_id,
                             is_main=is_main,
                             namespace=namespace,
-                        )
-                        tool_call_emitted_from_blocks = True
-                        # Log tool invocation for audit trail
-                        logger.info(
-                            "tool_call name=%s id=%s args=%s is_main=%s",
-                            name,
-                            tool_call_id,
-                            preview_first(str(coerced), 200) if coerced else "{}",
-                            is_main,
-                        )
+                        ):
+                            tool_call_emitted_from_blocks = True
+                            logger.info(
+                                "tool_call name=%s id=%s args=%s is_main=%s",
+                                name,
+                                tool_call_id,
+                                preview_first(str(coerced), 200) if coerced else "{}",
+                                is_main,
+                            )
         elif isinstance(msg.content, str) and msg.content:
             if self._suppress_main_assistant_body_for_headless_obj(msg, is_main=is_main):
                 pass
@@ -649,26 +666,20 @@ class EventProcessor:
 
                 if has_tc_args:
                     tool_call_id = tc.get("id", "")
-                    # Deduplicate tool calls by ID
-                    if tool_call_id and tool_call_id in self._state.emitted_tool_call_ids:
-                        continue
-                    if tool_call_id:
-                        self._state.emitted_tool_call_ids.add(tool_call_id)
-                    self._emit_tool_call_for_renderer(
+                    if self._emit_tool_call_for_renderer(
                         name,
                         tc_args,
                         tool_call_id,
                         is_main=is_main,
                         namespace=namespace,
-                    )
-                    # Log tool invocation for audit trail
-                    logger.info(
-                        "tool_call name=%s id=%s args=%s is_main=%s",
-                        name,
-                        tool_call_id,
-                        preview_first(str(tc_args), 200) if tc_args else "{}",
-                        is_main,
-                    )
+                    ):
+                        logger.info(
+                            "tool_call name=%s id=%s args=%s is_main=%s",
+                            name,
+                            tool_call_id,
+                            preview_first(str(tc_args), 200) if tc_args else "{}",
+                            is_main,
+                        )
 
     def _handle_tool_message(
         self,
@@ -840,27 +851,23 @@ class EventProcessor:
                 name = block.get("name", "")
                 if name and self._presentation.tier_visible(VerbosityTier.NORMAL):
                     args = extract_tool_args_dict(block)
-                    tool_call_id = block.get("id", "")
-                    # Deduplicate tool calls
-                    if tool_call_id and tool_call_id in self._state.emitted_tool_call_ids:
+                    if not args:
                         continue
-                    if tool_call_id:
-                        self._state.emitted_tool_call_ids.add(tool_call_id)
-                    self._emit_tool_call_for_renderer(
+                    tool_call_id = block.get("id", "")
+                    if self._emit_tool_call_for_renderer(
                         name,
                         args,
                         tool_call_id,
                         is_main=is_main,
                         namespace=namespace,
-                    )
-                    # Log tool invocation for audit trail
-                    logger.info(
-                        "tool_call name=%s id=%s args=%s is_main=%s",
-                        name,
-                        tool_call_id,
-                        preview_first(str(args), 200) if args else "{}",
-                        is_main,
-                    )
+                    ):
+                        logger.info(
+                            "tool_call name=%s id=%s args=%s is_main=%s",
+                            name,
+                            tool_call_id,
+                            preview_first(str(args), 200) if args else "{}",
+                            is_main,
+                        )
 
         # Handle tool_calls from serialized AIMessage (model_dump produces tool_calls not tool_call_chunks)
         # IMPORTANT: Only emit if we have non-empty args. Otherwise, let the accumulation
@@ -879,26 +886,20 @@ class EventProcessor:
                         if not args:
                             continue
 
-                        # Deduplicate tool calls
-                        if tool_call_id and tool_call_id in self._state.emitted_tool_call_ids:
-                            continue
-                        if tool_call_id:
-                            self._state.emitted_tool_call_ids.add(tool_call_id)
-                        self._emit_tool_call_for_renderer(
+                        if self._emit_tool_call_for_renderer(
                             name,
                             args,
                             tool_call_id,
                             is_main=is_main,
                             namespace=namespace,
-                        )
-                        # Log tool invocation for audit trail
-                        logger.info(
-                            "tool_call name=%s id=%s args=%s is_main=%s",
-                            name,
-                            tool_call_id,
-                            preview_first(str(args), 200) if args else "{}",
-                            is_main,
-                        )
+                        ):
+                            logger.info(
+                                "tool_call name=%s id=%s args=%s is_main=%s",
+                                name,
+                                tool_call_id,
+                                preview_first(str(args), 200) if args else "{}",
+                                is_main,
+                            )
 
     def _handle_tool_message_dict(
         self,
@@ -978,28 +979,22 @@ class EventProcessor:
 
     def _emit_pending_tool_calls(self, namespace: tuple[str, ...]) -> None:
         """Emit pending tool calls that have complete JSON args."""
-        if self._headless_output:
-            return
         for tc_id, pending in list(self._state.pending_tool_calls.items()):
-            if pending["emitted"]:
-                continue
-            # Deduplicate
-            if tc_id in self._state.emitted_tool_call_ids:
-                pending["emitted"] = True
+            if pending.get("emitted"):
                 continue
             parsed_args = try_parse_pending_tool_call_args(pending)
-            if parsed_args is not None and self._presentation.tier_visible(VerbosityTier.NORMAL):
-                self._state.emitted_tool_call_ids.add(tc_id)
-                pending_is_main = pending.get("is_main", not namespace)
-                emit_ns = () if pending_is_main else namespace
-                self._emit_tool_call_for_renderer(
-                    pending["name"],
-                    parsed_args,
-                    tc_id,
-                    is_main=pending_is_main,
-                    namespace=emit_ns,
-                )
-                pending["emitted"] = True
+            if parsed_args is None:
+                continue
+            pending_is_main = pending.get("is_main", not namespace)
+            emit_ns = () if pending_is_main else namespace
+            self._emit_tool_call_for_renderer(
+                pending["name"],
+                parsed_args,
+                tc_id,
+                is_main=pending_is_main,
+                namespace=emit_ns,
+            )
+            pending["emitted"] = True
 
     def _handle_custom_event(
         self,

@@ -7,11 +7,10 @@ from typing import Any, Literal
 
 from soothe.foundation import extract_text_from_ai_message
 from soothe_sdk.client.wire import prepare_stream_data_for_wire
+from soothe_sdk.core.events import AGENT_LOOP_COMPLETED
 from soothe_sdk.ux.loop_stream import assistant_output_phase
 
 StreamDeliveryMode = Literal["batch", "streaming"]
-
-AGENT_LOOP_COMPLETED = "soothe.cognition.agent_loop.completed"
 
 
 _MSG_PAIR_LEN = 2

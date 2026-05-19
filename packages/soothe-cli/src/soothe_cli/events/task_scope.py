@@ -24,16 +24,7 @@ def format_task_scope_prefix(tool_call_id: str, subagent_type: str) -> str:
     return f"Task({st}):{short}"
 
 
-def format_task_subagent_line(subagent_type: str, task_description: str) -> str:
-    """Single-line delegated UX: ``Task(explore, \"…\")`` with safe quoting."""
-    st = (subagent_type or "?").strip() or "?"
-    desc = task_description or ""
-    escaped = desc.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").strip()
-    return f'Task({st}, "{escaped}")'
-
-
 __all__ = [
     "brief_task_tool_call_id",
     "format_task_scope_prefix",
-    "format_task_subagent_line",
 ]

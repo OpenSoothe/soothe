@@ -293,6 +293,9 @@ observability:
     tags: null
     user_id: null
 security:
+  # Enable sandboxed execution via SandboxBackendProtocol. When true, the
+  # deepagents `execute` tool (sandbox-backed) is available. Host-execution
+  # tools (run_command, run_python, run_background) are always available.
   sandbox: false
   allow_paths_outside_workspace: false
   require_approval_for_outside_paths: true

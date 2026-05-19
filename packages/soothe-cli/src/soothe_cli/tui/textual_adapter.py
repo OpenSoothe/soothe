@@ -1,4 +1,8 @@
-"""Core agent execution loop for the Textual UI (execute_task_textual)."""
+"""Textual UI adapter: stream daemon events into Textual widgets.
+
+Merged module (formerly ``tui/textual_adapter/`` package). Public symbols are listed
+in ``__all__``; a few test-only helpers resolve via ``__getattr__``.
+"""
 
 from __future__ import annotations
 
@@ -7,26 +11,60 @@ import json
 import logging
 import time
 import uuid
+from time import monotonic
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from langchain.agents.middleware.human_in_the_loop import (
-        HITLDecision,
-    )
-    from langgraph.types import Interrupt
+    from collections.abc import Awaitable, Callable
+    from typing import Protocol
 
+    from langchain.agents.middleware.human_in_the_loop import (
+        ApproveDecision,
+        EditDecision,
+        RejectDecision,
+    )
+    from langchain_core.runnables import RunnableConfig
+    from langgraph.types import Interrupt
+    from pydantic import TypeAdapter
+
+    from soothe_cli.tui._ask_user_types import AskUserWidgetResult, Question
+    from soothe_cli.tui.widgets.messages import AssistantMessage
+
+    HITLDecision = ApproveDecision | EditDecision | RejectDecision
+
+    class _TokensUpdateCallback(Protocol):
+        def __call__(self, count: int, *, approximate: bool = False) -> None: ...
+
+    class _TokensShowCallback(Protocol):
+        def __call__(self, *, approximate: bool = False) -> None: ...
+
+
+from langchain_core.messages import AIMessage, HumanMessage
+from soothe_sdk.core.events import (
+    AGENT_LOOP_GOAL_COMPLETED,
+    AGENT_LOOP_GOAL_STARTED,
+    AGENT_LOOP_PLAN_DECISION,
+    AGENT_LOOP_STEP_COMPLETED,
+    AGENT_LOOP_STEP_STARTED,
+)
 from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
+from soothe_sdk.langchain_wire import (
+    messages_from_wire_dicts,
+)
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
+from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 from soothe_sdk.ux.task_namespace import (
+    TaskScope,
     parse_unified_tool_call_id,
     row_key_for_subgraph_tool,
 )
 
 from soothe_cli.events.core.presentation_engine import PresentationEngine
-from soothe_cli.events.policy.essential_events import (
-    LOOP_REASON_EVENT_TYPE,
-)
+from soothe_cli.events.duration_format import format_duration
+from soothe_cli.events.policy.essential_events import LOOP_REASON_EVENT_TYPE
+from soothe_cli.events.policy.explore_task_display import format_explore_task_json_blob_for_display
 from soothe_cli.events.rendering.renderer_base import RendererBase
+from soothe_cli.events.task_scope import format_task_scope_prefix
 from soothe_cli.events.tools.message_processing import (
     extract_tool_args_dict,
     ingest_tool_call_stream_state,
@@ -34,6 +72,7 @@ from soothe_cli.events.tools.message_processing import (
 )
 from soothe_cli.events.tools.tool_call_resolution import (
     build_streaming_args_overlay,
+    materialize_ai_blocks_with_resolved_tools,
     merge_tool_display_args,
     resolve_stream_tool_name,
     tool_args_meaningful,
@@ -46,50 +85,21 @@ from soothe_cli.events.turn.turn_stream_prepare import (
     prepare_turn_chunk,
 )
 from soothe_cli.tui._ask_user_types import AskUserRequest
-from soothe_cli.tui._cli_context import CLIContext  # noqa: TC001
-from soothe_cli.tui._session_stats import SessionStats, TurnEventStats
+from soothe_cli.tui._cli_context import CLIContext
+from soothe_cli.tui._session_stats import (
+    ModelStats,
+    SessionStats,
+    SpinnerStatus,
+    TurnEventStats,
+    format_token_count,
+)
 from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui.config import build_stream_config
 from soothe_cli.tui.file_ops import FileOpTracker
 from soothe_cli.tui.hooks import dispatch_hook
 from soothe_cli.tui.input import MediaTracker, parse_file_mentions
 from soothe_cli.tui.media_utils import create_multimodal_content
-
-# Import from sibling modules within this sub-package
-from soothe_cli.tui.textual_adapter._adapter import (
-    AGENT_LOOP_GOAL_COMPLETED,
-    AGENT_LOOP_GOAL_STARTED,
-    AGENT_LOOP_PLAN_DECISION,
-    AGENT_LOOP_STEP_COMPLETED,
-    AGENT_LOOP_STEP_STARTED,
-    TextualUIAdapter,
-    _get_ask_user_adapter,
-    _get_hitl_request_adapter,
-)
-from soothe_cli.tui.textual_adapter._stream_formatting import (
-    _is_summarization_chunk,
-    alias_subgraph_pending_and_overlay,
-    canonical_subgraph_tool_ids,
-    sync_pending_step_cards_from_plan,
-)
-from soothe_cli.tui.textual_adapter._stream_messages import (
-    _normalize_lc_stream_message,
-    _tui_effective_ai_blocks,
-    _tui_goal_completion_matches_prior_main_visible_answer,
-)
-from soothe_cli.tui.textual_adapter._stream_tool_wire import apply_tool_call_wire_update
-from soothe_cli.tui.textual_adapter._turn_helpers import (
-    _adapter_has_pending_tools,
-    _finalize_goal_completion_stream,
-    _flush_assistant_text_ns,
-    _goal_completion_time_footer_if_needed,
-    _handle_interrupt_cleanup,
-    _hitl_reject_step_tool_rows,
-    _hitl_start_step_tool_rows,
-    _read_mentioned_file,
-    _report_and_persist_tokens,
-)
-from soothe_cli.tui.textual_adapter._turn_ui_batch import TurnToolUiCoalescer
+from soothe_cli.tui.step_task_routing import StepTaskRouter
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
@@ -97,9 +107,1207 @@ from soothe_cli.tui.widgets.messages import (
     CognitionStepMessage,
     DiffMessage,
     SummarizationMessage,
+    flush_deferred_tools_refreshes,
+    reset_turn_tool_refresh_state,
 )
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Adapter core
+# ---------------------------------------------------------------------------
+
+_hitl_adapter_cache: TypeAdapter | None = None
+"""Lazy singleton for the HITL request validator."""
+
+
+def _get_hitl_request_adapter(hitl_request_type: type) -> TypeAdapter:
+    """Return a cached `TypeAdapter(HITLRequest)`.
+
+    Avoids re-compiling the pydantic schema on every `execute_task_textual` call.
+
+    Args:
+        hitl_request_type: The `HITLRequest` class (passed in because
+            it is imported locally by the caller).
+
+    Returns:
+        Shared `TypeAdapter` instance.
+    """
+    global _hitl_adapter_cache  # noqa: PLW0603
+    if _hitl_adapter_cache is None:
+        from pydantic import TypeAdapter
+
+        _hitl_adapter_cache = TypeAdapter(hitl_request_type)
+    return _hitl_adapter_cache
+
+
+_ask_user_adapter_cache: TypeAdapter | None = None
+"""Lazy singleton for the `ask_user` interrupt validator."""
+
+
+def _get_ask_user_adapter() -> TypeAdapter:
+    """Return a cached `TypeAdapter(AskUserRequest)`.
+
+    Returns:
+        Shared `TypeAdapter` instance.
+    """
+    global _ask_user_adapter_cache  # noqa: PLW0603
+    if _ask_user_adapter_cache is None:
+        from pydantic import TypeAdapter
+
+        _ask_user_adapter_cache = TypeAdapter(AskUserRequest)
+    return _ask_user_adapter_cache
+
+
+class TextualUIAdapter:
+    """Adapter for rendering agent output to Textual widgets.
+
+    This adapter provides an abstraction layer between the agent execution and the
+    Textual UI, allowing streaming output to be rendered as widgets.
+    """
+
+    def __init__(
+        self,
+        mount_message: Callable[..., Awaitable[None]],
+        update_status: Callable[[str], None],
+        request_approval: Callable[..., Awaitable[Any]],
+        on_auto_approve_enabled: Callable[[], None] | None = None,
+        set_spinner: Callable[[SpinnerStatus], Awaitable[None]] | None = None,
+        set_active_message: Callable[[str | None], None] | None = None,
+        sync_message_content: Callable[[str, str], None] | None = None,
+        request_ask_user: (
+            Callable[
+                [list[Question]],
+                Awaitable[asyncio.Future[AskUserWidgetResult] | None],
+            ]
+            | None
+        ) = None,
+    ) -> None:
+        """Initialize the adapter."""
+        self._mount_message = mount_message
+        """Async callback to mount a message widget to the chat."""
+
+        self._update_status = update_status
+        """Callback to update the status bar text."""
+
+        self._request_approval = request_approval
+        """Async callback that returns a Future for HITL approval."""
+
+        self._on_auto_approve_enabled = on_auto_approve_enabled
+        """Callback invoked when auto-approve is enabled via the HITL approval
+        menu.
+
+        Fired when the user selects "Auto-approve all" from an approval dialog,
+        allowing the app to sync its status bar and session state.
+        """
+
+        self._set_spinner = set_spinner
+        """Callback to show/hide loading spinner."""
+
+        self._set_active_message = set_active_message
+        """Callback to set the active streaming message ID (pass `None` to clear)."""
+
+        self._sync_message_content = sync_message_content
+        """Callback to sync final message content back to the store after streaming."""
+
+        self._request_ask_user = request_ask_user
+        """Async callback for `ask_user` interrupts.
+
+        When awaited, returns a `Future` that resolves to user answers.
+        """
+
+        # State tracking
+        self._tool_display_by_call_id: dict[str, CognitionStepMessage] = {}
+        """Stable tool_call_id → step card for subagent activity and pending-tool routing."""
+
+        self._current_step_messages: dict[str, CognitionStepMessage] = {}
+        """Map of agent-loop act step IDs to step card widgets."""
+
+        self._step_by_namespace: dict[tuple[Any, ...], CognitionStepMessage] = {}
+        """Active step card per stream namespace (main-agent tool aggregation, IG-402)."""
+
+        self._last_completed_main_step_execute_prose: str = ""
+        """Execute-phase prose frozen when the main-namespace step completes.
+
+        Used to suppress a duplicate standalone ``goal_completion`` assistant card when
+        the runner replays the same body for headless (``ledger_direct``); the TUI
+        already shows that text on the step card.
+        """
+
+        self._last_main_flushed_assistant_prose: str = ""
+        """Body last written to a main-namespace ``AssistantMessage`` via flush.
+
+        After ``chunk_position == last`` the adapter pops ``assistant_message_by_namespace``,
+        so ``goal_completion`` cannot use ``existing_msg`` to detect an already-mounted
+        execute card; this field preserves the final text for dedupe (``execute_wave`` path).
+        """
+
+        self._tool_to_step: dict[str, CognitionStepMessage] = {}
+        """tool_call_id → step card while awaiting a matching ``ToolMessage``."""
+
+        self._step_router = StepTaskRouter()
+        """Per-turn routing for parallel steps, root tools, and subagent namespaces."""
+
+        # Token display callbacks (set by the app after construction)
+        self._on_tokens_update: _TokensUpdateCallback | None = None
+        """Called with total context tokens after each LLM response."""
+
+        self._on_tokens_hide: Callable[[], None] | None = None
+        """Called to hide the token display during streaming."""
+
+        self._on_tokens_show: _TokensShowCallback | None = None
+        """Called to restore the token display with the cached value."""
+
+    def finalize_pending_tools_with_error(self, error: str) -> None:
+        """Mark all pending/running tool widgets as error and clear tracking.
+
+        This is used as a safety net when an unexpected exception aborts
+        streaming before matching `ToolMessage` results are received.
+
+        Args:
+            error: Error text to display in each pending tool widget.
+        """
+        self._tool_display_by_call_id.clear()
+
+        for tcid, step_w in list(self._tool_to_step.items()):
+            step_w.set_tool_error(tcid, error, duration_ms=0)
+        self._tool_to_step.clear()
+        self._step_by_namespace.clear()
+        self._step_router.reset_turn()
+        self._last_completed_main_step_execute_prose = ""
+        self._last_main_flushed_assistant_prose = ""
+
+        # Clear active streaming message to avoid stale "active" state in the store.
+        if self._set_active_message:
+            self._set_active_message(None)
+
+    def finalize_pending_steps_with_error(self, message: str) -> None:
+        """Mark in-flight step cards as interrupted and clear tracking."""
+        for step_msg in list(self._current_step_messages.values()):
+            step_msg.set_interrupted(message)
+        self._current_step_messages.clear()
+        self._tool_to_step.clear()
+        self._step_by_namespace.clear()
+        self._tool_display_by_call_id.clear()
+        self._step_router.reset_turn()
+        self._last_completed_main_step_execute_prose = ""
+        self._last_main_flushed_assistant_prose = ""
+
+
+# ---------------------------------------------------------------------------
+# Turn UI coalescing
+# ---------------------------------------------------------------------------
+
+_TOOL_UI_COALESCE_SEC = 0.05
+_CHUNK_YIELD_INTERVAL = 24
+_CHUNK_YIELD_BUDGET_SEC = 0.016
+
+
+class TurnToolUiCoalescer:
+    """Batch tool-card repaints, dedupe wire kwargs, and yield during dense streams."""
+
+    def __init__(self) -> None:
+        reset_turn_tool_refresh_state()
+        self._chunk_count = 0
+        self._burst_start = monotonic()
+        self._last_flush_at = 0.0
+        self._wire_args_fingerprint: dict[str, str] = {}
+        self.execute_wave_active = False
+
+    def reset_turn(self) -> None:
+        """Clear per-turn state (new user turn)."""
+        reset_turn_tool_refresh_state()
+        self._chunk_count = 0
+        self._burst_start = monotonic()
+        self._last_flush_at = 0.0
+        self._wire_args_fingerprint.clear()
+        self.execute_wave_active = False
+
+    def note_wire_apply(self, tool_call_id: str, args: dict[str, Any]) -> bool:
+        """Record a wire kwargs payload.
+
+        Returns:
+            True when the same ``(tool_call_id, args)`` was already applied.
+        """
+        key = str(tool_call_id).strip()
+        if not key:
+            return False
+        try:
+            fp = json.dumps(args, sort_keys=True, default=str)
+        except (TypeError, ValueError):
+            fp = repr(args)
+        if self._wire_args_fingerprint.get(key) == fp:
+            return True
+        self._wire_args_fingerprint[key] = fp
+        return False
+
+    def wire_applied(self, tool_call_id: str) -> bool:
+        """True when wire has already delivered displayable kwargs for this id."""
+        return str(tool_call_id).strip() in self._wire_args_fingerprint
+
+    def should_skip_messages_arg_refresh(self, tool_call_id: str) -> bool:
+        """Skip messages-path arg refresh when execute wave uses wire authority."""
+        if not self.execute_wave_active:
+            return False
+        return self.wire_applied(tool_call_id)
+
+    async def after_chunk(self, *, force_flush: bool = False) -> None:
+        """Yield to Textual when needed and flush deferred tool-list repaints."""
+        self._chunk_count += 1
+        now = monotonic()
+        if self._chunk_count % _CHUNK_YIELD_INTERVAL == 0:
+            await asyncio.sleep(0)
+            self._burst_start = now
+        elif now - self._burst_start >= _CHUNK_YIELD_BUDGET_SEC:
+            await asyncio.sleep(0)
+            self._burst_start = now
+
+        if force_flush or (now - self._last_flush_at) >= _TOOL_UI_COALESCE_SEC:
+            flush_deferred_tools_refreshes(force=force_flush)
+            self._last_flush_at = now
+
+    async def flush_final(self) -> None:
+        """Force pending tool UI updates at end of turn or interrupt."""
+        flush_deferred_tools_refreshes(force=True)
+
+
+__all__ = [
+    "TurnToolUiCoalescer",
+]
+
+# ---------------------------------------------------------------------------
+# Stream formatting
+# ---------------------------------------------------------------------------
+
+
+def _is_summarization_chunk(metadata: dict | None) -> bool:
+    """Return True when metadata marks a summarization middleware chunk."""
+    if metadata is None:
+        return False
+    return metadata.get("lc_source") == "summarization"
+
+
+def print_usage_table(
+    stats: SessionStats,
+    wall_time: float,
+    console: Any,
+) -> None:
+    """Print a model-usage stats table to a Rich console."""
+    from rich.table import Table
+
+    from soothe_cli.tui._session_stats import format_token_count
+
+    has_time = wall_time >= 0.1  # noqa: PLR2004
+    if not (stats.request_count or stats.input_tokens or has_time):
+        return
+
+    if stats.per_model:
+        multi_model = len(stats.per_model) > 1
+        table = Table(
+            show_header=True,
+            header_style="bold",
+            box=None,
+            padding=(0, 2, 0, 0),
+            show_edge=False,
+        )
+        table.add_column("Model", style="dim")
+        table.add_column("Reqs", justify="right", style="dim")
+        table.add_column("InputTok", justify="right", style="dim")
+        table.add_column("OutputTok", justify="right", style="dim")
+
+        if multi_model:
+            for model_name, ms in stats.per_model.items():
+                table.add_row(
+                    model_name,
+                    str(ms.request_count),
+                    format_token_count(ms.input_tokens),
+                    format_token_count(ms.output_tokens),
+                )
+            table.add_row(
+                "Total",
+                str(stats.request_count),
+                format_token_count(stats.input_tokens),
+                format_token_count(stats.output_tokens),
+            )
+        else:
+            model_label = next(iter(stats.per_model))
+            table.add_row(
+                model_label,
+                str(stats.request_count),
+                format_token_count(stats.input_tokens),
+                format_token_count(stats.output_tokens),
+            )
+
+        console.print()
+        console.print("[bold]Usage Stats[/bold]")
+        console.print(table)
+    if has_time:
+        console.print()
+        console.print(
+            f"Agent active  {format_duration(wall_time)}",
+            style="dim",
+            highlight=False,
+        )
+
+
+def canonical_subgraph_tool_ids(
+    ns_key: tuple[str, ...],
+    raw_tool_call_id: str,
+    *,
+    task_scope: TaskScope | None,
+) -> tuple[str, str]:
+    """Return ``(merge_lookup_id, row_key)`` for a subgraph tool invocation."""
+    raw = str(raw_tool_call_id).strip()
+    if not raw:
+        return "", ""
+    row_key = row_key_for_subgraph_tool(ns_key, raw, task_scope=task_scope)
+    _, type_code, _, _ = parse_unified_tool_call_id(row_key)
+    if type_code == "t":
+        return row_key, row_key
+    return raw, row_key
+
+
+def alias_subgraph_pending_and_overlay(
+    pending_tool_calls_lc: dict[str, dict[str, Any]],
+    streaming_overlay: dict[str, dict[str, Any]],
+    router: Any,
+    ns_key: tuple[str, ...],
+) -> None:
+    """Mirror provider tool-call ids under unified task-level ids when scope is bound."""
+    ts = router.resolve_task_scope(ns_key)
+    if ts is None:
+        return
+    for oid, pend in list(pending_tool_calls_lc.items()):
+        if not isinstance(pend, dict):
+            continue
+        merge_id, _row = canonical_subgraph_tool_ids(ns_key, oid, task_scope=ts)
+        if not merge_id or merge_id == oid:
+            continue
+        if merge_id not in pending_tool_calls_lc:
+            pending_tool_calls_lc[merge_id] = dict(pend)
+        oargs = streaming_overlay.get(oid)
+        if isinstance(oargs, dict) and oargs:
+            prev = streaming_overlay.get(merge_id)
+            if isinstance(prev, dict) and prev:
+                merged = dict(prev)
+                merged.update(oargs)
+                streaming_overlay[merge_id] = merged
+            else:
+                streaming_overlay[merge_id] = dict(oargs)
+
+
+def mark_parallel_plan_step_cards_running(adapter: TextualUIAdapter) -> None:
+    """Show all pending plan step cards as running during a parallel execute wave."""
+    for widget in adapter._current_step_messages.values():
+        if widget._status == "pending":
+            widget.set_running()
+
+
+async def sync_pending_step_cards_from_plan(
+    adapter: TextualUIAdapter,
+    *,
+    steps: list[dict[str, Any]],
+    execution_mode: str = "",
+) -> None:
+    """Mount step cards in ``pending`` state for planned steps not yet executing."""
+    planned_ids = {
+        str(row.get("id", "")).strip()
+        for row in steps
+        if isinstance(row, dict) and str(row.get("id", "")).strip()
+    }
+    for sid, widget in list(adapter._current_step_messages.items()):
+        if widget._status == "pending" and sid not in planned_ids:
+            if widget.is_mounted:
+                await widget.remove()
+            adapter._current_step_messages.pop(sid, None)
+            for ns, bound in list(adapter._step_by_namespace.items()):
+                if bound is widget:
+                    adapter._step_by_namespace.pop(ns, None)
+
+    for row in steps:
+        if not isinstance(row, dict):
+            continue
+        sid = str(row.get("id", "")).strip()
+        if not sid or sid in adapter._current_step_messages:
+            continue
+        desc = str(row.get("description", "")).strip() or "(step)"
+        step_widget = CognitionStepMessage(
+            step_id=sid,
+            description=desc,
+            id=f"step-{uuid.uuid4().hex[:8]}",
+        )
+        await adapter._mount_message(step_widget)
+        adapter._current_step_messages[sid] = step_widget
+
+    if execution_mode == "parallel":
+        mark_parallel_plan_step_cards_running(adapter)
+
+
+# ---------------------------------------------------------------------------
+# Stream messages
+# ---------------------------------------------------------------------------
+
+logger = logging.getLogger(__name__)
+
+
+def _normalize_lc_stream_message(message: Any) -> Any:
+    """Turn daemon JSON dicts into LangChain message objects when possible."""
+    if not isinstance(message, dict):
+        return message
+    try:
+        from soothe_sdk.langchain_wire import deserialize_langchain_message_from_wire
+
+        restored = deserialize_langchain_message_from_wire(message)
+        if restored is not message:
+            return restored
+    except Exception:
+        logger.debug("TUI could not restore LangChain message from dict", exc_info=True)
+    return message
+
+
+def _coerce_ai_message_for_blocks(message: Any) -> Any:
+    """Best-effort dict → ``AIMessage`` / ``AIMessageChunk`` for block extraction.
+
+    If the wire payload uses ``type: \"AIMessage\"`` (class name) instead of ``ai``,
+    :func:`messages_from_dict` would fail; :func:`envelope_langchain_message_dict`
+    canonicalizes first (see ``daemon_session``).
+    """
+    from langchain_core.messages import AIMessageChunk
+
+    if isinstance(message, (AIMessage, AIMessageChunk)):
+        return message
+    if not isinstance(message, dict):
+        return message
+    try:
+        restored = messages_from_wire_dicts([message])
+        if restored and isinstance(restored[0], (AIMessage, AIMessageChunk)):
+            return restored[0]
+    except Exception:
+        logger.debug("TUI could not coerce dict to AIMessage for blocks", exc_info=True)
+    return message
+
+
+def _expand_nonstandard_tool_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Map LangChain ``non_standard`` tool wrappers to plain ``tool_call`` blocks.
+
+    Anthropic-style ``tool_use`` content is often stored as
+    ``{\"type\": \"non_standard\", \"value\": {\"type\": \"tool_use\", ...}}``.
+    The TUI loop only understands ``tool_call`` / ``tool_call_chunk`` — without this,
+    tool cards never mount for Claude/Anthropic providers.
+    """
+    out: list[dict[str, Any]] = []
+    for b in blocks:
+        if not isinstance(b, dict):
+            continue
+        if b.get("type") != "non_standard":
+            out.append(b)
+            continue
+        val = b.get("value")
+        if not isinstance(val, dict):
+            out.append(b)
+            continue
+        inner_t = val.get("type")
+        if inner_t == "tool_use":
+            out.append(
+                {
+                    "type": "tool_call",
+                    "name": val.get("name"),
+                    "id": val.get("id"),
+                    "args": val.get("input") if val.get("input") is not None else {},
+                }
+            )
+            continue
+        if inner_t in ("tool_call", "tool_call_chunk"):
+            out.append(
+                {
+                    "type": inner_t,
+                    "name": val.get("name"),
+                    "id": val.get("id"),
+                    "args": val.get("args"),
+                    "index": val.get("index"),
+                }
+            )
+            continue
+        out.append(b)
+    return out
+
+
+def _tui_main_assistant_body_for_dedupe(raw: str) -> str:
+    """Normalize assistant text the same way as :func:`_flush_assistant_text_ns` input."""
+    from soothe_cli.events.policy.explore_task_display import (
+        format_explore_task_json_blob_for_display,
+    )
+
+    return format_explore_task_json_blob_for_display(
+        RendererBase.repair_concatenated_output(raw or "")
+    ).strip()
+
+
+def _tui_goal_completion_matches_prior_main_visible_answer(
+    adapter: TextualUIAdapter,
+    *,
+    ns_key: tuple[Any, ...],
+    output_text: str,
+    pending_execute_text: str = "",
+) -> bool:
+    """Return True when ``goal_completion`` duplicates an already-shown main answer.
+
+    Covers (1) ``execute_step`` prose on ``CognitionStepMessage``, (2) prose last flushed to a
+    standalone ``AssistantMessage``, and (3) prose still in ``pending_text_by_namespace`` that
+    was already streamed into an ``AssistantMessage`` via ``append_content`` but not yet
+    flushed (``goal_completion`` can arrive before ``chunk_position == last`` or end-of-turn
+    flush — common for direct daemon runs; ``/explore`` often interleaves flushes differently).
+    """
+    if ns_key != ():
+        return False
+    body = _tui_main_assistant_body_for_dedupe(output_text)
+    if not body:
+        return False
+    step_prior = _tui_main_assistant_body_for_dedupe(
+        adapter._last_completed_main_step_execute_prose
+    )
+    if step_prior and body == step_prior:
+        return True
+    flush_prior = _tui_main_assistant_body_for_dedupe(adapter._last_main_flushed_assistant_prose)
+    if flush_prior and body == flush_prior:
+        return True
+    pending_prior = _tui_main_assistant_body_for_dedupe(pending_execute_text)
+    return bool(pending_prior) and body == pending_prior
+
+
+def _tui_effective_ai_blocks(
+    message: Any,
+    *,
+    ns_key: tuple[Any, ...],
+    streaming_overlay: dict[str, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Build content blocks for TUI streaming (text + tool calls).
+
+    Tool kwargs are merged in
+    :func:`soothe_cli.shared.tool_call_resolution.materialize_ai_blocks_with_resolved_tools`.
+    """
+    from langchain_core.messages import AIMessageChunk
+
+    message = _coerce_ai_message_for_blocks(message)
+    if not isinstance(message, (AIMessage, AIMessageChunk)):
+        return []
+
+    # Root namespace: allow string fallback. Subgraphs: suppress plain string (avoid dup with main).
+    allow_plain_string = not ns_key
+    raw_blocks = getattr(message, "content_blocks", None)
+    blocks: list[dict[str, Any]] = []
+    if raw_blocks:
+        blocks = _expand_nonstandard_tool_blocks([b for b in raw_blocks if isinstance(b, dict)])
+        return materialize_ai_blocks_with_resolved_tools(
+            blocks, message, streaming_overlay=streaming_overlay
+        )
+
+    raw = getattr(message, "content", None)
+    if not allow_plain_string:
+        if isinstance(raw, list):
+            toolish = [
+                b
+                for b in raw
+                if isinstance(b, dict)
+                and b.get("type") in ("tool_call", "tool_call_chunk", "tool_use", "non_standard")
+            ]
+            if toolish:
+                expanded = _expand_nonstandard_tool_blocks(toolish)
+                return materialize_ai_blocks_with_resolved_tools(
+                    expanded, message, streaming_overlay=streaming_overlay
+                )
+        return materialize_ai_blocks_with_resolved_tools(
+            [], message, streaming_overlay=streaming_overlay
+        )
+    if isinstance(raw, str) and raw.strip():
+        merged = [{"type": "text", "text": raw}]
+        return materialize_ai_blocks_with_resolved_tools(
+            merged, message, streaming_overlay=streaming_overlay
+        )
+    if isinstance(raw, list):
+        part = _expand_nonstandard_tool_blocks([b for b in raw if isinstance(b, dict)])
+        if not part:
+            return materialize_ai_blocks_with_resolved_tools(
+                [], message, streaming_overlay=streaming_overlay
+            )
+        return materialize_ai_blocks_with_resolved_tools(
+            part, message, streaming_overlay=streaming_overlay
+        )
+    return materialize_ai_blocks_with_resolved_tools(
+        [], message, streaming_overlay=streaming_overlay
+    )
+
+
+# ---------------------------------------------------------------------------
+# Stream tool wire
+# ---------------------------------------------------------------------------
+
+
+async def apply_tool_call_wire_update(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    *,
+    data: dict[str, Any],
+    ns_key: tuple[str, ...],
+    pending_tool_calls_lc: dict[str, dict[str, Any]],
+    streaming_overlay: dict[str, dict[str, Any]] | None = None,
+    ui_coalesce: TurnToolUiCoalescer | None = None,
+) -> bool:
+    """Seed pending tool state from a wire tool-call update event (no tool-card UI)."""
+    if str(data.get("type", "")) != STREAM_TOOL_CALL_UPDATE:
+        return False
+
+    if ns_key:
+        router.on_subgraph_namespace(ns_key)
+
+    tcid = str(data.get("tool_call_id", "")).strip()
+    if not tcid:
+        return True
+
+    name = str(data.get("name") or "").strip() or "tool"
+    raw_args = data.get("args")
+    if not isinstance(raw_args, dict) or not raw_args:
+        return True
+
+    if ui_coalesce is not None and ui_coalesce.note_wire_apply(tcid, raw_args):
+        return True
+
+    overlay = streaming_overlay if streaming_overlay is not None else {}
+    is_main = ns_key == ()
+    ts = router.resolve_task_scope(ns_key) if ns_key else None
+    merge_id, row_key = (
+        (tcid, tcid) if is_main else canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
+    )
+
+    for key in {tcid, merge_id, row_key}:
+        if not key:
+            continue
+        overlay[key] = dict(raw_args)
+        pending_tool_calls_lc[key] = {
+            "name": name,
+            "args_str": json.dumps(raw_args, separators=(",", ":")),
+            "is_complete_json": True,
+            "emitted": False,
+            "is_main": is_main,
+        }
+
+    if ns_key:
+        alias_subgraph_pending_and_overlay(pending_tool_calls_lc, overlay, router, ns_key)
+
+    display_args = merge_tool_display_args(
+        merge_id or tcid,
+        block_args=raw_args,
+        streaming_overlay=overlay,
+        pending_tool_calls_lc=pending_tool_calls_lc,
+        tool_name=name,
+    )
+
+    if is_main and name == "task":
+        parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
+        bound_step_id = parsed_sid or router.step_id_for_tool(tcid)
+        raw_st = display_args.get("subagent_type", "")
+        subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
+        if subagent_type:
+            router.register_task_spawn(tcid, subagent_type, step_id=bound_step_id)
+        return True
+
+    if is_main:
+        parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
+        bound_step_id = parsed_sid or router.step_id_for_tool(tcid)
+        if bound_step_id:
+            step_w = adapter._current_step_messages.get(bound_step_id)
+            if step_w is not None and name != "task":
+                if step_w.has_tool_call_row(tcid):
+                    step_w.update_tool_args(tcid, display_args)
+                else:
+                    step_w.add_tool_call(tcid, name, display_args)
+                adapter._tool_to_step[tcid] = step_w
+        return True
+
+    _merge_buf, display_key = canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
+    if display_key:
+        router.buffer_subgraph_tool(
+            ns_key=ns_key,
+            lookup_id=tcid,
+            display_key=display_key,
+            tool_name=name,
+            args=display_args,
+        )
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Turn helpers
+# ---------------------------------------------------------------------------
+
+logger = logging.getLogger(__name__)
+
+_GOAL_COMPLETION_TIME_MARKER = "**Total time:**"
+
+
+def _loop_id_for_remote_state(config: RunnableConfig, daemon_session: Any) -> str:
+    """Resolve checkpoint thread id for daemon ``loop_state_*`` RPCs.
+
+    Prefer ``configurable.thread_id`` from the stream config; fall back to the
+    session's active loop when the config is empty (e.g. edge timing during
+    bootstrap).
+    """
+    loop_id = str((config.get("configurable") or {}).get("thread_id") or "").strip()
+    if loop_id:
+        return loop_id
+    raw = getattr(daemon_session, "loop_id", None)
+    return str(raw or "").strip()
+
+
+def _step_card_tool_count(widget: Any) -> int:
+    """Return the number of tool rows tracked on a step card."""
+    rows = getattr(widget, "_rows", None)
+    if isinstance(rows, list):
+        return len(rows)
+    return 0
+
+
+def _ensure_step_card_running_ui(widget: Any) -> None:
+    """Apply deferred running UI before completing a step card."""
+    if getattr(widget, "_deferred_running", False):
+        widget._deferred_running = False  # noqa: SLF001
+    promote = getattr(widget, "_promote_pending_to_running_if_needed", None)
+    if callable(promote):
+        promote()
+    elif getattr(widget, "_status", "") == "pending":  # noqa: SLF001
+        if getattr(widget, "is_mounted", False):
+            widget.set_running()  # noqa: SLF001
+        else:
+            widget._status = "running"  # noqa: SLF001
+            widget._start_time = time.time()  # noqa: SLF001
+            widget._deferred_running = True  # noqa: SLF001
+
+
+def _detach_step_card_from_adapter(
+    adapter: TextualUIAdapter,
+    step_id: str,
+    widget: Any,
+    *,
+    ns_key: tuple[Any, ...],
+    router: StepTaskRouter,
+) -> None:
+    """Clear namespace and tool bindings for a finished step card."""
+    if adapter._step_by_namespace.get(ns_key) is widget:
+        adapter._step_by_namespace.pop(ns_key, None)
+    stale_tool_ids = [k for k, sw in adapter._tool_to_step.items() if sw is widget]
+    for k in stale_tool_ids:
+        adapter._tool_to_step.pop(k, None)
+    router.clear_step_tool_bindings(step_id)
+    for k, parent in list(adapter._tool_display_by_call_id.items()):
+        if parent is widget:
+            adapter._tool_display_by_call_id.pop(k, None)
+
+
+def complete_tracked_step_card(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    *,
+    step_id: str,
+    widget: Any,
+    ns_key: tuple[Any, ...],
+    success: bool,
+    duration_ms: int,
+    tool_call_count: int,
+    summary: str,
+) -> None:
+    """Finalize a step card that is still tracked in ``_current_step_messages``."""
+    _ensure_step_card_running_ui(widget)
+    _detach_step_card_from_adapter(adapter, step_id, widget, ns_key=ns_key, router=router)
+    widget.set_complete(success, duration_ms, tool_call_count, summary)
+    if not ns_key:
+        adapter._last_completed_main_step_execute_prose = getattr(
+            widget, "last_completed_execute_prose", ""
+        )
+
+
+def finalize_tracked_step_cards_on_goal_complete(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+) -> None:
+    """Mark in-flight plan step cards complete when the agent loop goal finishes."""
+    for step_id, widget in list(adapter._current_step_messages.items()):
+        status = getattr(widget, "_status", "")
+        if status not in ("pending", "running"):
+            continue
+        duration_ms = 0
+        start_time = getattr(widget, "_start_time", None)
+        if start_time is not None:
+            duration_ms = int((time.time() - start_time) * 1000)
+        tool_call_count = _step_card_tool_count(widget)
+        adapter._current_step_messages.pop(step_id, None)
+        complete_tracked_step_card(
+            adapter,
+            router,
+            step_id=step_id,
+            widget=widget,
+            ns_key=(),
+            success=True,
+            duration_ms=duration_ms,
+            tool_call_count=tool_call_count,
+            summary="Done",
+        )
+
+
+def _adapter_has_pending_tools(adapter: TextualUIAdapter) -> bool:
+    """True while any tool is awaiting a ``ToolMessage`` on a step card."""
+    return bool(adapter._tool_to_step)
+
+
+def _hitl_start_step_tool_rows(adapter: TextualUIAdapter) -> None:
+    """Mark step-aggregated tool rows running after HITL approval (IG-402)."""
+    for tcid, stw in list(adapter._tool_to_step.items()):
+        stw.set_tool_running(tcid)
+
+
+def _hitl_reject_step_tool_rows(adapter: TextualUIAdapter) -> None:
+    """Mark step-aggregated tool rows rejected and drop pending bindings (IG-402)."""
+    for tcid, stw in list(adapter._tool_to_step.items()):
+        stw.set_tool_rejected(tcid)
+    adapter._tool_to_step.clear()
+
+
+def _build_interrupted_ai_message(
+    pending_text_by_namespace: dict[tuple, str],
+    adapter: TextualUIAdapter,
+) -> Any:
+    """Build an AIMessage capturing interrupted state (text + tool calls).
+
+    Args:
+        pending_text_by_namespace: Dict of accumulated text by namespace
+        adapter: UI adapter with pending step-aggregated tools.
+
+    Returns:
+        AIMessage with accumulated content and tool calls, or None if empty.
+    """
+
+    main_ns_key = ()
+    accumulated_text = pending_text_by_namespace.get(main_ns_key, "").strip()
+
+    tool_calls: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for step_w in dict.fromkeys(adapter._tool_to_step.values()):
+        if hasattr(step_w, "iter_open_tool_calls_for_interrupt"):
+            for row in step_w.iter_open_tool_calls_for_interrupt():
+                rid = str(row.get("id", ""))
+                if rid and rid not in seen_ids:
+                    tool_calls.append(row)
+                    seen_ids.add(rid)
+
+    if not accumulated_text and not tool_calls:
+        return None
+
+    return AIMessage(
+        content=accumulated_text,
+        tool_calls=tool_calls or [],
+    )
+
+
+def _read_mentioned_file(file_path: Any, max_embed_bytes: int) -> str:
+    """Read a mentioned file for inline embedding (sync, for use with to_thread).
+
+    Args:
+        file_path: Resolved path to the file.
+        max_embed_bytes: Size threshold; larger files get a reference only.
+
+    Returns:
+        Markdown snippet with the file content or a size-exceeded reference.
+    """
+    file_size = file_path.stat().st_size
+    if file_size > max_embed_bytes:
+        size_kb = file_size // 1024
+        return (
+            f"\n### {file_path.name}\n"
+            f"Path: `{file_path}`\n"
+            f"Size: {size_kb}KB (too large to embed, "
+            "use read_file tool to view)"
+        )
+    content = file_path.read_text(encoding="utf-8")
+    return f"\n### {file_path.name}\nPath: `{file_path}`\n```\n{content}\n```"
+
+
+def _goal_completion_time_footer_if_needed(
+    content: str,
+    *,
+    goal_loop_start_monotonic: float | None,
+    turn_start_monotonic: float | None,
+) -> str | None:
+    """Build a markdown footer with total elapsed time for goal completion cards."""
+    if _GOAL_COMPLETION_TIME_MARKER in (content or ""):
+        return None
+    start = (
+        goal_loop_start_monotonic if goal_loop_start_monotonic is not None else turn_start_monotonic
+    )
+    if start is None:
+        return None
+    elapsed = max(0.0, time.monotonic() - start)
+    return f"\n\n---\n\n{_GOAL_COMPLETION_TIME_MARKER} {format_duration(elapsed)}"
+
+
+async def _finalize_goal_completion_stream(
+    adapter: TextualUIAdapter,
+    stream_msg: AssistantMessage,
+    *,
+    ns_key: tuple[Any, ...],
+    goal_completion_stream_by_namespace: dict[tuple[Any, ...], AssistantMessage],
+    assistant_message_by_namespace: dict[tuple[Any, ...], Any],
+    extra_text: str,
+    goal_loop_start_monotonic: float | None = None,
+    turn_start_monotonic: float | None = None,
+) -> None:
+    """Stop the goal_completion ``AssistantMessage`` stream and record it under ``ns_key``."""
+    if extra_text and extra_text not in getattr(stream_msg, "_content", ""):
+        await stream_msg.append_content(extra_text)
+    footer = _goal_completion_time_footer_if_needed(
+        getattr(stream_msg, "_content", "") or "",
+        goal_loop_start_monotonic=goal_loop_start_monotonic,
+        turn_start_monotonic=turn_start_monotonic,
+    )
+    if footer:
+        await stream_msg.append_content(footer)
+    await stream_msg.stop_stream()
+    if adapter._sync_message_content and stream_msg.id:
+        adapter._sync_message_content(stream_msg.id, stream_msg._content)
+    goal_completion_stream_by_namespace.pop(ns_key, None)
+    assistant_message_by_namespace[ns_key] = stream_msg
+    if adapter._set_active_message:
+        adapter._set_active_message(None)
+    if adapter._set_spinner:
+        await adapter._set_spinner("Thinking")
+
+
+async def _handle_interrupt_cleanup(
+    *,
+    adapter: TextualUIAdapter,
+    config: RunnableConfig,
+    daemon_session: Any,  # noqa: ANN401  # TuiDaemonSession
+    pending_text_by_namespace: dict[tuple, str],
+    captured_input_tokens: int,
+    captured_output_tokens: int,
+    turn_stats: SessionStats,
+    start_time: float,
+) -> None:
+    """Shared cleanup for CancelledError and KeyboardInterrupt.
+
+    Args:
+        adapter: UI adapter with display callbacks.
+        config: Runnable config with loop_id mapped to thread_id in configurable.
+        daemon_session: Active daemon websocket session; also receives ``/cancel``
+            so the in-flight query stops (Ctrl+C / Esc; ``detach`` is quit-only).
+        pending_text_by_namespace: Accumulated text per namespace.
+        captured_input_tokens: Input tokens captured before interrupt.
+        captured_output_tokens: Output tokens captured before interrupt.
+        turn_stats: Stats for the current turn.
+        start_time: Monotonic timestamp when the turn began.
+    """
+    import time
+
+    # Clear active message immediately so it won't block pruning.
+    # If we don't do this, the store still thinks it's active and protects
+    # from pruning, which breaks get_messages_to_prune(), potentially
+    # blocking all future pruning.
+    if adapter._set_active_message:
+        adapter._set_active_message(None)
+
+    # Hide spinner (may still show a stale status if interrupted)
+    if adapter._set_spinner:
+        await adapter._set_spinner(None)
+
+    await adapter._mount_message(AppMessage("Interrupted by user"))
+
+    interrupted_msg = _build_interrupted_ai_message(pending_text_by_namespace, adapter)
+
+    # Save accumulated state before marking tools as rejected (best-effort).
+    # State update failures shouldn't prevent cleanup.
+    # Use shorter timeout (2s) during interrupt cleanup to avoid blocking cancel.
+    try:
+        cancellation_msg = HumanMessage(
+            content="[SYSTEM] Task interrupted by user. Previous operation was cancelled."
+        )
+        loop_id = _loop_id_for_remote_state(config, daemon_session)
+        if loop_id:
+            if interrupted_msg:
+                await daemon_session.aupdate_loop_state(
+                    loop_id,
+                    {"messages": [interrupted_msg.model_dump()]},
+                    timeout=2.0,
+                )
+            await daemon_session.aupdate_loop_state(
+                loop_id,
+                {"messages": [cancellation_msg.model_dump()]},
+                timeout=2.0,
+            )
+    except Exception:
+        logger.warning("Failed to save interrupted state", exc_info=True)
+
+    # Mark tools as rejected AFTER saving state
+    _hitl_reject_step_tool_rows(adapter)
+    adapter._tool_display_by_call_id.clear()
+
+    for step_msg in list(adapter._current_step_messages.values()):
+        step_msg.set_interrupted("Interrupted by user")
+    adapter._current_step_messages.clear()
+    adapter._tool_to_step.clear()
+    adapter._step_by_namespace.clear()
+    adapter._step_router.reset_turn()
+
+    adapter._last_completed_main_step_execute_prose = ""
+    adapter._last_main_flushed_assistant_prose = ""
+
+    # Keep the token count marked stale whenever interrupted state was captured,
+    # including tool-only turns after assistant text was already flushed.
+    approximate = interrupted_msg is not None
+
+    turn_stats.wall_time_seconds = time.monotonic() - start_time
+    await _report_and_persist_tokens(
+        adapter,
+        config,
+        captured_input_tokens,
+        captured_output_tokens,
+        shield=True,
+        approximate=approximate,
+        daemon_session=daemon_session,
+    )
+
+    # Ensure the daemon-side query is cancelled, not detached (detach is quit-only).
+    try:
+        await daemon_session.cancel_remote_query()
+        logger.info("Sent cancel to daemon during interrupt cleanup")
+    except Exception:
+        logger.warning("Failed to send cancel to daemon during interrupt cleanup", exc_info=True)
+
+
+async def _persist_context_tokens(
+    config: RunnableConfig,
+    tokens: int,
+    *,
+    daemon_session: Any,  # noqa: ANN401  # TuiDaemonSession
+) -> None:
+    """Best-effort persist of the context token count into remote loop state."""
+    try:
+        loop_id = _loop_id_for_remote_state(config, daemon_session)
+        if loop_id:
+            await daemon_session.aupdate_loop_state(loop_id, {"_context_tokens": tokens})
+    except Exception:  # non-critical; stale count on resume is acceptable
+        logger.warning(
+            "Failed to persist _context_tokens=%d; token count may be stale on resume",
+            tokens,
+            exc_info=True,
+        )
+
+
+async def _report_and_persist_tokens(
+    adapter: TextualUIAdapter,
+    config: RunnableConfig,
+    captured_input_tokens: int,
+    captured_output_tokens: int,
+    *,
+    daemon_session: Any,  # noqa: ANN401  # TuiDaemonSession
+    shield: bool = False,
+    approximate: bool = False,
+) -> None:
+    """Update the token display and best-effort persist via ``loop_state_update``."""
+    if captured_input_tokens or captured_output_tokens:
+        if adapter._on_tokens_update:
+            adapter._on_tokens_update(captured_input_tokens, approximate=approximate)
+        if shield:
+            try:
+                await _persist_context_tokens(
+                    config,
+                    captured_input_tokens,
+                    daemon_session=daemon_session,
+                )
+            except (Exception, asyncio.CancelledError):
+                logger.debug(
+                    "Token persist suppressed during interrupt cleanup",
+                    exc_info=True,
+                )
+        else:
+            await _persist_context_tokens(
+                config,
+                captured_input_tokens,
+                daemon_session=daemon_session,
+            )
+    elif adapter._on_tokens_show:
+        adapter._on_tokens_show(approximate=approximate)
+
+
+async def _flush_assistant_text_ns(
+    adapter: TextualUIAdapter,
+    text: str,
+    ns_key: tuple,
+    assistant_message_by_namespace: dict[tuple, Any],
+    *,
+    router: StepTaskRouter | None = None,
+) -> None:
+    """Flush accumulated assistant text for a specific namespace.
+
+    Finalizes the streaming state on the assistant card.
+    If no message exists yet, creates one with the full content.
+    """
+    repaired_text = RendererBase.repair_concatenated_output(text)
+    repaired_text = format_explore_task_json_blob_for_display(repaired_text)
+    if not repaired_text.strip():
+        return
+
+    ts_card = router.resolve_task_scope(ns_key) if router is not None and ns_key else None
+    if ts_card and ts_card[0]:
+        parent_tool = router.resolve_parent(
+            ts_card,
+            step_cards=adapter._current_step_messages,
+            tool_display_by_call_id=adapter._tool_display_by_call_id,
+        )
+        if parent_tool is not None:
+            line = f"⚙ {format_task_scope_prefix(ts_card[0], ts_card[1])} {repaired_text.strip()}"
+            parent_tool.append_subagent_activity(line)
+            return
+        # Suppress standalone AssistantMessage for all subagent tasks —
+        # only goal_completion surfaces the final result.
+        return
+
+    current_msg = assistant_message_by_namespace.get(ns_key)
+    if current_msg is None:
+        # No message was created during streaming - create one with full content
+        msg_id = f"asst-{uuid.uuid4().hex[:8]}"
+        current_msg = AssistantMessage(repaired_text, id=msg_id)
+        await adapter._mount_message(current_msg)
+        await current_msg.write_initial_content()
+        assistant_message_by_namespace[ns_key] = current_msg
+    else:
+        # Stop the stream to finalize the content
+        await current_msg.stop_stream()
+        # Sync normalized text for persistence without re-rendering: MarkdownStream
+        # already displayed the streamed body; repair can disturb fenced blocks/tables.
+        if repaired_text != current_msg._content:
+            current_msg._content = repaired_text
+
+    # When the AssistantMessage was first mounted and recorded in the
+    # MessageStore, it had empty content (streaming hadn't started yet).
+    # Now that streaming is done, the widget holds the full text in
+    # `_content`, but the store's MessageData still has `content=""`.
+    # If the message is later pruned and re-hydrated, `to_widget()` would
+    # recreate it from that stale empty string. This call copies the
+    # widget's final content back into the store so re-hydration works.
+    if adapter._sync_message_content and current_msg.id:
+        adapter._sync_message_content(current_msg.id, current_msg._content)
+
+    if not ns_key:
+        adapter._last_main_flushed_assistant_prose = _tui_main_assistant_body_for_dedupe(
+            getattr(current_msg, "_content", "") or ""
+        )
+
+    # Clear active message since streaming is done
+    if adapter._set_active_message:
+        adapter._set_active_message(None)
+
+
+# ---------------------------------------------------------------------------
+# Turn execution
+# ---------------------------------------------------------------------------
 
 
 def _log_turn_event_stats(
@@ -179,7 +1387,7 @@ async def execute_task_textual(
         HITLRequest,
         RejectDecision,
     )
-    from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
+    from langchain_core.messages import AIMessageChunk
     from langgraph.types import Command
     from pydantic import ValidationError
 
@@ -264,8 +1472,6 @@ async def execute_task_textual(
     router = adapter._step_router
     router.reset_turn()
     ui_coalesce = TurnToolUiCoalescer()
-    adapter._task_inner_tool_pending_lines.clear()
-    adapter._task_inner_tool_start_times.clear()
     tool_call_buffers: dict[str | int, dict] = {}
     # Streaming tool-call args (``tool_call_chunks``) — mirrors EventProcessor / IG-053
     pending_tool_calls_lc: dict[str, dict[str, Any]] = {}
@@ -1308,7 +2514,7 @@ async def execute_task_textual(
             # Safety net: finalize any steps/tools still in-flight (e.g. worker
             # crash sent a soothe.error.* event but step_completed was never
             # emitted, or stream ended before matching results arrived).
-            if adapter._current_step_messages or adapter._current_tool_messages:
+            if adapter._current_step_messages or adapter._tool_to_step:
                 adapter.finalize_pending_tools_with_error("Stream ended unexpectedly")
                 adapter.finalize_pending_steps_with_error("Stream ended unexpectedly")
 
@@ -1369,10 +2575,6 @@ async def execute_task_textual(
                                 resume_payload[interrupt_id] = {"answers": answers}
                                 tool_id = ask_req["tool_call_id"]
                                 tc_sid = str(tool_id) if tool_id is not None else ""
-                                if tc_sid and tc_sid in adapter._current_tool_messages:
-                                    tool_msg = adapter._current_tool_messages[tc_sid]
-                                    tool_msg.set_success("User answered")
-                                    adapter._current_tool_messages.pop(tc_sid, None)
                                 if tc_sid:
                                     st_w = adapter._tool_to_step.pop(tc_sid, None)
                                     if st_w is not None:
@@ -1424,8 +2626,6 @@ async def execute_task_textual(
                             ApproveDecision(type="approve") for _ in action_requests
                         ]
                         resume_payload[interrupt_id] = {"decisions": decisions}
-                        for tool_msg in list(adapter._current_tool_messages.values()):
-                            tool_msg.set_running()
                         _hitl_start_step_tool_rows(adapter)
                     else:
                         # Batch approval - one dialog for all parallel tool calls
@@ -1446,9 +2646,6 @@ async def execute_task_textual(
                                 decisions = [
                                     ApproveDecision(type="approve") for _ in action_requests
                                 ]
-                                tool_msgs = list(adapter._current_tool_messages.values())
-                                for tool_msg in tool_msgs:
-                                    tool_msg.set_running()
                                 _hitl_start_step_tool_rows(adapter)
                                 for action_request in action_requests:
                                     tool_name = action_request.get("name")
@@ -1464,9 +2661,6 @@ async def execute_task_textual(
                                 decisions = [
                                     ApproveDecision(type="approve") for _ in action_requests
                                 ]
-                                tool_msgs = list(adapter._current_tool_messages.values())
-                                for tool_msg in tool_msgs:
-                                    tool_msg.set_running()
                                 _hitl_start_step_tool_rows(adapter)
                                 for action_request in action_requests:
                                     tool_name = action_request.get("name")
@@ -1481,10 +2675,6 @@ async def execute_task_textual(
                             elif decision_type == "reject":
                                 decisions = [RejectDecision(type="reject") for _ in action_requests]
                                 _hitl_reject_step_tool_rows(adapter)
-                                tool_msgs = list(adapter._current_tool_messages.values())
-                                for tool_msg in tool_msgs:
-                                    tool_msg.set_rejected()
-                                adapter._current_tool_messages.clear()
                                 adapter._tool_display_by_call_id.clear()
                                 any_rejected = True
                             else:
@@ -1494,9 +2684,6 @@ async def execute_task_textual(
                                 )
                                 decisions = [RejectDecision(type="reject") for _ in action_requests]
                                 _hitl_reject_step_tool_rows(adapter)
-                                for tool_msg in list(adapter._current_tool_messages.values()):
-                                    tool_msg.set_rejected()
-                                adapter._current_tool_messages.clear()
                                 adapter._tool_display_by_call_id.clear()
                                 any_rejected = True
                         else:
@@ -1506,9 +2693,6 @@ async def execute_task_textual(
                             )
                             decisions = [RejectDecision(type="reject") for _ in action_requests]
                             _hitl_reject_step_tool_rows(adapter)
-                            for tool_msg in list(adapter._current_tool_messages.values()):
-                                tool_msg.set_rejected()
-                            adapter._current_tool_messages.clear()
                             adapter._tool_display_by_call_id.clear()
                             any_rejected = True
 
@@ -1559,3 +2743,46 @@ async def execute_task_textual(
         daemon_session=daemon_session,
     )
     return turn_stats
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+__all__ = [
+    "TextualUIAdapter",
+    "execute_task_textual",
+    "print_usage_table",
+    "ModelStats",
+    "SessionStats",
+    "SpinnerStatus",
+    "format_token_count",
+    "AGENT_LOOP_GOAL_COMPLETED",
+    "AGENT_LOOP_GOAL_STARTED",
+    "AGENT_LOOP_STEP_COMPLETED",
+    "AGENT_LOOP_STEP_STARTED",
+    "TurnToolUiCoalescer",
+]
+
+_LAZY_EXPORTS: dict[str, str] = {
+    "_expand_nonstandard_tool_blocks": "_expand_nonstandard_tool_blocks",
+    "_handle_interrupt_cleanup": "_handle_interrupt_cleanup",
+    "_tui_effective_ai_blocks": "_tui_effective_ai_blocks",
+    "_tui_goal_completion_matches_prior_main_visible_answer": (
+        "_tui_goal_completion_matches_prior_main_visible_answer"
+    ),
+}
+
+
+def __getattr__(name: str) -> Any:
+    if name == "_repair_concatenated_output_text":
+        fn = RendererBase.repair_concatenated_output
+        globals()[name] = fn
+        return fn
+    if name in _LAZY_EXPORTS:
+        attr = _LAZY_EXPORTS[name]
+        value = globals()[attr]
+        globals()[name] = value
+        return value
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)

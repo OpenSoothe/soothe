@@ -834,7 +834,7 @@ class _ExecutionMixin:
             return
         # Import from submodule so package ``__init__`` does not eagerly load
         # unrelated symbols; ``execute_task_textual`` graph is prewarmed on startup.
-        from soothe_cli.tui.textual_adapter._turn import execute_task_textual
+        from soothe_cli.tui.textual_adapter import execute_task_textual
 
         # Create the stats object up-front and store on the app so
         # exit() can merge it synchronously if the worker is cancelled

@@ -44,6 +44,22 @@ router:
   image: "coding-plan:qwen3.5-plus"
   embedding: "dashscope:multimodal-embedding-v1"
 
+subagents:
+  claude:
+    enabled: true
+    model: null
+    config:
+      permission_mode: accept-edits
+      max_turns: 20
+  browser:
+    enabled: true
+    model: null
+    config:
+      headless: true
+      max_steps: 10
+      use_vision: true
+      profile_mode: ephemeral
+
 agent_loop:
   max_iterations: 99
   plan_prompt_ledger:

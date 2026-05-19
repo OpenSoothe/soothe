@@ -76,10 +76,17 @@ TOOL_STARTED = "soothe.tool.execution.started"
 TOOL_COMPLETED = "soothe.tool.execution.completed"
 TOOL_ERROR = "soothe.tool.execution.error"
 
-# Agent loop events (DEBUG level)
+# Agent loop events (DEBUG level; wire ``mode=custom`` types)
 AGENT_LOOP_STARTED = "soothe.cognition.agent_loop.started"
 AGENT_LOOP_ITERATION = "soothe.cognition.agent_loop.iterated"
 AGENT_LOOP_COMPLETED = "soothe.cognition.agent_loop.completed"
+AGENT_LOOP_STEP_STARTED = "soothe.cognition.agent_loop.step.started"
+AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
+AGENT_LOOP_PLAN_DECISION = "soothe.cognition.agent_loop.plan.decision"
+
+# TUI aliases (same wire strings as lifecycle constants above)
+AGENT_LOOP_GOAL_STARTED = AGENT_LOOP_STARTED
+AGENT_LOOP_GOAL_COMPLETED = AGENT_LOOP_COMPLETED
 
 # Message events (DETAILED level)
 MESSAGE_RECEIVED = "soothe.protocol.message.received"
@@ -108,6 +115,11 @@ __all__ = [
     "AGENT_LOOP_STARTED",
     "AGENT_LOOP_ITERATION",
     "AGENT_LOOP_COMPLETED",
+    "AGENT_LOOP_STEP_STARTED",
+    "AGENT_LOOP_STEP_COMPLETED",
+    "AGENT_LOOP_PLAN_DECISION",
+    "AGENT_LOOP_GOAL_STARTED",
+    "AGENT_LOOP_GOAL_COMPLETED",
     # Message (DETAILED)
     "MESSAGE_RECEIVED",
     "MESSAGE_SENT",

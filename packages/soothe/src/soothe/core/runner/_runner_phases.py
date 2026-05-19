@@ -113,11 +113,11 @@ class PhasesMixin:
         """
         logger.info("Quiz: %s", user_input[:50])
 
-        quiz_model = getattr(self, "_default_chat_model", None)
-        model_label = "default"
+        quiz_model = getattr(self, "_fast_model", None)
+        model_label = "fast"
         if not quiz_model:
-            quiz_model = getattr(self, "_fast_model", None)
-            model_label = "fast"
+            quiz_model = getattr(self, "_default_chat_model", None)
+            model_label = "default"
         if not quiz_model:
             quiz_model = getattr(self, "_model", None)
             model_label = "think"

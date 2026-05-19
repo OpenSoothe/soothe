@@ -1,7 +1,4 @@
-"""Format LangChain ``ToolMessage`` content for CLI/TUI (shared, TUI-free).
-
-Moved from ``soothe_cli.events.tools.tool_row`` so headless and TUI share one implementation.
-"""
+"""Format LangChain ``ToolMessage`` content for summaries and step-card stats."""
 
 from __future__ import annotations
 
@@ -90,7 +87,7 @@ def format_tool_message_content(content: Any) -> str:  # noqa: ANN401
         content: Raw ``ToolMessage.content`` value.
 
     Returns:
-        Flattened string suitable for tool cards and CLI summaries.
+        Flattened string suitable for briefs, logging, and status lines.
     """
     if content is None:
         return ""

@@ -1199,8 +1199,10 @@ class SecurityConfig(BaseModel):
         require_approval_for_file_types: File types that need user approval.
             Examples: [".env", ".pem", ".key"] - User will be prompted before access
 
-        sandbox: Enable sandboxed execution environment for command tools (run_command,
-            run_python, run_background). When False, these tools are filtered out.
+        sandbox: Enable sandboxed execution via SandboxBackendProtocol. When True,
+            the deepagents ``execute`` tool (sandbox-backed) is available. When False,
+            the ``execute`` tool is removed. Host-execution tools (run_command,
+            run_python, run_background) are always available regardless of this flag.
             Default: False
 
     Path Evaluation Order:
@@ -1213,7 +1215,7 @@ class SecurityConfig(BaseModel):
 
     sandbox: bool = Field(
         default=False,
-        description="Enable sandboxed execution for command tools (run_command, run_python, run_background). Default: False (tools filtered out when no sandbox backend is available)",
+        description="Enable sandboxed execution (deepagents `execute` tool via SandboxBackendProtocol). Host-execution tools (run_command, etc.) are always available. Default: False",
     )
 
     allow_paths_outside_workspace: bool = False

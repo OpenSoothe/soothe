@@ -9,6 +9,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from soothe_sdk.core.events import (
+    AGENT_LOOP_GOAL_COMPLETED,
+    AGENT_LOOP_GOAL_STARTED,
+    AGENT_LOOP_PLAN_DECISION,
+    AGENT_LOOP_STEP_COMPLETED,
+    AGENT_LOOP_STEP_STARTED,
+)
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux.classification import classify_event_to_tier
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
@@ -18,13 +25,6 @@ from soothe_cli.events.tools.message_processing import ingest_tool_call_stream_s
 from soothe_cli.events.turn.messages import is_summarization_chunk, normalize_lc_stream_message
 from soothe_cli.tui._session_stats import TurnEventStats
 from soothe_cli.tui.step_task_routing import StepTaskRouter
-from soothe_cli.tui.textual_adapter._adapter import (
-    AGENT_LOOP_GOAL_COMPLETED,
-    AGENT_LOOP_GOAL_STARTED,
-    AGENT_LOOP_PLAN_DECISION,
-    AGENT_LOOP_STEP_COMPLETED,
-    AGENT_LOOP_STEP_STARTED,
-)
 
 _STREAM_CHUNK_LEN = 3
 _MSG_PAIR_LEN = 2

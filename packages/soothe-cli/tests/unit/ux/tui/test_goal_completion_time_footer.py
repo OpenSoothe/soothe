@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe_cli.tui.textual_adapter._turn_helpers import (
+from soothe_cli.tui.textual_adapter import (
     _finalize_goal_completion_stream,
     _goal_completion_time_footer_if_needed,
 )

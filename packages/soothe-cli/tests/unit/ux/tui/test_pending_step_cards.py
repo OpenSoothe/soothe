@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from soothe_cli.tui.textual_adapter import TextualUIAdapter
-from soothe_cli.tui.textual_adapter._stream_formatting import (
+from soothe_cli.tui.textual_adapter import (
+    TextualUIAdapter,
     mark_parallel_plan_step_cards_running,
     sync_pending_step_cards_from_plan,
 )

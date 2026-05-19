@@ -44,10 +44,11 @@ async def test_stop_stream_skips_full_markdown_refresh_without_stream() -> None:
 
 @pytest.mark.asyncio
 async def test_flush_does_not_replace_streamed_markdown_with_repaired_text() -> None:
-    from soothe_cli.tui.textual_adapter import _turn_helpers
+    from soothe_cli.events.rendering.renderer_base import RendererBase
+    from soothe_cli.tui.textual_adapter import _flush_assistant_text_ns
 
     raw = "```python\ndef foo3():\n    pass\n```"
-    repaired = _turn_helpers.RendererBase.repair_concatenated_output(raw)
+    repaired = RendererBase.repair_concatenated_output(raw)
     assert repaired != raw
 
     msg = AssistantMessage(id="asst-test")
@@ -58,7 +59,7 @@ async def test_flush_does_not_replace_streamed_markdown_with_repaired_text() -> 
     adapter = MagicMock()
     adapter._sync_message_content = MagicMock()
 
-    await _turn_helpers._flush_assistant_text_ns(
+    await _flush_assistant_text_ns(
         adapter,
         raw,
         (),
