@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, TypedDict
 
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical, VerticalScroll
@@ -13,13 +13,26 @@ from textual.events import (
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from soothe_cli.tui import theme
+from soothe_cli.tui.config import get_glyphs, is_ascii_mode
+
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
-    from soothe_cli.tui.mcp_tools import MCPServerInfo
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs, is_ascii_mode
+class _MCPToolInfo(TypedDict):
+    """Minimal tool metadata for the MCP viewer."""
+
+    name: str
+    description: str
+
+
+class _MCPServerInfo(TypedDict):
+    """Minimal server metadata for the MCP viewer."""
+
+    name: str
+    transport: str
+    tools: list[_MCPToolInfo]
 
 
 class MCPToolItem(Static):
@@ -219,7 +232,7 @@ class MCPViewerScreen(ModalScreen[None]):
     }
     """
 
-    def __init__(self, server_info: list[MCPServerInfo]) -> None:
+    def __init__(self, server_info: list[_MCPServerInfo]) -> None:
         """Initialize the MCP viewer screen.
 
         Args:

@@ -5,6 +5,7 @@ via an unscoped FIFO deferred until :func:`register_task_spawn_for_step` runs
 (parallel-safe). Clients without step ids fall back to binding against the spawn queue.
 
 IG-416: Unified tool call ID format for step-level and task-level tool calls.
+Canonical wire form: ``{step_id_underscore}:s:{tool}:{idx}`` (e.g. ``GHT_01:s:grep:0``).
 """
 
 from __future__ import annotations
@@ -18,24 +19,61 @@ TaskScope: TypeAlias = tuple[str, str, str]
 _TASK_SCOPE_SEP = "\x1e"
 
 
+def _step_id_to_unified_fragment(step_id: str) -> str:
+    """Map execute step ids (``GHT-01``) to the unified wire fragment (``GHT_01``)."""
+    return str(step_id).strip().replace("-", "_")
+
+
+def _step_id_from_unified_fragment(fragment: str) -> str:
+    """Map unified wire step fragment back to canonical execute step id."""
+    return str(fragment).strip().replace("_", "-")
+
+
 def _normalize_provider_tool_fragment(tid: str) -> str:
-    """Convert provider ``tool:N`` fragments to unified ``tool.N`` form."""
-    if ":" in tid:
-        name, _, idx = tid.rpartition(":")
+    """Convert provider or legacy fragments to unified ``tool:idx`` form."""
+    text = str(tid).strip()
+    if not text:
+        return text
+    if "." in text and ":" not in text:
+        name, _, idx = text.rpartition(".")
         if name and idx.isdigit():
-            return f"{name}.{idx}"
-    return tid
+            return f"{name}:{idx}"
+    if ":" in text:
+        name, _, idx = text.rpartition(":")
+        if name and idx.isdigit():
+            return f"{name}:{idx}"
+    return text
+
+
+def _tool_info_from_unified_parts(parts: list[str]) -> str:
+    """Extract ``tool:idx`` from colon segments after the type segment."""
+    if len(parts) >= 4 and parts[-1].isdigit():
+        return f"{parts[-2]}:{parts[-1]}"
+    if len(parts) >= 3:
+        return _normalize_provider_tool_fragment(":".join(parts[2:]))
+    return ""
+
+
+def _format_unified_tool_call_id(
+    step_id: str,
+    type_part: str,
+    tool_fragment: str,
+) -> str:
+    """Build canonical unified id: ``{step_wire}:{type}:{tool}:{idx}``."""
+    sid_wire = _step_id_to_unified_fragment(step_id)
+    frag = _normalize_provider_tool_fragment(tool_fragment)
+    return f"{sid_wire}:{type_part}:{frag}"
 
 
 def _shorten_tool_call_id(raw_tid: str) -> str:
     """Shorten provider tool_call_id for compact unified fragments.
 
-    Strips ``functions.`` and normalizes ``tool:N`` → ``tool.N``.
+    Strips ``functions.`` and normalizes to ``tool:idx``.
 
     Examples:
-        'functions.task:0' → 'task.0'
-        'functions.read_file:18' → 'read_file.18'
-        'GHT-01:t0:grep.1' → 'grep.1' (already unified)
+        'functions.task:0' → 'task:0'
+        'functions.read_file:18' → 'read_file:18'
+        'GHT_01:t0:grep:1' → 'grep:1' (already unified)
         'call_abc123' → 'call_abc123' (no pattern match, return as-is)
     """
     tid = str(raw_tid).strip()
@@ -53,46 +91,43 @@ def _shorten_tool_call_id(raw_tid: str) -> str:
 
 
 def normalize_unified_tool_call_id(tool_call_id: str) -> str:
-    """Normalize unified ids that use a legacy ``tool:N`` fragment to ``tool.N``."""
+    """Normalize legacy or partial unified ids to canonical wire form."""
     tid = str(tool_call_id).strip()
     if not tid:
         return tid
-    parts = tid.split(":")
-    if len(parts) >= 4 and parts[-1].isdigit():
-        type_part = parts[1]
-        if type_part == "s" or (type_part.startswith("t") and len(type_part) > 1):
-            return f"{parts[0]}:{type_part}:{parts[-2]}.{parts[-1]}"
-    parsed_sid, type_code, _, tool_info = parse_unified_tool_call_id(tid)
-    if parsed_sid and type_code in ("s", "t") and tool_info and ":" in tool_info:
-        type_part = parts[1] if len(parts) > 1 else ""
-        norm = _normalize_provider_tool_fragment(tool_info)
-        if type_part:
-            return f"{parsed_sid}:{type_part}:{norm}"
+    step_id, type_code, task_idx, tool_info = parse_unified_tool_call_id(tid)
+    if not step_id or not type_code:
+        return tid
+    frag = _normalize_provider_tool_fragment(tool_info)
+    if type_code == "s":
+        return _format_unified_tool_call_id(step_id, "s", frag)
+    if type_code == "t" and task_idx is not None:
+        return _format_unified_tool_call_id(step_id, f"t{task_idx}", frag)
     return tid
 
 
 def parse_unified_tool_call_id(tool_call_id: str) -> tuple[str, str, int | None, str]:
     """Parse unified tool_call_id format into components.
 
-    IG-416: Unified formats encode step_id directly:
-    - Step-level: {step_id}:s:{tool}.{idx} (e.g., 'GHT-01:s:task.0')
-    - Task-level: {step_id}:t{task_idx}:{tool}.{idx} (e.g., 'GHT-01:t0:read_file.1')
+    Canonical wire form:
+    - Step-level: ``{step_wire}:s:{tool}:{idx}`` (e.g. ``GHT_01:s:grep:0``)
+    - Task-level: ``{step_wire}:t{task_idx}:{tool}:{idx}`` (e.g. ``GHT_01:t0:read_file:1``)
 
     Args:
         tool_call_id: Unified tool_call_id string.
 
     Returns:
         Tuple of (step_id, type_code, task_idx, tool_info):
-        - step_id: Step identifier (empty if not unified format)
-        - type_code: 's' for step-level, 't' for task-level, '' if not unified
-        - task_idx: None for step-level, integer for task-level
-        - tool_info: Tool name and index part (e.g., 'task.0')
+        - step_id: Canonical execute step id (hyphen form, e.g. ``GHT-01``)
+        - type_code: ``s`` for step-level, ``t`` for task-level, ``''`` if not unified
+        - task_idx: ``None`` for step-level, integer for task-level
+        - tool_info: Tool name and index (e.g. ``grep:0``)
 
     Examples:
-        >>> parse_unified_tool_call_id("GHT-01:s:task.0")
-        ('GHT-01', 's', None, 'task.0')
-        >>> parse_unified_tool_call_id("GHT-01:t0:read_file.1")
-        ('GHT-01', 't', 0, 'read_file.1')
+        >>> parse_unified_tool_call_id("GHT_01:s:task:0")
+        ('GHT-01', 's', None, 'task:0')
+        >>> parse_unified_tool_call_id("GHT_01:t0:read_file:1")
+        ('GHT-01', 't', 0, 'read_file:1')
         >>> parse_unified_tool_call_id("task:0")
         ('', '', None, 'task:0')
     """
@@ -100,35 +135,29 @@ def parse_unified_tool_call_id(tool_call_id: str) -> tuple[str, str, int | None,
     if not tid:
         return ("", "", None, "")
 
-    # Check for unified format pattern: {step_id}:{type}:{tool_info}
-    # Type can be 's' (step) or 't{idx}' (task with index)
     parts = tid.split(":")
     if len(parts) < 3:
-        # Not unified format, return as-is
         return ("", "", None, tid)
 
-    step_id = parts[0]
+    step_id = _step_id_from_unified_fragment(parts[0])
     type_part = parts[1]
-    tool_info = parts[2]
 
     if type_part == "s":
-        # Step-level: {step_id}:s:{tool}.{idx}
+        tool_info = _tool_info_from_unified_parts(parts)
         return (step_id, "s", None, tool_info)
-    elif type_part.startswith("t") and len(type_part) > 1:
-        # Task-level: {step_id}:t{task_idx}:{tool}.{idx}
+    if type_part.startswith("t") and len(type_part) > 1:
         try:
             task_idx = int(type_part[1:])
-            return (step_id, "t", task_idx, tool_info)
         except ValueError:
-            # Invalid task index, treat as non-unified
             return ("", "", None, tid)
+        tool_info = _tool_info_from_unified_parts(parts)
+        return (step_id, "t", task_idx, tool_info)
 
-    # Unknown type code, treat as non-unified
     return ("", "", None, tid)
 
 
 def is_step_level_task_tool_id(tool_call_id: str) -> bool:
-    """True for unified main-graph ``task`` delegation ids (``{step}:s:task…``)."""
+    """True for unified main-graph ``task`` delegation ids (``{step}:s:task:…``)."""
     _, type_code, _, tool_info = parse_unified_tool_call_id(tool_call_id)
     if type_code != "s":
         return False
@@ -146,7 +175,7 @@ def normalize_step_task_tool_call_id(step_id: str, tool_call_id: str) -> str:
         tool_call_id: Provider or unified tool call id from the stream.
 
     Returns:
-        ``{step_id}:s:task.{idx}`` (normalized).
+        ``{step_wire}:s:task:{idx}`` (canonical).
     """
     sid = str(step_id).strip()
     tcid = str(tool_call_id).strip()
@@ -158,14 +187,14 @@ def normalize_step_task_tool_call_id(step_id: str, tool_call_id: str) -> str:
         return normalized
     short = _shorten_tool_call_id(tcid)
     if not short.startswith("task"):
-        short = "task.0"
-    return f"{sid}:s:{short}"
+        short = "task:0"
+    return _format_unified_tool_call_id(sid, "s", short)
 
 
 def step_level_parent_task_call_id(step_id: str, task_idx: int | None = None) -> str:
-    """Parent ``task`` row id for inner tools under ``{step_id}:t{idx}:…``."""
+    """Parent ``task`` row id for inner tools under ``{step_wire}:t{idx}:…``."""
     idx = 0 if task_idx is None else int(task_idx)
-    return f"{step_id}:s:task.{idx}"
+    return _format_unified_tool_call_id(step_id, "s", f"task:{idx}")
 
 
 def resolve_step_id_from_subgraph_tool(tool_call_id: str) -> str:
@@ -190,7 +219,6 @@ def task_scope_task_idx(scope: TaskScope | None, step_id: str) -> int:
     """
     if not scope:
         return 0
-    # Could be enhanced to track actual task ordering per step
     return 0
 
 
@@ -202,7 +230,7 @@ def resolve_task_parent_for_unified_tool_id(
 ) -> Any | None:
     """Return the Task delegation card for a task-level unified inner tool id.
 
-    Subgraph tools use ``{step_id}:t{idx}:{tool}`` ids; map ``step_id`` to the
+    Subgraph tools use ``{step_wire}:t{idx}:{tool}:{idx}`` ids; map ``step_id`` to the
     registered main-graph ``task`` spawn and its ``ToolCallMessage`` parent.
 
     Args:
@@ -235,7 +263,7 @@ def row_key_for_subgraph_tool(
     tid = str(tool_call_id).strip()
     _, type_code, _, _ = parse_unified_tool_call_id(tid)
     if type_code == "t":
-        return tid
+        return normalize_unified_tool_call_id(tid)
     return scoped_subgraph_tool_key(namespace, tid, task_scope=task_scope)
 
 
@@ -278,7 +306,7 @@ def scoped_subgraph_tool_key(
 ) -> str:
     """Build unified tool call ID for subgraph (task-level) tool rows.
 
-    IG-416: Unified format: {step_id}:t{task_idx}:{tool}
+    Canonical format: ``{step_wire}:t{task_idx}:{tool}:{idx}``
 
     Args:
         namespace: LangGraph subgraph namespace tuple.
@@ -291,21 +319,18 @@ def scoped_subgraph_tool_key(
     tid = str(tool_call_id).strip()
     parsed_sid, type_code, _, _ = parse_unified_tool_call_id(tid)
     if parsed_sid and type_code == "t":
-        return tid
+        return normalize_unified_tool_call_id(tid)
 
     short_tid = _shorten_tool_call_id(tid)
     if not namespace:
         return short_tid
 
-    # Extract step_id from task_scope if available
     step_id = task_scope_step_id(task_scope) if task_scope else ""
     task_idx = task_scope_task_idx(task_scope, step_id) if task_scope else 0
 
     if step_id:
-        # Unified format: {step_id}:t{task_idx}:{tool}
-        return f"{step_id}:t{task_idx}:{short_tid}"
+        return _format_unified_tool_call_id(step_id, f"t{task_idx}", short_tid)
 
-    # Fallback: use namespace hash for uniqueness when step_id unknown
     ns = "/".join(str(p) for p in namespace)
     return f"{ns}{_TASK_SCOPE_SEP}{short_tid}"
 
