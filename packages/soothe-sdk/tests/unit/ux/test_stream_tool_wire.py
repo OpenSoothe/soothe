@@ -14,12 +14,12 @@ from soothe_sdk.ux.stream_tool_wire import (
 
 def test_tool_call_update_event_shape() -> None:
     ev = tool_call_update_event(
-        tool_call_id="WAA-01:s:task:0",
+        tool_call_id="WAA_01:s:task:0",
         name="task",
         args={"subagent_type": "explore", "description": "scan repo"},
     )
     assert ev["type"] == STREAM_TOOL_CALL_UPDATE
-    assert ev["tool_call_id"] == "WAA-01:s:task:0"
+    assert ev["tool_call_id"] == "WAA_01:s:task:0"
     assert ev["name"] == "task"
     assert ev["args"]["subagent_type"] == "explore"
 
@@ -30,7 +30,7 @@ def test_extract_from_flat_wire_ai_message() -> None:
         tool_calls=[
             {
                 "name": "read_file",
-                "id": "ABC-01:s:read_file:0",
+                "id": "ABC_01:s:read_file:0",
                 "args": {"path": "/src/main.py"},
             }
         ],
@@ -60,14 +60,14 @@ def test_extract_dedupes_tool_calls_and_chunks() -> None:
         "tool_calls": [
             {
                 "name": "task",
-                "id": "WAA-01:s:task:0",
+                "id": "WAA_01:s:task:0",
                 "args": {"subagent_type": "explore"},
             }
         ],
         "tool_call_chunks": [
             {
                 "name": "task",
-                "id": "WAA-01:s:task:0",
+                "id": "WAA_01:s:task:0",
                 "args": {"subagent_type": "explore"},
             }
         ],

@@ -1073,7 +1073,7 @@ class ToolCallMessage(Vertical):
             # IG-418: Extract tool name from unified format
             _sid, _type_code, _, tool_info = parse_unified_tool_call_id(tcid)
             if tool_info:
-                head = tool_info.split(".")[0].strip()
+                head = tool_info.split(":")[0].split(".")[0].strip()
                 if head and head != "tool":
                     tn = head
         if not tn:
@@ -3100,14 +3100,14 @@ class CognitionStepMessage(Vertical):
         result.extend(other_rows)
         return result
 
-    def _refresh_tools_display(self) -> None:
+    def _refresh_tools_display(self, *, force: bool = False) -> None:
         # IG-420: When widget not mounted, always run auto-collapse checks (no throttling)
         if self._tools_widget is None:
             self._maybe_auto_fold_step_tool_list()
             self._maybe_auto_collapse_step_card()
             return
         # IG-420: Throttle refreshes to prevent UI lag during streaming (only when mounted)
-        if not _should_refresh_now(self._last_tools_refresh):
+        if not force and not _should_refresh_now(self._last_tools_refresh):
             return
         self._last_tools_refresh = monotonic()
         if not self._rows:
@@ -3436,7 +3436,7 @@ class CognitionStepMessage(Vertical):
 
         self.mark_unfinished_tools_skipped()
         self._tools_body_collapsed = True
-        self._refresh_tools_display()
+        self._refresh_tools_display(force=True)
 
         dur_str = format_duration_ms(duration_ms)
         tool_part = f" · {tool_call_count} tools" if tool_call_count > 0 else ""

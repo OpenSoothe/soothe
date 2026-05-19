@@ -423,12 +423,12 @@ def _rewrite_tool_call_ids_to_unified(
     def _needs_unified(raw_id: str) -> bool:
         if not raw_id:
             return False
-        if normalize_unified_tool_call_id(raw_id) != raw_id:
-            return True
         parsed_sid, type_code, _, _ = parse_unified_tool_call_id(raw_id)
-        if parsed_sid == sid and type_code in ("s", "t"):
+        if parsed_sid == sid and type_code == "s":
             return False
-        return ":" not in raw_id or not raw_id.startswith(sid)
+        if parsed_sid == sid and type_code == "t" and task_idx is not None:
+            return False
+        return True
 
     needs_rewrite = False
     seen_ids: set[str] = set()
@@ -467,15 +467,11 @@ def _rewrite_tool_call_ids_to_unified(
     modified = deepcopy(msg)
 
     def _unified(raw_id: str) -> str:
-        normalized = normalize_unified_tool_call_id(raw_id)
-        parsed_sid, type_code, _, _ = parse_unified_tool_call_id(normalized)
-        if parsed_sid == sid:
-            if type_code == "s" and task_idx is not None:
-                return normalized
-            if type_code == "s" and task_idx is None:
-                return normalized
-            if type_code == "t" and task_idx is not None:
-                return normalized
+        parsed_sid, type_code, _, _ = parse_unified_tool_call_id(raw_id)
+        if parsed_sid == sid and type_code == "s" and task_idx is None:
+            return normalize_unified_tool_call_id(raw_id)
+        if parsed_sid == sid and type_code == "t" and task_idx is not None:
+            return normalize_unified_tool_call_id(raw_id)
         return _unified_tool_call_id_for_stream(sid, raw_id, task_idx=task_idx)
 
     if isinstance(modified, AIMessageChunk):

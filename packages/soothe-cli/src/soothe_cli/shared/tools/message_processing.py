@@ -218,14 +218,12 @@ def _pending_or_overlay_id_matches_lookup(
     lookup_step = tool_lookup_step_id(lid)
     cand_step = tool_lookup_step_id(cid)
     if lookup_step and cand_step:
-        # Both are unified IDs - match by full tool_info (name AND index)
         from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 
         _, _, _, cand_tool_info = parse_unified_tool_call_id(cid)
         _, _, _, lookup_tool_info = parse_unified_tool_call_id(lid)
         return cand_tool_info == lookup_tool_info
-    # Provider id vs unified: daemon may have reassigned indices, match by tool name only
-    return tool_name and tool_name != "tool"
+    return False
 
 
 def _resolve_pending_lookup_tool_name(
@@ -257,10 +255,8 @@ def richest_pending_args_for_lookup(
 ) -> dict[str, Any]:
     """Return parsed args for ``tool_call_id`` from the pending buffer.
 
-    When the worker rewrites provider ids to unified step ids, early chunks may still
-    be keyed by ``functions.tool:N`` while the UI row uses ``{step}:t0:grep.0``. Only
-    pending entries with the same tool **name** are considered — never the largest
-    unrelated pending dict (e.g. a parallel ``task`` description).
+    Only pending entries whose unified id matches ``tool_call_id`` (or same step and
+    tool_info for ``task``) are considered.
     """
     if not isinstance(pending_tool_calls, Mapping):
         return {}

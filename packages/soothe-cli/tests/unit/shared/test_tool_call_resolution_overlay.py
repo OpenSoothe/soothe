@@ -63,7 +63,7 @@ def test_streaming_overlay_omits_empty_parsed_dict(chunk_last: AIMessageChunk) -
 def test_merge_tool_display_args_prefers_streaming_overlay() -> None:
     """Empty block args still pick up accumulated ``tool_call_chunks`` JSON."""
     pending = {
-        "EZJ-07:s:task:0": {
+        "EZJ_07:s:task:0": {
             "name": "task",
             "args_str": ('{"description": "Find autopilot_cmd.py", "subagent_type": "explore"}'),
             "emitted": False,
@@ -75,7 +75,7 @@ def test_merge_tool_display_args_prefers_streaming_overlay() -> None:
         pending,
     )
     merged = merge_tool_display_args(
-        "EZJ-07:s:task:0",
+        "EZJ_07:s:task:0",
         block_args={},
         streaming_overlay=overlay,
         pending_tool_calls_lc=pending,
@@ -124,7 +124,7 @@ def test_merge_tool_display_args_matches_message_by_tool_name() -> None:
         ],
     )
     merged = merge_tool_display_args(
-        "STEP-01:t0:grep.0",
+        "STEP_01:t0:grep:0",
         block_args={},
         streaming_overlay={},
         pending_tool_calls_lc={},
@@ -136,20 +136,20 @@ def test_merge_tool_display_args_matches_message_by_tool_name() -> None:
 
 
 def test_merge_tool_display_args_prefers_message_tool_calls() -> None:
-    """Wire dict ``tool_calls`` wins when pending buffer used a legacy provider id."""
+    """Wire dict ``tool_calls`` wins when pending buffer keys match the unified id."""
     msg = {
         "type": "ai",
         "content": "",
         "tool_calls": [
             {
                 "name": "read_file",
-                "id": "ABC-01:s:read_file:0",
+                "id": "ABC_01:s:read_file:0",
                 "args": {"path": "/full/path/to/file.py"},
             }
         ],
     }
     pending = {
-        "functions.read_file:0": {
+        "ABC_01:s:read_file:0": {
             "name": "read_file",
             "args_str": '{"path":"/partial"}',
             "emitted": False,
@@ -157,7 +157,7 @@ def test_merge_tool_display_args_prefers_message_tool_calls() -> None:
         },
     }
     merged = merge_tool_display_args(
-        "ABC-01:s:read_file:0",
+        "ABC_01:s:read_file:0",
         block_args={},
         streaming_overlay={},
         pending_tool_calls_lc=pending,
@@ -172,7 +172,7 @@ def test_richest_pending_task_args_scoped_to_execute_step() -> None:
     from soothe_cli.shared.tools.message_processing import richest_pending_args_for_lookup
 
     pending = {
-        "AAA-01:s:task:0": {
+        "AAA_01:s:task:0": {
             "name": "task",
             "args_str": (
                 '{"description": "First step explores the repository", "subagent_type": "explore"}'
@@ -181,7 +181,7 @@ def test_richest_pending_task_args_scoped_to_execute_step() -> None:
             "emitted": False,
             "is_main": True,
         },
-        "BBB-02:s:task:0": {
+        "BBB_02:s:task:0": {
             "name": "task",
             "args_str": (
                 '{"description": "Second step maps architecture", "subagent_type": "plan"}'
@@ -193,7 +193,7 @@ def test_richest_pending_task_args_scoped_to_execute_step() -> None:
     }
     merged = richest_pending_args_for_lookup(
         pending,
-        "BBB-02:s:task:0",
+        "BBB_02:s:task:0",
         tool_name="task",
     )
     assert "Second step" in str(merged.get("description", ""))
@@ -205,7 +205,7 @@ def test_richest_pending_does_not_steal_task_args_for_inner_tool() -> None:
     from soothe_cli.shared.tools.message_processing import richest_pending_args_for_lookup
 
     pending = {
-        "STEP-01:s:task:0": {
+        "STEP_01:s:task:0": {
             "name": "task",
             "args_str": (
                 '{"description": "Explore the whole repository", "subagent_type": "explore"}'
@@ -213,7 +213,7 @@ def test_richest_pending_does_not_steal_task_args_for_inner_tool() -> None:
             "emitted": False,
             "is_main": True,
         },
-        "functions.grep:0": {
+        "STEP_01:t0:grep:0": {
             "name": "grep",
             "args_str": '{"pattern": "autopilot"}',
             "emitted": False,
@@ -222,7 +222,7 @@ def test_richest_pending_does_not_steal_task_args_for_inner_tool() -> None:
     }
     merged = richest_pending_args_for_lookup(
         pending,
-        "STEP-01:t0:grep.0",
+        "STEP_01:t0:grep:0",
         tool_name="grep",
     )
     assert merged.get("pattern") == "autopilot"
@@ -232,13 +232,13 @@ def test_richest_pending_does_not_steal_task_args_for_inner_tool() -> None:
 def test_merge_inner_tool_on_task_card_uses_tool_args_not_task_desc() -> None:
     """Regression: task-card activity rows showed task description for every tool."""
     pending = {
-        "STEP-01:s:task:0": {
+        "STEP_01:s:task:0": {
             "name": "task",
             "args_str": '{"description": "Do everything", "subagent_type": "explore"}',
             "emitted": False,
             "is_main": True,
         },
-        "functions.read_file:0": {
+        "STEP_01:t0:read_file:1": {
             "name": "read_file",
             "args_str": '{"path": "/src/main.py"}',
             "emitted": False,
@@ -246,7 +246,7 @@ def test_merge_inner_tool_on_task_card_uses_tool_args_not_task_desc() -> None:
         },
     }
     merged = merge_tool_display_args(
-        "STEP-01:t0:read_file.1",
+        "STEP_01:t0:read_file:1",
         block_args={},
         pending_tool_calls_lc=pending,
         tool_name="read_file",
@@ -257,7 +257,7 @@ def test_merge_inner_tool_on_task_card_uses_tool_args_not_task_desc() -> None:
 
 def test_resolve_stream_tool_name_from_pending() -> None:
     """Placeholder chunk name ``tool`` is replaced by pending stream name."""
-    tcid = "LEN-02:s:task:0"
+    tcid = "LEN_02:s:task:0"
     pending = {tcid: {"name": "task", "args_str": "{}", "emitted": False}}
     assert (
         resolve_stream_tool_name(
@@ -269,7 +269,7 @@ def test_resolve_stream_tool_name_from_pending() -> None:
     )
     assert (
         resolve_stream_tool_name(
-            "LEN-02:s:task:0",
+            "LEN_02:s:task:0",
             chunk_name="tool",
             pending_tool_calls_lc=None,
         )

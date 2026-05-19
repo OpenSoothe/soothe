@@ -1605,9 +1605,11 @@ async def execute_task_textual(
                         if event_type == AGENT_LOOP_PLAN_DECISION and not ns_key:
                             raw_steps = data.get("steps")
                             if isinstance(raw_steps, list):
+                                execution_mode = str(data.get("execution_mode", "")).strip()
                                 await sync_pending_step_cards_from_plan(
                                     adapter,
                                     steps=raw_steps,
+                                    execution_mode=execution_mode,
                                 )
                             continue
 

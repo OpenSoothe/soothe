@@ -21,10 +21,10 @@ def test_resolve_parent_task_call_id_uses_task_scope() -> None:
     router = StepTaskRouter()
     ns = ("tools:explore-ns",)
     router.on_subgraph_namespace(ns)
-    router.register_task_spawn("VKJ-01:s:task.0", "explore", step_id="VKJ-01")
+    router.register_task_spawn("VKJ_01:s:task:0", "explore", step_id="VKJ-01")
     assert (
-        router.resolve_parent_task_call_id(ns, inner_tool_call_id="VKJ-01:t0:glob.1")
-        == "VKJ-01:s:task.0"
+        router.resolve_parent_task_call_id(ns, inner_tool_call_id="VKJ_01:t0:glob:1")
+        == "VKJ_01:s:task:0"
     )
 
 
@@ -66,22 +66,22 @@ async def test_inner_tool_row_nested_under_task_on_step_card() -> None:
     )
     adapter._current_step_messages["VKJ-01"] = step
     step.add_tool_call(
-        "VKJ-01:s:task.0",
+        "VKJ_01:s:task:0",
         "explore",
         {"subagent_type": "explore", "description": "Explore project root"},
         is_task_row=True,
     )
     ns = ("tools:sub",)
     router.on_subgraph_namespace(ns)
-    router.register_task_spawn("VKJ-01:s:task.0", "explore", step_id="VKJ-01")
+    router.register_task_spawn("VKJ_01:s:task:0", "explore", step_id="VKJ-01")
 
     ok = await _mount_subagent_inner_tool_row_if_resolved(
         adapter,
         router,
-        lookup_id="VKJ-01:t0:glob.1",
+        lookup_id="VKJ_01:t0:glob:1",
         buffer_name="glob",
         parsed_args={"glob_pattern": "**/*"},
-        buffer_id="VKJ-01:t0:glob.1",
+        buffer_id="VKJ_01:t0:glob:1",
         ns_key=ns,
         show_tool_ui=True,
         is_main_agent=False,
@@ -89,8 +89,8 @@ async def test_inner_tool_row_nested_under_task_on_step_card() -> None:
         file_op_tracker=FileOpTracker(assistant_id="a"),
     )
     assert ok is True
-    child = step._row_index["VKJ-01:t0:glob.1"]  # noqa: SLF001
-    assert child.parent_tool_call_id == "VKJ-01:s:task.0"
+    child = step._row_index["VKJ_01:t0:glob:1"]  # noqa: SLF001
+    assert child.parent_tool_call_id == "VKJ_01:s:task:0"
 
 
 def test_task_row_shows_subagent_name_and_truncated_description() -> None:
@@ -123,7 +123,7 @@ def test_no_pending_text_line_when_step_card_has_tool_rows() -> None:
     adapter._current_step_messages["VKJ-01"] = step
     ns = ("tools:sub",)
     router.on_subgraph_namespace(ns)
-    router.register_task_spawn("VKJ-01:s:task.0", "explore", step_id="VKJ-01")
+    router.register_task_spawn("VKJ_01:s:task:0", "explore", step_id="VKJ-01")
 
     presentation = MagicMock()
     presentation.tier_visible.return_value = True
@@ -131,7 +131,7 @@ def test_no_pending_text_line_when_step_card_has_tool_rows() -> None:
     _try_register_task_scoped_inner_tool_pending(
         adapter,
         router,
-        lookup_id="VKJ-01:t0:ls.0",
+        lookup_id="VKJ_01:t0:ls:0",
         buffer_name="ls",
         parsed_args={"path": "."},
         is_main_agent=False,

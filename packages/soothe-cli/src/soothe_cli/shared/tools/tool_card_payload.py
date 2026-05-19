@@ -105,7 +105,7 @@ def extract_tool_result_card_payload(message: Any) -> ToolResultCardPayload | No
         # IG-418: Extract tool name from unified format
         _, _, _, tool_info = parse_unified_tool_call_id(tool_call_id)
         if tool_info:
-            head = tool_info.split(".")[0].strip()
+            head = tool_info.split(":")[0].split(".")[0].strip()
             if head and head != "tool":
                 tool_name = head
     if not tool_name:
