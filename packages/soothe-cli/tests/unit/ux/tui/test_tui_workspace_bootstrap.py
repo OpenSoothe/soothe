@@ -2,40 +2,33 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import os
 from types import SimpleNamespace
 from typing import Any
 
+import soothe_cli.tui.app._module_init as source_module
 from soothe_cli.tui import app as app_module
 
 
-def test_run_textual_tui_forwards_non_default_workspace(monkeypatch, tmp_path: Path) -> None:
-    """Configured workspace_dir is passed as TUI cwd."""
+def test_run_textual_tui_uses_caller_cwd(monkeypatch) -> None:
+    """run_textual_tui passes caller's cwd (os.getcwd()), not config.workspace_dir.
+
+    Per IG-344, the TUI uses the caller's actual cwd for thread isolation,
+    not the daemon-level default workspace (~/.soothe/Workspace).
+    """
     captured: dict[str, Any] = {}
 
     async def fake_run_textual_app(**kwargs: Any) -> app_module.AppResult:
         captured.update(kwargs)
         return app_module.AppResult(return_code=0, loop_id=None)
 
-    monkeypatch.setattr(app_module, "run_textual_app", fake_run_textual_app)
+    # Patch source module (where run_textual_tui calls run_textual_app locally)
+    monkeypatch.setattr(source_module, "run_textual_app", fake_run_textual_app)
 
-    cfg = SimpleNamespace(workspace_dir=str((tmp_path / "ws").resolve()))
+    # config.workspace_dir is ignored - cwd comes from os.getcwd()
+    cfg = SimpleNamespace(workspace_dir="/some/ignored/path")
+    expected_cwd = os.getcwd()
+
     app_module.run_textual_tui(cfg)
 
-    assert captured["cwd"] == cfg.workspace_dir
-
-
-def test_run_textual_tui_keeps_default_cwd_when_workspace_is_dot(monkeypatch) -> None:
-    """Default ``workspace_dir='.'`` keeps cwd unset for runtime resolution."""
-    captured: dict[str, Any] = {}
-
-    async def fake_run_textual_app(**kwargs: Any) -> app_module.AppResult:
-        captured.update(kwargs)
-        return app_module.AppResult(return_code=0, loop_id=None)
-
-    monkeypatch.setattr(app_module, "run_textual_app", fake_run_textual_app)
-
-    cfg = SimpleNamespace(workspace_dir=".")
-    app_module.run_textual_tui(cfg)
-
-    assert captured["cwd"] is None
+    assert captured["cwd"] == expected_cwd
