@@ -733,7 +733,7 @@ class WorkerPool:
         max_pool_size: int = 4,
         idle_timeout_seconds: int = 300,
         max_requests_per_worker: int = 100,
-        request_timeout_seconds: int = 1800,
+        request_timeout_seconds: int = 0,
         heartbeat_interval_seconds: int = 30,
         stuck_worker_timeout_seconds: int = 180,
         dispatch_wait_stats_enabled: bool = False,

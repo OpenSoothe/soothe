@@ -734,7 +734,7 @@ class TestWorkerPoolConfig:
         assert cfg.max_pool_size == 4
         assert cfg.idle_timeout_seconds == 300
         assert cfg.max_requests_per_worker == 100
-        assert cfg.request_timeout_seconds == 1800  # 30 min
+        assert cfg.request_timeout_seconds == 0  # no default timeout
 
     def test_pool_size_bounds(self) -> None:
         """min_pool_size and max_pool_size bounds."""
