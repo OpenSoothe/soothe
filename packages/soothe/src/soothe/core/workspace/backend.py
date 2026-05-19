@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from deepagents.backends.filesystem import FilesystemBackend
+from deepagents.backends.protocol import GlobResult
 
 if TYPE_CHECKING:
     pass
@@ -27,10 +28,9 @@ class NormalizedPathBackend(FilesystemBackend):
     This wrapper ensures such paths are treated as workspace-relative.
 
     ``_resolve_path`` is overridden so ``read``, ``write``, ``edit``, and other
-    path-based operations use the same normalization as ``ls_info`` / ``glob_info``
-    (IG-300).
+    path-based operations use the same normalization as ``ls`` / ``glob`` (IG-300).
 
-    Glob optimization (IG-XXX): limits results to 50 and excludes large/irrelevant
+    Glob optimization: limits results to 50 and excludes large/irrelevant
     directories using .gitignore patterns + essential hardcoded excludes.
     """
 
@@ -150,17 +150,21 @@ class NormalizedPathBackend(FilesystemBackend):
         """Async list directory with file info, normalizing path first."""
         return await super().als_info(self._normalize_path(path))
 
-    def glob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
-        """Glob with file info, applying excludes and max_results limit."""
+    def glob(self, pattern: str, path: str = "/") -> GlobResult:
+        """Glob with path normalization, gitignore excludes, and max_results limit."""
         normalized = self._normalize_path(path)
-        results = super().glob_info(pattern, normalized)
-        return self._apply_glob_limits(results)
+        result = super().glob(pattern, normalized)
+        if result.error or not result.matches:
+            return result
+        return GlobResult(matches=self._apply_glob_limits(result.matches))
 
-    async def aglob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
-        """Async glob with file info, applying excludes and max_results limit."""
+    async def aglob(self, pattern: str, path: str = "/") -> GlobResult:
+        """Async glob with path normalization, gitignore excludes, and max_results limit."""
         normalized = self._normalize_path(path)
-        results = await super().aglob_info(pattern, normalized)
-        return self._apply_glob_limits(results)
+        result = await super().aglob(pattern, normalized)
+        if result.error or not result.matches:
+            return result
+        return GlobResult(matches=self._apply_glob_limits(result.matches))
 
 
 def get_workspace_backend(
@@ -381,25 +385,13 @@ class WorkspaceAwareBackend:
         """Async list directory with file info."""
         return await self._get_backend().als_info(self._normalize_path(path))
 
-    def glob(self, pattern: str) -> list[str]:
-        """Glob pattern matching."""
-        return self._get_backend().glob(pattern)
+    def glob(self, pattern: str, path: str = "/") -> GlobResult:
+        """Glob pattern matching with workspace path normalization."""
+        return self._get_backend().glob(pattern, self._normalize_path(path))
 
-    async def aglob(self, pattern: str) -> list[str]:
-        """Async glob pattern matching."""
-        return await self._get_backend().aglob(pattern)
-
-    def glob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
-        """Glob pattern matching with file info."""
-        backend = self._get_backend()
-        normalized_path = self._normalize_path(path)
-        return backend.glob_info(pattern, normalized_path)
-
-    async def aglob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
-        """Async glob pattern matching with file info."""
-        backend = self._get_backend()
-        normalized_path = self._normalize_path(path)
-        return await backend.aglob_info(pattern, normalized_path)
+    async def aglob(self, pattern: str, path: str = "/") -> GlobResult:
+        """Async glob pattern matching with workspace path normalization."""
+        return await self._get_backend().aglob(pattern, self._normalize_path(path))
 
     def grep(
         self,
