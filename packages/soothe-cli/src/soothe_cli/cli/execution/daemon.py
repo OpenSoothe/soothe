@@ -21,10 +21,10 @@ from soothe_sdk.client import (
 )
 
 from soothe_cli.cli.execution.headless_renderer import HeadlessCliRenderer
-from soothe_cli.shared import EventProcessor
-from soothe_cli.shared.commands.subagent_routing import parse_subagent_from_input
-from soothe_cli.shared.core.presentation_engine import PresentationEngine
-from soothe_cli.shared.daemon_errors import (
+from soothe_cli.events import EventProcessor
+from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
+from soothe_cli.events.core.presentation_engine import PresentationEngine
+from soothe_cli.cli.execution.daemon_errors import (
     friendly_daemon_execution_error,
     is_daemon_worker_subprocess_lost,
 )
@@ -82,10 +82,8 @@ async def _run_headless_session_once(
     try:
         await connect_websocket_with_retries(client)
         cli_ws = os.environ.get("SOOTHE_CLI_WORKSPACE", "").strip() or os.getcwd()
-        stream_delivery = "merged"
-        if getattr(cfg, "output_streaming_mode", None) == "streaming":
-            stream_delivery = "full"
-        elif getattr(cfg, "output_streaming_mode", None) == "batch":
+        stream_delivery = "streaming"
+        if getattr(cfg, "output_streaming_mode", None) == "batch":
             stream_delivery = "batch"
 
         status_event = await bootstrap_loop_session(

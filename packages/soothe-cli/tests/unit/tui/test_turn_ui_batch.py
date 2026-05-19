@@ -7,8 +7,8 @@ import asyncio
 import pytest
 from langchain_core.messages import AIMessageChunk
 
-from soothe_cli.shared.tools.message_processing import tool_ids_touched_by_stream_message
-from soothe_cli.shared.tools.tool_call_resolution import build_streaming_args_overlay
+from soothe_cli.events.tools.message_processing import tool_ids_touched_by_stream_message
+from soothe_cli.events.tools.tool_call_resolution import build_streaming_args_overlay
 from soothe_cli.tui.textual_adapter._turn_ui_batch import TurnToolUiCoalescer
 
 

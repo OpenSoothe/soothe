@@ -24,11 +24,11 @@ from soothe_sdk.ux.task_namespace import (
     task_scope_step_id,
 )
 
-from soothe_cli.cli.stream.display_line import DisplayLine
-from soothe_cli.shared.duration_format import format_duration
-from soothe_cli.shared.events.essential_events import is_essential_progress_event_type
-from soothe_cli.shared.tools.message_processing import format_tool_call_args
-from soothe_cli.shared.tools.tool_call_resolution import (
+from soothe_cli.events.stream.display_line import DisplayLine
+from soothe_cli.events.duration_format import format_duration
+from soothe_cli.events.policy.essential_events import is_essential_progress_event_type
+from soothe_cli.events.tools.message_processing import format_tool_call_args
+from soothe_cli.events.tools.tool_call_resolution import (
     merge_tool_display_args,
     tool_args_meaningful,
 )
@@ -153,12 +153,10 @@ def print_usage_table(
 
 
 def _format_display_line_for_tui(line: DisplayLine) -> str:
-    """Serialize pipeline ``DisplayLine`` for TUI widgets.
+    """Serialize pipeline ``DisplayLine`` for TUI widgets."""
+    from soothe_cli.events.stream.tui_format import format_display_line_for_tui
 
-    Leading spaces encode parent/child layout (step result vs step header, etc.).
-    Strips only newline separators and trailing whitespace.
-    """
-    return line.format().lstrip("\n").rstrip()
+    return format_display_line_for_tui(line)
 
 
 def _format_progress_event_lines_for_tui(
@@ -168,28 +166,16 @@ def _format_progress_event_lines_for_tui(
     pipeline: Any,
     task_scope: TaskScope | None = None,
 ) -> list[str]:
-    """Format progress events with the same pipeline as CLI.
+    """Format progress events through ``StreamDisplayPipeline``."""
+    from soothe_cli.events.stream.tui_format import format_progress_event_lines_for_tui
 
-    ``StreamDisplayPipeline`` applies verbosity tiers (curated ``soothe.subagent.*`` at NORMAL).
-    """
-    event_type = str(event_data.get("type", ""))
-
-    # Essential progress + curated subagent wire events
-    if is_essential_progress_event_type(event_type) or event_type.startswith("soothe.subagent."):
-        event_for_pipeline = dict(event_data)
-        event_for_pipeline["namespace"] = list(namespace)
-        if task_scope:
-            event_for_pipeline["task_scope"] = task_scope
-        lines = pipeline.process(event_for_pipeline)
-
-        rendered: list[str] = []
-        for line in lines:
-            line_text = _format_display_line_for_tui(line)
-            if line_text:
-                rendered.append(line_text)
-        return rendered
-
-    return []
+    scope = tuple(task_scope) if task_scope else None
+    return format_progress_event_lines_for_tui(
+        event_data,
+        namespace,
+        pipeline=pipeline,
+        task_scope=scope,
+    )
 
 
 def _format_task_scoped_tool_invocation_line(
@@ -198,7 +184,7 @@ def _format_task_scoped_tool_invocation_line(
     tool_args: dict[str, Any],
 ) -> str:
     """One stderr-style line for Task subgraph tools (⚙ prefix, display name, args)."""
-    from soothe_cli.cli.stream.task_scope import format_task_scope_prefix
+    from soothe_cli.events.stream.task_scope import format_task_scope_prefix
 
     display_name = get_tool_display_name(tool_name)
     raw_fb = tool_args.get("_raw", "")
@@ -216,7 +202,7 @@ def _raw_tool_content_for_presentation(message: Any) -> str:
 
     from langchain_core.messages import ToolMessage
 
-    from soothe_cli.shared.tools.tool_message_format import format_tool_message_content
+    from soothe_cli.events.tools.tool_message_format import format_tool_message_content
 
     if isinstance(message, ToolMessage):
         return format_tool_message_content(getattr(message, "content", ""))
@@ -328,7 +314,7 @@ def refresh_subgraph_parent_tool_row(
     parsed_args: dict[str, Any],
 ) -> bool:
     """Update an existing task-card tool row when fuller args arrive on a later chunk."""
-    from soothe_cli.shared.tools.tool_call_resolution import tool_args_meaningful
+    from soothe_cli.events.tools.tool_call_resolution import tool_args_meaningful
 
     if not tool_args_meaningful(parsed_args):
         return False
@@ -650,7 +636,7 @@ async def refresh_task_cards_for_step(
     if overlay is None and pending:
         from langchain_core.messages import AIMessageChunk
 
-        from soothe_cli.shared.tools.tool_call_resolution import build_streaming_args_overlay
+        from soothe_cli.events.tools.tool_call_resolution import build_streaming_args_overlay
 
         overlay = build_streaming_args_overlay(AIMessageChunk(content=""), pending)
     overlay = overlay or {}

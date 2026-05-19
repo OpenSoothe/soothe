@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from soothe_sdk.core.verbosity import VerbosityTier, should_show
 
-from soothe_cli.shared.core.presentation_engine import PresentationEngine
+from soothe_cli.events.core.presentation_engine import PresentationEngine
 
 
 def test_reason_dedup_within_window() -> None:

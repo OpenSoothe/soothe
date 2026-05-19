@@ -1,7 +1,7 @@
 """Tests for agent-loop reasoned event with split assessment/plan reasoning."""
 
-from soothe_cli.cli.stream import StreamDisplayPipeline
-from soothe_cli.shared.events.essential_events import LOOP_REASON_EVENT_TYPE
+from soothe_cli.events.stream import StreamDisplayPipeline
+from soothe_cli.events.policy.essential_events import LOOP_REASON_EVENT_TYPE
 
 
 def test_loop_agent_reason_emits_labeled_sections() -> None:

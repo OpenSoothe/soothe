@@ -374,6 +374,13 @@ class PromptBuilder:
                     "</PLAN_STEP_ID_HINT>"
                 )
 
+        project_instructions = None
+        if plan_phase == "generate":
+            from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+
+            workspace = context.workspace or state.workspace
+            project_instructions = load_workspace_project_instructions(workspace)
+
         # Build envelope with timestamp (RFC-214)
         return build_plan_context_envelope(
             goal=goal,
@@ -381,5 +388,6 @@ class PromptBuilder:
             max_iterations=state.max_iterations,
             dag_context=dag_context,
             step_id_hint=step_id_hint,
+            project_instructions=project_instructions,
             goal_user_submission=state.goal_user_submission,
         )

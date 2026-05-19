@@ -95,7 +95,7 @@ async def test_inner_tool_row_nested_under_task_on_step_card() -> None:
 
 def test_task_row_shows_subagent_name_and_truncated_description() -> None:
     from soothe_cli.tui.preview_limits import STEP_TASK_DELEGATION_DESC_MAX_CHARS
-    from soothe_cli.tui.tool_display import format_task_delegation_cli_command
+    from soothe_cli.events.tools.tool_labels import format_task_delegation_cli_command
 
     long_desc = (
         "Explore top-level project structure and identify main directories, "

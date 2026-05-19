@@ -9,12 +9,10 @@ from soothe.foundation import extract_text_from_ai_message
 from soothe_sdk.client.wire import prepare_stream_data_for_wire
 from soothe_sdk.ux.loop_stream import assistant_output_phase
 
-StreamDeliveryMode = Literal["batch", "merged", "full"]
+StreamDeliveryMode = Literal["batch", "streaming"]
 
 AGENT_LOOP_COMPLETED = "soothe.cognition.agent_loop.completed"
 
-# Coalesced goal-completion flushes for TUI (fewer WebSocket frames).
-_MERGED_FLUSH_CHARS = 512
 
 _MSG_PAIR_LEN = 2
 
@@ -31,7 +29,7 @@ class StreamDeliveryCoalescer:
     """Shape runner stream tuples before daemon broadcast to clients."""
 
     def __init__(self, mode: StreamDeliveryMode) -> None:
-        self._mode: StreamDeliveryMode = mode if mode in ("batch", "merged", "full") else "merged"
+        self._mode: StreamDeliveryMode = mode
         self._gc: _GoalCompletionBuffer | None = None
         self._turn_complete_pending = False
 
@@ -61,7 +59,7 @@ class StreamDeliveryCoalescer:
             self._turn_complete_pending = True
             return out
 
-        if self._mode == "full" or mode != "messages":
+        if self._mode == "streaming" or mode != "messages":
             return [(ns, mode, data)]
 
         if not isinstance(data, (tuple, list)) or len(data) != _MSG_PAIR_LEN:
@@ -81,13 +79,6 @@ class StreamDeliveryCoalescer:
 
         if self._mode == "batch":
             return []
-
-        if (
-            self._mode == "merged"
-            and self._joined_text()
-            and len(self._joined_text()) >= _MERGED_FLUSH_CHARS
-        ):
-            return self._flush_goal_completion(final=False)
 
         return []
 

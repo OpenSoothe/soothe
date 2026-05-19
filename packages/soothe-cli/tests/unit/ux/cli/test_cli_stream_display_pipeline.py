@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from soothe_sdk.core.subagent_wire import SUBAGENT_EXPLORE_STEP_COMPLETED
 
-from soothe_cli.cli.stream.context import PipelineContext
-from soothe_cli.cli.stream.display_line import DisplayLine, indent_for_level
-from soothe_cli.cli.stream.formatter import (
+from soothe_cli.events.stream.context import PipelineContext
+from soothe_cli.events.stream.display_line import DisplayLine, indent_for_level
+from soothe_cli.events.stream.formatter import (
     format_goal_done,
     format_goal_header,
     format_step_done,
@@ -19,7 +19,7 @@ from soothe_cli.cli.stream.formatter import (
     format_subagent_done,
     format_subagent_milestone,
 )
-from soothe_cli.cli.stream.pipeline import StreamDisplayPipeline
+from soothe_cli.events.stream.pipeline import StreamDisplayPipeline
 
 _STEP_DONE_MARK = "\u2705\ufe0f"
 

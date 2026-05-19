@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from soothe_cli.tui.textual_adapter._adapter import TextualUIAdapter
 
 
-from soothe_cli.shared.rendering.renderer_base import RendererBase
+from soothe_cli.events.rendering.renderer_base import RendererBase
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ def _assistant_message_terminal_for_empty_tool_arg_mount(message: Any) -> bool:
 
 def _tui_main_assistant_body_for_dedupe(raw: str) -> str:
     """Normalize assistant text the same way as :func:`_flush_assistant_text_ns` input."""
-    from soothe_cli.shared.events.explore_task_display import (
+    from soothe_cli.events.policy.explore_task_display import (
         format_explore_task_json_blob_for_display,
     )
 
@@ -168,7 +168,7 @@ def _tui_effective_ai_blocks(
     """
     from langchain_core.messages import AIMessage, AIMessageChunk
 
-    from soothe_cli.shared.tools.tool_call_resolution import (
+    from soothe_cli.events.tools.tool_call_resolution import (
         materialize_ai_blocks_with_resolved_tools,
     )
 

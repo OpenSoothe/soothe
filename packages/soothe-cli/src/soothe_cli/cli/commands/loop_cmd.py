@@ -19,7 +19,7 @@ from rich.prompt import Prompt
 from rich.table import Table
 from soothe_sdk.client import WebSocketClient, is_daemon_live, websocket_url_from_config
 
-from soothe_cli.shared import load_config
+from soothe_cli.events import load_config
 
 console = Console()
 

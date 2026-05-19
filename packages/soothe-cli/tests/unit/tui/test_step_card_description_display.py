@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from soothe_cli.tui.preview_limits import STEP_TASK_DELEGATION_DESC_MAX_CHARS
-from soothe_cli.tui.tool_display import format_task_delegation_cli_command
+from soothe_cli.events.tools.tool_labels import format_task_delegation_cli_command
 from soothe_cli.tui.widgets.messages import CognitionStepMessage
 
 
