@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from soothe.core.loop.engine.executor import Executor
-from soothe.core.loop.state.schemas import StepResult
+from soothe.core.loop.state.schemas import StepAction, StepResult
 
 from ..runtime_context import LoopRuntimeContext
 
@@ -75,12 +75,23 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
         )
         return {"last_outcome": "fatal"}
 
-    ready_steps = decision.get_ready_steps(state.dependency_completion_ids())
-    for step in ready_steps:
-        await ctx.emit(
-            "step_started",
-            {"step_id": step.id, "description": step.description},
-        )
+    started_step_ids: set[str] = set()
+    completed_ids = set(state.dependency_completion_ids())
+
+    async def _emit_step_started_for_steps(steps: list[StepAction]) -> None:
+        """Emit ``step_started`` once per step when it becomes runnable (live TUI)."""
+        for step in steps:
+            if step.id in started_step_ids:
+                continue
+            started_step_ids.add(step.id)
+            await ctx.emit(
+                "step_started",
+                {"step_id": step.id, "description": step.description},
+            )
+
+    await _emit_step_started_for_steps(
+        decision.get_ready_steps(completed_ids),
+    )
 
     step_results: list[StepResult] = []
     step_desc = {s.id: s.description for s in decision.steps}
@@ -104,6 +115,11 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
                 result=item,
                 step_desc=step_desc,
             )
+            if item.success:
+                completed_ids.add(item.step_id)
+                await _emit_step_started_for_steps(
+                    decision.get_ready_steps(completed_ids),
+                )
 
     fatal_errors = [r for r in step_results if r.error_type == "fatal"]
     if fatal_errors:
@@ -130,6 +146,7 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
     state.last_wave_tool_call_count = sum(r.tool_call_count for r in step_results)
     state.last_wave_subagent_task_count = sum(r.subagent_task_completions for r in step_results)
     state.last_wave_hit_subagent_cap = any(r.hit_subagent_cap for r in step_results)
+    state.last_wave_hit_tool_budget = any(r.hit_tool_budget for r in step_results)
 
     state.previous_plan = plan_result
 

@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 
 FileOpStatus = Literal["pending", "success", "error"]
 
+FILE_CHANGE_TOOLS: frozenset[str] = frozenset({"write_file", "edit_file", "delete_file"})
+"""Filesystem tools that produce before/after diffs in the TUI chat."""
+
 
 @dataclass
 class ApprovalPreview:
@@ -272,10 +275,10 @@ class FileOpTracker:
     ) -> None:
         """Begin tracking a file operation.
 
-        Creates a record for the operation and, for write/edit operations,
-        captures the file's content before modification.
+        Creates a record for the operation and captures on-disk content before
+        write, edit, or delete.
         """
-        if tool_name not in {"read_file", "write_file", "edit_file"}:
+        if tool_name not in {"read_file", *FILE_CHANGE_TOOLS}:
             return
         path_str = str(args.get("file_path") or args.get("path") or "")
         display_path = format_display_path(path_str)
@@ -286,9 +289,8 @@ class FileOpTracker:
             tool_call_id=tool_call_id,
             args=args,
         )
-        if tool_name in {"write_file", "edit_file"}:
-            if record.physical_path:
-                record.before_content = _safe_read(record.physical_path) or ""
+        if tool_name in FILE_CHANGE_TOOLS and record.physical_path:
+            record.before_content = _safe_read(record.physical_path) or ""
         self.active[tool_call_id] = record
 
     def complete_with_message(self, tool_message: Any) -> FileOperationRecord | None:  # noqa: ANN401  # Tool message type is dynamic
@@ -342,8 +344,10 @@ class FileOpTracker:
                 record.metrics.end_line = lines
             if isinstance(limit, int) and lines > limit:
                 record.metrics.end_line = (record.metrics.start_line or 1) + limit - 1
+        elif record.tool_name == "delete_file":
+            record.after_content = ""
+            record.metrics.lines_removed = _count_lines(record.before_content or "")
         else:
-            # For write/edit operations, read back from local filesystem
             self._populate_after_content(record)
             if record.after_content is None:
                 record.status = "error"
@@ -351,38 +355,43 @@ class FileOpTracker:
                 self._finalize(record)
                 return record
             record.metrics.lines_written = _count_lines(record.after_content)
+
+        if record.tool_name in FILE_CHANGE_TOOLS:
             before_lines = _count_lines(record.before_content or "")
-            diff = compute_unified_diff(
+            after_text = record.after_content or ""
+            record.diff = compute_unified_diff(
                 record.before_content or "",
-                record.after_content,
+                after_text,
                 record.display_path,
                 max_lines=APPROVAL_DIFF_MAX_LINES,
             )
-            record.diff = diff
-            if diff:
-                additions = sum(
+            if record.diff:
+                record.metrics.lines_added = sum(
                     1
-                    for line in diff.splitlines()
+                    for line in record.diff.splitlines()
                     if line.startswith("+") and not line.startswith("+++")
                 )
-                deletions = sum(
+                record.metrics.lines_removed = sum(
                     1
-                    for line in diff.splitlines()
+                    for line in record.diff.splitlines()
                     if line.startswith("-") and not line.startswith("---")
                 )
-                record.metrics.lines_added = additions
-                record.metrics.lines_removed = deletions
             elif record.tool_name == "write_file" and not (record.before_content or ""):
                 record.metrics.lines_added = record.metrics.lines_written
-            record.metrics.bytes_written = len(record.after_content.encode("utf-8"))
-            if record.diff is None and (record.before_content or "") != record.after_content:
+            if record.tool_name != "delete_file":
+                record.metrics.bytes_written = len(after_text.encode("utf-8"))
+            if record.diff is None and (record.before_content or "") != after_text:
                 record.diff = compute_unified_diff(
                     record.before_content or "",
-                    record.after_content,
+                    after_text,
                     record.display_path,
                     max_lines=APPROVAL_DIFF_MAX_LINES,
                 )
-            if record.diff is None and before_lines != record.metrics.lines_written:
+            if (
+                record.diff is None
+                and record.tool_name == "write_file"
+                and before_lines != record.metrics.lines_written
+            ):
                 record.metrics.lines_added = max(record.metrics.lines_written - before_lines, 0)
 
         self._finalize(record)
@@ -411,3 +420,75 @@ class FileOpTracker:
     def _finalize(self, record: FileOperationRecord) -> None:
         self.completed.append(record)
         self.active.pop(record.tool_call_id, None)
+
+
+def resolve_file_tool_call_id(
+    tool_name: str,
+    args: dict[str, Any],
+    pending_tool_calls_lc: dict[str, dict[str, Any]],
+) -> str | None:
+    """Match a HITL action request to a streamed tool call id by tool name and path."""
+    import json
+
+    path = str(args.get("file_path") or args.get("path") or "")
+    if not path:
+        return None
+    for tcid, pend in pending_tool_calls_lc.items():
+        if pend.get("name") != tool_name:
+            continue
+        raw = pend.get("args_str") or "{}"
+        try:
+            pend_args = json.loads(raw) if isinstance(raw, str) else dict(raw)
+        except json.JSONDecodeError:
+            pend_args = {}
+        if not isinstance(pend_args, dict):
+            continue
+        pend_path = str(pend_args.get("file_path") or pend_args.get("path") or "")
+        if pend_path == path:
+            return str(tcid)
+    return None
+
+
+def ensure_hitl_file_ops_tracked(
+    tracker: FileOpTracker,
+    action_requests: list[dict[str, Any]],
+    pending_tool_calls_lc: dict[str, dict[str, Any]],
+) -> None:
+    """Capture pre-change file content for HITL file tools before execution resumes."""
+    for req in action_requests:
+        name = str(req.get("name") or "")
+        if name not in FILE_CHANGE_TOOLS:
+            continue
+        args = req.get("args", {})
+        if not isinstance(args, dict):
+            continue
+        tcid = resolve_file_tool_call_id(name, args, pending_tool_calls_lc)
+        track_file_operation(tracker, name, args, tcid)
+
+
+def track_file_operation(
+    tracker: FileOpTracker,
+    tool_name: str,
+    args: dict[str, Any],
+    tool_call_id: str | None,
+) -> None:
+    """Start tracking a file change tool if not already tracked for this call id."""
+    if tool_name not in FILE_CHANGE_TOOLS:
+        return
+    tcid = str(tool_call_id).strip() if tool_call_id else ""
+    if not tcid or tcid in tracker.active:
+        return
+    tracker.start_operation(tool_name, args, tcid)
+
+
+def file_change_action_label(record: FileOperationRecord) -> str:
+    """Human-readable label for a completed file operation (chat diff header)."""
+    if record.tool_name == "delete_file":
+        return "Deleted"
+    if record.tool_name == "write_file" and not (record.before_content or ""):
+        return "New file"
+    if record.tool_name == "write_file":
+        return "Written"
+    if record.tool_name == "edit_file":
+        return "Updated"
+    return "Changed"

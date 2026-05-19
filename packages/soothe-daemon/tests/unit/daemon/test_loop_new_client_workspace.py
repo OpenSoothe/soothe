@@ -199,10 +199,107 @@ async def test_bind_execution_thread_prefers_client_workspace(
             _daemon_workspace=str(tmp_path / "fallback"),
         )
 
-        await bind_execution_thread_for_loop(bind_daemon, loop_id)
+        checkpoint_thread_id = await bind_execution_thread_for_loop(bind_daemon, loop_id)
 
+        assert checkpoint_thread_id != loop_id
         assert set_workspace_calls, "set_workspace must be invoked"
         assert set_workspace_calls[0] == project.resolve()
+    finally:
+        await daemon.close()
+
+
+@pytest.mark.asyncio
+async def test_bind_execution_thread_generates_distinct_thread_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """First bind mints a LangGraph thread id separate from the client loop_id."""
+    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+
+    from soothe.config import SootheConfig
+
+    config = SootheConfig()
+    daemon = _make_daemon_with_pm(config)
+    router = MessageRouter(daemon)
+
+    try:
+        await router._handle_loop_new(
+            client_id="client-1",
+            msg={"type": "loop_new", "request_id": "rid-1"},
+        )
+        loop_id = daemon.sent[-1]["loop_id"]
+
+        class _ThreadRegistry:
+            def ensure(self, _thread_id: str, *, is_draft: bool) -> None:
+                _ = is_draft
+
+            def set_workspace(self, _thread_id: str, _workspace: Path) -> None:
+                pass
+
+            def set_thread_loop(self, thread_id: str, bound_loop_id: str) -> None:
+                assert bound_loop_id == loop_id
+                assert thread_id != loop_id
+
+        bind_daemon = SimpleNamespace(
+            _persistence_manager=daemon._persistence_manager,
+            _thread_registry=_ThreadRegistry(),
+            _daemon_workspace=str(tmp_path / "fallback"),
+        )
+
+        checkpoint_thread_id = await bind_execution_thread_for_loop(bind_daemon, loop_id)
+        assert checkpoint_thread_id != loop_id
+
+        metadata = await daemon._persistence_manager.get_loop_metadata(loop_id)
+        assert metadata is not None
+        assert metadata.get("current_thread_id") == checkpoint_thread_id
+        assert checkpoint_thread_id in (metadata.get("thread_ids") or [])
+        assert loop_id not in (metadata.get("thread_ids") or [])
+    finally:
+        await daemon.close()
+
+
+@pytest.mark.asyncio
+async def test_bind_execution_thread_replaces_legacy_loop_id_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Loops that incorrectly stored thread_id=loop_id get a fresh thread on re-bind."""
+    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+
+    from soothe.config import SootheConfig
+
+    config = SootheConfig()
+    daemon = _make_daemon_with_pm(config)
+    router = MessageRouter(daemon)
+
+    try:
+        await router._handle_loop_new(
+            client_id="client-1",
+            msg={"type": "loop_new", "request_id": "rid-1"},
+        )
+        loop_id = daemon.sent[-1]["loop_id"]
+        await daemon._persistence_manager.update_loop_metadata(
+            loop_id,
+            current_thread_id=loop_id,
+            thread_ids=[loop_id],
+            status="running",
+        )
+
+        bind_daemon = SimpleNamespace(
+            _persistence_manager=daemon._persistence_manager,
+            _thread_registry=SimpleNamespace(
+                ensure=lambda *_a, **_k: None,
+                set_workspace=lambda *_a, **_k: None,
+                set_thread_loop=lambda *_a, **_k: None,
+            ),
+            _daemon_workspace=str(tmp_path / "fallback"),
+        )
+
+        checkpoint_thread_id = await bind_execution_thread_for_loop(bind_daemon, loop_id)
+        assert checkpoint_thread_id != loop_id
+
+        metadata = await daemon._persistence_manager.get_loop_metadata(loop_id)
+        assert metadata is not None
+        assert metadata.get("current_thread_id") == checkpoint_thread_id
+        assert loop_id not in (metadata.get("thread_ids") or [])
     finally:
         await daemon.close()
 

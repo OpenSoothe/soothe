@@ -561,6 +561,7 @@ class StepResult(BaseModel):
         tool_call_count: Number of tool calls made during execution
         subagent_task_completions: Completed ``task`` tool results at graph root (IG-130).
         hit_subagent_cap: True when streaming stopped early due to subagent task cap (IG-130).
+        hit_tool_budget: True when streaming stopped early due to per-step tool call cap.
     """
 
     step_id: str
@@ -573,6 +574,7 @@ class StepResult(BaseModel):
     tool_call_count: int = 0
     subagent_task_completions: int = 0
     hit_subagent_cap: bool = False
+    hit_tool_budget: bool = False
 
     def to_evidence_string(self, *, truncate: bool = True) -> str:
         """Convert to evidence string for judgment.
@@ -729,6 +731,7 @@ class LoopState(BaseModel):
     last_wave_tool_call_count: int = 0
     last_wave_subagent_task_count: int = 0
     last_wave_hit_subagent_cap: bool = False
+    last_wave_hit_tool_budget: bool = False
     last_wave_output_length: int = 0
     last_wave_error_count: int = 0
     total_tokens_used: int = 0

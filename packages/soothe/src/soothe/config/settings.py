@@ -739,7 +739,6 @@ class SootheConfig(BaseSettings):
             f"spec:{model_str}:streaming:{json.dumps(merged_params, sort_keys=True, default=str)}"
         )
         if cache_key in self._model_cache:
-            logger.debug("Using cached model for override key '%s'", cache_key[:120])
             return self._model_cache[cache_key]
 
         provider_name, _, model_name = model_str.partition(":")

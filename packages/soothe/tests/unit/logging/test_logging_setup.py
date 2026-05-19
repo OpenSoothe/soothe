@@ -256,8 +256,8 @@ class TestLoggingSetup:
 class TestThreadFormatter:
     """Tests for conversation thread id tags in log lines."""
 
-    def test_thread_tag_shows_first_four_chars_only(self) -> None:
-        """Log tag uses a short prefix of the conversation thread id."""
+    def test_thread_tag_shows_last_four_chars_only(self) -> None:
+        """Log tag uses the last four characters of the conversation thread id."""
         from soothe.logging.context import set_thread_id
         from soothe.logging.setup import ThreadFormatter
 
@@ -277,7 +277,34 @@ class TestThreadFormatter:
         finally:
             set_thread_id(None)
 
-        assert line.startswith("[abcd]")
+        assert line.startswith("[mnop]")
+
+    def test_thread_tag_uuid7_loops_differ_by_suffix(self) -> None:
+        """UUID7 loop ids created in the same second get distinct suffix tags."""
+        from soothe.logging.context import set_thread_id
+        from soothe.logging.setup import ThreadFormatter, _short_thread_id_for_log
+
+        a = "019e3fe2-bcea-78d0-81d7-bb6656b1a56b"
+        b = "019e3fe5-5a47-7443-8722-1844f8cfa4e5"
+        assert _short_thread_id_for_log(a) == "a56b"
+        assert _short_thread_id_for_log(b) == "a4e5"
+        assert _short_thread_id_for_log(a) != _short_thread_id_for_log(b)
+
+        fmt = ThreadFormatter("%(thread_id)s %(message)s")
+        set_thread_id(a)
+        try:
+            record = logging.LogRecord(
+                name="test",
+                level=logging.INFO,
+                pathname="",
+                lineno=0,
+                msg="x",
+                args=(),
+                exc_info=None,
+            )
+            assert fmt.format(record).startswith("[a56b]")
+        finally:
+            set_thread_id(None)
 
     def test_thread_tag_main_when_no_context(self) -> None:
         """Without set_thread_id, tag is ``[main]``."""

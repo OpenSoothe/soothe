@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage
 
-from soothe.core.loop.engine.executor import Executor
+from soothe.core.loop.engine.executor import (
+    Executor,
+    _format_tool_call_args_for_log,
+    _record_tool_call_args_by_id,
+)
 
 
 @pytest.mark.asyncio
@@ -31,7 +36,7 @@ async def test_stream_and_collect_namespaced_task_chunk_populates_delegate_final
 
     executor = Executor(mock_agent)
     rows = [r async for r in executor._stream_and_collect(fake_stream(), budget=None)]
-    _evt, _ev, tc_total, _msgs, delegate_final = rows[-1]
+    _evt, _ev, tc_total, _msgs, delegate_final, _outcomes = rows[-1]
     assert delegate_final.strip() == "Namespaced explore answer."
     assert tc_total == 1  # namespaced ``task`` ToolMessage counts toward wave tool total
 
@@ -60,7 +65,7 @@ async def test_stream_and_collect_joins_task_tool_returns_as_delegate_finals() -
     async for row in executor._stream_and_collect(fake_stream(), budget=None):
         results.append(row)
     assert len(results) == 2  # tuple passthrough + final aggregate
-    final_out, event, tc_count, msgs, delegate_final = results[-1]
+    final_out, event, tc_count, msgs, delegate_final, _outcomes = results[-1]
     assert event is None
     assert tc_count == 1
     assert delegate_final == "Counted 3 README files."
@@ -217,7 +222,7 @@ async def test_stream_and_collect_emits_tool_call_update_custom_events() -> None
 
     executor = Executor(mock_agent)
     custom_payloads: list[dict] = []
-    async for _out, event, _tc, _msgs, _df in executor._stream_and_collect(
+    async for _out, event, _tc, _msgs, _df, _outcomes in executor._stream_and_collect(
         fake_stream(),
         budget=None,
         step_id="GHT-01",
@@ -490,13 +495,76 @@ async def test_stream_and_collect_rewrites_root_tool_message_to_unified_id() -> 
     ):
         rows.append(row)
     assert len(rows) >= 2
-    _out, event, _tc, _msgs, _df = rows[0]
+    _out, event, _tc, _msgs, _df, _outcomes = rows[0]
     assert isinstance(event, tuple) and len(event) == 3
     _ns, mode, data = event
     assert mode == "messages"
     msg = data[0]
     assert isinstance(msg, ToolMessage)
     assert msg.tool_call_id == "GHT_01:s:grep:0"
+
+
+def test_format_tool_call_args_for_log_truncates_long_payload() -> None:
+    args = {"command": "x" * 600}
+    preview = _format_tool_call_args_for_log(args, max_chars=80)
+    assert preview.endswith("...")
+    assert len(preview) <= 83
+
+
+def test_record_tool_call_args_by_id_backfills_from_chunks() -> None:
+    msg = AIMessage(
+        content="",
+        tool_calls=[{"id": "call_1", "name": "grep", "args": {}}],
+        tool_call_chunks=[
+            {
+                "id": "call_1",
+                "name": "grep",
+                "args": '{"pattern": "foo", "path": "."}',
+            }
+        ],
+    )
+    dest: dict = {}
+    _record_tool_call_args_by_id(msg, dest)
+    assert dest["call_1"] == {"pattern": "foo", "path": "."}
+
+
+@pytest.mark.asyncio
+async def test_stream_and_collect_logs_tool_call_args(caplog: pytest.LogCaptureFixture) -> None:
+    """Tool outcome debug log includes kwargs recorded from the preceding AI tool_calls."""
+    ai = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "id": "functions.read_file:0",
+                "name": "read_file",
+                "args": {"path": "/tmp/foo.txt"},
+            }
+        ],
+    )
+    tool_msg = ToolMessage(
+        content="hello",
+        tool_call_id="functions.read_file:0",
+        name="read_file",
+    )
+
+    async def fake_stream():
+        yield ((), "messages", (ai, {}))
+        yield ((), "messages", (tool_msg, {}))
+
+    executor = Executor(MagicMock())
+    caplog.set_level(logging.DEBUG, logger="soothe.core.loop.engine.executor")
+    async for _row in executor._stream_and_collect(
+        fake_stream(),
+        budget=None,
+        step_id="STP-01",
+    ):
+        pass
+
+    assert any(
+        "read_file" in rec.message and 'args={"path": "/tmp/foo.txt"}' in rec.message
+        for rec in caplog.records
+        if rec.levelname == "DEBUG"
+    )
 
 
 def test_record_execute_wave_parallel_multi_clears_when_no_delegate() -> None:

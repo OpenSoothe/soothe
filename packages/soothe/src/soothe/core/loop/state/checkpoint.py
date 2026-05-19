@@ -7,10 +7,14 @@ RFC-214 introduces unified message ledger replacing fragmented traces.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+_AGENT_LOOP_CHECKPOINT_STATUSES = frozenset(
+    {"running", "ready_for_next_goal", "finalized", "cancelled"}
+)
 
 from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 
@@ -191,3 +195,54 @@ class AgentLoopCheckpoint(BaseModel):
 
     # Metadata (informational only, no migration logic)
     schema_version: str = "3.1"  # Current schema version
+
+
+def normalize_checkpoint_data(
+    data: dict[str, Any],
+    *,
+    loop_id: str | None = None,
+) -> dict[str, Any]:
+    """Fill defaults for partial checkpoint blobs stored by daemon registration.
+
+    PostgreSQL ``register_loop`` / ``update_loop_metadata`` persist a minimal JSONB
+    document for daemon bookkeeping. ``AgentLoopStateManager.load()`` expects a full
+    ``AgentLoopCheckpoint`` schema.
+    """
+    out = dict(data)
+    resolved_loop_id = out.get("loop_id") or loop_id
+    if resolved_loop_id:
+        out.setdefault("loop_id", resolved_loop_id)
+
+    current_thread_id = out.get("current_thread_id") or ""
+    if not out.get("thread_ids"):
+        out["thread_ids"] = [current_thread_id] if current_thread_id else []
+
+    now = datetime.now(UTC)
+    out.setdefault("created_at", now)
+    out.setdefault("updated_at", out.get("created_at", now))
+    out.setdefault("goal_history", [])
+    out.setdefault("current_goal_index", -1)
+    out.setdefault("working_memory_state", {"entries": [], "spill_files": []})
+
+    if "thread_health_metrics" not in out:
+        metrics_thread = current_thread_id or resolved_loop_id or "unknown"
+        out["thread_health_metrics"] = {
+            "thread_id": metrics_thread,
+            "last_updated": out.get("updated_at", now),
+        }
+
+    out.setdefault("total_goals_completed", 0)
+    out.setdefault("total_thread_switches", 0)
+    out.setdefault("total_duration_ms", 0)
+    out.setdefault("total_tokens_used", 0)
+    out.setdefault("thread_switch_pending", False)
+    out.setdefault("schema_version", "3.1")
+
+    status = out.get("status")
+    if status not in _AGENT_LOOP_CHECKPOINT_STATUSES:
+        out["status"] = "ready_for_next_goal"
+    elif status == "running" and not out.get("goal_history"):
+        # Daemon metadata-only row after bind (status=running, no goals yet).
+        out["status"] = "ready_for_next_goal"
+
+    return out

@@ -13,8 +13,10 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from soothe.core.runner._types import generate_thread_id
 from soothe.core.workspace import resolve_loop_daemon_workspace
-from uuid_utils import uuid7
+
+from soothe_daemon.logging import set_loop_id
 
 if TYPE_CHECKING:
     pass
@@ -35,16 +37,26 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
     Raises:
         RuntimeError: If loop metadata is missing or invalid.
     """
+    # Set loop_id in logging context for full ID in daemon.log
+    set_loop_id(loop_id)
+
     # Check loop exists in DB
     metadata = await daemon._persistence_manager.get_loop_metadata(loop_id)
     if metadata is None:
         msg = f"Loop {loop_id} not found"
         raise RuntimeError(msg)
 
-    thread_id = metadata.get("current_thread_id")
-    if not thread_id:
-        thread_id = str(uuid7())
-        thread_ids = list(metadata.get("thread_ids") or [])
+    thread_id = str(metadata.get("current_thread_id") or "").strip()
+    thread_ids = [str(t) for t in (metadata.get("thread_ids") or []) if str(t).strip()]
+    # loop_id scopes AgentLoop persistence; thread_id is the LangGraph/durability conversation id.
+    if not thread_id or thread_id == loop_id:
+        if thread_id == loop_id:
+            logger.info(
+                "Loop %s: replacing legacy thread_id=loop_id alias with a new thread",
+                loop_id,
+            )
+            thread_ids = [t for t in thread_ids if t != loop_id]
+        thread_id = generate_thread_id()
         if thread_id not in thread_ids:
             thread_ids.append(thread_id)
         try:
@@ -71,7 +83,7 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
         else:
             logger.warning(
                 "Loop %s client_workspace %r is not a directory; falling back to per-loop dir",
-                loop_id[:16],
+                loop_id,
                 raw_client_ws,
             )
 
@@ -112,7 +124,7 @@ class LoopInputDispatcher:
             if self._shutting_down:
                 logger.debug(
                     "LoopInputDispatcher shutting down; dropping message for loop %s",
-                    loop_id[:16],
+                    loop_id,
                 )
                 return
             if loop_id not in self._queues:
@@ -145,7 +157,7 @@ class LoopInputDispatcher:
             worker.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await worker
-        logger.debug("Cleaned up input dispatcher state for loop %s", loop_id[:16])
+        logger.debug("Cleaned up input dispatcher state for loop %s", loop_id)
 
     async def _worker(self, loop_id: str, queue: asyncio.Queue[dict[str, Any]]) -> None:
         d = self._daemon
@@ -157,7 +169,7 @@ class LoopInputDispatcher:
             try:
                 await d._process_loop_input_message(loop_id, msg)
             except Exception:
-                logger.exception("Loop worker failed for loop_id=%s", loop_id[:16])
+                logger.exception("Loop worker failed for loop_id=%s", loop_id)
 
     async def drain_for_tests(self) -> None:
         """Cancel workers and clear queues (unit/integration tests only)."""

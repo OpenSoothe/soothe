@@ -225,6 +225,8 @@ class StepTaskRouter:
         routed = 0
         for item in self._pending_main_tools:
             bound = self.step_id_for_tool(item.tool_call_id)
+            if not bound and len(self.active_step_ids) == 1:
+                bound = next(iter(self.active_step_ids))
             if not bound:
                 still.append(item)
                 continue
@@ -271,12 +273,120 @@ class StepTaskRouter:
             PendingSubgraphTool(
                 ns_key=ns_key,
                 lookup_id=tcid,
-                display_key=display_key,
+                display_key=display_key or tcid,
                 tool_name=tool_name or "tool",
                 args=dict(args or {}),
                 raw_args=raw_args,
             )
         )
+
+    def _ingest_subgraph_tool_on_parent(
+        self,
+        item: PendingSubgraphTool,
+        parent: ParentWidget,
+        scope: TaskScope,
+        tool_to_step: dict[str, ParentWidget],
+    ) -> bool:
+        """Register one subgraph tool row on an already-resolved parent step card."""
+        row_id = str(item.display_key or item.lookup_id).strip()
+        if not row_id:
+            return False
+        ingest = getattr(parent, "add_tool_call", None)
+        if not callable(ingest):
+            return False
+        has_row = getattr(parent, "has_tool_call_row", lambda _x: False)
+        if has_row(row_id):
+            update = getattr(parent, "update_tool_args", None)
+            if callable(update):
+                update(row_id, item.args)
+        else:
+            parent_task_id = str(scope[0]).strip()
+            ingest(
+                row_id,
+                item.tool_name,
+                dict(item.args or {}),
+                raw_args=item.raw_args,
+                parent_tool_call_id=parent_task_id or None,
+            )
+        tool_to_step[row_id] = parent
+        return True
+
+    def try_route_subgraph_tool(
+        self,
+        *,
+        ns_key: tuple[str, ...],
+        lookup_id: str,
+        display_key: str,
+        tool_name: str,
+        args: dict[str, Any],
+        raw_args: str = "",
+        step_cards: dict[str, StepWidget],
+        tool_to_step: dict[str, ParentWidget],
+        tool_display_by_call_id: dict[str, ParentWidget],
+    ) -> bool:
+        """Attach a subgraph tool to its parent step card for running-line stats.
+
+        Returns:
+            True when the tool was ingested on a step card; False when buffered.
+        """
+        item = PendingSubgraphTool(
+            ns_key=ns_key,
+            lookup_id=str(lookup_id).strip(),
+            display_key=display_key or str(lookup_id).strip(),
+            tool_name=tool_name or "tool",
+            args=dict(args or {}),
+            raw_args=raw_args,
+        )
+        if not item.lookup_id:
+            return False
+        scope = self.resolve_task_scope(ns_key)
+        if scope is None:
+            self._pending_subgraph_tools.append(item)
+            return False
+        parent = self.resolve_parent(
+            scope,
+            step_cards=step_cards,
+            tool_display_by_call_id=tool_display_by_call_id,
+        )
+        if parent is None:
+            self._pending_subgraph_tools.append(item)
+            return False
+        return self._ingest_subgraph_tool_on_parent(item, parent, scope, tool_to_step)
+
+    def route_pending_subgraph_tools(
+        self,
+        step_cards: dict[str, StepWidget],
+        tool_to_step: dict[str, ParentWidget],
+        tool_display_by_call_id: dict[str, ParentWidget],
+    ) -> int:
+        """Attach buffered subgraph tools when namespace bindings exist.
+
+        Returns:
+            Number of tools routed out of the pending buffer.
+        """
+        if not self._pending_subgraph_tools:
+            return 0
+        still: list[PendingSubgraphTool] = []
+        routed = 0
+        for item in self._pending_subgraph_tools:
+            scope = self.resolve_task_scope(item.ns_key)
+            if scope is None:
+                still.append(item)
+                continue
+            parent = self.resolve_parent(
+                scope,
+                step_cards=step_cards,
+                tool_display_by_call_id=tool_display_by_call_id,
+            )
+            if parent is None:
+                still.append(item)
+                continue
+            if self._ingest_subgraph_tool_on_parent(item, parent, scope, tool_to_step):
+                routed += 1
+            else:
+                still.append(item)
+        self._pending_subgraph_tools = still
+        return routed
 
     def pending_subgraph_tools(self) -> list[PendingSubgraphTool]:
         """Snapshot of subgraph tools still awaiting parent resolution."""

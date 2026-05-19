@@ -14,6 +14,7 @@ import websockets.exceptions
 from soothe_sdk.core.types import VerbosityLevel
 
 from soothe_daemon.event import loop_event_topic
+from soothe_daemon.logging import set_client_id, set_loop_id
 from soothe_daemon.query.stream_delivery import StreamDeliveryMode
 
 if TYPE_CHECKING:
@@ -132,7 +133,9 @@ class ClientSessionManager:
         # Start sender task
         session.sender_task = asyncio.create_task(self._sender_loop(session))
 
-        logger.info("[Session] Client %s connected (%s)", client_id[:8], transport.transport_type)
+        # Set client_id in logging context for full ID in daemon.log
+        set_client_id(client_id)
+        logger.info("[Session] Client %s connected (%s)", client_id, transport.transport_type)
 
         return client_id
 
@@ -160,8 +163,8 @@ class ClientSessionManager:
         if not session:
             logger.warning(
                 "[Session] Client %s not found for loop subscription %s (likely disconnected)",
-                client_id[:8],
-                loop_id[:8],
+                client_id,
+                loop_id,
             )
             return False
 
@@ -187,8 +190,8 @@ class ClientSessionManager:
 
         logger.info(
             "[Session] Client %s → loop %s (verbosity=%s, stream_delivery=%s)",
-            client_id[:8],
-            loop_id[:8],
+            client_id,
+            loop_id,
             verbosity,
             delivery,
         )
@@ -202,8 +205,8 @@ class ClientSessionManager:
         if not session:
             logger.debug(
                 "[Session] Client %s not found for loop unsubscription %s",
-                client_id[:8],
-                loop_id[:8],
+                client_id,
+                loop_id,
             )
             return False
 
@@ -211,11 +214,17 @@ class ClientSessionManager:
         await self._event_bus.unsubscribe(topic, session.event_queue)
         session.subscriptions.discard(loop_id)
 
-        logger.info("[Session] Client %s ← loop %s", client_id[:8], loop_id[:8])
+        # Set logging context for full IDs
+        set_client_id(client_id)
+        set_loop_id(loop_id)
+        logger.info("[Session] Client %s ← loop %s", client_id, loop_id)
         return True
 
     async def remove_session(self, client_id: str) -> None:
         """Remove client session and cleanup."""
+        # Set logging context for full client_id in daemon.log
+        set_client_id(client_id)
+
         async with self._lock:
             session = self._sessions.pop(client_id, None)
             owned_loop_id = self._client_loop_ownership.pop(client_id, None)
@@ -223,14 +232,18 @@ class ClientSessionManager:
         if not session:
             return
 
+        # Set loop_id context when client owns a loop
+        if owned_loop_id:
+            set_loop_id(owned_loop_id)
+
         if not session.detach_requested and owned_loop_id:
             if self._cancel_callback:
                 try:
                     await self._cancel_callback(owned_loop_id)
                     logger.info(
                         "[Session] Loop %s cancelled (client %s disconnect)",
-                        owned_loop_id[:8],
-                        client_id[:8],
+                        owned_loop_id,
+                        client_id,
                     )
                 except Exception:
                     logger.exception(
@@ -247,7 +260,7 @@ class ClientSessionManager:
         if self._dispatch_cleanup_callback:
             try:
                 await self._dispatch_cleanup_callback(client_id)
-                logger.debug("[Session] Dispatch tasks cancelled for client %s", client_id[:8])
+                logger.debug("[Session] Dispatch tasks cancelled for client %s", client_id)
             except Exception:
                 logger.exception(
                     "Failed to cleanup dispatch tasks for client %s",
@@ -261,7 +274,7 @@ class ClientSessionManager:
 
         await self._event_bus.unsubscribe_all(session.event_queue)
 
-        logger.info("[Session] Client %s disconnected", client_id[:8])
+        logger.info("[Session] Client %s disconnected", client_id)
 
     async def get_session(self, client_id: str) -> ClientSession | None:
         """Get session by client_id."""
@@ -270,15 +283,22 @@ class ClientSessionManager:
 
     async def claim_loop_ownership(self, client_id: str, loop_id: str) -> None:
         """Record that this client owns in-flight work for the loop."""
+        # Set logging context for full IDs in daemon.log
+        set_client_id(client_id)
+        set_loop_id(loop_id)
         async with self._lock:
             self._client_loop_ownership[client_id] = loop_id
             logger.debug("Client %s claimed ownership of loop %s", client_id, loop_id)
 
     async def release_loop_ownership(self, client_id: str) -> str | None:
         """Release loop ownership; returns the loop_id if any."""
+        # Set logging context for full client_id in daemon.log
+        set_client_id(client_id)
         async with self._lock:
             loop_id = self._client_loop_ownership.pop(client_id, None)
             if loop_id:
+                # Set logging context for full loop_id in daemon.log
+                set_loop_id(loop_id)
                 logger.debug("Client %s released ownership of loop %s", client_id, loop_id)
             return loop_id
 
@@ -289,7 +309,9 @@ class ClientSessionManager:
 
     async def _sender_loop(self, session: ClientSession) -> None:
         """Send events from queue with daemon-side filtering and batching (RFC-0022, IG-258)."""
-        logger.debug("Sender loop started for client %s", session.client_id[:8])
+        # Set logging context for full client_id in daemon.log
+        set_client_id(session.client_id)
+        logger.debug("Sender loop started for client %s", session.client_id)
         batch_timeout = 0.05  # 50ms batch window (IG-258)
 
         try:
@@ -348,32 +370,34 @@ class ClientSessionManager:
                 except websockets.exceptions.ConnectionClosedOK:
                     logger.debug(
                         "Client %s disconnected normally while sending",
-                        session.client_id[:8],
+                        session.client_id,
                     )
                     break
                 except websockets.exceptions.ConnectionClosedError:
                     logger.debug(
                         "Client %s disconnected abnormally while sending",
-                        session.client_id[:8],
+                        session.client_id,
                     )
                     break
                 except ConnectionError as e:
                     logger.debug(
                         "Client %s disconnected while sending: %s",
-                        session.client_id[:8],
+                        session.client_id,
                         e,
                     )
                     break
                 except Exception:
                     logger.warning(
                         "Failed to send event to client %s, stopping sender loop",
-                        session.client_id[:8],
+                        session.client_id,
                         exc_info=True,
                     )
                     break
 
         except asyncio.CancelledError:
-            logger.debug("Sender task cancelled for client %s", session.client_id[:8])
+            # Set logging context for full client_id in daemon.log
+            set_client_id(session.client_id)
+            logger.debug("Sender task cancelled for client %s", session.client_id)
             raise
 
     @property
