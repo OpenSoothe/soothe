@@ -554,13 +554,11 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
         )
         from soothe.logging import set_thread_id
 
-        # Only set thread_id if explicitly provided
-        if thread_id:
-            set_thread_id(thread_id)
-        elif self._current_thread_id:
-            set_thread_id(self._current_thread_id)
-
         cl_scope = (client_loop_id or "").strip()
+        # Prefer client loop scope for log tags so worker runner.log matches daemon loop_id.
+        log_scope = cl_scope or str(thread_id or self._current_thread_id or "").strip()
+        if log_scope:
+            set_thread_id(log_scope)
         prev_client_loop = self._client_loop_id_for_stream
         self._client_loop_id_for_stream = cl_scope or None
         hitl_tok = set_hitl_interrupt_resolver_context(

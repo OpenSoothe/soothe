@@ -16,13 +16,14 @@ from typing import Any
 from soothe.core.events import ERROR
 from soothe.core.workspace import resolve_workspace_for_stream
 from soothe.foundation import extract_text_from_ai_message
-from soothe.logging import ThreadLogger
+from soothe.logging import ThreadLogger, set_thread_id
 from soothe.utils.error_format import emit_error_event
 from soothe_sdk.client.protocol import _serialize_for_json
 from soothe_sdk.client.wire import prepare_stream_data_for_wire
 from soothe_sdk.ux.stream_tool_wire import extract_tool_call_updates_from_wire_message
 
 from soothe_daemon.image_understanding import enrich_user_text_with_vision
+from soothe_daemon.logging import set_client_id, set_loop_id
 from soothe_daemon.query.stream_delivery import StreamDeliveryCoalescer
 from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn, run_image_to_text_turn
 
@@ -206,6 +207,11 @@ class QueryEngine:
         effective_loop_id = (
             lid_in or str(d._thread_registry.get_thread_loop(thread_id) or "").strip()
         )
+        if effective_loop_id:
+            set_thread_id(effective_loop_id)
+            set_loop_id(effective_loop_id)
+        if client_id:
+            set_client_id(client_id)
 
         st = d._thread_registry.get(thread_id)
         if st and st.is_draft:

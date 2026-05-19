@@ -20,6 +20,7 @@ from soothe_sdk.client.protocol import encode
 from soothe_daemon._handlers import DaemonHandlersMixin
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.event import EventBus, EventSizeDistributionCollector, loop_event_topic
+from soothe_daemon.logging import set_client_id, set_loop_id
 from soothe_daemon.loop_isolation import LoopInputDispatcher
 from soothe_daemon.paths import pid_path
 from soothe_daemon.protocol import MessageRouter
@@ -455,6 +456,8 @@ class SootheDaemon(DaemonHandlersMixin):
                         len(incomplete) - len(remaining),
                     )
                     for t in remaining:
+                        # Set loop_id context for full ID in daemon.log
+                        set_loop_id(t["loop_id"])
                         logger.info(
                             "Loop %s: %d goals completed, %d threads",
                             t["loop_id"],
@@ -558,9 +561,11 @@ class SootheDaemon(DaemonHandlersMixin):
                             event_queue_max = 10000  # Default maxsize
                             event_threshold = int(event_queue_max * 0.8)
                             if event_queue_size > event_threshold:
+                                # Set client_id context for full ID in daemon.log
+                                set_client_id(client_id)
                                 logger.warning(
                                     "Client %s event queue near capacity: %d/%d (%.1f%%)",
-                                    client_id[:8],
+                                    client_id,
                                     event_queue_size,
                                     event_queue_max,
                                     (event_queue_size / event_queue_max) * 100,
@@ -844,6 +849,8 @@ class SootheDaemon(DaemonHandlersMixin):
         Args:
             client_id: Client identifier being disconnected
         """
+        # Set client_id context for full ID in daemon.log
+        set_client_id(client_id)
         if client_id in self._dispatch_tasks:
             task = self._dispatch_tasks[client_id]
             task.cancel()
@@ -851,7 +858,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 await task
             except asyncio.CancelledError:
                 pass  # Expected cancellation
-            logger.debug("Cancelled dispatch task for client %s", client_id[:8])
+            logger.debug("Cancelled dispatch task for client %s", client_id)
 
     # -- static helpers -----------------------------------------------------
 

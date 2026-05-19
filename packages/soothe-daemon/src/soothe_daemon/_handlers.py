@@ -15,6 +15,7 @@ import websockets.exceptions
 from soothe.core.events import ERROR
 from soothe_sdk.client.protocol import decode, encode
 
+from soothe_daemon.logging import set_client_id, set_loop_id
 from soothe_daemon.protocol.router import (
     _coerce_loop_input_text,
     _queue_options_from_daemon_message,
@@ -153,6 +154,12 @@ class DaemonHandlersMixin:
         """
         from soothe_daemon.loop_isolation import bind_execution_thread_for_loop
 
+        # Set logging context for full loop_id and client_id in daemon.log
+        set_loop_id(loop_id)
+        client_id = msg.get("client_id")
+        if client_id:
+            set_client_id(str(client_id))
+
         msg_type = msg.get("type", "")
         try:
             checkpoint_thread_id = await bind_execution_thread_for_loop(self, loop_id)
@@ -194,7 +201,7 @@ class DaemonHandlersMixin:
                 logger.warning(
                     "Loop worker ignoring unsupported queue message type=%r loop_id=%s",
                     msg_type,
-                    loop_id[:16] if loop_id else "?",
+                    loop_id if loop_id else "?",
                 )
                 return
 
@@ -203,7 +210,7 @@ class DaemonHandlersMixin:
                 if prompt_text is None:
                     logger.warning(
                         "Loop worker loop_input missing usable content loop_id=%s",
-                        loop_id[:16] if loop_id else "?",
+                        loop_id if loop_id else "?",
                     )
                     return
             else:
@@ -211,7 +218,7 @@ class DaemonHandlersMixin:
                 if not isinstance(raw_text, str):
                     logger.warning(
                         "Loop worker input missing str text loop_id=%s",
-                        loop_id[:16] if loop_id else "?",
+                        loop_id if loop_id else "?",
                     )
                     return
                 prompt_text = raw_text

@@ -50,6 +50,20 @@ MAX_MEDIA_BYTES: int = 20 * 1024 * 1024
 """Maximum media file size (20 MB). Keeps base64 payload under ~27 MB."""
 
 
+def _import_pil() -> tuple[type, type] | None:
+    """Import Pillow types when available.
+
+    Returns:
+        `(Image, UnidentifiedImageError)` when Pillow is installed, else `None`.
+    """
+    try:
+        from PIL import Image, UnidentifiedImageError
+    except ModuleNotFoundError:
+        logger.debug("Pillow is not installed; image clipboard/path handling is disabled")
+        return None
+    return Image, UnidentifiedImageError
+
+
 def _get_executable(name: str) -> str | None:
     """Get full path to an executable using shutil.which().
 
@@ -132,7 +146,14 @@ def get_image_from_path(path: pathlib.Path) -> ImageData | None:
     Returns:
         `ImageData` when the file is a valid image, otherwise `None`.
     """
-    from PIL import Image, UnidentifiedImageError
+    suffix = path.suffix.lower()
+    if suffix not in IMAGE_EXTENSIONS:
+        return None
+
+    pil = _import_pil()
+    if pil is None:
+        return None
+    Image, UnidentifiedImageError = pil
 
     try:
         file_size = path.stat().st_size
@@ -280,7 +301,10 @@ def _get_macos_clipboard_image() -> ImageData | None:
     Returns:
         ImageData if an image is found, None otherwise.
     """
-    from PIL import Image, UnidentifiedImageError
+    pil = _import_pil()
+    if pil is None:
+        return None
+    Image, UnidentifiedImageError = pil
 
     # Try pngpaste first (fast if installed)
     pngpaste_path = _get_executable("pngpaste")
@@ -328,7 +352,10 @@ def _get_clipboard_via_osascript() -> ImageData | None:
     Returns:
         ImageData if an image is found, None otherwise.
     """
-    from PIL import Image, UnidentifiedImageError
+    pil = _import_pil()
+    if pil is None:
+        return None
+    Image, UnidentifiedImageError = pil
 
     # Get osascript path - it's a macOS builtin so should always exist
     osascript_path = _get_executable("osascript")

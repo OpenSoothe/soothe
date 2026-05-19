@@ -12,6 +12,7 @@ from pathlib import Path
 
 from soothe.config.settings import SootheConfig
 from soothe.core.loop.state.persistence.directory_manager import PersistenceDirectoryManager
+from soothe.logging.context import set_thread_id
 from soothe.logging.setup import ThreadFormatter, _suppress_noisy_third_party
 
 _LOG = logging.getLogger(__name__)
@@ -42,12 +43,14 @@ def configure_loop_runner_worker_logging(config: SootheConfig, loop_id: str) -> 
     log_path = loop_dir / RUNNER_LOG_FILENAME
     resolved = log_path.resolve()
 
+    root_logger = logging.getLogger("soothe")
+    _remove_stale_loop_runner_handlers(root_logger, keep_path=resolved)
+
     file_level_name = config.logging.file.level.upper()
     if config.debug:
         file_level_name = "DEBUG"
     file_level = getattr(logging, file_level_name, logging.INFO)
 
-    root_logger = logging.getLogger("soothe")
     root_logger.setLevel(file_level)
 
     for h in root_logger.handlers:
@@ -73,8 +76,32 @@ def configure_loop_runner_worker_logging(config: SootheConfig, loop_id: str) -> 
 
     _suppress_noisy_third_party()
 
+    set_thread_id(lid)
+
     _LOG.info("Loop worker file logging enabled at %s", log_path)
     return log_path
+
+
+def _remove_stale_loop_runner_handlers(root_logger: logging.Logger, *, keep_path: Path) -> None:
+    """Remove loop ``runner.log`` handlers for other loops (pooled workers reuse one process)."""
+    keep_resolved = keep_path.resolve()
+    stale: list[logging.Handler] = []
+    for handler in root_logger.handlers:
+        if not isinstance(handler, RotatingFileHandler):
+            continue
+        base = getattr(handler, "baseFilename", None)
+        if base is None:
+            continue
+        try:
+            path = Path(str(base)).resolve()
+        except OSError:
+            continue
+        if path.name != RUNNER_LOG_FILENAME or path == keep_resolved:
+            continue
+        stale.append(handler)
+    for handler in stale:
+        root_logger.removeHandler(handler)
+        handler.close()
 
 
 __all__ = ["RUNNER_LOG_FILENAME", "configure_loop_runner_worker_logging"]

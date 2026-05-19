@@ -11,6 +11,7 @@ from time import monotonic, time
 from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.utils import get_tool_display_name
+from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 from textual import on
 from textual.containers import Vertical
 from textual.content import Content
@@ -985,17 +986,26 @@ class DiffMessage(_TimestampClickMixin, Static):
     """
     """Diff syntax coloring per theme: additions, removals, muted context."""
 
-    def __init__(self, diff_content: str, file_path: str = "", **kwargs: Any) -> None:
+    def __init__(
+        self,
+        diff_content: str,
+        file_path: str = "",
+        *,
+        action_label: str = "",
+        **kwargs: Any,
+    ) -> None:
         """Initialize a diff message.
 
         Args:
             diff_content: The unified diff content
             file_path: Path to the file being modified
+            action_label: Short verb for the change (e.g. ``Updated``, ``Deleted``)
             **kwargs: Additional arguments passed to parent
         """
         super().__init__(**kwargs)
         self._diff_content = diff_content
         self._file_path = file_path
+        self._action_label = action_label.strip()
 
     def compose(self) -> ComposeResult:
         """Compose the diff message layout.
@@ -1004,10 +1014,20 @@ class DiffMessage(_TimestampClickMixin, Static):
             Widgets displaying the diff header and formatted content.
         """
         if self._file_path:
-            yield Static(
-                Content.from_markup("[bold]File: $path[/bold]", path=self._file_path),
-                classes="diff-header",
-            )
+            if self._action_label:
+                yield Static(
+                    Content.from_markup(
+                        "[bold]$action:[/bold] $path",
+                        action=self._action_label,
+                        path=self._file_path,
+                    ),
+                    classes="diff-header",
+                )
+            else:
+                yield Static(
+                    Content.from_markup("[bold]File: $path[/bold]", path=self._file_path),
+                    classes="diff-header",
+                )
 
         # Render the diff with per-line Statics (CSS-driven backgrounds)
         yield from compose_diff_lines(self._diff_content, max_lines=APPROVAL_DIFF_MAX_LINES)
@@ -1042,8 +1062,10 @@ class _StepToolRow:
 class CognitionStepMessage(Vertical):
     """Agent-loop act step card: aggregates main-agent tool calls (IG-402).
 
-    Header is the step description only. Per-tool-kind counts (``Grep(2)``, …) appear
-    on the running status line via :meth:`_stats_title_suffix`; individual CLI-style
+    Header is the step description only. Per-tool-kind counts of distinct unified
+    ``tool_call_id`` values for this step appear on the running status line via
+    :meth:`_stats_title_suffix` (e.g. ``Glob(10)``);
+    individual CLI-style
     tool rows are optional (``STEP_CARD_SHOW_TOOL_ROW_DETAILS``). When tool rows are
     enabled and exceed ``_STEP_TOOL_PREVIEW_ROWS``, click first folds or unfolds the
     tool list; otherwise click toggles whole-card collapse. Subagent notes and execute
@@ -1404,22 +1426,30 @@ class CognitionStepMessage(Vertical):
         w.display = True
         self._maybe_auto_collapse_step_card()
 
-    def _bump_stat(self, tool_name: str) -> None:
-        key = get_tool_display_name(_normalize_tool_name_for_arg_map(tool_name or ""))
-        if key not in self._stats_counts:
-            self._stats_order.append(key)
-            self._stats_counts[key] = 0
-        self._stats_counts[key] += 1
+    def _row_belongs_to_step(self, row: _StepToolRow) -> bool:
+        """True when ``row`` belongs to this step card (unified id encodes step)."""
+        parsed_sid, _, _, _ = parse_unified_tool_call_id(row.tool_call_id)
+        if parsed_sid:
+            return parsed_sid == self._step_id
+        return True
 
-    def _decrement_tool_stat_for_row(self, tool_name: str) -> None:
-        key = get_tool_display_name(_normalize_tool_name_for_arg_map(tool_name or ""))
-        c = self._stats_counts.get(key, 0)
-        if c <= 1:
-            self._stats_counts.pop(key, None)
-            if key in self._stats_order:
-                self._stats_order.remove(key)
-        else:
-            self._stats_counts[key] = c - 1
+    def _rebuild_tool_stats(self) -> None:
+        """Recompute per-tool display counts: one per ``tool_call_id`` on this step."""
+        ids_by_display: dict[str, set[str]] = {}
+        order: list[str] = []
+        for row in self._rows:
+            if row.is_task_row or not self._row_belongs_to_step(row):
+                continue
+            tcid = str(row.tool_call_id).strip()
+            if not tcid:
+                continue
+            display = get_tool_display_name(_normalize_tool_name_for_arg_map(row.tool_name or ""))
+            if display not in ids_by_display:
+                ids_by_display[display] = set()
+                order.append(display)
+            ids_by_display[display].add(tcid)
+        self._stats_order = order
+        self._stats_counts = {name: len(ids_by_display[name]) for name in order}
 
     def _stats_title_suffix(self) -> str:
         if not self._stats_order:
@@ -1681,9 +1711,10 @@ class CognitionStepMessage(Vertical):
         )
         self._rows.append(row)
         self._row_index[tcid] = row
-        self._bump_stat(row.tool_name)
+        self._rebuild_tool_stats()
         self._refresh_header_title()
         self.request_tools_display_refresh(immediate=True)
+        self._sync_running_status_line()
 
         self._promote_pending_to_running_if_needed()
 
@@ -1711,7 +1742,7 @@ class CognitionStepMessage(Vertical):
         if row is None:
             return None
         self._rows = [r for r in self._rows if r.tool_call_id != tcid]
-        self._decrement_tool_stat_for_row(row.tool_name)
+        self._rebuild_tool_stats()
         self._refresh_header_title()
         self.request_tools_display_refresh(immediate=True)
 
@@ -1725,9 +1756,10 @@ class CognitionStepMessage(Vertical):
             return
         self._rows.append(row)
         self._row_index[tcid] = row
-        self._bump_stat(row.tool_name)
+        self._rebuild_tool_stats()
         self._refresh_header_title()
         self.request_tools_display_refresh(immediate=True)
+        self._sync_running_status_line()
 
         self._promote_pending_to_running_if_needed()
 
@@ -1755,6 +1787,8 @@ class CognitionStepMessage(Vertical):
         if merged == row.args:
             return
         row.args = merged
+        self._rebuild_tool_stats()
+        self._sync_running_status_line()
         self.request_tools_display_refresh()
 
     def set_tool_running(self, tool_call_id: str) -> None:
@@ -1869,7 +1903,7 @@ class CognitionStepMessage(Vertical):
             )
             self._rows.append(row)
             self._row_index[tcid] = row
-            self._bump_stat(name)
+        self._rebuild_tool_stats()
         self._refresh_header_title()
         self._refresh_tools_display()
 

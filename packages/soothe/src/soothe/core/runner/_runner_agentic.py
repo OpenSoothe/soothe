@@ -327,6 +327,7 @@ class AgenticMixin:
             loop_planner=self._planner,
             config=self._config,
         )
+        agent_loop_id = (self._client_loop_id_for_stream or tid).strip() or tid
 
         # IG-406: Get shared PostgreSQL pool for high-concurrency support
         shared_pool = await self.get_agentloop_shared_pool()
@@ -352,7 +353,7 @@ class AgenticMixin:
         async for event_type, event_data in loop_agent.run_with_progress(
             goal=user_input,
             thread_id=tid,
-            loop_id=tid,
+            loop_id=agent_loop_id,
             workspace=workspace,
             git_status=git_status,
             max_iterations=max_iterations,
