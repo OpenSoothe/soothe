@@ -17,7 +17,6 @@ from soothe.config.models import (
     ConsoleLoggingConfig,
     FilesystemMiddlewareConfig,
     GlobalHistoryConfig,
-    HitlApprovalConfig,
     MCPServerConfig,
     ModelProviderConfig,
     ModelRole,
@@ -299,7 +298,6 @@ class SootheConfig(BaseSettings):
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     """Security policy configuration."""
 
-    hitl: HitlApprovalConfig = Field(default_factory=HitlApprovalConfig)
     """Human-in-the-loop tool approval configuration."""
 
     filesystem_middleware: FilesystemMiddlewareConfig = Field(

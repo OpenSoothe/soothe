@@ -75,6 +75,27 @@ def test_route_pending_subgraph_tools_attaches_to_step_card() -> None:
     assert tool_to_step["YKF_01:t0:glob:1"] is step
 
 
+def test_stats_exclude_nested_subgraph_and_task_tools() -> None:
+    card = CognitionStepMessage("ABC-01", "Scan", id="stp-nested")
+    card.add_tool_call("ABC_01:s:grep:0", "grep", {})
+    card.add_tool_call(
+        "ABC_01:s:task:0",
+        "task",
+        {"subagent_type": "explore", "description": "scan"},
+        is_task_row=True,
+    )
+    card.add_tool_call(
+        "ABC_01:t0:glob:1",
+        "glob",
+        {"pattern": "**/*"},
+        parent_tool_call_id="ABC_01:s:task:0",
+    )
+    suffix = card._stats_title_suffix()
+    assert "Grep(1)" in suffix
+    assert "Glob" not in suffix
+    assert "Task" not in suffix
+
+
 def test_route_pending_main_tools_single_active_step_without_unified_id() -> None:
     router = StepTaskRouter()
     router.on_step_started("ONLY-01")

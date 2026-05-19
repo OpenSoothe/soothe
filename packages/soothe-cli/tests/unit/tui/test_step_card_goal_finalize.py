@@ -19,7 +19,6 @@ async def test_goal_complete_finalizes_pending_step_cards() -> None:
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=AsyncMock(),
-        request_approval=AsyncMock(),
     )
     router = StepTaskRouter()
     await sync_pending_step_cards_from_plan(

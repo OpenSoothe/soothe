@@ -18,19 +18,9 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from typing import Protocol
 
-    from langchain.agents.middleware.human_in_the_loop import (
-        ApproveDecision,
-        EditDecision,
-        RejectDecision,
-    )
     from langchain_core.runnables import RunnableConfig
-    from langgraph.types import Interrupt
-    from pydantic import TypeAdapter
 
-    from soothe_cli.tui._ask_user_types import AskUserWidgetResult, Question
     from soothe_cli.tui.widgets.messages import AssistantMessage
-
-    HITLDecision = ApproveDecision | EditDecision | RejectDecision
 
     class _TokensUpdateCallback(Protocol):
         def __call__(self, count: int, *, approximate: bool = False) -> None: ...
@@ -55,6 +45,7 @@ from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_ou
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
+    normalize_step_task_tool_call_id,
     parse_unified_tool_call_id,
     row_key_for_subgraph_tool,
 )
@@ -64,7 +55,6 @@ from soothe_cli.events.duration_format import format_duration
 from soothe_cli.events.policy.essential_events import LOOP_REASON_EVENT_TYPE
 from soothe_cli.events.policy.explore_task_display import format_explore_task_json_blob_for_display
 from soothe_cli.events.rendering.renderer_base import RendererBase
-from soothe_cli.events.task_scope import format_task_scope_prefix
 from soothe_cli.events.tools.message_processing import (
     extract_tool_args_dict,
     ingest_tool_call_stream_state,
@@ -84,7 +74,6 @@ from soothe_cli.events.turn.turn_stream_prepare import (
     TurnPrepareState,
     prepare_turn_chunk,
 )
-from soothe_cli.tui._ask_user_types import AskUserRequest
 from soothe_cli.tui._cli_context import CLIContext
 from soothe_cli.tui._session_stats import (
     ModelStats,
@@ -96,9 +85,7 @@ from soothe_cli.tui._session_stats import (
 from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui.config import build_stream_config
 from soothe_cli.tui.file_ops import (
-    FILE_CHANGE_TOOLS,
     FileOpTracker,
-    ensure_hitl_file_ops_tracked,
     file_change_action_label,
     track_file_operation,
 )
@@ -123,48 +110,6 @@ logger = logging.getLogger(__name__)
 # Adapter core
 # ---------------------------------------------------------------------------
 
-_hitl_adapter_cache: TypeAdapter | None = None
-"""Lazy singleton for the HITL request validator."""
-
-
-def _get_hitl_request_adapter(hitl_request_type: type) -> TypeAdapter:
-    """Return a cached `TypeAdapter(HITLRequest)`.
-
-    Avoids re-compiling the pydantic schema on every `execute_task_textual` call.
-
-    Args:
-        hitl_request_type: The `HITLRequest` class (passed in because
-            it is imported locally by the caller).
-
-    Returns:
-        Shared `TypeAdapter` instance.
-    """
-    global _hitl_adapter_cache  # noqa: PLW0603
-    if _hitl_adapter_cache is None:
-        from pydantic import TypeAdapter
-
-        _hitl_adapter_cache = TypeAdapter(hitl_request_type)
-    return _hitl_adapter_cache
-
-
-_ask_user_adapter_cache: TypeAdapter | None = None
-"""Lazy singleton for the `ask_user` interrupt validator."""
-
-
-def _get_ask_user_adapter() -> TypeAdapter:
-    """Return a cached `TypeAdapter(AskUserRequest)`.
-
-    Returns:
-        Shared `TypeAdapter` instance.
-    """
-    global _ask_user_adapter_cache  # noqa: PLW0603
-    if _ask_user_adapter_cache is None:
-        from pydantic import TypeAdapter
-
-        _ask_user_adapter_cache = TypeAdapter(AskUserRequest)
-    return _ask_user_adapter_cache
-
-
 class TextualUIAdapter:
     """Adapter for rendering agent output to Textual widgets.
 
@@ -176,18 +121,9 @@ class TextualUIAdapter:
         self,
         mount_message: Callable[..., Awaitable[None]],
         update_status: Callable[[str], None],
-        request_approval: Callable[..., Awaitable[Any]],
-        on_auto_approve_enabled: Callable[[], None] | None = None,
         set_spinner: Callable[[SpinnerStatus], Awaitable[None]] | None = None,
         set_active_message: Callable[[str | None], None] | None = None,
         sync_message_content: Callable[[str, str], None] | None = None,
-        request_ask_user: (
-            Callable[
-                [list[Question]],
-                Awaitable[asyncio.Future[AskUserWidgetResult] | None],
-            ]
-            | None
-        ) = None,
     ) -> None:
         """Initialize the adapter."""
         self._mount_message = mount_message
@@ -195,17 +131,6 @@ class TextualUIAdapter:
 
         self._update_status = update_status
         """Callback to update the status bar text."""
-
-        self._request_approval = request_approval
-        """Async callback that returns a Future for HITL approval."""
-
-        self._on_auto_approve_enabled = on_auto_approve_enabled
-        """Callback invoked when auto-approve is enabled via the HITL approval
-        menu.
-
-        Fired when the user selects "Auto-approve all" from an approval dialog,
-        allowing the app to sync its status bar and session state.
-        """
 
         self._set_spinner = set_spinner
         """Callback to show/hide loading spinner."""
@@ -215,12 +140,6 @@ class TextualUIAdapter:
 
         self._sync_message_content = sync_message_content
         """Callback to sync final message content back to the store after streaming."""
-
-        self._request_ask_user = request_ask_user
-        """Async callback for `ask_user` interrupts.
-
-        When awaited, returns a `Future` that resolves to user answers.
-        """
 
         # State tracking
         self._tool_display_by_call_id: dict[str, CognitionStepMessage] = {}
@@ -500,6 +419,51 @@ def alias_subgraph_pending_and_overlay(
                 streaming_overlay[merge_id] = merged
             else:
                 streaming_overlay[merge_id] = dict(oargs)
+
+
+def _ingest_main_task_tool_on_step_card(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    tool_call_id: str,
+    display_args: dict[str, Any],
+    *,
+    bound_step_id: str,
+) -> None:
+    """Register a main-graph ``task`` delegation on the step card task-activity tree."""
+    tcid = str(tool_call_id).strip()
+    sid = str(bound_step_id).strip()
+    if not tcid:
+        return
+    raw_st = display_args.get("subagent_type", "")
+    subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
+    if subagent_type:
+        router.register_task_spawn(tcid, subagent_type, step_id=sid)
+    if not sid:
+        router.route_pending_subgraph_tools(
+            adapter._current_step_messages,
+            adapter._tool_to_step,
+            adapter._tool_display_by_call_id,
+        )
+        return
+    norm_tcid = normalize_step_task_tool_call_id(sid, tcid)
+    step_w = _resolve_step_widget_for_tool(
+        adapter,
+        router,
+        bound_step_id=sid,
+        ns_key=(),
+    )
+    if step_w is not None:
+        if step_w.has_tool_call_row(norm_tcid):
+            step_w.update_tool_args(norm_tcid, display_args)
+        else:
+            step_w.add_tool_call(norm_tcid, "task", display_args, is_task_row=True)
+        adapter._tool_to_step[norm_tcid] = step_w
+        adapter._tool_display_by_call_id[norm_tcid] = step_w
+    router.route_pending_subgraph_tools(
+        adapter._current_step_messages,
+        adapter._tool_to_step,
+        adapter._tool_display_by_call_id,
+    )
 
 
 def _resolve_step_widget_for_tool(
@@ -837,10 +801,13 @@ async def apply_tool_call_wire_update(
     if is_main and name == "task":
         parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
         bound_step_id = parsed_sid or router.step_id_for_tool(tcid)
-        raw_st = display_args.get("subagent_type", "")
-        subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
-        if subagent_type:
-            router.register_task_spawn(tcid, subagent_type, step_id=bound_step_id)
+        _ingest_main_task_tool_on_step_card(
+            adapter,
+            router,
+            tcid,
+            display_args,
+            bound_step_id=bound_step_id,
+        )
         return True
 
     if is_main:
@@ -997,13 +964,13 @@ def _adapter_has_pending_tools(adapter: TextualUIAdapter) -> bool:
     return bool(adapter._tool_to_step)
 
 
-def _hitl_start_step_tool_rows(adapter: TextualUIAdapter) -> None:
-    """Mark step-aggregated tool rows running after HITL approval (IG-402)."""
+def _mark_step_tool_rows_running(adapter: TextualUIAdapter) -> None:
+    """Mark step-aggregated tool rows running after graph interrupt resume."""
     for tcid, stw in list(adapter._tool_to_step.items()):
         stw.set_tool_running(tcid)
 
 
-def _hitl_reject_step_tool_rows(adapter: TextualUIAdapter) -> None:
+def _reject_step_tool_rows(adapter: TextualUIAdapter) -> None:
     """Mark step-aggregated tool rows rejected and drop pending bindings (IG-402)."""
     for tcid, stw in list(adapter._tool_to_step.items()):
         stw.set_tool_rejected(tcid)
@@ -1184,7 +1151,7 @@ async def _handle_interrupt_cleanup(
         logger.warning("Failed to save interrupted state", exc_info=True)
 
     # Mark tools as rejected AFTER saving state
-    _hitl_reject_step_tool_rows(adapter)
+    _reject_step_tool_rows(adapter)
     adapter._tool_display_by_call_id.clear()
 
     for step_msg in list(adapter._current_step_messages.values()):
@@ -1301,8 +1268,8 @@ async def _flush_assistant_text_ns(
             tool_display_by_call_id=adapter._tool_display_by_call_id,
         )
         if parent_tool is not None:
-            line = f"⚙ {format_task_scope_prefix(ts_card[0], ts_card[1])} {repaired_text.strip()}"
-            parent_tool.append_subagent_activity(line)
+            body = repaired_text.strip()
+            parent_tool.append_subagent_activity(body, task_tool_call_id=ts_card[0])
             return
         # Suppress standalone AssistantMessage for all subagent tasks —
         # only goal_completion surfaces the final result.
@@ -1391,7 +1358,7 @@ async def execute_task_textual(
             When ``skip_daemon_send_turn=True``, only consumes chunks (prompt already
             queued server-side).
         assistant_id: The agent identifier
-        session_state: Session state with auto_approve flag
+        session_state: Session state (loop id, etc.)
         adapter: The TextualUIAdapter for UI operations
         image_tracker: Optional tracker for images
         context: Optional `CLIContext` with model override and params, passed
@@ -1419,22 +1386,12 @@ async def execute_task_textual(
             wall-clock time).
 
     Raises:
-        ValidationError: If HITL request validation fails (re-raised).
     """
-    from langchain.agents.middleware.human_in_the_loop import (
-        ApproveDecision,
-        HITLRequest,
-        RejectDecision,
-    )
     from langchain_core.messages import AIMessageChunk
-    from langgraph.types import Command
-    from pydantic import ValidationError
 
     if daemon_session is None:
         raise RuntimeError("execute_task_textual requires daemon_session")
 
-    hitl_request_adapter = _get_hitl_request_adapter(HITLRequest)
-    ask_user_adapter = _get_ask_user_adapter()
     presentation = PresentationEngine()
 
     # Parse file mentions and inject content if any — defer blocking I/O
@@ -1529,184 +1486,182 @@ async def execute_task_textual(
     if image_tracker:
         image_tracker.clear()
 
-    user_msg: dict[str, Any] = {"role": "user", "content": message_content}
-    if message_kwargs:
-        user_msg.update(message_kwargs)
-    stream_input: dict | Command = {"messages": [user_msg]}
-    cfg_workspace = (config.get("configurable") or {}).get("workspace")
-    if cfg_workspace:
-        stream_input["workspace"] = cfg_workspace
-
     # Track summarization lifecycle so spinner status and notification stay in sync.
     summarization_in_progress = False
     try:
-        while True:
-            interrupt_occurred = False
-            suppress_resumed_output = False
-            pending_interrupts: dict[str, HITLRequest] = {}
-            pending_ask_user: dict[str, AskUserRequest] = {}
-
-            if isinstance(stream_input, Command):
-                resume_data = getattr(stream_input, "resume", None)
-                if not isinstance(resume_data, dict):
-                    raise ValueError("Invalid daemon resume payload")
-                await daemon_session.resume_interrupts(resume_data)
-                chunk_source = daemon_session.iter_turn_chunks()
-            elif skip_daemon_send_turn:
-                chunk_source = daemon_session.iter_turn_chunks()
-            else:
-                daemon_text = message_content if isinstance(message_content, str) else final_input
-                subagent_name, routed_text = parse_subagent_from_input(
-                    daemon_text if isinstance(daemon_text, str) else final_input
-                )
-                ctx_model = context.get("model") if context else None
-                raw_mp = context.get("model_params") if context else None
-                mp = raw_mp if isinstance(raw_mp, dict) else None
-                image_attachments: list[dict[str, str]] | None = None
-                if images_to_send:
-                    image_attachments = [
-                        {
-                            "mime_type": f"image/{img.format}",
-                            "data": img.base64_data,
-                        }
-                        for img in images_to_send
-                    ]
-                await daemon_session.send_turn(
-                    routed_text,
-                    interactive=True,
-                    preferred_subagent=subagent_name,
-                    model=ctx_model if isinstance(ctx_model, str) and ctx_model.strip() else None,
-                    model_params=mp,
-                    attachments=image_attachments,
-                )
-                chunk_source = daemon_session.iter_turn_chunks()
-
-            prep_state = TurnPrepareState(
-                ev_stats=ev_stats,
-                router=router,
-                presentation=presentation,
-                pending_tool_calls_lc=pending_tool_calls_lc,
-                streaming_overlay=streaming_overlay,
-                last_active_tool_call_id=last_active_tool_call_id,
+        if skip_daemon_send_turn:
+            chunk_source = daemon_session.iter_turn_chunks()
+        else:
+            daemon_text = message_content if isinstance(message_content, str) else final_input
+            subagent_name, routed_text = parse_subagent_from_input(
+                daemon_text if isinstance(daemon_text, str) else final_input
             )
+            ctx_model = context.get("model") if context else None
+            raw_mp = context.get("model_params") if context else None
+            mp = raw_mp if isinstance(raw_mp, dict) else None
+            image_attachments: list[dict[str, str]] | None = None
+            if images_to_send:
+                image_attachments = [
+                    {
+                        "mime_type": f"image/{img.format}",
+                        "data": img.base64_data,
+                    }
+                    for img in images_to_send
+                ]
+            await daemon_session.send_turn(
+                routed_text,
+                preferred_subagent=subagent_name,
+                model=ctx_model if isinstance(ctx_model, str) and ctx_model.strip() else None,
+                model_params=mp,
+                attachments=image_attachments,
+            )
+            chunk_source = daemon_session.iter_turn_chunks()
 
-            async def _apply_turn_chunk(prepared: PreparedTurnChunk | None) -> None:
-                nonlocal last_active_tool_call_id
-                nonlocal summarization_in_progress
-                nonlocal interrupt_occurred
-                nonlocal suppress_resumed_output
-                nonlocal goal_loop_start_monotonic
-                nonlocal captured_input_tokens
-                if prepared is None or prepared.skip:
-                    return
-                for _chunk_once in (0,):
-                    try:
-                        current_stream_mode = prepared.mode
-                        data = prepared.data
-                        ns_key = prepared.namespace
+        prep_state = TurnPrepareState(
+            ev_stats=ev_stats,
+            router=router,
+            presentation=presentation,
+            pending_tool_calls_lc=pending_tool_calls_lc,
+            streaming_overlay=streaming_overlay,
+            last_active_tool_call_id=last_active_tool_call_id,
+        )
 
-                        # Root graph uses namespace ``()``; delegated subgraphs use non-empty
-                        # namespaces. Assistant *text* from subgraphs is suppressed (avoid duplicate
-                        # prose with main). Tool stats attach to step cards on the main graph only.
-                        is_main_agent = ns_key == ()
-                        suppress_subgraph_assistant_text = not is_main_agent
-                        suppress_main_agent_assistant_text = False
+        async def _apply_turn_chunk(prepared: PreparedTurnChunk | None) -> None:
+            nonlocal last_active_tool_call_id
+            nonlocal summarization_in_progress
+            nonlocal goal_loop_start_monotonic
+            nonlocal captured_input_tokens
+            if prepared is None or prepared.skip:
+                return
+            for _chunk_once in (0,):
+                try:
+                    current_stream_mode = prepared.mode
+                    data = prepared.data
+                    ns_key = prepared.namespace
 
-                        # Handle UPDATES stream - for interrupts and todos
-                        if current_stream_mode == "updates":
-                            if not isinstance(data, dict):
-                                continue
+                    # Root graph uses namespace ``()``; delegated subgraphs use non-empty
+                    # namespaces. Assistant *text* from subgraphs is suppressed (avoid duplicate
+                    # prose with main). Tool stats attach to step cards on the main graph only.
+                    is_main_agent = ns_key == ()
+                    suppress_subgraph_assistant_text = not is_main_agent
+                    suppress_main_agent_assistant_text = False
 
-                            # Check for interrupts
-                            if "__interrupt__" in data:
-                                interrupts: list[Interrupt] = data["__interrupt__"]
-                                if interrupts:
-                                    for interrupt_obj in interrupts:
-                                        iv = interrupt_obj.value
-                                        if isinstance(iv, dict) and iv.get("type") == "ask_user":
-                                            try:
-                                                validated_ask_user = (
-                                                    ask_user_adapter.validate_python(iv)
-                                                )
-                                                pending_ask_user[interrupt_obj.id] = (
-                                                    validated_ask_user
-                                                )
-                                                interrupt_occurred = True
-                                                await dispatch_hook("input.required", {})
-                                            except ValidationError:
-                                                logger.exception(
-                                                    "Invalid ask_user interrupt payload"
-                                                )
-                                                raise
-                                        else:
-                                            try:
-                                                validated_request = (
-                                                    hitl_request_adapter.validate_python(iv)
-                                                )
-                                                pending_interrupts[interrupt_obj.id] = (
-                                                    validated_request
-                                                )
-                                                interrupt_occurred = True
-                                                await dispatch_hook("input.required", {})
-                                            except ValidationError:  # noqa: TRY203  # Re-raise preserves exception context in handler
-                                                raise
+                    # Handle UPDATES stream - for todos
+                    if current_stream_mode == "updates":
+                        if not isinstance(data, dict):
+                            continue
 
-                            # Check for todo updates (not yet implemented in Textual UI)
-                            chunk_data = next(iter(data.values())) if data else None
-                            if (
-                                chunk_data
-                                and isinstance(chunk_data, dict)
-                                and "todos" in chunk_data
-                            ):
-                                pass  # Future: render todo list widget
+                        # Check for todo updates (not yet implemented in Textual UI)
+                        chunk_data = next(iter(data.values())) if data else None
+                        if (
+                            chunk_data
+                            and isinstance(chunk_data, dict)
+                            and "todos" in chunk_data
+                        ):
+                            pass  # Future: render todo list widget
 
-                        # Handle MESSAGES stream - for content and tool calls
-                        elif current_stream_mode == "messages":
-                            if not isinstance(data, (list, tuple)) or len(data) != 2:  # noqa: PLR2004
+                    # Handle MESSAGES stream - for content and tool calls
+                    elif current_stream_mode == "messages":
+                        if not isinstance(data, (list, tuple)) or len(data) != 2:  # noqa: PLR2004
+                            logger.debug(
+                                "Skipping non-pair message data: type=%s",
+                                type(data).__name__,
+                            )
+                            continue
+
+                        if prepared.normalized_message is not None:
+                            message = prepared.normalized_message
+                            metadata = prepared.message_metadata
+                        else:
+                            message, metadata = data
+                            message = _normalize_lc_stream_message(message)
+
+                        # Filter out summarization model output, but keep UI feedback.
+                        # The summarization model streams AIMessage chunks tagged
+                        # with lc_source="summarization" in the callback metadata.
+                        # These are hidden from the user; only the spinner and a
+                        # notification widget provide feedback.
+                        if prepared.is_summarization or _is_summarization_chunk(metadata):
+                            if not summarization_in_progress:
+                                summarization_in_progress = True
+                                if adapter._set_spinner:
+                                    await adapter._set_spinner("Offloading")
+                            continue
+
+                        # Regular (non-summarization) chunks resumed — summarization
+                        # has finished. Mount the notification and reset the spinner.
+                        if summarization_in_progress:
+                            summarization_in_progress = False
+                            try:
+                                await adapter._mount_message(SummarizationMessage())
+                            except Exception:
                                 logger.debug(
-                                    "Skipping non-pair message data: type=%s",
-                                    type(data).__name__,
+                                    "Failed to mount summarization notification",
+                                    exc_info=True,
                                 )
-                                continue
+                            if adapter._set_spinner and not _adapter_has_pending_tools(adapter):
+                                await adapter._set_spinner("Thinking")
 
-                            if prepared.normalized_message is not None:
-                                message = prepared.normalized_message
-                                metadata = prepared.message_metadata
+                        if isinstance(message, HumanMessage):
+                            content = message.text
+                            # Flush pending text for this namespace
+                            pending_text = pending_text_by_namespace.get(ns_key, "")
+                            if content and pending_text:
+                                await _flush_assistant_text_ns(
+                                    adapter,
+                                    pending_text,
+                                    ns_key,
+                                    assistant_message_by_namespace,
+                                    router=router,
+                                )
+                                pending_text_by_namespace[ns_key] = ""
+                            continue
+
+                        tool_result = extract_tool_result_payload(message)
+                        if tool_result is not None:
+                            ev_stats.tool_results += 1
+                            tool_id = tool_result.tool_call_id or None
+                            if tool_id:
+                                pending_tool_calls_lc.pop(str(tool_id), None)
+
+                            record = file_op_tracker.complete_with_message(message)
+
+                            sid = str(tool_id) if tool_id else ""
+                            if sid and not is_main_agent:
+                                ts_row = router.resolve_task_scope(ns_key)
+                                row_key = row_key_for_subgraph_tool(
+                                    ns_key, sid, task_scope=ts_row
+                                )
                             else:
-                                message, metadata = data
-                                message = _normalize_lc_stream_message(message)
+                                row_key = sid
+                            output_str = tool_result.output_display
+                            if row_key:
+                                step_w = adapter._tool_to_step.pop(row_key, None)
+                                if step_w is not None:
+                                    dur_ms = step_w.row_duration_ms_since_started(row_key)
+                                    if not tool_result.is_error:
+                                        step_w.set_tool_success(
+                                            row_key, output_str, duration_ms=dur_ms
+                                        )
+                                    else:
+                                        step_w.set_tool_error(
+                                            row_key, output_str or "Error", duration_ms=dur_ms
+                                        )
+                                        await dispatch_hook(
+                                            "tool.error",
+                                            {"tool_names": [tool_result.tool_name or "tool"]},
+                                        )
 
-                            # Filter out summarization model output, but keep UI feedback.
-                            # The summarization model streams AIMessage chunks tagged
-                            # with lc_source="summarization" in the callback metadata.
-                            # These are hidden from the user; only the spinner and a
-                            # notification widget provide feedback.
-                            if prepared.is_summarization or _is_summarization_chunk(metadata):
-                                if not summarization_in_progress:
-                                    summarization_in_progress = True
-                                    if adapter._set_spinner:
-                                        await adapter._set_spinner("Offloading")
-                                continue
+                            # Reshow spinner only when all in-flight tools have
+                            # completed (avoids premature "Thinking..." when
+                            # parallel tool calls are active).
+                            if adapter._set_spinner and not _adapter_has_pending_tools(adapter):
+                                await adapter._set_spinner("Thinking")
 
-                            # Regular (non-summarization) chunks resumed — summarization
-                            # has finished. Mount the notification and reset the spinner.
-                            if summarization_in_progress:
-                                summarization_in_progress = False
-                                try:
-                                    await adapter._mount_message(SummarizationMessage())
-                                except Exception:
-                                    logger.debug(
-                                        "Failed to mount summarization notification",
-                                        exc_info=True,
-                                    )
-                                if adapter._set_spinner and not _adapter_has_pending_tools(adapter):
-                                    await adapter._set_spinner("Thinking")
-
-                            if isinstance(message, HumanMessage):
-                                content = message.text
-                                # Flush pending text for this namespace
+                            # Show file operation results - always show diffs in chat
+                            if record:
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
-                                if content and pending_text:
+                                if pending_text:
                                     await _flush_assistant_text_ns(
                                         adapter,
                                         pending_text,
@@ -1715,581 +1670,413 @@ async def execute_task_textual(
                                         router=router,
                                     )
                                     pending_text_by_namespace[ns_key] = ""
-                                continue
-
-                            tool_result = extract_tool_result_payload(message)
-                            if tool_result is not None:
-                                ev_stats.tool_results += 1
-                                tool_id = tool_result.tool_call_id or None
-                                if tool_id:
-                                    pending_tool_calls_lc.pop(str(tool_id), None)
-
-                                record = file_op_tracker.complete_with_message(message)
-
-                                sid = str(tool_id) if tool_id else ""
-                                if sid and not is_main_agent:
-                                    ts_row = router.resolve_task_scope(ns_key)
-                                    row_key = row_key_for_subgraph_tool(
-                                        ns_key, sid, task_scope=ts_row
+                                if record.diff and record.tool_name in FILE_CHANGE_TOOLS:
+                                    await adapter._mount_message(
+                                        DiffMessage(
+                                            record.diff,
+                                            record.display_path,
+                                            action_label=file_change_action_label(record),
+                                        )
                                     )
-                                else:
-                                    row_key = sid
-                                output_str = tool_result.output_display
-                                if row_key:
-                                    step_w = adapter._tool_to_step.pop(row_key, None)
-                                    if step_w is not None:
-                                        dur_ms = step_w.row_duration_ms_since_started(row_key)
-                                        if not tool_result.is_error:
-                                            step_w.set_tool_success(
-                                                row_key, output_str, duration_ms=dur_ms
-                                            )
-                                        else:
-                                            step_w.set_tool_error(
-                                                row_key, output_str or "Error", duration_ms=dur_ms
-                                            )
-                                            await dispatch_hook(
-                                                "tool.error",
-                                                {"tool_names": [tool_result.tool_name or "tool"]},
-                                            )
+                            continue
 
-                                # Reshow spinner only when all in-flight tools have
-                                # completed (avoids premature "Thinking..." when
-                                # parallel tool calls are active).
-                                if adapter._set_spinner and not _adapter_has_pending_tools(adapter):
-                                    await adapter._set_spinner("Thinking")
+                        # Extract token usage (before content_blocks check
+                        # - usage may be on any chunk)
+                        if hasattr(message, "usage_metadata"):
+                            usage = message.usage_metadata
+                            if usage:
+                                input_toks = usage.get("input_tokens", 0)
+                                output_toks = usage.get("output_tokens", 0)
+                                total_toks = usage.get("total_tokens", 0)
+                                from soothe_cli.tui.config import settings
 
-                                # Show file operation results - always show diffs in chat
-                                if record:
-                                    pending_text = pending_text_by_namespace.get(ns_key, "")
-                                    if pending_text:
-                                        await _flush_assistant_text_ns(
-                                            adapter,
-                                            pending_text,
-                                            ns_key,
-                                            assistant_message_by_namespace,
-                                            router=router,
-                                        )
-                                        pending_text_by_namespace[ns_key] = ""
-                                    if record.diff and record.tool_name in FILE_CHANGE_TOOLS:
-                                        await adapter._mount_message(
-                                            DiffMessage(
-                                                record.diff,
-                                                record.display_path,
-                                                action_label=file_change_action_label(record),
-                                            )
-                                        )
-                                continue
-
-                            # Extract token usage (before content_blocks check
-                            # - usage may be on any chunk)
-                            if hasattr(message, "usage_metadata"):
-                                usage = message.usage_metadata
-                                if usage:
-                                    input_toks = usage.get("input_tokens", 0)
-                                    output_toks = usage.get("output_tokens", 0)
-                                    total_toks = usage.get("total_tokens", 0)
-                                    from soothe_cli.tui.config import settings
-
-                                    active_model = settings.model_name or ""
-                                    if input_toks or output_toks:
-                                        # Model gives split counts — preferred path
-                                        turn_stats.record_request(
-                                            active_model, input_toks, output_toks
-                                        )
-                                        captured_input_tokens = max(
-                                            captured_input_tokens, input_toks + output_toks
-                                        )
-                                    elif total_toks:
-                                        # Fallback: model gives only total (no split)
-                                        turn_stats.record_request(active_model, total_toks, 0)
-                                        captured_input_tokens = max(
-                                            captured_input_tokens, total_toks
-                                        )
-
-                            touched_tool_ids = tool_ids_touched_by_stream_message(message)
-                            if touched_tool_ids:
-                                ev_stats.tool_calls += 1
-                            if prepared.tool_stream_touched:
-                                last_active_tool_call_id = prep_state.last_active_tool_call_id
-                            else:
-                                last_active_tool_call_id = ingest_tool_call_stream_state(
-                                    pending_tool_calls_lc,
-                                    message,
-                                    is_main=(ns_key == ()),
-                                    last_active_id=last_active_tool_call_id,
-                                )
-                            if isinstance(message, (AIMessage, AIMessageChunk)) or (
-                                isinstance(message, dict)
-                                and (message.get("tool_call_chunks") or message.get("tool_calls"))
-                            ):
-                                overlay_msg = message
-                                if isinstance(message, dict):
-                                    overlay_msg = AIMessageChunk(content="")
-                                chunk_overlay = build_streaming_args_overlay(
-                                    overlay_msg,
-                                    pending_tool_calls_lc,
-                                    only_ids=touched_tool_ids,
-                                )
-                                streaming_overlay.update(chunk_overlay)
-                                if ns_key:
-                                    alias_subgraph_pending_and_overlay(
-                                        pending_tool_calls_lc,
-                                        streaming_overlay,
-                                        router,
-                                        ns_key,
+                                active_model = settings.model_name or ""
+                                if input_toks or output_toks:
+                                    # Model gives split counts — preferred path
+                                    turn_stats.record_request(
+                                        active_model, input_toks, output_toks
                                     )
-                            blocks = _tui_effective_ai_blocks(
+                                    captured_input_tokens = max(
+                                        captured_input_tokens, input_toks + output_toks
+                                    )
+                                elif total_toks:
+                                    # Fallback: model gives only total (no split)
+                                    turn_stats.record_request(active_model, total_toks, 0)
+                                    captured_input_tokens = max(
+                                        captured_input_tokens, total_toks
+                                    )
+
+                        touched_tool_ids = tool_ids_touched_by_stream_message(message)
+                        if touched_tool_ids:
+                            ev_stats.tool_calls += 1
+                        if prepared.tool_stream_touched:
+                            last_active_tool_call_id = prep_state.last_active_tool_call_id
+                        else:
+                            last_active_tool_call_id = ingest_tool_call_stream_state(
+                                pending_tool_calls_lc,
                                 message,
-                                ns_key=ns_key,
-                                streaming_overlay=streaming_overlay or None,
+                                is_main=(ns_key == ()),
+                                last_active_id=last_active_tool_call_id,
                             )
-                            if not blocks:
+                        if isinstance(message, (AIMessage, AIMessageChunk)) or (
+                            isinstance(message, dict)
+                            and (message.get("tool_call_chunks") or message.get("tool_calls"))
+                        ):
+                            overlay_msg = message
+                            if isinstance(message, dict):
+                                overlay_msg = AIMessageChunk(content="")
+                            chunk_overlay = build_streaming_args_overlay(
+                                overlay_msg,
+                                pending_tool_calls_lc,
+                                only_ids=touched_tool_ids,
+                            )
+                            streaming_overlay.update(chunk_overlay)
+                            if ns_key:
+                                alias_subgraph_pending_and_overlay(
+                                    pending_tool_calls_lc,
+                                    streaming_overlay,
+                                    router,
+                                    ns_key,
+                                )
+                        blocks = _tui_effective_ai_blocks(
+                            message,
+                            ns_key=ns_key,
+                            streaming_overlay=streaming_overlay or None,
+                        )
+                        if not blocks:
+                            continue
+
+                        # ``phase=goal_completion`` → standalone ``AssistantMessage`` (all namespaces).
+                        if getattr(message, "phase", None) == "goal_completion":
+                            text_gc = "".join(
+                                str(b.get("text", ""))
+                                for b in blocks
+                                if isinstance(b, dict) and b.get("type") == "text"
+                            )
+                            is_gc_chunk = isinstance(message, AIMessageChunk)
+                            if text_gc == "" and is_gc_chunk:
                                 continue
 
-                            # ``phase=goal_completion`` → standalone ``AssistantMessage`` (all namespaces).
-                            if getattr(message, "phase", None) == "goal_completion":
-                                text_gc = "".join(
-                                    str(b.get("text", ""))
-                                    for b in blocks
-                                    if isinstance(b, dict) and b.get("type") == "text"
-                                )
-                                is_gc_chunk = isinstance(message, AIMessageChunk)
-                                if text_gc == "" and is_gc_chunk:
-                                    continue
+                            output_text = text_gc
+                            ev_stats.text_chunks += 1
+                            pending_text = pending_text_by_namespace.get(ns_key, "")
+                            existing_msg = assistant_message_by_namespace.get(ns_key)
+                            stream_msg = goal_completion_stream_by_namespace.get(ns_key)
+                            is_synthesis_stream_chunk = is_gc_chunk
 
-                                output_text = text_gc
-                                ev_stats.text_chunks += 1
-                                pending_text = pending_text_by_namespace.get(ns_key, "")
-                                existing_msg = assistant_message_by_namespace.get(ns_key)
-                                stream_msg = goal_completion_stream_by_namespace.get(ns_key)
-                                is_synthesis_stream_chunk = is_gc_chunk
+                            if is_synthesis_stream_chunk:
+                                if pending_text:
+                                    await _flush_assistant_text_ns(
+                                        adapter,
+                                        pending_text,
+                                        ns_key,
+                                        assistant_message_by_namespace,
+                                        router=router,
+                                    )
+                                    pending_text_by_namespace[ns_key] = ""
+                                    assistant_message_by_namespace.pop(ns_key, None)
 
-                                if is_synthesis_stream_chunk:
-                                    if pending_text:
-                                        await _flush_assistant_text_ns(
-                                            adapter,
-                                            pending_text,
-                                            ns_key,
-                                            assistant_message_by_namespace,
-                                            router=router,
-                                        )
-                                        pending_text_by_namespace[ns_key] = ""
-                                        assistant_message_by_namespace.pop(ns_key, None)
+                                if stream_msg is None:
+                                    if adapter._set_spinner:
+                                        await adapter._set_spinner("Synthesizing")
+                                    msg_id = f"asst-{uuid.uuid4().hex[:8]}"
+                                    if adapter._set_active_message:
+                                        adapter._set_active_message(msg_id)
+                                    stream_msg = AssistantMessage(id=msg_id)
+                                    await adapter._mount_message(stream_msg)
+                                    goal_completion_stream_by_namespace[ns_key] = stream_msg
 
-                                    if stream_msg is None:
-                                        if adapter._set_spinner:
-                                            await adapter._set_spinner("Synthesizing")
-                                        msg_id = f"asst-{uuid.uuid4().hex[:8]}"
-                                        if adapter._set_active_message:
-                                            adapter._set_active_message(msg_id)
-                                        stream_msg = AssistantMessage(id=msg_id)
-                                        await adapter._mount_message(stream_msg)
-                                        goal_completion_stream_by_namespace[ns_key] = stream_msg
-
-                                    await stream_msg.append_content(output_text)
-                                    if getattr(message, "chunk_position", None) == "last":
-                                        await _finalize_goal_completion_stream(
-                                            adapter,
-                                            stream_msg,
-                                            ns_key=ns_key,
-                                            goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
-                                            assistant_message_by_namespace=assistant_message_by_namespace,
-                                            extra_text="",
-                                            goal_loop_start_monotonic=goal_loop_start_monotonic,
-                                            turn_start_monotonic=start_time,
-                                        )
-                                    continue
-
-                                if stream_msg is not None:
+                                await stream_msg.append_content(output_text)
+                                if getattr(message, "chunk_position", None) == "last":
                                     await _finalize_goal_completion_stream(
                                         adapter,
                                         stream_msg,
                                         ns_key=ns_key,
                                         goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
                                         assistant_message_by_namespace=assistant_message_by_namespace,
-                                        extra_text=output_text,
+                                        extra_text="",
                                         goal_loop_start_monotonic=goal_loop_start_monotonic,
                                         turn_start_monotonic=start_time,
                                     )
-                                    continue
+                                continue
 
-                                if existing_msg is not None:
-                                    if adapter._set_active_message:
-                                        adapter._set_active_message(None)
-                                    if adapter._set_spinner:
-                                        await adapter._set_spinner("Thinking")
-                                    continue
-
-                                if (
-                                    not is_gc_chunk
-                                    and _tui_goal_completion_matches_prior_main_visible_answer(
-                                        adapter,
-                                        ns_key=ns_key,
-                                        output_text=output_text,
-                                        pending_execute_text=pending_text,
-                                    )
-                                ):
-                                    if adapter._set_active_message:
-                                        adapter._set_active_message(None)
-                                    if adapter._set_spinner:
-                                        await adapter._set_spinner("Thinking")
-                                    continue
-
-                                if pending_text:
-                                    await _flush_assistant_text_ns(
-                                        adapter,
-                                        pending_text,
-                                        ns_key,
-                                        assistant_message_by_namespace,
-                                        router=router,
-                                    )
-                                    pending_text_by_namespace[ns_key] = ""
-                                    assistant_message_by_namespace.pop(ns_key, None)
-
-                                repaired_output = RendererBase.repair_concatenated_output(
-                                    output_text
-                                )
-                                footer = _goal_completion_time_footer_if_needed(
-                                    repaired_output,
+                            if stream_msg is not None:
+                                await _finalize_goal_completion_stream(
+                                    adapter,
+                                    stream_msg,
+                                    ns_key=ns_key,
+                                    goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+                                    assistant_message_by_namespace=assistant_message_by_namespace,
+                                    extra_text=output_text,
                                     goal_loop_start_monotonic=goal_loop_start_monotonic,
                                     turn_start_monotonic=start_time,
                                 )
-                                if footer:
-                                    repaired_output += footer
-                                output_widget = AssistantMessage(
-                                    repaired_output,
-                                    id=f"asst-{uuid.uuid4().hex[:8]}",
-                                )
-                                await adapter._mount_message(output_widget)
-                                await output_widget.write_initial_content()
-                                if adapter._sync_message_content and output_widget.id:
-                                    adapter._sync_message_content(
-                                        output_widget.id,
-                                        repaired_output,
-                                    )
-                                assistant_message_by_namespace[ns_key] = output_widget
+                                continue
 
+                            if existing_msg is not None:
                                 if adapter._set_active_message:
                                     adapter._set_active_message(None)
                                 if adapter._set_spinner:
                                     await adapter._set_spinner("Thinking")
                                 continue
 
-                            for block in blocks:
-                                block_type = block.get("type")
+                            if (
+                                not is_gc_chunk
+                                and _tui_goal_completion_matches_prior_main_visible_answer(
+                                    adapter,
+                                    ns_key=ns_key,
+                                    output_text=output_text,
+                                    pending_execute_text=pending_text,
+                                )
+                            ):
+                                if adapter._set_active_message:
+                                    adapter._set_active_message(None)
+                                if adapter._set_spinner:
+                                    await adapter._set_spinner("Thinking")
+                                continue
 
-                                if block_type == "text":
-                                    ev_stats.text_chunks += 1
-                                    if suppress_main_agent_assistant_text:
-                                        continue
-                                    task_scope_txt = (
-                                        router.resolve_task_scope(ns_key) if ns_key else None
-                                    )
-                                    phase_loop = getattr(message, "phase", None)
-                                    text = block.get("text", "") or ""
-                                    if task_scope_txt is not None:
-                                        if (
-                                            phase_loop
-                                            in (
-                                                "execute_step",
-                                                "execute_wave",
-                                            )
-                                            and text.strip()
-                                        ):
-                                            tcid = str(task_scope_txt[0] or "").strip()
-                                            if tcid:
-                                                parent_tool = router.resolve_parent(
-                                                    task_scope_txt,
-                                                    step_cards=adapter._current_step_messages,
-                                                    tool_display_by_call_id=adapter._tool_display_by_call_id,
-                                                )
-                                                if parent_tool is not None and hasattr(
-                                                    parent_tool, "set_result_preview"
-                                                ):
-                                                    prev = task_loop_assistant_by_tcid.get(tcid, "")
-                                                    task_loop_assistant_by_tcid[tcid] = prev + text
-                                                    parent_tool.set_result_preview(
-                                                        task_loop_assistant_by_tcid[tcid]
-                                                    )
-                                        continue
-                                    if suppress_subgraph_assistant_text:
-                                        continue
-                                    if not text:
-                                        continue
+                            if pending_text:
+                                await _flush_assistant_text_ns(
+                                    adapter,
+                                    pending_text,
+                                    ns_key,
+                                    assistant_message_by_namespace,
+                                    router=router,
+                                )
+                                pending_text_by_namespace[ns_key] = ""
+                                assistant_message_by_namespace.pop(ns_key, None)
+
+                            repaired_output = RendererBase.repair_concatenated_output(
+                                output_text
+                            )
+                            footer = _goal_completion_time_footer_if_needed(
+                                repaired_output,
+                                goal_loop_start_monotonic=goal_loop_start_monotonic,
+                                turn_start_monotonic=start_time,
+                            )
+                            if footer:
+                                repaired_output += footer
+                            output_widget = AssistantMessage(
+                                repaired_output,
+                                id=f"asst-{uuid.uuid4().hex[:8]}",
+                            )
+                            await adapter._mount_message(output_widget)
+                            await output_widget.write_initial_content()
+                            if adapter._sync_message_content and output_widget.id:
+                                adapter._sync_message_content(
+                                    output_widget.id,
+                                    repaired_output,
+                                )
+                            assistant_message_by_namespace[ns_key] = output_widget
+
+                            if adapter._set_active_message:
+                                adapter._set_active_message(None)
+                            if adapter._set_spinner:
+                                await adapter._set_spinner("Thinking")
+                            continue
+
+                        for block in blocks:
+                            block_type = block.get("type")
+
+                            if block_type == "text":
+                                ev_stats.text_chunks += 1
+                                if suppress_main_agent_assistant_text:
+                                    continue
+                                task_scope_txt = (
+                                    router.resolve_task_scope(ns_key) if ns_key else None
+                                )
+                                phase_loop = getattr(message, "phase", None)
+                                text = block.get("text", "") or ""
+                                if task_scope_txt is not None:
                                     if (
-                                        phase_loop == "execute_step"
-                                        and is_main_agent
+                                        phase_loop
+                                        in (
+                                            "execute_step",
+                                            "execute_wave",
+                                        )
                                         and text.strip()
                                     ):
-                                        step_w = adapter._step_by_namespace.get(ns_key)
-                                        if step_w is not None:
-                                            step_w.append_execute_assistant_delta(text)
-                                        # Never mount standalone assistant cards for execute-step prose
-                                        # (aggregated on the step card when present).
-                                        continue
-
-                                    # Main graph: skip standalone AssistantMessage cards for
-                                    # intermediate AIMessage streams (execute_wave, unphased, etc.).
-                                    # ``goal_completion`` is handled above. Other RFC-614 user-output
-                                    # phases (quiz, autonomous_goal) still use cards.
-                                    if (
-                                        is_main_agent
-                                        and assistant_output_phase(message)
-                                        not in LOOP_ASSISTANT_OUTPUT_PHASES
-                                    ):
-                                        continue
-
-                                    # Track accumulated text for reference
-                                    pending_text = pending_text_by_namespace.get(ns_key, "")
-                                    pending_text += text
-                                    pending_text_by_namespace[ns_key] = pending_text
-
-                                    # Get or create assistant message for this namespace
-                                    current_msg = assistant_message_by_namespace.get(ns_key)
-                                    if current_msg is None:
-                                        if adapter._set_spinner:
-                                            await adapter._set_spinner("Writing")
-                                        msg_id = f"asst-{uuid.uuid4().hex[:8]}"
-                                        # Mark active BEFORE mounting so pruning
-                                        # (triggered by mount) won't remove it
-                                        # (_mount_message can trigger
-                                        # _prune_old_messages if the window exceeds
-                                        # WINDOW_SIZE.)
-                                        if adapter._set_active_message:
-                                            adapter._set_active_message(msg_id)
-                                        current_msg = AssistantMessage(id=msg_id)
-                                        await adapter._mount_message(current_msg)
-                                        assistant_message_by_namespace[ns_key] = current_msg
-
-                                    # Append just the new text chunk for smoother
-                                    # streaming (batched plain-text updates on the card)
-                                    await current_msg.append_content(text)
-
-                                elif block_type in {"tool_call_chunk", "tool_call", "tool_use"}:
-                                    chunk_name = block.get("name")
-                                    chunk_args = block.get("args")
-                                    if chunk_args is None and block_type == "tool_use":
-                                        chunk_args = block.get("input")
-                                    chunk_id = block.get("id")
-                                    chunk_index = block.get("index")
-
-                                    buffer_key: str | int
-                                    if chunk_index is not None:
-                                        buffer_key = chunk_index
-                                    elif chunk_id is not None:
-                                        buffer_key = chunk_id
-                                    else:
-                                        buffer_key = f"unknown-{len(tool_call_buffers)}"
-
-                                    buffer = tool_call_buffers.setdefault(
-                                        buffer_key,
-                                        {
-                                            "name": None,
-                                            "id": None,
-                                            "args": None,
-                                            "args_parts": [],
-                                        },
-                                    )
-
-                                    if chunk_name:
-                                        buffer["name"] = chunk_name
-                                    if chunk_id:
-                                        buffer["id"] = chunk_id
-
-                                    if isinstance(chunk_args, dict):
-                                        buffer["args"] = chunk_args
-                                        buffer["args_parts"] = []
-                                    elif isinstance(chunk_args, str):
-                                        if chunk_args:
-                                            parts: list[str] = buffer.setdefault("args_parts", [])
-                                            if not parts or chunk_args != parts[-1]:
-                                                parts.append(chunk_args)
-                                            buffer["args"] = "".join(parts)
-                                    elif chunk_args is not None:
-                                        buffer["args"] = chunk_args
-
-                                    buffer_name = buffer.get("name")
-                                    buffer_id = buffer.get("id")
-                                    if buffer_name is None:
-                                        continue
-
-                                    lookup_id = str(buffer_id) if buffer_id is not None else ""
-                                    raw_args_stream = ""
-                                    pend_stream = (
-                                        pending_tool_calls_lc.get(lookup_id) if lookup_id else None
-                                    )
-                                    if isinstance(pend_stream, dict):
-                                        raw_args_stream = str(pend_stream.get("args_str", ""))
-
-                                    parsed_args: dict[str, Any] = {}
-                                    args_still_streaming = False
-                                    raw_args_field = buffer.get("args")
-                                    if isinstance(raw_args_field, str):
-                                        if not raw_args_field.strip():
-                                            args_still_streaming = True
-                                        else:
-                                            try:
-                                                loaded = json.loads(raw_args_field)
-                                                parsed_args = (
-                                                    loaded
-                                                    if isinstance(loaded, dict)
-                                                    else {"value": loaded}
-                                                )
-                                            except json.JSONDecodeError:
-                                                args_still_streaming = True
-                                                parsed_args = {}
-                                    elif raw_args_field is None:
-                                        args_still_streaming = True
-                                    elif isinstance(raw_args_field, dict):
-                                        parsed_args = raw_args_field
-                                    else:
-                                        parsed_args = {"value": raw_args_field}
-
-                                    if isinstance(parsed_args, dict):
-                                        parsed_args = extract_tool_args_dict(parsed_args)
-
-                                    merge_lookup_id = lookup_id
-                                    if lookup_id and not is_main_agent:
-                                        ts_merge = router.resolve_task_scope(ns_key)
-                                        merge_lookup_id, _rk = canonical_subgraph_tool_ids(
-                                            ns_key, str(lookup_id), task_scope=ts_merge
-                                        )
-                                        merge_lookup_id = merge_lookup_id or lookup_id
-                                    if merge_lookup_id:
-                                        parsed_args = merge_tool_display_args(
-                                            merge_lookup_id,
-                                            block_args=parsed_args,
-                                            streaming_overlay=streaming_overlay,
-                                            pending_tool_calls_lc=pending_tool_calls_lc,
-                                            message=message,
-                                            tool_name=buffer_name,
-                                        )
-                                        resolved_tool_name = resolve_stream_tool_name(
-                                            lookup_id,
-                                            chunk_name=buffer_name,
-                                            pending_tool_calls_lc=pending_tool_calls_lc,
-                                        )
-                                        if resolved_tool_name:
-                                            buffer_name = resolved_tool_name
-                                            buffer["name"] = resolved_tool_name
-
-                                    if tool_args_meaningful(parsed_args):
-                                        args_still_streaming = False
-
-                                    # Flush pending text before tool call
-                                    pending_text = pending_text_by_namespace.get(ns_key, "")
-                                    if pending_text:
-                                        await _flush_assistant_text_ns(
-                                            adapter,
-                                            pending_text,
-                                            ns_key,
-                                            assistant_message_by_namespace,
-                                            router=router,
-                                        )
-                                        pending_text_by_namespace[ns_key] = ""
-                                        assistant_message_by_namespace.pop(ns_key, None)
-
-                                    args_meaningful = tool_args_meaningful(parsed_args)
-
-                                    if args_still_streaming and not args_meaningful:
-                                        continue
-
-                                    if lookup_id and buffer_name and args_meaningful:
-                                        if buffer_name in FILE_CHANGE_TOOLS:
-                                            file_tcid = str(lookup_id)
-                                            if not is_main_agent:
-                                                ts_file = router.resolve_task_scope(ns_key)
-                                                file_tcid, _fk = canonical_subgraph_tool_ids(
-                                                    ns_key, file_tcid, task_scope=ts_file
-                                                )
-                                                file_tcid = file_tcid or str(lookup_id)
-                                            track_file_operation(
-                                                file_op_tracker,
-                                                buffer_name,
-                                                parsed_args,
-                                                file_tcid,
-                                            )
-
-                                        if is_main_agent and buffer_name == "task":
-                                            parsed_step_id, _, _, _ = parse_unified_tool_call_id(
-                                                str(lookup_id)
-                                            )
-                                            bound_step_id = (
-                                                parsed_step_id
-                                                or router.step_id_for_tool(str(lookup_id))
-                                            )
-                                            raw_st = parsed_args.get("subagent_type", "")
-                                            subagent_type = (
-                                                raw_st.strip() if isinstance(raw_st, str) else ""
-                                            )
-                                            if subagent_type:
-                                                router.register_task_spawn(
-                                                    str(lookup_id),
-                                                    subagent_type,
-                                                    step_id=bound_step_id,
-                                                )
-                                                router.route_pending_subgraph_tools(
-                                                    adapter._current_step_messages,
-                                                    adapter._tool_to_step,
-                                                    adapter._tool_display_by_call_id,
-                                                )
-                                        elif is_main_agent and buffer_name != "task":
-                                            parsed_sid, _, _, _ = parse_unified_tool_call_id(
-                                                str(lookup_id)
-                                            )
-                                            bound_step_id = parsed_sid or router.step_id_for_tool(
-                                                str(lookup_id)
-                                            )
-                                            active_step = _resolve_step_widget_for_tool(
-                                                adapter,
-                                                router,
-                                                bound_step_id=bound_step_id,
-                                                ns_key=ns_key,
-                                            )
-                                            if active_step is not None:
-                                                if active_step.has_tool_call_row(lookup_id):
-                                                    if not ui_coalesce.should_skip_messages_arg_refresh(
-                                                        str(lookup_id)
-                                                    ):
-                                                        active_step.update_tool_args(
-                                                            lookup_id, parsed_args
-                                                        )
-                                                else:
-                                                    active_step.add_tool_call(
-                                                        lookup_id,
-                                                        buffer_name,
-                                                        parsed_args,
-                                                        raw_args=raw_args_stream,
-                                                    )
-                                                adapter._tool_to_step[lookup_id] = active_step
-                                            else:
-                                                router.buffer_main_tool(
-                                                    str(lookup_id),
-                                                    buffer_name,
-                                                    parsed_args,
-                                                    raw_args=raw_args_stream,
-                                                )
-                                        elif not is_main_agent:
-                                            ts_disp = router.resolve_task_scope(ns_key)
-                                            _merge_disp, display_key = canonical_subgraph_tool_ids(
-                                                ns_key, str(lookup_id), task_scope=ts_disp
-                                            )
-                                            display_key = display_key or str(lookup_id)
-                                            router.try_route_subgraph_tool(
-                                                ns_key=ns_key,
-                                                lookup_id=str(lookup_id),
-                                                display_key=display_key,
-                                                tool_name=buffer_name,
-                                                args=parsed_args,
-                                                raw_args=raw_args_stream,
+                                        tcid = str(task_scope_txt[0] or "").strip()
+                                        if tcid:
+                                            parent_tool = router.resolve_parent(
+                                                task_scope_txt,
                                                 step_cards=adapter._current_step_messages,
-                                                tool_to_step=adapter._tool_to_step,
                                                 tool_display_by_call_id=adapter._tool_display_by_call_id,
                                             )
+                                            if parent_tool is not None and hasattr(
+                                                parent_tool, "set_result_preview"
+                                            ):
+                                                prev = task_loop_assistant_by_tcid.get(tcid, "")
+                                                task_loop_assistant_by_tcid[tcid] = prev + text
+                                                parent_tool.set_result_preview(
+                                                    task_loop_assistant_by_tcid[tcid]
+                                                )
+                                    continue
+                                if suppress_subgraph_assistant_text:
+                                    continue
+                                if not text:
+                                    continue
+                                if (
+                                    phase_loop == "execute_step"
+                                    and is_main_agent
+                                    and text.strip()
+                                ):
+                                    step_w = adapter._step_by_namespace.get(ns_key)
+                                    if step_w is not None:
+                                        step_w.append_execute_assistant_delta(text)
+                                    # Never mount standalone assistant cards for execute-step prose
+                                    # (aggregated on the step card when present).
+                                    continue
 
-                                    tool_call_buffers.pop(buffer_key, None)
+                                # Main graph: skip standalone AssistantMessage cards for
+                                # intermediate AIMessage streams (execute_wave, unphased, etc.).
+                                # ``goal_completion`` is handled above. Other RFC-614 user-output
+                                # phases (quiz, autonomous_goal) still use cards.
+                                if (
+                                    is_main_agent
+                                    and assistant_output_phase(message)
+                                    not in LOOP_ASSISTANT_OUTPUT_PHASES
+                                ):
+                                    continue
 
-                            if getattr(message, "chunk_position", None) == "last":
+                                # Track accumulated text for reference
+                                pending_text = pending_text_by_namespace.get(ns_key, "")
+                                pending_text += text
+                                pending_text_by_namespace[ns_key] = pending_text
+
+                                # Get or create assistant message for this namespace
+                                current_msg = assistant_message_by_namespace.get(ns_key)
+                                if current_msg is None:
+                                    if adapter._set_spinner:
+                                        await adapter._set_spinner("Writing")
+                                    msg_id = f"asst-{uuid.uuid4().hex[:8]}"
+                                    # Mark active BEFORE mounting so pruning
+                                    # (triggered by mount) won't remove it
+                                    # (_mount_message can trigger
+                                    # _prune_old_messages if the window exceeds
+                                    # WINDOW_SIZE.)
+                                    if adapter._set_active_message:
+                                        adapter._set_active_message(msg_id)
+                                    current_msg = AssistantMessage(id=msg_id)
+                                    await adapter._mount_message(current_msg)
+                                    assistant_message_by_namespace[ns_key] = current_msg
+
+                                # Append just the new text chunk for smoother
+                                # streaming (batched plain-text updates on the card)
+                                await current_msg.append_content(text)
+
+                            elif block_type in {"tool_call_chunk", "tool_call", "tool_use"}:
+                                chunk_name = block.get("name")
+                                chunk_args = block.get("args")
+                                if chunk_args is None and block_type == "tool_use":
+                                    chunk_args = block.get("input")
+                                chunk_id = block.get("id")
+                                chunk_index = block.get("index")
+
+                                buffer_key: str | int
+                                if chunk_index is not None:
+                                    buffer_key = chunk_index
+                                elif chunk_id is not None:
+                                    buffer_key = chunk_id
+                                else:
+                                    buffer_key = f"unknown-{len(tool_call_buffers)}"
+
+                                buffer = tool_call_buffers.setdefault(
+                                    buffer_key,
+                                    {
+                                        "name": None,
+                                        "id": None,
+                                        "args": None,
+                                        "args_parts": [],
+                                    },
+                                )
+
+                                if chunk_name:
+                                    buffer["name"] = chunk_name
+                                if chunk_id:
+                                    buffer["id"] = chunk_id
+
+                                if isinstance(chunk_args, dict):
+                                    buffer["args"] = chunk_args
+                                    buffer["args_parts"] = []
+                                elif isinstance(chunk_args, str):
+                                    if chunk_args:
+                                        parts: list[str] = buffer.setdefault("args_parts", [])
+                                        if not parts or chunk_args != parts[-1]:
+                                            parts.append(chunk_args)
+                                        buffer["args"] = "".join(parts)
+                                elif chunk_args is not None:
+                                    buffer["args"] = chunk_args
+
+                                buffer_name = buffer.get("name")
+                                buffer_id = buffer.get("id")
+                                if buffer_name is None:
+                                    continue
+
+                                lookup_id = str(buffer_id) if buffer_id is not None else ""
+                                raw_args_stream = ""
+                                pend_stream = (
+                                    pending_tool_calls_lc.get(lookup_id) if lookup_id else None
+                                )
+                                if isinstance(pend_stream, dict):
+                                    raw_args_stream = str(pend_stream.get("args_str", ""))
+
+                                parsed_args: dict[str, Any] = {}
+                                args_still_streaming = False
+                                raw_args_field = buffer.get("args")
+                                if isinstance(raw_args_field, str):
+                                    if not raw_args_field.strip():
+                                        args_still_streaming = True
+                                    else:
+                                        try:
+                                            loaded = json.loads(raw_args_field)
+                                            parsed_args = (
+                                                loaded
+                                                if isinstance(loaded, dict)
+                                                else {"value": loaded}
+                                            )
+                                        except json.JSONDecodeError:
+                                            args_still_streaming = True
+                                            parsed_args = {}
+                                elif raw_args_field is None:
+                                    args_still_streaming = True
+                                elif isinstance(raw_args_field, dict):
+                                    parsed_args = raw_args_field
+                                else:
+                                    parsed_args = {"value": raw_args_field}
+
+                                if isinstance(parsed_args, dict):
+                                    parsed_args = extract_tool_args_dict(parsed_args)
+
+                                merge_lookup_id = lookup_id
+                                if lookup_id and not is_main_agent:
+                                    ts_merge = router.resolve_task_scope(ns_key)
+                                    merge_lookup_id, _rk = canonical_subgraph_tool_ids(
+                                        ns_key, str(lookup_id), task_scope=ts_merge
+                                    )
+                                    merge_lookup_id = merge_lookup_id or lookup_id
+                                if merge_lookup_id:
+                                    parsed_args = merge_tool_display_args(
+                                        merge_lookup_id,
+                                        block_args=parsed_args,
+                                        streaming_overlay=streaming_overlay,
+                                        pending_tool_calls_lc=pending_tool_calls_lc,
+                                        message=message,
+                                        tool_name=buffer_name,
+                                    )
+                                    resolved_tool_name = resolve_stream_tool_name(
+                                        lookup_id,
+                                        chunk_name=buffer_name,
+                                        pending_tool_calls_lc=pending_tool_calls_lc,
+                                    )
+                                    if resolved_tool_name:
+                                        buffer_name = resolved_tool_name
+                                        buffer["name"] = resolved_tool_name
+
+                                if tool_args_meaningful(parsed_args):
+                                    args_still_streaming = False
+
+                                # Flush pending text before tool call
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
                                     await _flush_assistant_text_ns(
@@ -2302,179 +2089,182 @@ async def execute_task_textual(
                                     pending_text_by_namespace[ns_key] = ""
                                     assistant_message_by_namespace.pop(ns_key, None)
 
-                        elif current_stream_mode == "custom":
-                            if isinstance(data, dict):
-                                event_type = str(data.get("type", ""))
-                                if await apply_tool_call_wire_update(
-                                    adapter,
-                                    router,
-                                    data=data,
-                                    ns_key=ns_key,
-                                    pending_tool_calls_lc=pending_tool_calls_lc,
-                                    streaming_overlay=streaming_overlay,
-                                    ui_coalesce=ui_coalesce,
-                                    file_op_tracker=file_op_tracker,
-                                ):
-                                    continue
-                                if event_type.startswith("soothe.error"):
-                                    error_text = str(
-                                        data.get("error") or data.get("message") or "Agent error"
-                                    )
-                                    adapter.finalize_pending_tools_with_error(error_text)
-                                    adapter.finalize_pending_steps_with_error(error_text)
-                                    await adapter._mount_message(AppMessage(error_text))
-                                    if adapter._set_spinner:
-                                        await adapter._set_spinner(None)
+                                args_meaningful = tool_args_meaningful(parsed_args)
+
+                                if args_still_streaming and not args_meaningful:
                                     continue
 
-                                if event_type == AGENT_LOOP_GOAL_STARTED:
-                                    if not ns_key:
-                                        goal_loop_start_monotonic = time.monotonic()
-                                        ui_coalesce.execute_wave_active = True
-                                        adapter._last_completed_main_step_execute_prose = ""
-                                        adapter._last_main_flushed_assistant_prose = ""
-                                    pending_text = pending_text_by_namespace.get(ns_key, "")
-                                    if pending_text:
-                                        await _flush_assistant_text_ns(
+                                if lookup_id and buffer_name and args_meaningful:
+                                    if buffer_name in FILE_CHANGE_TOOLS:
+                                        file_tcid = str(lookup_id)
+                                        if not is_main_agent:
+                                            ts_file = router.resolve_task_scope(ns_key)
+                                            file_tcid, _fk = canonical_subgraph_tool_ids(
+                                                ns_key, file_tcid, task_scope=ts_file
+                                            )
+                                            file_tcid = file_tcid or str(lookup_id)
+                                        track_file_operation(
+                                            file_op_tracker,
+                                            buffer_name,
+                                            parsed_args,
+                                            file_tcid,
+                                        )
+
+                                    if is_main_agent and buffer_name == "task":
+                                        parsed_step_id, _, _, _ = parse_unified_tool_call_id(
+                                            str(lookup_id)
+                                        )
+                                        bound_step_id = (
+                                            parsed_step_id
+                                            or router.step_id_for_tool(str(lookup_id))
+                                        )
+                                        _ingest_main_task_tool_on_step_card(
                                             adapter,
-                                            pending_text,
-                                            ns_key,
-                                            assistant_message_by_namespace,
-                                            router=router,
+                                            router,
+                                            str(lookup_id),
+                                            parsed_args,
+                                            bound_step_id=bound_step_id,
                                         )
-                                        pending_text_by_namespace[ns_key] = ""
-                                        assistant_message_by_namespace.pop(ns_key, None)
-                                    continue
-
-                                if event_type == AGENT_LOOP_GOAL_COMPLETED:
-                                    continue
-
-                                if event_type == AGENT_LOOP_PLAN_DECISION and not ns_key:
-                                    raw_steps = data.get("steps")
-                                    if isinstance(raw_steps, list):
-                                        execution_mode = str(data.get("execution_mode", "")).strip()
-                                        await sync_pending_step_cards_from_plan(
+                                    elif is_main_agent and buffer_name != "task":
+                                        parsed_sid, _, _, _ = parse_unified_tool_call_id(
+                                            str(lookup_id)
+                                        )
+                                        bound_step_id = parsed_sid or router.step_id_for_tool(
+                                            str(lookup_id)
+                                        )
+                                        active_step = _resolve_step_widget_for_tool(
                                             adapter,
-                                            steps=raw_steps,
-                                            execution_mode=execution_mode,
+                                            router,
+                                            bound_step_id=bound_step_id,
+                                            ns_key=ns_key,
                                         )
-                                        if execution_mode == "parallel":
-                                            ui_coalesce.execute_wave_active = True
-                                    continue
-
-                                if event_type == AGENT_LOOP_STEP_STARTED:
-                                    ui_coalesce.execute_wave_active = True
-                                    step_id = str(data.get("step_id", "")).strip()
-                                    description = str(data.get("description", "")).strip()
-                                    logger.info(
-                                        "[STEP_STARTED] received step_id=%s description=%s ns=%r",
-                                        step_id,
-                                        description[:50] if description else "",
-                                        ns_key,
-                                    )
-                                    if step_id:
-                                        pending_text = pending_text_by_namespace.get(ns_key, "")
-                                        if pending_text:
-                                            await _flush_assistant_text_ns(
-                                                adapter,
-                                                pending_text,
-                                                ns_key,
-                                                assistant_message_by_namespace,
-                                                router=router,
-                                            )
-                                            pending_text_by_namespace[ns_key] = ""
-                                            assistant_message_by_namespace.pop(ns_key, None)
-                                        step_widget = adapter._current_step_messages.get(step_id)
-                                        if step_widget is None:
-                                            step_widget = CognitionStepMessage(
-                                                step_id=step_id,
-                                                description=description or "(step)",
-                                                id=f"step-{uuid.uuid4().hex[:8]}",
-                                            )
-                                            await adapter._mount_message(step_widget)
-                                            adapter._current_step_messages[step_id] = step_widget
-                                        elif description:
-                                            step_widget.set_description(description)
-                                        step_widget.set_running()
-                                        adapter._step_by_namespace[ns_key] = step_widget
-                                        router.on_step_started(step_id)
-                                        # IG-416 debug: Log step card creation
-                                        logger.info(
-                                            "[STEP_STARTED] CREATED step_card step_id=%s ns=%r "
-                                            "current_step_messages_keys=%s",
-                                            step_id,
-                                            ns_key,
-                                            list(adapter._current_step_messages.keys()),
-                                        )
-                                        router.route_pending_main_tools(
-                                            adapter._current_step_messages,
-                                            adapter._tool_to_step,
-                                            adapter._tool_display_by_call_id,
-                                        )
-                                        router.route_pending_subgraph_tools(
-                                            adapter._current_step_messages,
-                                            adapter._tool_to_step,
-                                            adapter._tool_display_by_call_id,
-                                        )
-
-                                        continue
-
-                                if event_type == AGENT_LOOP_STEP_COMPLETED:
-                                    step_id = str(data.get("step_id", "")).strip()
-                                    if step_id:
-                                        router.on_step_completed(step_id)
-                                        pending_text = pending_text_by_namespace.get(ns_key, "")
-                                        if pending_text:
-                                            await _flush_assistant_text_ns(
-                                                adapter,
-                                                pending_text,
-                                                ns_key,
-                                                assistant_message_by_namespace,
-                                                router=router,
-                                            )
-                                            pending_text_by_namespace[ns_key] = ""
-                                            assistant_message_by_namespace.pop(ns_key, None)
-                                        success = bool(data.get("success", True))
-                                        duration_ms = int(data.get("duration_ms", 0))
-                                        tool_call_count = int(data.get("tool_call_count", 0))
-                                        summary = str(
-                                            data.get("summary", "")
-                                            or data.get("output_preview", "")
-                                            or ""
-                                        )
-                                        if not summary.strip():
-                                            summary = "Failed" if not success else "Done"
-                                        widget = adapter._current_step_messages.pop(step_id, None)
-                                        if widget is not None:
-                                            if adapter._step_by_namespace.get(ns_key) is widget:
-                                                adapter._step_by_namespace.pop(ns_key, None)
-                                            stale_tool_ids = [
-                                                k
-                                                for k, sw in adapter._tool_to_step.items()
-                                                if sw is widget
-                                            ]
-                                            for k in stale_tool_ids:
-                                                adapter._tool_to_step.pop(k, None)
-                                            # Clean up tool-to-step bindings for this step
-                                            router.clear_step_tool_bindings(step_id)
-                                            for k, parent in list(
-                                                adapter._tool_display_by_call_id.items()
-                                            ):
-                                                if parent is widget:
-                                                    adapter._tool_display_by_call_id.pop(k, None)
-                                            widget.set_complete(
-                                                success,
-                                                duration_ms,
-                                                tool_call_count,
-                                                summary,
-                                            )
-                                            if not ns_key:
-                                                adapter._last_completed_main_step_execute_prose = (
-                                                    widget.last_completed_execute_prose
+                                        if active_step is not None:
+                                            if active_step.has_tool_call_row(lookup_id):
+                                                if not ui_coalesce.should_skip_messages_arg_refresh(
+                                                    str(lookup_id)
+                                                ):
+                                                    active_step.update_tool_args(
+                                                        lookup_id, parsed_args
+                                                    )
+                                            else:
+                                                active_step.add_tool_call(
+                                                    lookup_id,
+                                                    buffer_name,
+                                                    parsed_args,
+                                                    raw_args=raw_args_stream,
                                                 )
-                                        continue
+                                            adapter._tool_to_step[lookup_id] = active_step
+                                        else:
+                                            router.buffer_main_tool(
+                                                str(lookup_id),
+                                                buffer_name,
+                                                parsed_args,
+                                                raw_args=raw_args_stream,
+                                            )
+                                    elif not is_main_agent:
+                                        ts_disp = router.resolve_task_scope(ns_key)
+                                        _merge_disp, display_key = canonical_subgraph_tool_ids(
+                                            ns_key, str(lookup_id), task_scope=ts_disp
+                                        )
+                                        display_key = display_key or str(lookup_id)
+                                        router.try_route_subgraph_tool(
+                                            ns_key=ns_key,
+                                            lookup_id=str(lookup_id),
+                                            display_key=display_key,
+                                            tool_name=buffer_name,
+                                            args=parsed_args,
+                                            raw_args=raw_args_stream,
+                                            step_cards=adapter._current_step_messages,
+                                            tool_to_step=adapter._tool_to_step,
+                                            tool_display_by_call_id=adapter._tool_display_by_call_id,
+                                        )
 
-                                if event_type == LOOP_REASON_EVENT_TYPE:
+                                tool_call_buffers.pop(buffer_key, None)
+
+                        if getattr(message, "chunk_position", None) == "last":
+                            pending_text = pending_text_by_namespace.get(ns_key, "")
+                            if pending_text:
+                                await _flush_assistant_text_ns(
+                                    adapter,
+                                    pending_text,
+                                    ns_key,
+                                    assistant_message_by_namespace,
+                                    router=router,
+                                )
+                                pending_text_by_namespace[ns_key] = ""
+                                assistant_message_by_namespace.pop(ns_key, None)
+
+                    elif current_stream_mode == "custom":
+                        if isinstance(data, dict):
+                            event_type = str(data.get("type", ""))
+                            if await apply_tool_call_wire_update(
+                                adapter,
+                                router,
+                                data=data,
+                                ns_key=ns_key,
+                                pending_tool_calls_lc=pending_tool_calls_lc,
+                                streaming_overlay=streaming_overlay,
+                                ui_coalesce=ui_coalesce,
+                                file_op_tracker=file_op_tracker,
+                            ):
+                                continue
+                            if event_type.startswith("soothe.error"):
+                                error_text = str(
+                                    data.get("error") or data.get("message") or "Agent error"
+                                )
+                                adapter.finalize_pending_tools_with_error(error_text)
+                                adapter.finalize_pending_steps_with_error(error_text)
+                                await adapter._mount_message(AppMessage(error_text))
+                                if adapter._set_spinner:
+                                    await adapter._set_spinner(None)
+                                continue
+
+                            if event_type == AGENT_LOOP_GOAL_STARTED:
+                                if not ns_key:
+                                    goal_loop_start_monotonic = time.monotonic()
+                                    ui_coalesce.execute_wave_active = True
+                                    adapter._last_completed_main_step_execute_prose = ""
+                                    adapter._last_main_flushed_assistant_prose = ""
+                                pending_text = pending_text_by_namespace.get(ns_key, "")
+                                if pending_text:
+                                    await _flush_assistant_text_ns(
+                                        adapter,
+                                        pending_text,
+                                        ns_key,
+                                        assistant_message_by_namespace,
+                                        router=router,
+                                    )
+                                    pending_text_by_namespace[ns_key] = ""
+                                    assistant_message_by_namespace.pop(ns_key, None)
+                                continue
+
+                            if event_type == AGENT_LOOP_GOAL_COMPLETED:
+                                continue
+
+                            if event_type == AGENT_LOOP_PLAN_DECISION and not ns_key:
+                                raw_steps = data.get("steps")
+                                if isinstance(raw_steps, list):
+                                    execution_mode = str(data.get("execution_mode", "")).strip()
+                                    await sync_pending_step_cards_from_plan(
+                                        adapter,
+                                        steps=raw_steps,
+                                        execution_mode=execution_mode,
+                                    )
+                                    if execution_mode == "parallel":
+                                        ui_coalesce.execute_wave_active = True
+                                continue
+
+                            if event_type == AGENT_LOOP_STEP_STARTED:
+                                ui_coalesce.execute_wave_active = True
+                                step_id = str(data.get("step_id", "")).strip()
+                                description = str(data.get("description", "")).strip()
+                                logger.info(
+                                    "[STEP_STARTED] received step_id=%s description=%s ns=%r",
+                                    step_id,
+                                    description[:50] if description else "",
+                                    ns_key,
+                                )
+                                if step_id:
                                     pending_text = pending_text_by_namespace.get(ns_key, "")
                                     if pending_text:
                                         await _flush_assistant_text_ns(
@@ -2486,317 +2276,225 @@ async def execute_task_textual(
                                         )
                                         pending_text_by_namespace[ns_key] = ""
                                         assistant_message_by_namespace.pop(ns_key, None)
-                                    pa_raw = data.get("plan_action", "")
-                                    plan_action = pa_raw if pa_raw in ("keep", "new") else ""
-                                    plan_widget = CognitionReasonMessage(
-                                        next_action=str(data.get("next_action", "")),
-                                        status=str(data.get("status", "")),
-                                        iteration=int(data.get("iteration", 0)),
-                                        plan_action=str(plan_action),
-                                        assessment_reasoning=str(
-                                            data.get("assessment_reasoning", "")
-                                        ),
-                                        plan_reasoning=str(data.get("plan_reasoning", "")),
-                                        id=f"plan-{uuid.uuid4().hex[:8]}",
-                                    )
-                                    await adapter._mount_message(plan_widget)
-                                    continue
-
-                                if ns_key:
-                                    router.on_subgraph_namespace(ns_key)
-                                task_scope = router.resolve_task_scope(ns_key)
-                                if (
-                                    task_scope
-                                    and event_type.startswith("soothe.subagent.")
-                                    and is_allowlisted_subagent_event_type(event_type)
-                                ):
-                                    continue
-                    finally:
-                        await ui_coalesce.after_chunk()
-
-            await run_turn_pipeline(
-                chunk_source,
-                lambda raw: prepare_turn_chunk(prep_state, raw),
-                _apply_turn_chunk,
-            )
-            last_active_tool_call_id = prep_state.last_active_tool_call_id
-
-            await ui_coalesce.flush_final()
-
-            # Reset summarization state if stream ended mid-summarization
-            # (e.g. middleware error, stream exhausted before regular chunks).
-            if summarization_in_progress:
-                summarization_in_progress = False
-                try:
-                    await adapter._mount_message(SummarizationMessage())
-                except Exception:
-                    logger.debug(
-                        "Failed to mount summarization notification",
-                        exc_info=True,
-                    )
-                if adapter._set_spinner and not _adapter_has_pending_tools(adapter):
-                    await adapter._set_spinner("Thinking")
-
-            # Flush any remaining text from all namespaces
-            for ns_key, pending_text in list(pending_text_by_namespace.items()):
-                if pending_text:
-                    await _flush_assistant_text_ns(
-                        adapter,
-                        pending_text,
-                        ns_key,
-                        assistant_message_by_namespace,
-                        router=router,
-                    )
-            for ns_key, stream_msg in list(goal_completion_stream_by_namespace.items()):
-                await _finalize_goal_completion_stream(
-                    adapter,
-                    stream_msg,
-                    ns_key=ns_key,
-                    goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
-                    assistant_message_by_namespace=assistant_message_by_namespace,
-                    extra_text="",
-                    goal_loop_start_monotonic=goal_loop_start_monotonic,
-                    turn_start_monotonic=start_time,
-                )
-            pending_text_by_namespace.clear()
-            assistant_message_by_namespace.clear()
-            task_loop_assistant_by_tcid.clear()
-
-            # Buffered tools without a step card: do not mount standalone tool cards.
-            routed_main = router.route_pending_main_tools(
-                adapter._current_step_messages,
-                adapter._tool_to_step,
-                adapter._tool_display_by_call_id,
-            )
-            if routed_main:
-                logger.debug(
-                    "Routed %d pending main-namespace tool row(s) at stream end",
-                    routed_main,
-                )
-            elif router.pending_main_tool_count:
-                logger.debug(
-                    "Dropping %d pending main-namespace tool row(s) (no step card)",
-                    router.pending_main_tool_count,
-                )
-            routed_sub = router.route_pending_subgraph_tools(
-                adapter._current_step_messages,
-                adapter._tool_to_step,
-                adapter._tool_display_by_call_id,
-            )
-            if routed_sub:
-                logger.debug(
-                    "Routed %d pending subgraph tool row(s) at stream end",
-                    routed_sub,
-                )
-            pending_sub = router.pending_subgraph_tools()
-            if pending_sub:
-                logger.debug(
-                    "Dropping %d pending subgraph tool row(s) (parent unresolved)",
-                    len(pending_sub),
-                )
-
-            # Safety net: finalize any steps/tools still in-flight (e.g. worker
-            # crash sent a soothe.error.* event but step_completed was never
-            # emitted, or stream ended before matching results arrived).
-            if adapter._current_step_messages or adapter._tool_to_step:
-                adapter.finalize_pending_tools_with_error("Stream ended unexpectedly")
-                adapter.finalize_pending_steps_with_error("Stream ended unexpectedly")
-
-            # Handle HITL after stream completes
-            if interrupt_occurred:
-                any_rejected = False
-                resume_payload: dict[str, Any] = {}
-
-                for interrupt_id, ask_req in list(pending_ask_user.items()):
-                    questions = ask_req["questions"]
-
-                    if adapter._request_ask_user:
-                        if adapter._set_spinner:
-                            await adapter._set_spinner(None)
-                        result: dict[str, Any] = {
-                            "type": "error",
-                            "error": "ask_user callback returned no response",
-                        }
-                        try:
-                            future = await adapter._request_ask_user(questions)
-                        except Exception:
-                            logger.exception("Failed to mount ask_user widget")
-                            result = {
-                                "type": "error",
-                                "error": "failed to display ask_user prompt",
-                            }
-                            future = None
-
-                        if future is None:
-                            logger.error("ask_user callback returned no Future; reporting as error")
-                        else:
-                            try:
-                                future_result = await future
-                                if isinstance(future_result, dict):
-                                    result = future_result
-                                else:
-                                    logger.error(
-                                        "ask_user future returned non-dict result: %s",
-                                        type(future_result).__name__,
-                                    )
-                                    result = {
-                                        "type": "error",
-                                        "error": "invalid ask_user widget result",
-                                    }
-                            except Exception:
-                                logger.exception(
-                                    "ask_user future resolution failed; reporting as error"
-                                )
-                                result = {
-                                    "type": "error",
-                                    "error": "failed to receive ask_user response",
-                                }
-
-                        result_type = result.get("type")
-                        if result_type == "answered":
-                            answers = result.get("answers", [])
-                            if isinstance(answers, list):
-                                resume_payload[interrupt_id] = {"answers": answers}
-                                tool_id = ask_req["tool_call_id"]
-                                tc_sid = str(tool_id) if tool_id is not None else ""
-                                if tc_sid:
-                                    st_w = adapter._tool_to_step.pop(tc_sid, None)
-                                    if st_w is not None:
-                                        st_w.set_tool_success(
-                                            tc_sid, "User answered", duration_ms=0
+                                    step_widget = adapter._current_step_messages.get(step_id)
+                                    if step_widget is None:
+                                        step_widget = CognitionStepMessage(
+                                            step_id=step_id,
+                                            description=description or "(step)",
+                                            id=f"step-{uuid.uuid4().hex[:8]}",
                                         )
-                            else:
-                                logger.error(
-                                    "ask_user answered payload had non-list answers: %s",
-                                    type(answers).__name__,
+                                        await adapter._mount_message(step_widget)
+                                        adapter._current_step_messages[step_id] = step_widget
+                                    elif description:
+                                        step_widget.set_description(description)
+                                    step_widget.set_running()
+                                    adapter._step_by_namespace[ns_key] = step_widget
+                                    router.on_step_started(step_id)
+                                    # IG-416 debug: Log step card creation
+                                    logger.info(
+                                        "[STEP_STARTED] CREATED step_card step_id=%s ns=%r "
+                                        "current_step_messages_keys=%s",
+                                        step_id,
+                                        ns_key,
+                                        list(adapter._current_step_messages.keys()),
+                                    )
+                                    router.route_pending_main_tools(
+                                        adapter._current_step_messages,
+                                        adapter._tool_to_step,
+                                        adapter._tool_display_by_call_id,
+                                    )
+                                    router.route_pending_subgraph_tools(
+                                        adapter._current_step_messages,
+                                        adapter._tool_to_step,
+                                        adapter._tool_display_by_call_id,
+                                    )
+
+                                    continue
+
+                            if event_type == AGENT_LOOP_STEP_COMPLETED:
+                                step_id = str(data.get("step_id", "")).strip()
+                                if step_id:
+                                    router.on_step_completed(step_id)
+                                    pending_text = pending_text_by_namespace.get(ns_key, "")
+                                    if pending_text:
+                                        await _flush_assistant_text_ns(
+                                            adapter,
+                                            pending_text,
+                                            ns_key,
+                                            assistant_message_by_namespace,
+                                            router=router,
+                                        )
+                                        pending_text_by_namespace[ns_key] = ""
+                                        assistant_message_by_namespace.pop(ns_key, None)
+                                    success = bool(data.get("success", True))
+                                    duration_ms = int(data.get("duration_ms", 0))
+                                    tool_call_count = int(data.get("tool_call_count", 0))
+                                    summary = str(
+                                        data.get("summary", "")
+                                        or data.get("output_preview", "")
+                                        or ""
+                                    )
+                                    if not summary.strip():
+                                        summary = "Failed" if not success else "Done"
+                                    widget = adapter._current_step_messages.pop(step_id, None)
+                                    if widget is not None:
+                                        if adapter._step_by_namespace.get(ns_key) is widget:
+                                            adapter._step_by_namespace.pop(ns_key, None)
+                                        stale_tool_ids = [
+                                            k
+                                            for k, sw in adapter._tool_to_step.items()
+                                            if sw is widget
+                                        ]
+                                        for k in stale_tool_ids:
+                                            adapter._tool_to_step.pop(k, None)
+                                        # Clean up tool-to-step bindings for this step
+                                        router.clear_step_tool_bindings(step_id)
+                                        for k, parent in list(
+                                            adapter._tool_display_by_call_id.items()
+                                        ):
+                                            if parent is widget:
+                                                adapter._tool_display_by_call_id.pop(k, None)
+                                        widget.set_complete(
+                                            success,
+                                            duration_ms,
+                                            tool_call_count,
+                                            summary,
+                                        )
+                                        if not ns_key:
+                                            adapter._last_completed_main_step_execute_prose = (
+                                                widget.last_completed_execute_prose
+                                            )
+                                    continue
+
+                            if event_type == LOOP_REASON_EVENT_TYPE:
+                                pending_text = pending_text_by_namespace.get(ns_key, "")
+                                if pending_text:
+                                    await _flush_assistant_text_ns(
+                                        adapter,
+                                        pending_text,
+                                        ns_key,
+                                        assistant_message_by_namespace,
+                                        router=router,
+                                    )
+                                    pending_text_by_namespace[ns_key] = ""
+                                    assistant_message_by_namespace.pop(ns_key, None)
+                                pa_raw = data.get("plan_action", "")
+                                plan_action = pa_raw if pa_raw in ("keep", "new") else ""
+                                plan_widget = CognitionReasonMessage(
+                                    next_action=str(data.get("next_action", "")),
+                                    status=str(data.get("status", "")),
+                                    iteration=int(data.get("iteration", 0)),
+                                    plan_action=str(plan_action),
+                                    assessment_reasoning=str(
+                                        data.get("assessment_reasoning", "")
+                                    ),
+                                    plan_reasoning=str(data.get("plan_reasoning", "")),
+                                    id=f"plan-{uuid.uuid4().hex[:8]}",
                                 )
-                                resume_payload[interrupt_id] = {
-                                    "status": "error",
-                                    "error": "invalid ask_user answers payload",
-                                    "answers": ["" for _ in questions],
-                                }
-                                any_rejected = True
-                        elif result_type == "cancelled":
-                            resume_payload[interrupt_id] = {
-                                "status": "cancelled",
-                                "answers": ["" for _ in questions],
-                            }
-                            any_rejected = True
-                        else:
-                            error_text = result.get("error")
-                            if not isinstance(error_text, str) or not error_text:
-                                error_text = "ask_user interaction failed"
-                            resume_payload[interrupt_id] = {
-                                "status": "error",
-                                "error": error_text,
-                                "answers": ["" for _ in questions],
-                            }
-                            any_rejected = True
-                    else:
-                        logger.warning(
-                            "ask_user interrupt received but no UI callback is registered; reporting as error"
-                        )
-                        resume_payload[interrupt_id] = {
-                            "status": "error",
-                            "error": "ask_user not supported by this UI",
-                            "answers": ["" for _ in questions],
-                        }
+                                await adapter._mount_message(plan_widget)
+                                continue
 
-                for interrupt_id, hitl_request in list(pending_interrupts.items()):
-                    action_requests = hitl_request["action_requests"]
-                    ensure_hitl_file_ops_tracked(
-                        file_op_tracker, action_requests, pending_tool_calls_lc
-                    )
+                            if ns_key:
+                                router.on_subgraph_namespace(ns_key)
+                            task_scope = router.resolve_task_scope(ns_key)
+                            if (
+                                task_scope
+                                and event_type.startswith("soothe.subagent.")
+                                and is_allowlisted_subagent_event_type(event_type)
+                            ):
+                                continue
+                finally:
+                    await ui_coalesce.after_chunk()
 
-                    if session_state.auto_approve:
-                        decisions: list[HITLDecision] = [
-                            ApproveDecision(type="approve") for _ in action_requests
-                        ]
-                        resume_payload[interrupt_id] = {"decisions": decisions}
-                        _hitl_start_step_tool_rows(adapter)
-                    else:
-                        # Batch approval - one dialog for all parallel tool calls
-                        await dispatch_hook(
-                            "permission.request",
-                            {"tool_names": [r.get("name", "") for r in action_requests]},
-                        )
-                        future = await adapter._request_approval(action_requests, assistant_id)
-                        decision = await future
+        await run_turn_pipeline(
+            chunk_source,
+            lambda raw: prepare_turn_chunk(prep_state, raw),
+            _apply_turn_chunk,
+        )
+        last_active_tool_call_id = prep_state.last_active_tool_call_id
 
-                        if isinstance(decision, dict):
-                            decision_type = decision.get("type")
+        await ui_coalesce.flush_final()
 
-                            if decision_type == "auto_approve_all":
-                                session_state.auto_approve = True
-                                if adapter._on_auto_approve_enabled:
-                                    adapter._on_auto_approve_enabled()
-                                decisions = [
-                                    ApproveDecision(type="approve") for _ in action_requests
-                                ]
-                                _hitl_start_step_tool_rows(adapter)
-                                for action_request in action_requests:
-                                    tool_name = action_request.get("name")
-                                    if tool_name in FILE_CHANGE_TOOLS:
-                                        args = action_request.get("args", {})
-                                        if isinstance(args, dict):
-                                            file_op_tracker.mark_hitl_approved(tool_name, args)
+        # Reset summarization state if stream ended mid-summarization
+        # (e.g. middleware error, stream exhausted before regular chunks).
+        if summarization_in_progress:
+            summarization_in_progress = False
+            try:
+                await adapter._mount_message(SummarizationMessage())
+            except Exception:
+                logger.debug(
+                    "Failed to mount summarization notification",
+                    exc_info=True,
+                )
+            if adapter._set_spinner and not _adapter_has_pending_tools(adapter):
+                await adapter._set_spinner("Thinking")
 
-                            elif decision_type == "approve":
-                                decisions = [
-                                    ApproveDecision(type="approve") for _ in action_requests
-                                ]
-                                _hitl_start_step_tool_rows(adapter)
-                                for action_request in action_requests:
-                                    tool_name = action_request.get("name")
-                                    if tool_name in FILE_CHANGE_TOOLS:
-                                        args = action_request.get("args", {})
-                                        if isinstance(args, dict):
-                                            file_op_tracker.mark_hitl_approved(tool_name, args)
+        # Flush any remaining text from all namespaces
+        for ns_key, pending_text in list(pending_text_by_namespace.items()):
+            if pending_text:
+                await _flush_assistant_text_ns(
+                    adapter,
+                    pending_text,
+                    ns_key,
+                    assistant_message_by_namespace,
+                    router=router,
+                )
+        for ns_key, stream_msg in list(goal_completion_stream_by_namespace.items()):
+            await _finalize_goal_completion_stream(
+                adapter,
+                stream_msg,
+                ns_key=ns_key,
+                goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+                assistant_message_by_namespace=assistant_message_by_namespace,
+                extra_text="",
+                goal_loop_start_monotonic=goal_loop_start_monotonic,
+                turn_start_monotonic=start_time,
+            )
+        pending_text_by_namespace.clear()
+        assistant_message_by_namespace.clear()
+        task_loop_assistant_by_tcid.clear()
 
-                            elif decision_type == "reject":
-                                decisions = [RejectDecision(type="reject") for _ in action_requests]
-                                _hitl_reject_step_tool_rows(adapter)
-                                adapter._tool_display_by_call_id.clear()
-                                any_rejected = True
-                            else:
-                                logger.warning(
-                                    "Unexpected HITL decision type: %s",
-                                    decision_type,
-                                )
-                                decisions = [RejectDecision(type="reject") for _ in action_requests]
-                                _hitl_reject_step_tool_rows(adapter)
-                                adapter._tool_display_by_call_id.clear()
-                                any_rejected = True
-                        else:
-                            logger.warning(
-                                "HITL decision was not a dict: %s",
-                                type(decision).__name__,
-                            )
-                            decisions = [RejectDecision(type="reject") for _ in action_requests]
-                            _hitl_reject_step_tool_rows(adapter)
-                            adapter._tool_display_by_call_id.clear()
-                            any_rejected = True
+        # Buffered tools without a step card: do not mount standalone tool cards.
+        routed_main = router.route_pending_main_tools(
+            adapter._current_step_messages,
+            adapter._tool_to_step,
+            adapter._tool_display_by_call_id,
+        )
+        if routed_main:
+            logger.debug(
+                "Routed %d pending main-namespace tool row(s) at stream end",
+                routed_main,
+            )
+        elif router.pending_main_tool_count:
+            logger.debug(
+                "Dropping %d pending main-namespace tool row(s) (no step card)",
+                router.pending_main_tool_count,
+            )
+        routed_sub = router.route_pending_subgraph_tools(
+            adapter._current_step_messages,
+            adapter._tool_to_step,
+            adapter._tool_display_by_call_id,
+        )
+        if routed_sub:
+            logger.debug(
+                "Routed %d pending subgraph tool row(s) at stream end",
+                routed_sub,
+            )
+        pending_sub = router.pending_subgraph_tools()
+        if pending_sub:
+            logger.debug(
+                "Dropping %d pending subgraph tool row(s) (parent unresolved)",
+                len(pending_sub),
+            )
 
-                        resume_payload[interrupt_id] = {"decisions": decisions}
+        # Safety net: finalize any steps/tools still in-flight (e.g. worker
+        # crash sent a soothe.error.* event but step_completed was never
+        # emitted, or stream ended before matching results arrived).
+        if adapter._current_step_messages or adapter._tool_to_step:
+            adapter.finalize_pending_tools_with_error("Stream ended unexpectedly")
+            adapter.finalize_pending_steps_with_error("Stream ended unexpectedly")
 
-                        if any_rejected:
-                            break
-
-                suppress_resumed_output = any_rejected
-
-            if interrupt_occurred and resume_payload:
-                if suppress_resumed_output and not pending_ask_user:
-                    await adapter._mount_message(
-                        AppMessage("Command rejected. Tell the agent what you'd like instead.")
-                    )
-                    turn_stats.wall_time_seconds = time.monotonic() - start_time
-                    _log_turn_event_stats(ev_stats, turn_stats, daemon_session)
-                    return turn_stats
-
-                stream_input = Command(resume=resume_payload)
-            else:
-                await dispatch_hook("task.complete", {"loop_id": loop_id})
-                break
+        await dispatch_hook("task.complete", {"loop_id": loop_id})
 
     except (asyncio.CancelledError, KeyboardInterrupt):
         await _handle_interrupt_cleanup(

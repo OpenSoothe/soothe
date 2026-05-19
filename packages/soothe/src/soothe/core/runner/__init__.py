@@ -195,8 +195,7 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
             )
         )
         self._context_restore_lock = asyncio.Lock()
-        self._interrupt_resolvers: dict[str, Any] = {}  # keyed by loop_id (Bug 5.7)
-        # Client-visible loop id for the active ``astream`` (daemon / TUI HITL scope).
+        # Client-visible loop id for the active ``astream`` (daemon loop scope / logging).
         self._client_loop_id_for_stream: str | None = None
 
         # IG-406: Shared PostgreSQL pool for AgentLoop state persistence
@@ -416,20 +415,6 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
 
         await self._close_attached_store(self._memory)
 
-    def set_interrupt_resolver(self, loop_id: str, resolver: Any | None) -> None:
-        """Set a temporary interactive interrupt resolver for a specific loop.
-
-        Args:
-            loop_id: The loop identifier to scope this resolver to.
-            resolver: Async callable receiving pending interrupt payloads and
-                returning a LangGraph resume payload, or `None` to remove the
-                resolver for this loop.
-        """
-        if resolver is not None:
-            self._interrupt_resolvers[loop_id] = resolver
-        else:
-            self._interrupt_resolvers.pop(loop_id, None)
-
     async def get_thread_state_values(self, thread_id: str) -> dict[str, Any]:
         """Return checkpoint state values for a thread.
 
@@ -541,17 +526,11 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
             autonomous: Enable autonomous iteration loop (explicit goals).
             max_iterations: Override max iterations from config.
             preferred_subagent: Optional subagent hint merged into AgentLoop (IG-349).
-            client_loop_id: Daemon client loop scope for interactive HITL (RFC-221); when set
-                with a matching ``set_interrupt_resolver`` entry, CoreAgent interrupts pause
-                until the client sends ``resume_interrupts``.
+            client_loop_id: Daemon client loop scope for logging and stream correlation.
             intent_hint: Suggested intent to bypass LLM classification. When ``quiz``,
                 skips the intent classification LLM call.
         """
         # Update thread_id for logging if one is provided
-        from soothe.core.loop.engine.hitl_scope import (
-            reset_hitl_interrupt_resolver_context,
-            set_hitl_interrupt_resolver_context,
-        )
         from soothe.logging import set_thread_id
 
         cl_scope = (client_loop_id or "").strip()
@@ -561,9 +540,6 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
             set_thread_id(log_scope)
         prev_client_loop = self._client_loop_id_for_stream
         self._client_loop_id_for_stream = cl_scope or None
-        hitl_tok = set_hitl_interrupt_resolver_context(
-            self._interrupt_resolvers.get(cl_scope) if cl_scope else None
-        )
         try:
             resolved = resolve_workspace_for_stream(
                 explicit=workspace,
@@ -602,6 +578,5 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
             ):
                 yield chunk
         finally:
-            reset_hitl_interrupt_resolver_context(hitl_tok)
             self._client_loop_id_for_stream = prev_client_loop
             self._clear_query_scoped_runner_state()

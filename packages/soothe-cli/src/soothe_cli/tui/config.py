@@ -1308,47 +1308,20 @@ class Settings:
 
 
 class SessionState:
-    """Mutable session state shared across the app, adapter, and agent.
+    """Mutable session state shared across the app, adapter, and agent."""
 
-    Tracks runtime flags like auto-approve that can be toggled during a
-    session via keybindings or the HITL approval menu's "Auto-approve all"
-    option.
-
-    The `auto_approve` flag controls whether tool calls (shell execution, file
-    writes/edits, web search, URL fetch) require user confirmation before running.
-    """
-
-    def __init__(self, auto_approve: bool = True, no_splash: bool = False) -> None:
+    def __init__(self, no_splash: bool = False) -> None:
         """Initialize session state with optional flags.
 
         Args:
-            auto_approve: Whether to auto-approve tool calls without
-                prompting.
-
-                Can be toggled at runtime via Shift+Tab or the HITL
-                approval menu.
             no_splash: Whether to skip displaying the splash screen on startup.
         """
-        self.auto_approve = auto_approve
         self.no_splash = no_splash
         self.exit_hint_until: float | None = None
         self.exit_hint_handle = None
         from soothe_cli.tui.sessions import generate_loop_id
 
         self.loop_id = generate_loop_id()
-
-    def toggle_auto_approve(self) -> bool:
-        """Toggle auto-approve and return the new state.
-
-        Called by the Shift+Tab keybinding in the Textual app.
-
-        When auto-approve is on, all tool calls execute without prompting.
-
-        Returns:
-            The new `auto_approve` state after toggling.
-        """
-        self.auto_approve = not self.auto_approve
-        return self.auto_approve
 
 
 SHELL_TOOL_NAMES: frozenset[str] = frozenset({"bash", "shell", "execute"})

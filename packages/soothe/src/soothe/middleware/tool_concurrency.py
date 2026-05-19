@@ -75,8 +75,6 @@ class ToolConcurrencyMiddleware(AgentMiddleware):
             return await handler(request)
 
         async with sem:
-            tool_call = request.tool_call or {}
-            tool_name = str(tool_call.get("name", "unknown"))
             return await handler(request)
 
 

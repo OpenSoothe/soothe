@@ -39,11 +39,10 @@ from soothe.core.context.model_override import (
     attach_stream_model_override,
     reset_stream_model_override,
 )
-from soothe.core.loop.engine.hitl_scope import (
-    _MAX_HITL_ITERATIONS,
-    auto_approve_interrupt_resume_payload,
+from soothe.core.loop.engine.graph_interrupt import (
+    _MAX_INTERRUPT_ITERATIONS,
     await_next_graph_stream_chunk,
-    get_hitl_interrupt_resolver,
+    build_auto_resume_payload,
 )
 from soothe.core.loop.engine.metadata_generator import (
     PLANNER_OUTCOME_PREVIEW_CAP,
@@ -958,18 +957,13 @@ class Executor:
             return min(cap, 256)
         return DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES
 
-    async def _core_agent_astream_with_hitl(
+    async def _core_agent_astream_with_interrupt_resume(
         self,
         stream_input: dict[str, Any] | Command,
         graph_config: dict[str, Any],
     ) -> AsyncGenerator[Any, None]:
-        """Run ``CoreAgent.astream`` with LangGraph HITL interrupt / resume loop.
-
-        When a daemon client registers an interrupt resolver (interactive TUI),
-        pauses until ``resume_interrupts`` delivers the payload; otherwise uses
-        ``auto_approve_interrupt_resume_payload`` from ``hitl_scope``.
-        """
-        hitl_iterations = 0
+        """Run ``CoreAgent.astream`` with LangGraph interrupt auto-resume."""
+        interrupt_iterations = 0
         current_input: dict[str, Any] | Command = stream_input
         while True:
             interrupt_occurred = False
@@ -1003,19 +997,15 @@ class Executor:
             if not interrupt_occurred:
                 return
 
-            hitl_iterations += 1
-            if hitl_iterations > _MAX_HITL_ITERATIONS:
+            interrupt_iterations += 1
+            if interrupt_iterations > _MAX_INTERRUPT_ITERATIONS:
                 logger.warning(
-                    "CoreAgent HITL: exceeded iteration limit (%d); stopping stream",
-                    _MAX_HITL_ITERATIONS,
+                    "CoreAgent interrupt resume: exceeded iteration limit (%d); stopping stream",
+                    _MAX_INTERRUPT_ITERATIONS,
                 )
                 return
 
-            resolver = get_hitl_interrupt_resolver()
-            if resolver is not None:
-                resume_payload = await resolver(pending_interrupts)
-            else:
-                resume_payload = auto_approve_interrupt_resume_payload(pending_interrupts)
+            resume_payload = build_auto_resume_payload(pending_interrupts)
             current_input = Command(resume=resume_payload)
 
     @staticmethod
@@ -1704,7 +1694,7 @@ class Executor:
                 graph_config = self._executor_langfuse_merge_for_stream(
                     graph_config, thread_id=state.thread_id
                 )
-            stream = self._core_agent_astream_with_hitl(
+            stream = self._core_agent_astream_with_interrupt_resume(
                 self._execute_graph_input(
                     step_messages,  # N messages instead of combined description
                     routing_classification=getattr(state, "routing_classification", None),
@@ -2032,7 +2022,7 @@ class Executor:
                 phase="execute_step",
             )
             graph_input_messages.append(human_msg)
-            stream = self._core_agent_astream_with_hitl(
+            stream = self._core_agent_astream_with_interrupt_resume(
                 self._execute_graph_input(
                     graph_input_messages,
                     routing_classification=routing_classification,

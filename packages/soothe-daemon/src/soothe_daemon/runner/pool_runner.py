@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.config import SOOTHE_HOME
 from soothe.config.settings import SootheConfig
-from soothe.protocols.runner import InterruptPending, LoopRunnerProtocol, LoopRunRequest
+from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
 
 from soothe_daemon.config import SootheDaemonConfig
 
@@ -473,18 +473,6 @@ def _pool_worker_body(
 
             try:
                 runner = SootheRunner(config)
-
-                if req.interactive:
-
-                    async def _interrupt_resolver(
-                        pending_interrupts: dict[str, Any],
-                    ) -> dict[str, Any]:
-                        """Send interrupt to daemon and block until resume payload arrives."""
-                        response_queue.put(("interrupt_pending", request_id, pending_interrupts))
-                        payload = await loop.run_in_executor(None, interrupt_queue.get)
-                        return payload
-
-                    runner.set_interrupt_resolver(req.loop_id, _interrupt_resolver)
 
                 # Use asyncio.timeout for overall request timeout if enabled
                 timeout_ctx = _asyncio.timeout(timeout_seconds) if timeout_enabled else None
@@ -1420,11 +1408,9 @@ class WorkerPool:
                     raise payload
 
                 if msg_type == "interrupt_pending":
-                    from soothe.protocols.runner import InterruptPending
-
-                    yield InterruptPending(
-                        loop_id=request.loop_id,
-                        pending_interrupts=payload,
+                    logger.debug(
+                        "WorkerPool: ignoring interrupt_pending for request %s (auto-resume in worker)",
+                        request_id,
                     )
                     continue
 
@@ -1464,36 +1450,6 @@ class WorkerPool:
             "WorkerPool: cancellation signal sent for loop_id=%s to worker=%s",
             loop_id,
             worker_id,
-        )
-
-    async def forward_interrupt_resume(self, loop_id: str, payload: dict[str, Any]) -> None:
-        """Deliver an HITL resume payload to the worker blocked on ``interrupt_queue``.
-
-        Args:
-            loop_id: Loop whose worker is awaiting the resume.
-            payload: The ``resume_payload`` dict from the client.
-        """
-        worker_id = self._workers_by_loop_id.get(loop_id)
-        if worker_id is None:
-            logger.warning(
-                "WorkerPool: no active worker for loop_id=%s on interrupt resume", loop_id
-            )
-            return
-
-        worker = self._workers.get(worker_id)
-        if worker is None:
-            logger.warning(
-                "WorkerPool: worker %s not found for loop_id=%s on interrupt resume",
-                worker_id,
-                loop_id,
-            )
-            return
-
-        worker.interrupt_queue.put(payload)
-        logger.info(
-            "WorkerPool: forwarded interrupt resume to worker=%s (loop=%s)",
-            worker_id,
-            loop_id,
         )
 
     async def shutdown(self) -> None:
@@ -1610,7 +1566,7 @@ class PoolLoopRunner:
         self._daemon_config = daemon_config
         self._pool: WorkerPool | None = None
 
-    async def run(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk | InterruptPending]:
+    async def run(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk]:
         """Delegate to shared pool, stream results."""
         pool = await WorkerPool.get_shared_instance(self._config, self._daemon_config)
         self._pool = pool
@@ -1622,12 +1578,6 @@ class PoolLoopRunner:
         """Request cancellation."""
         if self._pool is not None:
             await self._pool.cancel_request(self._loop_id)
-
-    async def forward_interrupt_resume(self, loop_id: str, payload: dict[str, Any]) -> None:
-        """Forward HITL resume payload to the worker subprocess."""
-        if self._pool is not None:
-            await self._pool.forward_interrupt_resume(loop_id, payload)
-
 
 # Verify structural compliance at import time (no overhead at runtime).
 def _assert_protocol() -> None:
