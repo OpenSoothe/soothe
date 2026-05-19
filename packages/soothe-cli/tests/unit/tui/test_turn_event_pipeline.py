@@ -35,7 +35,6 @@ async def test_run_turn_pipeline_processes_chunks_in_order() -> None:
 
 def test_prepare_turn_chunk_skips_invisible_custom_events() -> None:
     """Custom events below the active verbosity tier are dropped in prepare."""
-    from soothe_cli.events.stream import StreamDisplayPipeline
     from soothe_cli.events.core.presentation_engine import PresentationEngine
     from soothe_cli.tui._session_stats import TurnEventStats
     from soothe_cli.tui.step_task_routing import StepTaskRouter
@@ -43,11 +42,9 @@ def test_prepare_turn_chunk_skips_invisible_custom_events() -> None:
     state = TurnPrepareState(
         ev_stats=TurnEventStats(),
         router=StepTaskRouter(),
-        progress_pipeline=StreamDisplayPipeline(),
         presentation=PresentationEngine(),
         pending_tool_calls_lc={},
         streaming_overlay={},
-        show_tool_ui=True,
     )
     prepared = prepare_turn_chunk(
         state,

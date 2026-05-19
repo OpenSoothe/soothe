@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+from soothe.core.loop.state.schemas import LoopState
+from soothe.core.prompts import PromptBuilder
 from soothe.core.prompts.user_envelope import (
     build_execute_step_envelope,
     build_plan_context_envelope,
@@ -14,6 +15,8 @@ from soothe.core.prompts.user_envelope import (
 
 
 def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Path) -> None:
+    from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+
     claude = tmp_path / "CLAUDE.md"
     claude.write_text("\n".join(f"claude line {i}" for i in range(600)), encoding="utf-8")
     agents = tmp_path / "AGENTS.md"
@@ -31,6 +34,8 @@ def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Pat
 
 
 def test_load_workspace_project_instructions_agents_from_soothe_dir(tmp_path: Path) -> None:
+    from soothe.core.prompts.project_instructions import load_workspace_project_instructions
+
     soothe = tmp_path / ".soothe"
     soothe.mkdir()
     (soothe / "AGENTS.md").write_text("from dot soothe\n", encoding="utf-8")
@@ -67,8 +72,6 @@ def test_envelopes_embed_project_instructions_in_context_info() -> None:
 
 
 def test_plan_generate_includes_project_instructions(tmp_path: Path) -> None:
-    from soothe.core.prompts.builder import PromptBuilder
-    from soothe.core.loop.state.schemas import LoopState
     from soothe.protocols.planner import PlanContext
 
     (tmp_path / "CLAUDE.md").write_text("Plan must follow CLAUDE rules\n", encoding="utf-8")

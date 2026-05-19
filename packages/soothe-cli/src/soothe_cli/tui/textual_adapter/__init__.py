@@ -24,9 +24,7 @@ __all__ = [
     "AGENT_LOOP_STEP_STARTED",
 ]
 
-# (module path, attribute name) — resolved lazily and cached on the module dict.
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
-    # --- _adapter -----------------------------------------------------------------
     "AGENT_LOOP_GOAL_COMPLETED": (
         "soothe_cli.tui.textual_adapter._adapter",
         "AGENT_LOOP_GOAL_COMPLETED",
@@ -48,29 +46,15 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "SpinnerStatus": ("soothe_cli.tui.textual_adapter._adapter", "SpinnerStatus"),
     "TextualUIAdapter": ("soothe_cli.tui.textual_adapter._adapter", "TextualUIAdapter"),
     "format_token_count": ("soothe_cli.tui.textual_adapter._adapter", "format_token_count"),
-    # --- other submodules ---------------------------------------------------------
     "execute_task_textual": ("soothe_cli.tui.textual_adapter._turn", "execute_task_textual"),
     "print_usage_table": ("soothe_cli.tui.textual_adapter._stream_formatting", "print_usage_table"),
-    # --- test / internal re-exports (historically imported from package root) ---
     "_expand_nonstandard_tool_blocks": (
         "soothe_cli.tui.textual_adapter._stream_messages",
         "_expand_nonstandard_tool_blocks",
     ),
-    "_format_progress_event_lines_for_tui": (
-        "soothe_cli.tui.textual_adapter._stream_formatting",
-        "_format_progress_event_lines_for_tui",
-    ),
-    "_format_task_scoped_tool_invocation_line": (
-        "soothe_cli.tui.textual_adapter._stream_formatting",
-        "_format_task_scoped_tool_invocation_line",
-    ),
     "_handle_interrupt_cleanup": (
         "soothe_cli.tui.textual_adapter._turn_helpers",
         "_handle_interrupt_cleanup",
-    ),
-    "_mount_subagent_inner_tool_row_if_resolved": (
-        "soothe_cli.tui.textual_adapter._stream_formatting",
-        "_mount_subagent_inner_tool_row_if_resolved",
     ),
     "_tui_effective_ai_blocks": (
         "soothe_cli.tui.textual_adapter._stream_messages",
@@ -90,14 +74,10 @@ def __getattr__(name: str) -> Any:
         fn = RendererBase.repair_concatenated_output
         globals()[name] = fn
         return fn
-    spec = _LAZY_EXPORTS.get(name)
-    if spec is not None:
-        mod_path, attr = spec
-        value = getattr(import_module(mod_path), attr)
+    if name in _LAZY_EXPORTS:
+        module_path, attr = _LAZY_EXPORTS[name]
+        value = getattr(import_module(module_path), attr)
         globals()[name] = value
         return value
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-def __dir__() -> list[str]:
-    return sorted(set(__all__) | set(_LAZY_EXPORTS.keys()) | {"_repair_concatenated_output_text"})
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)

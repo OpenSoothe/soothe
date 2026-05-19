@@ -41,8 +41,8 @@ from soothe_cli.events.tools.message_processing import (
     try_parse_pending_tool_call_args,
 )
 from soothe_cli.events.tools.rendering import update_name_map_from_tool_calls
-from soothe_cli.events.tools.tool_card_payload import (
-    extract_tool_result_card_payload,
+from soothe_cli.events.tools.tool_result import (
+    extract_tool_result_payload,
     infer_tool_output_suggests_error,
 )
 
@@ -106,7 +106,7 @@ class EventProcessor:
         shared_from_renderer = getattr(renderer, "presentation_engine", None)
         if presentation_engine is not None:
             self._presentation = presentation_engine
-            # Avoid rebuilding StreamDisplayPipeline when renderer already uses this engine.
+            # Rebind renderer when it already shares a different presentation engine instance.
             if callable(rebind) and shared_from_renderer is not presentation_engine:
                 rebind(presentation_engine)
         elif isinstance(shared_from_renderer, PresentationEngine):
@@ -713,7 +713,7 @@ class EventProcessor:
                 namespace=emit_ns,
             )
 
-        payload = extract_tool_result_card_payload(msg)
+        payload = extract_tool_result_payload(msg)
         is_error = (
             payload.is_error
             if payload is not None
@@ -950,7 +950,7 @@ class EventProcessor:
                 namespace=emit_ns,
             )
 
-        payload = extract_tool_result_card_payload(msg)
+        payload = extract_tool_result_payload(msg)
         is_error = (
             payload.is_error
             if payload is not None
@@ -1016,8 +1016,7 @@ class EventProcessor:
                 self._renderer.on_error(error_text)
             return
 
-        # Tool events are now visible at NORMAL verbosity (RFC-0020 CLI Stream Display Pipeline)
-        # They are processed through on_progress_event -> StreamDisplayPipeline
+        # Non-plan progress events delegate to the renderer when tier-visible.
 
         category = classify_event_to_tier(etype, namespace)
 

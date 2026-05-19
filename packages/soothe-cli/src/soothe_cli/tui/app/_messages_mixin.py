@@ -33,7 +33,6 @@ from soothe_cli.tui.widgets.messages import (
     ErrorMessage,
     QueuedUserMessage,
     SkillMessage,
-    ToolCallMessage,
 )
 
 logger = logging.getLogger(__name__)
@@ -150,7 +149,6 @@ class _MessagesMixin:
         self,
         widget: Static
         | AssistantMessage
-        | ToolCallMessage
         | SkillMessage
         | CognitionStepMessage
         | CognitionReasonMessage
@@ -640,13 +638,6 @@ class _MessagesMixin:
             for skill_msg in reversed(skill_messages):
                 if skill_msg._stripped_body.strip():
                     skill_msg.toggle_body()
-                    return
-        # Fall back to tool messages with output
-        with suppress(NoMatches):
-            tool_messages = list(self.query(ToolCallMessage))
-            for tool_msg in reversed(tool_messages):
-                if tool_msg.has_output:
-                    tool_msg.toggle_output()
                     return
 
     # Approval menu action handlers (delegated from App-level bindings)
