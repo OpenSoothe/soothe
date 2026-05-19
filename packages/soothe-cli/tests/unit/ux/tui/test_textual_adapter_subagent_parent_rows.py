@@ -135,11 +135,11 @@ async def test_mount_subagent_inner_unified_id_on_task_card_without_namespace() 
     task_card = ToolCallMessage(
         "task",
         {"subagent_type": "explore"},
-        tool_call_id="FJS-02:s:task:0",
+        tool_call_id="FJS_02:s:task:0",
     )
-    adapter._tool_display_by_call_id["FJS-02:s:task:0"] = task_card
-    router._spawns_by_step_id["FJS-02"] = ("FJS-02:s:task:0", "explore", "FJS-02")
-    unified = "FJS-02:t0:grep.0"
+    adapter._tool_display_by_call_id["FJS_02:s:task:0"] = task_card
+    router._spawns_by_step_id["FJS-02"] = ("FJS_02:s:task:0", "explore", "FJS-02")
+    unified = "FJS_02:t0:grep:0"
 
     ok = await _mount_subagent_inner_tool_row_if_resolved(
         adapter,

@@ -64,11 +64,9 @@ class StepTaskRouter:
 
     Attributes:
         active_step_ids: Execute steps currently in the running phase.
-        tool_call_to_step_id: Root ``tool_call_id`` → ``step_id`` map (legacy fallback).
     """
 
     active_step_ids: set[str] = field(default_factory=set)
-    tool_call_to_step_id: dict[str, str] = field(default_factory=dict)
 
     _task_spawn_queue: deque[TaskScope] = field(default_factory=deque, repr=False)
     _namespace_bindings: dict[tuple[str, ...], TaskScope] = field(default_factory=dict, repr=False)
@@ -81,7 +79,6 @@ class StepTaskRouter:
     def reset_turn(self) -> None:
         """Clear all per-turn routing state."""
         self.active_step_ids.clear()
-        self.tool_call_to_step_id.clear()
         self._task_spawn_queue.clear()
         self._namespace_bindings.clear()
         self._spawns_by_step_id.clear()
@@ -105,25 +102,9 @@ class StepTaskRouter:
             self.active_step_ids.discard(sid)
             self._spawns_by_step_id.pop(sid, None)
 
-    def bind_tool_to_step(self, tool_call_id: str, step_id: str) -> None:
-        """Record tool_call_id → step_id mapping (legacy fallback for non-unified IDs)."""
-        tcid = str(tool_call_id).strip()
-        sid = str(step_id).strip()
-        if tcid and sid:
-            self.tool_call_to_step_id[tcid] = sid
-
     def step_id_for_tool(self, tool_call_id: str) -> str:
-        """Return bound execute step id for a root tool call, if any.
-
-        First checks explicit binding, then parses unified tool_call_id format.
-        """
-        tcid = str(tool_call_id).strip()
-        # Check explicit binding first
-        bound = self.tool_call_to_step_id.get(tcid, "")
-        if bound:
-            return bound
-        # Parse unified ID format as fallback: {step_id}:s:{tool}.{idx}
-        parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
+        """Return execute step id encoded in a unified root tool_call_id."""
+        parsed_sid, _, _, _ = parse_unified_tool_call_id(str(tool_call_id).strip())
         return parsed_sid
 
     # --- Namespace / task spawn ---
@@ -163,7 +144,7 @@ class StepTaskRouter:
         parsed_sid, type_code, _, _ = parse_unified_tool_call_id(tcid)
         sid = parsed_sid if (parsed_sid and type_code == "s") else ""
         if not sid:
-            sid = (step_id or self.step_id_for_tool(tcid)).strip()
+            sid = str(step_id).strip()
         if not sid:
             return False
         normalized_tcid = normalize_step_task_tool_call_id(sid, tcid)
@@ -237,7 +218,7 @@ class StepTaskRouter:
             inner_tool_call_id: Optional subgraph tool id (``{step}:t0:…``).
 
         Returns:
-            The parent task's tool_call_id (e.g., ``step-01:s:task.0``) or None.
+            The parent task's tool_call_id (e.g., ``step_01:s:task:0``) or None.
         """
         parsed_sid, type_code, task_idx, _ = parse_unified_tool_call_id(
             str(inner_tool_call_id).strip()
@@ -253,20 +234,6 @@ class StepTaskRouter:
             and is_step_level_task_tool_id(str(inner_tool_call_id).strip())
         ):
             return str(inner_tool_call_id).strip()
-        if not ns_key or len(ns_key) < 3:
-            return None
-        step_id = str(ns_key[0])
-        if ns_key[1] == "t":
-            # Legacy ns_key format: (step_id, "t", task_comp, ...)
-            task_comp = str(ns_key[2])
-            if ":" in task_comp:
-                name, _, idx = task_comp.rpartition(":")
-                if name == "task" and idx.isdigit():
-                    return f"{step_id}:s:task.{idx}"
-            if "." in task_comp:
-                name, _, idx = task_comp.rpartition(".")
-                if name == "task" and idx.isdigit():
-                    return f"{step_id}:s:task.{idx}"
         return None
 
     # --- Pending main-graph tools ---
@@ -383,13 +350,8 @@ class StepTaskRouter:
         ]
 
     def clear_step_tool_bindings(self, step_id: str) -> None:
-        """Remove tool→step entries pointing at a completed step."""
-        sid = step_id.strip()
-        if not sid:
-            return
-        for tcid, bound in list(self.tool_call_to_step_id.items()):
-            if bound == sid:
-                self.tool_call_to_step_id.pop(tcid, None)
+        """No-op: step routing uses unified tool_call_id encoding only."""
+        _ = step_id
 
 
 __all__ = [
