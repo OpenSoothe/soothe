@@ -48,6 +48,7 @@ dependencies = [
     "jsonschema>=4.0.0,<5.0.0",
     "python-dotenv>=1.0.0,<2.0.0",
     "pyyaml>=6.0.0,<7.0.0",
+    "pathspec>=0.12.0,<2.0.0",
     "requests>=2.32.3",
     "psycopg[binary,pool]>=3.2.0",
     "langgraph-checkpoint-postgres>=2.0.0",
