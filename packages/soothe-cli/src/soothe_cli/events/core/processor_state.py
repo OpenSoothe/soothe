@@ -35,9 +35,6 @@ class ProcessorState:
     # Last active tool_call_id for orphan chunk attachment (chunks without explicit id)
     last_active_tool_call_id: str = ""
 
-    # Namespace -> display name mapping for subagents
-    name_map: dict[str, str] = field(default_factory=dict)
-
     # Current plan state (updated on plan events)
     current_plan: Plan | None = None
 
@@ -46,10 +43,6 @@ class ProcessorState:
 
     # Internal context tracking (suppress internal LLM responses)
     internal_context_active: bool = False
-
-    # Tool call timing for duration display (RFC-0020)
-    # Maps tool_call_id -> start_timestamp
-    tool_call_start_times: dict[str, float] = field(default_factory=dict)
 
     # Deduplication for tool calls (prevents duplicate display)
     emitted_tool_call_ids: set[str] = field(default_factory=set)
@@ -81,7 +74,6 @@ class ProcessorState:
         """
         self.pending_tool_calls.clear()
         self.last_active_tool_call_id = ""
-        self.tool_call_start_times.clear()
         self.emitted_tool_call_ids.clear()
         self.emitted_tool_result_ids.clear()
         self.streaming_accumulator.finalize_all()
@@ -99,7 +91,6 @@ class ProcessorState:
         self.pending_tool_calls.clear()
         self.current_plan = None
         self.internal_context_active = False
-        self.tool_call_start_times.clear()
         self.emitted_tool_call_ids.clear()
         self.emitted_tool_result_ids.clear()
         self.streaming_accumulator.clear()

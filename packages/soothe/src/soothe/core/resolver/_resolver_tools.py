@@ -153,11 +153,10 @@ def resolve_tools(
         if getattr(tools_config, name, None) and getattr(tools_config, name).enabled
     ]
 
-    # Filter out execution tools when sandbox is disabled (IG-sandbox)
-    if config and hasattr(config, "security") and config.security:
-        if not config.security.sandbox:
-            enabled_tools = [name for name in enabled_tools if name != "execution"]
-            logger.debug("Sandbox disabled: execution tools filtered out")
+    # Host-execution tools (run_command, run_python, etc.) do not require a
+    # sandbox — they run on the host via subprocess. The deepagents `execute`
+    # tool (which needs a SandboxBackendProtocol) is filtered separately in
+    # execute_tool_filter.py.
 
     total_start = time.perf_counter()
 
@@ -345,11 +344,7 @@ def _resolve_single_tool_group_uncached(
 
     # Support individual tool names (map to consolidated group)
     if name in ("run_command", "run_background", "kill_process", "run_python"):
-        # Filter out if sandbox is disabled (IG-sandbox)
-        if config and hasattr(config, "security") and config.security:
-            if not config.security.sandbox:
-                logger.debug("Sandbox disabled: '%s' tool filtered out", name)
-                return []
+        # Host-execution tools do not require a sandbox backend.
         from soothe.toolkits.execution import ExecutionToolkit
 
         resolved_cwd = (

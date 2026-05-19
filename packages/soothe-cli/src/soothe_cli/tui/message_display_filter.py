@@ -61,10 +61,3 @@ def extract_ai_text_for_display(message: Any) -> str:
         return "".join(parts).strip()
 
     return ""
-
-
-def extract_message_tool_calls(message: Any) -> list[dict[str, Any]]:
-    """Extract tool call dicts from an AI message/chunk for card rendering."""
-    tool_calls = list(getattr(message, "tool_calls", None) or [])
-    tool_call_chunks = list(getattr(message, "tool_call_chunks", None) or [])
-    return [call for call in [*tool_call_chunks, *tool_calls] if isinstance(call, dict)]

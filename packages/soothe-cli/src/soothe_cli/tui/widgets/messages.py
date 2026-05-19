@@ -18,7 +18,6 @@ from textual.events import Click
 from textual.reactive import var
 from textual.widgets import Static
 
-from soothe_cli.events.core.presentation_engine import PresentationEngine
 from soothe_cli.events.duration_format import format_duration, format_duration_ms
 from soothe_cli.events.tools.message_processing import _normalize_tool_name_for_arg_map
 from soothe_cli.tui import theme
@@ -304,13 +303,6 @@ class FormattedOutput:
     """Description of truncated content (e.g., "10 more lines"), or None if no
     truncation occurred."""
 
-
-# Truncation limits for display
-_MAX_TODO_CONTENT_LEN = 70
-_MAX_WEB_CONTENT_LEN = 100
-
-_TOOL_CARD_PRESENTATION = PresentationEngine()
-"""Shared brief/summary rules with headless CLI (IG-320)."""
 
 _SUCCESS_EXIT_RE = re.compile(r"\n?\[Command succeeded with exit code 0\]\s*$")
 """Strip the SDK's `[Command succeeded with exit code 0]` trailer from tool output."""
@@ -1665,8 +1657,8 @@ class CognitionStepMessage(Vertical):
             tool_call_id: Unique tool call identifier.
             tool_name: Tool name for display.
             args: Parsed tool arguments.
-            raw_args: Raw JSON args string from streaming (for regex fallback
-                in ``format_tool_call_args`` when ``args`` is empty/partial).
+            raw_args: Raw JSON args string from streaming (stored on the row for
+                later merge when args arrive incrementally).
             parent_tool_call_id: IG-419: Link to parent task row for nesting.
             is_task_row: IG-419: Mark as task delegation parent row.
         """

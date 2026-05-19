@@ -33,13 +33,12 @@ from soothe_cli.events.tools.message_processing import (
     extract_tool_args_dict,
     extract_tool_brief,
     finalize_pending_tool_call,
-    format_tool_call_args,
+    ingest_tool_call_stream_state,
     normalize_tool_calls_list,
     strip_internal_tags,
     tool_calls_have_any_arg_dict,
     try_parse_pending_tool_call_args,
 )
-from soothe_cli.events.tools.rendering import update_name_map_from_tool_calls
 
 __all__ = [
     "INTERNAL_EVENT_TYPES",
@@ -60,7 +59,7 @@ __all__ = [
     "extract_tool_args_dict",
     "extract_tool_brief",
     "finalize_pending_tool_call",
-    "format_tool_call_args",
+    "ingest_tool_call_stream_state",
     "is_essential_progress_event_type",
     "is_goal_start_event_type",
     "is_step_complete_event_type",
@@ -71,5 +70,4 @@ __all__ = [
     "strip_internal_tags",
     "tool_calls_have_any_arg_dict",
     "try_parse_pending_tool_call_args",
-    "update_name_map_from_tool_calls",
 ]
