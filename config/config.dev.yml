@@ -50,7 +50,7 @@ agent_loop:
     plan_ledger_max_messages: 20
   limits:
     max_parallel_steps: 3
-    max_parallel_tools: 20
+    max_parallel_tools: 30
     global_max_llm_calls: 10
     tool_call_limit:
       global_thread_limit: 200

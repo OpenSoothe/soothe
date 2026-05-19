@@ -9,10 +9,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import signal
 from typing import Any
 
 import typer
 from soothe_sdk.client import (
+    WebSocketClient,
     bootstrap_loop_session,
     connect_websocket_with_retries,
     websocket_url_from_config,
@@ -33,6 +35,7 @@ _DAEMON_FALLBACK_EXIT_CODE = 42
 _SESSION_BOOTSTRAP_TIMEOUT_S = 30.0
 _QUERY_START_TIMEOUT_S = 20.0
 _HEADLESS_WORKER_LOST_RETRIES = 1
+_CANCEL_SEND_TIMEOUT_S = 3.0
 
 
 def _is_loop_scoped_event(event: dict[str, Any], *, active_loop_id: str) -> bool:
@@ -48,6 +51,14 @@ def _emit_headless_error(message: str) -> None:
     typer.echo(f"ERROR: {message}", err=True)
 
 
+async def _send_cancel_to_daemon(client: WebSocketClient) -> None:
+    """Send /cancel to the daemon with a short timeout."""
+    try:
+        await asyncio.wait_for(client.send_command("/cancel"), timeout=_CANCEL_SEND_TIMEOUT_S)
+    except Exception:
+        logger.warning("Failed to send /cancel to daemon", exc_info=True)
+
+
 async def _run_headless_session_once(
     cfg: Any,
     prompt: str,
@@ -61,6 +72,12 @@ async def _run_headless_session_once(
 
     ws_url = websocket_url_from_config(cfg)
     client = WebSocketClient(url=ws_url)
+
+    # Track whether the daemon was notified of cancellation.
+    cancel_sent = False
+    sigint_received = False
+    sigint_count = 0
+    original_sigint: Any = None
 
     try:
         await connect_websocket_with_retries(client)
@@ -103,6 +120,30 @@ async def _run_headless_session_once(
             timeout=_SESSION_BOOTSTRAP_TIMEOUT_S,
         )
 
+        # Install a custom SIGINT handler that sends /cancel to the daemon
+        # before cancelling the asyncio task.  This overrides the handler
+        # that asyncio.run() installed so we can notify the daemon first.
+        loop = asyncio.get_running_loop()
+        main_task = asyncio.current_task()
+
+        def _on_headless_sigint() -> None:
+            nonlocal sigint_received, sigint_count
+            sigint_count += 1
+            if sigint_count >= 2:
+                # Second Ctrl+C — force exit without waiting.
+                logger.info("Second Ctrl+C received; forcing exit")
+                import sys
+
+                sys.exit(130)
+            sigint_received = True
+
+        try:
+            original_sigint = signal.getsignal(signal.SIGINT)
+            loop.add_signal_handler(signal.SIGINT, _on_headless_sigint)
+        except (ValueError, OSError):
+            # Not main thread or signals not supported; rely on fallbacks.
+            pass
+
         presentation = PresentationEngine()
         renderer = HeadlessCliRenderer()
         processor = EventProcessor(
@@ -115,6 +156,16 @@ async def _run_headless_session_once(
         query_started = False
 
         while True:
+            # Check if SIGINT fired and send /cancel to the daemon.
+            if sigint_received and not cancel_sent:
+                cancel_sent = True
+                logger.info("Headless query interrupted; sending /cancel to daemon")
+                await _send_cancel_to_daemon(client)
+                # After notifying the daemon, cancel the main task so
+                # asyncio.run() can unwind cleanly.
+                if main_task is not None and not main_task.done():
+                    main_task.cancel()
+
             try:
                 if query_started:
                     event = await client.read_event()
@@ -167,6 +218,22 @@ async def _run_headless_session_once(
 
             processor.process_event(event)
 
+    except KeyboardInterrupt:
+        if not cancel_sent:
+            cancel_sent = True
+            logger.info("Headless query interrupted by user; sending /cancel to daemon")
+            await _send_cancel_to_daemon(client)
+        return 1, False
+    except asyncio.CancelledError:
+        if not cancel_sent:
+            cancel_sent = True
+            logger.info("Headless query cancelled; sending /cancel to daemon")
+            # Best-effort: the task is being cancelled so awaiting may fail.
+            try:
+                await asyncio.shield(_send_cancel_to_daemon(client))
+            except (asyncio.CancelledError, Exception):
+                pass
+        raise
     except (ConnectionError, OSError, TimeoutError) as e:
         logger.exception("Daemon connection failed")
         from soothe_sdk.utils import format_cli_error
@@ -181,6 +248,14 @@ async def _run_headless_session_once(
     else:
         return 0, False
     finally:
+        # Restore original SIGINT handler.
+        try:
+            loop = asyncio.get_running_loop()
+            loop.remove_signal_handler(signal.SIGINT)
+            if original_sigint is not None:
+                signal.signal(signal.SIGINT, original_sigint)
+        except (ValueError, OSError, RuntimeError):
+            pass
         await client.close()
 
 

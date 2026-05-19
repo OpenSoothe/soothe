@@ -5,8 +5,13 @@ from __future__ import annotations
 from time import time
 from unittest.mock import patch
 
+import pytest
+
 from soothe_cli.tui import theme as theme_mod
-from soothe_cli.tui.preview_limits import STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
+from soothe_cli.tui.preview_limits import (
+    STEP_CARD_SHOW_TOOL_ROW_DETAILS,
+    STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD,
+)
 from soothe_cli.tui.widgets.messages import CognitionStepMessage, ToolCallMessage
 
 
@@ -110,30 +115,50 @@ def test_step_auto_collapses_when_body_lines_exceed_threshold() -> None:
     w = CognitionStepMessage("s-auto", "Work", id="st-auto")
     n = STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD + 1
     for i in range(n):
-        w.add_tool_call(f"c{i}", "grep", {"pattern": str(i)})
+        w.append_subagent_activity(f"meta {i}")
     assert w._card_collapsed  # noqa: SLF001
+
+
+def test_step_card_hides_tool_row_details_by_default() -> None:
+    """Stats-only mode: no per-tool CLI rows in the card body."""
+    assert STEP_CARD_SHOW_TOOL_ROW_DETAILS is False
+    w = CognitionStepMessage("s-hide", "Work", id="st-hide")
+    w.add_tool_call("c1", "grep", {"pattern": "x"})
+    w.add_tool_call("c2", "read_file", {"file_path": "/a.md"})
+    w._tools_widget = type("W", (), {"display": True, "update": lambda *_a, **_k: None})()  # noqa: SLF001
+    w._refresh_tools_display(force=True)
+    assert w._tools_widget.display is False  # noqa: SLF001
+    assert "Grep(1)" in w._stats_title_suffix()
 
 
 def test_step_respects_user_expand_after_auto_collapse() -> None:
     w = CognitionStepMessage("s-user", "Work", id="st-user")
     for i in range(STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD + 1):
-        w.add_tool_call(f"c{i}", "grep", {"pattern": str(i)})
+        w.append_subagent_activity(f"meta {i}")
     assert w._card_collapsed  # noqa: SLF001
     w.toggle_collapse()
     assert not w._card_collapsed  # noqa: SLF001
-    w.add_tool_call("extra", "ls", {"path": "."})
+    w.append_subagent_activity("extra meta")
     assert not w._card_collapsed  # noqa: SLF001
 
 
-def test_step_auto_folds_tool_list_when_rows_exceed_preview() -> None:
-    """Tool-row preview folds as rows stream in, not only after set_complete."""
+def test_step_auto_folds_tool_list_when_rows_exceed_preview(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tool-row preview folds as rows stream in when detail rows are enabled."""
+    monkeypatch.setattr(
+        "soothe_cli.tui.widgets.messages.STEP_CARD_SHOW_TOOL_ROW_DETAILS",
+        True,
+    )
     w = CognitionStepMessage("s-fold", "Work", id="st-fold")
     for i in range(STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD + 1):
         w.add_tool_call(f"c{i}", "grep", {"pattern": str(i)})
     assert w._tools_body_collapsed  # noqa: SLF001
 
 
-def test_step_tool_list_fold_respects_user_expand() -> None:
+def test_step_tool_list_fold_respects_user_expand(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "soothe_cli.tui.widgets.messages.STEP_CARD_SHOW_TOOL_ROW_DETAILS",
+        True,
+    )
     w = CognitionStepMessage("s-tlu", "Work", id="st-tlu")
     for i in range(STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD):
         w.add_tool_call(f"c{i}", "grep", {"pattern": str(i)})

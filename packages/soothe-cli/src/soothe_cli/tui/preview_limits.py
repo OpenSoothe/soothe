@@ -9,6 +9,10 @@ from __future__ import annotations
 from typing import Final
 
 # --- Step / Task cognition cards (`CognitionStepMessage`, task `ToolCallMessage`) ---
+# When False, step cards track tools internally but show only per-kind counts on the
+# running status line (no CLI-style tool rows in the card body).
+STEP_CARD_SHOW_TOOL_ROW_DETAILS: Final[bool] = False
+
 # When estimated body lines exceed this count, the card auto-collapses (strict `>`).
 # Matches the step/task activity preview row cap (`_STEP_TOOL_PREVIEW_ROWS`).
 STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD: Final[int] = 3

@@ -38,6 +38,7 @@ from soothe_cli.tui.preview_limits import (
     APPROVAL_DIFF_MAX_LINES,
     SKILL_CARD_PREVIEW_CHARS,
     SKILL_CARD_PREVIEW_LINES,
+    STEP_CARD_SHOW_TOOL_ROW_DETAILS,
     STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD,
     TOOL_CARD_PREVIEW_CHARS,
     TOOL_CARD_PREVIEW_LINES,
@@ -2618,19 +2619,16 @@ class _StepToolRow:
 class CognitionStepMessage(Vertical):
     """Agent-loop act step card: aggregates main-agent tool calls (IG-402).
 
-    Header is the step description only; per-tool counts appear on the running
-    status line (and match the prior header format). Body lists one CLI-style row
-    per call. When there are more than ``_STEP_TOOL_PREVIEW_ROWS`` rows, click first folds or
-    unfolds the tool list; otherwise click toggles whole-card collapse. When tool
-    rows, subagent notes, and execute prose together exceed that same threshold,
-    the card body auto-collapses until the user expands it (a new ``set_running``
-    clears that preference).
+    Header is the step description only. Per-tool-kind counts (``Grep(2)``, …) appear
+    on the running status line via :meth:`_stats_title_suffix`; individual CLI-style
+    tool rows are optional (``STEP_CARD_SHOW_TOOL_ROW_DETAILS``). When tool rows are
+    enabled and exceed ``_STEP_TOOL_PREVIEW_ROWS``, click first folds or unfolds the
+    tool list; otherwise click toggles whole-card collapse. Subagent notes and execute
+    prose can auto-collapse the card body until the user expands it (a new
+    ``set_running`` clears that preference).
 
-    Tool rows use the goal-tree gutter (``⎿``) plus the same hollow/filled circle
-    convention as the goal step list: ``circle_empty`` while pending/running,
-    ``circle_filled`` when the call finishes (replaces ``tool_prefix`` / spinner in
-    :func:`soothe_cli.tui.tool_display.format_tool_call_row`). Prose / notes keep
-    ``⎿ ○`` continuation lines.
+    Tool rows use the goal-tree gutter (``⎿``) plus hollow/filled circles when shown.
+    Prose / notes keep ``⎿ ○`` continuation lines.
     """
 
     ALLOW_SELECT = True
@@ -2751,7 +2749,9 @@ class CognitionStepMessage(Vertical):
 
     def _step_body_line_estimate(self) -> int:
         """Approximate expanded-body line count for auto-collapse."""
-        n = len(self._rows) + len(self._subagent_notes)
+        n = len(self._subagent_notes)
+        if STEP_CARD_SHOW_TOOL_ROW_DETAILS:
+            n += len(self._rows)
         buf = (self._execute_assistant_buffer or "").strip()
         if buf:
             n += len(buf.splitlines())
@@ -2765,6 +2765,8 @@ class CognitionStepMessage(Vertical):
 
     def _maybe_auto_fold_step_tool_list(self) -> None:
         """Fold long tool lists to the preview cap while the step runs (not only after complete)."""
+        if not STEP_CARD_SHOW_TOOL_ROW_DETAILS:
+            return
         if self._step_tool_list_user_expanded:
             return
         if len(self._rows) <= _STEP_TOOL_PREVIEW_ROWS:
@@ -2861,7 +2863,11 @@ class CognitionStepMessage(Vertical):
         event.stop()
         if _click_has_text_selection(self):
             return
-        if self._rows and len(self._rows) > _STEP_TOOL_PREVIEW_ROWS:
+        if (
+            STEP_CARD_SHOW_TOOL_ROW_DETAILS
+            and self._rows
+            and len(self._rows) > _STEP_TOOL_PREVIEW_ROWS
+        ):
             was_collapsed = self._tools_body_collapsed
             self._tools_body_collapsed = not self._tools_body_collapsed
             if was_collapsed and not self._tools_body_collapsed:
@@ -2869,7 +2875,7 @@ class CognitionStepMessage(Vertical):
             self._refresh_tools_display()
             return
         has_collapsible_content = (
-            self._rows
+            (STEP_CARD_SHOW_TOOL_ROW_DETAILS and self._rows)
             or self._subagent_notes
             or self._execute_assistant_buffer.strip()
             or self._status in ("success", "error")
@@ -3188,6 +3194,16 @@ class CognitionStepMessage(Vertical):
         if self._tools_widget is None:
             self._maybe_auto_fold_step_tool_list()
             self._maybe_auto_collapse_step_card()
+            self._sync_running_status_line()
+            return
+        if not STEP_CARD_SHOW_TOOL_ROW_DETAILS:
+            self._tools_widget.display = False
+            self._row_cache_key_by_id.clear()
+            self._row_content_by_id.clear()
+            self._tools_panel_cache_key = None
+            self._maybe_auto_collapse_step_card()
+            self._sync_step_footer_hint()
+            self._sync_running_status_line()
             return
         # IG-420: Throttle refreshes to prevent UI lag during streaming (only when mounted)
         if not force and not _should_refresh_now(self._last_tools_refresh):
@@ -3273,6 +3289,15 @@ class CognitionStepMessage(Vertical):
         self._refresh_header_title()
         self.request_tools_display_refresh(immediate=True)
 
+        # Receiving tool calls means the step is executing — transition
+        # from pending to running if step.started hasn't arrived yet.
+        # Only update state here; the full UI transition (animation timer,
+        # status widget update) is deferred to on_mount or set_running().
+        if self._status == "pending":
+            self._status = "running"
+            self._start_time = time()
+            self._deferred_running = True
+
     def has_tool_call_row(self, tool_call_id: str) -> bool:
         """Return True if this step card already tracks ``tool_call_id``."""
         return str(tool_call_id) in self._row_index
@@ -3303,6 +3328,12 @@ class CognitionStepMessage(Vertical):
         self._bump_stat(row.tool_name)
         self._refresh_header_title()
         self.request_tools_display_refresh(immediate=True)
+
+        # Receiving tool rows means the step is executing.
+        if self._status == "pending":
+            self._status = "running"
+            self._start_time = time()
+            self._deferred_running = True
 
     def row_duration_ms_since_started(self, tool_call_id: str) -> int:
         """Elapsed ms since this row entered running state (for result lines)."""
@@ -3446,6 +3477,13 @@ class CognitionStepMessage(Vertical):
         self._refresh_header_title()
         self._refresh_tools_display()
 
+    def _sync_running_status_line(self) -> None:
+        """Refresh status text when tool stats change without repainting tool rows."""
+        if self._status == "running":
+            self._update_running_animation()
+        elif self._status == "pending":
+            self._refresh_pending_display()
+
     def _refresh_pending_display(self) -> None:
         """Show waiting state for planned steps that are not executing yet."""
         if self._status != "pending" or self._status_widget is None:
@@ -3456,7 +3494,7 @@ class CognitionStepMessage(Vertical):
             colors = theme.DARK_COLORS
         g = get_glyphs()
         gutter = f"{g.output_prefix} "
-        line = f"{gutter}{g.circle_empty} Pending..."
+        line = f"{gutter}{g.circle_empty} Pending...{self._stats_title_suffix()}"
         self._status_widget.add_class("pending")
         self._status_widget.update(Content.styled(line, colors.cognition))
         self._status_widget.display = True
@@ -3500,7 +3538,9 @@ class CognitionStepMessage(Vertical):
         gutter = f"{get_glyphs().output_prefix} "
         # Expand/collapse affordance: collapsed → expand glyph; expanded → collapse glyph.
         has_collapsible = (
-            self._rows or self._subagent_notes or self._execute_assistant_buffer.strip()
+            (STEP_CARD_SHOW_TOOL_ROW_DETAILS and self._rows)
+            or self._subagent_notes
+            or self._execute_assistant_buffer.strip()
         )
         g = get_glyphs()
         toggle_icon = ""
@@ -3562,7 +3602,11 @@ class CognitionStepMessage(Vertical):
             self._status_widget.add_class("error")
             g = get_glyphs()
             # Add expand/collapse icon at the end of status line
-            has_collapsible = self._rows or self._subagent_notes or prose
+            has_collapsible = (
+                (STEP_CARD_SHOW_TOOL_ROW_DETAILS and self._rows)
+                or self._subagent_notes
+                or prose
+            )
             collapse_icon = (
                 f" {g.expand}"
                 if self._card_collapsed and has_collapsible
