@@ -22,6 +22,7 @@ from textual.reactive import var
 from textual.widgets import Static
 
 from soothe_cli.shared.core.presentation_engine import PresentationEngine
+from soothe_cli.shared.duration_format import format_duration, format_duration_ms
 from soothe_cli.shared.tools.message_processing import _normalize_tool_name_for_arg_map
 from soothe_cli.tui import theme
 from soothe_cli.tui._env_vars import TUI_REFRESH_INTERVAL_MS
@@ -31,7 +32,6 @@ from soothe_cli.tui.config import (
     get_glyphs,
     is_ascii_mode,
 )
-from soothe_cli.tui.formatting import format_duration, format_duration_ms
 from soothe_cli.tui.input import EMAIL_PREFIX_PATTERN, INPUT_HIGHLIGHT_PATTERN
 from soothe_cli.tui.preview_limits import (
     APPROVAL_DIFF_MAX_LINES,

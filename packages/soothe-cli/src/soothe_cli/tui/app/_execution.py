@@ -385,7 +385,7 @@ class _ExecutionMixin:
             cmd: The normalized slash command used to look up the URL.
         """
         url = _COMMAND_URLS[cmd]
-        webbrowser.open(url)
+        await asyncio.to_thread(webbrowser.open, url)
 
         if self._agent_running or self._shell_running:
             queued_widget = QueuedUserMessage(command)

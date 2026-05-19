@@ -25,6 +25,7 @@ from soothe_sdk.ux.task_namespace import (
 )
 
 from soothe_cli.cli.stream.display_line import DisplayLine
+from soothe_cli.shared.duration_format import format_duration
 from soothe_cli.shared.events.essential_events import is_essential_progress_event_type
 from soothe_cli.shared.tools.message_processing import format_tool_call_args
 from soothe_cli.shared.tools.tool_call_resolution import (
@@ -32,7 +33,6 @@ from soothe_cli.shared.tools.tool_call_resolution import (
     tool_args_meaningful,
 )
 from soothe_cli.tui._session_stats import SessionStats
-from soothe_cli.tui.formatting import format_duration
 from soothe_cli.tui.step_task_routing import StepTaskRouter
 from soothe_cli.tui.widgets.messages import CognitionStepMessage
 
