@@ -266,6 +266,7 @@ def refresh_subgraph_tool_rows_from_overlay(
     streaming_overlay: dict[str, dict[str, Any]],
     pending_tool_calls_lc: dict[str, dict[str, Any]],
     message: Any = None,
+    only_tcids: set[str] | None = None,
 ) -> None:
     """Push overlay kwargs onto existing task-card tool rows when they arrive late.
 
@@ -285,13 +286,14 @@ def refresh_subgraph_tool_rows_from_overlay(
     if not step_id:
         return
 
-    for tcid, oargs in streaming_overlay.items():
+    scan_ids = only_tcids if only_tcids is not None else set(streaming_overlay.keys())
+    for tcid in scan_ids:
+        oargs = streaming_overlay.get(tcid)
         if not isinstance(oargs, dict) or not oargs:
             continue
         parsed_sid, type_code, _, _ = parse_unified_tool_call_id(str(tcid))
         if type_code != "t":
             continue
-        # IG-418: Only process tool rows for this namespace's step
         if parsed_sid != step_id:
             continue
         merged = merge_tool_display_args(
@@ -687,6 +689,7 @@ async def sync_task_delegation_cards_from_stream(
     streaming_overlay: dict[str, dict[str, Any]],
     pending_tool_calls_lc: dict[str, dict[str, Any]],
     show_tool_ui: bool,
+    only_tcids: set[str] | None = None,
 ) -> None:
     """Refresh task delegation cards whenever streaming overlay gains task kwargs."""
     import logging as _logging
@@ -694,8 +697,12 @@ async def sync_task_delegation_cards_from_stream(
     if not show_tool_ui:
         return
     _log = _logging.getLogger(__name__)
-    for tcid, overlay_args in streaming_overlay.items():
+    scan_ids = only_tcids if only_tcids is not None else set(streaming_overlay.keys())
+    for tcid in scan_ids:
+        overlay_args = streaming_overlay.get(tcid)
         if not is_step_level_task_tool_id(tcid):
+            continue
+        if not isinstance(overlay_args, dict):
             continue
         if not tool_args_meaningful(overlay_args):
             continue

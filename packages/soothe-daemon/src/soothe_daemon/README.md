@@ -39,7 +39,7 @@ daemon **never** duplicates protocol, memory, or planning logic.
 
 | File / Package | Responsibility |
 |----------------|----------------|
-| `server.py` | `SootheDaemon` — process lifecycle, WebSocket server, Unix socket |
+| `server.py` | `SootheDaemon` — process lifecycle, WebSocket server |
 | `entrypoint.py` | `run_daemon()` — CLI entry point, signal handling |
 | `transport_manager.py` | Manages multiple transport servers (WebSocket, HTTP REST) |
 | `transports/` | `WebSocketTransport`, `HttpRestTransport`, `TransportServer` base |
@@ -51,14 +51,14 @@ daemon **never** duplicates protocol, memory, or planning logic.
 | `protocol.py` / `protocol_v2.py` | Wire-format encode/decode helpers |
 | `websocket_client.py` | `WebSocketClient` — for CLI commands that talk to the daemon |
 | `singleton.py` | Single-instance enforcement |
-| `paths.py` | `pid_path()`, `socket_path()` — canonical filesystem paths |
+| `paths.py` | `pid_path()` — canonical PID file path |
 | `health/` | `HealthChecker` and per-category check implementations |
 
 ---
 
 ## health/ subpackage
 
-Health checks verify all Soothe components including daemon socket,
+Health checks verify all Soothe components including daemon connectivity,
 persistence, providers, protocols, and external APIs.
 
 ```
@@ -69,7 +69,7 @@ daemon/health/
 ├── formatters.py        # format_text, format_markdown, format_json
 └── checks/
     ├── config_check.py
-    ├── daemon_check.py  # uses soothe_daemon.paths (pid_path, socket_path)
+    ├── daemon_check.py  # uses soothe_daemon.paths (pid_path)
     ├── persistence_check.py
     ├── protocols_check.py
     ├── providers_check.py
@@ -80,7 +80,7 @@ daemon/health/
 ```
 
 Health checks live here (not in `core`) because they legitimately depend
-on daemon-layer paths (`pid_path`, `socket_path`) and daemon connectivity.
+on daemon-layer paths (`pid_path`) and daemon connectivity.
 
 ---
 
@@ -104,7 +104,6 @@ from soothe_daemon import SootheDaemon      # main daemon class
 from soothe_daemon import WebSocketClient   # client for CLI ↔ daemon
 from soothe_daemon import run_daemon        # entrypoint
 from soothe_daemon import pid_path          # ~/.soothe/soothe.pid
-from soothe_daemon import socket_path       # ~/.soothe/soothe.sock
 from soothe_daemon.health import HealthChecker
 ```
 

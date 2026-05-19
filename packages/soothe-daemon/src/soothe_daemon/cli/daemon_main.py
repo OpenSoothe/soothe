@@ -14,13 +14,14 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from soothe.config import SOOTHE_HOME, SootheConfig
 
+from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe_daemon.config import SootheDaemonConfig, default_daemon_config_path
 from soothe_daemon.entrypoint import run_daemon
 from soothe_daemon.health.checker import HealthChecker
 from soothe_daemon.health.formatters import format_json, format_markdown, format_text
 from soothe_daemon.health.models import CheckStatus
+from soothe_daemon.paths import pid_path
 from soothe_daemon.server import SootheDaemon
 
 app = typer.Typer(
@@ -90,12 +91,9 @@ def daemon_start(
     for _ in range(120):
         if SootheDaemon.is_running():
             pid = SootheDaemon.find_pid()
-            socket_path = Path(SOOTHE_HOME).expanduser() / "soothe.sock"
 
-            # Compact success message
             pid_str = f"PID: {pid}" if pid else "PID: unknown"
-            socket_str = f"socket: {socket_path}"
-            typer.echo(f"Daemon started successfully ({pid_str}, {socket_str})")
+            typer.echo(f"Daemon started successfully ({pid_str}, ws://127.0.0.1:8765)")
             return
         time.sleep(0.1)
 
@@ -127,11 +125,33 @@ def daemon_status() -> None:
         typer.echo("Daemon status: stopped")
         return
 
-    pid = SootheDaemon.find_pid()
     typer.echo("Daemon status: running")
+
+    # Read PID file directly first (fast), fall back to find_pid() only if needed
+    pf = pid_path()
+    pid: int | None = None
+    if pf.exists():
+        import os
+
+        try:
+            pid = int(pf.read_text().strip())
+            os.kill(pid, 0)
+        except (ValueError, ProcessLookupError, PermissionError):
+            pid = SootheDaemon.find_pid()
+    else:
+        pid = SootheDaemon.find_pid()
+
     if pid:
         typer.echo(f"PID: {pid}")
-    typer.echo(f"Socket: {Path(SOOTHE_HOME).expanduser() / 'soothe.sock'}")
+
+    # Resolve WebSocket address from daemon config
+    try:
+        cfg = SootheDaemonConfig()
+        ws_host = cfg.transports.websocket.host
+        ws_port = cfg.transports.websocket.port
+    except Exception:
+        ws_host, ws_port = "127.0.0.1", 8765
+    typer.echo(f"WebSocket: ws://{ws_host}:{ws_port}")
 
 
 @app.command("restart")

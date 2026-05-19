@@ -5,7 +5,6 @@ from pathlib import Path
 from soothe.config import SOOTHE_HOME
 
 _PID_FILENAME = "soothe.pid"
-_SOCKET_FILENAME = "soothe.sock"
 
 
 def _soothe_dir() -> Path:
@@ -16,8 +15,3 @@ def _soothe_dir() -> Path:
 def pid_path() -> Path:
     """Return the canonical PID file path."""
     return _soothe_dir() / _PID_FILENAME
-
-
-def socket_path() -> Path:
-    """Return the canonical Unix socket path."""
-    return _soothe_dir() / _SOCKET_FILENAME
