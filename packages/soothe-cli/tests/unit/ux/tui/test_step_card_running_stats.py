@@ -25,6 +25,22 @@ def test_stats_ignore_unified_ids_for_other_steps() -> None:
     assert card._stats_title_suffix() == ""
 
 
+def test_status_tool_stats_suffix_prefers_per_tool_over_fallback_total() -> None:
+    card = CognitionStepMessage("ABC-01", "Scan", id="stp-done")
+    card.add_tool_call("ABC_01:s:grep:0", "grep", {})
+    card.add_tool_call("ABC_01:s:grep:1", "grep", {})
+    card.add_tool_call("ABC_01:s:glob:0", "glob", {})
+    suffix = card._status_tool_stats_suffix(fallback_count=99)
+    assert "Grep(2)" in suffix
+    assert "Glob(1)" in suffix
+    assert "99 tools" not in suffix
+
+
+def test_status_tool_stats_suffix_falls_back_to_total_when_untracked() -> None:
+    card = CognitionStepMessage("ABC-01", "Scan", id="stp-fallback")
+    assert card._status_tool_stats_suffix(fallback_count=3) == " · 3 tools"
+
+
 def test_stats_same_unified_id_not_double_counted() -> None:
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-stream")
     card.add_tool_call("ABC_01:s:glob:0", "glob", {})

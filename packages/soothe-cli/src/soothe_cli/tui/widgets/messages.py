@@ -1363,9 +1363,7 @@ class CognitionStepMessage(Vertical):
         elif self._status in ("success", "error") and self._detail_widget:
             # Re-apply completion detail with updated icon
             dur_str = format_duration_ms(self._last_duration_ms)
-            tool_part = (
-                f" · {self._last_tool_call_count} tools" if self._last_tool_call_count > 0 else ""
-            )
+            tool_part = self._status_tool_stats_suffix(self._last_tool_call_count)
             if self._last_success:
                 status_body = f"Completed ({dur_str}){tool_part}"
                 self._detail_widget.update(
@@ -1462,6 +1460,15 @@ class CognitionStepMessage(Vertical):
         if extra > 0:
             text += f" +{extra} more"
         return f" · {text}"
+
+    def _status_tool_stats_suffix(self, fallback_count: int = 0) -> str:
+        """Per-tool breakdown for status lines; total-only when rows were not tracked."""
+        suffix = self._stats_title_suffix()
+        if suffix:
+            return suffix
+        if fallback_count > 0:
+            return f" · {fallback_count} tools"
+        return ""
 
     def _refresh_header_title(self) -> None:
         if self._header_widget is None:
@@ -2003,7 +2010,7 @@ class CognitionStepMessage(Vertical):
         self._refresh_tools_display(force=True)
 
         dur_str = format_duration_ms(duration_ms)
-        tool_part = f" · {tool_call_count} tools" if tool_call_count > 0 else ""
+        tool_part = self._status_tool_stats_suffix(tool_call_count)
 
         prose = self._execute_assistant_buffer.strip()
         self._last_completed_execute_prose = prose
@@ -2071,9 +2078,7 @@ class CognitionStepMessage(Vertical):
         assembled: list[object] = []
         if self._last_success is not None:
             dur_str = format_duration_ms(self._last_duration_ms)
-            tool_part = (
-                f" · {self._last_tool_call_count} tools" if self._last_tool_call_count > 0 else ""
-            )
+            tool_part = self._status_tool_stats_suffix(self._last_tool_call_count)
             status_body = f"Completed ({dur_str}){tool_part}"
             try:
                 pv_colors = theme.get_theme_colors(self)
