@@ -411,7 +411,7 @@ class WebSocketClient:
         loop_id: str,
         *,
         verbosity: VerbosityLevel = "normal",
-        stream_delivery: str = "merged",
+        stream_delivery: str = "streaming",
         request_id: str | None = None,
     ) -> None:
         """Subscribe client to loop events via daemon RPC (RFC-503 ``loop_subscribe``).
@@ -422,10 +422,10 @@ class WebSocketClient:
         Args:
             loop_id: Loop identifier.
             verbosity: Event verbosity (RFC-0022).
-            stream_delivery: ``batch``, ``merged``, or ``full`` stream shaping for this loop.
+            stream_delivery: ``batch`` or ``streaming`` (default) stream shaping for this loop.
             request_id: Optional request correlation ID.
         """
-        delivery = stream_delivery if stream_delivery in ("batch", "merged", "full") else "merged"
+        delivery = stream_delivery if stream_delivery in ("batch", "streaming") else "streaming"
         payload: dict[str, Any] = {
             "type": "loop_subscribe",
             "loop_id": loop_id,

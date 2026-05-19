@@ -1,6 +1,6 @@
 """Unit tests for StreamDisplayPipeline action extraction (IG-143)."""
 
-from soothe_cli.cli.stream import StreamDisplayPipeline
+from soothe_cli.events.stream import StreamDisplayPipeline
 
 
 def test_on_loop_agent_reason_extracts_next_action():

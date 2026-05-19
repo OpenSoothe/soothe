@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from soothe_cli.shared.tools.tool_card_visibility import (
+from soothe_cli.events.tools.tool_card_visibility import (
     should_elide_stream_tool_card_mount,
     should_elide_tool_card_no_info,
     tool_result_display_is_insubstantial,

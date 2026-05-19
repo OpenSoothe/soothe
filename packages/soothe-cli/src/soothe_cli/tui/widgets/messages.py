@@ -22,9 +22,9 @@ from textual.events import Click
 from textual.reactive import var
 from textual.widgets import Static
 
-from soothe_cli.shared.core.presentation_engine import PresentationEngine
-from soothe_cli.shared.duration_format import format_duration, format_duration_ms
-from soothe_cli.shared.tools.message_processing import _normalize_tool_name_for_arg_map
+from soothe_cli.events.core.presentation_engine import PresentationEngine
+from soothe_cli.events.duration_format import format_duration, format_duration_ms
+from soothe_cli.events.tools.message_processing import _normalize_tool_name_for_arg_map
 from soothe_cli.tui import theme
 from soothe_cli.tui._env_vars import TUI_REFRESH_INTERVAL_MS
 from soothe_cli.tui.config import (
@@ -45,7 +45,8 @@ from soothe_cli.tui.preview_limits import (
     TOOL_CARD_PREVIEW_TODO_ITEMS,
     TOOL_CARD_PREVIEW_WEB_DICT_KEYS,
 )
-from soothe_cli.tui.tool_display import format_tool_call_row, format_tool_cli_style_command
+from soothe_cli.events.tools.tool_labels import format_tool_cli_style_command
+from soothe_cli.tui.formatting.tool_row import format_tool_call_row
 from soothe_cli.tui.widgets._links import open_style_link
 from soothe_cli.tui.widgets.diff import compose_diff_lines
 
@@ -823,7 +824,7 @@ class AssistantMessage(Vertical):
         # Determine markdown rendering from config
         self._render_markdown: bool = True
         try:
-            from soothe_cli.shared.config_loader import load_config
+            from soothe_cli.config.loader import load_config
 
             config = load_config()
             self._render_markdown = config.render_markdown
@@ -1370,8 +1371,8 @@ class ToolCallMessage(Vertical):
         kwargs follow on later chunks. The adapter may mount early and then call
         this when a fuller argument dict is available.
         """
-        from soothe_cli.shared.tools.message_processing import extract_tool_args_dict
-        from soothe_cli.shared.tools.tool_call_resolution import tool_args_meaningful
+        from soothe_cli.events.tools.message_processing import extract_tool_args_dict
+        from soothe_cli.events.tools.tool_call_resolution import tool_args_meaningful
 
         incoming = extract_tool_args_dict(args or {})
         merged = dict(self._args or {})
@@ -1588,8 +1589,8 @@ class ToolCallMessage(Vertical):
 
     def update_tool_args(self, tool_call_id: str, args: dict[str, Any]) -> None:
         """Refresh kwargs when streaming fills in arguments."""
-        from soothe_cli.shared.tools.message_processing import extract_tool_args_dict
-        from soothe_cli.shared.tools.tool_call_resolution import tool_args_meaningful
+        from soothe_cli.events.tools.message_processing import extract_tool_args_dict
+        from soothe_cli.events.tools.tool_call_resolution import tool_args_meaningful
 
         row = self._row_index.get(str(tool_call_id))
         if row is None:
@@ -3289,14 +3290,18 @@ class CognitionStepMessage(Vertical):
         self._refresh_header_title()
         self.request_tools_display_refresh(immediate=True)
 
-        # Receiving tool calls means the step is executing — transition
-        # from pending to running if step.started hasn't arrived yet.
-        # Only update state here; the full UI transition (animation timer,
-        # status widget update) is deferred to on_mount or set_running().
-        if self._status == "pending":
-            self._status = "running"
-            self._start_time = time()
-            self._deferred_running = True
+        self._promote_pending_to_running_if_needed()
+
+    def _promote_pending_to_running_if_needed(self) -> None:
+        """Show running UI when tools arrive before ``step.started`` (mounted cards)."""
+        if self._status != "pending":
+            return
+        if getattr(self, "is_mounted", False):
+            self.set_running()
+            return
+        self._status = "running"
+        self._start_time = time()
+        self._deferred_running = True
 
     def has_tool_call_row(self, tool_call_id: str) -> bool:
         """Return True if this step card already tracks ``tool_call_id``."""
@@ -3329,11 +3334,7 @@ class CognitionStepMessage(Vertical):
         self._refresh_header_title()
         self.request_tools_display_refresh(immediate=True)
 
-        # Receiving tool rows means the step is executing.
-        if self._status == "pending":
-            self._status = "running"
-            self._start_time = time()
-            self._deferred_running = True
+        self._promote_pending_to_running_if_needed()
 
     def row_duration_ms_since_started(self, tool_call_id: str) -> int:
         """Elapsed ms since this row entered running state (for result lines)."""
@@ -3344,8 +3345,8 @@ class CognitionStepMessage(Vertical):
 
     def update_tool_args(self, tool_call_id: str, args: dict[str, Any]) -> None:
         """Refresh kwargs when streaming fills in arguments."""
-        from soothe_cli.shared.tools.message_processing import extract_tool_args_dict
-        from soothe_cli.shared.tools.tool_call_resolution import tool_args_meaningful
+        from soothe_cli.events.tools.message_processing import extract_tool_args_dict
+        from soothe_cli.events.tools.tool_call_resolution import tool_args_meaningful
 
         row = self._row_index.get(str(tool_call_id))
         if row is None:
@@ -3603,9 +3604,7 @@ class CognitionStepMessage(Vertical):
             g = get_glyphs()
             # Add expand/collapse icon at the end of status line
             has_collapsible = (
-                (STEP_CARD_SHOW_TOOL_ROW_DETAILS and self._rows)
-                or self._subagent_notes
-                or prose
+                (STEP_CARD_SHOW_TOOL_ROW_DETAILS and self._rows) or self._subagent_notes or prose
             )
             collapse_icon = (
                 f" {g.expand}"

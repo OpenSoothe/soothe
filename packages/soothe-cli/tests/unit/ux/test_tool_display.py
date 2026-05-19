@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe_cli.tui.tool_display import format_tool_cli_style_command, format_tool_display
+from soothe_cli.events.tools.tool_labels import format_tool_cli_style_command, format_tool_display
 
 
 def test_read_file_shows_line_range_when_present() -> None:

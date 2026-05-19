@@ -18,7 +18,7 @@ from textual.content import Content
 from textual.css.query import NoMatches
 from textual.style import Style as TStyle
 
-from soothe_cli.shared.daemon_errors import (
+from soothe_cli.cli.execution.daemon_errors import (
     friendly_daemon_execution_error as _friendly_agent_execution_error,
 )
 from soothe_cli.tui import theme
@@ -429,11 +429,11 @@ class _ExecutionMixin:
         Args:
             command: The slash command (including /)
         """
-        from soothe_cli.shared.commands.command_router import (
+        from soothe_cli.tui.commands.command_router import (
             parse_slash_command,
             validate_command,
         )
-        from soothe_cli.shared.commands.slash_commands import COMMANDS as _RFC404_COMMANDS
+        from soothe_cli.tui.commands.slash_commands import COMMANDS as _RFC404_COMMANDS
 
         # RFC-404 daemon *routing* commands (/research, /explore, /plan, optional /«id»):
         # send the full line as a normal user turn so ``parse_subagent_from_input``

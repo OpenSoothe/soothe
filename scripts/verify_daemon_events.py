@@ -6,13 +6,13 @@ This script connects to the daemon via SDK WebSocket client and verifies:
 3. Tool call and task instance association
 4. Stream tool wire events (soothe.stream.tool_call.update)
 5. Subagent wire events (soothe.subagent.*)
-6. Streaming mode comparison (batch vs merged vs full)
+6. Streaming mode comparison (batch vs streaming)
 
 Usage:
-    # Single-mode run (default: merged)
+    # Single-mode run (default: streaming)
     python scripts/verify_daemon_events.py [--daemon-url URL] [--timeout SECONDS]
 
-    # Compare all streaming modes (runs the same prompt 3x, one per mode)
+    # Compare all streaming modes (runs the same prompt 2x, one per mode)
     python scripts/verify_daemon_events.py --compare-modes [--timeout SECONDS]
 
 Requirements:
@@ -41,7 +41,7 @@ from soothe_sdk.core.subagent_wire import (
     parse_subagent_wire_agent,
 )
 
-STREAM_DELIVERY_MODES: list[StreamDeliveryMode] = ["batch", "merged", "full"]
+STREAM_DELIVERY_MODES: list[StreamDeliveryMode] = ["batch", "streaming"]
 
 logging.basicConfig(
     level=logging.INFO,
@@ -640,7 +640,7 @@ async def run_verification(
     daemon_url: str,
     test_prompt: str,
     timeout: float,
-    stream_delivery: StreamDeliveryMode = "merged",
+    stream_delivery: StreamDeliveryMode = "streaming",
 ) -> EventStats:
     """Run verification by connecting to daemon and collecting events."""
 
@@ -764,7 +764,7 @@ def print_mode_comparison(all_stats: dict[StreamDeliveryMode, EventStats]) -> No
     """Print a side-by-side comparison of streaming modes."""
 
     print("\n" + "=" * 80)
-    print("STREAMING MODE COMPARISON: batch vs merged vs full")
+    print("STREAMING MODE COMPARISON: batch vs streaming")
     print("=" * 80)
 
     # Header row
@@ -820,9 +820,8 @@ def print_mode_comparison(all_stats: dict[StreamDeliveryMode, EventStats]) -> No
 
     # Explain behavioral expectations
     print("\n--- Expected Behavior ---")
-    print("  batch:  goal_completion text suppressed until loop completes → 1 flush event")
-    print("  merged: goal_completion text flushed in ~512-char batches → few flush events")
-    print("  full:   every goal_completion chunk emitted individually → flush count ≈ chunk count")
+    print("  batch:     goal_completion text suppressed until loop completes → 1 flush event")
+    print("  streaming: every goal_completion chunk emitted individually → flush count ≈ chunk count")
 
     # Validate expectations
     print("\n--- Validation ---")
@@ -844,17 +843,11 @@ def print_mode_comparison(all_stats: dict[StreamDeliveryMode, EventStats]) -> No
             else:
                 print(f"  {mode:>8s}: WARN (batch mode produced {fl} flush events, expected ≤1)")
                 all_pass = False
-        elif mode == "merged":
-            if fl < gc:
-                print(f"  {mode:>8s}: PASS (merged mode coalesced {gc} chunks → {fl} flush events)")
-            else:
-                print(f"  {mode:>8s}: WARN (merged mode did not coalesce: {gc} chunks → {fl} flush events)")
-                all_pass = False
-        elif mode == "full":
+        elif mode == "streaming":
             if fl == gc:
-                print(f"  {mode:>8s}: PASS (full mode: 1:1 chunk-to-flush, {gc} each)")
+                print(f"  {mode:>8s}: PASS (streaming mode: 1:1 chunk-to-flush, {gc} each)")
             else:
-                print(f"  {mode:>8s}: WARN (full mode: {gc} chunks → {fl} flush events, expected equal)")
+                print(f"  {mode:>8s}: WARN (streaming mode: {gc} chunks → {fl} flush events, expected equal)")
                 all_pass = False
 
     if all_pass:
@@ -876,7 +869,7 @@ async def run_mode_comparison(
 
     for i, mode in enumerate(STREAM_DELIVERY_MODES):
         print(f"\n{'=' * 40}")
-        print(f"  Running mode {i+1}/3: {mode}")
+        print(f"  Running mode {i+1}/2: {mode}")
         print(f"{'=' * 40}")
 
         logger.info("Starting verification with stream_delivery=%s", mode)
@@ -920,14 +913,14 @@ def main() -> int:
     )
     parser.add_argument(
         "--stream-delivery",
-        choices=["batch", "merged", "full"],
-        default="merged",
-        help="Stream delivery mode (default: merged)",
+        choices=["batch", "streaming"],
+        default="streaming",
+        help="Stream delivery mode (default: streaming)",
     )
     parser.add_argument(
         "--compare-modes",
         action="store_true",
-        help="Run all 3 streaming modes and compare results side-by-side",
+        help="Run all streaming modes and compare results side-by-side",
     )
     parser.add_argument(
         "--verbose",

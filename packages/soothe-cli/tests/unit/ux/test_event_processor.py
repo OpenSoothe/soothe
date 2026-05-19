@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 
 from soothe_sdk.core.events import PLAN_CREATED
 
-from soothe_cli.shared import EventProcessor, ProcessorState
+from soothe_cli.events import EventProcessor, ProcessorState
 
 
 @dataclass

@@ -85,7 +85,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
 
 def __getattr__(name: str) -> Any:
     if name == "_repair_concatenated_output_text":
-        from soothe_cli.shared.rendering.renderer_base import RendererBase
+        from soothe_cli.events.rendering.renderer_base import RendererBase
 
         fn = RendererBase.repair_concatenated_output
         globals()[name] = fn

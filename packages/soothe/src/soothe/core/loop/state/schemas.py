@@ -745,6 +745,13 @@ class LoopState(BaseModel):
     last_wave_answer_from_delegate_final: bool = False
     last_execute_wave_parallel_multi_step: bool = False
     continue_thread: bool = False  # IG-226: Continue-thread mode flag
+    project_instructions_execute_iteration: int | None = Field(
+        default=None,
+        description=(
+            "Iteration index where CLAUDE.md/AGENTS.md were injected into the first "
+            "CoreAgent execute human of that iteration (avoids duplicate per wave)."
+        ),
+    )
     intent: Any | None = None  # IG-268: Intent classification for response length intelligence
     routing_classification: Any | None = Field(
         default=None,

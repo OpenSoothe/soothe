@@ -394,7 +394,7 @@ def clear_default_model() -> None:
 def clear_caches() -> None:
     """Clear cached ``SootheConfig`` so the next ``ModelConfig.load()`` re-reads disk."""
     try:
-        import soothe_cli.shared.config_loader as _cl
+        import soothe_cli.config.loader as _cl
 
         _cl._config_cache.clear()
     except Exception:

@@ -137,8 +137,8 @@ class ClientSessionManager:
         return client_id
 
     def get_stream_delivery(self, loop_id: str) -> StreamDeliveryMode:
-        """Return stream shaping mode for a loop (``batch``, ``merged``, or ``full``)."""
-        return self._loop_stream_delivery.get(loop_id, "merged")
+        """Return stream shaping mode for a loop (``batch`` or ``streaming``)."""
+        return self._loop_stream_delivery.get(loop_id, "batch")
 
     async def subscribe_loop(
         self,
@@ -146,7 +146,7 @@ class ClientSessionManager:
         loop_id: str,
         verbosity: VerbosityLevel = "normal",
         *,
-        stream_delivery: StreamDeliveryMode = "merged",
+        stream_delivery: StreamDeliveryMode = "batch",
     ) -> bool:
         """Subscribe client to loop event topic; replaces prior loop subscriptions.
 
@@ -167,7 +167,7 @@ class ClientSessionManager:
 
         session.verbosity = verbosity
         delivery: StreamDeliveryMode = (
-            stream_delivery if stream_delivery in ("batch", "merged", "full") else "merged"
+            stream_delivery if stream_delivery in ("batch", "streaming") else "batch"
         )
         self._loop_stream_delivery[loop_id] = delivery
 

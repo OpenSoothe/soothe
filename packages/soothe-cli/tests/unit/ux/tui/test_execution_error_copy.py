@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe_cli.shared.daemon_errors import friendly_daemon_execution_error
+from soothe_cli.cli.execution.daemon_errors import friendly_daemon_execution_error
 
 
 def test_friendly_message_for_daemon_worker_subprocess_loss() -> None:

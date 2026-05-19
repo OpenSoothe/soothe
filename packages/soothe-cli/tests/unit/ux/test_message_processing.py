@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from soothe_cli.shared.tools.message_processing import (
+from soothe_cli.events.tools.message_processing import (
     accumulate_tool_call_chunks,
     coerce_tool_call_args_to_dict,
     extract_tool_args_dict,

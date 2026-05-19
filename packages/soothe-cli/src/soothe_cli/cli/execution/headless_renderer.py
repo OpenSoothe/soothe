@@ -12,7 +12,7 @@ from typing import Any
 
 from rich.console import Console
 
-from soothe_cli.shared.rendering.renderer_base import RendererBase
+from soothe_cli.events.rendering.renderer_base import RendererBase
 
 
 class HeadlessCliRenderer(RendererBase):
