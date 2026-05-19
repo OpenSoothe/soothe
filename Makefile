@@ -50,9 +50,13 @@ help:
 # Workspace Setup
 # ============================================================================
 
+# Broken or partial mirrors (e.g. UV_INDEX_URL=https://tsinghua.edu.cn) leave dist-info
+# without wheels (psycopg_pool, jsonschema). Force PyPI for all uv invocations below.
+UV_SYNC = UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras
+
 setup:
 	@echo "Syncing workspace dependencies..."
-	uv sync --all-packages --all-extras
+	$(UV_SYNC)
 	@echo "Workspace ready (.venv created if needed)"
 
 # Reset all state: docker volumes + ~/.soothe/ (keeps config), then restart services
@@ -74,8 +78,17 @@ reset-the-world:
 
 sync:
 	@echo "Syncing all workspace packages (optional extras + dev dependency group)..."
-	uv sync --all-packages --all-extras
+	$(UV_SYNC)
+	@$(MAKE) sync-verify
 	@echo "All packages synced with all optional extras and workspace dev dependencies"
+
+sync-verify:
+	@.venv/bin/python -c "\
+import importlib.util; \
+pkgs = ('psycopg_pool', 'jsonschema', 'langfuse'); \
+missing = [p for p in pkgs if importlib.util.find_spec(p) is None]; \
+assert not missing, f'Missing packages after sync (broken mirror?): {missing}'"
+	@echo "Critical daemon dependencies verified (psycopg_pool, jsonschema, langfuse)"
 
 format: sync
 	@echo "Formatting all packages..."

@@ -15,9 +15,9 @@ if TYPE_CHECKING:
     from soothe_cli.tui.textual_adapter._adapter import TextualUIAdapter
     from soothe_cli.tui.widgets.messages import AssistantMessage
 
+from soothe_cli.shared.duration_format import format_duration
 from soothe_cli.shared.rendering.renderer_base import RendererBase
 from soothe_cli.tui._session_stats import SessionStats
-from soothe_cli.tui.formatting import format_duration
 from soothe_cli.tui.widgets.messages import AppMessage, AssistantMessage
 
 logger = logging.getLogger(__name__)

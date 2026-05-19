@@ -18,7 +18,6 @@ from textual.theme import Theme
 from soothe_cli.tui import theme
 from soothe_cli.tui.app._module_init import (
     DeferredAction,
-    _LoopHistoryPayload,
     save_theme_preference,
 )
 from soothe_cli.tui.widgets.messages import AppMessage, ErrorMessage
@@ -423,107 +422,6 @@ class _ModelMixin:
                 logger.warning(missing_message, loop_id)
             else:
                 logger.debug(missing_message, loop_id)
-
-    async def _resume_loop_on_local_agent(self, loop_id: str) -> None:
-        """Resume a loop for an in-process LangGraph agent (local checkpointer path).
-
-        Fetches history for that loop, then switches UI state. Prefetching
-        first avoids clearing the active chat when history loading fails.
-
-        Args:
-            loop_id: Active AgentLoop id (same value LangGraph uses as
-                ``configurable.thread_id``).
-        """
-        if not self._runtime_backend_ready():
-            await self._mount_message(AppMessage("Cannot switch loops: no execution backend"))
-            return
-
-        if not self._session_state:
-            await self._mount_message(AppMessage("Cannot switch loops: no active session"))
-            return
-
-        if self._session_state.loop_id == loop_id:
-            await self._mount_message(AppMessage(f"Already on loop: {loop_id}"))
-            return
-
-        if self._loop_switching:
-            await self._mount_message(AppMessage("Loop switch already in progress."))
-            return
-
-        # Save previous state for rollback on failure
-        prev_loop_id = self._lc_loop_id
-        prev_session_loop = self._session_state.loop_id
-        self._loop_switching = True
-        if self._chat_input:
-            self._chat_input.set_cursor_active(active=False)
-
-        prefetched_payload: _LoopHistoryPayload | None = None
-        try:
-            self._update_status(f"Loading loop: {loop_id}")
-            prefetched_payload = await self._fetch_loop_history_data(loop_id)
-
-            # Clear conversation (similar to /clear, without creating a new loop)
-            self._pending_messages.clear()
-            self._queued_widgets.clear()
-            await self._clear_messages()
-            self._context_tokens = 0
-            self._tokens_approximate = False
-            self._update_tokens(0)
-            self._update_status("")
-
-            if self._daemon_session is not None:
-                await self._daemon_session.switch_loop(loop_id)
-            self._session_state.loop_id = loop_id
-            self._lc_loop_id = loop_id
-            self._clear_loop_model_override()
-
-            self._update_welcome_banner(
-                loop_id,
-                missing_message="Welcome banner not found during loop switch to %s",
-                warn_if_missing=False,
-            )
-
-            await self._load_loop_history(
-                loop_id=loop_id,
-                preloaded_payload=prefetched_payload,
-            )
-        except Exception as exc:
-            if prefetched_payload is None:
-                logger.exception("Failed to prefetch history for loop %s", loop_id)
-                await self._mount_message(
-                    AppMessage(
-                        f"Failed to switch to loop {loop_id}: {exc}. Use /loops to try again."
-                    )
-                )
-                return
-            logger.exception("Failed to switch to loop %s", loop_id)
-            self._session_state.loop_id = prev_session_loop
-            self._lc_loop_id = prev_loop_id
-            self._update_welcome_banner(
-                prev_session_loop,
-                missing_message=(
-                    "Welcome banner not found during rollback to loop %s; banner may display stale id"
-                ),
-                warn_if_missing=True,
-            )
-            rollback_restore_failed = False
-            try:
-                await self._clear_messages()
-                await self._load_loop_history(loop_id=prev_session_loop)
-            except Exception:  # Resilient session state saving
-                rollback_restore_failed = True
-                msg = "Could not restore previous conversation after failed switch to %s"
-                logger.warning(msg, loop_id, exc_info=True)
-            error_message = f"Failed to switch to loop {loop_id}: {exc}."
-            if rollback_restore_failed:
-                error_message += " Previous conversation could not be restored."
-            error_message += " Use /loops to try again."
-            await self._mount_message(AppMessage(error_message))
-        finally:
-            self._loop_switching = False
-            self._update_status("")
-            if self._chat_input:
-                self._chat_input.set_cursor_active(active=not self._agent_running)
 
     def _clear_loop_model_override(self) -> None:
         """Drop per-loop model override; next turns use config/CLI defaults."""

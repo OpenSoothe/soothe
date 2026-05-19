@@ -796,26 +796,6 @@ class _MessagesMixin:
     # =========================================================================
     # SOOTHE: Slash command actions
 
-    def action_show_plan(self) -> None:
-        """Toggle plan tree visibility."""
-        # TODO: Implement plan tree widget toggle
-        self.notify("Plan tree toggle (coming soon)", severity="info")
-
-    def action_show_memory(self) -> None:
-        """Show memory statistics."""
-        # TODO: Query backend_adapter for memory stats
-        self.notify("Memory stats (coming soon)", severity="info")
-
-    def action_show_context(self) -> None:
-        """Show context statistics."""
-        # TODO: Query backend_adapter for context stats
-        self.notify("Context stats (coming soon)", severity="info")
-
-    def action_show_policy(self) -> None:
-        """Show active policy."""
-        # TODO: Display active policy from config
-        self.notify("Active policy (coming soon)", severity="info")
-
     def action_detach(self) -> None:
         """Exit TUI but leave daemon running."""
         self._detach_or_exit()

@@ -13,13 +13,13 @@ from typing import Any
 from soothe_sdk.utils import get_all_path_arg_keys, get_tool_display_name, get_tool_meta
 from textual.content import Content
 
+from soothe_cli.shared.duration_format import format_duration
 from soothe_cli.shared.tools.message_processing import (
     _normalize_tool_name_for_arg_map,
     extract_tool_args_dict,
     format_tool_call_args,
 )
 from soothe_cli.tui.config import MAX_ARG_LENGTH, get_glyphs
-from soothe_cli.tui.formatting import format_duration
 from soothe_cli.tui.preview_limits import STEP_TASK_DELEGATION_DESC_MAX_CHARS
 from soothe_cli.tui.unicode_security import strip_dangerous_unicode
 

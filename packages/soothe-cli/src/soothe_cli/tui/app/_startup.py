@@ -211,34 +211,6 @@ class _StartupMixin:
                 timeout=10,
             )
 
-    async def _discover_skills(self) -> None:
-        """Discover skills from daemon RPC, cache metadata, and update autocomplete.
-
-        Fetches wire-safe skill metadata via daemon WebSocket RPC and caches
-        it for autocomplete and skill list display.
-        """
-        try:
-            from soothe_cli.tui.skills.invocation import discover_skills_async
-
-            skills = await discover_skills_async(daemon_config=self._daemon_config)
-            self._discovered_skills = skills
-            self._apply_slash_command_autocomplete()
-            if skills and not self._chat_input:
-                logger.debug(
-                    "Skill discovery completed (%d skills) but chat input not yet mounted; autocomplete deferred",
-                    len(skills),
-                )
-        except Exception:
-            self._discovered_skills = []
-            logger.exception("Unexpected error during skill discovery")
-            self.notify(
-                "Skill discovery failed. /skill: commands may not work. Check logs for details.",
-                severity="warning",
-                timeout=8,
-                markup=False,
-            )
-            self._apply_slash_command_autocomplete()
-
     def _apply_slash_command_autocomplete(self) -> None:
         """Merge static slash commands with skill entries (daemon catalog or local)."""
         from soothe_cli.tui.command_registry import (

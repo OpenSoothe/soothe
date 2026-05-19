@@ -9,8 +9,8 @@ from textual.containers import Horizontal
 from textual.content import Content
 from textual.widgets import Static
 
+from soothe_cli.shared.duration_format import format_duration
 from soothe_cli.tui.config import get_glyphs
-from soothe_cli.tui.formatting import format_duration
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
