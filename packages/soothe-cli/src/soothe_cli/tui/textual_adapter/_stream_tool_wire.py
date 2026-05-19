@@ -10,17 +10,11 @@ from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 
 from soothe_cli.events.tools.tool_call_resolution import merge_tool_display_args
 from soothe_cli.tui.textual_adapter._stream_formatting import (
-    _ensure_task_delegation_card,
-    _flush_router_pending_subgraph_tools,
-    _mount_subagent_inner_tool_row_if_resolved,
     alias_subgraph_pending_and_overlay,
     canonical_subgraph_tool_ids,
-    enrich_task_delegation_args,
 )
-from soothe_cli.tui.widgets.messages import ToolCallMessage
 
 if TYPE_CHECKING:
-    from soothe_cli.tui.file_ops import FileOpTracker
     from soothe_cli.tui.step_task_routing import StepTaskRouter
     from soothe_cli.tui.textual_adapter._adapter import TextualUIAdapter
     from soothe_cli.tui.textual_adapter._turn_ui_batch import TurnToolUiCoalescer
@@ -32,21 +26,13 @@ async def apply_tool_call_wire_update(
     *,
     data: dict[str, Any],
     ns_key: tuple[str, ...],
-    show_tool_ui: bool,
     pending_tool_calls_lc: dict[str, dict[str, Any]],
     streaming_overlay: dict[str, dict[str, Any]] | None = None,
-    file_op_tracker: FileOpTracker | None = None,
     ui_coalesce: TurnToolUiCoalescer | None = None,
 ) -> bool:
-    """Seed pending tool state and refresh cards from a wire tool-call update event.
-
-    Returns:
-        True when ``data`` was a handled tool-call update.
-    """
+    """Seed pending tool state from a wire tool-call update event (no tool-card UI)."""
     if str(data.get("type", "")) != STREAM_TOOL_CALL_UPDATE:
         return False
-    if not show_tool_ui:
-        return True
 
     if ns_key:
         router.on_subgraph_namespace(ns_key)
@@ -99,25 +85,7 @@ async def apply_tool_call_wire_update(
         raw_st = display_args.get("subagent_type", "")
         subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
         if subagent_type:
-            router.register_task_spawn(
-                tcid,
-                subagent_type,
-                step_id=bound_step_id,
-            )
-        await _ensure_task_delegation_card(
-            adapter,
-            lookup_id=tcid,
-            parsed_args=enrich_task_delegation_args(
-                adapter,
-                tcid,
-                display_args,
-                streaming_overlay=overlay,
-                pending_tool_calls_lc=pending_tool_calls_lc,
-            ),
-            show_tool_ui=show_tool_ui,
-            streaming_overlay=overlay,
-            pending_tool_calls_lc=pending_tool_calls_lc,
-        )
+            router.register_task_spawn(tcid, subagent_type, step_id=bound_step_id)
         return True
 
     if is_main:
@@ -125,48 +93,21 @@ async def apply_tool_call_wire_update(
         bound_step_id = parsed_sid or router.step_id_for_tool(tcid)
         if bound_step_id:
             step_w = adapter._current_step_messages.get(bound_step_id)
-            if step_w is not None:
+            if step_w is not None and name != "task":
                 if step_w.has_tool_call_row(tcid):
                     step_w.update_tool_args(tcid, display_args)
                 else:
                     step_w.add_tool_call(tcid, name, display_args)
                 adapter._tool_to_step[tcid] = step_w
+        return True
 
-    card = adapter._current_tool_messages.get(tcid) or adapter._tool_display_by_call_id.get(tcid)
-    if isinstance(card, ToolCallMessage):
-        card.refresh_tool_args(display_args)
-
-    if not is_main and name != "task" and file_op_tracker is not None:
-        mounted = await _mount_subagent_inner_tool_row_if_resolved(
-            adapter,
-            router,
-            lookup_id=tcid,
-            buffer_name=name,
-            parsed_args=display_args,
-            buffer_id=tcid,
+    _merge_buf, display_key = canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
+    if display_key:
+        router.buffer_subgraph_tool(
             ns_key=ns_key,
-            show_tool_ui=show_tool_ui,
-            is_main_agent=False,
-            pending_tool_calls_lc=pending_tool_calls_lc,
-            file_op_tracker=file_op_tracker,
-            streaming_overlay=overlay,
+            lookup_id=tcid,
+            display_key=display_key,
+            tool_name=name,
+            args=display_args,
         )
-        if not mounted:
-            _merge_buf, display_key = canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
-            if display_key:
-                router.buffer_subgraph_tool(
-                    ns_key=ns_key,
-                    lookup_id=tcid,
-                    display_key=display_key,
-                    tool_name=name,
-                    args=display_args,
-                )
-        await _flush_router_pending_subgraph_tools(
-            adapter,
-            router,
-            show_tool_ui=show_tool_ui,
-            pending_tool_calls_lc=pending_tool_calls_lc,
-            file_op_tracker=file_op_tracker,
-        )
-
     return True

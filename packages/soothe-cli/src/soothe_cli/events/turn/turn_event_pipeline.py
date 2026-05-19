@@ -18,7 +18,7 @@ import asyncio
 import logging
 import queue
 import threading
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Callable
 from typing import Any, Generic, TypeVar
 
 logger = logging.getLogger(__name__)

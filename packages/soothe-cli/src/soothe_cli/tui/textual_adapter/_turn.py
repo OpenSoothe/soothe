@@ -16,21 +16,18 @@ if TYPE_CHECKING:
     from langgraph.types import Interrupt
 
 from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
-from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
 from soothe_sdk.ux.task_namespace import (
     parse_unified_tool_call_id,
     row_key_for_subgraph_tool,
 )
 
-from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.events.core.presentation_engine import PresentationEngine
 from soothe_cli.events.policy.essential_events import (
     LOOP_REASON_EVENT_TYPE,
 )
 from soothe_cli.events.rendering.renderer_base import RendererBase
 from soothe_cli.events.tools.message_processing import (
-    _normalize_tool_name_for_arg_map,
     extract_tool_args_dict,
     ingest_tool_call_stream_state,
     tool_ids_touched_by_stream_message,
@@ -41,15 +38,17 @@ from soothe_cli.events.tools.tool_call_resolution import (
     resolve_stream_tool_name,
     tool_args_meaningful,
 )
-from soothe_cli.events.tools.tool_card_payload import extract_tool_result_card_payload
-from soothe_cli.events.tools.tool_card_visibility import (
-    should_elide_completed_tool_call_message,
-    should_elide_stream_tool_card_mount,
-    should_elide_tool_card_no_info,
+from soothe_cli.events.tools.tool_result import extract_tool_result_payload
+from soothe_cli.events.turn.turn_event_pipeline import run_turn_pipeline
+from soothe_cli.events.turn.turn_stream_prepare import (
+    PreparedTurnChunk,
+    TurnPrepareState,
+    prepare_turn_chunk,
 )
 from soothe_cli.tui._ask_user_types import AskUserRequest
 from soothe_cli.tui._cli_context import CLIContext  # noqa: TC001
 from soothe_cli.tui._session_stats import SessionStats, TurnEventStats
+from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui.config import build_stream_config
 from soothe_cli.tui.file_ops import FileOpTracker
 from soothe_cli.tui.hooks import dispatch_hook
@@ -68,27 +67,12 @@ from soothe_cli.tui.textual_adapter._adapter import (
     _get_hitl_request_adapter,
 )
 from soothe_cli.tui.textual_adapter._stream_formatting import (
-    _ensure_early_tool_row_mount,
-    _ensure_task_delegation_card,
-    _flush_router_pending_subgraph_tools,
-    _format_display_line_for_tui,
-    _format_progress_event_lines_for_tui,
     _is_summarization_chunk,
-    _mount_subagent_inner_tool_row_if_resolved,
-    _raw_tool_content_for_presentation,
-    _should_append_subagent_wire_line_to_parent,
-    _try_register_task_scoped_inner_tool_pending,
     alias_subgraph_pending_and_overlay,
     canonical_subgraph_tool_ids,
-    enrich_task_delegation_args,
-    refresh_subgraph_parent_tool_row,
-    refresh_subgraph_tool_rows_from_overlay,
-    refresh_task_cards_for_step,
     sync_pending_step_cards_from_plan,
-    sync_task_delegation_cards_from_stream,
 )
 from soothe_cli.tui.textual_adapter._stream_messages import (
-    _assistant_message_terminal_for_empty_tool_arg_mount,
     _normalize_lc_stream_message,
     _tui_effective_ai_blocks,
     _tui_goal_completion_matches_prior_main_visible_answer,
@@ -106,12 +90,6 @@ from soothe_cli.tui.textual_adapter._turn_helpers import (
     _report_and_persist_tokens,
 )
 from soothe_cli.tui.textual_adapter._turn_ui_batch import TurnToolUiCoalescer
-from soothe_cli.events.turn.turn_event_pipeline import run_turn_pipeline
-from soothe_cli.events.turn.turn_stream_prepare import (
-    PreparedTurnChunk,
-    TurnPrepareState,
-    prepare_turn_chunk,
-)
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
@@ -119,7 +97,6 @@ from soothe_cli.tui.widgets.messages import (
     CognitionStepMessage,
     DiffMessage,
     SummarizationMessage,
-    ToolCallMessage,
 )
 
 logger = logging.getLogger(__name__)
@@ -206,16 +183,11 @@ async def execute_task_textual(
     from langgraph.types import Command
     from pydantic import ValidationError
 
-    from soothe_cli.events.stream import StreamDisplayPipeline
-
     if daemon_session is None:
         raise RuntimeError("execute_task_textual requires daemon_session")
 
     hitl_request_adapter = _get_hitl_request_adapter(HITLRequest)
     ask_user_adapter = _get_ask_user_adapter()
-    show_tool_ui = True
-    logger.debug("TUI turn: fixed normal UX show_tool_ui=%s", show_tool_ui)
-    progress_pipeline = StreamDisplayPipeline()
     presentation = PresentationEngine()
 
     # Parse file mentions and inject content if any — defer blocking I/O
@@ -294,7 +266,6 @@ async def execute_task_textual(
     ui_coalesce = TurnToolUiCoalescer()
     adapter._task_inner_tool_pending_lines.clear()
     adapter._task_inner_tool_start_times.clear()
-    displayed_tool_ids: set[str] = set()
     tool_call_buffers: dict[str | int, dict] = {}
     # Streaming tool-call args (``tool_call_chunks``) — mirrors EventProcessor / IG-053
     pending_tool_calls_lc: dict[str, dict[str, Any]] = {}
@@ -368,11 +339,9 @@ async def execute_task_textual(
             prep_state = TurnPrepareState(
                 ev_stats=ev_stats,
                 router=router,
-                progress_pipeline=progress_pipeline,
                 presentation=presentation,
                 pending_tool_calls_lc=pending_tool_calls_lc,
                 streaming_overlay=streaming_overlay,
-                show_tool_ui=show_tool_ui,
                 last_active_tool_call_id=last_active_tool_call_id,
             )
 
@@ -392,7 +361,7 @@ async def execute_task_textual(
 
                         # Root graph uses namespace ``()``; delegated subgraphs use non-empty
                         # namespaces. Assistant *text* from subgraphs is suppressed (avoid duplicate
-                        # prose with main). Tool-call UI is gated by ``show_tool_ui``, not namespace.
+                        # prose with main). Tool stats attach to step cards on the main graph only.
                         is_main_agent = ns_key == ()
                         suppress_subgraph_assistant_text = not is_main_agent
                         suppress_main_agent_assistant_text = False
@@ -502,30 +471,15 @@ async def execute_task_textual(
                                     pending_text_by_namespace[ns_key] = ""
                                 continue
 
-                            tool_card = extract_tool_result_card_payload(message)
-                            if tool_card is not None:
+                            tool_result = extract_tool_result_payload(message)
+                            if tool_result is not None:
                                 ev_stats.tool_results += 1
-                                tool_id = tool_card.tool_call_id or None
+                                tool_id = tool_result.tool_call_id or None
                                 if tool_id:
                                     pending_tool_calls_lc.pop(str(tool_id), None)
 
-                                if not show_tool_ui:
-                                    logger.debug(
-                                        "Tool result skipped (tool UI off): tool_call_id=%r name=%r",
-                                        tool_id,
-                                        tool_card.tool_name,
-                                    )
-                                    continue
-
-                                if not tool_id:
-                                    logger.debug(
-                                        "Tool result has no tool_call_id (cannot match card): name=%r",
-                                        tool_card.tool_name,
-                                    )
-
                                 record = file_op_tracker.complete_with_message(message)
 
-                                # Update tool call status with output (unified ToolMessage / wire dict)
                                 sid = str(tool_id) if tool_id else ""
                                 if sid and not is_main_agent:
                                     ts_row = router.resolve_task_scope(ns_key)
@@ -534,19 +488,12 @@ async def execute_task_textual(
                                     )
                                 else:
                                     row_key = sid
-                                output_str = tool_card.output_display
-                                handled_step = False
+                                output_str = tool_result.output_display
                                 if row_key:
                                     step_w = adapter._tool_to_step.pop(row_key, None)
                                     if step_w is not None:
-                                        handled_step = True
                                         dur_ms = step_w.row_duration_ms_since_started(row_key)
-                                        logger.debug(
-                                            "Tool result matched step row: tool_call_id=%s error=%s",
-                                            row_key,
-                                            tool_card.is_error,
-                                        )
-                                        if not tool_card.is_error:
+                                        if not tool_result.is_error:
                                             step_w.set_tool_success(
                                                 row_key, output_str, duration_ms=dur_ms
                                             )
@@ -556,212 +503,7 @@ async def execute_task_textual(
                                             )
                                             await dispatch_hook(
                                                 "tool.error",
-                                                {"tool_names": [tool_card.tool_name or "tool"]},
-                                            )
-
-                                handled_card = False
-                                if sid and sid in adapter._current_tool_messages:
-                                    handled_card = True
-                                    # Pop before widget calls so the dict drains even
-                                    # if set_success/set_error raises.
-                                    tool_msg = adapter._current_tool_messages.pop(sid)
-                                    logger.debug(
-                                        "Tool result matched pending card: tool_call_id=%s name=%s error=%s",
-                                        sid,
-                                        tool_msg._tool_name,
-                                        tool_card.is_error,
-                                    )
-                                    if not tool_card.is_error:
-                                        tool_msg.set_success(output_str)
-                                        # Standalone ``task`` card: keep until subgraph completes so
-                                        # activity lines have a parent (when not using step aggregation).
-                                        if _normalize_tool_name_for_arg_map(
-                                            tool_msg._tool_name
-                                        ) != "task" and should_elide_completed_tool_call_message(
-                                            tool_msg, output_str, is_error=False
-                                        ):
-                                            adapter._tool_display_by_call_id.pop(sid, None)
-                                            await tool_msg.remove()
-                                    else:
-                                        tool_msg.set_error(output_str or "Error")
-                                        await dispatch_hook(
-                                            "tool.error",
-                                            {"tool_names": [tool_msg._tool_name]},
-                                        )
-
-                                handled_task_inner = False
-                                if (
-                                    row_key
-                                    and show_tool_ui
-                                    and presentation.tier_visible(VerbosityTier.NORMAL)
-                                ):
-                                    pending_ln = adapter._task_inner_tool_pending_lines.pop(
-                                        row_key, None
-                                    )
-                                    start_tm = adapter._task_inner_tool_start_times.pop(
-                                        row_key, None
-                                    )
-                                    if pending_ln:
-                                        ts_ap = router.resolve_task_scope(ns_key)
-                                        if ts_ap and ts_ap[0]:
-                                            parent_task = router.resolve_parent(
-                                                ts_ap,
-                                                step_cards=adapter._current_step_messages,
-                                                tool_display_by_call_id=adapter._tool_display_by_call_id,
-                                            )
-                                            if parent_task is not None:
-                                                if getattr(
-                                                    parent_task,
-                                                    "has_tool_call_row",
-                                                    lambda _x: False,
-                                                )(row_key):
-                                                    handled_task_inner = True
-                                                else:
-                                                    duration_ms = (
-                                                        int((time.time() - start_tm) * 1000)
-                                                        if start_tm
-                                                        else 0
-                                                    )
-                                                    raw_body = _raw_tool_content_for_presentation(
-                                                        message
-                                                    )
-                                                    tname = tool_card.tool_name or "tool"
-                                                    status_ln = (
-                                                        presentation.format_tool_result_status_line(
-                                                            tname,
-                                                            raw_body,
-                                                            is_error=tool_card.is_error,
-                                                            duration_ms=duration_ms,
-                                                        )
-                                                    )
-                                                    parent_task.append_subagent_activity(
-                                                        f"{pending_ln} -> {status_ln}"
-                                                    )
-                                                    handled_task_inner = True
-
-                                if (
-                                    tool_id
-                                    and show_tool_ui
-                                    and not (handled_step or handled_card or handled_task_inner)
-                                ):
-                                    # Orphan result: no pending Task card / step row matched this id.
-                                    # Prefer attaching to the active step card; never mount standalone
-                                    # tool widgets (except the dedicated ``task`` delegation card).
-                                    tname = tool_card.tool_name or "tool"
-                                    output_str = tool_card.output_display
-                                    if not is_main_agent:
-                                        ts_orphan = router.resolve_task_scope(ns_key)
-                                        parent_orphan = (
-                                            router.resolve_parent(
-                                                ts_orphan,
-                                                step_cards=adapter._current_step_messages,
-                                                tool_display_by_call_id=adapter._tool_display_by_call_id,
-                                            )
-                                            if ts_orphan
-                                            else None
-                                        )
-                                        if parent_orphan is None and sid:
-                                            parent_orphan = router.resolve_task_parent_for_unified_inner_tool(
-                                                sid,
-                                                tool_display_by_call_id=adapter._tool_display_by_call_id,
-                                            )
-                                        if parent_orphan is not None and sid:
-                                            row_orphan = row_key_for_subgraph_tool(
-                                                ns_key, sid, task_scope=ts_orphan
-                                            )
-                                            if not getattr(
-                                                parent_orphan, "has_tool_call_row", lambda _x: False
-                                            )(row_orphan):
-                                                parent_orphan.add_tool_call(
-                                                    row_orphan,
-                                                    tname,
-                                                    {},
-                                                    raw_args="",
-                                                )
-                                                adapter._tool_to_step[row_orphan] = parent_orphan
-                                            o_dur = parent_orphan.row_duration_ms_since_started(
-                                                row_orphan
-                                            )
-                                            logger.debug(
-                                                "Tool result attached on task/step parent: "
-                                                "tool_call_id=%s name=%s",
-                                                tool_id,
-                                                tname,
-                                            )
-                                            if not tool_card.is_error:
-                                                parent_orphan.set_tool_success(
-                                                    row_orphan, output_str, duration_ms=o_dur
-                                                )
-                                            else:
-                                                parent_orphan.set_tool_error(
-                                                    row_orphan,
-                                                    output_str or "Error",
-                                                    duration_ms=o_dur,
-                                                )
-                                                await dispatch_hook(
-                                                    "tool.error",
-                                                    {"tool_names": [tname]},
-                                                )
-                                            continue
-                                        logger.debug(
-                                            "Tool result orphan suppressed (subagent): "
-                                            "tool_call_id=%s name=%s",
-                                            tool_id,
-                                            tname,
-                                        )
-                                    elif should_elide_tool_card_no_info(
-                                        tool_name=tname,
-                                        args={},
-                                        formatted_output=output_str,
-                                        is_error=tool_card.is_error,
-                                    ):
-                                        logger.debug(
-                                            "Tool result orphan skipped (IG-300 no-info): "
-                                            "tool_call_id=%s name=%s",
-                                            tool_id,
-                                            tname,
-                                        )
-                                    else:
-                                        step_attach = adapter._step_by_namespace.get(ns_key)
-                                        if (
-                                            is_main_agent
-                                            and step_attach is not None
-                                            and sid
-                                            and show_tool_ui
-                                        ):
-                                            if not step_attach.has_tool_call_row(sid):
-                                                step_attach.add_tool_call(
-                                                    sid,
-                                                    tname,
-                                                    {},
-                                                    raw_args="",
-                                                )
-                                                adapter._tool_to_step[sid] = step_attach
-                                            o_dur = step_attach.row_duration_ms_since_started(sid)
-                                            logger.debug(
-                                                "Tool result orphan attached to step card: "
-                                                "tool_call_id=%s name=%s",
-                                                tool_id,
-                                                tname,
-                                            )
-                                            if not tool_card.is_error:
-                                                step_attach.set_tool_success(
-                                                    sid, output_str, duration_ms=o_dur
-                                                )
-                                            else:
-                                                step_attach.set_tool_error(
-                                                    sid, output_str or "Error", duration_ms=o_dur
-                                                )
-                                                await dispatch_hook(
-                                                    "tool.error",
-                                                    {"tool_names": [tname]},
-                                                )
-                                        else:
-                                            logger.debug(
-                                                "Tool result orphan suppressed (no standalone cards): "
-                                                "tool_call_id=%s name=%s",
-                                                tool_id,
-                                                tname,
+                                                {"tool_names": [tool_result.tool_name or "tool"]},
                                             )
 
                                 # Reshow spinner only when all in-flight tools have
@@ -846,30 +588,6 @@ async def execute_task_textual(
                                         router,
                                         ns_key,
                                     )
-                                    if not ui_coalesce.execute_wave_active:
-                                        refresh_subgraph_tool_rows_from_overlay(
-                                            adapter,
-                                            router,
-                                            ns_key=ns_key,
-                                            streaming_overlay=streaming_overlay,
-                                            pending_tool_calls_lc=pending_tool_calls_lc,
-                                            message=message,
-                                            only_tcids=touched_tool_ids or set(chunk_overlay),
-                                        )
-                                if (
-                                    is_main_agent
-                                    and chunk_overlay
-                                    and not ui_coalesce.execute_wave_active
-                                ):
-                                    await sync_task_delegation_cards_from_stream(
-                                        adapter,
-                                        router,
-                                        streaming_overlay=streaming_overlay,
-                                        pending_tool_calls_lc=pending_tool_calls_lc,
-                                        show_tool_ui=show_tool_ui,
-                                        only_tcids=touched_tool_ids or set(chunk_overlay),
-                                    )
-
                             blocks = _tui_effective_ai_blocks(
                                 message,
                                 ns_key=ns_key,
@@ -880,8 +598,6 @@ async def execute_task_textual(
 
                             # ``phase=goal_completion`` → standalone ``AssistantMessage`` (all namespaces).
                             if getattr(message, "phase", None) == "goal_completion":
-                                from langchain_core.messages import AIMessageChunk
-
                                 text_gc = "".join(
                                     str(b.get("text", ""))
                                     for b in blocks
@@ -1225,451 +941,77 @@ async def execute_task_textual(
 
                                     args_meaningful = tool_args_meaningful(parsed_args)
 
-                                    if lookup_id and buffer_name:
-                                        await _ensure_early_tool_row_mount(
-                                            adapter,
-                                            router,
-                                            lookup_id=lookup_id,
-                                            buffer_name=buffer_name,
-                                            parsed_args=parsed_args,
-                                            raw_args=raw_args_stream,
-                                            ns_key=ns_key,
-                                            is_main_agent=is_main_agent,
-                                            show_tool_ui=show_tool_ui,
-                                            pending_tool_calls_lc=pending_tool_calls_lc,
-                                            file_op_tracker=file_op_tracker,
-                                            streaming_overlay=streaming_overlay,
-                                        )
-                                        if is_main_agent and buffer_name == "task":
-                                            await _flush_router_pending_subgraph_tools(
-                                                adapter,
-                                                router,
-                                                show_tool_ui=show_tool_ui,
-                                                pending_tool_calls_lc=pending_tool_calls_lc,
-                                                file_op_tracker=file_op_tracker,
-                                            )
-
-                                    # IG-403: Refresh task spawn/subagent_type when args complete.
-                                    if (
-                                        lookup_id
-                                        and is_main_agent
-                                        and buffer_name == "task"
-                                        and args_meaningful
-                                    ):
-                                        parsed_step_id, _, _, _ = parse_unified_tool_call_id(
-                                            str(lookup_id)
-                                        )
-                                        bound_step_id = parsed_step_id or router.step_id_for_tool(
-                                            str(lookup_id)
-                                        )
-                                        raw_st = parsed_args.get("subagent_type", "")
-                                        subagent_type = (
-                                            raw_st.strip() if isinstance(raw_st, str) else ""
-                                        )
-                                        if subagent_type:
-                                            router.register_task_spawn(
-                                                str(lookup_id),
-                                                subagent_type,
-                                                step_id=bound_step_id,
-                                            )
-                                            await _flush_router_pending_subgraph_tools(
-                                                adapter,
-                                                router,
-                                                show_tool_ui=show_tool_ui,
-                                                pending_tool_calls_lc=pending_tool_calls_lc,
-                                                file_op_tracker=file_op_tracker,
-                                            )
-                                        await _ensure_task_delegation_card(
-                                            adapter,
-                                            lookup_id=str(lookup_id),
-                                            parsed_args=enrich_task_delegation_args(
-                                                adapter,
-                                                str(lookup_id),
-                                                parsed_args,
-                                                streaming_overlay=streaming_overlay,
-                                                pending_tool_calls_lc=pending_tool_calls_lc,
-                                            ),
-                                            show_tool_ui=show_tool_ui,
-                                            streaming_overlay=streaming_overlay,
-                                            pending_tool_calls_lc=pending_tool_calls_lc,
-                                        )
-
-                                    if lookup_id and is_main_agent and buffer_name == "task":
-                                        await _ensure_task_delegation_card(
-                                            adapter,
-                                            lookup_id=str(lookup_id),
-                                            parsed_args=enrich_task_delegation_args(
-                                                adapter,
-                                                str(lookup_id),
-                                                parsed_args,
-                                                streaming_overlay=streaming_overlay,
-                                                pending_tool_calls_lc=pending_tool_calls_lc,
-                                            ),
-                                            show_tool_ui=show_tool_ui,
-                                            streaming_overlay=streaming_overlay,
-                                            pending_tool_calls_lc=pending_tool_calls_lc,
-                                        )
-
                                     if args_still_streaming and not args_meaningful:
                                         continue
 
-                                    if (
-                                        lookup_id
-                                        and args_meaningful
-                                        and not is_main_agent
-                                        and refresh_subgraph_parent_tool_row(
-                                            adapter,
-                                            router,
-                                            ns_key=ns_key,
-                                            lookup_id=str(lookup_id),
-                                            parsed_args=parsed_args,
-                                        )
-                                    ):
-                                        tool_call_buffers.pop(buffer_key, None)
-                                        continue
-
-                                    existing_tool = None
-                                    if lookup_id:
-                                        step_agg = adapter._step_by_namespace.get(ns_key)
-                                        if (
-                                            step_agg is not None
-                                            and is_main_agent
-                                            and buffer_name != "task"
-                                            and step_agg.has_tool_call_row(lookup_id)
-                                        ):
-                                            if not ui_coalesce.should_skip_messages_arg_refresh(
+                                    if lookup_id and buffer_name and args_meaningful:
+                                        if is_main_agent and buffer_name == "task":
+                                            parsed_step_id, _, _, _ = parse_unified_tool_call_id(
                                                 str(lookup_id)
-                                            ):
-                                                step_agg.update_tool_args(lookup_id, parsed_args)
-                                            logger.debug(
-                                                "Tool call args refreshed on step card: id=%s name=%s",
-                                                lookup_id,
-                                                buffer_name,
                                             )
-                                            tool_call_buffers.pop(buffer_key, None)
-                                            continue
-                                        existing_tool = adapter._current_tool_messages.get(
-                                            lookup_id
-                                        ) or adapter._tool_display_by_call_id.get(lookup_id)
-                                    if lookup_id and args_meaningful and existing_tool is not None:
-                                        if not ui_coalesce.should_skip_messages_arg_refresh(
-                                            str(lookup_id)
-                                        ):
-                                            if isinstance(existing_tool, ToolCallMessage):
-                                                existing_tool.refresh_tool_args(parsed_args)
-                                            elif isinstance(existing_tool, CognitionStepMessage):
-                                                existing_tool.update_tool_args(
-                                                    str(lookup_id), parsed_args
+                                            bound_step_id = (
+                                                parsed_step_id
+                                                or router.step_id_for_tool(str(lookup_id))
+                                            )
+                                            raw_st = parsed_args.get("subagent_type", "")
+                                            subagent_type = (
+                                                raw_st.strip() if isinstance(raw_st, str) else ""
+                                            )
+                                            if subagent_type:
+                                                router.register_task_spawn(
+                                                    str(lookup_id),
+                                                    subagent_type,
+                                                    step_id=bound_step_id,
                                                 )
-                                        logger.debug(
-                                            "Tool call args refreshed on existing card: id=%s name=%s",
-                                            lookup_id,
-                                            buffer_name,
-                                        )
-                                        tool_call_buffers.pop(buffer_key, None)
-                                        continue
-
-                                    if lookup_id and not is_main_agent:
-                                        ts_disp = router.resolve_task_scope(ns_key)
-                                        _merge_disp, display_key = canonical_subgraph_tool_ids(
-                                            ns_key, str(lookup_id), task_scope=ts_disp
-                                        )
-                                        display_key = display_key or str(lookup_id)
-                                    else:
-                                        display_key = str(lookup_id) if lookup_id else ""
-                                    if (
-                                        display_key
-                                        and display_key in displayed_tool_ids
-                                        and args_meaningful
-                                        and not is_main_agent
-                                        and refresh_subgraph_parent_tool_row(
-                                            adapter,
-                                            router,
-                                            ns_key=ns_key,
-                                            lookup_id=str(lookup_id),
-                                            parsed_args=parsed_args,
-                                        )
-                                    ):
-                                        logger.debug(
-                                            "Subagent tool row args refreshed (already displayed): "
-                                            "id=%s name=%s",
-                                            lookup_id,
-                                            buffer_name,
-                                        )
-                                        tool_call_buffers.pop(buffer_key, None)
-                                        continue
-                                    if display_key and display_key not in displayed_tool_ids:
-                                        # IG-416: Extract step_id from unified tool_call_id
-                                        if lookup_id and is_main_agent:
+                                        elif is_main_agent and buffer_name != "task":
                                             parsed_sid, _, _, _ = parse_unified_tool_call_id(
                                                 str(lookup_id)
                                             )
-                                            bound_step = parsed_sid or router.step_id_for_tool(
-                                                str(lookup_id)
-                                            )
-                                            if bound_step and buffer_name == "task":
-                                                task_card_bound = (
-                                                    adapter._current_tool_messages.get(
-                                                        str(lookup_id)
-                                                    )
-                                                    or adapter._tool_display_by_call_id.get(
-                                                        str(lookup_id)
-                                                    )
-                                                )
-                                                if isinstance(task_card_bound, ToolCallMessage):
-                                                    task_card_bound.refresh_tool_args(parsed_args)
-                                                    displayed_tool_ids.add(display_key)
-                                                    logger.debug(
-                                                        "Task card args refreshed: id=%s step_id=%s",
-                                                        lookup_id,
-                                                        bound_step,
-                                                    )
-                                                    tool_call_buffers.pop(buffer_key, None)
-                                                    continue
-                                            if bound_step:
-                                                step_card_bound = (
-                                                    adapter._current_step_messages.get(bound_step)
-                                                )
-                                                if (
-                                                    buffer_name != "task"
-                                                    and step_card_bound
-                                                    and getattr(
-                                                        step_card_bound,
-                                                        "has_tool_call_row",
-                                                        lambda _x: False,
-                                                    )(str(lookup_id))
-                                                ):
-                                                    if parsed_args:
-                                                        update_fn = getattr(
-                                                            step_card_bound,
-                                                            "update_tool_args",
-                                                            None,
-                                                        )
-                                                        if callable(update_fn):
-                                                            update_fn(str(lookup_id), parsed_args)
-                                                    displayed_tool_ids.add(display_key)
-                                                    logger.debug(
-                                                        "Tool call args refreshed (binding-mounted): "
-                                                        "id=%s name=%s step_id=%s",
-                                                        lookup_id,
-                                                        buffer_name,
-                                                        bound_step,
-                                                    )
-                                                    tool_call_buffers.pop(buffer_key, None)
-                                                    continue
-                                        elide_empty_args_card = should_elide_stream_tool_card_mount(
-                                            tool_name=buffer_name or "",
-                                            args=parsed_args,
-                                            message_terminal_for_tool_args=_assistant_message_terminal_for_empty_tool_arg_mount(
-                                                message
-                                            ),
-                                        )
-                                        if elide_empty_args_card:
-                                            displayed_tool_ids.add(display_key)
-                                            _try_register_task_scoped_inner_tool_pending(
-                                                adapter,
-                                                router,
-                                                lookup_id=str(lookup_id),
-                                                buffer_name=buffer_name,
-                                                parsed_args=parsed_args,
-                                                is_main_agent=is_main_agent,
-                                                ns_key=ns_key,
-                                                show_tool_ui=show_tool_ui,
-                                                presentation=presentation,
-                                            )
-                                            if await _mount_subagent_inner_tool_row_if_resolved(
-                                                adapter,
-                                                router,
-                                                lookup_id=str(lookup_id),
-                                                buffer_name=buffer_name,
-                                                parsed_args=parsed_args,
-                                                buffer_id=buffer_id,
-                                                ns_key=ns_key,
-                                                show_tool_ui=show_tool_ui,
-                                                is_main_agent=is_main_agent,
-                                                pending_tool_calls_lc=pending_tool_calls_lc,
-                                                file_op_tracker=file_op_tracker,
-                                                streaming_overlay=streaming_overlay,
-                                            ):
-                                                logger.debug(
-                                                    "Tool call card skipped (IG-300 terminal empty args); "
-                                                    "subagent row on parent: name=%s tool_call_id=%r "
-                                                    "chunk_position=%r",
-                                                    buffer_name,
-                                                    lookup_id,
-                                                    getattr(message, "chunk_position", None),
-                                                )
-                                                tool_call_buffers.pop(buffer_key, None)
-                                                continue
-                                            if not is_main_agent:
-                                                router.buffer_subgraph_tool(
-                                                    ns_key=ns_key,
-                                                    lookup_id=str(lookup_id),
-                                                    display_key=display_key,
-                                                    tool_name=buffer_name or "tool",
-                                                    args=parsed_args,
-                                                )
-                                                tool_call_buffers.pop(buffer_key, None)
-                                                continue
-                                            logger.debug(
-                                                "Tool call card skipped (IG-300 terminal empty args); "
-                                                "main agent — aggregating on step: name=%s tool_call_id=%r",
-                                                buffer_name,
-                                                lookup_id,
-                                            )
-                                        else:
-                                            displayed_tool_ids.add(display_key)
-                                            _try_register_task_scoped_inner_tool_pending(
-                                                adapter,
-                                                router,
-                                                lookup_id=str(lookup_id),
-                                                buffer_name=buffer_name,
-                                                parsed_args=parsed_args,
-                                                is_main_agent=is_main_agent,
-                                                ns_key=ns_key,
-                                                show_tool_ui=show_tool_ui,
-                                                presentation=presentation,
-                                            )
-                                            if await _mount_subagent_inner_tool_row_if_resolved(
-                                                adapter,
-                                                router,
-                                                lookup_id=str(lookup_id),
-                                                buffer_name=buffer_name,
-                                                parsed_args=parsed_args,
-                                                buffer_id=buffer_id,
-                                                ns_key=ns_key,
-                                                show_tool_ui=show_tool_ui,
-                                                is_main_agent=is_main_agent,
-                                                pending_tool_calls_lc=pending_tool_calls_lc,
-                                                file_op_tracker=file_op_tracker,
-                                                streaming_overlay=streaming_overlay,
-                                            ):
-                                                tool_call_buffers.pop(buffer_key, None)
-                                                continue
-                                        if show_tool_ui:
-                                            file_op_tracker.start_operation(
-                                                buffer_name, parsed_args, buffer_id
-                                            )
-
-                                            if adapter._set_spinner:
-                                                await adapter._set_spinner("Tools")
-
-                                            # IG-416: Parse unified ID for step_id, fallback to router binding
-                                            parsed_sid = ""
-                                            if lookup_id:
-                                                parsed_sid, _, _, _ = parse_unified_tool_call_id(
-                                                    str(lookup_id)
-                                                )
                                             bound_step_id = parsed_sid or router.step_id_for_tool(
                                                 str(lookup_id)
                                             )
-                                            if bound_step_id:
-                                                active_step = adapter._current_step_messages.get(
-                                                    bound_step_id
-                                                )
-                                            else:
-                                                # Fallback to namespace lookup (existing behavior)
-                                                active_step = adapter._step_by_namespace.get(ns_key)
-                                            use_step_aggregator = (
-                                                is_main_agent
-                                                and active_step is not None
-                                                and buffer_name != "task"
+                                            active_step = (
+                                                adapter._current_step_messages.get(bound_step_id)
+                                                if bound_step_id
+                                                else adapter._step_by_namespace.get(ns_key)
                                             )
-                                            if is_main_agent and buffer_name == "task":
-                                                await _ensure_task_delegation_card(
-                                                    adapter,
-                                                    lookup_id=str(lookup_id),
-                                                    parsed_args=parsed_args,
-                                                    show_tool_ui=show_tool_ui,
-                                                )
-                                            elif use_step_aggregator:
-                                                # IG-402: Pass _raw from streaming accumulator so
-                                                # format_tool_call_args can use its regex fallback.
-                                                raw = ""
-                                                pend = pending_tool_calls_lc.get(str(lookup_id))
-                                                if isinstance(pend, dict):
-                                                    raw = str(pend.get("args_str", ""))
-                                                active_step.add_tool_call(
-                                                    lookup_id,
-                                                    buffer_name or "tool",
-                                                    parsed_args,
-                                                    raw_args=raw,
-                                                )
+                                            if active_step is not None:
+                                                if active_step.has_tool_call_row(lookup_id):
+                                                    if not ui_coalesce.should_skip_messages_arg_refresh(
+                                                        str(lookup_id)
+                                                    ):
+                                                        active_step.update_tool_args(
+                                                            lookup_id, parsed_args
+                                                        )
+                                                else:
+                                                    active_step.add_tool_call(
+                                                        lookup_id,
+                                                        buffer_name,
+                                                        parsed_args,
+                                                        raw_args=raw_args_stream,
+                                                    )
                                                 adapter._tool_to_step[lookup_id] = active_step
-                                                logger.debug(
-                                                    "Tool call row on step card: name=%s "
-                                                    "tool_call_id=%s namespace=%s",
-                                                    buffer_name,
-                                                    lookup_id,
-                                                    ns_key,
-                                                )
-                                            elif is_main_agent:
-                                                # IG-402: No step card yet — buffer this tool so it can
-                                                # be retroactively attached when step_started arrives.
-                                                raw = ""
-                                                pend = pending_tool_calls_lc.get(str(lookup_id))
-                                                if isinstance(pend, dict):
-                                                    raw = str(pend.get("args_str", ""))
+                                            else:
                                                 router.buffer_main_tool(
                                                     str(lookup_id),
-                                                    buffer_name or "tool",
+                                                    buffer_name,
                                                     parsed_args,
-                                                    raw_args=raw,
+                                                    raw_args=raw_args_stream,
                                                 )
-                                                if buffer_name != "task":
-                                                    # Pending marker for non-task tools: subagent
-                                                    # resolution sees this and knows the parent exists
-                                                    # but hasn't been flushed yet.
-                                                    adapter._tool_display_by_call_id[
-                                                        str(lookup_id)
-                                                    ] = None
-                                                logger.debug(
-                                                    "Tool call buffered for step aggregation: name=%s "
-                                                    "tool_call_id=%s namespace=%s",
-                                                    buffer_name,
-                                                    lookup_id,
-                                                    ns_key,
-                                                )
-                                            else:
-                                                # Buffer until namespace → task scope resolves.
-                                                raw_sg = ""
-                                                pend_sg = pending_tool_calls_lc.get(str(lookup_id))
-                                                if isinstance(pend_sg, dict):
-                                                    raw_sg = str(pend_sg.get("args_str", ""))
-                                                router.buffer_subgraph_tool(
-                                                    ns_key=ns_key,
-                                                    lookup_id=str(lookup_id),
-                                                    display_key=display_key,
-                                                    tool_name=buffer_name or "tool",
-                                                    args=parsed_args,
-                                                    raw_args=raw_sg,
-                                                )
-                                                logger.debug(
-                                                    "Subagent tool buffered (parent pending): "
-                                                    "name=%s tool_call_id=%s namespace=%s",
-                                                    buffer_name,
-                                                    lookup_id,
-                                                    ns_key,
-                                                )
-                                        else:
-                                            logger.debug(
-                                                "Tool call block not shown as card (tool UI off): "
-                                                "name=%s tool_call_id=%s",
-                                                buffer_name,
-                                                lookup_id,
+                                        elif not is_main_agent:
+                                            ts_disp = router.resolve_task_scope(ns_key)
+                                            _merge_disp, display_key = canonical_subgraph_tool_ids(
+                                                ns_key, str(lookup_id), task_scope=ts_disp
                                             )
-                                    elif (
-                                        show_tool_ui
-                                        and args_meaningful
-                                        and buffer_name
-                                        and not lookup_id
-                                    ):
-                                        logger.debug(
-                                            "Tool call has no stable id; card not mounted: "
-                                            "name=%s namespace=%s",
-                                            buffer_name,
-                                            ns_key,
-                                        )
+                                            display_key = display_key or str(lookup_id)
+                                            router.buffer_subgraph_tool(
+                                                ns_key=ns_key,
+                                                lookup_id=str(lookup_id),
+                                                display_key=display_key,
+                                                tool_name=buffer_name,
+                                                args=parsed_args,
+                                                raw_args=raw_args_stream,
+                                            )
 
                                     tool_call_buffers.pop(buffer_key, None)
 
@@ -1694,10 +1036,8 @@ async def execute_task_textual(
                                     router,
                                     data=data,
                                     ns_key=ns_key,
-                                    show_tool_ui=show_tool_ui,
                                     pending_tool_calls_lc=pending_tool_calls_lc,
                                     streaming_overlay=streaming_overlay,
-                                    file_op_tracker=file_op_tracker,
                                     ui_coalesce=ui_coalesce,
                                 ):
                                     continue
@@ -1796,21 +1136,6 @@ async def execute_task_textual(
                                             adapter._tool_to_step,
                                             adapter._tool_display_by_call_id,
                                         )
-                                        await _flush_router_pending_subgraph_tools(
-                                            adapter,
-                                            router,
-                                            show_tool_ui=show_tool_ui,
-                                            pending_tool_calls_lc=pending_tool_calls_lc,
-                                            file_op_tracker=file_op_tracker,
-                                        )
-                                        await refresh_task_cards_for_step(
-                                            adapter,
-                                            router,
-                                            step_id,
-                                            streaming_overlay=None,
-                                            pending_tool_calls_lc=pending_tool_calls_lc,
-                                            show_tool_ui=show_tool_ui,
-                                        )
 
                                         continue
 
@@ -1867,23 +1192,9 @@ async def execute_task_textual(
                                                 adapter._last_completed_main_step_execute_prose = (
                                                     widget.last_completed_execute_prose
                                                 )
-                                        else:
-                                            ev = dict(data)
-                                            ev["namespace"] = list(ns_key)
-                                            for line in progress_pipeline.process(ev):
-                                                line_text = _format_display_line_for_tui(line)
-                                                if line_text:
-                                                    await adapter._mount_message(
-                                                        AppMessage(line_text)
-                                                    )
                                         continue
 
                                 if event_type == LOOP_REASON_EVENT_TYPE:
-                                    ev_plan = dict(data)
-                                    ev_plan["namespace"] = list(ns_key)
-                                    plan_lines = progress_pipeline.process(ev_plan)
-                                    if not plan_lines:
-                                        continue
                                     pending_text = pending_text_by_namespace.get(ns_key, "")
                                     if pending_text:
                                         await _flush_assistant_text_ns(
@@ -1919,59 +1230,6 @@ async def execute_task_textual(
                                     and event_type.startswith("soothe.subagent.")
                                     and is_allowlisted_subagent_event_type(event_type)
                                 ):
-                                    tcid = task_scope[0]
-                                    card = router.resolve_parent(
-                                        task_scope,
-                                        step_cards=adapter._current_step_messages,
-                                        tool_display_by_call_id=adapter._tool_display_by_call_id,
-                                    )
-                                    if card is None and tcid:
-                                        card = adapter._current_tool_messages.get(tcid)
-                                    if prepared.precomputed_progress_lines:
-                                        wire_lines = prepared.precomputed_progress_lines
-                                    else:
-                                        ev_wire = dict(data)
-                                        ev_wire.setdefault("type", event_type)
-                                        ev_wire["namespace"] = list(ns_key)
-                                        ev_wire["task_scope"] = task_scope
-                                        wire_lines = [
-                                            _format_display_line_for_tui(line)
-                                            for line in progress_pipeline.process(ev_wire)
-                                        ]
-                                        wire_lines = [ln for ln in wire_lines if ln]
-                                    if card is not None:
-                                        for line_text in wire_lines:
-                                            if _should_append_subagent_wire_line_to_parent(
-                                                card, event_type=event_type
-                                            ):
-                                                card.append_subagent_activity(line_text)
-                                        continue
-
-                                if prepared.precomputed_progress_lines:
-                                    progress_lines = prepared.precomputed_progress_lines
-                                elif prepared.skip_custom_progress:
-                                    progress_lines = []
-                                else:
-                                    progress_lines = _format_progress_event_lines_for_tui(
-                                        data,
-                                        ns_key,
-                                        pipeline=progress_pipeline,
-                                        task_scope=task_scope,
-                                    )
-                                if progress_lines:
-                                    pending_text = pending_text_by_namespace.get(ns_key, "")
-                                    if pending_text:
-                                        await _flush_assistant_text_ns(
-                                            adapter,
-                                            pending_text,
-                                            ns_key,
-                                            assistant_message_by_namespace,
-                                            router=router,
-                                        )
-                                        pending_text_by_namespace[ns_key] = ""
-                                        assistant_message_by_namespace.pop(ns_key, None)
-                                    for progress_line in progress_lines:
-                                        await adapter._mount_message(AppMessage(progress_line))
                                     continue
                     finally:
                         await ui_coalesce.after_chunk()

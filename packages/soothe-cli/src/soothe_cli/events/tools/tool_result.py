@@ -1,9 +1,8 @@
-"""Unified extraction of tool-card update data from LangChain stream messages.
+"""Extract tool result fields from LangChain stream messages.
 
-The TUI uses this to turn ``ToolMessage`` instances (or serialized wire dicts) into
-display-ready fields for ``ToolCallMessage`` lifecycle updates.
+Used by the TUI to update step-card tool state (stats only; no tool-row UI).
 
-Error detection matches :class:`soothe_cli.shared.event_processor.EventProcessor`
+Error detection matches :class:`soothe_cli.events.core.event_processor.EventProcessor`
 tool-result handling (content heuristics) with explicit ``status`` override.
 """
 
@@ -44,8 +43,8 @@ def infer_tool_output_suggests_error(output_display: str, _tool_name: str = "") 
 
 
 @dataclass(frozen=True, slots=True)
-class ToolResultCardPayload:
-    """Fields needed to update a tool card after a tool has returned."""
+class ToolResultPayload:
+    """Normalized tool result fields from a stream message."""
 
     tool_call_id: str
     tool_name: str
@@ -78,8 +77,8 @@ def _tool_dict_from_any(message: Any) -> dict[str, Any] | None:
     return None
 
 
-def extract_tool_result_card_payload(message: Any) -> ToolResultCardPayload | None:
-    """Build :class:`ToolResultCardPayload` from a tool result stream value.
+def extract_tool_result_payload(message: Any) -> ToolResultPayload | None:
+    """Build :class:`ToolResultPayload` from a tool result stream value.
 
     Accepts:
 
@@ -126,7 +125,7 @@ def extract_tool_result_card_payload(message: Any) -> ToolResultCardPayload | No
     else:
         is_error = infer_tool_output_suggests_error(output_display, tool_name)
 
-    return ToolResultCardPayload(
+    return ToolResultPayload(
         tool_call_id=tool_call_id,
         tool_name=tool_name,
         output_display=output_display,
@@ -135,8 +134,14 @@ def extract_tool_result_card_payload(message: Any) -> ToolResultCardPayload | No
     )
 
 
+# Back-compat aliases (remove when callers are migrated).
+ToolResultCardPayload = ToolResultPayload
+extract_tool_result_card_payload = extract_tool_result_payload
+
 __all__ = [
     "ToolResultCardPayload",
+    "ToolResultPayload",
     "extract_tool_result_card_payload",
+    "extract_tool_result_payload",
     "infer_tool_output_suggests_error",
 ]

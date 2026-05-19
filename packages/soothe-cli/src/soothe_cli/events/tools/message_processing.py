@@ -437,27 +437,17 @@ def extract_tool_brief(tool_name: str, content: str | dict | Any, max_length: in
         >>> extract_tool_brief("run_command", "output")
         "✓ Done (6 chars output)"
     """
-    # Use semantic formatter for tool-specific summarization
-    from soothe_cli.events.tools.tool_output_formatter import ToolOutputFormatter
+    from soothe_cli.events.tools.tool_message_format import format_tool_message_content
 
-    try:
-        formatter = ToolOutputFormatter()
-        brief = formatter.format(tool_name, content)
-        return brief.to_display()
-    except Exception:
-        # Fallback to simple truncation if formatter fails
-        if isinstance(content, str):
-            # Web search/crawl tools return structured output with summary on first line
-            web_tools = {"wizsearch_search", "wizsearch_crawl", "web_search", "fetch_url"}
-            if tool_name in web_tools:
-                first_line = content.split("\n", 1)[0].strip()
-                if first_line:
-                    return first_line[:max_length]
-            return content.replace("\n", " ")[:max_length]
-        if isinstance(content, dict):
-            # Simple dict formatting
-            return f"Dict with {len(content)} fields"
-        return str(content)[:max_length]
+    text = format_tool_message_content(content)
+    if not text:
+        return ""
+    web_tools = {"wizsearch_search", "wizsearch_crawl", "web_search", "fetch_url"}
+    if tool_name in web_tools:
+        first_line = text.split("\n", 1)[0].strip()
+        if first_line:
+            return first_line[:max_length]
+    return text.replace("\n", " ")[:max_length]
 
 
 def coerce_tool_call_args_to_dict(raw: Any) -> dict[str, Any]:

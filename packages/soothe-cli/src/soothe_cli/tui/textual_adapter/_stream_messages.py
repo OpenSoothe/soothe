@@ -97,21 +97,6 @@ def _expand_nonstandard_tool_blocks(blocks: list[dict[str, Any]]) -> list[dict[s
     return out
 
 
-def _assistant_message_terminal_for_empty_tool_arg_mount(message: Any) -> bool:
-    """True when streamed tool-call kwargs will not be refined by a later chunk.
-
-    Used with :func:`should_elide_stream_tool_card_mount` to avoid mounting cards
-    that only show placeholder headers (IG-300).
-    """
-    from langchain_core.messages import AIMessage, AIMessageChunk
-
-    if isinstance(message, AIMessage):
-        return True
-    if isinstance(message, AIMessageChunk):
-        return getattr(message, "chunk_position", None) == "last"
-    return False
-
-
 def _tui_main_assistant_body_for_dedupe(raw: str) -> str:
     """Normalize assistant text the same way as :func:`_flush_assistant_text_ns` input."""
     from soothe_cli.events.policy.explore_task_display import (

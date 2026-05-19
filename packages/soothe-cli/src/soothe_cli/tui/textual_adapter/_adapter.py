@@ -47,10 +47,7 @@ from soothe_cli.tui._session_stats import (
     format_token_count as format_token_count,
 )
 from soothe_cli.tui.step_task_routing import StepTaskRouter
-from soothe_cli.tui.widgets.messages import (
-    CognitionStepMessage,
-    ToolCallMessage,
-)
+from soothe_cli.tui.widgets.messages import CognitionStepMessage
 
 logger = logging.getLogger(__name__)
 
@@ -160,10 +157,10 @@ class TextualUIAdapter:
         """
 
         # State tracking
-        self._current_tool_messages: dict[str, ToolCallMessage] = {}
+        self._current_tool_messages: dict[str, CognitionStepMessage] = {}
         """Map of tool call IDs to widgets still awaiting a ``ToolMessage`` (in-flight)."""
 
-        self._tool_display_by_call_id: dict[str, ToolCallMessage | CognitionStepMessage] = {}
+        self._tool_display_by_call_id: dict[str, CognitionStepMessage] = {}
         """Stable tool_call_id → tool card or step card (``task`` on step aggregates here).
 
         Used for subagent activity lines and inner-tool result routing (IG-402). Cleared with
@@ -191,7 +188,7 @@ class TextualUIAdapter:
         execute card; this field preserves the final text for dedupe (``execute_wave`` path).
         """
 
-        self._tool_to_step: dict[str, ToolCallMessage | CognitionStepMessage] = {}
+        self._tool_to_step: dict[str, CognitionStepMessage] = {}
         """tool_call_id → parent card (step or task) while awaiting a matching ``ToolMessage``."""
 
         self._task_inner_tool_pending_lines: dict[str, str] = {}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from soothe_cli.events.tools.tool_card_payload import extract_tool_result_card_payload
+from soothe_cli.events.tools.tool_result import extract_tool_result_payload
 
 
 def test_extract_from_tool_message_success() -> None:
@@ -14,7 +14,7 @@ def test_extract_from_tool_message_success() -> None:
         name="read_file",
         status="success",
     )
-    p = extract_tool_result_card_payload(msg)
+    p = extract_tool_result_payload(msg)
     assert p is not None
     assert p.tool_call_id == "tc-1"
     assert p.tool_name == "read_file"
@@ -29,7 +29,7 @@ def test_extract_from_tool_message_error_status() -> None:
         name="run",
         status="error",
     )
-    p = extract_tool_result_card_payload(msg)
+    p = extract_tool_result_payload(msg)
     assert p is not None
     assert p.is_error is True
 
@@ -42,7 +42,7 @@ def test_extract_from_wire_dict_tool() -> None:
         "status": "success",
         "content": '["a", "b"]',
     }
-    p = extract_tool_result_card_payload(chunk)
+    p = extract_tool_result_payload(chunk)
     assert p is not None
     assert p.tool_call_id == "tc-3"
     assert p.tool_name == "ls"
@@ -50,8 +50,8 @@ def test_extract_from_wire_dict_tool() -> None:
 
 
 def test_extract_from_non_tool_returns_none() -> None:
-    assert extract_tool_result_card_payload(AIMessage(content="hi")) is None
-    assert extract_tool_result_card_payload({"type": "human"}) is None
+    assert extract_tool_result_payload(AIMessage(content="hi")) is None
+    assert extract_tool_result_payload({"type": "human"}) is None
 
 
 def test_run_python_envelope_success_not_flagged_on_ambiguous_status() -> None:
@@ -63,7 +63,7 @@ def test_run_python_envelope_success_not_flagged_on_ambiguous_status() -> None:
         "status": "pending",
         "content": '{"success": true, "output": "", "result": null, "error": null}',
     }
-    p = extract_tool_result_card_payload(chunk)
+    p = extract_tool_result_payload(chunk)
     assert p is not None
     assert p.is_error is False
 
@@ -76,7 +76,7 @@ def test_run_python_envelope_failure_when_success_false() -> None:
         "status": "pending",
         "content": '{"success": false, "output": "", "result": null, "error": "SyntaxError: x"}',
     }
-    p = extract_tool_result_card_payload(chunk)
+    p = extract_tool_result_payload(chunk)
     assert p is not None
     assert p.is_error is True
 
@@ -90,6 +90,6 @@ def test_run_python_envelope_allows_extra_keys() -> None:
         "status": "pending",
         "content": ('{"success": true, "output": "", "result": null, "error": null, "meta": 1}'),
     }
-    p = extract_tool_result_card_payload(chunk)
+    p = extract_tool_result_payload(chunk)
     assert p is not None
     assert p.is_error is False
