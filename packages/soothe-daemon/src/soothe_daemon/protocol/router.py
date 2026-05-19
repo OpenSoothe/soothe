@@ -307,7 +307,7 @@ class MessageRouter:
         if not loop_id or not isinstance(resume_payload, dict):
             logger.warning(
                 "[MsgRouter] resume_interrupts rejected from client %s: missing loop_id or payload",
-                str(client_id)[:8],
+                client_id,
             )
             await d._send_client_message(
                 client_id,
@@ -908,7 +908,7 @@ class MessageRouter:
             await d._query_engine.cancel_loop(loop_id)
         except Exception:
             logger.warning(
-                "Failed to cancel running queries for loop %s", loop_id[:16], exc_info=True
+                "Failed to cancel running queries for loop %s", loop_id, exc_info=True
             )
 
         # 2. Unsubscribe all clients from this loop's topic
@@ -1132,7 +1132,7 @@ class MessageRouter:
         pending = d._pending_interrupt_responses.pop(loop_id, None)
         if pending and not pending.done():
             pending.set_result({"action": "cancel", "reason": "client_detached"})
-            logger.debug("Resolved pending interrupt future for detached loop %s", loop_id[:16])
+            logger.debug("Resolved pending interrupt future for detached loop %s", loop_id)
 
         await d._session_manager.unsubscribe_loop(client_id, loop_id)
 
@@ -1193,7 +1193,7 @@ class MessageRouter:
                 client_workspace = str(resolved)
                 logger.info(
                     "[loop_new] Loop %s using client workspace: %s",
-                    loop_id[:16],
+                    loop_id,
                     client_workspace,
                 )
 

@@ -150,10 +150,10 @@ class WorkerPoolConfig(BaseModel):
         description="Max requests before worker respawn (prevents memory buildup)",
     )
     request_timeout_seconds: int = Field(
-        default=1800,
+        default=0,
         ge=0,
-        le=7200,
-        description="Default per-request timeout in seconds (0 = no timeout, default 30 min)",
+        le=604_800,
+        description="Default per-request timeout in seconds (0 = no timeout)",
     )
     heartbeat_interval_seconds: int = Field(
         default=30,
