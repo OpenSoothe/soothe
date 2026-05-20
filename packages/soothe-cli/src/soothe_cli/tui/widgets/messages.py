@@ -2222,7 +2222,7 @@ class CognitionStepMessage(Vertical):
         self.request_tools_display_refresh(immediate=True)
 
     def set_tool_rejected(self, tool_call_id: str) -> None:
-        """Mark a tool row as rejected (HITL)."""
+        """Mark a tool row as rejected."""
         row = self._row_index.get(str(tool_call_id))
         if row is None:
             return

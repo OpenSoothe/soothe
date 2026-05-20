@@ -101,7 +101,6 @@ class WorkerProcess:
     request_queue: multiprocessing.Queue  # main → worker
     response_queue: multiprocessing.Queue  # worker → main
     cancel_event: multiprocessing.Event  # cooperative cancellation signal (inherited at spawn)
-    interrupt_queue: multiprocessing.Queue  # main → worker (HITL resume payloads)
     worker_id: str
     status: WorkerStatus = WorkerStatus.IDLE
     current_loop_id: str | None = None
@@ -368,7 +367,6 @@ def _pool_worker(
     request_queue: multiprocessing.Queue,
     response_queue: multiprocessing.Queue,
     cancel_event: multiprocessing.Event,
-    interrupt_queue: multiprocessing.Queue,
     idle_timeout_seconds: int,
     max_requests: int,
     default_timeout_seconds: int,
@@ -382,7 +380,6 @@ def _pool_worker(
             request_queue,
             response_queue,
             cancel_event,
-            interrupt_queue,
             idle_timeout_seconds,
             max_requests,
             default_timeout_seconds,
@@ -403,7 +400,6 @@ def _pool_worker_body(
     request_queue: multiprocessing.Queue,
     response_queue: multiprocessing.Queue,
     cancel_event: multiprocessing.Event,
-    interrupt_queue: multiprocessing.Queue,
     idle_timeout_seconds: int,
     max_requests: int,
     default_timeout_seconds: int,
@@ -428,7 +424,6 @@ def _pool_worker_body(
         request_queue: Queue for receiving requests from main process.
         response_queue: Queue for sending responses to main process.
         cancel_event: multiprocessing.Event for cooperative cancellation signaling.
-        interrupt_queue: Queue for receiving HITL resume payloads from main process.
         idle_timeout_seconds: Exit after this many seconds idle.
         max_requests: Exit after this many requests completed.
         default_timeout_seconds: Default per-request timeout if not specified.
@@ -451,12 +446,6 @@ def _pool_worker_body(
 
         # Clear cancel event at start of new request
         cancel_event.clear()
-        # Drain stale interrupt payloads from a previous request
-        while not interrupt_queue.empty():
-            try:
-                interrupt_queue.get_nowait()
-            except Exception:  # noqa: BLE001
-                break
 
         # Determine timeout: use request-specific or default
         timeout_seconds = (
@@ -842,11 +831,10 @@ class WorkerPool:
         )
 
     async def _spawn_worker(self, worker_id: str, config: SootheConfig) -> WorkerProcess:
-        """Spawn a single worker process with queues, cancel event, and interrupt queue."""
+        """Spawn a single worker process with request/response queues and cancel event."""
         request_queue: Any = self._ctx.Queue()
         response_queue: Any = self._ctx.Queue()
         cancel_event: Any = self._ctx.Event()
-        interrupt_queue: Any = self._ctx.Queue()
 
         process = self._ctx.Process(
             target=_pool_worker,
@@ -856,7 +844,6 @@ class WorkerPool:
                 request_queue,
                 response_queue,
                 cancel_event,
-                interrupt_queue,
                 self._idle_timeout_seconds,
                 self._max_requests_per_worker,
                 self._request_timeout_seconds,
@@ -872,7 +859,6 @@ class WorkerPool:
             request_queue=request_queue,
             response_queue=response_queue,
             cancel_event=cancel_event,
-            interrupt_queue=interrupt_queue,
             worker_id=worker_id,
             started_at=datetime.now(),
         )
@@ -1149,20 +1135,6 @@ class WorkerPool:
                     )
                     continue
 
-                # INTERRUPT_PENDING: Worker hit HITL interrupt, needs resume payload
-                if msg_type == "interrupt_pending":
-                    response_queue = self._pending_responses.get(request_id)
-                    if response_queue is not None:
-                        await response_queue.put(("interrupt_pending", payload))
-                    worker.last_heartbeat_at = datetime.now()
-                    logger.info(
-                        "WorkerPool: worker %s request %s awaiting interrupt resume (loop=%s)",
-                        worker_id,
-                        request_id,
-                        worker.current_loop_id or "?",
-                    )
-                    continue
-
                 # TIMEOUT handling: Worker exceeded request timeout
                 if msg_type == "timeout":
                     response_queue = self._pending_responses.get(request_id)
@@ -1407,13 +1379,6 @@ class WorkerPool:
                     self._pending_responses.pop(request_id, None)
                     raise payload
 
-                if msg_type == "interrupt_pending":
-                    logger.debug(
-                        "WorkerPool: ignoring interrupt_pending for request %s (auto-resume in worker)",
-                        request_id,
-                    )
-                    continue
-
                 # msg_type == "chunk"
                 yield payload
         except asyncio.CancelledError:
@@ -1578,6 +1543,7 @@ class PoolLoopRunner:
         """Request cancellation."""
         if self._pool is not None:
             await self._pool.cancel_request(self._loop_id)
+
 
 # Verify structural compliance at import time (no overhead at runtime).
 def _assert_protocol() -> None:

@@ -244,7 +244,14 @@ def row_key_for_subgraph_tool(
 ) -> str:
     """Row key for a subgraph tool on a parent step/task card."""
     tid = str(tool_call_id).strip()
-    _, type_code, _, _ = parse_unified_tool_call_id(tid)
+    parsed_sid, type_code, parsed_idx, tool_info = parse_unified_tool_call_id(tid)
+    # Re-map task-level IDs to the bound task_scope's step_id
+    if type_code == "t" and task_scope is not None:
+        bound_step_id = task_scope_step_id(task_scope)
+        bound_task_idx = task_scope_task_idx(task_scope, bound_step_id)
+        if bound_step_id and (parsed_sid != bound_step_id or parsed_idx != bound_task_idx):
+            # Daemon sent wrong step_id/task_idx - remap to correct ones from binding
+            return _format_unified_tool_call_id(bound_step_id, f"t{bound_task_idx}", tool_info)
     if type_code == "t":
         return tid
     return scoped_subgraph_tool_key(namespace, tid, task_scope=task_scope)
@@ -257,13 +264,18 @@ def try_bind_namespace_to_unlinked_spawn(
     *,
     pending_unscoped_namespaces: deque[tuple[str, ...]] | None = None,
 ) -> bool:
-    """Bind a subgraph namespace to a spawn that has no namespace yet."""
+    """Bind a subgraph namespace to an unlinked spawn using FIFO order.
+
+    When namespace arrives after spawn registration, bind to the oldest
+    unlinked spawn (FIFO matching for parallel task handling).
+    """
     if not namespace or namespace in bindings:
         return False
     linked_spawn_ids = {scope[0] for scope in bindings.values()}
     unlinked = [scope for scope in spawns_by_step.values() if scope[0] not in linked_spawn_ids]
-    if len(unlinked) != 1:
+    if not unlinked:
         return False
+    # Bind namespace to the first unlinked spawn (FIFO)
     scope = unlinked[0]
     bindings[namespace] = scope
     if pending_unscoped_namespaces is not None:
@@ -322,22 +334,31 @@ def _maybe_bind_one_pending_namespace(
     scope: TaskScope,
     spawns_by_step: dict[str, TaskScope],
 ) -> None:
-    """Bind a deferred namespace only when there is a single unambiguous pending ns."""
+    """Bind deferred namespace(s) to newly registered spawn using FIFO matching.
+
+    When multiple namespaces are pending and multiple spawns are unlinked,
+    bind the oldest pending namespace to this spawn (FIFO order).
+    """
     task_call_id = scope[0]
     if any(bound == scope for bound in bindings.values()):
         return
     unbound = [ns for ns in pending_unscoped_namespaces if ns not in bindings]
-    if len(unbound) != 1:
+    if not unbound:
         return
     linked_task_ids = {s[0] for s in bindings.values()}
     unlinked = [s for s in spawns_by_step.values() if s[0] not in linked_task_ids]
-    if len(unlinked) != 1 or unlinked[0][0] != task_call_id:
+    # Find the spawn matching this scope
+    matching_spawn = None
+    for s in unlinked:
+        if s[0] == task_call_id:
+            matching_spawn = s
+            break
+    if matching_spawn is None:
         return
+    # Bind the oldest pending namespace to this spawn (FIFO)
     ns = unbound[0]
-    bindings[ns] = scope
-    remaining = deque(n for n in pending_unscoped_namespaces if n != ns)
-    pending_unscoped_namespaces.clear()
-    pending_unscoped_namespaces.extend(remaining)
+    bindings[ns] = matching_spawn
+    pending_unscoped_namespaces.remove(ns)
 
 
 def register_task_spawn_for_step(

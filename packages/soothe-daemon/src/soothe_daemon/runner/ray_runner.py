@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import ray
 from ray.util.queue import Queue
@@ -84,6 +84,7 @@ class RayLoopRunner:
         except Exception:  # noqa: BLE001
             pass
         self._actor = None
+
 
 # Structural protocol check.
 def _assert_protocol() -> None:
