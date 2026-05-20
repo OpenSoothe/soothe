@@ -66,9 +66,11 @@ from soothe_cli.runtime.parse.tool_call_resolution import (
 )
 from soothe_cli.runtime.parse.tool_result import extract_tool_result_payload
 from soothe_cli.runtime.policy.essential_events import LOOP_REASON_EVENT_TYPE
-from soothe_cli.runtime.presentation.explore_task_display import format_explore_task_json_blob_for_display
 from soothe_cli.runtime.presentation.duration_format import format_duration
 from soothe_cli.runtime.presentation.engine import PresentationEngine
+from soothe_cli.runtime.presentation.explore_task_display import (
+    format_explore_task_json_blob_for_display,
+)
 from soothe_cli.runtime.presentation.renderer_base import RendererBase
 from soothe_cli.runtime.state.file_tracker import (
     FILE_CHANGE_TOOLS,
