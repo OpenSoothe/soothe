@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from soothe.core.loop.engine.executor import Executor
+from soothe.core.loop.engine.executor import Executor, StepWaveQueued, StepWaveStart
 from soothe.core.loop.state.schemas import StepAction, StepResult
 
 from ..runtime_context import LoopRuntimeContext
@@ -76,22 +76,30 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
         return {"last_outcome": "fatal"}
 
     started_step_ids: set[str] = set()
-    completed_ids = set(state.dependency_completion_ids())
+    queued_step_ids: set[str] = set()
+
+    async def _emit_step_queued_for_steps(steps: list[StepAction]) -> None:
+        """Emit ``step_queued`` for ready steps waiting on ``max_parallel_steps``."""
+        for step in steps:
+            if step.id in queued_step_ids or step.id in started_step_ids:
+                continue
+            queued_step_ids.add(step.id)
+            await ctx.emit(
+                "step_queued",
+                {"step_id": step.id, "description": step.description},
+            )
 
     async def _emit_step_started_for_steps(steps: list[StepAction]) -> None:
-        """Emit ``step_started`` once per step when it becomes runnable (live TUI)."""
+        """Emit ``step_started`` when a step enters an active execute batch (live TUI)."""
         for step in steps:
             if step.id in started_step_ids:
                 continue
             started_step_ids.add(step.id)
+            queued_step_ids.discard(step.id)
             await ctx.emit(
                 "step_started",
                 {"step_id": step.id, "description": step.description},
             )
-
-    await _emit_step_started_for_steps(
-        decision.get_ready_steps(completed_ids),
-    )
 
     step_results: list[StepResult] = []
     step_desc = {s.id: s.description for s in decision.steps}
@@ -106,7 +114,11 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
         decision=decision,
         state=state,
     ):
-        if isinstance(item, tuple) and len(item) == _STREAM_CHUNK_LEN:
+        if isinstance(item, StepWaveQueued):
+            await _emit_step_queued_for_steps(list(item.steps))
+        elif isinstance(item, StepWaveStart):
+            await _emit_step_started_for_steps(list(item.steps))
+        elif isinstance(item, tuple) and len(item) == _STREAM_CHUNK_LEN:
             await ctx.emit("stream_event", item)
         elif isinstance(item, StepResult):
             step_results.append(item)
@@ -115,11 +127,6 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
                 result=item,
                 step_desc=step_desc,
             )
-            if item.success:
-                completed_ids.add(item.step_id)
-                await _emit_step_started_for_steps(
-                    decision.get_ready_steps(completed_ids),
-                )
 
     fatal_errors = [r for r in step_results if r.error_type == "fatal"]
     if fatal_errors:

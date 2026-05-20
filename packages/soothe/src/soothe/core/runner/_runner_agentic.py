@@ -8,12 +8,15 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
+
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.events import (
     AgenticLoopCompletedEvent,
     AgenticLoopStartedEvent,
     AgenticPlanDecisionEvent,
     AgenticStepCompletedEvent,
+    AgenticStepQueuedEvent,
     AgenticStepStartedEvent,
 )
 from soothe.core.intention import IntentHint, build_loop_routing_classification
@@ -184,12 +187,39 @@ def _is_ai_messages_stream_chunk(chunk: object) -> bool:
     return False
 
 
-def _forward_messages_chunk_for_tool_ui(
+def _is_subgraph_tool_call_update_chunk(chunk: object) -> bool:
+    """Return True if chunk is a ``custom`` mode tool call update from subgraph.
+
+    Executor yields subgraph tool invocations as custom events with type
+    ``soothe.stream.tool_call.update`` so the CLI can display tool stats on
+    step cards (IG-416).
+
+    Args:
+        chunk: Deepagents stream chunk ``(namespace, mode, data)``.
+
+    Returns:
+        True for namespaced custom tool_call_update events.
+    """
+    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
+        return False
+    namespace, mode, data = chunk
+    # Only forward namespaced (subgraph) tool updates; main graph updates
+    # are already in messages mode AI chunks.
+    if not namespace or mode != "custom":
+        return False
+    if not isinstance(data, dict):
+        return False
+    return str(data.get("type", "")) == STREAM_TOOL_CALL_UPDATE
+
+
+def _forward_messages_chunk(
     chunk: object,
 ) -> bool:
     """Whether to forward a ``stream_event`` chunk to WebSocket / TUI.
 
-    Forwards ``messages`` mode: ``ToolMessage`` and ``AIMessage`` / ``AIMessageChunk`` (IG-330).
+    Forwards:
+    - ``messages`` mode: ``ToolMessage`` and ``AIMessage`` / ``AIMessageChunk`` (IG-330)
+    - ``custom`` mode: namespaced ``soothe.stream.tool_call.update`` events (IG-416)
 
     Args:
         chunk: Deepagents stream chunk ``(namespace, mode, data)``.
@@ -197,7 +227,11 @@ def _forward_messages_chunk_for_tool_ui(
     Returns:
         True if chunk should be forwarded.
     """
-    return _is_tool_stream_chunk(chunk) or _is_ai_messages_stream_chunk(chunk)
+    return (
+        _is_tool_stream_chunk(chunk)
+        or _is_ai_messages_stream_chunk(chunk)
+        or _is_subgraph_tool_call_update_chunk(chunk)
+    )
 
 
 def _clip_agentic_step_description(
@@ -425,6 +459,14 @@ class AgenticMixin:
                     ).to_dict()
                 )
 
+            elif event_type == "step_queued":
+                yield _custom(
+                    AgenticStepQueuedEvent(
+                        step_id=str(event_data.get("step_id", "")),
+                        description=_clip_agentic_step_description(event_data["description"]),
+                    ).to_dict()
+                )
+
             elif event_type == "step_completed":
                 # Level 3: Step result
                 success = event_data["success"]
@@ -444,7 +486,8 @@ class AgenticMixin:
 
             elif event_type == "stream_event":
                 # IG-330: Forward full ``messages`` stream for AI + tool payloads (no strip).
-                if _forward_messages_chunk_for_tool_ui(event_data):
+                # IG-416: Also forward namespaced custom tool_call_update events.
+                if _forward_messages_chunk(event_data):
                     yield event_data
 
             elif event_type == "assess":

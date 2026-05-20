@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from soothe_cli.tui._env_vars import SERVER_ENV_PREFIX
+from soothe_cli.tui.path_utils import path_exists
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -150,7 +151,7 @@ def find_project_root(start_path: str | Path | None = None) -> Path | None:
     # Walk up the directory tree
     for parent in [current, *list(current.parents)]:
         git_dir = parent / ".git"
-        if git_dir.exists():
+        if path_exists(git_dir):
             return parent
 
     return None

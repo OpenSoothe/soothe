@@ -30,7 +30,7 @@ from soothe.core.loop.utils.reflection import (
     _extract_text_content,
     reflect_heuristic,
 )
-from soothe.middleware.llm_rate_limit import _estimate_content_chars
+from soothe.utils.token_counting import estimate_content_chars
 from soothe.protocols.planner import (
     GoalContext,
     Plan,
@@ -1408,11 +1408,11 @@ class LLMPlanner:
                     decision_info,
                 )
                 prompt_chars = sum(
-                    _estimate_content_chars(getattr(m, "content", None)) for m in assess_messages
+                    estimate_content_chars(getattr(m, "content", None)) for m in assess_messages
                 )
                 if generate_messages:
                     prompt_chars += sum(
-                        _estimate_content_chars(getattr(m, "content", None))
+                        estimate_content_chars(getattr(m, "content", None))
                         for m in generate_messages
                     )
                 logger.info(

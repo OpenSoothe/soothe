@@ -506,9 +506,7 @@ def _rewrite_tool_call_ids_to_unified(
 
     def _unified(raw_id: str) -> str:
         parsed_sid, type_code, _, _ = parse_unified_tool_call_id(raw_id)
-        if parsed_sid == sid and type_code == "s" and task_idx is None:
-            return normalize_unified_tool_call_id(raw_id)
-        if parsed_sid == sid and type_code == "t" and task_idx is not None:
+        if parsed_sid and type_code in ("s", "t"):
             return normalize_unified_tool_call_id(raw_id)
         return _unified_tool_call_id_for_stream(sid, raw_id, task_idx=task_idx)
 
@@ -577,7 +575,7 @@ def _rewrite_tool_message_tool_call_id(
     if not raw_id:
         return msg
     parsed_sid, type_code, _, _ = parse_unified_tool_call_id(raw_id)
-    if parsed_sid == sid and type_code in ("s", "t"):
+    if parsed_sid and type_code in ("s", "t"):
         return msg
     unified = _unified_tool_call_id_for_stream(sid, raw_id, task_idx=task_idx)
     return msg.model_copy(update={"tool_call_id": unified})
@@ -774,6 +772,24 @@ class _ActStreamBudget:
     tool_call_count: int = 0
     hit_subagent_cap: bool = False
     hit_tool_budget: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class StepWaveQueued:
+    """Ready steps waiting for a later execute batch (``max_parallel_steps`` cap)."""
+
+    steps: tuple[StepAction, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class StepWaveStart:
+    """Marks the start of a bounded execute batch (``max_parallel_steps`` cap).
+
+    Emitted before a wave runs so UIs can show only actively executing steps as
+    ``running``; overflow ready steps are announced via :class:`StepWaveQueued`.
+    """
+
+    steps: tuple[StepAction, ...]
 
 
 @dataclass(slots=True)
@@ -1200,7 +1216,7 @@ class Executor:
         self,
         decision: AgentDecision,
         state: LoopState,
-    ) -> AsyncGenerator[StreamEvent | StepResult, None]:
+    ) -> AsyncGenerator[StreamEvent | StepResult | StepWaveQueued | StepWaveStart, None]:
         """Execute steps based on execution mode, yielding events and results.
 
         This method yields stream events (custom events from tool execution)
@@ -1285,18 +1301,39 @@ class Executor:
             return remaining
         return min(self._max_parallel_steps, remaining)
 
+    @staticmethod
+    def _collect_wave_queued_steps(
+        ready: list[StepAction],
+        wave_size: int,
+        queued_emitted: set[str],
+    ) -> tuple[StepAction, ...]:
+        """Return ready steps not in the current wave that have not been queued yet."""
+        newly: list[StepAction] = []
+        for step in ready[wave_size:]:
+            if step.id in queued_emitted:
+                continue
+            queued_emitted.add(step.id)
+            newly.append(step)
+        return tuple(newly)
+
     async def _execute_parallel_waves(
         self,
         ready_steps: list,
         state: LoopState,
-    ) -> AsyncGenerator[StreamEvent | StepResult, None]:
+    ) -> AsyncGenerator[StreamEvent | StepResult | StepWaveQueued | StepWaveStart, None]:
         """Run parallel mode in waves bounded by ``max_parallel_steps``."""
         idx = 0
         n = len(ready_steps)
+        queued_emitted: set[str] = set()
         while idx < n:
             w = self._wave_size(n - idx)
             chunk = ready_steps[idx : idx + w]
+            if idx == 0:
+                queued = self._collect_wave_queued_steps(ready_steps, w, queued_emitted)
+                if queued:
+                    yield StepWaveQueued(steps=queued)
             idx += w
+            yield StepWaveStart(steps=tuple(chunk))
             async for item in self._execute_parallel(chunk, state):
                 yield item
 
@@ -1630,14 +1667,20 @@ class Executor:
         self,
         ready_steps: list,
         state: LoopState,
-    ) -> AsyncGenerator[StreamEvent | StepResult, None]:
+    ) -> AsyncGenerator[StreamEvent | StepResult | StepWaveQueued | StepWaveStart, None]:
         """Run sequential mode in waves; each wave yields one result per step (scheme B)."""
         idx = 0
         n = len(ready_steps)
+        queued_emitted: set[str] = set()
         while idx < n:
             w = self._wave_size(n - idx)
             chunk = ready_steps[idx : idx + w]
+            if idx == 0:
+                queued = self._collect_wave_queued_steps(ready_steps, w, queued_emitted)
+                if queued:
+                    yield StepWaveQueued(steps=queued)
             idx += w
+            yield StepWaveStart(steps=tuple(chunk))
             async for item in self._execute_sequential_chunk(chunk, state):
                 yield item
 
@@ -1846,7 +1889,7 @@ class Executor:
         self,
         decision: AgentDecision,
         state: LoopState,
-    ) -> AsyncGenerator[StreamEvent | StepResult, None]:
+    ) -> AsyncGenerator[StreamEvent | StepResult | StepWaveQueued | StepWaveStart, None]:
         """Execute steps respecting dependency DAG.
 
         Args:
@@ -1858,6 +1901,7 @@ class Executor:
         """
         local_done = set(state.dependency_completion_ids())
         failed_sticky: set[str] = set()
+        queued_emitted: set[str] = set()
 
         while True:
             ready_all = decision.get_ready_steps(local_done)
@@ -1866,6 +1910,10 @@ class Executor:
                 break
             w = self._wave_size(len(ready))
             chunk = ready[:w]
+            queued = self._collect_wave_queued_steps(ready, w, queued_emitted)
+            if queued:
+                yield StepWaveQueued(steps=queued)
+            yield StepWaveStart(steps=tuple(chunk))
             async for item in self._execute_parallel(chunk, state):
                 yield item
                 if isinstance(item, StepResult):
@@ -2358,19 +2406,43 @@ class Executor:
                         chunks.append(t)
                         logger.debug("[AI Message] %s", log_preview(t, chars=150))
 
+            subgraph_tool_updates: list[tuple[tuple[str, ...], dict[str, Any]]] = []
             for ns_tuple, tm in iter_namespaced_tool_messages(chunk):
                 subgraph_tool_call_count += 1
                 body_preview = log_preview(
                     extract_text_from_message_content(getattr(tm, "content", "")),
                     chars=160,
                 )
+                tcid = str(getattr(tm, "tool_call_id", "") or "").strip()
+                tname = str(getattr(tm, "name", "") or "unknown").strip() or "unknown"
                 logger.info(
                     "[SubagentTool] ns=%s name=%s id=%s preview=%s",
                     "/".join(ns_tuple) if ns_tuple else "()",
-                    getattr(tm, "name", "") or "unknown",
-                    getattr(tm, "tool_call_id", "") or "",
+                    tname,
+                    tcid,
                     body_preview,
                 )
+                if tcid and tname != "task":
+                    from soothe_sdk.ux.stream_tool_wire import tool_call_update_event
+                    from soothe_sdk.ux.task_namespace import is_unified_tool_call_id
+
+                    if is_unified_tool_call_id(tcid):
+                        args = dict(tool_args_by_call_id.get(tcid) or {})
+                        if not args:
+                            args = {"_subgraph_tool": True}
+                        if args:
+                            subgraph_tool_updates.append(
+                                (
+                                    ns_tuple,
+                                    tool_call_update_event(
+                                        tool_call_id=tcid,
+                                        name=tname,
+                                        args=args,
+                                    ),
+                                )
+                            )
+            for ns_tuple, tool_ev in subgraph_tool_updates:
+                yield None, (ns_tuple, "custom", tool_ev), 0, [], "", []
 
             for task_msg in iter_messages_for_delegate_task_scan(chunk):
                 text_out = extract_text_from_message_content(task_msg.content)

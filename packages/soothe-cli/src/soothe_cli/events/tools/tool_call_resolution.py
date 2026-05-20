@@ -189,9 +189,8 @@ def merge_tool_display_args(
                                 tool_name=lookup_name,
                             )
                         ]
-                        pool = scoped if scoped else matches
                         best: dict[str, Any] = {}
-                        for tc in pool:
+                        for tc in scoped:
                             cand = extract_tool_args_dict(tc)
                             if len(cand) > len(best):
                                 best = cand
