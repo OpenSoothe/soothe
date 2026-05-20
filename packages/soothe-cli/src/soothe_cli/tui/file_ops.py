@@ -18,17 +18,6 @@ FILE_CHANGE_TOOLS: frozenset[str] = frozenset({"write_file", "edit_file", "delet
 """Filesystem tools that produce before/after diffs in the TUI chat."""
 
 
-@dataclass
-class ApprovalPreview:
-    """Data used to render HITL previews."""
-
-    title: str
-    details: list[str]
-    diff: str | None = None
-    diff_title: str | None = None
-    error: str | None = None
-
-
 def _safe_read(path: Path) -> str | None:
     """Read file content, returning None on failure.
 
@@ -123,7 +112,6 @@ class FileOperationRecord:
     before_content: str | None = None
     after_content: str | None = None
     read_output: str | None = None
-    hitl_approved: bool = False
 
 
 def resolve_physical_path(path_str: str | None, assistant_id: str | None) -> Path | None:
@@ -164,101 +152,6 @@ def format_display_path(path_str: str | None) -> str:
         return str(path)
     except (OSError, ValueError):
         return str(path_str)
-
-
-def build_approval_preview(
-    tool_name: str,
-    args: dict[str, Any],
-    assistant_id: str | None,
-) -> ApprovalPreview | None:
-    """Collect summary info and diff for HITL approvals.
-
-    Returns:
-        ApprovalPreview with diff and details, or None if tool not supported.
-    """
-    path_str = str(args.get("file_path") or args.get("path") or "")
-    display_path = format_display_path(path_str)
-    physical_path = resolve_physical_path(path_str, assistant_id)
-
-    if tool_name == "write_file":
-        content = str(args.get("content", ""))
-        before = _safe_read(physical_path) if physical_path and physical_path.exists() else ""
-        after = content
-        diff = compute_unified_diff(
-            before or "", after, display_path, max_lines=APPROVAL_DIFF_MAX_LINES
-        )
-        additions = 0
-        if diff:
-            additions = sum(
-                1
-                for line in diff.splitlines()
-                if line.startswith("+") and not line.startswith("+++")
-            )
-        total_lines = _count_lines(after)
-        details = [
-            f"File: {path_str}",
-            "Action: Create new file" + (" (overwrites existing content)" if before else ""),
-            f"Lines to write: {additions or total_lines}",
-        ]
-        return ApprovalPreview(
-            title=f"Write {display_path}",
-            details=details,
-            diff=diff,
-            diff_title=f"Diff {display_path}",
-        )
-
-    if tool_name == "edit_file":
-        if physical_path is None:
-            return ApprovalPreview(
-                title=f"Update {display_path}",
-                details=[f"File: {path_str}", "Action: Replace text"],
-                error="Unable to resolve file path.",
-            )
-        before = _safe_read(physical_path)
-        if before is None:
-            return ApprovalPreview(
-                title=f"Update {display_path}",
-                details=[f"File: {path_str}", "Action: Replace text"],
-                error="Unable to read current file contents.",
-            )
-        old_string = str(args.get("old_string", ""))
-        new_string = str(args.get("new_string", ""))
-        replace_all = bool(args.get("replace_all"))
-
-        # Preview string replacement locally
-        if replace_all:
-            after = before.replace(old_string, new_string)
-        else:
-            after = before.replace(old_string, new_string, 1)
-
-        diff = compute_unified_diff(before, after, display_path, max_lines=APPROVAL_DIFF_MAX_LINES)
-        additions = 0
-        deletions = 0
-        if diff:
-            additions = sum(
-                1
-                for line in diff.splitlines()
-                if line.startswith("+") and not line.startswith("+++")
-            )
-            deletions = sum(
-                1
-                for line in diff.splitlines()
-                if line.startswith("-") and not line.startswith("---")
-            )
-        scope = "all occurrences" if replace_all else "first occurrence"
-        details = [
-            f"File: {path_str}",
-            f"Action: Replace text ({scope})",
-            f"+{additions} / -{deletions} lines",
-        ]
-        return ApprovalPreview(
-            title=f"Update {display_path}",
-            details=details,
-            diff=diff,
-            diff_title=f"Diff {display_path}",
-        )
-
-    return None
 
 
 class FileOpTracker:
@@ -397,19 +290,6 @@ class FileOpTracker:
         self._finalize(record)
         return record
 
-    def mark_hitl_approved(self, tool_name: str, args: dict[str, Any]) -> None:
-        """Mark operations matching tool_name and file_path as HIL-approved."""
-        file_path = args.get("file_path") or args.get("path")
-        if not file_path:
-            return
-
-        # Mark all active records that match
-        for record in self.active.values():
-            if record.tool_name == tool_name:
-                record_path = record.args.get("file_path") or record.args.get("path")
-                if record_path == file_path:
-                    record.hitl_approved = True
-
     def _populate_after_content(self, record: FileOperationRecord) -> None:
         """Read the file content after the operation for diff computation."""
         if record.physical_path is None:
@@ -420,50 +300,6 @@ class FileOpTracker:
     def _finalize(self, record: FileOperationRecord) -> None:
         self.completed.append(record)
         self.active.pop(record.tool_call_id, None)
-
-
-def resolve_file_tool_call_id(
-    tool_name: str,
-    args: dict[str, Any],
-    pending_tool_calls_lc: dict[str, dict[str, Any]],
-) -> str | None:
-    """Match a HITL action request to a streamed tool call id by tool name and path."""
-    import json
-
-    path = str(args.get("file_path") or args.get("path") or "")
-    if not path:
-        return None
-    for tcid, pend in pending_tool_calls_lc.items():
-        if pend.get("name") != tool_name:
-            continue
-        raw = pend.get("args_str") or "{}"
-        try:
-            pend_args = json.loads(raw) if isinstance(raw, str) else dict(raw)
-        except json.JSONDecodeError:
-            pend_args = {}
-        if not isinstance(pend_args, dict):
-            continue
-        pend_path = str(pend_args.get("file_path") or pend_args.get("path") or "")
-        if pend_path == path:
-            return str(tcid)
-    return None
-
-
-def ensure_hitl_file_ops_tracked(
-    tracker: FileOpTracker,
-    action_requests: list[dict[str, Any]],
-    pending_tool_calls_lc: dict[str, dict[str, Any]],
-) -> None:
-    """Capture pre-change file content for HITL file tools before execution resumes."""
-    for req in action_requests:
-        name = str(req.get("name") or "")
-        if name not in FILE_CHANGE_TOOLS:
-            continue
-        args = req.get("args", {})
-        if not isinstance(args, dict):
-            continue
-        tcid = resolve_file_tool_call_id(name, args, pending_tool_calls_lc)
-        track_file_operation(tracker, name, args, tcid)
 
 
 def track_file_operation(

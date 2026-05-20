@@ -187,7 +187,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
         except Exception:
             logger.debug("Failed to save quiz to checkpointer", exc_info=True)
 
-    # -- LangGraph stream with HITL loop ------------------------------------
+    # -- LangGraph stream with interrupt auto-resume -------------------------
 
     async def _ensure_checkpointer_initialized(self) -> None:
         """Lazily initialize the async checkpointer (AsyncSqliteSaver / AsyncPostgresSaver).

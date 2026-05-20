@@ -1005,4 +1005,3 @@ class QueryEngine:
         d._thread_registry.ensure(tid, is_draft=False)
         d._thread_registry.set_workspace(tid, Path(d._daemon_workspace))
         return tid
-
