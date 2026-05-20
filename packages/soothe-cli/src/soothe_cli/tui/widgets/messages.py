@@ -23,8 +23,8 @@ from textual.events import Click
 from textual.reactive import var
 from textual.widgets import Static
 
-from soothe_cli.events.duration_format import format_duration, format_duration_ms
-from soothe_cli.events.tools.message_processing import _normalize_tool_name_for_arg_map
+from soothe_cli.runtime.parse.message_processing import _normalize_tool_name_for_arg_map
+from soothe_cli.runtime.presentation.duration_format import format_duration, format_duration_ms
 from soothe_cli.tui import theme
 from soothe_cli.tui._env_vars import TUI_REFRESH_INTERVAL_MS
 from soothe_cli.tui.commands.subagent_routing import get_subagent_display_name
@@ -1190,6 +1190,8 @@ class CognitionStepMessage(Vertical):
         self._tools_body_collapsed: bool = False
         self._subagent_notes: list[str] = []
         self._subagent_notes_by_task: dict[str, list[str]] = {}
+        self._task_activity_start_times: dict[str, float] = {}
+        """Per task-delegation key: monotonic time when subgraph activity began."""
         self._execute_assistant_buffer: str = ""
         self._last_completed_execute_prose: str = ""
         """Execute-step prose frozen when ``set_complete`` runs (TUI dedupe vs goal_completion)."""
@@ -1209,8 +1211,16 @@ class CognitionStepMessage(Vertical):
             n += len(notes)
         for task_row in self._iter_task_delegation_rows():
             n += 1
-            n += len(self._child_rows_for_task(task_row))
+            child_rows = self._child_rows_for_task(task_row)
+            if child_rows:
+                n += 1
+                if self._effective_task_delegation_phase(task_row, child_rows) == "running":
+                    n += 1
+            elif self._status in ("pending", "queued"):
+                n += 1
             n += len(self._subagent_notes_by_task.get(str(task_row.tool_call_id).strip(), []))
+        if self._status in ("pending", "queued") and not self._iter_task_delegation_rows():
+            n += 1
         if STEP_CARD_SHOW_TOOL_ROW_DETAILS:
             n += len(self._rows)
         buf = (self._execute_assistant_buffer or "").strip()
@@ -1422,6 +1432,8 @@ class CognitionStepMessage(Vertical):
         """True when the step card should show the task-activity tree panel."""
         if self._subagent_notes or self._subagent_notes_by_task:
             return True
+        if self._status in ("pending", "queued"):
+            return True
         return bool(self._iter_task_delegation_rows())
 
     def _task_delegation_dedupe_key(self, row: _StepToolRow) -> str:
@@ -1539,14 +1551,21 @@ class CognitionStepMessage(Vertical):
             return f"{name}({desc_text})"
         return name
 
+    def _phase_icon(self, phase: str, g: Any, *, animate_running: bool = False) -> str:
+        """Lifecycle glyph for a task branch or tool row."""
+        p = (phase or "pending").strip().lower()
+        if p in ("success", "done"):
+            return g.checkmark
+        if p in ("error", "rejected", "failed"):
+            return g.error
+        if p == "running" and animate_running:
+            frames = g.spinner_frames
+            return frames[self._spinner_position % len(frames)]
+        return g.circle_empty
+
     def _task_tool_phase_icon(self, row: _StepToolRow, g: Any) -> str:
         """Glyph for a task-branch tool row from its lifecycle phase."""
-        phase = (row.phase or "pending").strip().lower()
-        if phase == "success":
-            return g.checkmark
-        if phase in ("error", "rejected"):
-            return g.error
-        return g.circle_empty
+        return self._phase_icon(row.phase or "pending", g)
 
     def _task_tool_status_tail(self, row: _StepToolRow) -> str:
         """Trailing status text for a task-branch tool row (duration, failure, etc.)."""
@@ -1564,39 +1583,88 @@ class CognitionStepMessage(Vertical):
         return ""
 
     def _task_tool_row_tone(self, row: _StepToolRow, colors: Any) -> str:
-        phase = (row.phase or "pending").strip().lower()
-        if phase == "success":
+        return self._task_tool_row_tone_for_phase(row.phase or "pending", colors)
+
+    def _task_tool_row_tone_for_phase(self, phase: str, colors: Any) -> str:
+        p = (phase or "pending").strip().lower()
+        if p in ("success", "done"):
             return colors.cognition
-        if phase in ("error", "rejected"):
+        if p in ("error", "rejected", "failed"):
             return colors.error
-        if phase == "running":
+        if p == "running":
             return colors.cognition
         return colors.muted
 
-    def _task_children_aggregate_status(self, rows: list[_StepToolRow]) -> str:
-        """Status suffix for nested tools under one task (running / failed / done)."""
+    def _task_children_aggregate_phase(self, rows: list[_StepToolRow]) -> str:
+        """Aggregate lifecycle phase for nested tools under one task delegation."""
         if not rows:
-            return ""
+            return "pending"
         phases = {(r.phase or "pending").strip().lower() for r in rows}
         if "running" in phases:
-            return " · running"
+            return "running"
         if "error" in phases or "rejected" in phases:
-            return " · failed"
+            return "failed"
         if phases <= {"success"}:
-            return " · done"
+            return "success"
         if phases <= {"skipped"}:
-            return " · skipped"
+            return "skipped"
         if "pending" in phases:
+            return "pending"
+        return "pending"
+
+    def _task_children_aggregate_status(self, rows: list[_StepToolRow]) -> str:
+        """Status suffix for nested tools under one task (running / failed / done)."""
+        phase = self._task_children_aggregate_phase(rows)
+        if phase == "running":
+            return " · running"
+        if phase == "failed":
+            return " · failed"
+        if phase == "success":
+            return " · done"
+        if phase == "skipped":
+            return " · skipped"
+        if phase == "pending":
             return " · pending"
         return ""
 
-    def _task_children_stats_tone(self, rows: list[_StepToolRow], colors: Any) -> str:
-        phases = {(r.phase or "pending").strip().lower() for r in rows}
-        if "running" in phases:
+    def _effective_task_delegation_phase(
+        self,
+        task_row: _StepToolRow,
+        child_rows: list[_StepToolRow],
+    ) -> str:
+        """Derived phase for a task delegation from its subgraph tool rows."""
+        if child_rows:
+            return self._task_children_aggregate_phase(child_rows)
+        return (task_row.phase or "pending").strip().lower()
+
+    def _touch_task_activity_start(self, task_key: str) -> None:
+        """Record when subgraph activity began for elapsed-time display."""
+        key = str(task_key or "").strip()
+        if key and key not in self._task_activity_start_times:
+            self._task_activity_start_times[key] = time()
+
+    def _task_delegation_elapsed_suffix(self, task_key: str) -> str:
+        start = self._task_activity_start_times.get(str(task_key or "").strip())
+        if start is None:
+            return ""
+        elapsed_secs = int(time() - start)
+        return f" ({format_duration(float(elapsed_secs))})"
+
+    def _has_active_task_branch_animation(self) -> bool:
+        """True when any task delegation branch needs live spinner/elapsed updates."""
+        for task_row in self._iter_task_delegation_rows():
+            child_rows = self._child_rows_for_task(task_row)
+            if self._effective_task_delegation_phase(task_row, child_rows) == "running":
+                return True
+        return False
+
+    def _task_children_stats_tone(self, phase: str, colors: Any) -> str:
+        p = (phase or "pending").strip().lower()
+        if p == "running":
             return colors.cognition
-        if "error" in phases or "rejected" in phases:
+        if p in ("failed", "error", "rejected"):
             return colors.error
-        if phases <= {"success"} and rows:
+        if p == "success":
             return colors.cognition
         return colors.muted
 
@@ -1674,32 +1742,70 @@ class CognitionStepMessage(Vertical):
         parts: list[object] = []
         first_block = True
 
-        for task_row in self._iter_task_delegation_rows():
+        task_rows = self._iter_task_delegation_rows()
+        if not task_rows and self._status in ("pending", "queued"):
+            status_word = "Queued..." if self._status == "queued" else "Pending..."
+            return Content.styled(
+                f"{branch_gutter}{g.circle_empty} {status_word}",
+                colors.muted,
+            )
+
+        for task_row in task_rows:
             if not first_block:
                 parts.append("\n")
             first_block = False
-            task_icon = self._task_tool_phase_icon(task_row, g)
-            task_tail = self._task_tool_status_tail(task_row)
-            task_tone = self._task_tool_row_tone(task_row, colors)
+            task_key = self._task_delegation_dedupe_key(task_row)
+            child_rows = self._child_rows_for_task(task_row)
+            eff_phase = self._effective_task_delegation_phase(task_row, child_rows)
+            if eff_phase == "running" and task_key:
+                self._touch_task_activity_start(task_key)
+
+            task_icon = self._phase_icon(eff_phase, g, animate_running=False)
             label = self._task_delegation_label(task_row)
+            task_tone = self._task_tool_row_tone_for_phase(eff_phase, colors)
             parts.append(
                 Content.styled(
-                    f"{branch_gutter}{task_icon} {label}{task_tail}",
-                    task_tone if task_row.phase != "pending" else colors.foreground,
+                    f"{branch_gutter}{task_icon} {label}",
+                    task_tone if eff_phase != "pending" else colors.foreground,
                 )
             )
-            child_rows = self._child_rows_for_task(task_row)
-            child_stats = self._tool_stats_suffix_for_rows(child_rows)
-            if child_stats:
-                child_status = self._task_children_aggregate_status(child_rows)
+
+            if child_rows:
+                child_stats = self._tool_stats_suffix_for_rows(child_rows)
+                if child_stats:
+                    child_status = self._task_children_aggregate_status(child_rows)
+                    parts.append("\n")
+                    parts.append(
+                        Content.styled(
+                            f"{child_gutter}{child_stats}{child_status}",
+                            self._task_children_stats_tone(eff_phase, colors),
+                        )
+                    )
+                if eff_phase == "running":
+                    elapsed = self._task_delegation_elapsed_suffix(task_key)
+                    toggle = ""
+                    if self._card_collapsed:
+                        toggle = f" {g.expand}"
+                    elif self._has_task_activity_body():
+                        toggle = f" {g.collapse}"
+                    frame = self._phase_icon("running", g, animate_running=True)
+                    parts.append("\n")
+                    parts.append(
+                        Content.styled(
+                            f"{child_gutter}{frame} Running...{elapsed}{toggle}",
+                            colors.cognition,
+                        )
+                    )
+            elif self._status in ("pending", "queued"):
+                wait_word = "Queued..." if self._status == "queued" else "Pending..."
                 parts.append("\n")
                 parts.append(
                     Content.styled(
-                        f"{child_gutter}{child_stats}{child_status}",
-                        self._task_children_stats_tone(child_rows, colors),
+                        f"{child_gutter}{g.circle_empty} {wait_word}",
+                        colors.muted,
                     )
                 )
-            task_key = self._task_delegation_dedupe_key(task_row)
+
             for note in self._subagent_notes_by_task.get(task_key, []):
                 text = (note or "").strip()
                 if not text:
@@ -2084,11 +2190,29 @@ class CognitionStepMessage(Vertical):
             parent_tool_call_id=parent_tool_call_id,
             is_task_row=is_task_row,
         )
+        if not is_task_row:
+            _, type_code, task_idx, _ = parse_unified_tool_call_id(tcid)
+            is_subgraph_tool = type_code == "t" or bool(parent_tool_call_id)
+            if is_subgraph_tool:
+                row.phase = "running"
+                row.started_at = time()
+                parent_key = ""
+                if parent_tool_call_id:
+                    parent_key = self._normalized_task_note_key(parent_tool_call_id)
+                elif task_idx is not None:
+                    for task_row in self._iter_task_delegation_rows():
+                        if self._task_idx_from_delegation_row(task_row) == task_idx:
+                            parent_key = self._task_delegation_dedupe_key(task_row)
+                            break
+                if parent_key:
+                    self._touch_task_activity_start(parent_key)
         self._rows.append(row)
         self._row_index[tcid] = row
         self._rebuild_tool_stats()
         self._refresh_header_title()
         self.request_tools_display_refresh(immediate=True)
+        if is_task_row or parent_tool_call_id:
+            self._refresh_task_activity_display()
         self._sync_running_status_line()
 
         self._promote_pending_to_running_if_needed()
@@ -2190,8 +2314,8 @@ class CognitionStepMessage(Vertical):
 
     def update_tool_args(self, tool_call_id: str, args: dict[str, Any]) -> None:
         """Refresh kwargs when streaming fills in arguments."""
-        from soothe_cli.events.tools.message_processing import extract_tool_args_dict
-        from soothe_cli.events.tools.tool_call_resolution import tool_args_meaningful
+        from soothe_cli.runtime.parse.message_processing import extract_tool_args_dict
+        from soothe_cli.runtime.parse.tool_call_resolution import tool_args_meaningful
 
         row = self._row_index.get(str(tool_call_id))
         if row is None:
@@ -2364,6 +2488,7 @@ class CognitionStepMessage(Vertical):
         self._status_widget.add_class("pending")
         self._status_widget.update(Content.styled(line, colors.cognition))
         self._status_widget.display = True
+        self._refresh_task_activity_display()
 
     def _refresh_queued_display(self) -> None:
         """Show ready steps waiting for a concurrency slot (``max_parallel_steps``)."""
@@ -2380,6 +2505,7 @@ class CognitionStepMessage(Vertical):
         self._status_widget.add_class("queued")
         self._status_widget.update(Content.styled(line, colors.cognition))
         self._status_widget.display = True
+        self._refresh_task_activity_display()
 
     def set_queued(self) -> None:
         """Mark a ready step as waiting for an execute batch slot."""
@@ -2402,6 +2528,7 @@ class CognitionStepMessage(Vertical):
             self._status_widget.remove_class("queued")
             self._status_widget.display = True
         self._update_running_animation()
+        self._refresh_task_activity_display()
         self._animation_timer = self.set_interval(
             _RUNNING_SPINNER_INTERVAL_SECONDS,
             self._update_running_animation,
@@ -2440,6 +2567,8 @@ class CognitionStepMessage(Vertical):
         line = f"{gutter}{frame} Running...{elapsed}{stats_suffix}{toggle_icon}"
         clear_widget_text_selection(self._status_widget)
         self._status_widget.update(Content.styled(line, colors.cognition))
+        if self._has_active_task_branch_animation():
+            self._refresh_task_activity_display()
 
     def set_complete(
         self,

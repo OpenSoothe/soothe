@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 from textual.containers import Container, VerticalScroll
 from textual.css.query import NoMatches
 
-from soothe_cli.tui._session_stats import SpinnerStatus
+from soothe_cli.runtime.state.session_stats import SpinnerStatus
 from soothe_cli.tui.widgets.loading import LoadingWidget
 from soothe_cli.tui.widgets.messages import AssistantMessage
 
@@ -155,7 +155,9 @@ class _UIMixin:
             hydrated_widgets: list[tuple[Widget, Any]] = []  # (widget, msg_data)
             for msg_data in to_hydrate:
                 try:
-                    widget = msg_data.to_widget()
+                    from soothe_cli.tui.binding import message_to_widget
+
+                    widget = message_to_widget(msg_data)
                     hydrated_widgets.append((widget, msg_data))
                 except Exception:
                     logger.warning(

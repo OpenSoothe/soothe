@@ -438,7 +438,7 @@ def extract_tool_brief(tool_name: str, content: str | dict | Any, max_length: in
     Returns:
         One-line summary suitable for status lines and logging.
     """
-    from soothe_cli.events.tools.tool_message_format import format_tool_message_content
+    from soothe_cli.runtime.parse.tool_message_format import format_tool_message_content
 
     text = format_tool_message_content(content)
     if not text:

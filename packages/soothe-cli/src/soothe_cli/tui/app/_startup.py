@@ -368,7 +368,7 @@ class _StartupMixin:
                 websocket_url_from_config,
             )
 
-            from soothe_cli.tui.daemon_session import TuiDaemonSession
+            from soothe_cli.runtime.transport.session import TuiDaemonSession
 
             ws_url = websocket_url_from_config(self._daemon_config)
 
@@ -500,7 +500,7 @@ class _StartupMixin:
             import importlib
 
             importlib.import_module("soothe_cli.tui.textual_adapter")
-            importlib.import_module("soothe_cli.events.turn.turn_stream_prepare")
+            importlib.import_module("soothe_cli.runtime.turn.prepare")
         except Exception:
             logger.warning("Could not prewarm first-turn execute path", exc_info=True)
 

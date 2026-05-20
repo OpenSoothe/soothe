@@ -11,7 +11,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
-from soothe_sdk.client.protocol import preview_first
 from soothe_sdk.core.events import (
     PLAN_CREATED,
     PLAN_STEP_COMPLETED,
@@ -20,17 +19,10 @@ from soothe_sdk.core.events import (
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux import classify_event_to_tier
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
-from soothe_sdk.ux.task_namespace import (
-    enqueue_task_spawn,
-    maybe_bind_namespace,
-    resolve_task_scope_for_namespace,
-)
+from soothe_sdk.ux.task_namespace import resolve_task_scope_for_namespace
 
-from soothe_cli.events.core.presentation_engine import PresentationEngine
-from soothe_cli.events.core.processor_state import ProcessorState
-from soothe_cli.events.policy.display_policy import DisplayPolicy
-from soothe_cli.events.policy.tui_trace_log import log_tui_trace
-from soothe_cli.events.tools.message_processing import (
+from soothe_cli.runtime.headless.processor_state import ProcessorState
+from soothe_cli.runtime.parse.message_processing import (
     accumulate_tool_call_chunks,
     extract_tool_args_dict,
     extract_tool_brief,
@@ -40,15 +32,18 @@ from soothe_cli.events.tools.message_processing import (
     tool_calls_have_any_arg_dict,
     try_parse_pending_tool_call_args,
 )
-from soothe_cli.events.tools.tool_result import (
+from soothe_cli.runtime.parse.tool_result import (
     extract_tool_result_payload,
     infer_tool_output_suggests_error,
 )
+from soothe_cli.runtime.policy.display_policy import DisplayPolicy
+from soothe_cli.runtime.policy.tui_trace_log import log_tui_trace
+from soothe_cli.runtime.presentation.engine import PresentationEngine
 
 if TYPE_CHECKING:
     from soothe_sdk.client.schemas import Plan
 
-    from soothe_cli.events.core.renderer_protocol import RendererProtocol
+    from soothe_cli.runtime.presentation.renderer_protocol import RendererProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -132,12 +127,11 @@ class EventProcessor:
         return self._state
 
     def _maybe_bind_task_namespace(self, namespace: tuple[str, ...]) -> None:
-        """Bind LangGraph subgraph ``namespace`` to the next queued Task spawn (IG-334)."""
-        maybe_bind_namespace(
-            self._state.namespace_task_bindings,
-            self._state.task_spawn_queue,
-            namespace,
-        )
+        """Bind LangGraph subgraph ``namespace`` to the next queued Task spawn."""
+        if not namespace or namespace in self._state.namespace_task_bindings:
+            return
+        if self._state.task_spawn_queue:
+            self._state.namespace_task_bindings[namespace] = self._state.task_spawn_queue.popleft()
 
     def _resolve_task_scope(self, namespace: tuple[str, ...]) -> tuple[str, str, str] | None:
         """Return task scope ``(task_tool_call_id, subagent_type, step_id)`` for namespace."""
@@ -152,13 +146,11 @@ class EventProcessor:
         is_main: bool,
     ) -> None:
         """Record main-graph ``task`` tool calls so subgraph streams can resolve labels."""
-        enqueue_task_spawn(
-            self._state.task_spawn_queue,
-            tool_name=name,
-            args=args,
-            tool_call_id=tool_call_id,
-            is_main=is_main,
-        )
+        if not is_main or name != "task" or not tool_call_id:
+            return
+        raw = args.get("subagent_type", "")
+        subagent_type = raw.strip() if isinstance(raw, str) else ""
+        self._state.task_spawn_queue.append((tool_call_id, subagent_type or "?", ""))
 
     def _emit_tool_call_for_renderer(
         self,
@@ -626,11 +618,10 @@ class EventProcessor:
                             namespace=namespace,
                         ):
                             tool_call_emitted_from_blocks = True
-                            logger.info(
-                                "tool_call name=%s id=%s args=%s is_main=%s",
+                            logger.debug(
+                                "tool_call name=%s id=%s is_main=%s",
                                 name,
                                 tool_call_id,
-                                preview_first(str(coerced), 200) if coerced else "{}",
                                 is_main,
                             )
         elif isinstance(msg.content, str) and msg.content:
@@ -673,11 +664,10 @@ class EventProcessor:
                         is_main=is_main,
                         namespace=namespace,
                     ):
-                        logger.info(
-                            "tool_call name=%s id=%s args=%s is_main=%s",
+                        logger.debug(
+                            "tool_call name=%s id=%s is_main=%s",
                             name,
                             tool_call_id,
-                            preview_first(str(tc_args), 200) if tc_args else "{}",
                             is_main,
                         )
 
@@ -731,13 +721,11 @@ class EventProcessor:
             else infer_tool_output_suggests_error(content, tool_name)
         )
 
-        # Log tool result for audit trail
-        logger.info(
-            "tool_result name=%s id=%s status=%s result=%s is_main=%s",
+        logger.debug(
+            "tool_result name=%s id=%s status=%s is_main=%s",
             tool_name,
             tool_call_id,
             "error" if is_error else "success",
-            preview_first(brief, 300) if brief else "",
             is_main,
         )
 
@@ -861,11 +849,10 @@ class EventProcessor:
                         is_main=is_main,
                         namespace=namespace,
                     ):
-                        logger.info(
-                            "tool_call name=%s id=%s args=%s is_main=%s",
+                        logger.debug(
+                            "tool_call name=%s id=%s is_main=%s",
                             name,
                             tool_call_id,
-                            preview_first(str(args), 200) if args else "{}",
                             is_main,
                         )
 
@@ -893,11 +880,10 @@ class EventProcessor:
                             is_main=is_main,
                             namespace=namespace,
                         ):
-                            logger.info(
-                                "tool_call name=%s id=%s args=%s is_main=%s",
+                            logger.debug(
+                                "tool_call name=%s id=%s is_main=%s",
                                 name,
                                 tool_call_id,
-                                preview_first(str(args), 200) if args else "{}",
                                 is_main,
                             )
 
@@ -958,13 +944,11 @@ class EventProcessor:
             else infer_tool_output_suggests_error(content, tool_name)
         )
 
-        # Log tool result for audit trail
-        logger.info(
-            "tool_result name=%s id=%s status=%s result=%s is_main=%s",
+        logger.debug(
+            "tool_result name=%s id=%s status=%s is_main=%s",
             tool_name,
             tool_call_id,
             "error" if is_error else "success",
-            preview_first(brief, 300) if brief else "",
             is_main,
         )
 

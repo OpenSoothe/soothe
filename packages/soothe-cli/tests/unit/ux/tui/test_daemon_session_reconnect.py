@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe_cli.tui.daemon_session import TuiDaemonSession
+from soothe_cli.runtime.transport.session import TuiDaemonSession
 
 
 class _AliveToggleClient:
@@ -57,7 +57,7 @@ async def test_ensure_connected_reconnects_and_resumes_loop() -> None:
     )
 
     with patch(
-        "soothe_cli.tui.daemon_session.connect_websocket_with_retries",
+        "soothe_cli.runtime.transport.session.connect_websocket_with_retries",
         new_callable=AsyncMock,
     ) as connect_mock:
         await session.ensure_connected()

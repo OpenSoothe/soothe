@@ -2,7 +2,8 @@
 
 import json
 
-from soothe_cli.tui.widgets.message_store import MessageData, MessageType
+from soothe_cli.tui.binding import message_from_widget, message_to_widget
+from soothe_cli.tui.widgets.message_store import MessageType
 from soothe_cli.tui.widgets.messages import CognitionGoalTreeMessage
 
 
@@ -22,7 +23,7 @@ def test_cognition_goal_tree_message_store_round_trip() -> None:
         total_steps=1,
     )
 
-    md = MessageData.from_widget(w)
+    md = message_from_widget(w)
     assert md.type == MessageType.COGNITION_GOAL_TREE
     assert md.cognition_goal_snapshot_json
     snap = json.loads(md.cognition_goal_snapshot_json or "{}")
@@ -32,7 +33,7 @@ def test_cognition_goal_tree_message_store_round_trip() -> None:
     assert snap["footer_visible"] is True
     assert snap.get("footer_tone") == "success"
 
-    restored = md.to_widget()
+    restored = message_to_widget(md)
     assert isinstance(restored, CognitionGoalTreeMessage)
     assert restored._goal_text == "Ship the feature"
     assert "s1" in restored._steps

@@ -6,8 +6,9 @@
 # the TUI uses a fixed bootstrap level. Theme and other UI prefs live in
 # `~/.soothe/config/config.yml` (`ui.theme`).
 
-# Python logging level for `~/.soothe/logs/cli.log`.
-# `SOOTHE_LOG_LEVEL` overrides when set.
+# Python logging level for `~/.soothe/logs/cli.log` (startup, turns, connection).
+# File rotates at 5 MB (three backups), same as soothe.log and daemon.log.
+# Routing/step traces need `SOOTHE_LOG_LEVEL=DEBUG`. Env overrides this file.
 logging_level: INFO
 
 # Daemon connection (WebSocket) — must match `daemon_config.yml`

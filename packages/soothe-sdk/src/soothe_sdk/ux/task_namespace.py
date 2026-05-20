@@ -1,11 +1,11 @@
 """Task-tool namespace binding — pure helpers for subgraph stream routing.
 
-Main graph records ``task`` tool calls in order; subgraph namespaces bind to spawns
-via an unscoped FIFO deferred until :func:`register_task_spawn_for_step` runs
-(parallel-safe). Clients without step ids fall back to binding against the spawn queue.
+Subgraph namespaces bind to spawns using unified tool_call_id format:
+``{step_wire}:{type}:{tool}:{idx}`` where type is ``s`` for step-level or ``t{n}``
+for task-level. The step_id embedded in tool_call_ids provides the correlation key
+between LangGraph ``tools:…`` namespaces and main-graph ``task`` spawns.
 
 IG-416: Unified tool call ID format for step-level and task-level tool calls.
-Canonical wire form: ``{step_wire}:s:{tool}:{idx}`` (e.g. ``GHT_01:s:grep:0``).
 """
 
 from __future__ import annotations
@@ -307,74 +307,6 @@ def try_bind_namespace_from_tool_call_id(
     return True
 
 
-def try_bind_pending_namespaces_fifo(
-    bindings: dict[tuple[str, ...], TaskScope],
-    pending_unscoped_namespaces: deque[tuple[str, ...]],
-    spawn_queue: deque[TaskScope],
-    spawns_by_step: dict[str, TaskScope],
-) -> int:
-    """Bind deferred namespaces to unlinked spawns in FIFO order when counts match.
-
-      Used when multiple explore delegations start before their LangGraph ``tools:…``
-    namespaces arrive (parallel execute). Unified subgraph tool ids are unavailable
-      until a namespace is bound, so correlation falls back to arrival order.
-    """
-    unbound = [ns for ns in pending_unscoped_namespaces if ns not in bindings]
-    if not unbound:
-        return 0
-    linked_task_ids = {str(scope[0]).strip() for scope in bindings.values()}
-    unlinked: list[TaskScope] = []
-    seen: set[str] = set()
-    for scope in spawn_queue:
-        tid = str(scope[0]).strip()
-        if tid and tid not in linked_task_ids and tid not in seen:
-            unlinked.append(scope)
-            seen.add(tid)
-    if not unlinked:
-        for scope in spawns_by_step.values():
-            tid = str(scope[0]).strip()
-            if tid and tid not in linked_task_ids and tid not in seen:
-                unlinked.append(scope)
-                seen.add(tid)
-    if len(unbound) != len(unlinked):
-        return 0
-    for ns, scope in zip(unbound, unlinked, strict=True):
-        bindings[ns] = scope
-        try:
-            pending_unscoped_namespaces.remove(ns)
-        except ValueError:
-            pass
-    return len(unbound)
-
-
-def try_bind_namespace_to_unlinked_spawn(
-    bindings: dict[tuple[str, ...], TaskScope],
-    spawns_by_step: dict[str, TaskScope],
-    namespace: tuple[str, ...],
-    *,
-    pending_unscoped_namespaces: deque[tuple[str, ...]] | None = None,
-) -> bool:
-    """Bind a subgraph namespace to the sole unlinked spawn (single-delegation only).
-
-    When multiple explore tasks run in parallel, callers must use
-    :func:`try_bind_namespace_from_tool_call_id` instead of order-based FIFO matching.
-    """
-    if not namespace or namespace in bindings:
-        return False
-    linked_spawn_ids = {scope[0] for scope in bindings.values()}
-    unlinked = [scope for scope in spawns_by_step.values() if scope[0] not in linked_spawn_ids]
-    if len(unlinked) != 1:
-        return False
-    scope = unlinked[0]
-    bindings[namespace] = scope
-    if pending_unscoped_namespaces is not None:
-        try:
-            pending_unscoped_namespaces.remove(namespace)
-        except ValueError:
-            pass
-    return True
-
-
 def scoped_subgraph_tool_key(
     namespace: tuple[str, ...],
     tool_call_id: str,
@@ -401,55 +333,6 @@ def scoped_subgraph_tool_key(
     return f"{ns}{_TASK_SCOPE_SEP}{short_tid}"
 
 
-def enqueue_task_spawn(
-    queue: deque[TaskScope],
-    *,
-    tool_name: str,
-    args: dict[str, Any],
-    tool_call_id: str,
-    is_main: bool,
-) -> None:
-    """Queue a Task delegation when ``tool_name`` is ``task`` on the main graph."""
-    if not is_main or tool_name != "task" or not tool_call_id:
-        return
-    raw = args.get("subagent_type", "")
-    subagent_type = raw.strip() if isinstance(raw, str) else ""
-    queue.append((tool_call_id, subagent_type or "?", ""))
-
-
-def _maybe_bind_one_pending_namespace(
-    bindings: dict[tuple[str, ...], TaskScope],
-    pending_unscoped_namespaces: deque[tuple[str, ...]],
-    scope: TaskScope,
-    spawns_by_step: dict[str, TaskScope],
-) -> None:
-    """Bind deferred namespace(s) to newly registered spawn using FIFO matching.
-
-    When multiple namespaces are pending and multiple spawns are unlinked,
-    bind the oldest pending namespace to this spawn (FIFO order).
-    """
-    task_call_id = scope[0]
-    if any(bound == scope for bound in bindings.values()):
-        return
-    unbound = [ns for ns in pending_unscoped_namespaces if ns not in bindings]
-    if len(unbound) != 1:
-        return
-    linked_task_ids = {s[0] for s in bindings.values()}
-    unlinked = [s for s in spawns_by_step.values() if s[0] not in linked_task_ids]
-    if len(unlinked) != 1:
-        return
-    matching_spawn = None
-    for s in unlinked:
-        if s[0] == task_call_id:
-            matching_spawn = s
-            break
-    if matching_spawn is None:
-        return
-    ns = unbound[0]
-    bindings[ns] = matching_spawn
-    pending_unscoped_namespaces.remove(ns)
-
-
 def register_task_spawn_for_step(
     bindings: dict[tuple[str, ...], TaskScope],
     queue: deque[TaskScope],
@@ -459,7 +342,11 @@ def register_task_spawn_for_step(
     pending_unscoped_namespaces: deque[tuple[str, ...]] | None = None,
     spawns_by_task_id: dict[str, TaskScope] | None = None,
 ) -> None:
-    """Record a task spawn for ``scope[2]`` and bind any namespaces that arrived early."""
+    """Record a task spawn for ``scope[2]``.
+
+    Namespace binding is deferred to unified ID-based matching via
+    :func:`try_bind_namespace_from_tool_call_id`.
+    """
     queue.append(scope)
     step_id = task_scope_step_id(scope)
     task_call_id = str(scope[0] or "").strip()
@@ -472,10 +359,6 @@ def register_task_spawn_for_step(
     spawns_by_step[step_id] = scope
     if spawns_by_task_id is not None and task_call_id:
         spawns_by_task_id[task_call_id] = scope
-    if pending_unscoped_namespaces is not None:
-        _maybe_bind_one_pending_namespace(
-            bindings, pending_unscoped_namespaces, scope, spawns_by_step
-        )
 
 
 def prune_bound_pending_namespaces(
@@ -488,24 +371,6 @@ def prune_bound_pending_namespaces(
     filtered = [ns for ns in pending_unscoped_namespaces if ns not in bindings]
     pending_unscoped_namespaces.clear()
     pending_unscoped_namespaces.extend(filtered)
-
-
-def maybe_bind_namespace(
-    bindings: dict[tuple[str, ...], TaskScope],
-    queue: deque[TaskScope],
-    namespace: tuple[str, ...],
-    *,
-    pending_unscoped_namespaces: deque[tuple[str, ...]] | None = None,
-) -> None:
-    """Defer ``namespace`` until a spawn is registered, or bind via the spawn queue."""
-    if not namespace or namespace in bindings:
-        return
-    if pending_unscoped_namespaces is not None:
-        if namespace not in pending_unscoped_namespaces:
-            pending_unscoped_namespaces.append(namespace)
-        return
-    if queue:
-        bindings[namespace] = queue.popleft()
 
 
 def resolve_task_scope_for_namespace(
@@ -549,8 +414,6 @@ __all__ = [
     "normalize_step_task_tool_call_id",
     "normalize_unified_tool_call_id",
     "_shorten_tool_call_id",
-    "enqueue_task_spawn",
-    "maybe_bind_namespace",
     "prune_bound_pending_namespaces",
     "parse_unified_tool_call_id",
     "register_task_spawn_for_step",
@@ -564,6 +427,4 @@ __all__ = [
     "task_scope_step_id",
     "task_scope_task_idx",
     "try_bind_namespace_from_tool_call_id",
-    "try_bind_namespace_to_unlinked_spawn",
-    "try_bind_pending_namespaces_fifo",
 ]

@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 # Extra wall-clock seconds per this many estimated prompt characters (IG-301).
 _CHARS_PER_EXTRA_TIMEOUT_SECOND = 400
 
+
 def estimate_model_request_prompt_chars(request: ModelRequest[Any]) -> int:
     """Sum system prompt and user/tool message text lengths for timeout scaling (IG-301)."""
     total = 0

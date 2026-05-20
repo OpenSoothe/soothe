@@ -1,6 +1,6 @@
 """Unit tests for PresentationEngine action deduplication (IG-143)."""
 
-from soothe_cli.events.core.presentation_engine import PresentationEngine
+from soothe_cli.runtime.presentation.engine import PresentationEngine
 
 
 def test_should_emit_action_deduplicates_identical_text():

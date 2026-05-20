@@ -4726,6 +4726,7 @@ source = { editable = "packages/soothe" }
 dependencies = [
     { name = "aiohttp" },
     { name = "aiosqlite" },
+    { name = "anthropic" },
     { name = "anyio" },
     { name = "bubus" },
     { name = "deepagents" },
@@ -4827,6 +4828,7 @@ video = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.9.0" },
     { name = "aiosqlite", specifier = ">=0.22.1" },
+    { name = "anthropic", specifier = ">=0.96.0,<1.0.0" },
     { name = "anyio", specifier = ">=3.0.0" },
     { name = "arxiv", marker = "extra == 'all'", specifier = ">=2.1.0" },
     { name = "arxiv", marker = "extra == 'research'", specifier = ">=2.1.0" },

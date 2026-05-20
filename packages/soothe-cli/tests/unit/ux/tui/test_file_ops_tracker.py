@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from soothe_cli.tui.file_ops import (
+from soothe_cli.runtime.state.file_tracker import (
     FileOpTracker,
     file_change_action_label,
     track_file_operation,

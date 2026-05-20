@@ -16,7 +16,7 @@ Design Principles:
 - Easy to extend without modifying multiple files
 
 Usage:
-    from soothe_cli.events.policy.display_policy import DisplayPolicy
+    from soothe_cli.runtime.policy.display_policy import DisplayPolicy
 
     policy = DisplayPolicy()
 

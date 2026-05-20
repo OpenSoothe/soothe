@@ -21,11 +21,11 @@ from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux.classification import classify_event_to_tier
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
-from soothe_cli.events.core.presentation_engine import PresentationEngine
-from soothe_cli.events.tools.message_processing import ingest_tool_call_stream_state
-from soothe_cli.events.turn.messages import is_summarization_chunk, normalize_lc_stream_message
-from soothe_cli.tui._session_stats import TurnEventStats
-from soothe_cli.tui.step_task_routing import StepTaskRouter
+from soothe_cli.runtime.parse.message_processing import ingest_tool_call_stream_state
+from soothe_cli.runtime.presentation.engine import PresentationEngine
+from soothe_cli.runtime.state.session_stats import TurnEventStats
+from soothe_cli.runtime.state.step_router import StepTaskRouter
+from soothe_cli.runtime.wire.messages import is_summarization_chunk, normalize_lc_stream_message
 
 _STREAM_CHUNK_LEN = 3
 _MSG_PAIR_LEN = 2

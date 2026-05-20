@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from soothe_cli.events.turn.turn_event_pipeline import TurnEventPipeline, run_turn_pipeline
-from soothe_cli.events.turn.turn_stream_prepare import TurnPrepareState, prepare_turn_chunk
+from soothe_cli.runtime.turn.pipeline import TurnEventPipeline, run_turn_pipeline
+from soothe_cli.runtime.turn.prepare import TurnPrepareState, prepare_turn_chunk
 
 
 @pytest.mark.asyncio
@@ -35,9 +35,9 @@ async def test_run_turn_pipeline_processes_chunks_in_order() -> None:
 
 def test_prepare_turn_chunk_skips_invisible_custom_events() -> None:
     """Custom events below the active verbosity tier are dropped in prepare."""
-    from soothe_cli.events.core.presentation_engine import PresentationEngine
-    from soothe_cli.tui._session_stats import TurnEventStats
-    from soothe_cli.tui.step_task_routing import StepTaskRouter
+    from soothe_cli.runtime.presentation.engine import PresentationEngine
+    from soothe_cli.runtime.state.session_stats import TurnEventStats
+    from soothe_cli.runtime.state.step_router import StepTaskRouter
 
     state = TurnPrepareState(
         ev_stats=TurnEventStats(),

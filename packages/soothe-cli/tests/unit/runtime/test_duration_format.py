@@ -1,8 +1,8 @@
-"""Tests for soothe_cli.events.duration_format."""
+"""Tests for soothe_cli.runtime.presentation.duration_format."""
 
 from __future__ import annotations
 
-from soothe_cli.events.duration_format import format_duration_ms
+from soothe_cli.runtime.presentation.duration_format import format_duration_ms
 
 
 def test_format_duration_ms_subsecond() -> None:
