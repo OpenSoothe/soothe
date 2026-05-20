@@ -167,6 +167,68 @@ def test_merge_tool_display_args_prefers_message_tool_calls() -> None:
     assert merged["path"] == "/full/path/to/file.py"
 
 
+def test_richest_pending_task_args_scoped_with_placeholder_tool_name() -> None:
+    """Placeholder stream name ``tool`` must not match parallel ``task:0`` on another step."""
+    from soothe_cli.events.tools.message_processing import richest_pending_args_for_lookup
+
+    pending = {
+        "AGP_01:s:task:0": {
+            "name": "task",
+            "args_str": (
+                '{"description": "Explore soothe-sdk package", "subagent_type": "explore"}'
+            ),
+            "is_complete_json": True,
+            "emitted": False,
+            "is_main": True,
+        },
+        "AGP_02:s:task:0": {
+            "name": "task",
+            "args_str": (
+                '{"description": "Explore soothe-cli package", "subagent_type": "explore"}'
+            ),
+            "is_complete_json": True,
+            "emitted": False,
+            "is_main": True,
+        },
+    }
+    merged = richest_pending_args_for_lookup(
+        pending,
+        "AGP_02:s:task:0",
+        tool_name="tool",
+    )
+    assert "soothe-cli" in str(merged.get("description", ""))
+    assert "soothe-sdk" not in str(merged.get("description", ""))
+
+
+def test_richest_pending_same_step_different_task_index() -> None:
+    """``task:0`` and ``task:1`` on one step are distinct delegations."""
+    from soothe_cli.events.tools.message_processing import richest_pending_args_for_lookup
+
+    pending = {
+        "WAV_01:s:task:0": {
+            "name": "task",
+            "args_str": '{"description": "First delegation", "subagent_type": "explore"}',
+            "is_complete_json": True,
+            "emitted": False,
+            "is_main": True,
+        },
+        "WAV_01:s:task:1": {
+            "name": "task",
+            "args_str": '{"description": "Second delegation", "subagent_type": "research"}',
+            "is_complete_json": True,
+            "emitted": False,
+            "is_main": True,
+        },
+    }
+    merged = richest_pending_args_for_lookup(
+        pending,
+        "WAV_01:s:task:1",
+        tool_name="task",
+    )
+    assert "Second delegation" in str(merged.get("description", ""))
+    assert "First delegation" not in str(merged.get("description", ""))
+
+
 def test_richest_pending_task_args_scoped_to_execute_step() -> None:
     """Parallel ``task`` spawns must not reuse another step's pending description."""
     from soothe_cli.events.tools.message_processing import richest_pending_args_for_lookup

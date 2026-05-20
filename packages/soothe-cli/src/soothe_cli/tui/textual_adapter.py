@@ -35,6 +35,7 @@ from soothe_sdk.core.events import (
     AGENT_LOOP_GOAL_STARTED,
     AGENT_LOOP_PLAN_DECISION,
     AGENT_LOOP_STEP_COMPLETED,
+    AGENT_LOOP_STEP_QUEUED,
     AGENT_LOOP_STEP_STARTED,
 )
 from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
@@ -45,6 +46,7 @@ from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_ou
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
+    is_inner_subgraph_task_tool_id,
     normalize_step_task_tool_call_id,
     parse_unified_tool_call_id,
     row_key_for_subgraph_tool,
@@ -479,7 +481,7 @@ def _ingest_main_task_tool_on_step_card(
     """Register a main-graph ``task`` delegation on the step card task-activity tree."""
     tcid = str(tool_call_id).strip()
     sid = str(bound_step_id).strip()
-    if not tcid:
+    if not tcid or is_inner_subgraph_task_tool_id(tcid):
         return
     raw_st = display_args.get("subagent_type", "")
     subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
@@ -535,13 +537,6 @@ def _resolve_step_widget_for_tool(
     return None
 
 
-def mark_parallel_plan_step_cards_running(adapter: TextualUIAdapter) -> None:
-    """Show all pending plan step cards as running during a parallel execute wave."""
-    for widget in adapter._current_step_messages.values():
-        if widget._status == "pending":
-            widget.set_running()
-
-
 async def sync_pending_step_cards_from_plan(
     adapter: TextualUIAdapter,
     *,
@@ -577,9 +572,6 @@ async def sync_pending_step_cards_from_plan(
         )
         await adapter._mount_message(step_widget)
         adapter._current_step_messages[sid] = step_widget
-
-    if execution_mode == "parallel":
-        mark_parallel_plan_step_cards_running(adapter)
 
 
 # ---------------------------------------------------------------------------
@@ -846,6 +838,8 @@ async def apply_tool_call_wire_update(
         track_file_operation(file_op_tracker, name, raw_args, merge_id or tcid)
 
     if is_main and name == "task":
+        if is_inner_subgraph_task_tool_id(tcid):
+            return True
         parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
         bound_step_id = parsed_sid or router.step_id_for_tool(tcid)
         _ingest_main_task_tool_on_step_card(
@@ -2142,19 +2136,20 @@ async def execute_task_textual(
                                         )
 
                                     if is_main_agent and buffer_name == "task":
-                                        parsed_step_id, _, _, _ = parse_unified_tool_call_id(
-                                            str(lookup_id)
-                                        )
-                                        bound_step_id = parsed_step_id or router.step_id_for_tool(
-                                            str(lookup_id)
-                                        )
-                                        _ingest_main_task_tool_on_step_card(
-                                            adapter,
-                                            router,
-                                            str(lookup_id),
-                                            parsed_args,
-                                            bound_step_id=bound_step_id,
-                                        )
+                                        if not is_inner_subgraph_task_tool_id(str(lookup_id)):
+                                            parsed_step_id, _, _, _ = parse_unified_tool_call_id(
+                                                str(lookup_id)
+                                            )
+                                            bound_step_id = parsed_step_id or (
+                                                router.step_id_for_tool(str(lookup_id))
+                                            )
+                                            _ingest_main_task_tool_on_step_card(
+                                                adapter,
+                                                router,
+                                                str(lookup_id),
+                                                parsed_args,
+                                                bound_step_id=bound_step_id,
+                                            )
                                     elif is_main_agent and buffer_name != "task":
                                         parsed_sid, _, _, _ = parse_unified_tool_call_id(
                                             str(lookup_id)
@@ -2282,6 +2277,24 @@ async def execute_task_textual(
                                     )
                                     if execution_mode == "parallel":
                                         ui_coalesce.execute_wave_active = True
+                                continue
+
+                            if event_type == AGENT_LOOP_STEP_QUEUED:
+                                step_id = str(data.get("step_id", "")).strip()
+                                description = str(data.get("description", "")).strip()
+                                if step_id:
+                                    step_widget = adapter._current_step_messages.get(step_id)
+                                    if step_widget is None:
+                                        step_widget = CognitionStepMessage(
+                                            step_id=step_id,
+                                            description=description or "(step)",
+                                            id=f"step-{uuid.uuid4().hex[:8]}",
+                                        )
+                                        await adapter._mount_message(step_widget)
+                                        adapter._current_step_messages[step_id] = step_widget
+                                    elif description:
+                                        step_widget.set_description(description)
+                                    step_widget.set_queued()
                                 continue
 
                             if event_type == AGENT_LOOP_STEP_STARTED:
@@ -2576,6 +2589,7 @@ __all__ = [
     "AGENT_LOOP_GOAL_COMPLETED",
     "AGENT_LOOP_GOAL_STARTED",
     "AGENT_LOOP_STEP_COMPLETED",
+    "AGENT_LOOP_STEP_QUEUED",
     "AGENT_LOOP_STEP_STARTED",
     "TurnToolUiCoalescer",
 ]

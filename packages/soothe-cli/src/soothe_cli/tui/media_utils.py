@@ -416,7 +416,12 @@ def _get_clipboard_via_osascript() -> ImageData | None:
             return None
 
         # Check if file was created and has content
-        if not pathlib.Path(temp_path).exists() or pathlib.Path(temp_path).stat().st_size == 0:
+        temp = pathlib.Path(temp_path)
+        try:
+            missing_or_empty = not temp.exists() or temp.stat().st_size == 0
+        except OSError:
+            return None
+        if missing_or_empty:
             return None
 
         # Read and validate the image

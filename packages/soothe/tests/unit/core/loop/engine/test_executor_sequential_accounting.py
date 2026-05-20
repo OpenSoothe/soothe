@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk
 
-from soothe.core.loop.engine.executor import Executor
+from soothe.core.loop.engine.executor import Executor, StepWaveQueued, StepWaveStart
 from soothe.core.loop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -117,6 +117,58 @@ def test_extract_sequential_outcomes_single_step_fills_ledger_from_chunks_ig373(
     body = outcomes["9oi"].content
     assert "Here are the first lines" in body
     assert "A\nB" in body
+
+
+@pytest.mark.asyncio
+async def test_parallel_waves_emit_step_wave_queued_for_overflow() -> None:
+    mock_agent = MagicMock()
+    mock_agent.astream = MagicMock(side_effect=lambda *a, **k: _empty_agent_stream())
+
+    executor = Executor(mock_agent, max_parallel_steps=1)
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[
+            StepAction(id="a", description="p1", expected_output="o"),
+            StepAction(id="b", description="p2", expected_output="o"),
+        ],
+        execution_mode="parallel",
+        reasoning="r",
+    )
+    state = LoopState(goal="g", thread_id="t-main")
+    queued: list[StepWaveQueued] = []
+    async for item in executor.execute(decision, state):
+        if isinstance(item, StepWaveQueued):
+            queued.append(item)
+
+    assert len(queued) == 1
+    assert [s.id for s in queued[0].steps] == ["b"]
+
+
+@pytest.mark.asyncio
+async def test_parallel_waves_emit_step_wave_start_per_batch() -> None:
+    mock_agent = MagicMock()
+    mock_agent.astream = MagicMock(side_effect=lambda *a, **k: _empty_agent_stream())
+
+    executor = Executor(mock_agent, max_parallel_steps=1)
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[
+            StepAction(id="a", description="p1", expected_output="o"),
+            StepAction(id="b", description="p2", expected_output="o"),
+        ],
+        execution_mode="parallel",
+        reasoning="r",
+    )
+    state = LoopState(goal="g", thread_id="t-main")
+    wave_starts: list[StepWaveStart] = []
+    async for item in executor.execute(decision, state):
+        if isinstance(item, StepWaveStart):
+            wave_starts.append(item)
+
+    assert [tuple(w.steps) for w in wave_starts] == [
+        (decision.steps[0],),
+        (decision.steps[1],),
+    ]
 
 
 @pytest.mark.asyncio

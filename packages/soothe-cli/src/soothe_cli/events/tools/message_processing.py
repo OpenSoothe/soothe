@@ -281,17 +281,24 @@ def _pending_or_overlay_id_matches_lookup(
         return False
     if cid == lid:
         return True
-    if tool_name == "task":
-        step = tool_lookup_step_id(lid)
-        return bool(step) and tool_lookup_step_id(cid) == step
-    lookup_step = tool_lookup_step_id(lid)
-    cand_step = tool_lookup_step_id(cid)
-    if lookup_step and cand_step:
-        from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 
-        _, _, _, cand_tool_info = parse_unified_tool_call_id(cid)
-        _, _, _, lookup_tool_info = parse_unified_tool_call_id(lid)
-        return cand_tool_info == lookup_tool_info
+    from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
+
+    cand_step, cand_type, cand_tidx, cand_info = parse_unified_tool_call_id(cid)
+    lookup_step, lookup_type, lookup_tidx, lookup_info = parse_unified_tool_call_id(lid)
+
+    # Unified wire ids: always require the same execute step (parallel ``task:0`` rows).
+    if lookup_step and cand_step:
+        if lookup_step != cand_step:
+            return False
+        if lookup_type == "s" and cand_type == "s":
+            return lookup_info == cand_info
+        if lookup_type == "t" and cand_type == "t":
+            return lookup_tidx == cand_tidx and lookup_info == cand_info
+        return False
+
+    # Non-unified ids: only match when names align and ids are identical (handled above).
+    _ = tool_name
     return False
 
 

@@ -5,9 +5,32 @@ This module provides utilities for counting tokens in text.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 ComplexityLevel = Literal["simple", "medium", "complex"]  # Simplified: merged trivial into simple
+
+
+def estimate_content_chars(content: Any) -> int:
+    """Best-effort character count for message content (string or blocks)."""
+    if content is None:
+        return 0
+    if isinstance(content, str):
+        return len(content)
+    if isinstance(content, list):
+        total = 0
+        for block in content:
+            if isinstance(block, str):
+                total += len(block)
+            elif isinstance(block, dict):
+                text = block.get("text")
+                if isinstance(text, str):
+                    total += len(text)
+                else:
+                    total += len(str(block))
+            else:
+                total += len(str(block))
+        return total
+    return len(str(content))
 
 
 def count_tokens(text: str, *, use_tiktoken: bool = True) -> int:

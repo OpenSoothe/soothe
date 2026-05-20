@@ -121,6 +121,29 @@ def test_duplicate_task_rows_dedupe_to_one_branch() -> None:
     assert text.count("Explore(scan repo)") == 1
 
 
+def test_subgraph_task_level_id_does_not_overwrite_main_delegation() -> None:
+    """Regression: ``FHG_01:t0:task:0`` must not replace ``FHG_01:s:task:0`` args."""
+    card = CognitionStepMessage("FHG-01", "Explore soothe-sdk", id="stp-overwrite")
+    card.add_tool_call(
+        "FHG_01:s:task:0",
+        "task",
+        {"subagent_type": "explore", "description": "Explore soothe-sdk package"},
+        is_task_row=True,
+    )
+    card.add_tool_call(
+        "FHG_01:t0:task:0",
+        "task",
+        {"description": "Check soothe-cli dependencies", "subagent_type": "explore"},
+        parent_tool_call_id="FHG_01:s:task:0",
+    )
+    rows = card._iter_task_delegation_rows()
+    assert len(rows) == 1
+    assert "soothe-sdk" in str(rows[0].args.get("description", ""))
+    text = _plain(card._step_task_activity_content())
+    assert "Explore(Explore soothe-sdk package)" in text
+    assert "Check soothe-cli" not in text
+
+
 def test_child_stats_link_via_normalized_parent_id() -> None:
     card = CognitionStepMessage("JIY-01", "Explore", id="stp-parent-norm")
     card.add_tool_call(

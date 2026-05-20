@@ -14,6 +14,7 @@ from soothe_sdk.core.events import (
     AGENT_LOOP_GOAL_STARTED,
     AGENT_LOOP_PLAN_DECISION,
     AGENT_LOOP_STEP_COMPLETED,
+    AGENT_LOOP_STEP_QUEUED,
     AGENT_LOOP_STEP_STARTED,
 )
 from soothe_sdk.core.verbosity import VerbosityTier
@@ -36,6 +37,7 @@ _MAIN_LOOP_CUSTOM_TYPES = frozenset(
         AGENT_LOOP_GOAL_COMPLETED,
         AGENT_LOOP_PLAN_DECISION,
         AGENT_LOOP_STEP_STARTED,
+        AGENT_LOOP_STEP_QUEUED,
         AGENT_LOOP_STEP_COMPLETED,
     }
 )

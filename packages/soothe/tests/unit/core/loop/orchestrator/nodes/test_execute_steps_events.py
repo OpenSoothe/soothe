@@ -7,12 +7,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from soothe.core.loop.engine.executor import StepWaveQueued, StepWaveStart
 from soothe.core.loop.orchestrator.nodes.execute_steps import node_execute
 from soothe.core.loop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.core.loop.state.schemas import AgentDecision, StepAction, StepResult
 
 
 async def _fake_execute_stream(*_args: Any, **_kwargs: Any):
+    yield StepWaveQueued(steps=(StepAction(id="WAA-02", description="Second"),))
+    yield StepWaveStart(steps=(StepAction(id="WAA-01", description="First"),))
     yield ("ns", "messages", ("chunk", {}))
     yield StepResult(
         step_id="WAA-01",
@@ -83,6 +86,12 @@ async def test_execute_emits_step_completed_per_result() -> None:
 
     await node_execute(ctx, {})
 
+    queued = [e for e in emitted if e[0] == "step_queued"]
+    assert [q[1]["step_id"] for q in queued] == ["WAA-02"]
+
+    started = [e for e in emitted if e[0] == "step_started"]
+    assert [s[1]["step_id"] for s in started] == ["WAA-01"]
+
     completed = [e for e in emitted if e[0] == "step_completed"]
     assert len(completed) == 2
     assert completed[0][1]["step_id"] == "WAA-01"
@@ -93,6 +102,7 @@ async def test_execute_emits_step_completed_per_result() -> None:
 
 async def _fake_dependency_execute_stream(*_args: Any, **_kwargs: Any):
     """Simulate dependency DAG: one step at a time, second starts after first completes."""
+    yield StepWaveStart(steps=(StepAction(id="WAA-01", description="First"),))
     yield StepResult(
         step_id="WAA-01",
         success=True,
@@ -100,6 +110,7 @@ async def _fake_dependency_execute_stream(*_args: Any, **_kwargs: Any):
         thread_id="thread-1",
         tool_call_count=2,
     )
+    yield StepWaveStart(steps=(StepAction(id="WAA-02", description="Second"),))
     yield StepResult(
         step_id="WAA-02",
         success=True,

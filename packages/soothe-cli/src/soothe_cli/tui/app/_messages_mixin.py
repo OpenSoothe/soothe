@@ -684,8 +684,9 @@ class _MessagesMixin:
         if self._pending_ask_user_widget:
             return
         # Preserve an active text selection (focus would clear highlight for copy).
-        screen = self.screen
-        if screen is not None and screen.get_selected_text():
+        from soothe_cli.tui.widgets.clipboard import screen_has_text_selection
+
+        if screen_has_text_selection(self.screen):
             return
         self.call_after_refresh(self._chat_input.focus_input)
 
@@ -698,8 +699,9 @@ class _MessagesMixin:
         """
         from soothe_cli.tui.widgets.clipboard import copy_selection_to_clipboard
 
-        screen = self.screen
-        if screen is None or not screen.get_selected_text():
+        from soothe_cli.tui.widgets.clipboard import screen_has_text_selection
+
+        if not screen_has_text_selection(self.screen):
             return
         copy_selection_to_clipboard(self)
 

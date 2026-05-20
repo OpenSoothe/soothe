@@ -10,6 +10,7 @@ from soothe_sdk.ux.task_namespace import (
     normalize_step_task_tool_call_id,
     normalize_unified_tool_call_id,
     parse_unified_tool_call_id,
+    prune_bound_pending_namespaces,
     register_task_spawn_for_step,
     resolve_step_id_from_subgraph_tool,
     resolve_task_parent_for_unified_tool_id,
@@ -19,8 +20,36 @@ from soothe_sdk.ux.task_namespace import (
     scoped_subgraph_tool_key,
     step_level_parent_task_call_id,
     task_scope_task_idx,
+    try_bind_namespace_from_tool_call_id,
     try_bind_namespace_to_unlinked_spawn,
+    try_bind_pending_namespaces_fifo,
 )
+
+
+def test_maybe_bind_namespace_does_not_duplicate_pending_entries() -> None:
+    """LangGraph re-emits the same subgraph namespace on every stream chunk."""
+    bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
+    pending: deque[tuple[str, ...]] = deque()
+    ns = ("tools:explore-a",)
+    for _ in range(100):
+        maybe_bind_namespace(
+            bindings,
+            deque(),
+            ns,
+            pending_unscoped_namespaces=pending,
+        )
+    assert list(pending) == [ns]
+
+
+def test_prune_bound_pending_namespaces_removes_linked() -> None:
+    bindings: dict[tuple[str, ...], tuple[str, str, str]] = {
+        ("tools:a",): ("S_01:s:task:0", "explore", "S-01"),
+    }
+    pending: deque[tuple[str, ...]] = deque(
+        [("tools:a",), ("tools:b",), ("tools:a",), ("tools:c",)]
+    )
+    prune_bound_pending_namespaces(bindings, pending)
+    assert list(pending) == [("tools:b",), ("tools:c",)]
 
 
 def test_register_task_spawn_binds_deferred_unscoped_namespace() -> None:
@@ -83,8 +112,8 @@ def test_parallel_spawns_bind_one_namespace_per_register_when_interleaved() -> N
     assert bindings[("tools:ccc",)][2] == "YKF-03"
 
 
-def test_parallel_spawns_fifo_bind_when_multiple_namespaces_pending() -> None:
-    """When multiple namespaces pending, FIFO binding pairs oldest namespace to first spawn."""
+def test_parallel_spawns_no_fifo_bind_when_multiple_pending() -> None:
+    """Multiple pending namespaces must not bind by registration order (FIFO)."""
     bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
     queue: deque[tuple[str, str, str]] = deque()
     spawns: dict[str, tuple[str, str, str]] = {}
@@ -103,10 +132,6 @@ def test_parallel_spawns_fifo_bind_when_multiple_namespaces_pending() -> None:
         ("YKF_01:s:task:0", "explore", "YKF-01"),
         pending_unscoped_namespaces=pending_unscoped,
     )
-    # First namespace bound to first spawn (FIFO)
-    assert bindings[("tools:aaa",)] == ("YKF_01:s:task:0", "explore", "YKF-01")
-    assert ("tools:bbb",) not in bindings
-
     register_task_spawn_for_step(
         bindings,
         queue,
@@ -114,13 +139,94 @@ def test_parallel_spawns_fifo_bind_when_multiple_namespaces_pending() -> None:
         ("YKF_02:s:task:0", "explore", "YKF-02"),
         pending_unscoped_namespaces=pending_unscoped,
     )
-    # Second namespace bound to second spawn
+    assert ("tools:aaa",) not in bindings
+    assert ("tools:bbb",) not in bindings
+
+    assert try_bind_namespace_from_tool_call_id(
+        bindings, spawns, ("tools:aaa",), "YKF_01:t0:grep:0"
+    )
+    assert try_bind_namespace_from_tool_call_id(
+        bindings, spawns, ("tools:bbb",), "YKF_02:t0:glob:1"
+    )
+    assert bindings[("tools:aaa",)] == ("YKF_01:s:task:0", "explore", "YKF-01")
     assert bindings[("tools:bbb",)] == ("YKF_02:s:task:0", "explore", "YKF-02")
+
+
+def test_try_bind_namespace_to_unlinked_spawn_requires_single_unlinked() -> None:
+    """FIFO fallback only applies when exactly one spawn lacks a namespace."""
+    bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
+    spawns = {
+        "YKF-01": ("YKF_01:s:task:0", "explore", "YKF-01"),
+        "YKF-02": ("YKF_02:s:task:0", "explore", "YKF-02"),
+    }
+    assert not try_bind_namespace_to_unlinked_spawn(bindings, spawns, ("tools:late",))
+    spawns_single = {"YKF-01": ("YKF_01:s:task:0", "explore", "YKF-01")}
+    assert try_bind_namespace_to_unlinked_spawn(bindings, spawns_single, ("tools:late",))
+    assert bindings[("tools:late",)] == ("YKF_01:s:task:0", "explore", "YKF-01")
 
 
 def test_normalize_step_task_tool_call_id_embeds_step() -> None:
     assert normalize_step_task_tool_call_id("YKF-02", "functions.task:0") == "YKF_02:s:task:0"
     assert normalize_step_task_tool_call_id("YKF-02", "YKF_02:s:task:0") == "YKF_02:s:task:0"
+
+
+def test_normalize_step_task_tool_call_id_does_not_remap_foreign_step() -> None:
+    """Another step's task id must not be forced onto the current step card."""
+    foreign = "YKF_02:s:task:0"
+    assert normalize_step_task_tool_call_id("YKF-01", foreign) == foreign
+
+
+def test_is_inner_subgraph_task_tool_id() -> None:
+    from soothe_sdk.ux.task_namespace import is_inner_subgraph_task_tool_id
+
+    assert is_inner_subgraph_task_tool_id("YKF_02:t0:task:0")
+    assert not is_inner_subgraph_task_tool_id("YKF_02:s:task:0")
+    assert not is_inner_subgraph_task_tool_id("YKF_02:t0:glob:1")
+
+
+def test_try_bind_namespace_rejects_inner_task_id() -> None:
+    from soothe_sdk.ux.task_namespace import is_inner_subgraph_task_tool_id
+
+    bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
+    spawns = {"YKF-02": ("YKF_02:s:task:0", "explore", "YKF-02")}
+    assert not try_bind_namespace_from_tool_call_id(
+        bindings, spawns, ("tools:aaa",), "YKF_02:t0:task:0"
+    )
+    assert ("tools:aaa",) not in bindings
+    _ = is_inner_subgraph_task_tool_id
+
+
+def test_register_task_spawn_for_step_keeps_step_level_spawn() -> None:
+    bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
+    queue: deque[tuple[str, str, str]] = deque()
+    spawns: dict[str, tuple[str, str, str]] = {}
+    register_task_spawn_for_step(
+        bindings,
+        queue,
+        spawns,
+        ("YKF_02:s:task:0", "explore", "YKF-02"),
+    )
+    register_task_spawn_for_step(
+        bindings,
+        queue,
+        spawns,
+        ("YKF_02:t0:task:0", "explore", "YKF-02"),
+    )
+    assert spawns["YKF-02"][0] == "YKF_02:s:task:0"
+
+
+def test_try_bind_namespace_rebinds_on_definitive_tool_id() -> None:
+    bindings: dict[tuple[str, ...], tuple[str, str, str]] = {
+        ("tools:aaa",): ("YKF_02:s:task:0", "explore", "YKF-02"),
+    }
+    spawns = {
+        "YKF-02": ("YKF_02:s:task:0", "explore", "YKF-02"),
+        "YKF-03": ("YKF_03:s:task:0", "explore", "YKF-03"),
+    }
+    assert try_bind_namespace_from_tool_call_id(
+        bindings, spawns, ("tools:aaa",), "YKF_03:t0:glob:0"
+    )
+    assert bindings[("tools:aaa",)] == ("YKF_03:s:task:0", "explore", "YKF-03")
 
 
 def test_legacy_unified_formats_are_not_accepted() -> None:
@@ -255,6 +361,34 @@ def test_resolve_task_parent_for_unified_task_level_id() -> None:
     )
 
 
+def test_resolve_task_parent_uses_spawns_by_task_id_for_parallel_tasks() -> None:
+    first_card = object()
+    second_card = object()
+    spawns_by_step = {"WAV-01": ("WAV_01:s:task:1", "research", "WAV-01")}
+    spawns_by_task = {
+        "WAV_01:s:task:0": ("WAV_01:s:task:0", "explore", "WAV-01"),
+        "WAV_01:s:task:1": ("WAV_01:s:task:1", "research", "WAV-01"),
+    }
+    display = {
+        "WAV_01:s:task:0": first_card,
+        "WAV_01:s:task:1": second_card,
+    }
+    parent0 = resolve_task_parent_for_unified_tool_id(
+        "WAV_01:t0:grep:0",
+        spawns_by_step=spawns_by_step,
+        tool_display_by_call_id=display,
+        spawns_by_task_id=spawns_by_task,
+    )
+    parent1 = resolve_task_parent_for_unified_tool_id(
+        "WAV_01:t1:grep:0",
+        spawns_by_step=spawns_by_step,
+        tool_display_by_call_id=display,
+        spawns_by_task_id=spawns_by_task,
+    )
+    assert parent0 is first_card
+    assert parent1 is second_card
+
+
 def test_shorten_tool_call_id_normalizes_provider_colon_index() -> None:
     assert _shorten_tool_call_id("functions.grep:0") == "grep:0"
     assert _shorten_tool_call_id("GHT_01:t0:read_file:1") == "read_file:1"
@@ -288,6 +422,47 @@ def test_row_key_for_subgraph_tool_remaps_wrong_task_idx() -> None:
     bound_scope = ("MFE_01:s:task:0", "explore", "MFE-01")  # task_idx=0
     remapped = row_key_for_subgraph_tool(("tools:abc",), wrong_tid, task_scope=bound_scope)
     assert remapped == "MFE_01:t0:read_file:0"
+
+
+def test_try_bind_pending_namespaces_fifo_when_counts_match() -> None:
+    """Parallel explore: spawns register first, then namespaces arrive in pairs."""
+    bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
+    queue: deque[tuple[str, str, str]] = deque()
+    spawns: dict[str, tuple[str, str, str]] = {}
+    pending: deque[tuple[str, ...]] = deque()
+
+    for step_id, ns in (
+        ("XFJ-02", ("tools:aaa",)),
+        ("XFJ-01", ("tools:bbb",)),
+    ):
+        register_task_spawn_for_step(
+            bindings,
+            queue,
+            spawns,
+            (f"{step_id.replace('-', '_')}:s:task:0", "explore", step_id),
+            pending_unscoped_namespaces=pending,
+        )
+
+    for ns in (("tools:aaa",), ("tools:bbb",)):
+        maybe_bind_namespace(bindings, queue, ns, pending_unscoped_namespaces=pending)
+
+    assert try_bind_pending_namespaces_fifo(bindings, pending, queue, spawns) == 2
+    assert bindings[("tools:aaa",)][2] == "XFJ-02"
+    assert bindings[("tools:bbb",)][2] == "XFJ-01"
+    assert list(pending) == []
+
+
+def test_try_bind_pending_namespaces_fifo_skips_when_counts_differ() -> None:
+    bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
+    queue: deque[tuple[str, str, str]] = deque()
+    spawns: dict[str, tuple[str, str, str]] = {
+        "A-01": ("A_01:s:task:0", "explore", "A-01"),
+        "A-02": ("A_02:s:task:0", "explore", "A-02"),
+    }
+    pending: deque[tuple[str, ...]] = deque([("tools:only",)])
+    queue.extend(spawns.values())
+    assert try_bind_pending_namespaces_fifo(bindings, pending, queue, spawns) == 0
+    assert bindings == {}
 
 
 def test_try_bind_namespace_to_unlinked_spawn_after_register() -> None:

@@ -2,7 +2,13 @@
 
 from .agent_loop import AgentLoop
 from .anchor_manager import CheckpointAnchorManager
-from .executor import DELEGATE_FINAL_WAVE_CAP, Executor, compute_act_wave_finalize
+from .executor import (
+    DELEGATE_FINAL_WAVE_CAP,
+    Executor,
+    StepWaveQueued,
+    StepWaveStart,
+    compute_act_wave_finalize,
+)
 from .goal_context_manager import GoalContextManager
 from .metadata_generator import generate_outcome_metadata
 from .scenario_classifier import ScenarioClassification
@@ -14,6 +20,8 @@ __all__ = [
     "CheckpointAnchorManager",
     "DELEGATE_FINAL_WAVE_CAP",
     "Executor",
+    "StepWaveQueued",
+    "StepWaveStart",
     "GoalContextManager",
     "ScenarioClassification",
     "SynthesisGenerator",

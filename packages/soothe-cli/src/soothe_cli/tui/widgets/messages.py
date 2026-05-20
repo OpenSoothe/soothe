@@ -43,6 +43,10 @@ from soothe_cli.tui.preview_limits import (
     STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD,
 )
 from soothe_cli.tui.widgets._links import open_style_link
+from soothe_cli.tui.widgets.clipboard import (
+    clear_widget_text_selection,
+    screen_has_text_selection,
+)
 from soothe_cli.tui.widgets.diff import compose_diff_lines
 
 if TYPE_CHECKING:
@@ -56,13 +60,7 @@ logger = logging.getLogger(__name__)
 
 def _click_has_text_selection(widget: Static | Vertical) -> bool:
     """Return True when the screen still has an active text selection."""
-    screen = widget.screen
-    if screen is None:
-        return False
-    try:
-        return bool(screen.get_selected_text())
-    except (AttributeError, TypeError, ValueError):
-        return False
+    return screen_has_text_selection(widget.screen)
 
 
 _STEP_TOOL_PREVIEW_ROWS = STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
@@ -1108,6 +1106,10 @@ class CognitionStepMessage(Vertical):
         color: $cognition;
     }
 
+    CognitionStepMessage .step-status.queued {
+        color: $cognition;
+    }
+
     CognitionStepMessage .step-tools {
         margin-left: 0;
         margin-top: 0;
@@ -1157,7 +1159,7 @@ class CognitionStepMessage(Vertical):
         super().__init__(**kwargs)
         self._step_id = step_id
         self._description = description.strip()
-        self._status = "pending"  # pending | running | success | error
+        self._status = "pending"  # pending | queued | running | success | error
         self._spinner_position = 0
         self._start_time: float | None = None
         self._animation_timer: Timer | None = None
@@ -1312,6 +1314,8 @@ class CognitionStepMessage(Vertical):
         elif self._deferred_running:
             self._deferred_running = False
             self.set_running()
+        elif self._status == "queued":
+            self._refresh_queued_display()
         elif self._status == "pending":
             self._refresh_pending_display()
 
@@ -1426,6 +1430,9 @@ class CognitionStepMessage(Vertical):
         if not tcid:
             return ""
         if row.is_task_row or is_step_level_task_tool_id(tcid):
+            parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
+            if parsed_sid and parsed_sid != self._step_id:
+                return tcid
             return normalize_step_task_tool_call_id(self._step_id, tcid)
         return tcid
 
@@ -1472,6 +1479,10 @@ class CognitionStepMessage(Vertical):
         if row_parent_id == parent_id:
             return True
         if is_step_level_task_tool_id(parent_id) or is_step_level_task_tool_id(row_parent_id):
+            p_sid, _, _, _ = parse_unified_tool_call_id(parent_id)
+            r_sid, _, _, _ = parse_unified_tool_call_id(row_parent_id)
+            if p_sid != self._step_id or r_sid != self._step_id:
+                return parent_id == row_parent_id
             return normalize_step_task_tool_call_id(
                 self._step_id, row_parent_id
             ) == normalize_step_task_tool_call_id(self._step_id, parent_id)
@@ -1479,10 +1490,12 @@ class CognitionStepMessage(Vertical):
 
     def _child_rows_for_task(self, task_row: _StepToolRow) -> list[_StepToolRow]:
         """Subgraph tool rows for one task (``parent_tool_call_id`` or ``{step}:t{n}:…``)."""
-        parent_id = normalize_step_task_tool_call_id(
-            self._step_id,
-            str(task_row.tool_call_id).strip(),
-        )
+        raw_parent = str(task_row.tool_call_id).strip()
+        parsed_sid, _, _, _ = parse_unified_tool_call_id(raw_parent)
+        if parsed_sid and parsed_sid == self._step_id:
+            parent_id = normalize_step_task_tool_call_id(self._step_id, raw_parent)
+        else:
+            parent_id = raw_parent
         task_idx = self._task_idx_from_delegation_row(task_row)
         by_id: dict[str, _StepToolRow] = {}
         for row in self._rows:
@@ -2033,22 +2046,30 @@ class CognitionStepMessage(Vertical):
         tcid = str(tool_call_id).strip()
         if not tcid:
             return
-        if not is_task_row and (
-            (tool_name or "").strip() == "task" or is_step_level_task_tool_id(tcid)
-        ):
-            is_task_row = True
-        if is_task_row:
-            canonical_tcid = normalize_step_task_tool_call_id(self._step_id, tcid)
-            for existing_id, existing_row in list(self._row_index.items()):
-                if self._task_delegation_dedupe_key(existing_row) != canonical_tcid:
-                    continue
-                if existing_id == canonical_tcid:
+        # Only main-graph step-level ``task`` delegations are parent rows. Subgraph
+        # ``{step}:t{n}:task:…`` streams must stay nested children (or be skipped).
+        if not is_task_row and parent_tool_call_id is None:
+            _, type_code, _, _ = parse_unified_tool_call_id(tcid)
+            if is_step_level_task_tool_id(tcid) or (
+                (tool_name or "").strip() == "task" and type_code != "t"
+            ):
+                is_task_row = True
+        if is_task_row and is_step_level_task_tool_id(tcid):
+            parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
+            if parsed_sid and parsed_sid != self._step_id:
+                is_task_row = False
+            else:
+                canonical_tcid = normalize_step_task_tool_call_id(self._step_id, tcid)
+                for existing_id, existing_row in list(self._row_index.items()):
+                    if self._task_delegation_dedupe_key(existing_row) != canonical_tcid:
+                        continue
+                    if existing_id == canonical_tcid:
+                        self.update_tool_args(canonical_tcid, args)
+                        return
+                    self._migrate_tool_row_id(existing_id, canonical_tcid)
                     self.update_tool_args(canonical_tcid, args)
                     return
-                self._migrate_tool_row_id(existing_id, canonical_tcid)
-                self.update_tool_args(canonical_tcid, args)
-                return
-            tcid = canonical_tcid
+                tcid = canonical_tcid
         if tcid in self._row_index:
             self.update_tool_args(tcid, args)
             return
@@ -2089,6 +2110,9 @@ class CognitionStepMessage(Vertical):
         if not tcid:
             return None
         if is_step_level_task_tool_id(tcid):
+            parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
+            if parsed_sid and parsed_sid != self._step_id:
+                return None
             return normalize_step_task_tool_call_id(self._step_id, tcid)
         return None
 
@@ -2320,6 +2344,8 @@ class CognitionStepMessage(Vertical):
         """Refresh status text when tool stats change without repainting tool rows."""
         if self._status == "running":
             self._update_running_animation()
+        elif self._status == "queued":
+            self._refresh_queued_display()
         elif self._status == "pending":
             self._refresh_pending_display()
 
@@ -2334,9 +2360,33 @@ class CognitionStepMessage(Vertical):
         g = get_glyphs()
         gutter = f"{g.output_prefix} "
         line = f"{gutter}{g.circle_empty} Pending...{self._stats_title_suffix()}"
+        self._status_widget.remove_class("queued")
         self._status_widget.add_class("pending")
         self._status_widget.update(Content.styled(line, colors.cognition))
         self._status_widget.display = True
+
+    def _refresh_queued_display(self) -> None:
+        """Show ready steps waiting for a concurrency slot (``max_parallel_steps``)."""
+        if self._status != "queued" or self._status_widget is None:
+            return
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
+        g = get_glyphs()
+        gutter = f"{g.output_prefix} "
+        line = f"{gutter}{g.circle_empty} Queued...{self._stats_title_suffix()}"
+        self._status_widget.remove_class("pending")
+        self._status_widget.add_class("queued")
+        self._status_widget.update(Content.styled(line, colors.cognition))
+        self._status_widget.display = True
+
+    def set_queued(self) -> None:
+        """Mark a ready step as waiting for an execute batch slot."""
+        if self._status in ("running", "success", "error"):
+            return
+        self._status = "queued"
+        self._refresh_queued_display()
 
     def set_running(self) -> None:
         """Show animated running state (call after mount)."""
@@ -2348,7 +2398,8 @@ class CognitionStepMessage(Vertical):
         self._start_time = time()
         self._tools_body_collapsed = False
         if self._status_widget:
-            self._status_widget.add_class("pending")
+            self._status_widget.remove_class("pending")
+            self._status_widget.remove_class("queued")
             self._status_widget.display = True
         self._update_running_animation()
         self._animation_timer = self.set_interval(
@@ -2387,6 +2438,7 @@ class CognitionStepMessage(Vertical):
             toggle_icon = f" {g.expand if self._card_collapsed else g.collapse}"
         stats_suffix = self._stats_title_suffix()
         line = f"{gutter}{frame} Running...{elapsed}{stats_suffix}{toggle_icon}"
+        clear_widget_text_selection(self._status_widget)
         self._status_widget.update(Content.styled(line, colors.cognition))
 
     def set_complete(

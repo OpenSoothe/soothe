@@ -17,6 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
+from soothe_cli.tui.path_utils import path_is_file
 from soothe_cli.tui.project_utils import find_project_root
 
 
@@ -329,7 +330,7 @@ def _get_project_files(root: Path) -> list[str]:
     try:
         for pattern in ["*", "*/*", "*/*/*", "*/*/*/*"]:
             for p in root.glob(pattern):
-                if p.is_file() and not any(part.startswith(".") for part in p.parts):
+                if path_is_file(p) and not any(part.startswith(".") for part in p.parts):
                     files.append(p.relative_to(root).as_posix())
                 if len(files) >= _MAX_FALLBACK_FILES:
                     break
