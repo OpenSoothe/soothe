@@ -50,19 +50,23 @@ class MockWebSocketClient:
         self.request = MagicMock()
         self.request.headers = {"Origin": "http://localhost"}
 
-    async def send(self, data: str | bytes) -> None:
-        """Simulate WebSocket send with configurable delay."""
+    async def send_text(self, text: str) -> None:
+        """Simulate Starlette WebSocket send_text with configurable delay."""
         await asyncio.sleep(self.delay)
         self.send_count += 1
         # Parse message for tracking
         import json
 
         try:
-            raw = data.decode("utf-8") if isinstance(data, bytes) else data
-            msg = json.loads(raw)
+            msg = json.loads(text)
             self.messages_received.append(msg)
         except json.JSONDecodeError:
             pass
+
+    async def send(self, data: str | bytes) -> None:
+        """Simulate generic WebSocket send (compatibility alias)."""
+        text = data.decode("utf-8") if isinstance(data, bytes) else data
+        await self.send_text(text)
 
     async def close(self, code: int = 1000, reason: str = "") -> None:
         """Simulate WebSocket close."""
