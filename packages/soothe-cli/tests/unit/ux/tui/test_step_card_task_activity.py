@@ -103,9 +103,11 @@ def test_task_branch_child_line_shows_stats_and_running_status() -> None:
 
 def test_pending_step_shows_branch_pending_without_task_rows() -> None:
     card = CognitionStepMessage("WAA-02", "Blocked step", id="stp-wait")
+    # After IG-422 refactor, pending status is handled by _status_widget, not _step_task_activity_content.
+    # Without task delegation rows, _step_task_activity_content returns empty Content.
     text = _plain(card._step_task_activity_content())
-    assert "Pending..." in text
-    assert card._has_task_activity_body()
+    assert text == ""  # No task rows → empty task activity content
+    assert not card._has_task_activity_body()  # No subagent activity scheduled
 
 
 def test_pending_step_with_task_delegation_shows_child_pending() -> None:
