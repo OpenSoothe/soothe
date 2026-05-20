@@ -1,6 +1,7 @@
 """Round-trip tests for CognitionReasonMessage in the message store."""
 
-from soothe_cli.tui.widgets.message_store import MessageData, MessageType
+from soothe_cli.tui.binding import message_from_widget, message_to_widget
+from soothe_cli.tui.widgets.message_store import MessageType
 from soothe_cli.tui.widgets.messages import CognitionReasonMessage
 
 
@@ -15,7 +16,7 @@ def test_cognition_plan_message_store_round_trip() -> None:
         plan_reasoning="Need to verify imports.",
         id="msg-plan-01",
     )
-    md = MessageData.from_widget(w)
+    md = message_from_widget(w)
     assert md.type == MessageType.COGNITION_REASON
     assert md.cognition_plan_next_action == "Read src/foo.py"
     assert md.cognition_plan_status == "continue"
@@ -24,7 +25,7 @@ def test_cognition_plan_message_store_round_trip() -> None:
     assert md.cognition_plan_assessment == "Progress looks good."
     assert md.cognition_plan_strategy == "Need to verify imports."
 
-    restored = md.to_widget()
+    restored = message_to_widget(md)
     assert isinstance(restored, CognitionReasonMessage)
     assert restored._next_action == "Read src/foo.py"
     assert restored._plan_reasoning == "Need to verify imports."
@@ -41,13 +42,13 @@ def test_assess_only_card_round_trip() -> None:
         plan_reasoning="",
         id="msg-assess-01",
     )
-    md = MessageData.from_widget(w)
+    md = message_from_widget(w)
     assert md.type == MessageType.COGNITION_REASON
     assert md.cognition_plan_assessment == "Evidence is accumulating."
     assert md.cognition_plan_next_action == ""
     assert md.cognition_plan_action == ""
 
-    restored = md.to_widget()
+    restored = message_to_widget(md)
     assert isinstance(restored, CognitionReasonMessage)
     assert restored._assessment_reasoning == "Evidence is accumulating."
     assert restored._next_action == ""
@@ -65,12 +66,12 @@ def test_intent_only_card_round_trip() -> None:
         plan_reasoning="",
         id="msg-intent-01",
     )
-    md = MessageData.from_widget(w)
+    md = message_from_widget(w)
     assert md.type == MessageType.COGNITION_REASON
     assert md.cognition_plan_next_action == "I'll help you refactor the module."
     assert md.cognition_plan_action == ""
 
-    restored = md.to_widget()
+    restored = message_to_widget(md)
     assert isinstance(restored, CognitionReasonMessage)
     assert restored._next_action == "I'll help you refactor the module."
     assert restored._plan_action == ""

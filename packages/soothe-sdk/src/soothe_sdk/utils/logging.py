@@ -12,8 +12,13 @@ import os
 import random
 import time
 from datetime import UTC
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
+
+# Shared rotation policy for ``~/.soothe/logs/{soothe,cli,daemon}.log``.
+DEFAULT_LOG_MAX_BYTES = 5_242_880  # 5 MB
+DEFAULT_LOG_BACKUP_COUNT = 3
 
 # Valid values for SOOTHE_LOG_LEVEL (same names as logging module levels).
 _SOOTHE_LOG_LEVEL_ENV = "SOOTHE_LOG_LEVEL"
@@ -241,22 +246,46 @@ class GlobalInputHistory:
         return datetime.now(UTC).isoformat()
 
 
+def _handler_targets_log_file(handler: logging.Handler, log_file: Path) -> bool:
+    """True when ``handler`` writes to the same path as ``log_file``."""
+    if not isinstance(handler, RotatingFileHandler):
+        return False
+    base = getattr(handler, "baseFilename", None)
+    if base is None:
+        return False
+    try:
+        return os.path.samefile(base, log_file)
+    except OSError:
+        try:
+            return Path(str(base)).resolve() == log_file.resolve()
+        except OSError:
+            return False
+
+
 def setup_logging(
-    level: str = "INFO", log_file: Path | None = None, format_string: str | None = None
+    level: str = "INFO",
+    log_file: Path | None = None,
+    format_string: str | None = None,
+    *,
+    max_bytes: int = DEFAULT_LOG_MAX_BYTES,
+    backup_count: int = DEFAULT_LOG_BACKUP_COUNT,
 ) -> None:
     """Setup logging configuration.
 
-    Configures Python logging for daemon or CLI.
+    Configures Python logging for the CLI client (and other lightweight callers).
 
     The console handler (stderr) stays at WARNING so interactive Textual TUI output
     is not corrupted by DEBUG lines. Full ``level`` (including DEBUG from
     ``SOOTHE_LOG_LEVEL``) applies to ``log_file`` when set — tail that file for
-    diagnostics.
+    diagnostics. File output uses :class:`~logging.handlers.RotatingFileHandler`
+    (default 5 MB per file, three backups).
 
     Args:
         level: Log level (DEBUG, INFO, WARNING, ERROR) for the root logger and file.
         log_file: Optional log file path (e.g., Path("~/.soothe/logs/cli.log")).
         format_string: Optional custom format string.
+        max_bytes: Rotate log file after this many bytes (default 5 MB).
+        backup_count: Number of rotated backup files to retain.
     """
     # Default format matches soothe.log: timestamp level [Client:xxxxxxxx] name:lineno message
     if not format_string:
@@ -268,17 +297,32 @@ def setup_logging(
     # Configure root logger
     logging.basicConfig(level=root_level, format=format_string, handlers=[])
 
-    # Add file handler if specified - full log level
+    root_logger = logging.getLogger()
     if log_file:
+        log_file = Path(log_file)
         log_file.parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setFormatter(ClientFormatter(format_string))
-        file_handler.setLevel(root_level)
-        logging.getLogger().addHandler(file_handler)
+        existing = next(
+            (h for h in root_logger.handlers if _handler_targets_log_file(h, log_file)),
+            None,
+        )
+        if existing is not None:
+            existing.setLevel(root_level)
+        else:
+            file_handler = RotatingFileHandler(
+                str(log_file),
+                maxBytes=max_bytes,
+                backupCount=backup_count,
+                encoding="utf-8",
+            )
+            file_handler.setFormatter(ClientFormatter(format_string))
+            file_handler.setLevel(root_level)
+            root_logger.addHandler(file_handler)
 
 
 __all__ = [
     "ClientFormatter",
+    "DEFAULT_LOG_BACKUP_COUNT",
+    "DEFAULT_LOG_MAX_BYTES",
     "GlobalInputHistory",
     "ShortLevelFormatter",
     "abbreviate_logger_name",

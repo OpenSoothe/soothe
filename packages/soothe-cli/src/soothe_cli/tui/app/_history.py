@@ -18,13 +18,13 @@ if TYPE_CHECKING:
 
 from textual.content import Content
 
-from soothe_cli.events.tools.tool_result import extract_tool_result_payload
-from soothe_cli.tui.app._module_init import _LoopHistoryPayload
-from soothe_cli.tui.message_display_filter import (
+from soothe_cli.runtime.parse.tool_result import extract_tool_result_payload
+from soothe_cli.runtime.wire.display_text import (
     extract_ai_text_for_display,
     extract_user_text_for_display,
     normalize_stream_message,
 )
+from soothe_cli.tui.app._module_init import _LoopHistoryPayload
 from soothe_cli.tui.widgets.message_store import (
     MessageData,
     MessageType,
@@ -125,7 +125,7 @@ class _HistoryMixin:
         """
         from langchain_core.messages import AIMessage, ToolMessage
 
-        from soothe_cli.events.tools.message_processing import (
+        from soothe_cli.runtime.parse.message_processing import (
             extract_tool_args_dict,
             normalize_tool_calls_list,
         )

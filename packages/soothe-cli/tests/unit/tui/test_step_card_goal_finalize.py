@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from soothe_cli.tui.step_task_routing import StepTaskRouter
+from soothe_cli.runtime.state.step_router import StepTaskRouter
 from soothe_cli.tui.textual_adapter import (
     TextualUIAdapter,
     finalize_tracked_step_cards_on_goal_complete,

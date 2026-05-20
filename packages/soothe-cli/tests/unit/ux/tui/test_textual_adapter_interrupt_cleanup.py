@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock
 
 import pytest
 
-from soothe_cli.tui._session_stats import SessionStats
+from soothe_cli.runtime.state.session_stats import SessionStats
 from soothe_cli.tui.textual_adapter import TextualUIAdapter, _handle_interrupt_cleanup
 
 

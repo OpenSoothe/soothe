@@ -9,7 +9,7 @@ from textual.containers import Horizontal
 from textual.content import Content
 from textual.widgets import Static
 
-from soothe_cli.events.duration_format import format_duration
+from soothe_cli.runtime.presentation.duration_format import format_duration
 from soothe_cli.tui.config import get_glyphs
 
 if TYPE_CHECKING:

@@ -2,7 +2,7 @@
 
 Used by the TUI to update step-card tool state (stats only; no tool-row UI).
 
-Error detection matches :class:`soothe_cli.events.core.event_processor.EventProcessor`
+Error detection matches :class:`soothe_cli.runtime.headless.processor.EventProcessor`
 tool-result handling (content heuristics) with explicit ``status`` override.
 """
 
@@ -14,8 +14,8 @@ from typing import Any
 
 from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 
-from soothe_cli.events.tools._utils import text_looks_like_error
-from soothe_cli.events.tools.tool_message_format import (
+from soothe_cli.runtime.parse._utils import text_looks_like_error
+from soothe_cli.runtime.parse.tool_message_format import (
     format_tool_message_content,
     run_python_envelope_indicates_failure,
     try_parse_run_python_result_envelope,

@@ -52,50 +52,50 @@ from soothe_sdk.ux.task_namespace import (
     row_key_for_subgraph_tool,
 )
 
-from soothe_cli.events.core.presentation_engine import PresentationEngine
-from soothe_cli.events.duration_format import format_duration
-from soothe_cli.events.policy.essential_events import LOOP_REASON_EVENT_TYPE
-from soothe_cli.events.policy.explore_task_display import format_explore_task_json_blob_for_display
-from soothe_cli.events.rendering.renderer_base import RendererBase
-from soothe_cli.events.tools.message_processing import (
+from soothe_cli.runtime.parse.message_processing import (
     extract_tool_args_dict,
     ingest_tool_call_stream_state,
     tool_ids_touched_by_stream_message,
 )
-from soothe_cli.events.tools.tool_call_resolution import (
+from soothe_cli.runtime.parse.tool_call_resolution import (
     build_streaming_args_overlay,
     materialize_ai_blocks_with_resolved_tools,
     merge_tool_display_args,
     resolve_stream_tool_name,
     tool_args_meaningful,
 )
-from soothe_cli.events.tools.tool_result import extract_tool_result_payload
-from soothe_cli.events.turn.turn_event_pipeline import run_turn_pipeline
-from soothe_cli.events.turn.turn_stream_prepare import (
-    PreparedTurnChunk,
-    TurnPrepareState,
-    prepare_turn_chunk,
+from soothe_cli.runtime.parse.tool_result import extract_tool_result_payload
+from soothe_cli.runtime.policy.essential_events import LOOP_REASON_EVENT_TYPE
+from soothe_cli.runtime.presentation.explore_task_display import format_explore_task_json_blob_for_display
+from soothe_cli.runtime.presentation.duration_format import format_duration
+from soothe_cli.runtime.presentation.engine import PresentationEngine
+from soothe_cli.runtime.presentation.renderer_base import RendererBase
+from soothe_cli.runtime.state.file_tracker import (
+    FILE_CHANGE_TOOLS,
+    FileOpTracker,
+    file_change_action_label,
+    track_file_operation,
 )
-from soothe_cli.tui._cli_context import CLIContext
-from soothe_cli.tui._session_stats import (
+from soothe_cli.runtime.state.session_stats import (
     ModelStats,
     SessionStats,
     SpinnerStatus,
     TurnEventStats,
     format_token_count,
 )
+from soothe_cli.runtime.state.step_router import StepTaskRouter
+from soothe_cli.runtime.turn.pipeline import run_turn_pipeline
+from soothe_cli.runtime.turn.prepare import (
+    PreparedTurnChunk,
+    TurnPrepareState,
+    prepare_turn_chunk,
+)
+from soothe_cli.tui._cli_context import CLIContext
 from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui.config import build_stream_config
-from soothe_cli.tui.file_ops import (
-    FILE_CHANGE_TOOLS,
-    FileOpTracker,
-    file_change_action_label,
-    track_file_operation,
-)
 from soothe_cli.tui.hooks import dispatch_hook
 from soothe_cli.tui.input import MediaTracker, parse_file_mentions
 from soothe_cli.tui.media_utils import create_multimodal_content
-from soothe_cli.tui.step_task_routing import StepTaskRouter
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
@@ -324,7 +324,7 @@ def print_usage_table(
     """Print a model-usage stats table to a Rich console."""
     from rich.table import Table
 
-    from soothe_cli.tui._session_stats import format_token_count
+    from soothe_cli.runtime.state.session_stats import format_token_count
 
     has_time = wall_time >= 0.1  # noqa: PLR2004
     if not (stats.request_count or stats.input_tokens or has_time):
@@ -433,40 +433,23 @@ def _log_step_completion_stats(
     duration_ms: int,
     tool_call_count: int,
 ) -> None:
-    """Log detailed tool stats for step completion debugging."""
+    """Compact step-completion trace (DEBUG only)."""
     rows = getattr(widget, "_rows", []) or []
-    stats_order = getattr(widget, "_stats_order", []) or []
-    stats_counts = getattr(widget, "_stats_counts", {}) or {}
-    task_rows = [r for r in rows if getattr(r, "is_task_row", False)]
-
-    # Count tools by type
-    main_tools: dict[str, int] = {}
-    subgraph_tools: dict[str, int] = {}
-    for row in rows:
-        tool_name = str(getattr(row, "tool_name", "") or "").strip()
-        if not tool_name:
-            continue
-        parent_id = getattr(row, "parent_tool_call_id", None)
-        is_task = getattr(row, "is_task_row", False)
-        if is_task or parent_id:
-            subgraph_tools[tool_name] = subgraph_tools.get(tool_name, 0) + 1
-        else:
-            main_tools[tool_name] = main_tools.get(tool_name, 0) + 1
-
-    log.info(
-        "[Step] %s completed: success=%s duration_ms=%d wire_tool_count=%d "
-        "rows=%d main_tools=%r task_rows=%d subgraph_tools=%r "
-        "stats_order=%r stats_counts=%r",
+    task_rows = sum(1 for r in rows if getattr(r, "is_task_row", False))
+    subgraph_rows = sum(
+        1
+        for r in rows
+        if getattr(r, "parent_tool_call_id", None) or getattr(r, "is_task_row", False)
+    )
+    log.debug(
+        "[Step] %s done success=%s duration_ms=%d tools=%d rows=%d task=%d subgraph=%d",
         step_id,
         success,
         duration_ms,
         tool_call_count,
         len(rows),
-        main_tools,
-        len(task_rows),
-        subgraph_tools,
-        stats_order,
-        stats_counts,
+        task_rows,
+        subgraph_rows,
     )
 
 
@@ -665,7 +648,7 @@ def _expand_nonstandard_tool_blocks(blocks: list[dict[str, Any]]) -> list[dict[s
 
 def _tui_main_assistant_body_for_dedupe(raw: str) -> str:
     """Normalize assistant text the same way as :func:`_flush_assistant_text_ns` input."""
-    from soothe_cli.events.policy.explore_task_display import (
+    from soothe_cli.runtime.presentation.explore_task_display import (
         format_explore_task_json_blob_for_display,
     )
 
@@ -2301,10 +2284,9 @@ async def execute_task_textual(
                                 ui_coalesce.execute_wave_active = True
                                 step_id = str(data.get("step_id", "")).strip()
                                 description = str(data.get("description", "")).strip()
-                                logger.info(
-                                    "[STEP_STARTED] received step_id=%s description=%s ns=%r",
+                                logger.debug(
+                                    "[STEP_STARTED] received step_id=%s ns=%r",
                                     step_id,
-                                    description[:50] if description else "",
                                     ns_key,
                                 )
                                 if step_id:
@@ -2333,13 +2315,10 @@ async def execute_task_textual(
                                     step_widget.set_running()
                                     adapter._step_by_namespace[ns_key] = step_widget
                                     router.on_step_started(step_id)
-                                    # IG-416 debug: Log step card creation
-                                    logger.info(
-                                        "[STEP_STARTED] CREATED step_card step_id=%s ns=%r "
-                                        "current_step_messages_keys=%s",
+                                    logger.debug(
+                                        "[STEP_STARTED] step_card step_id=%s ns=%r",
                                         step_id,
                                         ns_key,
-                                        list(adapter._current_step_messages.keys()),
                                     )
                                     router.route_pending_main_tools(
                                         adapter._current_step_messages,
@@ -2510,30 +2489,18 @@ async def execute_task_textual(
             adapter._tool_to_step,
             adapter._tool_display_by_call_id,
         )
-        if routed_main:
-            logger.debug(
-                "Routed %d pending main-namespace tool row(s) at stream end",
-                routed_main,
-            )
-        elif router.pending_main_tool_count:
-            logger.debug(
-                "Dropping %d pending main-namespace tool row(s) (no step card)",
-                router.pending_main_tool_count,
-            )
         routed_sub = router.route_pending_subgraph_tools(
             adapter._current_step_messages,
             adapter._tool_to_step,
             adapter._tool_display_by_call_id,
         )
-        if routed_sub:
-            logger.debug(
-                "Routed %d pending subgraph tool row(s) at stream end",
-                routed_sub,
-            )
         pending_sub = router.pending_subgraph_tools()
-        if pending_sub:
+        if router.pending_main_tool_count or pending_sub:
             logger.debug(
-                "Dropping %d pending subgraph tool row(s) (parent unresolved)",
+                "Stream-end tool buffer: routed_main=%d dropped_main=%d routed_sub=%d dropped_sub=%d",
+                routed_main,
+                router.pending_main_tool_count,
+                routed_sub,
                 len(pending_sub),
             )
 

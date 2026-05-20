@@ -127,8 +127,8 @@ def _copy_texts_to_clipboard(app: App, selected_texts: list[str]) -> None:
 def screen_has_text_selection(screen: object | None) -> bool:
     """Return True when the screen still has an active text selection.
 
-    Prefer this over ``screen.get_selected_text()`` for click guards: animated
-  widgets can hold stale line offsets that make extraction raise ``IndexError``.
+      Prefer this over ``screen.get_selected_text()`` for click guards: animated
+    widgets can hold stale line offsets that make extraction raise ``IndexError``.
     """
     if screen is None:
         return False

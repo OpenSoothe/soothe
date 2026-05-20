@@ -10,7 +10,7 @@ from soothe_sdk.client.config import SOOTHE_HOME
 from soothe_sdk.utils.logging import resolve_cli_log_level
 
 from soothe_cli.cli.execution import run_headless, run_tui
-from soothe_cli.events import load_config, setup_logging
+from soothe_cli.runtime import load_config, setup_logging
 
 logger = logging.getLogger(__name__)
 

@@ -15,7 +15,7 @@ from soothe_sdk.client import (
 )
 from soothe_sdk.client.protocol import _serialize_for_json
 
-from soothe_cli.tui._session_stats import TurnEventStats
+from soothe_cli.runtime.state.session_stats import TurnEventStats
 
 if TYPE_CHECKING:
     pass
@@ -396,3 +396,6 @@ class TuiDaemonSession:
         if not isinstance(raw, list):
             return []
         return [m for m in raw if isinstance(m, dict)]
+
+
+DaemonSession = TuiDaemonSession

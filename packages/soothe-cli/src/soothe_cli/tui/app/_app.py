@@ -22,8 +22,8 @@ from textual.binding import Binding, BindingType
 from textual.containers import Container, Vertical, VerticalScroll
 from textual.message import Message
 
+from soothe_cli.runtime.state.session_stats import SessionStats
 from soothe_cli.tui import theme
-from soothe_cli.tui._session_stats import SessionStats
 from soothe_cli.tui.app._commands import _CommandsMixin
 from soothe_cli.tui.app._execution import _ExecutionMixin
 from soothe_cli.tui.app._history import _HistoryMixin

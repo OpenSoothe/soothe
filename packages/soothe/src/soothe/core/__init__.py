@@ -40,28 +40,23 @@ def __getattr__(name: str) -> Any:
 
         return PromptBuilder
     if name == "resolve_daemon_workspace":
-        # NEW: Import from workspace package
-        from soothe.core.workspace import resolve_daemon_workspace
+        from soothe.core.workspace.resolution import resolve_daemon_workspace
 
         return resolve_daemon_workspace
     if name == "validate_client_workspace":
-        # NEW: Import from workspace package
-        from soothe.core.workspace import validate_client_workspace
+        from soothe.core.workspace.resolution import validate_client_workspace
 
         return validate_client_workspace
     if name == "ResolvedWorkspace":
-        # NEW: Import from workspace package
-        from soothe.core.workspace import ResolvedWorkspace
+        from soothe.core.workspace.stream_resolution import ResolvedWorkspace
 
         return ResolvedWorkspace
     if name == "resolve_workspace_for_stream":
-        # NEW: Import from workspace package
-        from soothe.core.workspace import resolve_workspace_for_stream
+        from soothe.core.workspace.stream_resolution import resolve_workspace_for_stream
 
         return resolve_workspace_for_stream
     if name == "FrameworkFilesystem":
-        # NEW: Import from workspace package
-        from soothe.core.workspace import FrameworkFilesystem
+        from soothe.core.workspace.framework_filesystem import FrameworkFilesystem
 
         return FrameworkFilesystem
 

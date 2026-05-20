@@ -44,7 +44,7 @@ async def test_stop_stream_skips_full_markdown_refresh_without_stream() -> None:
 
 @pytest.mark.asyncio
 async def test_flush_does_not_replace_streamed_markdown_with_repaired_text() -> None:
-    from soothe_cli.events.rendering.renderer_base import RendererBase
+    from soothe_cli.runtime.presentation.renderer_base import RendererBase
     from soothe_cli.tui.textual_adapter import _flush_assistant_text_ns
 
     raw = "```python\ndef foo3():\n    pass\n```"
