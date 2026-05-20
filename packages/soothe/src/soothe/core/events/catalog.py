@@ -48,6 +48,7 @@ from .constants import (
     AGENT_LOOP_PLAN_DECISION,
     AGENT_LOOP_STARTED,
     AGENT_LOOP_STEP_COMPLETED,
+    AGENT_LOOP_STEP_QUEUED,
     AGENT_LOOP_STEP_STARTED,
     # Cognition - AgentLoop
     AUTOPILLOT_CHECKPOINT_SAVED,
@@ -243,6 +244,16 @@ class AgenticStepStartedEvent(LifecycleEvent):
 
     type: Literal["soothe.cognition.agent_loop.step.started"] = (
         "soothe.cognition.agent_loop.step.started"
+    )
+    step_id: str
+    description: str
+
+
+class AgenticStepQueuedEvent(LifecycleEvent):
+    """Ready step waiting for a later execute batch (concurrency cap)."""
+
+    type: Literal["soothe.cognition.agent_loop.step.queued"] = (
+        "soothe.cognition.agent_loop.step.queued"
     )
     step_id: str
     description: str
@@ -679,6 +690,12 @@ _reg(
     AgenticStepStartedEvent,
     verbosity=VerbosityTier.NORMAL,  # RFC-0020: Step descriptions visible at normal verbosity
     summary_template="{description}",
+)
+_reg(
+    AGENT_LOOP_STEP_QUEUED,
+    AgenticStepQueuedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="Queued: {description}",
 )
 _reg(
     AGENT_LOOP_STEP_COMPLETED,

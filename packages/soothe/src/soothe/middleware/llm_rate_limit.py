@@ -18,34 +18,12 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware.types import ModelRequest, ModelResponse
 
+from soothe.utils.token_counting import estimate_content_chars
+
 logger = logging.getLogger(__name__)
 
 # Extra wall-clock seconds per this many estimated prompt characters (IG-301).
 _CHARS_PER_EXTRA_TIMEOUT_SECOND = 400
-
-
-def _estimate_content_chars(content: Any) -> int:
-    """Best-effort character count for message content (string or blocks)."""
-    if content is None:
-        return 0
-    if isinstance(content, str):
-        return len(content)
-    if isinstance(content, list):
-        total = 0
-        for block in content:
-            if isinstance(block, str):
-                total += len(block)
-            elif isinstance(block, dict):
-                text = block.get("text")
-                if isinstance(text, str):
-                    total += len(text)
-                else:
-                    total += len(str(block))
-            else:
-                total += len(str(block))
-        return total
-    return len(str(content))
-
 
 def estimate_model_request_prompt_chars(request: ModelRequest[Any]) -> int:
     """Sum system prompt and user/tool message text lengths for timeout scaling (IG-301)."""
@@ -58,7 +36,7 @@ def estimate_model_request_prompt_chars(request: ModelRequest[Any]) -> int:
         pass
     for msg in request.messages:
         try:
-            total += _estimate_content_chars(getattr(msg, "content", None))
+            total += estimate_content_chars(getattr(msg, "content", None))
         except Exception:  # noqa: BLE001
             continue
     return total

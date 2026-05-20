@@ -8,8 +8,41 @@ import pytest
 
 from soothe_cli.tui.widgets.clipboard import (
     _collect_selected_texts,
+    _selected_text_from_screen,
+    clear_widget_text_selection,
     copy_selection_to_clipboard,
+    screen_has_text_selection,
 )
+
+
+def test_screen_has_text_selection_uses_selections_not_extract() -> None:
+    """Click guards must not call get_selected_text (stale offsets can raise)."""
+    screen = MagicMock()
+    screen.selections = {MagicMock(): MagicMock()}
+    screen.get_selected_text.side_effect = IndexError("list index out of range")
+
+    assert screen_has_text_selection(screen) is True
+    screen.get_selected_text.assert_not_called()
+
+
+def test_selected_text_from_screen_tolerates_index_error() -> None:
+    app = MagicMock()
+    app.screen.get_selected_text.side_effect = IndexError("list index out of range")
+
+    assert _selected_text_from_screen(app) is None
+
+
+def test_clear_widget_text_selection_removes_widget_entry() -> None:
+    widget = MagicMock()
+    other = MagicMock()
+    screen = MagicMock()
+    widget.screen = screen
+    screen.selections = {widget: MagicMock(), other: MagicMock()}
+
+    clear_widget_text_selection(widget)
+
+    assert widget not in screen.selections
+    assert other in screen.selections
 
 
 def test_copy_uses_screen_get_selected_text() -> None:

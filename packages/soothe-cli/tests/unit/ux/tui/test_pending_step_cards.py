@@ -8,7 +8,6 @@ import pytest
 
 from soothe_cli.tui.textual_adapter import (
     TextualUIAdapter,
-    mark_parallel_plan_step_cards_running,
     sync_pending_step_cards_from_plan,
 )
 
@@ -54,7 +53,8 @@ async def test_plan_decision_replan_removes_stale_pending_cards() -> None:
 
 
 @pytest.mark.asyncio
-async def test_parallel_plan_marks_all_pending_cards_running() -> None:
+async def test_parallel_plan_keeps_pending_until_step_started() -> None:
+    """Parallel plans must not promote every card to running before execute waves."""
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=AsyncMock(),
@@ -69,28 +69,22 @@ async def test_parallel_plan_marks_all_pending_cards_running() -> None:
         execution_mode="parallel",
     )
     for sid in ("WAA-01", "WAA-02"):
-        assert adapter._current_step_messages[sid]._status == "running"
+        assert adapter._current_step_messages[sid]._status == "pending"
 
 
 @pytest.mark.asyncio
-async def test_mark_parallel_plan_step_cards_running_only_pending() -> None:
+async def test_queued_card_shows_queued_status() -> None:
     adapter = TextualUIAdapter(
         mount_message=AsyncMock(),
         update_status=AsyncMock(),
     )
     await sync_pending_step_cards_from_plan(
         adapter,
-        steps=[{"id": "WAA-01", "description": "A"}],
+        steps=[{"id": "WAA-01", "description": "Step one"}],
     )
     card = adapter._current_step_messages["WAA-01"]
-    card.set_running()
-    await sync_pending_step_cards_from_plan(
-        adapter,
-        steps=[{"id": "WAA-02", "description": "B"}],
-    )
-    mark_parallel_plan_step_cards_running(adapter)
-    assert adapter._current_step_messages["WAA-01"]._status == "running"
-    assert adapter._current_step_messages["WAA-02"]._status == "running"
+    card.set_queued()
+    assert card._status == "queued"
 
 
 @pytest.mark.asyncio

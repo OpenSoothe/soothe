@@ -17,13 +17,17 @@ from typing import Any, TypeAlias
 
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
+    is_inner_subgraph_task_tool_id,
     maybe_bind_namespace,
     normalize_step_task_tool_call_id,
     parse_unified_tool_call_id,
+    prune_bound_pending_namespaces,
     register_task_spawn_for_step,
     resolve_task_parent_lookup,
     resolve_task_scope_for_namespace,
+    row_key_for_subgraph_tool,
     task_scope_step_id,
+    try_bind_namespace_from_tool_call_id,
     try_bind_namespace_to_unlinked_spawn,
 )
 
@@ -58,6 +62,11 @@ class PendingSubgraphTool:
     raw_args: str = ""
 
 
+def _subgraph_pending_key(ns_key: tuple[str, ...], lookup_id: str) -> tuple[tuple[str, ...], str]:
+    """Stable key for coalescing repeated stream chunks for one logical subgraph tool."""
+    return (ns_key, str(lookup_id).strip())
+
+
 @dataclass
 class StepTaskRouter:
     """High-performance per-turn router for steps, tools, and task namespaces.
@@ -71,10 +80,14 @@ class StepTaskRouter:
     _task_spawn_queue: deque[TaskScope] = field(default_factory=deque, repr=False)
     _namespace_bindings: dict[tuple[str, ...], TaskScope] = field(default_factory=dict, repr=False)
     _spawns_by_step_id: dict[str, TaskScope] = field(default_factory=dict, repr=False)
+    _spawns_by_task_id: dict[str, TaskScope] = field(default_factory=dict, repr=False)
     _pending_unscoped_namespaces: deque[tuple[str, ...]] = field(default_factory=deque, repr=False)
     _spawn_recorded: set[tuple[str, str]] = field(default_factory=set, repr=False)
-    _pending_main_tools: list[PendingMainTool] = field(default_factory=list, repr=False)
-    _pending_subgraph_tools: list[PendingSubgraphTool] = field(default_factory=list, repr=False)
+    _pending_main_tools: dict[str, PendingMainTool] = field(default_factory=dict, repr=False)
+    _pending_subgraph_tools: dict[tuple[tuple[str, ...], str], PendingSubgraphTool] = field(
+        default_factory=dict,
+        repr=False,
+    )
 
     def reset_turn(self) -> None:
         """Clear all per-turn routing state."""
@@ -82,10 +95,49 @@ class StepTaskRouter:
         self._task_spawn_queue.clear()
         self._namespace_bindings.clear()
         self._spawns_by_step_id.clear()
+        self._spawns_by_task_id.clear()
         self._pending_unscoped_namespaces.clear()
         self._spawn_recorded.clear()
         self._pending_main_tools.clear()
         self._pending_subgraph_tools.clear()
+
+    def _upsert_pending_main_tool(self, item: PendingMainTool) -> None:
+        """Merge streaming updates for the same root tool_call_id."""
+        key = str(item.tool_call_id).strip()
+        if not key:
+            return
+        existing = self._pending_main_tools.get(key)
+        if existing is None:
+            self._pending_main_tools[key] = item
+            return
+        args = item.args if len(item.args) >= len(existing.args) else existing.args
+        raw = item.raw_args if len(item.raw_args) >= len(existing.raw_args) else existing.raw_args
+        self._pending_main_tools[key] = PendingMainTool(
+            tool_call_id=key,
+            name=item.name or existing.name,
+            args=args,
+            raw_args=raw,
+        )
+
+    def _upsert_pending_subgraph_tool(self, item: PendingSubgraphTool) -> None:
+        """Merge streaming updates for the same subgraph namespace + tool_call_id."""
+        key = _subgraph_pending_key(item.ns_key, item.lookup_id)
+        if not key[1]:
+            return
+        existing = self._pending_subgraph_tools.get(key)
+        if existing is None:
+            self._pending_subgraph_tools[key] = item
+            return
+        args = item.args if len(item.args) >= len(existing.args) else existing.args
+        raw = item.raw_args if len(item.raw_args) >= len(existing.raw_args) else existing.raw_args
+        self._pending_subgraph_tools[key] = PendingSubgraphTool(
+            ns_key=item.ns_key,
+            lookup_id=key[1],
+            display_key=item.display_key or existing.display_key,
+            tool_name=item.tool_name or existing.tool_name,
+            args=args,
+            raw_args=raw,
+        )
 
     # --- Step lifecycle ---
 
@@ -100,7 +152,16 @@ class StepTaskRouter:
         sid = step_id.strip()
         if sid:
             self.active_step_ids.discard(sid)
-            self._spawns_by_step_id.pop(sid, None)
+            removed = self._spawns_by_step_id.pop(sid, None)
+            if removed is not None:
+                self._spawns_by_task_id.pop(str(removed[0]).strip(), None)
+            drop_tcid = [
+                tcid
+                for tcid, scope in self._spawns_by_task_id.items()
+                if task_scope_step_id(scope) == sid
+            ]
+            for tcid in drop_tcid:
+                self._spawns_by_task_id.pop(tcid, None)
 
     def step_id_for_tool(self, tool_call_id: str) -> str:
         """Return execute step id encoded in a unified root tool_call_id."""
@@ -126,15 +187,46 @@ class StepTaskRouter:
             namespace,
             pending_unscoped_namespaces=self._pending_unscoped_namespaces,
         )
+        id_bound = self._try_bind_namespaces_from_pending_tools()
+        prune_bound_pending_namespaces(
+            self._namespace_bindings,
+            self._pending_unscoped_namespaces,
+        )
+        pending = self._pending_unscoped_namespaces
+        pending_unique = len({ns for ns in pending}) if pending else 0
         _log.debug(
             "[Router] on_subgraph_namespace ns=%r bindings_before=%r bindings_after=%r "
-            "pending=%r spawns=%r",
+            "pending_len=%d pending_unique=%d id_bound=%d spawns=%r",
             namespace,
             before,
             self._namespace_bindings,
-            list(self._pending_unscoped_namespaces),
+            len(pending),
+            pending_unique,
+            id_bound,
             self._spawns_by_step_id,
         )
+
+    def _try_bind_namespaces_from_pending_tools(self) -> int:
+        """Bind deferred namespaces using unified step ids from buffered subgraph tools."""
+        bound = 0
+        for item in list(self._pending_subgraph_tools.values()):
+            for candidate in (item.display_key, item.lookup_id):
+                cand = str(candidate or "").strip()
+                if not cand:
+                    continue
+                if try_bind_namespace_from_tool_call_id(
+                    self._namespace_bindings,
+                    self._spawns_by_step_id,
+                    item.ns_key,
+                    cand,
+                ):
+                    bound += 1
+                    try:
+                        self._pending_unscoped_namespaces.remove(item.ns_key)
+                    except ValueError:
+                        pass
+                    break
+        return bound
 
     def register_task_spawn(
         self,
@@ -149,9 +241,11 @@ class StepTaskRouter:
             True when this ``(step_id, tool_call_id)`` pair is newly recorded.
         """
         tcid = str(tool_call_id).strip()
-        if not tcid:
+        if not tcid or is_inner_subgraph_task_tool_id(tcid):
             return False
         parsed_sid, type_code, _, _ = parse_unified_tool_call_id(tcid)
+        if type_code == "t":
+            return False
         sid = parsed_sid if (parsed_sid and type_code == "s") else ""
         if not sid:
             sid = str(step_id).strip()
@@ -176,18 +270,23 @@ class StepTaskRouter:
             self._spawns_by_step_id,
             scope,
             pending_unscoped_namespaces=self._pending_unscoped_namespaces,
+            spawns_by_task_id=self._spawns_by_task_id,
         )
         self._spawn_recorded.add(spawn_key)
+        prune_bound_pending_namespaces(
+            self._namespace_bindings,
+            self._pending_unscoped_namespaces,
+        )
         _log.info(
             "[Router] register_task_spawn REGISTERED: tcid=%r normalized=%r step=%r "
-            "bindings_before=%r bindings_after=%r pending_before=%r pending_after=%r",
+            "bindings_before=%r bindings_after=%r pending_len_before=%d pending_len_after=%d",
             tcid,
             normalized_tcid,
             sid,
             before_bindings,
             self._namespace_bindings,
-            before_pending,
-            list(self._pending_unscoped_namespaces),
+            len(before_pending),
+            len(self._pending_unscoped_namespaces),
         )
         return True
 
@@ -227,7 +326,7 @@ class StepTaskRouter:
         tcid = str(tool_call_id).strip()
         if not tcid:
             return
-        self._pending_main_tools.append(
+        self._upsert_pending_main_tool(
             PendingMainTool(
                 tool_call_id=tcid,
                 name=name or "tool",
@@ -249,22 +348,22 @@ class StepTaskRouter:
         """
         if not self._pending_main_tools:
             return 0
-        still: list[PendingMainTool] = []
+        still: dict[str, PendingMainTool] = {}
         routed = 0
-        for item in self._pending_main_tools:
+        for key, item in self._pending_main_tools.items():
             bound = self.step_id_for_tool(item.tool_call_id)
             if not bound and len(self.active_step_ids) == 1:
                 bound = next(iter(self.active_step_ids))
             if not bound:
-                still.append(item)
+                still[key] = item
                 continue
             step_w = step_cards.get(bound)
             if step_w is None:
-                still.append(item)
+                still[key] = item
                 continue
             ingest = getattr(step_w, "add_tool_call", None)
             if not callable(ingest):
-                still.append(item)
+                still[key] = item
                 continue
             if not getattr(step_w, "has_tool_call_row", lambda _x: False)(item.tool_call_id):
                 ingest(
@@ -297,7 +396,7 @@ class StepTaskRouter:
         tcid = str(lookup_id).strip()
         if not tcid:
             return
-        self._pending_subgraph_tools.append(
+        self._upsert_pending_subgraph_tool(
             PendingSubgraphTool(
                 ns_key=ns_key,
                 lookup_id=tcid,
@@ -316,7 +415,21 @@ class StepTaskRouter:
         tool_to_step: dict[str, ParentWidget],
     ) -> bool:
         """Register one subgraph tool row on an already-resolved parent step card."""
-        row_id = str(item.display_key or item.lookup_id).strip()
+        if (item.tool_name or "").strip() == "task":
+            # Inner explore ``task`` chunks are not user-facing tool stats; ingesting
+            # them used to rewrite the main ``{step}:s:task:…`` delegation row args.
+            return True
+        display = str(item.display_key or "").strip()
+        _, display_type, _, _ = parse_unified_tool_call_id(display)
+        if display_type == "t":
+            row_id = display
+        else:
+            row_id = row_key_for_subgraph_tool(
+                item.ns_key,
+                item.lookup_id,
+                task_scope=scope,
+            )
+            row_id = str(row_id or display or item.lookup_id).strip()
         if not row_id:
             return False
         ingest = getattr(parent, "add_tool_call", None)
@@ -367,18 +480,46 @@ class StepTaskRouter:
         )
         if not item.lookup_id:
             return False
+        for candidate in (item.lookup_id, item.display_key):
+            cand = str(candidate or "").strip()
+            if not cand:
+                continue
+            if try_bind_namespace_from_tool_call_id(
+                self._namespace_bindings,
+                self._spawns_by_step_id,
+                ns_key,
+                cand,
+            ):
+                try:
+                    self._pending_unscoped_namespaces.remove(ns_key)
+                except ValueError:
+                    pass
+                break
+        scope = self.resolve_task_scope(ns_key)
+        if scope is not None:
+            _, display_type, _, _ = parse_unified_tool_call_id(item.display_key)
+            if display_type != "t":
+                recomputed = row_key_for_subgraph_tool(ns_key, item.lookup_id, task_scope=scope)
+                if recomputed:
+                    item.display_key = recomputed
+        if self._namespace_bindings:
+            self.route_pending_subgraph_tools(
+                step_cards,
+                tool_to_step,
+                tool_display_by_call_id,
+            )
         scope = self.resolve_task_scope(ns_key)
         if scope is None:
             _log.debug(
                 "[Router] try_route_subgraph_tool BUFFERED (no scope): ns=%r tool=%r display=%r "
-                "bindings=%r pending=%d",
+                "bindings=%r pending_subgraph=%d",
                 ns_key,
                 tool_name,
                 display_key,
                 self._namespace_bindings,
                 len(self._pending_subgraph_tools),
             )
-            self._pending_subgraph_tools.append(item)
+            self._upsert_pending_subgraph_tool(item)
             return False
         parent = self.resolve_parent(
             scope,
@@ -395,8 +536,10 @@ class StepTaskRouter:
                 list(step_cards.keys()),
                 list(tool_display_by_call_id.keys()),
             )
-            self._pending_subgraph_tools.append(item)
+            self._upsert_pending_subgraph_tool(item)
             return False
+        pending_key = _subgraph_pending_key(ns_key, item.lookup_id)
+        self._pending_subgraph_tools.pop(pending_key, None)
         _log.info(
             "[Router] try_route_subgraph_tool INGESTED: ns=%r scope=%r tool=%r display=%r",
             ns_key,
@@ -419,31 +562,53 @@ class StepTaskRouter:
         """
         if not self._pending_subgraph_tools:
             return 0
-        still: list[PendingSubgraphTool] = []
+        still: dict[tuple[tuple[str, ...], str], PendingSubgraphTool] = {}
         routed = 0
-        for item in self._pending_subgraph_tools:
+        for key, item in self._pending_subgraph_tools.items():
+            for candidate in (item.display_key, item.lookup_id):
+                cand = str(candidate or "").strip()
+                if not cand:
+                    continue
+                if try_bind_namespace_from_tool_call_id(
+                    self._namespace_bindings,
+                    self._spawns_by_step_id,
+                    item.ns_key,
+                    cand,
+                ):
+                    try:
+                        self._pending_unscoped_namespaces.remove(item.ns_key)
+                    except ValueError:
+                        pass
+                    break
             scope = self.resolve_task_scope(item.ns_key)
             if scope is None:
-                still.append(item)
+                still[key] = item
                 continue
+            _, display_type, _, _ = parse_unified_tool_call_id(item.display_key)
+            if display_type != "t":
+                recomputed = row_key_for_subgraph_tool(
+                    item.ns_key, item.lookup_id, task_scope=scope
+                )
+                if recomputed:
+                    item.display_key = recomputed
             parent = self.resolve_parent(
                 scope,
                 step_cards=step_cards,
                 tool_display_by_call_id=tool_display_by_call_id,
             )
             if parent is None:
-                still.append(item)
+                still[key] = item
                 continue
             if self._ingest_subgraph_tool_on_parent(item, parent, scope, tool_to_step):
                 routed += 1
             else:
-                still.append(item)
+                still[key] = item
         self._pending_subgraph_tools = still
         return routed
 
     def pending_subgraph_tools(self) -> list[PendingSubgraphTool]:
         """Snapshot of subgraph tools still awaiting parent resolution."""
-        return list(self._pending_subgraph_tools)
+        return list(self._pending_subgraph_tools.values())
 
     @property
     def pending_main_tool_count(self) -> int:

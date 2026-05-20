@@ -12,6 +12,7 @@ from rich.markup import escape as escape_markup
 
 from soothe_cli.tui.config import console
 from soothe_cli.tui.media_utils import ImageData, VideoData
+from soothe_cli.tui.path_utils import path_exists, path_is_dir, path_is_file
 from soothe_cli.tui.preview_limits import (
     CHAT_INPUT_PASTE_ABBREVIATE_CHAR_COUNT,
     CHAT_INPUT_PASTE_ABBREVIATE_LINE_COUNT,
@@ -319,7 +320,7 @@ def parse_file_mentions(text: str) -> tuple[str, list[Path]]:
                 path = Path.cwd() / path
 
             resolved = path.resolve()
-            if resolved.exists() and resolved.is_file():
+            if path_exists(resolved) and path_is_file(resolved):
                 files.append(resolved)
             else:
                 console.print(
@@ -703,7 +704,7 @@ def _resolve_existing_pasted_path(path: Path) -> Path | None:
     except (OSError, RuntimeError) as e:
         logger.debug("Path resolution failed for %r: %s", path, e)
         return None
-    if resolved.exists() and resolved.is_file():
+    if path_exists(resolved) and path_is_file(resolved):
         return resolved
 
     fuzzy = _resolve_with_unicode_space_variants(path)
@@ -714,7 +715,7 @@ def _resolve_existing_pasted_path(path: Path) -> Path | None:
     except (OSError, RuntimeError) as e:
         logger.debug("Unicode-space resolution failed for %r: %s", fuzzy, e)
         return None
-    if resolved_fuzzy.exists() and resolved_fuzzy.is_file():
+    if path_exists(resolved_fuzzy) and path_is_file(resolved_fuzzy):
         return resolved_fuzzy
     return None
 
@@ -750,11 +751,11 @@ def _resolve_with_unicode_space_variants(path: Path) -> Path | None:
 
     for index, part in enumerate(parts):
         candidate = current / part
-        if candidate.exists():
+        if path_exists(candidate):
             current = candidate
             continue
 
-        if not current.exists() or not current.is_dir():
+        if not path_exists(current) or not path_is_dir(current):
             return None
         if " " not in part and "\u00a0" not in part and "\u202f" not in part:
             return None
@@ -775,11 +776,11 @@ def _resolve_with_unicode_space_variants(path: Path) -> Path | None:
 
         is_last = index == len(parts) - 1
         if is_last:
-            file_matches = [entry for entry in matches if entry.is_file()]
+            file_matches = [entry for entry in matches if path_is_file(entry)]
             if file_matches:
                 matches = file_matches
         else:
-            dir_matches = [entry for entry in matches if entry.is_dir()]
+            dir_matches = [entry for entry in matches if path_is_dir(entry)]
             if dir_matches:
                 matches = dir_matches
 

@@ -124,6 +124,18 @@ def _copy_texts_to_clipboard(app: App, selected_texts: list[str]) -> None:
     )
 
 
+def screen_has_text_selection(screen: object | None) -> bool:
+    """Return True when the screen still has an active text selection.
+
+    Prefer this over ``screen.get_selected_text()`` for click guards: animated
+  widgets can hold stale line offsets that make extraction raise ``IndexError``.
+    """
+    if screen is None:
+        return False
+    selections = getattr(screen, "selections", None)
+    return bool(selections)
+
+
 def _selected_text_from_screen(app: App) -> str | None:
     """Return selected text via Textual's screen-level selection API."""
     screen = app.screen
@@ -131,13 +143,26 @@ def _selected_text_from_screen(app: App) -> str | None:
         return None
     try:
         selected = screen.get_selected_text()
-    except (AttributeError, TypeError, ValueError) as exc:
+    except (AttributeError, TypeError, ValueError, IndexError) as exc:
         logger.debug("screen.get_selected_text failed: %s", exc, exc_info=True)
         return None
     if not selected:
         return None
     text = selected.strip()
     return text or None
+
+
+def clear_widget_text_selection(widget: Widget) -> None:
+    """Drop a widget's selection entry when its rendered line count may have changed."""
+    screen = widget.screen
+    if screen is None:
+        return
+    selections = getattr(screen, "selections", None)
+    if not selections or widget not in selections:
+        return
+    updated = dict(selections)
+    updated.pop(widget, None)
+    screen.selections = updated
 
 
 def _collect_selected_texts(
