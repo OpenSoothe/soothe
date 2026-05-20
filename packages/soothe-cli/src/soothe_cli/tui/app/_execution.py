@@ -806,7 +806,7 @@ class _ExecutionMixin:
 
         # Create the stats object up-front and store on the app so
         # exit() can merge it synchronously if the worker is cancelled
-        # before this method can return (e.g. Ctrl+D during HITL).
+        # before this method can return (e.g. Ctrl+D during a pending tool call).
         turn_stats = SessionStats()
         self._inflight_turn_stats = turn_stats
         self._inflight_turn_start = time.monotonic()

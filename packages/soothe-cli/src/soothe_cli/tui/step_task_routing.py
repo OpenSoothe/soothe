@@ -10,6 +10,7 @@ this module adds TUI-oriented buffers and lifecycle for multiple concurrent step
 
 from __future__ import annotations
 
+import logging
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, TypeAlias
@@ -25,6 +26,8 @@ from soothe_sdk.ux.task_namespace import (
     task_scope_step_id,
     try_bind_namespace_to_unlinked_spawn,
 )
+
+_log = logging.getLogger(__name__)
 
 StepWidget: TypeAlias = Any
 """``CognitionStepMessage`` or compatible step card (duck-typed)."""
@@ -110,6 +113,7 @@ class StepTaskRouter:
         """Bind or defer a delegated subgraph namespace."""
         if not namespace:
             return
+        before = dict(self._namespace_bindings)
         maybe_bind_namespace(
             self._namespace_bindings,
             self._task_spawn_queue,
@@ -121,6 +125,15 @@ class StepTaskRouter:
             self._spawns_by_step_id,
             namespace,
             pending_unscoped_namespaces=self._pending_unscoped_namespaces,
+        )
+        _log.debug(
+            "[Router] on_subgraph_namespace ns=%r bindings_before=%r bindings_after=%r "
+            "pending=%r spawns=%r",
+            namespace,
+            before,
+            self._namespace_bindings,
+            list(self._pending_unscoped_namespaces),
+            self._spawns_by_step_id,
         )
 
     def register_task_spawn(
@@ -143,16 +156,20 @@ class StepTaskRouter:
         if not sid:
             sid = str(step_id).strip()
         if not sid:
+            _log.debug("[Router] register_task_spawn SKIPPED: no step_id tcid=%r", tcid)
             return False
         normalized_tcid = normalize_step_task_tool_call_id(sid, tcid)
         spawn_key = (sid, normalized_tcid)
         if spawn_key in self._spawn_recorded:
+            _log.debug("[Router] register_task_spawn DUPE: spawn_key=%r", spawn_key)
             return False
         scope: TaskScope = (
             normalized_tcid,
             (subagent_type or "?").strip() or "?",
             sid,
         )
+        before_bindings = dict(self._namespace_bindings)
+        before_pending = list(self._pending_unscoped_namespaces)
         register_task_spawn_for_step(
             self._namespace_bindings,
             self._task_spawn_queue,
@@ -161,6 +178,17 @@ class StepTaskRouter:
             pending_unscoped_namespaces=self._pending_unscoped_namespaces,
         )
         self._spawn_recorded.add(spawn_key)
+        _log.info(
+            "[Router] register_task_spawn REGISTERED: tcid=%r normalized=%r step=%r "
+            "bindings_before=%r bindings_after=%r pending_before=%r pending_after=%r",
+            tcid,
+            normalized_tcid,
+            sid,
+            before_bindings,
+            self._namespace_bindings,
+            before_pending,
+            list(self._pending_unscoped_namespaces),
+        )
         return True
 
     def resolve_task_scope(self, namespace: tuple[str, ...]) -> TaskScope | None:
@@ -341,6 +369,15 @@ class StepTaskRouter:
             return False
         scope = self.resolve_task_scope(ns_key)
         if scope is None:
+            _log.debug(
+                "[Router] try_route_subgraph_tool BUFFERED (no scope): ns=%r tool=%r display=%r "
+                "bindings=%r pending=%d",
+                ns_key,
+                tool_name,
+                display_key,
+                self._namespace_bindings,
+                len(self._pending_subgraph_tools),
+            )
             self._pending_subgraph_tools.append(item)
             return False
         parent = self.resolve_parent(
@@ -349,8 +386,24 @@ class StepTaskRouter:
             tool_display_by_call_id=tool_display_by_call_id,
         )
         if parent is None:
+            _log.debug(
+                "[Router] try_route_subgraph_tool BUFFERED (no parent): ns=%r scope=%r tool=%r "
+                "step_cards=%r tool_display=%r",
+                ns_key,
+                scope,
+                tool_name,
+                list(step_cards.keys()),
+                list(tool_display_by_call_id.keys()),
+            )
             self._pending_subgraph_tools.append(item)
             return False
+        _log.info(
+            "[Router] try_route_subgraph_tool INGESTED: ns=%r scope=%r tool=%r display=%r",
+            ns_key,
+            scope,
+            tool_name,
+            display_key,
+        )
         return self._ingest_subgraph_tool_on_parent(item, parent, scope, tool_to_step)
 
     def route_pending_subgraph_tools(

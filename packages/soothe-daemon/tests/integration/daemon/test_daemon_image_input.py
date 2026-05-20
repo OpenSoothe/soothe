@@ -113,7 +113,6 @@ async def test_websocket_input_with_image_runs_turn(
         await client.send_input(
             loop_id,
             "ack",
-            interactive=True,
             attachments=[{"mime_type": "image/png", "data": TINY_PNG_B64}],
         )
         running = await await_status_state(client.read_event, "running", timeout=8.0)
@@ -179,7 +178,6 @@ async def test_websocket_input_with_real_image_attachment(
         await client.send_input(
             loop_id,
             "Describe what you see in this image",
-            interactive=True,
             attachments=[{"mime_type": "image/png", "data": soothe_logo_b64}],
         )
         running = await await_status_state(client.read_event, "running", timeout=8.0)
@@ -218,7 +216,6 @@ async def test_websocket_input_with_multi_image_attachments(
         await client.send_input(
             loop_id,
             "Compare these two images and describe their contents",
-            interactive=True,
             attachments=[
                 {"mime_type": "image/png", "data": soothe_logo_b64},
                 {"mime_type": "image/png", "data": logical_arch_b64},

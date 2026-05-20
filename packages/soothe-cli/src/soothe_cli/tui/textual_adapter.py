@@ -85,6 +85,7 @@ from soothe_cli.tui._session_stats import (
 from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui.config import build_stream_config
 from soothe_cli.tui.file_ops import (
+    FILE_CHANGE_TOOLS,
     FileOpTracker,
     file_change_action_label,
     track_file_operation,
@@ -109,6 +110,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Adapter core
 # ---------------------------------------------------------------------------
+
 
 class TextualUIAdapter:
     """Adapter for rendering agent output to Textual widgets.
@@ -419,6 +421,51 @@ def alias_subgraph_pending_and_overlay(
                 streaming_overlay[merge_id] = merged
             else:
                 streaming_overlay[merge_id] = dict(oargs)
+
+
+def _log_step_completion_stats(
+    log: logging.Logger,
+    step_id: str,
+    widget: Any,
+    success: bool,
+    duration_ms: int,
+    tool_call_count: int,
+) -> None:
+    """Log detailed tool stats for step completion debugging."""
+    rows = getattr(widget, "_rows", []) or []
+    stats_order = getattr(widget, "_stats_order", []) or []
+    stats_counts = getattr(widget, "_stats_counts", {}) or {}
+    task_rows = [r for r in rows if getattr(r, "is_task_row", False)]
+
+    # Count tools by type
+    main_tools: dict[str, int] = {}
+    subgraph_tools: dict[str, int] = {}
+    for row in rows:
+        tool_name = str(getattr(row, "tool_name", "") or "").strip()
+        if not tool_name:
+            continue
+        parent_id = getattr(row, "parent_tool_call_id", None)
+        is_task = getattr(row, "is_task_row", False)
+        if is_task or parent_id:
+            subgraph_tools[tool_name] = subgraph_tools.get(tool_name, 0) + 1
+        else:
+            main_tools[tool_name] = main_tools.get(tool_name, 0) + 1
+
+    log.info(
+        "[Step] %s completed: success=%s duration_ms=%d wire_tool_count=%d "
+        "rows=%d main_tools=%r task_rows=%d subgraph_tools=%r "
+        "stats_order=%r stats_counts=%r",
+        step_id,
+        success,
+        duration_ms,
+        tool_call_count,
+        len(rows),
+        main_tools,
+        len(task_rows),
+        subgraph_tools,
+        stats_order,
+        stats_counts,
+    )
 
 
 def _ingest_main_task_tool_on_step_card(
@@ -1553,11 +1600,7 @@ async def execute_task_textual(
 
                         # Check for todo updates (not yet implemented in Textual UI)
                         chunk_data = next(iter(data.values())) if data else None
-                        if (
-                            chunk_data
-                            and isinstance(chunk_data, dict)
-                            and "todos" in chunk_data
-                        ):
+                        if chunk_data and isinstance(chunk_data, dict) and "todos" in chunk_data:
                             pass  # Future: render todo list widget
 
                     # Handle MESSAGES stream - for content and tool calls
@@ -1629,9 +1672,7 @@ async def execute_task_textual(
                             sid = str(tool_id) if tool_id else ""
                             if sid and not is_main_agent:
                                 ts_row = router.resolve_task_scope(ns_key)
-                                row_key = row_key_for_subgraph_tool(
-                                    ns_key, sid, task_scope=ts_row
-                                )
+                                row_key = row_key_for_subgraph_tool(ns_key, sid, task_scope=ts_row)
                             else:
                                 row_key = sid
                             output_str = tool_result.output_display
@@ -1693,18 +1734,14 @@ async def execute_task_textual(
                                 active_model = settings.model_name or ""
                                 if input_toks or output_toks:
                                     # Model gives split counts — preferred path
-                                    turn_stats.record_request(
-                                        active_model, input_toks, output_toks
-                                    )
+                                    turn_stats.record_request(active_model, input_toks, output_toks)
                                     captured_input_tokens = max(
                                         captured_input_tokens, input_toks + output_toks
                                     )
                                 elif total_toks:
                                     # Fallback: model gives only total (no split)
                                     turn_stats.record_request(active_model, total_toks, 0)
-                                    captured_input_tokens = max(
-                                        captured_input_tokens, total_toks
-                                    )
+                                    captured_input_tokens = max(captured_input_tokens, total_toks)
 
                         touched_tool_ids = tool_ids_touched_by_stream_message(message)
                         if touched_tool_ids:
@@ -1846,9 +1883,7 @@ async def execute_task_textual(
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
 
-                            repaired_output = RendererBase.repair_concatenated_output(
-                                output_text
-                            )
+                            repaired_output = RendererBase.repair_concatenated_output(output_text)
                             footer = _goal_completion_time_footer_if_needed(
                                 repaired_output,
                                 goal_loop_start_monotonic=goal_loop_start_monotonic,
@@ -1916,11 +1951,7 @@ async def execute_task_textual(
                                     continue
                                 if not text:
                                     continue
-                                if (
-                                    phase_loop == "execute_step"
-                                    and is_main_agent
-                                    and text.strip()
-                                ):
+                                if phase_loop == "execute_step" and is_main_agent and text.strip():
                                     step_w = adapter._step_by_namespace.get(ns_key)
                                     if step_w is not None:
                                         step_w.append_execute_assistant_delta(text)
@@ -2114,9 +2145,8 @@ async def execute_task_textual(
                                         parsed_step_id, _, _, _ = parse_unified_tool_call_id(
                                             str(lookup_id)
                                         )
-                                        bound_step_id = (
-                                            parsed_step_id
-                                            or router.step_id_for_tool(str(lookup_id))
+                                        bound_step_id = parsed_step_id or router.step_id_for_tool(
+                                            str(lookup_id)
                                         )
                                         _ingest_main_task_tool_on_step_card(
                                             adapter,
@@ -2354,6 +2384,15 @@ async def execute_task_textual(
                                         ):
                                             if parent is widget:
                                                 adapter._tool_display_by_call_id.pop(k, None)
+                                        # Log step completion with tool stats details
+                                        _log_step_completion_stats(
+                                            logger,
+                                            step_id,
+                                            widget,
+                                            success,
+                                            duration_ms,
+                                            tool_call_count,
+                                        )
                                         widget.set_complete(
                                             success,
                                             duration_ms,
@@ -2385,9 +2424,7 @@ async def execute_task_textual(
                                     status=str(data.get("status", "")),
                                     iteration=int(data.get("iteration", 0)),
                                     plan_action=str(plan_action),
-                                    assessment_reasoning=str(
-                                        data.get("assessment_reasoning", "")
-                                    ),
+                                    assessment_reasoning=str(data.get("assessment_reasoning", "")),
                                     plan_reasoning=str(data.get("plan_reasoning", "")),
                                     id=f"plan-{uuid.uuid4().hex[:8]}",
                                 )

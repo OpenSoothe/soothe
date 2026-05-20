@@ -188,6 +188,7 @@ class LocalLoopRunner:
             )
             self._process.kill()
 
+
 # Verify structural compliance at import time (no overhead at runtime).
 def _assert_protocol() -> None:
     _: LoopRunnerProtocol = LocalLoopRunner.__new__(LocalLoopRunner)  # type: ignore[assignment]

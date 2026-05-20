@@ -83,8 +83,8 @@ def test_parallel_spawns_bind_one_namespace_per_register_when_interleaved() -> N
     assert bindings[("tools:ccc",)][2] == "YKF-03"
 
 
-def test_parallel_spawns_skip_fifo_when_multiple_namespaces_pending() -> None:
-    """Queued namespaces are not paired by arrival order when several are pending."""
+def test_parallel_spawns_fifo_bind_when_multiple_namespaces_pending() -> None:
+    """When multiple namespaces pending, FIFO binding pairs oldest namespace to first spawn."""
     bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
     queue: deque[tuple[str, str, str]] = deque()
     spawns: dict[str, tuple[str, str, str]] = {}
@@ -103,6 +103,10 @@ def test_parallel_spawns_skip_fifo_when_multiple_namespaces_pending() -> None:
         ("YKF_01:s:task:0", "explore", "YKF-01"),
         pending_unscoped_namespaces=pending_unscoped,
     )
+    # First namespace bound to first spawn (FIFO)
+    assert bindings[("tools:aaa",)] == ("YKF_01:s:task:0", "explore", "YKF-01")
+    assert ("tools:bbb",) not in bindings
+
     register_task_spawn_for_step(
         bindings,
         queue,
@@ -110,8 +114,8 @@ def test_parallel_spawns_skip_fifo_when_multiple_namespaces_pending() -> None:
         ("YKF_02:s:task:0", "explore", "YKF-02"),
         pending_unscoped_namespaces=pending_unscoped,
     )
-    assert ("tools:aaa",) not in bindings
-    assert ("tools:bbb",) not in bindings
+    # Second namespace bound to second spawn
+    assert bindings[("tools:bbb",)] == ("YKF_02:s:task:0", "explore", "YKF-02")
 
 
 def test_normalize_step_task_tool_call_id_embeds_step() -> None:
@@ -265,6 +269,25 @@ def test_row_key_for_subgraph_tool_unified_passthrough() -> None:
         task_scope=("tc", "explore", "FJS-02"),
     )
     assert legacy == "FJS_02:t0:grep:0"
+
+
+def test_row_key_for_subgraph_tool_remaps_wrong_step_id() -> None:
+    """Daemon sends task-level ID with wrong step_id - remap to bound task_scope."""
+    # Daemon sent MFE_02:t0:grep:1 but namespace is bound to MFE-01's task
+    wrong_tid = "MFE_02:t0:grep:1"
+    bound_scope = ("MFE_01:s:task:0", "explore", "MFE-01")
+    remapped = row_key_for_subgraph_tool(("tools:abc",), wrong_tid, task_scope=bound_scope)
+    # Should remap to MFE-01 step with correct task_idx from scope
+    assert remapped == "MFE_01:t0:grep:1"
+
+
+def test_row_key_for_subgraph_tool_remaps_wrong_task_idx() -> None:
+    """Daemon sends task-level ID with wrong task_idx - remap to bound scope's idx."""
+    # Daemon sent MFE_01:t2:read_file:0 but namespace is bound to task_idx=0
+    wrong_tid = "MFE_01:t2:read_file:0"
+    bound_scope = ("MFE_01:s:task:0", "explore", "MFE-01")  # task_idx=0
+    remapped = row_key_for_subgraph_tool(("tools:abc",), wrong_tid, task_scope=bound_scope)
+    assert remapped == "MFE_01:t0:read_file:0"
 
 
 def test_try_bind_namespace_to_unlinked_spawn_after_register() -> None:

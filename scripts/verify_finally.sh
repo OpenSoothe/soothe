@@ -244,9 +244,14 @@ setup_workspace() {
         exit 1
     fi
 
-    print_info "Syncing workspace packages with dev dependencies..."
-    uv sync --all-packages --all-extras 2>&1 || true
-    print_success "Workspace synced (with dev dependencies)"
+    print_info "Syncing workspace packages with all dependencies..."
+    # Run uv sync with all packages and extras - must succeed
+    if ! uv sync --all-packages --all-extras 2>&1; then
+        print_failure "uv sync failed - cannot continue verification"
+        print_info "Try running 'make sync' or 'uv sync --all-packages --all-extras' manually"
+        exit 1
+    fi
+    print_success "Workspace synced (all packages, all extras)"
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
