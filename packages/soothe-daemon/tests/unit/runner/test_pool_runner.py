@@ -707,9 +707,9 @@ class TestWorkerPoolConfig:
     """WorkerPoolConfig defaults and validation."""
 
     def test_defaults(self) -> None:
-        """Default configuration values."""
+        """Default configuration values (thread_pool is default runner mode)."""
         cfg = WorkerPoolConfig()
-        assert cfg.enabled is True
+        assert cfg.enabled is False  # Disabled by default; thread_pool is default
         assert cfg.min_pool_size == 2
         assert cfg.max_pool_size == 4
         assert cfg.idle_timeout_seconds == 300

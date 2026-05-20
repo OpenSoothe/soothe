@@ -1,0 +1,59 @@
+# Soothe daemon development configuration.
+# Uses thread pool for faster startup (~ms vs ~8s subprocess spawn).
+# Install: ~/.soothe/config/daemon_config.yml (symlink or copy for dev)
+
+# ============================================================================
+# TRANSPORTS - Network listeners for daemon communication
+# ============================================================================
+transports:
+  websocket:  # Primary transport for CLI/TUI clients
+    enabled: true
+    host: 127.0.0.1
+    port: 8765
+  http_rest:  # Optional REST API (health checks, metrics)
+    enabled: false
+
+# ============================================================================
+# CONCURRENCY - Limits for parallel execution and resource protection
+# ============================================================================
+max_concurrent_threads: 100          # Higher for dev testing
+max_concurrent_dispatches: 50
+max_concurrent_vision_preflight: 8
+max_input_queue_size: 1000
+
+# ============================================================================
+# TIMEOUTS & CANCELLATION - Shorter timeouts for faster dev iteration
+# ============================================================================
+max_query_duration_minutes: 60       # Shorter for dev testing (vs 4320 prod)
+thread_max_age_hours: 24
+cancel_grace_seconds: 10             # Faster cancel for dev testing
+cancel_retry_count: 3
+cancel_retry_interval_seconds: 1.0   # Faster retry interval
+cancel_force_kill_timeout_seconds: 5.0  # Shorter force kill timeout
+query_timeout_action: cancel
+auto_cancel_on_startup: true
+
+# ============================================================================
+# OBSERVABILITY - Diagnostic metrics and logging
+# ============================================================================
+event_size_stats_enabled: true
+event_size_stats_interval_seconds: 30   # More frequent for dev diagnostics
+
+# ============================================================================
+# RUNNER MODES - Thread pool enabled for faster dev iteration
+#
+# PostgreSQL Pool Sharing (IG-406): Thread pool mode uses daemon-level singleton
+# pools shared by ALL threads. Use larger persistence.pool_size values (8-12).
+# ============================================================================
+thread_pool:
+  enabled: true                      # Dev default: thread pool for fast startup
+  min_pool_size: 2
+  max_pool_size: 8
+  idle_timeout_seconds: 300
+  max_requests_per_thread: 100
+
+worker_pool:
+  enabled: false                     # Disabled: thread pool takes precedence
+
+distributed:
+  enabled: false                     # Disabled for local dev

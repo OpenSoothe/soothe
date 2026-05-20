@@ -16,6 +16,7 @@ from soothe.config import SOOTHE_HOME
 
 from soothe_daemon.config.models import (
     DistributedConfig,
+    ThreadPoolConfig,
     TransportConfig,
     WorkerPoolConfig,
 )
@@ -66,6 +67,24 @@ class SootheDaemonConfig(BaseSettings):
         description=(
             "Seconds to await in-flight query after /cancel before logging slow-unwind warning"
         ),
+    )
+    cancel_retry_count: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Number of retry attempts for cooperative cancellation before force kill",
+    )
+    cancel_retry_interval_seconds: float = Field(
+        default=2.0,
+        ge=0.5,
+        le=30.0,
+        description="Base interval between cancellation retries (exponential backoff applied)",
+    )
+    cancel_force_kill_timeout_seconds: float = Field(
+        default=10.0,
+        ge=5.0,
+        le=60.0,
+        description="Maximum seconds to wait before force killing unresponsive worker",
     )
     query_timeout_action: str = Field(
         default="cancel", description="Action on timeout: cancel | suspend"
@@ -118,6 +137,10 @@ class SootheDaemonConfig(BaseSettings):
         default_factory=WorkerPoolConfig,
         description="Persistent worker pool configuration (local multiprocessing)",
     )
+    thread_pool: ThreadPoolConfig = Field(
+        default_factory=ThreadPoolConfig,
+        description="Thread pool configuration (shared-memory async execution)",
+    )
 
     # --- Linkage to agent core ---------------------------------------------
 
@@ -156,6 +179,35 @@ class SootheDaemonConfig(BaseSettings):
         if path.exists():
             return SootheConfig.from_yaml_file(str(path))
         return SootheConfig()
+
+    def validate_runner_mode(self) -> str:
+        """Validate exactly one runner mode is enabled.
+
+        Returns the enabled mode name: "worker_pool", "thread_pool", or "distributed".
+
+        Raises:
+            ValueError: If no mode is enabled, or multiple modes are enabled.
+        """
+        enabled_modes = []
+        if self.worker_pool.enabled:
+            enabled_modes.append("worker_pool")
+        if self.thread_pool.enabled:
+            enabled_modes.append("thread_pool")
+        if self.distributed.enabled:
+            enabled_modes.append("distributed")
+
+        if len(enabled_modes) == 0:
+            raise ValueError(
+                "No runner mode enabled. Set exactly one: "
+                "worker_pool.enabled=true, thread_pool.enabled=true, or distributed.enabled=true"
+            )
+        if len(enabled_modes) > 1:
+            raise ValueError(
+                f"Multiple runner modes enabled ({', '.join(enabled_modes)}). "
+                "Enable exactly one: worker_pool, thread_pool, or distributed"
+            )
+
+        return enabled_modes[0]
 
 
 __all__ = ["SootheDaemonConfig", "default_daemon_config_path", "default_soothe_config_path"]

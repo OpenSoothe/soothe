@@ -85,7 +85,10 @@ observability:
 
 persistence:
   default_backend: postgresql
-  agentloop_pool_size: 10
+  # Thread pool mode (daemon_config.dev.yml): pools are daemon-level singletons (IG-406)
+  # Can use larger pools for high concurrency since they're shared across all threads.
+  checkpointer_pool_size: 8      # Thread pool: shared singleton, larger for concurrency
+  agentloop_pool_size: 12        # Thread pool: shared singleton (IG-406)
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
 
 vector_stores:

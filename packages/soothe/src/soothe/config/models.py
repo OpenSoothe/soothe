@@ -318,23 +318,25 @@ class PersistenceConfig(BaseModel):
     default_backend: Literal["postgresql", "sqlite"] = "sqlite"
 
     checkpointer_pool_size: int = Field(
-        default=8,
+        default=2,
         ge=1,
         le=64,
         description=(
             "LangGraph PostgreSQL checkpointer pool max_size per process. "
-            "Each worker holds one pool for the lifetime of a request; size parallel "
-            "checkpoint access within a single run (raise if DAG parallelism exhausts the pool)."
+            "Worker pool mode: each worker process has its own pool (N workers × pool_size connections). "
+            "Thread pool mode: pool is shared across threads (daemon-level singleton via IG-406). "
+            "Default 2 suits worker_pool mode; thread_pool can use 8-12 for higher concurrency."
         ),
     )
     agentloop_pool_size: int = Field(
-        default=12,
+        default=4,
         ge=1,
         le=128,
         description=(
             "Shared AgentLoop persistence pool max_size per process (checkpoints DB). "
-            "Lower than historical 30: pool workers run one request at a time; scale via "
-            "daemon.worker_pool and this value, not oversized per-worker pools."
+            "Thread pool mode: single daemon-level singleton shared by all threads (IG-406). "
+            "Worker pool mode: each worker process creates its own singleton (not cross-process shared). "
+            "Default 4 suits worker_pool; thread_pool can use 12-30 for 200+ thread scenarios."
         ),
     )
 
