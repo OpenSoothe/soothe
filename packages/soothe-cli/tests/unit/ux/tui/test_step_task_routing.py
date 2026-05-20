@@ -19,12 +19,37 @@ def test_register_task_spawn_normalizes_unified_task_id() -> None:
     assert router._spawns_by_step_id["YKF-02"][0] == "YKF_02:s:task:0"
 
 
-def test_parallel_namespace_bind_one_at_a_time() -> None:
+def test_parallel_namespace_bind_via_unified_tool_ids() -> None:
+    """Namespace binding requires unified tool call IDs, not FIFO order."""
     router = StepTaskRouter()
+    router.register_task_spawn("YKF_01:s:task:0", "explore", step_id="YKF-01")
+    router.register_task_spawn("YKF_02:s:task:0", "explore", step_id="YKF-02")
     router.on_subgraph_namespace(("tools:aaa",))
-    router.register_task_spawn("functions.task:0", "explore", step_id="YKF-01")
     router.on_subgraph_namespace(("tools:bbb",))
-    router.register_task_spawn("functions.task:0", "explore", step_id="YKF-02")
+    # Namespaces not bound yet without tool calls
+    assert router.resolve_task_scope(("tools:aaa",)) is None
+    assert router.resolve_task_scope(("tools:bbb",)) is None
+    # Bind via unified tool call IDs with embedded step ids
+    router.try_route_subgraph_tool(
+        ns_key=("tools:aaa",),
+        lookup_id="YKF_01:t0:grep:0",
+        display_key="YKF_01:t0:grep:0",
+        tool_name="grep",
+        args={"pattern": "x"},
+        step_cards={},
+        tool_to_step={},
+        tool_display_by_call_id={},
+    )
+    router.try_route_subgraph_tool(
+        ns_key=("tools:bbb",),
+        lookup_id="YKF_02:t0:grep:0",
+        display_key="YKF_02:t0:grep:0",
+        tool_name="grep",
+        args={"pattern": "y"},
+        step_cards={},
+        tool_to_step={},
+        tool_display_by_call_id={},
+    )
     assert router.resolve_task_scope(("tools:aaa",)) == ("YKF_01:s:task:0", "explore", "YKF-01")
     assert router.resolve_task_scope(("tools:bbb",)) == ("YKF_02:s:task:0", "explore", "YKF-02")
 
@@ -153,6 +178,7 @@ def test_parallel_explore_namespaces_bind_from_unified_tool_ids() -> None:
 
 
 def test_subgraph_inner_task_tool_is_not_ingested_on_step_card() -> None:
+    """Inner subgraph task tools are swallowed, not ingested as tool rows."""
     router = StepTaskRouter()
     step = MagicMock()
     step.has_tool_call_row.return_value = False
@@ -161,7 +187,22 @@ def test_subgraph_inner_task_tool_is_not_ingested_on_step_card() -> None:
 
     router.register_task_spawn("FHG_01:s:task:0", "explore", step_id="FHG-01")
     router.on_subgraph_namespace(("tools:sub",))
-
+    # Bind namespace via a non-task tool first
+    router.try_route_subgraph_tool(
+        ns_key=("tools:sub",),
+        lookup_id="FHG_01:t0:grep:0",
+        display_key="FHG_01:t0:grep:0",
+        tool_name="grep",
+        args={"pattern": "x"},
+        step_cards=step_cards,
+        tool_to_step={},
+        tool_display_by_call_id=display,
+    )
+    # Verify grep tool was added
+    step.add_tool_call.assert_called_once()
+    # Reset mock to check inner task tool behavior
+    step.reset_mock()
+    # Now inner task tool is ingested (returns True) but add_tool_call is not called
     assert (
         router.try_route_subgraph_tool(
             ns_key=("tools:sub",),
@@ -175,10 +216,12 @@ def test_subgraph_inner_task_tool_is_not_ingested_on_step_card() -> None:
         )
         is True
     )
+    # Inner task tools don't create tool rows (they're not user-facing)
     step.add_tool_call.assert_not_called()
 
 
 def test_parallel_subgraph_tools_route_under_explore_row() -> None:
+    """Subgraph tools route to parent step card using unified tool call IDs."""
     router = StepTaskRouter()
     step = MagicMock()
     step.has_tool_call_row.return_value = False
@@ -189,10 +232,11 @@ def test_parallel_subgraph_tools_route_under_explore_row() -> None:
     router.register_task_spawn("XFJ_01:s:task:0", "explore", step_id="XFJ-01")
     router.on_subgraph_namespace(("tools:sub",))
 
+    # Use unified tool call ID to bind namespace and route tool
     router.try_route_subgraph_tool(
         ns_key=("tools:sub",),
-        lookup_id="functions.grep:0",
-        display_key="tools:sub\x1egrep:0",
+        lookup_id="XFJ_01:t0:grep:0",
+        display_key="XFJ_01:t0:grep:0",
         tool_name="grep",
         args={"pattern": "x"},
         step_cards=step_cards,
@@ -205,12 +249,25 @@ def test_parallel_subgraph_tools_route_under_explore_row() -> None:
     assert kwargs.get("parent_tool_call_id") == "XFJ_01:s:task:0"
 
 
-def test_late_subgraph_namespace_binds_to_unlinked_spawn() -> None:
-    """Namespace after register_task_spawn attaches via unlinked-spawn fallback."""
+def test_late_subgraph_namespace_binds_via_unified_tool_call_id() -> None:
+    """Namespace binds via unified tool call ID, not automatic spawn linking."""
     router = StepTaskRouter()
     router.register_task_spawn("FJS_02:s:task:0", "explore", step_id="FJS-02")
     ns = ("tools:late-arrival",)
     router.on_subgraph_namespace(ns)
+    # Namespace not bound yet without unified tool call ID
+    assert router.resolve_task_scope(ns) is None
+    # Bind via unified tool call ID with embedded step_id
+    router.try_route_subgraph_tool(
+        ns_key=ns,
+        lookup_id="FJS_02:t0:grep:0",
+        display_key="FJS_02:t0:grep:0",
+        tool_name="grep",
+        args={"pattern": "x"},
+        step_cards={},
+        tool_to_step={},
+        tool_display_by_call_id={},
+    )
     scope = router.resolve_task_scope(ns)
     assert scope is not None
     assert scope[2] == "FJS-02"
