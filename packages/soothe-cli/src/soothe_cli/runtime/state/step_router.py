@@ -10,7 +10,6 @@ this module adds TUI-oriented buffers and lifecycle for multiple concurrent step
 
 from __future__ import annotations
 
-import logging
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, TypeAlias
@@ -28,8 +27,6 @@ from soothe_sdk.ux.task_namespace import (
     task_scope_step_id,
     try_bind_namespace_from_tool_call_id,
 )
-
-_log = logging.getLogger(__name__)
 
 StepWidget: TypeAlias = Any
 """``CognitionStepMessage`` or compatible step card (duck-typed)."""
@@ -177,17 +174,10 @@ class StepTaskRouter:
         if namespace not in self._pending_unscoped_namespaces:
             self._pending_unscoped_namespaces.append(namespace)
         # Bind using unified step ids from pending subgraph tool buffers
-        id_bound = self._try_bind_namespaces_from_pending_tools()
+        self._try_bind_namespaces_from_pending_tools()
         prune_bound_pending_namespaces(
             self._namespace_bindings,
             self._pending_unscoped_namespaces,
-        )
-        _log.debug(
-            "[Router] on_subgraph_namespace ns=%r bindings=%d pending=%d id_bound=%d",
-            namespace,
-            len(self._namespace_bindings),
-            len(self._pending_unscoped_namespaces),
-            id_bound,
         )
 
     def _try_bind_namespaces_from_pending_tools(self) -> int:
@@ -234,19 +224,16 @@ class StepTaskRouter:
         if not sid:
             sid = str(step_id).strip()
         if not sid:
-            _log.debug("[Router] register_task_spawn SKIPPED: no step_id tcid=%r", tcid)
             return False
         normalized_tcid = normalize_step_task_tool_call_id(sid, tcid)
         spawn_key = (sid, normalized_tcid)
         if spawn_key in self._spawn_recorded:
-            _log.debug("[Router] register_task_spawn DUPE: spawn_key=%r", spawn_key)
             return False
         scope: TaskScope = (
             normalized_tcid,
             (subagent_type or "?").strip() or "?",
             sid,
         )
-        pending_before = len(self._pending_unscoped_namespaces)
         register_task_spawn_for_step(
             self._namespace_bindings,
             self._task_spawn_queue,
@@ -259,15 +246,6 @@ class StepTaskRouter:
         prune_bound_pending_namespaces(
             self._namespace_bindings,
             self._pending_unscoped_namespaces,
-        )
-        _log.debug(
-            "[Router] register_task_spawn step=%r task=%r agent=%r bindings=%d pending=%d→%d",
-            sid,
-            normalized_tcid,
-            scope[1],
-            len(self._namespace_bindings),
-            pending_before,
-            len(self._pending_unscoped_namespaces),
         )
         return True
 
@@ -491,12 +469,6 @@ class StepTaskRouter:
             )
         scope = self.resolve_task_scope(ns_key)
         if scope is None:
-            _log.debug(
-                "[Router] try_route_subgraph_tool BUFFERED (no scope): ns=%r tool=%r pending=%d",
-                ns_key,
-                tool_name,
-                len(self._pending_subgraph_tools),
-            )
             self._upsert_pending_subgraph_tool(item)
             return False
         parent = self.resolve_parent(
@@ -505,22 +477,10 @@ class StepTaskRouter:
             tool_display_by_call_id=tool_display_by_call_id,
         )
         if parent is None:
-            _log.debug(
-                "[Router] try_route_subgraph_tool BUFFERED (no parent): ns=%r step=%r tool=%r",
-                ns_key,
-                task_scope_step_id(scope) if scope else "",
-                tool_name,
-            )
             self._upsert_pending_subgraph_tool(item)
             return False
         pending_key = _subgraph_pending_key(ns_key, item.lookup_id)
         self._pending_subgraph_tools.pop(pending_key, None)
-        _log.debug(
-            "[Router] try_route_subgraph_tool INGESTED: ns=%r step=%r tool=%r",
-            ns_key,
-            task_scope_step_id(scope) if scope else "",
-            tool_name,
-        )
         return self._ingest_subgraph_tool_on_parent(item, parent, scope, tool_to_step)
 
     def route_pending_subgraph_tools(
