@@ -1463,6 +1463,10 @@ class CognitionStepMessage(Vertical):
         for row in self._rows:
             if not row.is_task_row and not is_step_level_task_tool_id(row.tool_call_id):
                 continue
+            # Skip rows that belong to OTHER steps (parsed step_id != this card's step_id).
+            parsed_sid, _, _, _ = parse_unified_tool_call_id(str(row.tool_call_id or ""))
+            if parsed_sid and parsed_sid != self._step_id:
+                continue
             key = self._task_delegation_dedupe_key(row)
             if not key:
                 continue
