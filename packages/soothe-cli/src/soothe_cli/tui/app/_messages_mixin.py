@@ -23,7 +23,6 @@ from soothe_cli.tui.app._module_init import (
     _LoopHistoryPayload,
     _write_iterm_escape,
 )
-from soothe_cli.tui.widgets.message_store import MessageData
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
@@ -98,7 +97,9 @@ class _MessagesMixin:
                 return
 
             # 6-7. Create and mount only visible widgets (max WINDOW_SIZE)
-            widgets = [msg_data.to_widget() for msg_data in visible]
+            from soothe_cli.tui.binding import message_to_widget
+
+            widgets = [message_to_widget(msg_data) for msg_data in visible]
             if widgets:
                 await messages_container.mount(*widgets)
 
@@ -178,7 +179,9 @@ class _MessagesMixin:
             return
 
         # Store message data for virtualization
-        message_data = MessageData.from_widget(widget)
+        from soothe_cli.tui.binding import message_from_widget
+
+        message_data = message_from_widget(widget)
         # Ensure the widget's DOM id matches the store id so that
         # features like click-to-show-timestamp can look it up.
         if not widget.id:
@@ -697,9 +700,10 @@ class _MessagesMixin:
         synthesized ``Click``, but ``call_after_refresh`` would run after card
         collapse handlers clear the selection.
         """
-        from soothe_cli.tui.widgets.clipboard import copy_selection_to_clipboard
-
-        from soothe_cli.tui.widgets.clipboard import screen_has_text_selection
+        from soothe_cli.tui.widgets.clipboard import (
+            copy_selection_to_clipboard,
+            screen_has_text_selection,
+        )
 
         if not screen_has_text_selection(self.screen):
             return

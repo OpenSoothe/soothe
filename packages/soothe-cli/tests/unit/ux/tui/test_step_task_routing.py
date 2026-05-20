@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from soothe_cli.tui.step_task_routing import StepTaskRouter
+from soothe_cli.runtime.state.step_router import StepTaskRouter
 
 
 def test_register_task_spawn_rejects_inner_subgraph_task_id() -> None:

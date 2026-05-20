@@ -30,7 +30,6 @@ from soothe.core.loop.utils.reflection import (
     _extract_text_content,
     reflect_heuristic,
 )
-from soothe.utils.token_counting import estimate_content_chars
 from soothe.protocols.planner import (
     GoalContext,
     Plan,
@@ -40,6 +39,7 @@ from soothe.protocols.planner import (
 )
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, preview_first
+from soothe.utils.token_counting import estimate_content_chars
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig

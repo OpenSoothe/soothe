@@ -12,13 +12,15 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from soothe.config import SOOTHE_HOME
-from soothe_sdk.utils.logging import ShortLevelFormatter
+from soothe_sdk.utils.logging import (
+    DEFAULT_LOG_BACKUP_COUNT,
+    DEFAULT_LOG_MAX_BYTES,
+    ShortLevelFormatter,
+)
 
 DEFAULT_DAEMON_LOG = "daemon.log"
-
-
-DEFAULT_MAX_BYTES = 5_242_880  # 5 MB
-DEFAULT_BACKUP_COUNT = 3
+DEFAULT_MAX_BYTES = DEFAULT_LOG_MAX_BYTES
+DEFAULT_BACKUP_COUNT = DEFAULT_LOG_BACKUP_COUNT
 
 # Context variables for loop_id and client_id (always log full IDs)
 loop_id_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar("loop_id", default=None)

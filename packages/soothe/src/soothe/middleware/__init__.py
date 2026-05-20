@@ -21,7 +21,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from soothe.middleware._builder import build_soothe_middleware_stack as build_soothe_middleware_stack
+    from soothe.middleware._builder import (
+        build_soothe_middleware_stack as build_soothe_middleware_stack,
+    )
     from soothe.middleware._utils import create_llm_call_metadata as create_llm_call_metadata
     from soothe.middleware.execution_hints import ExecutionHintsMiddleware
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
@@ -44,7 +46,10 @@ __all__ = [
 ]
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
-    "build_soothe_middleware_stack": ("soothe.middleware._builder", "build_soothe_middleware_stack"),
+    "build_soothe_middleware_stack": (
+        "soothe.middleware._builder",
+        "build_soothe_middleware_stack",
+    ),
     "create_llm_call_metadata": ("soothe.middleware._utils", "create_llm_call_metadata"),
     "ExecutionHintsMiddleware": ("soothe.middleware.execution_hints", "ExecutionHintsMiddleware"),
     "SootheFilesystemMiddleware": ("soothe.middleware.filesystem", "SootheFilesystemMiddleware"),
@@ -55,7 +60,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "soothe.middleware.system_prompt_optimization",
         "SystemPromptOptimizationMiddleware",
     ),
-    "WorkspaceContextMiddleware": ("soothe.middleware.workspace_context", "WorkspaceContextMiddleware"),
+    "WorkspaceContextMiddleware": (
+        "soothe.middleware.workspace_context",
+        "WorkspaceContextMiddleware",
+    ),
 }
 
 

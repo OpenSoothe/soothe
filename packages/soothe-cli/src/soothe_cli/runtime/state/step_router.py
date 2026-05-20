@@ -18,7 +18,6 @@ from typing import Any, TypeAlias
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
     is_inner_subgraph_task_tool_id,
-    maybe_bind_namespace,
     normalize_step_task_tool_call_id,
     parse_unified_tool_call_id,
     prune_bound_pending_namespaces,
@@ -28,7 +27,6 @@ from soothe_sdk.ux.task_namespace import (
     row_key_for_subgraph_tool,
     task_scope_step_id,
     try_bind_namespace_from_tool_call_id,
-    try_bind_namespace_to_unlinked_spawn,
 )
 
 _log = logging.getLogger(__name__)
@@ -171,39 +169,25 @@ class StepTaskRouter:
     # --- Namespace / task spawn ---
 
     def on_subgraph_namespace(self, namespace: tuple[str, ...]) -> None:
-        """Bind or defer a delegated subgraph namespace."""
+        """Defer subgraph namespace for unified ID-based binding from tool_call_ids."""
         if not namespace:
             return
-        before = dict(self._namespace_bindings)
-        maybe_bind_namespace(
-            self._namespace_bindings,
-            self._task_spawn_queue,
-            namespace,
-            pending_unscoped_namespaces=self._pending_unscoped_namespaces,
-        )
-        try_bind_namespace_to_unlinked_spawn(
-            self._namespace_bindings,
-            self._spawns_by_step_id,
-            namespace,
-            pending_unscoped_namespaces=self._pending_unscoped_namespaces,
-        )
+        if namespace in self._namespace_bindings:
+            return
+        if namespace not in self._pending_unscoped_namespaces:
+            self._pending_unscoped_namespaces.append(namespace)
+        # Bind using unified step ids from pending subgraph tool buffers
         id_bound = self._try_bind_namespaces_from_pending_tools()
         prune_bound_pending_namespaces(
             self._namespace_bindings,
             self._pending_unscoped_namespaces,
         )
-        pending = self._pending_unscoped_namespaces
-        pending_unique = len({ns for ns in pending}) if pending else 0
         _log.debug(
-            "[Router] on_subgraph_namespace ns=%r bindings_before=%r bindings_after=%r "
-            "pending_len=%d pending_unique=%d id_bound=%d spawns=%r",
+            "[Router] on_subgraph_namespace ns=%r bindings=%d pending=%d id_bound=%d",
             namespace,
-            before,
-            self._namespace_bindings,
-            len(pending),
-            pending_unique,
+            len(self._namespace_bindings),
+            len(self._pending_unscoped_namespaces),
             id_bound,
-            self._spawns_by_step_id,
         )
 
     def _try_bind_namespaces_from_pending_tools(self) -> int:
@@ -262,8 +246,7 @@ class StepTaskRouter:
             (subagent_type or "?").strip() or "?",
             sid,
         )
-        before_bindings = dict(self._namespace_bindings)
-        before_pending = list(self._pending_unscoped_namespaces)
+        pending_before = len(self._pending_unscoped_namespaces)
         register_task_spawn_for_step(
             self._namespace_bindings,
             self._task_spawn_queue,
@@ -277,15 +260,13 @@ class StepTaskRouter:
             self._namespace_bindings,
             self._pending_unscoped_namespaces,
         )
-        _log.info(
-            "[Router] register_task_spawn REGISTERED: tcid=%r normalized=%r step=%r "
-            "bindings_before=%r bindings_after=%r pending_len_before=%d pending_len_after=%d",
-            tcid,
-            normalized_tcid,
+        _log.debug(
+            "[Router] register_task_spawn step=%r task=%r agent=%r bindings=%d pending=%d→%d",
             sid,
-            before_bindings,
-            self._namespace_bindings,
-            len(before_pending),
+            normalized_tcid,
+            scope[1],
+            len(self._namespace_bindings),
+            pending_before,
             len(self._pending_unscoped_namespaces),
         )
         return True
@@ -511,12 +492,9 @@ class StepTaskRouter:
         scope = self.resolve_task_scope(ns_key)
         if scope is None:
             _log.debug(
-                "[Router] try_route_subgraph_tool BUFFERED (no scope): ns=%r tool=%r display=%r "
-                "bindings=%r pending_subgraph=%d",
+                "[Router] try_route_subgraph_tool BUFFERED (no scope): ns=%r tool=%r pending=%d",
                 ns_key,
                 tool_name,
-                display_key,
-                self._namespace_bindings,
                 len(self._pending_subgraph_tools),
             )
             self._upsert_pending_subgraph_tool(item)
@@ -528,24 +506,20 @@ class StepTaskRouter:
         )
         if parent is None:
             _log.debug(
-                "[Router] try_route_subgraph_tool BUFFERED (no parent): ns=%r scope=%r tool=%r "
-                "step_cards=%r tool_display=%r",
+                "[Router] try_route_subgraph_tool BUFFERED (no parent): ns=%r step=%r tool=%r",
                 ns_key,
-                scope,
+                task_scope_step_id(scope) if scope else "",
                 tool_name,
-                list(step_cards.keys()),
-                list(tool_display_by_call_id.keys()),
             )
             self._upsert_pending_subgraph_tool(item)
             return False
         pending_key = _subgraph_pending_key(ns_key, item.lookup_id)
         self._pending_subgraph_tools.pop(pending_key, None)
-        _log.info(
-            "[Router] try_route_subgraph_tool INGESTED: ns=%r scope=%r tool=%r display=%r",
+        _log.debug(
+            "[Router] try_route_subgraph_tool INGESTED: ns=%r step=%r tool=%r",
             ns_key,
-            scope,
+            task_scope_step_id(scope) if scope else "",
             tool_name,
-            display_key,
         )
         return self._ingest_subgraph_tool_on_parent(item, parent, scope, tool_to_step)
 

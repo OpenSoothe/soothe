@@ -12,10 +12,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from soothe_cli.tui import theme
-from soothe_cli.tui._session_stats import (
+from soothe_cli.runtime.state.session_stats import (
     SessionStats,
 )
+from soothe_cli.tui import theme
 
 # Keep module-level imports minimal before first paint.
 # All other config imports — settings, create_model, detect_provider, etc. — are

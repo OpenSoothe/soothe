@@ -25,9 +25,9 @@ from soothe_cli.cli.execution.daemon_errors import (
 from soothe_cli.cli.execution.daemon_errors import (
     friendly_daemon_execution_error as _friendly_agent_execution_error,
 )
+from soothe_cli.runtime.state.session_stats import SessionStats, format_token_count
 from soothe_cli.tui import theme
 from soothe_cli.tui._cli_context import CLIContext
-from soothe_cli.tui._session_stats import SessionStats, format_token_count
 from soothe_cli.tui._version import DOCS_URL
 from soothe_cli.tui.app._module_init import (
     _COMMAND_URLS,

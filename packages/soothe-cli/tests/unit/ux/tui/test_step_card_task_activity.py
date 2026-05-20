@@ -96,9 +96,32 @@ def test_task_branch_child_line_shows_stats_and_running_status() -> None:
         {"pattern": "x"},
         parent_tool_call_id="ABC_01:s:task:0",
     )
-    card.set_tool_running("ABC_01:t0:grep:0")
     text = _plain(card._step_task_activity_content())
     assert "Grep(1) · running" in text
+    assert "Running..." in text
+
+
+def test_pending_step_shows_branch_pending_without_task_rows() -> None:
+    card = CognitionStepMessage("WAA-02", "Blocked step", id="stp-wait")
+    text = _plain(card._step_task_activity_content())
+    assert "Pending..." in text
+    assert card._has_task_activity_body()
+
+
+def test_pending_step_with_task_delegation_shows_child_pending() -> None:
+    card = CognitionStepMessage("WAA-03", "Future explore", id="stp-wait-task")
+    card.add_tool_call(
+        "WAA_03:s:task:0",
+        "task",
+        {"subagent_type": "explore", "description": "scan later"},
+        is_task_row=True,
+    )
+    # Tool arrival can promote internal state; keep plan-style pending for the branch UI.
+    card._status = "pending"
+    card._deferred_running = False
+    text = _plain(card._step_task_activity_content())
+    assert "Explore(scan later)" in text
+    assert "Pending..." in text
 
 
 def test_duplicate_task_rows_dedupe_to_one_branch() -> None:
