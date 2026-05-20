@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.config import SOOTHE_HOME
 from soothe.config.settings import SootheConfig
+from soothe.core.runner._worker_utils import parse_intent_hint
 from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
 
 from soothe_daemon.config import SootheDaemonConfig
@@ -329,11 +330,11 @@ class PoolDispatchWaitStatsCollector:
 def _spawn_safe_config(config: SootheConfig | None) -> SootheConfig:
     """Return a copy of config safe for multiprocessing spawn pickling.
 
-    Same as local_runner._spawn_safe_config — strips runtime caches.
+    Same as _worker_utils.spawn_safe_config — strips runtime caches.
     """
-    from soothe.core.runner.local_runner import _spawn_safe_config as _local_spawn_safe_config
+    from soothe.core.runner._worker_utils import spawn_safe_config
 
-    return _local_spawn_safe_config(config)
+    return spawn_safe_config(config)
 
 
 def _log_pool_worker_fatal(worker_id: str, exc: BaseException) -> None:
@@ -432,7 +433,6 @@ def _pool_worker_body(
     import asyncio as _asyncio
 
     from soothe.core.runner import SootheRunner
-    from soothe.core.runner.local_runner import _parse_intent_hint
     from soothe.core.runner.worker_logging import configure_loop_runner_worker_logging
 
     loop = _asyncio.new_event_loop()
@@ -479,7 +479,7 @@ def _pool_worker_body(
                         max_iterations=req.max_iterations,
                         preferred_subagent=req.preferred_subagent,
                         client_loop_id=req.loop_id,
-                        intent_hint=_parse_intent_hint(req.intent_hint),
+                        intent_hint=parse_intent_hint(req.intent_hint),
                     ):
                         # COOPERATIVE CANCELLATION: Check cancel_event between chunks
                         if cancel_event.is_set():
@@ -1416,6 +1416,79 @@ class WorkerPool:
             loop_id,
             worker_id,
         )
+
+    async def force_kill_worker(self, worker_id: str, timeout: float = 10.0) -> None:
+        """Force terminate a worker process after cooperative cancel fails.
+
+        Guarantees the worker is terminated by SIGTERM then SIGKILL if needed.
+
+        Args:
+            worker_id: Worker to terminate.
+            timeout: Seconds to wait for process death after terminate.
+        """
+        worker = self._workers.get(worker_id)
+        if worker is None:
+            logger.debug("force_kill_worker: worker %s not found", worker_id)
+            return
+
+        if not worker.process.is_alive():
+            # Already dead - cleanup bookkeeping
+            logger.debug("force_kill_worker: worker %s already dead, cleaning up", worker_id)
+            self._workers.pop(worker_id, None)
+            loop_id = worker.current_loop_id or ""
+            self._workers_by_loop_id.pop(loop_id, None)
+            self._pending_responses.pop(worker.current_request_id or "", None)
+            return
+
+        logger.warning(
+            "Force killing worker %s (loop_id=%s)",
+            worker_id,
+            worker.current_loop_id,
+        )
+        worker.status = WorkerStatus.SHUTTING_DOWN
+
+        loop = asyncio.get_event_loop()
+
+        # SIGTERM first (graceful termination)
+        try:
+            worker.process.terminate()
+            await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: worker.process.join(timeout=timeout / 2)),
+                timeout=timeout / 2 + 1,
+            )
+        except TimeoutError:
+            pass
+
+        # SIGKILL if still alive
+        if worker.process.is_alive():
+            logger.warning("Worker %s did not respond to terminate, killing", worker_id)
+            worker.process.kill()
+            try:
+                await asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: worker.process.join(timeout=2)),
+                    timeout=3,
+                )
+            except TimeoutError:
+                logger.error("Worker %s zombie after kill", worker_id)
+
+        # Cleanup bookkeeping
+        self._workers.pop(worker_id, None)
+        loop_id = worker.current_loop_id or ""
+        self._workers_by_loop_id.pop(loop_id, None)
+        self._pending_responses.pop(worker.current_request_id or "", None)
+
+        logger.info("Worker %s force terminated", worker_id)
+
+    def get_worker_id_for_loop(self, loop_id: str) -> str | None:
+        """Return worker_id handling the given loop_id, if any."""
+        return self._workers_by_loop_id.get(loop_id)
+
+    def is_worker_idle(self, worker_id: str) -> bool:
+        """Check if worker has returned to idle state."""
+        worker = self._workers.get(worker_id)
+        if worker is None:
+            return True  # Gone means cancelled
+        return worker.status == WorkerStatus.IDLE or not worker.process.is_alive()
 
     async def shutdown(self) -> None:
         """Graceful shutdown: signal workers, wait, then force-kill."""

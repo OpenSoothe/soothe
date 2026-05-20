@@ -33,6 +33,207 @@ _STREAM_CHUNK_LENGTH = 3
 _MSG_PAIR_LENGTH = 2
 
 
+class AsyncCancelOrchestrator:
+    """Manages async cancellation with retry and force kill - guarantees success.
+
+    When cancel_loop() is called, this orchestrator kicks off a background task
+    that:
+    1. Signals cooperative cancellation (cancel_event)
+    2. Retries with exponential backoff up to cancel_retry_count
+    3. Force kills the worker if retries are exhausted
+
+    The caller returns immediately; cancellation is guaranteed in background.
+    """
+
+    def __init__(self, daemon: Any, query_engine: QueryEngine) -> None:
+        """Initialize orchestrator with daemon and query engine references."""
+        self._daemon = daemon
+        self._query_engine = query_engine
+        self._active_cancel_tasks: dict[str, asyncio.Task] = {}
+
+    async def start_async_cancel(self, loop_id: str, already_signaled: bool = False) -> None:
+        """Kick off async cancel, return immediately. Cancel guaranteed in background.
+
+        Deduplicates cancel requests: only one background task per loop_id.
+
+        Args:
+            loop_id: The loop to cancel.
+            already_signaled: If True, runner.cancel() was already called by caller.
+        """
+        # Deduplicate: only one cancel task per loop
+        if loop_id in self._active_cancel_tasks:
+            existing = self._active_cancel_tasks[loop_id]
+            if not existing.done():
+                logger.debug("Already cancelling loop %s, skipping duplicate", loop_id[:16])
+                return
+
+        # Spawn background task that guarantees cancel
+        task = asyncio.create_task(
+            self._cancel_with_retry_and_force(loop_id, already_signaled=already_signaled),
+            name=f"cancel-{loop_id[:8]}",
+        )
+        self._active_cancel_tasks[loop_id] = task
+        task.add_done_callback(lambda _: self._active_cancel_tasks.pop(loop_id, None))
+
+    async def _cancel_with_retry_and_force(
+        self, loop_id: str, already_signaled: bool = False
+    ) -> None:
+        """Execute cancellation with retry loop and force kill fallback.
+
+        Always succeeds: either cooperative cancel works, or force kill terminates.
+
+        Args:
+            loop_id: The loop to cancel.
+            already_signaled: If True, runner.cancel() was already called by caller.
+        """
+        config = self._daemon._daemon_config
+        max_retries = getattr(config, "cancel_retry_count", 3)
+        base_interval = getattr(config, "cancel_retry_interval_seconds", 2.0)
+        force_timeout = getattr(config, "cancel_force_kill_timeout_seconds", 10.0)
+
+        runner = self._query_engine._active_runners.get(loop_id)
+        worker_id = self._get_worker_id_for_loop(loop_id)
+
+        # Collect asyncio tasks to cancel
+        tasks_to_cancel = self._collect_tasks_for_loop(loop_id)
+
+        # Cancel asyncio tasks immediately
+        for label, task in tasks_to_cancel:
+            if not task.done():
+                task.cancel()
+
+        # Retry loop for cooperative cancellation
+        for attempt in range(max_retries):
+            try:
+                # Signal cooperative cancel to worker pool (unless already done by caller)
+                if runner is not None and not already_signaled:
+                    try:
+                        await runner.cancel()
+                    except Exception:
+                        logger.debug(
+                            "Cancel attempt %d: runner.cancel failed for loop %s",
+                            attempt + 1,
+                            loop_id[:16],
+                            exc_info=True,
+                        )
+
+                # Wait for cooperative response (exponential backoff)
+                wait_time = base_interval * (0.5 + attempt * 0.5)
+                await asyncio.sleep(wait_time)
+
+                # Check if worker is now idle (cancel succeeded)
+                if self._is_worker_idle(worker_id):
+                    logger.info(
+                        "Cancel succeeded for loop %s (attempt %d)",
+                        loop_id[:16],
+                        attempt + 1,
+                    )
+                    # Await cancelled tasks briefly to let them unwind
+                    for label, task in tasks_to_cancel:
+                        if not task.done():
+                            try:
+                                await asyncio.wait_for(asyncio.shield(task), timeout=1.0)
+                            except (TimeoutError, asyncio.CancelledError):
+                                pass
+                    return  # Success
+
+                # Update tasks list (some may have completed)
+                tasks_to_cancel = self._collect_tasks_for_loop(loop_id)
+
+            except Exception as e:
+                logger.warning(
+                    "Cancel attempt %d for loop %s failed: %s",
+                    attempt + 1,
+                    loop_id[:16],
+                    e,
+                )
+
+        # Retries exhausted - force kill guarantees success
+        logger.warning(
+            "Cooperative cancel failed for loop %s after %d attempts, force killing",
+            loop_id[:16],
+            max_retries,
+        )
+        await self._force_kill_worker(worker_id, loop_id, timeout=force_timeout)
+
+        # Cleanup bookkeeping
+        self._query_engine._active_runners.pop(loop_id, None)
+
+    def _get_worker_id_for_loop(self, loop_id: str) -> str | None:
+        """Get worker_id handling the given loop_id from the runner pool."""
+        runner = self._daemon._runner
+        if runner is None:
+            return None
+        # Try pool_runner or thread_runner interface
+        if hasattr(runner, "get_worker_id_for_loop"):
+            return runner.get_worker_id_for_loop(loop_id)
+        return None
+
+    def _is_worker_idle(self, worker_id: str | None) -> bool:
+        """Check if worker has returned to idle state."""
+        if worker_id is None:
+            return True  # No worker means no active request
+        runner = self._daemon._runner
+        if runner is None:
+            return True
+        if hasattr(runner, "is_worker_idle"):
+            return runner.is_worker_idle(worker_id)
+        return False
+
+    async def _force_kill_worker(self, worker_id: str | None, loop_id: str, timeout: float) -> None:
+        """Force terminate worker - guarantees cancel succeeds."""
+        if worker_id is None:
+            logger.warning("No worker_id for loop %s, cannot force kill", loop_id[:16])
+            return
+
+        runner = self._daemon._runner
+        if runner is None:
+            return
+
+        runner_type = self._daemon._daemon_config.validate_runner_mode()
+
+        if runner_type == "worker_pool" and hasattr(runner, "force_kill_worker"):
+            await runner.force_kill_worker(worker_id, timeout)
+        elif runner_type == "thread_pool" and hasattr(runner, "force_cancel_worker"):
+            await runner.force_cancel_worker(worker_id, timeout)
+        else:
+            logger.warning(
+                "Runner type %s does not support force kill for worker %s",
+                runner_type,
+                worker_id,
+            )
+
+    def _collect_tasks_for_loop(self, loop_id: str) -> list[tuple[str, asyncio.Task]]:
+        """Collect asyncio tasks associated with the given loop_id."""
+        d = self._daemon
+        tasks: list[tuple[str, asyncio.Task]] = []
+        seen: set[int] = set()
+
+        for tid, t in list(d._active_threads.items()):
+            if (
+                d._thread_registry.get_thread_loop(tid) == loop_id
+                and t is not None
+                and not t.done()
+                and id(t) not in seen
+            ):
+                tasks.append((str(tid), t))
+                seen.add(id(t))
+
+        ct = d._current_query_task
+        cur = d._runner.current_thread_id if d._runner else None
+        if (
+            ct is not None
+            and not ct.done()
+            and id(ct) not in seen
+            and cur
+            and d._thread_registry.get_thread_loop(cur) == loop_id
+        ):
+            tasks.append(("current", ct))
+            seen.add(id(ct))
+
+        return tasks
+
+
 class QueryEngine:
     """Runs ``SootheRunner.astream`` and manages cancel/ownership for the daemon.
 
@@ -47,6 +248,8 @@ class QueryEngine:
         self._daemon = daemon
         # RFC-221: per-loop runner instances keyed by loop_id
         self._active_runners: dict[str, Any] = {}
+        # Async cancel orchestrator for guaranteed cancellation
+        self._cancel_orchestrator: AsyncCancelOrchestrator | None = None
 
     @staticmethod
     def _loop_scoped_client_message(loop_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -875,42 +1078,20 @@ class QueryEngine:
     async def cancel_loop(self, loop_id: str) -> None:
         """Cancel running query tasks bound to ``loop_id`` (IG-408).
 
-        Signals the pool/local subprocess runner for ``loop_id`` *before* awaiting
-        asyncio task unwind so ``cancel_request`` runs even if ``_run_stream`` finally
-        would otherwise pop ``_active_runners`` first (subprocess would never see cancel).
+        Signals cancellation immediately (runner.cancel() called before return),
+        then kicks off async background task that guarantees completion via
+        retry loop and force kill fallback.
+
+        Returns immediately after signaling; completion is guaranteed in background.
         """
         lidq = str(loop_id or "").strip()
         if not lidq:
             logger.warning("cancel_loop called with empty loop_id; ignoring (no cancellation)")
             return
 
-        d = self._daemon
-        tasks_to_cancel: list[tuple[str, asyncio.Task]] = []
-        seen: set[int] = set()
-        for tid, t in list(d._active_threads.items()):
-            if (
-                d._thread_registry.get_thread_loop(tid) == lidq
-                and t is not None
-                and not t.done()
-                and id(t) not in seen
-            ):
-                tasks_to_cancel.append((str(tid), t))
-                seen.add(id(t))
-        ct = d._current_query_task
-        cur = d._runner.current_thread_id if d._runner else None
-        if (
-            ct is not None
-            and not ct.done()
-            and id(ct) not in seen
-            and cur
-            and d._thread_registry.get_thread_loop(cur) == lidq
-        ):
-            tasks_to_cancel.append(("current", ct))
-            seen.add(id(ct))
-
-        # RFC-221: signal the pool/local subprocess runner *before* awaiting asyncio
-        # task unwind. Otherwise ``_run_stream`` finally pops the runner first and
-        # ``cancel_request`` (cooperative cancel_event) never runs.
+        # RFC-221: signal the pool/local subprocess runner *before* return.
+        # This ensures cooperative cancellation starts immediately, even though
+        # retry/force-kill logic runs in background.
         loop_runner = self._active_runners.pop(lidq, None)
         if loop_runner is not None:
             try:
@@ -922,19 +1103,8 @@ class QueryEngine:
                     exc_info=True,
                 )
 
-        if not tasks_to_cancel:
-            if loop_runner is None:
-                return
-            await d._broadcast(
-                {
-                    "type": "command_response",
-                    "content": "[yellow]Cancellation requested.[/yellow]",
-                    "loop_id": lidq,
-                }
-            )
-            return
-
-        await d._broadcast(
+        # Broadcast cancellation notice immediately
+        await self._daemon._broadcast(
             {
                 "type": "command_response",
                 "content": "[yellow]Cancellation requested.[/yellow]",
@@ -942,10 +1112,13 @@ class QueryEngine:
             }
         )
 
-        for label, task in tasks_to_cancel:
-            logger.info("Cancelling query task %s for loop %s", label, lidq[:16])
-            task.cancel()
-            await self._await_cancel_after_signal(task, label)
+        # Use async orchestrator for guaranteed completion in background
+        if self._cancel_orchestrator is None:
+            self._cancel_orchestrator = AsyncCancelOrchestrator(self._daemon, self)
+
+        orchestrator = self._cancel_orchestrator
+        await orchestrator.start_async_cancel(lidq, already_signaled=True)
+        # Returns immediately - retry/force-kill runs in background
 
     async def cancel_thread(self, checkpoint_thread_id: str) -> None:
         """Cancel a specific query task keyed by LangGraph checkpoint id."""

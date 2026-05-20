@@ -1429,10 +1429,12 @@ class CognitionStepMessage(Vertical):
         self._detail_widget.display = True
 
     def _has_task_activity_body(self) -> bool:
-        """True when the step card should show the task-activity tree panel."""
+        """True when the step card should show the task-activity tree panel.
+
+        Only show when sub agents are actually scheduled/executing, not when
+        step is merely queued/pending.
+        """
         if self._subagent_notes or self._subagent_notes_by_task:
-            return True
-        if self._status in ("pending", "queued"):
             return True
         return bool(self._iter_task_delegation_rows())
 
@@ -1753,12 +1755,10 @@ class CognitionStepMessage(Vertical):
         first_block = True
 
         task_rows = self._iter_task_delegation_rows()
-        if not task_rows and self._status in ("pending", "queued"):
-            status_word = "Queued..." if self._status == "queued" else "Pending..."
-            return Content.styled(
-                f"{branch_gutter}{g.circle_empty} {status_word}",
-                colors.muted,
-            )
+        # Only show content when sub agents are actually scheduled/executing.
+        # Step queued/pending status is handled by _status_widget, not here.
+        if not task_rows:
+            return Content("")
 
         for task_row in task_rows:
             if not first_block:

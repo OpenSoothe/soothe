@@ -135,8 +135,11 @@ persistence:
     memory: soothe_memory
   soothe_postgres_dsn: postgresql://postgres:postgres@localhost:5432/soothe
   default_backend: sqlite
-  checkpointer_pool_size: 8
-  agentloop_pool_size: 12
+  # PostgreSQL pool sizing depends on runner mode (daemon_config.yml):
+  # - worker_pool: Each subprocess has own pool (N workers × pool_size). Use small values (2-4).
+  # - thread_pool: Daemon-level singleton shared by all threads. Can use larger values (8-12).
+  checkpointer_pool_size: 2      # Small default for worker_pool mode
+  agentloop_pool_size: 4         # Small default for worker_pool mode
   metadata_sqlite_path: null
   checkpoint_sqlite_path: null
 protocols:

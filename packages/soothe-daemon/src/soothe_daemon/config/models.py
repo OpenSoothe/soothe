@@ -107,6 +107,12 @@ class WorkerPoolConfig(BaseModel):
     - Grows up to max_pool_size when request load increases
     - Shrinks back to min_pool_size when workers idle out
 
+    PostgreSQL Pool Considerations (multiprocessing spawn isolation):
+    Each worker process has its OWN PostgreSQL connection pools (checkpointer + agentloop).
+    Total PG connections = active_workers × (checkpointer_pool_size + agentloop_pool_size).
+    Use small pool sizes in persistence config (2-4) to avoid connection exhaustion.
+    For high-concurrency scenarios, consider PGBouncer as external connection proxy.
+
     Args:
         enabled: Enable persistent worker pool mode.
         min_pool_size: Minimum workers to keep pooled (startup baseline).
@@ -123,8 +129,8 @@ class WorkerPoolConfig(BaseModel):
     """
 
     enabled: bool = Field(
-        default=True,
-        description="Enable persistent worker pool (reduces ~8s spawn overhead)",
+        default=False,
+        description="Enable persistent worker pool (subprocess isolation, ~8s spawn overhead)",
     )
     min_pool_size: int = Field(
         default=2,
@@ -256,10 +262,91 @@ class DistributedConfig(BaseModel):
     )
 
 
+class ThreadPoolConfig(BaseModel):
+    """Thread pool configuration for loop execution.
+
+    Uses threads instead of subprocesses for lower overhead (~ms vs ~8s spawn).
+    Each thread has a dedicated asyncio event loop; fresh SootheRunner instances
+    are created per request to ensure no user data leakage.
+
+    PostgreSQL Pool Sharing (IG-406):
+    Daemon-level singleton pools are shared by ALL threads in the pool. This is
+    efficient because threads share the same memory space and asyncio event loops
+    can access shared AsyncConnectionPool instances. Use larger pool sizes in
+    persistence config (8-12 checkpointer, 12-30 agentloop) since all threads
+    benefit from shared pool capacity without multiplying connections.
+
+    Trade-offs vs WorkerPoolConfig:
+    - Lower spawn overhead (milliseconds vs ~8s subprocess)
+    - Shared memory space (no config pickling required)
+    - PostgreSQL pools shared across threads (IG-406 singleton)
+    - No CPU parallelism (GIL blocks across threads)
+    - Less crash isolation (thread crash affects daemon process)
+
+    Best for: Development/testing, I/O-bound async workloads, high-concurrency scenarios.
+
+    Default runner mode: lighter weight, faster startup.
+
+    Args:
+        enabled: Enable thread pool mode.
+        min_pool_size: Minimum threads to keep pooled.
+        max_pool_size: Maximum threads to scale up under load.
+        idle_timeout_seconds: Idle thread timeout before graceful exit.
+        max_requests_per_thread: Max requests before thread respawn (prevents memory buildup).
+        request_timeout_seconds: Default per-request timeout (0 = no timeout).
+        thread_startup_timeout_seconds: Timeout for thread startup and event loop init.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable thread pool mode (lighter weight, ~ms vs ~8s subprocess spawn)",
+    )
+    min_pool_size: int = Field(
+        default=2,
+        ge=1,
+        le=64,
+        description="Minimum threads to keep pooled",
+    )
+    max_pool_size: int = Field(
+        default=8,
+        ge=1,
+        le=128,
+        description="Maximum threads to scale up",
+    )
+    idle_timeout_seconds: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        description="Idle thread timeout before shutdown (seconds)",
+    )
+    max_requests_per_thread: int = Field(
+        default=100,
+        ge=1,
+        description="Max requests before thread respawn (prevents memory buildup)",
+    )
+    request_timeout_seconds: int = Field(
+        default=0,
+        ge=0,
+        le=604_800,
+        description="Default per-request timeout in seconds (0 = no timeout)",
+    )
+    thread_startup_timeout_seconds: int = Field(
+        default=10,
+        ge=1,
+        le=60,
+        description="Timeout for thread startup and event loop init (seconds)",
+    )
+
+    def get_effective_pool_size(self) -> int:
+        """Get effective max pool size, ensuring max >= min."""
+        return max(self.min_pool_size, self.max_pool_size)
+
+
 __all__ = [
     "DistributedConfig",
     "HttpRestConfig",
     "RayClusterConfig",
+    "ThreadPoolConfig",
     "TransportConfig",
     "WebSocketConfig",
     "WorkerPoolConfig",

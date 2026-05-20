@@ -41,14 +41,11 @@ from ._runner_checkpoint import CheckpointMixin
 from ._runner_phases import PhasesMixin
 from ._runner_shared import StreamChunk
 from ._types import generate_thread_id
-from .local_runner import LocalLoopRunner, SubprocessLoopError
 
 # Re-export types
 __all__ = [
     "IntentHint",
-    "LocalLoopRunner",
     "SootheRunner",
-    "SubprocessLoopError",
     "generate_thread_id",
 ]
 
@@ -400,18 +397,10 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
             except Exception:
                 logger.debug("Failed to close checkpointer pool", exc_info=True)
 
-        # IG-406: Close shared AgentLoop PostgreSQL pool
-        if self._agentloop_shared_pool is not None:
-            try:
-                from soothe.core.loop.state.persistence.shared_pool import (
-                    SharedPostgreSQLPool,
-                )
-
-                await SharedPostgreSQLPool.close_shared_instance()
-                self._agentloop_shared_pool = None
-                logger.info("Closed shared AgentLoop PostgreSQL pool")
-            except Exception:
-                logger.debug("Failed to close shared AgentLoop pool", exc_info=True)
+        # IG-406: Clear reference to shared AgentLoop PostgreSQL pool
+        # NOTE: Do NOT close the global singleton here - it's shared across all threads
+        # in thread_pool mode. Pool is closed at daemon shutdown via LoopRunnerFactory.
+        self._agentloop_shared_pool = None
 
         await self._close_attached_store(self._memory)
 

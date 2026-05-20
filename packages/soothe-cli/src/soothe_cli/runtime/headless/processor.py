@@ -7,7 +7,6 @@ delegating display to RendererProtocol implementations.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
@@ -44,8 +43,6 @@ if TYPE_CHECKING:
     from soothe_sdk.client.schemas import Plan
 
     from soothe_cli.runtime.presentation.renderer_protocol import RendererProtocol
-
-logger = logging.getLogger(__name__)
 
 _MSG_PAIR_LEN = 2
 
@@ -618,12 +615,6 @@ class EventProcessor:
                             namespace=namespace,
                         ):
                             tool_call_emitted_from_blocks = True
-                            logger.debug(
-                                "tool_call name=%s id=%s is_main=%s",
-                                name,
-                                tool_call_id,
-                                is_main,
-                            )
         elif isinstance(msg.content, str) and msg.content:
             if self._suppress_main_assistant_body_for_headless_obj(msg, is_main=is_main):
                 pass
@@ -657,19 +648,13 @@ class EventProcessor:
 
                 if has_tc_args:
                     tool_call_id = tc.get("id", "")
-                    if self._emit_tool_call_for_renderer(
+                    self._emit_tool_call_for_renderer(
                         name,
                         tc_args,
                         tool_call_id,
                         is_main=is_main,
                         namespace=namespace,
-                    ):
-                        logger.debug(
-                            "tool_call name=%s id=%s is_main=%s",
-                            name,
-                            tool_call_id,
-                            is_main,
-                        )
+                    )
 
     def _handle_tool_message(
         self,
@@ -719,14 +704,6 @@ class EventProcessor:
             payload.is_error
             if payload is not None
             else infer_tool_output_suggests_error(content, tool_name)
-        )
-
-        logger.debug(
-            "tool_result name=%s id=%s status=%s is_main=%s",
-            tool_name,
-            tool_call_id,
-            "error" if is_error else "success",
-            is_main,
         )
 
         self._emit_tool_result_for_renderer(
@@ -842,19 +819,13 @@ class EventProcessor:
                     if not args:
                         continue
                     tool_call_id = block.get("id", "")
-                    if self._emit_tool_call_for_renderer(
+                    self._emit_tool_call_for_renderer(
                         name,
                         args,
                         tool_call_id,
                         is_main=is_main,
                         namespace=namespace,
-                    ):
-                        logger.debug(
-                            "tool_call name=%s id=%s is_main=%s",
-                            name,
-                            tool_call_id,
-                            is_main,
-                        )
+                    )
 
         # Handle tool_calls from serialized AIMessage (model_dump produces tool_calls not tool_call_chunks)
         # IMPORTANT: Only emit if we have non-empty args. Otherwise, let the accumulation
@@ -873,19 +844,13 @@ class EventProcessor:
                         if not args:
                             continue
 
-                        if self._emit_tool_call_for_renderer(
+                        self._emit_tool_call_for_renderer(
                             name,
                             args,
                             tool_call_id,
                             is_main=is_main,
                             namespace=namespace,
-                        ):
-                            logger.debug(
-                                "tool_call name=%s id=%s is_main=%s",
-                                name,
-                                tool_call_id,
-                                is_main,
-                            )
+                        )
 
     def _handle_tool_message_dict(
         self,
@@ -942,14 +907,6 @@ class EventProcessor:
             payload.is_error
             if payload is not None
             else infer_tool_output_suggests_error(content, tool_name)
-        )
-
-        logger.debug(
-            "tool_result name=%s id=%s status=%s is_main=%s",
-            tool_name,
-            tool_call_id,
-            "error" if is_error else "success",
-            is_main,
         )
 
         self._emit_tool_result_for_renderer(

@@ -3,20 +3,14 @@
 # Install: ~/.soothe/config/daemon_config.yml
 # CLI:     soothed --config <path>
 #
-# This file configures the daemon process only (listeners, concurrency, worker pool).
-# Agent models, tools, and protocols live in a separate YAML (SootheConfig),
-# loaded from ~/.soothe/config/config.yml by default.
-#
 # Environment overrides: prefix SOOTHE_DAEMON_, nested keys use __
 # Example: SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__PORT=9000
-#
-# Defaults align with soothe_daemon.config.settings.SootheDaemonConfig and
-# soothe_daemon.config.models (WebSocketConfig, HttpRestConfig, …).
 
+# ============================================================================
+# TRANSPORTS - Network listeners for daemon communication
+# ============================================================================
 transports:
-  # WebSocket is required. This block sets the TCP bind address and TLS for the
-  # shared ASGI app when HTTP REST is enabled below.
-  websocket:
+  websocket:  # Primary transport for CLI/TUI clients
     enabled: true
     host: 127.0.0.1
     port: 8765
@@ -26,53 +20,101 @@ transports:
     cors_origins:
       - http://localhost:*
       - http://127.0.0.1:*
-    max_frame_size: 10485760
-  # HTTP REST (health checks, REST API). When enabled, REST is served on the same
-  # TCP port as WebSocket (unified ASGI stack); host/port/tls fields here are ignored.
-  http_rest:
+    max_frame_size: 10485760  # 10MB WebSocket frame limit
+  http_rest:  # Optional REST API (health checks, metrics)
     enabled: false
     cors_origins:
       - http://localhost:*
       - http://127.0.0.1:*
 
-# Concurrency and safety
-max_concurrent_threads: 100
-max_query_duration_minutes: 4320  # 3 days (0 = unlimited)
-cancel_grace_seconds: 30
-query_timeout_action: cancel
-thread_max_age_hours: 24
-auto_cancel_on_startup: true
-max_input_queue_size: 1000
-max_concurrent_dispatches: 50
-# Cap parallel image-role vision preflight on the daemon (0 = unlimited).
-max_concurrent_vision_preflight: 8
+# ============================================================================
+# CONCURRENCY - Limits for parallel execution and resource protection
+# ============================================================================
+max_concurrent_threads: 100          # Global thread limit across all runners
+max_concurrent_dispatches: 50        # Parallel goal dispatches
+max_concurrent_vision_preflight: 8   # Parallel vision tool preflight checks (0 = unlimited)
+max_input_queue_size: 1000           # Pending requests before rejection
 
-# EventBus JSON wire-size distribution logging (optional diagnostics)
-event_size_stats_enabled: true
+# ============================================================================
+# TIMEOUTS & CANCELLATION - Query lifecycle and graceful shutdown
+# ============================================================================
+max_query_duration_minutes: 4320     # 3 days max query runtime (0 = unlimited)
+thread_max_age_hours: 24             # Thread recycling age
+cancel_grace_seconds: 30             # Initial grace period before cancel sequence
+cancel_retry_count: 3                # Cooperative cancel attempts before force kill
+cancel_retry_interval_seconds: 2.0   # Retry backoff interval
+cancel_force_kill_timeout_seconds: 10.0  # Final timeout before force kill
+query_timeout_action: cancel         # Action on timeout: 'cancel' or 'terminate'
+auto_cancel_on_startup: true         # Cancel stale queries from previous session
+
+# ============================================================================
+# OBSERVABILITY - Diagnostic metrics and logging
+# ============================================================================
+event_size_stats_enabled: true       # Track JSON wire-size distribution
 event_size_stats_interval_seconds: 60
 event_size_stats_idle_pause_seconds: 120
 
-# Distributed loop execution (Ray)
-distributed:
-  enabled: false
-  ray:
-    address: null
-    num_cpus: 0.0
-    object_store_memory: 0
-    max_concurrent_actors: 10
-    actor_lifetime: detached
-    log_to_driver: true
+# ============================================================================
+# RUNNER MODES - Execution backend (enable exactly ONE)
+# Options: thread_pool (default), worker_pool, distributed
+#
+# PostgreSQL Pool Sharing (IG-406):
+# - thread_pool: Daemon-level singleton shared by ALL threads → efficient pool reuse
+# - worker_pool: Each subprocess has its OWN pool (N × pool_size connections)
+#   Due to multiprocessing spawn isolation, pools cannot be cross-process shared.
+#
+# Pool Size Recommendations:
+# - thread_pool mode: Larger pools (8-12 checkpointer, 12-30 agentloop) benefit all threads
+# - worker_pool mode: Small pools (2-4 checkpointer, 4-8 agentloop) to avoid connection bloat
+#   Total connections = (min_pool_size + scale) × pool_size per worker
+# ============================================================================
 
-# Persistent worker pool (local multiprocessing)
-worker_pool:
+# Thread pool - Lightweight async execution (DEFAULT)
+# Uses threads with dedicated event loops; fast startup (~ms vs ~8s subprocess spawn)
+# Best for: Dev/testing, I/O-bound async workloads
+#
+# PostgreSQL connection sharing: Daemon-level singleton pools (IG-406) are shared by
+# ALL threads. Use larger persistence pool sizes (8-12 checkpointer, 12-30 agentloop)
+# since threads benefit from shared pool capacity without multiplying connections.
+thread_pool:
   enabled: true
+  min_pool_size: 2
+  max_pool_size: 8
+  idle_timeout_seconds: 300
+  max_requests_per_thread: 100
+  request_timeout_seconds: 0         # 0 = no per-request timeout
+  thread_startup_timeout_seconds: 10
+
+# Worker pool - Process-based isolation
+# Subprocess workers with memory isolation; pre-warmed at startup
+# Best for: Production, user data isolation, CPU-bound workloads
+#
+# PostgreSQL connection sizing: Each worker process has its OWN connection pool.
+# Total PG connections = (active workers) × (checkpointer_pool_size + agentloop_pool_size)
+# Use small persistence pool sizes (2-4) to avoid connection exhaustion.
+# For high-concurrency worker_pool: consider PGBouncer as external connection proxy.
+worker_pool:
+  enabled: false
   min_pool_size: 2
   max_pool_size: 4
   idle_timeout_seconds: 300
   max_requests_per_worker: 100
-  request_timeout_seconds: 0  # 0 = no per-request timeout
+  request_timeout_seconds: 0         # 0 = no per-request timeout
   heartbeat_interval_seconds: 30
   stuck_worker_timeout_seconds: 180
   dispatch_wait_stats_enabled: true
   dispatch_wait_stats_interval_seconds: 60
   dispatch_wait_stats_idle_pause_seconds: 120
+
+# Distributed - Ray cluster execution
+# Remote actors for horizontal scaling; requires Ray cluster
+# Best for: Large-scale distributed workloads
+distributed:
+  enabled: false
+  ray:
+    address: null                    # Ray cluster address (null = auto-detect)
+    num_cpus: 0.0                    # CPU allocation (0 = auto)
+    object_store_memory: 0           # Memory allocation (0 = auto)
+    max_concurrent_actors: 10
+    actor_lifetime: detached
+    log_to_driver: true

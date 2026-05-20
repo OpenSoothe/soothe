@@ -11,31 +11,34 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from soothe.config import SootheConfig
-from soothe.core.runner.local_runner import LocalLoopRunner
 
 from soothe_daemon.config import SootheDaemonConfig
-from soothe_daemon.config.models import DistributedConfig, WorkerPoolConfig
+from soothe_daemon.config.models import DistributedConfig, ThreadPoolConfig, WorkerPoolConfig
 from soothe_daemon.runner.factory import LoopRunnerFactory
 from soothe_daemon.runner.pool_runner import PoolLoopRunner
+from soothe_daemon.runner.thread_runner import ThreadLoopRunner
 
 
 def _config(
-    distributed: bool = False, worker_pool_enabled: bool = True
+    distributed: bool = False, worker_pool_enabled: bool = True, thread_pool_enabled: bool = False
 ) -> tuple[SootheDaemonConfig, SootheConfig]:
     """Create daemon and agent configs with specific distribution and pool settings."""
     daemon_cfg = SootheDaemonConfig()
     daemon_cfg.distributed = DistributedConfig(enabled=distributed)
     daemon_cfg.worker_pool = WorkerPoolConfig(enabled=worker_pool_enabled)
+    daemon_cfg.thread_pool = ThreadPoolConfig(enabled=thread_pool_enabled)
     agent_cfg = SootheConfig()
     return daemon_cfg, agent_cfg
 
 
 class TestLoopRunnerFactoryPoolMode:
-    """Factory creates PoolLoopRunner when worker_pool.enabled=True (default)."""
+    """Factory creates PoolLoopRunner when worker_pool.enabled=True."""
 
-    def test_create_runner_returns_pool_runner_by_default(self) -> None:
-        """By default, worker_pool.enabled=True, so PoolLoopRunner is used."""
+    def test_create_runner_returns_pool_runner_when_explicitly_enabled(self) -> None:
+        """When worker_pool.enabled=True (and thread_pool disabled), PoolLoopRunner is used."""
         daemon_cfg = SootheDaemonConfig()
+        daemon_cfg.worker_pool = WorkerPoolConfig(enabled=True)
+        daemon_cfg.thread_pool = ThreadPoolConfig(enabled=False)
         agent_cfg = SootheConfig()
         factory = LoopRunnerFactory(daemon_cfg, agent_cfg)
         runner = factory.create_runner("loop-abc")
@@ -43,6 +46,8 @@ class TestLoopRunnerFactoryPoolMode:
 
     def test_create_runner_unique_per_loop_id(self) -> None:
         daemon_cfg = SootheDaemonConfig()
+        daemon_cfg.worker_pool = WorkerPoolConfig(enabled=True)
+        daemon_cfg.thread_pool = ThreadPoolConfig(enabled=False)
         agent_cfg = SootheConfig()
         factory = LoopRunnerFactory(daemon_cfg, agent_cfg)
         r1 = factory.create_runner("loop-1")
@@ -52,24 +57,28 @@ class TestLoopRunnerFactoryPoolMode:
         assert r2._loop_id == "loop-2"
 
 
-class TestLoopRunnerFactoryLocalMode:
-    """Factory creates LocalLoopRunner when worker_pool.enabled=False and distributed=False."""
+class TestLoopRunnerFactoryThreadMode:
+    """Factory creates ThreadLoopRunner when thread_pool.enabled=True."""
 
-    def test_create_runner_returns_local_runner_when_pool_disabled(self) -> None:
-        """When pool disabled and distributed disabled, LocalLoopRunner is used."""
-        daemon_cfg, agent_cfg = _config(distributed=False, worker_pool_enabled=False)
+    def test_create_runner_returns_thread_runner_when_thread_pool_enabled(self) -> None:
+        """When thread pool enabled, ThreadLoopRunner is used."""
+        daemon_cfg, agent_cfg = _config(
+            distributed=False, worker_pool_enabled=False, thread_pool_enabled=True
+        )
         factory = LoopRunnerFactory(daemon_cfg, agent_cfg)
         runner = factory.create_runner("loop-abc")
-        assert isinstance(runner, LocalLoopRunner)
+        assert isinstance(runner, ThreadLoopRunner)
 
-    def test_local_mode_does_not_import_ray(self) -> None:
-        """Creating a factory or runner in local mode must not import Ray."""
+    def test_thread_mode_does_not_import_ray(self) -> None:
+        """Creating a factory or runner in thread mode must not import Ray."""
         # Ensure ray is not in sys.modules at all after factory creation
-        daemon_cfg, agent_cfg = _config(distributed=False, worker_pool_enabled=False)
+        daemon_cfg, agent_cfg = _config(
+            distributed=False, worker_pool_enabled=False, thread_pool_enabled=True
+        )
         with patch.dict(sys.modules, {"ray": None}):
             factory = LoopRunnerFactory(daemon_cfg, agent_cfg)
             runner = factory.create_runner("loop-xyz")
-        assert isinstance(runner, LocalLoopRunner)
+        assert isinstance(runner, ThreadLoopRunner)
 
 
 class TestLoopRunnerFactoryDistributedMode:
@@ -109,23 +118,70 @@ class TestLoopRunnerFactoryDistributedMode:
 
 
 class TestLoopRunnerFactoryDefaultConfig:
-    """Default SootheDaemonConfig has distributed.enabled=False and worker_pool.enabled=True."""
+    """Default SootheDaemonConfig has distributed.enabled=False and thread_pool.enabled=True."""
 
-    def test_default_config_has_pool_enabled(self) -> None:
-        """Default config enables worker pool (PoolLoopRunner)."""
+    def test_default_config_has_thread_pool_enabled(self) -> None:
+        """Default config enables thread pool (ThreadLoopRunner)."""
         daemon_cfg = SootheDaemonConfig()
         agent_cfg = SootheConfig()
         assert daemon_cfg.distributed.enabled is False
-        assert daemon_cfg.worker_pool.enabled is True
+        assert daemon_cfg.thread_pool.enabled is True
+        assert daemon_cfg.worker_pool.enabled is False
         factory = LoopRunnerFactory(daemon_cfg, agent_cfg)
         runner = factory.create_runner("loop-default")
-        assert isinstance(runner, PoolLoopRunner)
+        assert isinstance(runner, ThreadLoopRunner)
 
-    def test_explicit_local_mode_returns_local_runner(self) -> None:
-        """Explicitly disabling pool returns LocalLoopRunner."""
+    def test_explicit_worker_pool_returns_pool_runner(self) -> None:
+        """Explicitly enabling worker pool and disabling thread pool returns PoolLoopRunner."""
         daemon_cfg = SootheDaemonConfig()
-        daemon_cfg.worker_pool = WorkerPoolConfig(enabled=False)
+        daemon_cfg.worker_pool = WorkerPoolConfig(enabled=True)
+        daemon_cfg.thread_pool = ThreadPoolConfig(enabled=False)
         agent_cfg = SootheConfig()
         factory = LoopRunnerFactory(daemon_cfg, agent_cfg)
         runner = factory.create_runner("loop-local")
-        assert isinstance(runner, LocalLoopRunner)
+        assert isinstance(runner, PoolLoopRunner)
+
+
+class TestLoopRunnerFactoryModeValidation:
+    """Tests for validate_runner_mode() ensuring exactly one mode enabled."""
+
+    def test_raises_value_error_when_no_mode_enabled(self) -> None:
+        """When all modes disabled, validation fails."""
+        daemon_cfg = SootheDaemonConfig()
+        daemon_cfg.worker_pool = WorkerPoolConfig(enabled=False)
+        daemon_cfg.thread_pool = ThreadPoolConfig(enabled=False)
+        daemon_cfg.distributed = DistributedConfig(enabled=False)
+        agent_cfg = SootheConfig()
+        with pytest.raises(ValueError, match="No runner mode enabled"):
+            LoopRunnerFactory(daemon_cfg, agent_cfg)
+
+    def test_raises_value_error_when_multiple_modes_enabled(self) -> None:
+        """When multiple modes enabled, validation fails."""
+        daemon_cfg = SootheDaemonConfig()
+        daemon_cfg.worker_pool = WorkerPoolConfig(enabled=True)
+        daemon_cfg.thread_pool = ThreadPoolConfig(enabled=True)
+        agent_cfg = SootheConfig()
+        with pytest.raises(ValueError, match="Multiple runner modes enabled"):
+            LoopRunnerFactory(daemon_cfg, agent_cfg)
+
+    def test_worker_pool_valid_when_only_one_enabled(self) -> None:
+        """Worker pool is valid when only it is enabled."""
+        daemon_cfg = SootheDaemonConfig()
+        daemon_cfg.worker_pool = WorkerPoolConfig(enabled=True)
+        daemon_cfg.thread_pool = ThreadPoolConfig(enabled=False)
+        daemon_cfg.distributed = DistributedConfig(enabled=False)
+        agent_cfg = SootheConfig()
+        factory = LoopRunnerFactory(daemon_cfg, agent_cfg)
+        runner = factory.create_runner("loop-pool")
+        assert isinstance(runner, PoolLoopRunner)
+
+    def test_thread_pool_valid_when_only_one_enabled(self) -> None:
+        """Thread pool is valid when only it is enabled (also default)."""
+        daemon_cfg = SootheDaemonConfig()
+        daemon_cfg.worker_pool = WorkerPoolConfig(enabled=False)
+        daemon_cfg.thread_pool = ThreadPoolConfig(enabled=True)
+        daemon_cfg.distributed = DistributedConfig(enabled=False)
+        agent_cfg = SootheConfig()
+        factory = LoopRunnerFactory(daemon_cfg, agent_cfg)
+        runner = factory.create_runner("loop-thread")
+        assert isinstance(runner, ThreadLoopRunner)
