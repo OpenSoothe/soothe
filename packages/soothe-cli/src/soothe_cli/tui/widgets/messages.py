@@ -1703,9 +1703,12 @@ class CognitionStepMessage(Vertical):
         self._status_widget.display = True
 
     def _tool_stats_suffix_for_rows(self, rows: list[_StepToolRow]) -> str:
-        """Per-tool-kind counts for a set of tool rows (e.g. nested task children)."""
+        """Per-tool-kind counts for a set of tool rows (e.g. nested task children).
+
+        Sorted by call count descending (most calls first). Shows ``+N more`` for
+        additional tool kinds beyond the display limit.
+        """
         ids_by_display: dict[str, set[str]] = {}
-        order: list[str] = []
         for row in rows:
             tcid = str(row.tool_call_id).strip()
             if not tcid:
@@ -1713,15 +1716,18 @@ class CognitionStepMessage(Vertical):
             display = get_tool_display_name(_normalize_tool_name_for_arg_map(row.tool_name or ""))
             if display not in ids_by_display:
                 ids_by_display[display] = set()
-                order.append(display)
             ids_by_display[display].add(tcid)
-        if not order:
+        if not ids_by_display:
             return ""
+        # Sort by count descending (most calls first)
+        sorted_kinds = sorted(
+            ids_by_display.keys(), key=lambda k: len(ids_by_display[k]), reverse=True
+        )
         parts: list[str] = []
-        for name in order[:_MAX_STEP_STAT_TOOL_KINDS]:
+        for name in sorted_kinds[:_MAX_STEP_STAT_TOOL_KINDS]:
             parts.append(f"{name}({len(ids_by_display[name])})")
         text = ", ".join(parts)
-        extra = len(order) - _MAX_STEP_STAT_TOOL_KINDS
+        extra = len(sorted_kinds) - _MAX_STEP_STAT_TOOL_KINDS
         if extra > 0:
             text += f" +{extra} more"
         return text
@@ -1885,9 +1891,11 @@ class CognitionStepMessage(Vertical):
         return True
 
     def _rebuild_tool_stats(self) -> None:
-        """Recompute per-tool display counts for the step status line (direct tools only)."""
+        """Recompute per-tool display counts for the step status line (direct tools only).
+
+        Sorted by count descending (most calls first).
+        """
         ids_by_display: dict[str, set[str]] = {}
-        order: list[str] = []
         for row in self._rows:
             if not self._row_counts_for_step_status_line(row):
                 continue
@@ -1897,10 +1905,12 @@ class CognitionStepMessage(Vertical):
             display = get_tool_display_name(_normalize_tool_name_for_arg_map(row.tool_name or ""))
             if display not in ids_by_display:
                 ids_by_display[display] = set()
-                order.append(display)
             ids_by_display[display].add(tcid)
-        self._stats_order = order
-        self._stats_counts = {name: len(ids_by_display[name]) for name in order}
+        # Sort by count descending (most calls first)
+        self._stats_order = sorted(
+            ids_by_display.keys(), key=lambda k: len(ids_by_display[k]), reverse=True
+        )
+        self._stats_counts = {name: len(ids_by_display[name]) for name in self._stats_order}
         self._refresh_task_activity_display()
 
     def _stats_title_suffix(self) -> str:
