@@ -282,20 +282,31 @@ class AgentBuilder:
             return resolve_policy(self._config)
 
     def _load_plugins(self) -> None:
-        """Load plugins from global registry."""
+        """Load plugins from global registry.
+
+        Uses thread pool when already in async context (e.g., daemon thread runner)
+        to avoid skipping plugin loading entirely.
+        """
         import asyncio
+        from concurrent.futures import ThreadPoolExecutor
 
         from soothe.plugin.global_registry import load_plugins
 
         plugins_start = time.perf_counter()
         try:
+            coro = load_plugins(self._config)
             try:
                 asyncio.get_running_loop()
-                # Already in async context, skip for now
-                logger.debug("[Init] Skipping plugin loading in async context")
+
+                # Already in async context: run on a worker thread with fresh loop
+                def _run_async_on_fresh_loop() -> None:
+                    asyncio.run(coro)
+
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    pool.submit(_run_async_on_fresh_loop).result()
             except RuntimeError:
                 # No running loop, safe to use asyncio.run()
-                asyncio.run(load_plugins(self._config))
+                asyncio.run(coro)
         except RuntimeError:
             logger.debug("[Init] Plugin loading failed, will load on demand")
         plugins_ms = (time.perf_counter() - plugins_start) * 1000

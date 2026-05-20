@@ -268,59 +268,74 @@ class ConcurrentQueryBenchmark:
         query_start = time.perf_counter()
 
         try:
-            # Generate unique query to avoid duplicate filtering
-            unique_question = f"Benchmark query {query_id}: Calculate {query_id} + {query_id * 2}"
-            await client.send_input(text=unique_question)
+            # First, create a new loop for this query
+            await client.send_loop_new()
 
-            # Wait for first response (stream start or status event)
-            # We measure latency to first response chunk, not completion
+            # Wait for events and process sequentially:
+            # 1. loop_new_response -> get loop_id, then subscribe
+            # 2. loop_subscribe_response -> then send input
+            # 3. message/output/status -> query completed
+            loop_id = None
+            subscribed = False
+            input_sent = False
+            received_response = False
             timeout_seconds = 30.0 if not is_warmup else 10.0
 
-            async def receive_first_response():
-                received_thread_id = None
+            async for event in client.receive():
+                event_type = event.get("type")
 
-                async for event in client.receive():
-                    event_type = event.get("type")
+                # Capture loop_id from loop_new_response
+                if event_type == "loop_new_response" and not loop_id:
+                    loop_id = event.get("loop_id")
+                    logger.debug(f"Query {query_id} created loop {loop_id[:8] if loop_id else 'None'}")
+                    # Subscribe to the loop for events
+                    await client.send_loop_subscribe(loop_id, verbosity="normal")
 
-                    # First, capture the thread_id from status events
-                    # The daemon sends status events with thread_id when processing queries
-                    if event_type == "status":
-                        thread_id = event.get("thread_id")
-                        state = event.get("state")
+                # Handle subscribe confirmation - send input after subscribed
+                if event_type in ["loop_subscribe_response", "subscription_confirmed"] and not input_sent:
+                    subscribed = True
+                    logger.debug(f"Query {query_id} subscribed to loop, sending input")
+                    # Generate unique query
+                    unique_question = f"Benchmark query {query_id}: Calculate {query_id} + {query_id * 2}"
+                    await client.send_input(loop_id=loop_id, text=unique_question)
+                    input_sent = True
 
-                        # Capture the thread_id assigned to our query
-                        if thread_id and not received_thread_id:
-                            received_thread_id = thread_id
-                            logger.debug(f"Query {query_id} assigned thread {thread_id[:8]}")
+                # Check for response events
+                if event_type == "status":
+                    thread_id = event.get("thread_id")
+                    state = event.get("state")
+                    if thread_id and state == "idle":
+                        logger.debug(f"Query {query_id} completed")
+                        received_response = True
+                        break
 
-                        # Wait for our specific thread to complete (state="idle")
-                        if thread_id and thread_id == received_thread_id and state == "idle":
-                            logger.debug(f"Query {query_id} completed on thread {thread_id[:8]}")
-                            return True
+                if event_type in ["message", "output", "stream_start"]:
+                    received_response = True
 
-                    # Also accept message/output events (contain actual LLM response)
-                    if event_type in ["message", "output", "stream_start"]:
-                        return True
+                if event_type == "daemon_status":
+                    data = event.get("data", {})
+                    if "input_queue_depth" in data:
+                        self.metrics.queue_depth_samples.append(data["input_queue_depth"])
+                    if "active_tasks" in data:
+                        self.metrics.task_count_samples.append(data["active_tasks"])
+                    if "client_count" in data:
+                        self.metrics.client_count_samples.append(data["client_count"])
 
-                    # Collect resource metrics from daemon status events
-                    if event_type == "daemon_status":
-                        data = event.get("data", {})
-                        if "input_queue_depth" in data:
-                            self.metrics.queue_depth_samples.append(data["input_queue_depth"])
-                        if "active_tasks" in data:
-                            self.metrics.task_count_samples.append(data["active_tasks"])
-                        if "client_count" in data:
-                            self.metrics.client_count_samples.append(data["client_count"])
-                return False
+                # Check for errors
+                if event_type == "error":
+                    raise Exception(f"Query error: {event}")
 
-            response_received = await asyncio.wait_for(
-                receive_first_response(),
-                timeout=timeout_seconds
-            )
+                # Timeout check
+                elapsed = time.perf_counter() - query_start
+                if elapsed > timeout_seconds:
+                    break
+
+            if not loop_id:
+                raise Exception("No loop_id received from loop_new")
 
             query_latency_ms = (time.perf_counter() - query_start) * 1000
 
-            if response_received:
+            if received_response:
                 logger.debug(f"Query {query_id} completed in {query_latency_ms:.2f}ms")
                 return query_latency_ms
             else:
