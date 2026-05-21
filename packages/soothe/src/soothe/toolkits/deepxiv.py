@@ -15,14 +15,162 @@ Tools:
 
 from __future__ import annotations
 
+import inspect
 import logging
+import os
 from functools import wraps
 from typing import Any
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from soothe.config.env import _ENV_VAR_RE, _resolve_env
+
 logger = logging.getLogger(__name__)
+
+_PREVIEW_LEN = 100
+_auth_failure_logged = False
+_DEEPXIV_TOKEN_ENV_VARS = ("DEEPXIV_API_KEY", "DEEPXIV_TOKEN")
+_DEEPXIV_TOKEN_ENV_HINT = "DEEPXIV_API_KEY or DEEPXIV_TOKEN"
+
+
+def _deepxiv_env_token() -> str | None:
+    """Read token from ``DEEPXIV_API_KEY`` or ``DEEPXIV_TOKEN`` (first non-empty wins)."""
+    for name in _DEEPXIV_TOKEN_ENV_VARS:
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return None
+
+
+def resolve_deepxiv_token(token: str | None) -> str | None:
+    """Resolve DeepXiv API token from config value or env (``DEEPXIV_API_KEY`` / ``DEEPXIV_TOKEN``)."""
+    if token:
+        text = str(token).strip()
+        if text:
+            resolved = _resolve_env(text)
+            if not _ENV_VAR_RE.match(resolved):
+                return resolved
+    return _deepxiv_env_token()
+
+
+def _deepxiv_exception_kind(exc: Exception) -> str:
+    """Classify a DeepXiv SDK exception for logging and user messages."""
+    try:
+        from deepxiv_sdk import (
+            APIError,
+            AuthenticationError,
+            NotFoundError,
+            RateLimitError,
+        )
+    except ImportError:
+        name = type(exc).__name__
+        if name == "AuthenticationError":
+            return "auth_error"
+        if name == "RateLimitError":
+            return "rate_limit"
+        if name == "NotFoundError":
+            return "not_found"
+        if name == "APIError":
+            return "api_error"
+        return "unknown"
+
+    if isinstance(exc, AuthenticationError):
+        return "auth_error"
+    if isinstance(exc, RateLimitError):
+        return "rate_limit"
+    if isinstance(exc, NotFoundError):
+        return "not_found"
+    if isinstance(exc, APIError):
+        return "api_error"
+    return "unknown"
+
+
+def _deepxiv_exception_message(exc: Exception) -> str:
+    """Map a DeepXiv SDK exception to a user-facing tool result string."""
+    kind = _deepxiv_exception_kind(exc)
+    if kind == "auth_error":
+        return (
+            f"Error: Invalid DeepXiv token. "
+            f"Set {_DEEPXIV_TOKEN_ENV_HINT} or register at https://data.rag.ac.cn"
+        )
+    if kind == "rate_limit":
+        return (
+            "Error: Daily API limit reached. Register at https://data.rag.ac.cn for higher limits."
+        )
+    if kind == "not_found":
+        return "Error: Paper not found. Check the ID and try again."
+    if kind == "api_error":
+        return f"Error: DeepXiv API error - {exc}"
+    return f"Error: DeepXiv operation failed - {exc}"
+
+
+def _log_deepxiv_exception(tool_name: str, preview: str, exc: Exception) -> None:
+    """Log SDK failures without noisy tracebacks for expected API errors."""
+    global _auth_failure_logged
+    kind = _deepxiv_exception_kind(exc)
+    if kind == "auth_error":
+        if not _auth_failure_logged:
+            logger.warning(
+                "[DeepXiv] API authentication failed (invalid or expired token). "
+                "Set %s or register at https://data.rag.ac.cn",
+                _DEEPXIV_TOKEN_ENV_HINT,
+            )
+            _auth_failure_logged = True
+        logger.info("[DeepXiv] %s %s status=auth_error", tool_name, preview)
+        return
+    if kind == "rate_limit":
+        logger.warning("[DeepXiv] %s %s status=rate_limit error=%s", tool_name, preview, exc)
+        return
+    if kind in ("not_found", "api_error"):
+        logger.warning("[DeepXiv] %s %s status=%s error=%s", tool_name, preview, kind, exc)
+        return
+    logger.warning(
+        "[DeepXiv] %s %s status=exception error=%s",
+        tool_name,
+        preview,
+        exc,
+        exc_info=True,
+    )
+
+
+def _preview(value: object, *, max_len: int = _PREVIEW_LEN) -> str:
+    text = " ".join(str(value).split())
+    if len(text) > max_len:
+        return text[: max_len - 1] + "…"
+    return text
+
+
+def _format_call_preview(args: tuple[object, ...], kwargs: dict[str, object]) -> str:
+    """Build a short log fragment from tool call arguments."""
+    parts: list[str] = []
+    if len(args) > 1:
+        parts.append(f"arg0={_preview(args[1])}")
+    for key in ("query", "paper_id", "section_name", "source", "size", "days", "limit"):
+        if key in kwargs and kwargs[key] is not None:
+            parts.append(f"{key}={_preview(kwargs[key])}")
+    return " ".join(parts) if parts else "(no args)"
+
+
+def _log_deepxiv_done(tool_name: str, preview: str, result: str) -> None:
+    """Log tool completion outcome (mirrors wizsearch engine status visibility)."""
+    if result.startswith("Error"):
+        logger.warning(
+            "[DeepXiv] %s %s status=error message=%s",
+            tool_name,
+            preview,
+            _preview(result, max_len=200),
+        )
+    elif result.startswith("No ") or "not found" in result.lower():
+        logger.info("[DeepXiv] %s %s status=no_results", tool_name, preview)
+    else:
+        logger.info(
+            "[DeepXiv] %s %s status=success output_chars=%d",
+            tool_name,
+            preview,
+            len(result),
+        )
+
 
 # ---------------------------------------------------------------------------
 # Error Handling
@@ -34,35 +182,38 @@ def _safe_call(tool_func):  # type: ignore[no-untyped-def]
 
     @wraps(tool_func)
     def wrapper(*args, **kwargs):  # type: ignore[no-untyped-def]
-        try:
-            return tool_func(*args, **kwargs)
-        except Exception as e:
-            # Handle DeepXiv SDK exceptions if available
-            try:
-                from deepxiv_sdk.exceptions import (
-                    APIError,
-                    AuthenticationError,
-                    NotFoundError,
-                    RateLimitError,
-                )
+        params = list(inspect.signature(tool_func).parameters)
+        bound_method = bool(params and params[0] == "self" and args)
+        if bound_method:
+            self, call_args = args[0], args[1:]
+            tool_name = getattr(self, "name", tool_func.__qualname__)
+            preview = _format_call_preview(call_args, kwargs)
+        else:
+            tool_name = tool_func.__qualname__
+            preview = _format_call_preview(args, kwargs)
 
-                if isinstance(e, AuthenticationError):
-                    return (
-                        "Error: Invalid DeepXiv token. "
-                        "Configure DEEPXIV_API_KEY or get one at data.rag.ac.cn"
-                    )
-                if isinstance(e, RateLimitError):
-                    return (
-                        "Error: Daily API limit reached. "
-                        "Register at data.rag.ac.cn for higher limits."
-                    )
-                if isinstance(e, NotFoundError):
-                    return "Error: Paper not found. Check the ID and try again."
-                if isinstance(e, APIError):
-                    return f"Error: DeepXiv API error - {e}"
-            except ImportError:
-                pass  # deepxiv_sdk not installed
-            return f"Error: DeepXiv operation failed - {e}"
+        logger.info("[DeepXiv] %s start %s", tool_name, preview)
+        try:
+            if bound_method:
+                result = tool_func(self, *call_args, **kwargs)
+            else:
+                result = tool_func(*args, **kwargs)
+        except Exception as e:
+            _log_deepxiv_exception(tool_name, preview, e)
+            result = _deepxiv_exception_message(e)
+            if _deepxiv_exception_kind(e) != "auth_error" and (
+                tool_name != "deepxiv_search" or result.startswith("Error")
+            ):
+                _log_deepxiv_done(tool_name, preview, result)
+            return result
+
+        if isinstance(result, str):
+            # deepxiv_search logs structured hit counts in _run
+            if tool_name != "deepxiv_search":
+                _log_deepxiv_done(tool_name, preview, result)
+            elif result.startswith("Error") or result.startswith("No "):
+                _log_deepxiv_done(tool_name, preview, result)
+        return result
 
     return wrapper
 
@@ -174,7 +325,7 @@ class DeepxivToolkit:
         max_retries: int = 3,
     ) -> None:
         """Initialize the DeepXiv toolkit."""
-        self.token = token
+        self.token = resolve_deepxiv_token(token)
         self.timeout = timeout
         self.max_retries = max_retries
         self._reader: Any | None = None
@@ -191,7 +342,16 @@ class DeepxivToolkit:
                     timeout=self.timeout,
                     max_retries=self.max_retries,
                 )
+                logger.info(
+                    "[DeepXiv] Reader initialized (timeout=%ss, max_retries=%d, token=%s)",
+                    self.timeout,
+                    self.max_retries,
+                    "set" if self.token else "anonymous",
+                )
             except ImportError:
+                logger.warning(
+                    "[DeepXiv] deepxiv_sdk not installed; install soothe[research] for academic tools"
+                )
                 raise RuntimeError(
                     "deepxiv_sdk not installed. Install with: pip install 'soothe[research]'"
                 )
@@ -279,8 +439,19 @@ class DeepxivSearchTool(BaseTool):
         total = result.get("total_count", len(papers))
 
         if not papers:
+            logger.info(
+                "[DeepXiv] deepxiv_search query=%r status=no_results total=%d",
+                query,
+                total,
+            )
             return "No papers found matching your query."
 
+        logger.info(
+            "[DeepXiv] deepxiv_search query=%r status=success papers=%d total=%d",
+            _preview(query, max_len=80),
+            len(papers),
+            total,
+        )
         lines = [f"Found {total} papers (showing {len(papers)}):\n"]
         for paper in papers:
             paper_id = (
@@ -704,8 +875,6 @@ class DeepxivPlugin:
         Args:
             context: Plugin context with config and logger.
         """
-        import os
-
         # Get config from soothe_config
         sc = getattr(context, "soothe_config", None)
         token: str | None = None
@@ -715,13 +884,9 @@ class DeepxivPlugin:
         if sc and hasattr(sc, "tools"):
             deepxiv_config = getattr(sc.tools, "deepxiv", None)
             if deepxiv_config:
-                token = getattr(deepxiv_config, "token", None) or os.environ.get("DEEPXIV_API_KEY")
+                token = getattr(deepxiv_config, "token", None)
                 timeout = getattr(deepxiv_config, "timeout", 60)
                 max_retries = getattr(deepxiv_config, "max_retries", 3)
-
-        # Fallback to environment variable
-        if not token:
-            token = os.environ.get("DEEPXIV_API_KEY")
 
         try:
             toolkit = DeepxivToolkit(

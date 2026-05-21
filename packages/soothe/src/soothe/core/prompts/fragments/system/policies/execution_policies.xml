@@ -1,29 +1,17 @@
 <EXECUTION_POLICIES>
-**Milestone steps**: Plan steps are checkpoints the execute-phase agent owns end-to-end; it may use reasoning and local todos inside a step. Each ``description`` states the milestone only—fewer than 20 words—not a full procedure or tool script.
+**Milestone steps**: Each step is a checkpoint the executor owns end-to-end. ``description`` states the milestone (<20 words), not a procedure.
 
-**Granularity**:
-- First plan-generate (``<GOAL_PROGRESS>`` execute iteration 1, no execute evidence in ledger): **1–2 steps only** — never 3+
-- Later plan-generate calls (execute iteration 2+): 1–3 steps per decision
-- Each step has a checkable ``expected_output``
-- Step ``id``: short local tokens (e.g. ``01``, ``02``, or next free per ``<PLAN_STEP_ID_HINT>``). ``dependencies`` must reference those same ``id`` strings (runtime may normalize numeric spelling; prefer exact matches).
-- ``description``: imperative outcome/scope line, not the raw goal string
-- Merge related filesystem reads into one step when they are sequential tool-only work
-- ``parallel``: independent readonly steps only, with descriptions naming disjoint scopes (e.g. separate explore targets)
+**Step count**:
+- First wave (iteration 1, empty ledger): **1–2 steps** (never 3+). Runtime truncates extras.
+- Later waves (iteration 2+): **1–3 steps**.
 
-**Progress-aware** (use assess ``Progress`` when present): ``high`` → favor 1–2 closing or verify steps. On the **first** plan-generate, stay within the 1–2 step hard cap even when Progress is ``none`` / ``low`` / ``medium`` (bundle recon into one explore milestone rather than many steps). On later iterations, stage within the 1–3 cap.
+**Progress-aware**: ``high`` → 1–2 closing steps. ``none/low/medium`` → stage within cap.
 
-**Filesystem discovery**:
-- Do not fan out many parallel shallow ``list_files`` / ``glob`` calls on overlapping paths; prefer one reconnaissance step then sequential targeted ``read_file`` / ``grep``.
-- Use ``parallel`` execution_mode only when steps are readonly and name **disjoint** subtrees or files; avoid parallel “scan the whole repo” patterns.
-- ``glob`` can be expensive on large workspaces—use narrow patterns and depth limits when possible.
+**Parallel execution**: Only for independent readonly steps with disjoint scopes. Default ``sequential``.
 
-**Readonly discovery plans**:
-- When the next work is mostly **readonly** discovery (search, skim files, map structure), prefer concise targeted steps over broad repository-wide scans.
-- Split into multiple discovery steps only when scopes are genuinely disjoint.
+**DAG dependencies**: Use ``dependencies`` field referencing sibling ``id`` strings (e.g. ``01`` → ``02``).
 
-**First-wave constraint** (overrides general granularity on the first plan-generate):
-- When ``<GOAL_PROGRESS>`` shows execute iteration **1** and the ledger has no execute-step tool/subagent results: emit **1–2 steps only** (never 3+). Runtime truncates extras.
-- Rationale: validate direction before committing to a long DAG; catch wrong approaches early.
+**Discovery**: Prefer one recon step + targeted reads over many shallow parallel scans. ``glob`` needs narrow patterns.
 
-**Step consolidation**: Merge sequential reads of related files or single-topic discovery+analysis into one milestone when they are not independent parallel work. Split only for true parallelism or different subagent needs.
+**On failure**: Propose different approach, do not repeat same step text.
 </EXECUTION_POLICIES>
