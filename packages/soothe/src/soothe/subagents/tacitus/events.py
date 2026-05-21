@@ -6,14 +6,13 @@ from typing import Literal
 
 from pydantic import ConfigDict
 from soothe_sdk.core.events import SootheEvent
-from soothe_sdk.core.subagent_wire import (
-    SUBAGENT_TACITUS_COMPLETED,
-    SUBAGENT_TACITUS_GATHER_SUMMARY,
-    SUBAGENT_TACITUS_STARTED,
-)
 from soothe_sdk.core.verbosity import VerbosityTier
 
 from soothe.core.events import register_event
+
+SUBAGENT_TACITUS_STARTED = "soothe.subagent.tacitus.started"
+SUBAGENT_TACITUS_GATHER_SUMMARY = "soothe.subagent.tacitus.gather.summary"
+SUBAGENT_TACITUS_COMPLETED = "soothe.subagent.tacitus.completed"
 
 
 class TacitusStartedEvent(SootheEvent):
@@ -64,6 +63,9 @@ register_event(
 )
 
 __all__ = [
+    "SUBAGENT_TACITUS_COMPLETED",
+    "SUBAGENT_TACITUS_GATHER_SUMMARY",
+    "SUBAGENT_TACITUS_STARTED",
     "TacitusCompletedEvent",
     "TacitusGatherSummaryEvent",
     "TacitusStartedEvent",

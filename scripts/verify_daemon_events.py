@@ -37,7 +37,7 @@ from soothe_sdk.client.websocket import WebSocketClient
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, extract_tool_call_updates_from_wire_message
 from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 from soothe_sdk.core.subagent_wire import (
-    ALLOWLISTED_SUBAGENT_EVENT_TYPES,
+    is_allowlisted_subagent_event_type,
     parse_subagent_wire_agent,
 )
 
@@ -346,7 +346,7 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                                 f"Legacy tool_call_id without unified format: {tool_call_id}"
                             )
 
-                elif inner_type in ALLOWLISTED_SUBAGENT_EVENT_TYPES:
+                elif is_allowlisted_subagent_event_type(inner_type):
                     stats.subagent_events_by_type[inner_type] += 1
                     agent = parse_subagent_wire_agent(inner_type)
                     if agent:
@@ -432,7 +432,7 @@ def validate_event(event: dict[str, Any], stats: EventStats) -> None:
                 )
 
     # Check for subagent wire events (unwrapped)
-    elif event_type in ALLOWLISTED_SUBAGENT_EVENT_TYPES:
+    elif is_allowlisted_subagent_event_type(event_type):
         stats.subagent_events_by_type[event_type] += 1
         agent = parse_subagent_wire_agent(event_type)
         if agent:

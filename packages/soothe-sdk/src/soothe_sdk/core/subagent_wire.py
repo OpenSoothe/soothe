@@ -1,63 +1,65 @@
 """Curated ``soothe.subagent.*`` wire protocol (metadata-only, IG-338).
 
-Built-in subagents emit only allowlisted types with bounded string fields.
+Provides registration, structural validation, payload clipping, and stream emission.
+Event type strings live in each subagent (or plugin) ``events`` module — not in this SDK.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
-# --- Browser ---
-SUBAGENT_BROWSER_STARTED = "soothe.subagent.browser.started"
-SUBAGENT_BROWSER_COMPLETED = "soothe.subagent.browser.completed"
-SUBAGENT_BROWSER_STEP_COMPLETED = "soothe.subagent.browser.step.completed"
+_REGISTERED_SUBAGENT_WIRE_TYPES: set[str] = set()
 
-# --- Claude ---
-SUBAGENT_CLAUDE_STARTED = "soothe.subagent.claude.started"
-SUBAGENT_CLAUDE_STEP_COMPLETED = "soothe.subagent.claude.step.completed"
-SUBAGENT_CLAUDE_COMPLETED = "soothe.subagent.claude.completed"
-SUBAGENT_CLAUDE_FAILED = "soothe.subagent.claude.failed"
-
-# --- Explore ---
-SUBAGENT_EXPLORE_STARTED = "soothe.subagent.explore.started"
-SUBAGENT_EXPLORE_MILESTONE = "soothe.subagent.explore.milestone"
-SUBAGENT_EXPLORE_STEP_COMPLETED = "soothe.subagent.explore.step.completed"
-SUBAGENT_EXPLORE_COMPLETED = "soothe.subagent.explore.completed"
-
-# --- Tacitus (public-domain research; RFC-619) ---
-SUBAGENT_TACITUS_STARTED = "soothe.subagent.tacitus.started"
-SUBAGENT_TACITUS_GATHER_SUMMARY = "soothe.subagent.tacitus.gather.summary"
-SUBAGENT_TACITUS_COMPLETED = "soothe.subagent.tacitus.completed"
-
-ALLOWLISTED_SUBAGENT_EVENT_TYPES: frozenset[str] = frozenset(
-    {
-        SUBAGENT_BROWSER_STARTED,
-        SUBAGENT_BROWSER_COMPLETED,
-        SUBAGENT_BROWSER_STEP_COMPLETED,
-        SUBAGENT_CLAUDE_STARTED,
-        SUBAGENT_CLAUDE_STEP_COMPLETED,
-        SUBAGENT_CLAUDE_COMPLETED,
-        SUBAGENT_CLAUDE_FAILED,
-        SUBAGENT_EXPLORE_STARTED,
-        SUBAGENT_EXPLORE_MILESTONE,
-        SUBAGENT_EXPLORE_STEP_COMPLETED,
-        SUBAGENT_EXPLORE_COMPLETED,
-        SUBAGENT_TACITUS_STARTED,
-        SUBAGENT_TACITUS_GATHER_SUMMARY,
-        SUBAGENT_TACITUS_COMPLETED,
-    }
+# ``soothe.subagent.<agent>.<signal>`` — clients may accept before producers register types.
+_CURATED_SUBAGENT_WIRE_RE = re.compile(
+    r"^soothe\.subagent\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_.]+$"
 )
 
 _DEFAULT_PREVIEW_LEN = 120
 _LONG_PREVIEW_LEN = 200
-# Task-oriented fields (e.g. explore search_target) may be full user sentences
 _TASK_DESCRIPTION_LEN = 8000
 
 
+def register_subagent_wire_event_types(*event_types: str) -> None:
+    """Register ``soothe.subagent.*`` wire types for emission allowlisting.
+
+    Subagents call this from their ``events`` module (or rely on
+    ``soothe.core.events.register_event`` to register automatically).
+    """
+    for et in event_types:
+        if isinstance(et, str) and et.startswith("soothe.subagent."):
+            _REGISTERED_SUBAGENT_WIRE_TYPES.add(et)
+
+
+def get_allowlisted_subagent_event_types() -> frozenset[str]:
+    """Return wire types registered for emission in this process."""
+    return frozenset(_REGISTERED_SUBAGENT_WIRE_TYPES)
+
+
+# Backward-compatible alias for scripts/tests (snapshot at import; prefer get_* in new code).
+ALLOWLISTED_SUBAGENT_EVENT_TYPES = get_allowlisted_subagent_event_types()
+
+
+def is_curated_subagent_wire_event_type(event_type: str) -> bool:
+    """Return True for structurally valid curated ``soothe.subagent.*`` wire types.
+
+    Used by CLI/TUI clients that may not import subagent ``events`` modules.
+    """
+    return bool(_CURATED_SUBAGENT_WIRE_RE.match(event_type))
+
+
+def is_emit_allowed_subagent_wire_event_type(event_type: str) -> bool:
+    """Return True when a producer may emit this subagent wire event."""
+    return event_type in _REGISTERED_SUBAGENT_WIRE_TYPES
+
+
 def is_allowlisted_subagent_event_type(event_type: str) -> bool:
-    """Return True when ``event_type`` is an allowlisted curated subagent wire event."""
-    return event_type in ALLOWLISTED_SUBAGENT_EVENT_TYPES
+    """Return True when a consumer may treat ``event_type`` as curated subagent wire."""
+    return is_emit_allowed_subagent_wire_event_type(event_type) or is_curated_subagent_wire_event_type(
+        event_type
+    )
 
 
 def parse_subagent_wire_agent(event_type: str) -> str | None:
@@ -109,14 +111,14 @@ def emit_subagent_wire_event(event: dict[str, Any], logger: logging.Logger) -> N
     """Emit allowlisted subagent progress to the LangGraph ``custom`` stream.
 
     Community subagents use this helper so they do not depend on the ``soothe`` package.
-    Unknown event types are dropped.
+    Unknown event types are dropped unless registered via :func:`register_subagent_wire_event_types`.
 
     Args:
-        event: Dict with at least ``type`` matching ``ALLOWLISTED_SUBAGENT_EVENT_TYPES``.
+        event: Dict with at least ``type`` registered for emission.
         logger: Caller logger for audit trail.
     """
     et = event.get("type", "")
-    if not isinstance(et, str) or not is_allowlisted_subagent_event_type(et):
+    if not isinstance(et, str) or not is_emit_allowed_subagent_wire_event_type(et):
         logger.debug("Ignoring non-allowlisted subagent wire event: %r", et)
         return
     clipped = clip_wire_event_payload(event)
@@ -133,23 +135,13 @@ def emit_subagent_wire_event(event: dict[str, Any], logger: logging.Logger) -> N
 
 __all__ = [
     "ALLOWLISTED_SUBAGENT_EVENT_TYPES",
-    "SUBAGENT_BROWSER_COMPLETED",
-    "SUBAGENT_BROWSER_STARTED",
-    "SUBAGENT_BROWSER_STEP_COMPLETED",
-    "SUBAGENT_CLAUDE_COMPLETED",
-    "SUBAGENT_CLAUDE_FAILED",
-    "SUBAGENT_CLAUDE_STARTED",
-    "SUBAGENT_CLAUDE_STEP_COMPLETED",
-    "SUBAGENT_EXPLORE_COMPLETED",
-    "SUBAGENT_EXPLORE_MILESTONE",
-    "SUBAGENT_EXPLORE_STEP_COMPLETED",
-    "SUBAGENT_EXPLORE_STARTED",
-    "SUBAGENT_TACITUS_COMPLETED",
-    "SUBAGENT_TACITUS_GATHER_SUMMARY",
-    "SUBAGENT_TACITUS_STARTED",
     "clip_wire_event_payload",
     "emit_subagent_wire_event",
+    "get_allowlisted_subagent_event_types",
     "is_allowlisted_subagent_event_type",
+    "is_curated_subagent_wire_event_type",
+    "is_emit_allowed_subagent_wire_event_type",
     "parse_subagent_wire_agent",
+    "register_subagent_wire_event_types",
     "truncate_wire_str",
 ]

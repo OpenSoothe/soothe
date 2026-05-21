@@ -634,6 +634,11 @@ def register_event(
         priority=priority,
     )
 
+    if type_string.startswith("soothe.subagent."):
+        from soothe_sdk.core.subagent_wire import register_subagent_wire_event_types
+
+        register_subagent_wire_event_types(type_string)
+
 
 # -- Lifecycle ---------------------------------------------------------------
 _reg(
