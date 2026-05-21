@@ -7,6 +7,7 @@ from typing import Any
 
 from soothe_sdk.plugin import plugin, subagent
 
+from . import events as _events  # noqa: F401 — register soothe.subagent.explore.* wire types
 from .implementation import create_explore_subagent
 from .schemas import ExploreAgentState, ExploreResult, ExploreSubagentConfig, MatchEntry
 

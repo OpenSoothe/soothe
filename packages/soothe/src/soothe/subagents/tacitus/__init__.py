@@ -4,6 +4,7 @@ from typing import Any
 
 from soothe_sdk.plugin import plugin, subagent
 
+from . import events as _events  # noqa: F401 — register soothe.subagent.tacitus.* wire types
 from .implementation import create_tacitus_subagent
 from .protocol import (
     GatherContext,
