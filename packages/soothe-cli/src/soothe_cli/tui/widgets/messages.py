@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.utils import get_tool_display_name
 from soothe_sdk.ux.task_namespace import (
+    _step_id_from_unified_fragment,
     is_step_level_task_tool_id,
     normalize_step_task_tool_call_id,
     parse_unified_tool_call_id,
@@ -1871,7 +1872,11 @@ class CognitionStepMessage(Vertical):
         """True when ``row`` belongs to this step card (unified id encodes step)."""
         parsed_sid, _, _, _ = parse_unified_tool_call_id(row.tool_call_id)
         if parsed_sid:
-            return parsed_sid == self._step_id
+            # Normalize both step IDs to canonical format (hyphen) for comparison
+            # parsed_sid is already canonical from parse_unified_tool_call_id
+            # self._step_id may be in wire format (underscore) or canonical (hyphen)
+            canonical_step_id = _step_id_from_unified_fragment(self._step_id)
+            return parsed_sid == canonical_step_id
         return True
 
     def _row_counts_for_step_status_line(self, row: _StepToolRow) -> bool:

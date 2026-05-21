@@ -335,6 +335,17 @@ filesystem_middleware:
   virtual_mode: false
   max_file_size_mb: 10
   tool_token_limit_before_evict: 20000
+# Code interpreter configuration (IG-423): Embedded QuickJS for programmatic tool calling
+# Reference: https://www.langchain.com/blog/give-your-agents-an-interpreter
+code_interpreter:
+  enabled: false
+  ptc_allowlist: []
+  memory_limit_mb: 128
+  timeout_seconds: 30
+  max_ptc_calls: 50
+  max_result_size: 10000
+  console_capture: true
+  snapshot_between_turns: false
 # Daemon-side configuration (transports, worker pool, distributed) lives in
 # `daemon_config.yml` and is parsed by `SootheDaemonConfig`. See
 # `config/daemon_config.template.yml` for the full reference.

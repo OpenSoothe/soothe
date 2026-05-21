@@ -6,7 +6,7 @@ import base64
 import logging
 import os
 import pathlib
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING
 
 from soothe_cli.tui.config import get_glyphs
@@ -72,28 +72,42 @@ def _get_selected_text(widget: Widget) -> str | None:
     return text or None
 
 
+def _prefer_tty_osc52() -> bool:
+    """Return True when clipboard should use tmux-wrapped OSC 52 on /dev/tty.
+
+    Textual's ``copy_to_clipboard`` emits unwrapped OSC 52 via the driver and
+    never raises, so it would block the tmux-aware path if tried first.
+    """
+    return bool(os.environ.get("TMUX") or os.environ.get("SSH_CONNECTION"))
+
+
+def _clipboard_copy_methods(app: App) -> list[Callable[[str], None]]:
+    """Return clipboard backends in priority order for the current environment."""
+    methods: list[Callable[[str], None]] = []
+
+    try:
+        import pyperclip
+
+        methods.append(pyperclip.copy)
+    except ImportError:
+        pass
+
+    if _prefer_tty_osc52():
+        methods.append(_copy_osc52)
+    else:
+        methods.append(app.copy_to_clipboard)
+        methods.append(_copy_osc52)
+
+    return methods
+
+
 def _copy_texts_to_clipboard(app: App, selected_texts: list[str]) -> None:
     """Copy selected text(s) via available clipboard methods."""
     if not selected_texts:
         return
 
     combined_text = "\n".join(selected_texts)
-
-    # Try multiple clipboard methods
-    # Prefer pyperclip/app clipboard first (works reliably on local machines)
-    # OSC 52 is last resort (for SSH/remote where native clipboard unavailable)
-    copy_methods = [app.copy_to_clipboard]
-
-    # Try pyperclip if available (preferred - uses pbcopy on macOS)
-    try:
-        import pyperclip
-
-        copy_methods.insert(0, pyperclip.copy)
-    except ImportError:
-        pass
-
-    # OSC 52 as fallback for remote/SSH sessions
-    copy_methods.append(_copy_osc52)
+    copy_methods = _clipboard_copy_methods(app)
 
     for copy_fn in copy_methods:
         try:

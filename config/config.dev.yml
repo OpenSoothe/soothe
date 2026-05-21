@@ -102,3 +102,15 @@ vector_stores:
 
 vector_store_router:
   default: pgvector_dev:soothe_default
+
+# Code interpreter configuration (IG-423): Disabled by default for dev
+# Enable with caution - requires langchain-quickjs package
+code_interpreter:
+  enabled: false
+  ptc_allowlist: []
+  memory_limit_mb: 128
+  timeout_seconds: 30
+  max_ptc_calls: 50
+  max_result_size: 10000
+  console_capture: true
+  snapshot_between_turns: false

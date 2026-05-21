@@ -142,7 +142,7 @@ def build_continue_thread_bootstrap_plan(_goal: str) -> PlanResult:
         type="execute_steps",
         steps=[
             StepAction(
-                description="Address follow-up request using prior conversation context.",
+                description="Address your request using prior conversation context.",
                 expected_output=(
                     "A response that addresses the current request while staying consistent "
                     "with earlier conversation context."

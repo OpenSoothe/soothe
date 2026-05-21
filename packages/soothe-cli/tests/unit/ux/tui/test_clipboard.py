@@ -7,7 +7,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from soothe_cli.tui.widgets.clipboard import (
+    _clipboard_copy_methods,
     _collect_selected_texts,
+    _copy_osc52,
+    _copy_texts_to_clipboard,
     _selected_text_from_screen,
     clear_widget_text_selection,
     copy_selection_to_clipboard,
@@ -70,6 +73,52 @@ def test_copy_notifies_when_empty_and_requested() -> None:
     app.query.return_value = []
 
     assert copy_selection_to_clipboard(app, notify_if_empty=True) is False
+    app.notify.assert_called_once()
+
+
+def test_clipboard_methods_use_osc52_before_textual_in_tmux(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unwrapped Textual OSC 52 must not run before tmux-wrapped /dev/tty copy."""
+    monkeypatch.setenv("TMUX", "/tmp/tmux-123/default,12345,0")
+    app = MagicMock()
+
+    methods = _clipboard_copy_methods(app)
+
+    assert methods[0] is _copy_osc52
+    assert app.copy_to_clipboard not in methods
+
+
+def test_clipboard_methods_use_textual_before_osc52_locally(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Local sessions prefer Textual's driver, with OSC 52 as fallback."""
+    monkeypatch.delenv("TMUX", raising=False)
+    monkeypatch.delenv("SSH_CONNECTION", raising=False)
+    app = MagicMock()
+
+    methods = _clipboard_copy_methods(app)
+
+    assert methods[0] is app.copy_to_clipboard
+    assert methods[-1] is _copy_osc52
+
+
+def test_copy_in_tmux_calls_osc52_not_textual(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end copy path must reach tmux-aware OSC 52 when TMUX is set."""
+    monkeypatch.setenv("TMUX", "/tmp/tmux-123/default,12345,0")
+    app = MagicMock()
+    osc52_mock = MagicMock()
+    monkeypatch.setattr(
+        "soothe_cli.tui.widgets.clipboard._copy_osc52",
+        osc52_mock,
+    )
+
+    _copy_texts_to_clipboard(app, ["hello"])
+
+    osc52_mock.assert_called_once_with("hello")
+    app.copy_to_clipboard.assert_not_called()
     app.notify.assert_called_once()
 
 
