@@ -188,6 +188,59 @@ def test_child_stats_link_via_normalized_parent_id() -> None:
     assert "Glob(1)" in text
 
 
+def test_successful_step_marks_unfinished_task_tools_done() -> None:
+    """Regression: completed steps must not show Skipped/Pending on task branches."""
+    card = CognitionStepMessage("ABC-01", "Explore codebase", id="stp-done-task")
+    card.add_tool_call(
+        "ABC_01:s:task:0",
+        "task",
+        {"subagent_type": "explore", "description": "find files"},
+        is_task_row=True,
+    )
+    card.add_tool_call(
+        "ABC_01:t0:read_file:0",
+        "read_file",
+        {"path": "a.py"},
+        parent_tool_call_id="ABC_01:s:task:0",
+    )
+    card.add_tool_call(
+        "ABC_01:t0:grep:1",
+        "grep",
+        {"pattern": "deepxiv"},
+        parent_tool_call_id="ABC_01:s:task:0",
+    )
+    card.set_running()
+    card.set_complete(True, 83_000, 23, "Done")
+
+    text = _plain(card._step_task_activity_content())
+    assert "Skipped" not in text
+    assert "Pending" not in text
+    assert "Done" in text
+    assert "ReadFile(1)" in text
+
+
+def test_failed_step_still_marks_unfinished_task_tools_skipped() -> None:
+    card = CognitionStepMessage("ABC-02", "Broken explore", id="stp-fail-task")
+    card.add_tool_call(
+        "ABC_02:s:task:0",
+        "task",
+        {"subagent_type": "explore", "description": "scan"},
+        is_task_row=True,
+    )
+    card.add_tool_call(
+        "ABC_02:t0:glob:0",
+        "glob",
+        {"pattern": "**/*"},
+        parent_tool_call_id="ABC_02:s:task:0",
+    )
+    card.set_running()
+    card.set_complete(False, 1000, 1, "failed")
+    card.mark_unfinished_tools_on_step_complete(success=False)
+
+    text = _plain(card._step_task_activity_content())
+    assert "Skipped" in text
+
+
 def test_status_line_still_excludes_nested_task_tools() -> None:
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-task-status")
     card.add_tool_call("ABC_01:s:grep:0", "grep", {})
