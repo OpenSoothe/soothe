@@ -62,7 +62,6 @@ research = [
     "arxiv>=2.1.0",
     "langchain-tavily>=0.2.17",
     "tavily-python>=0.5.0",
-    "wikipedia>=1.4.0",
     "wizsearch>=1.1.8,<2.0.0",
     "chardet<6",
     "deepxiv-sdk>=0.2.5",
@@ -107,7 +106,7 @@ dev = [
     "ruff>=0.12.0",
     "mypy>=1.0.0",
     "soothe[langfuse]",
-    "soothe-community>=0.1.0,<1.0.0",
+    "soothe-community>=0.2.1,<1.0.0",
 ]
 
 [project.urls]

@@ -8,14 +8,12 @@ from pydantic import BaseModel, Field
 
 CapabilityId = Literal[
     "web_search",
-    "wikipedia",
     "academic_search",
     "url_crawl",
 ]
 
 SourceType = Literal[
     "web",
-    "encyclopedia",
     "academic",
     "url",
 ]
@@ -65,16 +63,15 @@ class TacitusConfig(BaseModel):
     enabled_capabilities: list[CapabilityId] = Field(
         default_factory=lambda: [
             "web_search",
-            "wikipedia",
             "academic_search",
             "url_crawl",
         ],
     )
     capability_profiles: dict[str, list[CapabilityId]] = Field(
         default_factory=lambda: {
-            "public": ["web_search", "wikipedia", "academic_search", "url_crawl"],
-            "web": ["web_search", "wikipedia", "url_crawl"],
-            "academic": ["academic_search", "wikipedia"],
+            "public": ["web_search", "academic_search", "url_crawl"],
+            "web": ["web_search", "url_crawl"],
+            "academic": ["academic_search"],
         },
     )
     routing: TacitusRoutingConfig = Field(default_factory=TacitusRoutingConfig)

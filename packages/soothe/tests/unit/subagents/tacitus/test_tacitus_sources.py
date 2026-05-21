@@ -1,15 +1,13 @@
-"""Unit tests for Tacitus gather sources (academic, wikipedia)."""
+"""Unit tests for Tacitus gather sources (academic)."""
 
 from __future__ import annotations
 
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from soothe.subagents.tacitus.protocol import GatherContext
 from soothe.subagents.tacitus.sources.academic import AcademicSearchSource
-from soothe.subagents.tacitus.sources.wikipedia import WikipediaSource
 
 
 @pytest.fixture
@@ -37,38 +35,3 @@ class TestAcademicAuthCircuitBreaker:
         assert second == []
         assert mock_tool._arun.await_count == 1
         assert source._auth_failed is True
-
-
-class TestWikipediaMediaWikiFallback:
-    """Wikipedia uses MediaWiki API when package lookup fails."""
-
-    def test_mediawiki_api_returns_extract(self):
-        opensearch_payload = json.dumps(["", ["Mixture of experts"], [], []]).encode()
-        extract_payload = json.dumps(
-            {
-                "query": {
-                    "pages": {
-                        "1": {
-                            "title": "Mixture of experts",
-                            "extract": "A mixture of experts is a machine learning technique.",
-                        }
-                    }
-                }
-            }
-        ).encode()
-
-        def fake_urlopen(req, timeout=15):  # noqa: ARG001
-            url = req.full_url if hasattr(req, "full_url") else req.get_full_url()
-            body = opensearch_payload if "opensearch" in url else extract_payload
-            resp = MagicMock()
-            resp.read.return_value = body
-            resp.__enter__ = MagicMock(return_value=resp)
-            resp.__exit__ = MagicMock(return_value=False)
-            return resp
-
-        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
-            with patch.object(WikipediaSource, "_query_wikipedia_package", return_value=None):
-                text = WikipediaSource._query_mediawiki_api("Mixture of experts")
-
-        assert text is not None
-        assert "mixture of experts" in text.lower()

@@ -29,4 +29,4 @@ def test_create_tacitus_public_sources_only(mock_model: MagicMock, mock_config: 
 
     sources = _build_public_sources(mock_config)
     names = {s.capability_id for s in sources}
-    assert names == {"web_search", "wikipedia", "academic_search", "url_crawl"}
+    assert names == {"web_search", "academic_search", "url_crawl"}
