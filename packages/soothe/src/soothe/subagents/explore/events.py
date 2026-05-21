@@ -6,15 +6,14 @@ from typing import Literal
 
 from pydantic import ConfigDict
 from soothe_sdk.core.events import SootheEvent, SubagentEvent
-from soothe_sdk.core.subagent_wire import (
-    SUBAGENT_EXPLORE_COMPLETED,
-    SUBAGENT_EXPLORE_MILESTONE,
-    SUBAGENT_EXPLORE_STARTED,
-    SUBAGENT_EXPLORE_STEP_COMPLETED,
-)
 from soothe_sdk.core.verbosity import VerbosityTier
 
 from soothe.core.events import register_event
+
+SUBAGENT_EXPLORE_STARTED = "soothe.subagent.explore.started"
+SUBAGENT_EXPLORE_MILESTONE = "soothe.subagent.explore.milestone"
+SUBAGENT_EXPLORE_STEP_COMPLETED = "soothe.subagent.explore.step.completed"
+SUBAGENT_EXPLORE_COMPLETED = "soothe.subagent.explore.completed"
 
 
 class ExploreStartedEvent(SootheEvent):
@@ -84,11 +83,6 @@ register_event(
     verbosity=VerbosityTier.NORMAL,
     summary_template="Explore done ({total_findings} findings)",
 )
-
-SUBAGENT_EXPLORE_STARTED = SUBAGENT_EXPLORE_STARTED
-SUBAGENT_EXPLORE_MILESTONE = SUBAGENT_EXPLORE_MILESTONE
-SUBAGENT_EXPLORE_STEP_COMPLETED = SUBAGENT_EXPLORE_STEP_COMPLETED
-SUBAGENT_EXPLORE_COMPLETED = SUBAGENT_EXPLORE_COMPLETED
 
 __all__ = [
     "SUBAGENT_EXPLORE_COMPLETED",

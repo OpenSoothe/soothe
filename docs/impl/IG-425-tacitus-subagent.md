@@ -30,7 +30,7 @@ Rename the built-in research subagent to **tacitus**, restrict gather to **publi
 
 ### Wire + SDK
 
-- `soothe_sdk/core/subagent_wire.py` — `SUBAGENT_TACITUS_*`
+- `soothe/subagents/tacitus/events.py` — `SUBAGENT_TACITUS_*` (registered via `register_event`)
 - `tacitus/events.py` — register tacitus events
 - `soothe-cli` — `/tacitus`, display policy
 
