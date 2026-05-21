@@ -14,6 +14,7 @@ from soothe.config.models import (
     AgentLoopConfig,
     AutonomousConfig,
     AutopilotConfig,
+    CodeInterpreterConfig,
     ConsoleLoggingConfig,
     FilesystemMiddlewareConfig,
     GlobalHistoryConfig,
@@ -304,6 +305,9 @@ class SootheConfig(BaseSettings):
         default_factory=FilesystemMiddlewareConfig
     )
     """Filesystem middleware configuration."""
+
+    code_interpreter: CodeInterpreterConfig = Field(default_factory=CodeInterpreterConfig)
+    """Code interpreter middleware configuration (IG-423)."""
 
     autopilot: AutopilotConfig = Field(default_factory=AutopilotConfig)
     """Autopilot mode configuration (RFC-204)."""

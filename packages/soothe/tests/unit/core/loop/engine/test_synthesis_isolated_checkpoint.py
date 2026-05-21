@@ -16,6 +16,22 @@ from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.utils.observability import langfuse as langfuse_util
 
 
+def test_build_synthesis_instruction_discourages_chronological_replay() -> None:
+    """Final synthesis prompt must ask for logic summary, not ledger re-narration."""
+    classification = ScenarioClassification(
+        scenario="general_summary",
+        sections=["Summary", "Key Points"],
+        contextual_focus=["Outcomes"],
+        evidence_emphasis="Group by outcome",
+    )
+    gen = SynthesisGenerator(MagicMock(), MagicMock(), soothe_config=None)
+    text = gen._build_synthesis_instruction("Integrate feature X", classification)
+    assert "do not quote, paraphrase, or replay" in text
+    assert "major processing logic" in text
+    assert "not by message order" in text
+    assert "Now let me" in text
+
+
 def test_synthesis_checkpoint_thread_id_is_unique_and_prefixed() -> None:
     parent = "thread-abc"
     a = synthesis_checkpoint_thread_id(parent)

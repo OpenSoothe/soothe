@@ -117,8 +117,11 @@ class SynthesisGenerator:
             return ScenarioClassification(
                 scenario="general_summary",
                 sections=BUILTIN_SCENARIOS["general_summary"],
-                contextual_focus=["Provide concise summary of goal completion"],
-                evidence_emphasis="Use any available tool results or AI responses",
+                contextual_focus=["Summarize major agent actions and outcomes for the goal"],
+                evidence_emphasis=(
+                    "Group evidence by concern or outcome; do not replay assistant "
+                    "turns chronologically"
+                ),
             )
 
     async def generate_synthesis(
@@ -408,10 +411,11 @@ EVIDENCE EMPHASIS:
 {classification.evidence_emphasis}
 
 INSTRUCTIONS:
-1. Use the AgentLoop execution messages above (human execute prompts and assistant outcomes) as primary evidence.
-2. Follow the scenario structure - address each section purposefully.
-3. Focus on the contextual areas identified above.
-4. Extract and present actual content reflected in that history (file contents, search results, tool outcomes, etc.).
-5. Be concrete and actionable - show findings, not just confirmations.
-6. If prior turns are missing or sparse, state what is unknown rather than inventing execution detail.
-7. Write all user-facing text (headings, narrative, lists) in the same primary natural language as the goal above; if the goal explicitly requests a language, follow it. Keep code, file paths, identifiers, and quoted literals unchanged."""
+1. Treat the AgentLoop execution messages above as evidence only — do not quote, paraphrase, or replay them turn-by-turn or in chronological order.
+2. Summarize the major processing logic of agent actions: intent, key decisions, tools/subagents used, and outcomes. Group by theme or concern (e.g. discovery, implementation, verification), not by message order.
+3. Omit step-by-step narration and meta-reasoning ("Now let me...", "Let me check...", "I will...") unless required to explain a failure, blocker, or unresolved risk.
+4. Follow the scenario structure - address each section purposefully.
+5. Focus on the contextual areas identified above.
+6. Be concrete and actionable — present findings, artifacts, and conclusions (file contents, search results, tool outcomes) where they matter to the goal; avoid empty confirmations.
+7. If prior turns are missing or sparse, state what is unknown rather than inventing execution detail.
+8. Write all user-facing text (headings, narrative, lists) in the same primary natural language as the goal above; if the goal explicitly requests a language, follow it. Keep code, file paths, identifiers, and quoted literals unchanged."""
