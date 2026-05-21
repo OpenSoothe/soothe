@@ -1154,6 +1154,51 @@ class FilesystemMiddlewareConfig(BaseModel):
     """Token limit before evicting large tool results (inherited from FilesystemMiddleware)."""
 
 
+class CodeInterpreterConfig(BaseModel):
+    """Configuration for CodeInterpreterMiddleware (IG-423).
+
+    Enables embedded QuickJS interpreter for programmatic tool calling and
+    stateful code execution within the agent loop.
+
+    Reference: https://www.langchain.com/blog/give-your-agents-an-interpreter
+
+    Args:
+        enabled: Enable the code interpreter middleware.
+        ptc_allowlist: List of tool names exposed to interpreter via tools.* namespace.
+            Empty list means no tools are exposed (security-first default).
+        memory_limit_mb: Interpreter memory limit in MB.
+        timeout_seconds: Per-eval timeout in seconds.
+        max_ptc_calls: Maximum programmatic tool calls per eval.
+        max_result_size: Maximum result size in characters.
+        console_capture: Capture console.log output.
+        snapshot_between_turns: Preserve interpreter state between conversation turns.
+    """
+
+    enabled: bool = False
+    """Enable the code interpreter middleware. Disabled by default (opt-in)."""
+
+    ptc_allowlist: list[str] = Field(default_factory=list)
+    """Tools exposed to interpreter via tools.* namespace. Empty = security-first default."""
+
+    memory_limit_mb: int = 128
+    """Interpreter memory limit in MB."""
+
+    timeout_seconds: int = 30
+    """Per-eval timeout in seconds."""
+
+    max_ptc_calls: int = 50
+    """Maximum programmatic tool calls per eval."""
+
+    max_result_size: int = 10000
+    """Maximum result size in characters."""
+
+    console_capture: bool = True
+    """Capture console.log output from interpreter."""
+
+    snapshot_between_turns: bool = False
+    """Preserve interpreter state between conversation turns."""
+
+
 class SecurityConfig(BaseModel):
     """Security policy configuration for filesystem access control.
 

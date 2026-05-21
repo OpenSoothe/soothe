@@ -37,4 +37,4 @@ async def test_simple_query_skips_plan_generate_on_first_cycle() -> None:
     assert result.plan_action == "new"
     assert result.decision is not None
     assert len(result.decision.steps) == 1
-    assert "Complete this simple request directly" in result.decision.steps[0].description
+    assert "I will complete this request directly" in result.decision.steps[0].description

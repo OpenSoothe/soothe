@@ -1142,7 +1142,7 @@ class LLMPlanner:
             )
 
         if task_complexity == "simple" and state.iteration == 0 and not state.step_results:
-            direct_instruction = f"Complete this simple request directly: {goal}"
+            direct_instruction = f"I will complete this request directly: {goal}"
             result = PlanResult(
                 status=assessment.status,
                 goal_progress=assessment.goal_progress,
@@ -1348,7 +1348,7 @@ class LLMPlanner:
                         and state.iteration == 0
                         and not state.step_results
                     ):
-                        direct_instruction = f"Complete this simple request directly: {goal}"
+                        direct_instruction = f"I will complete this request directly: {goal}"
                         result = PlanResult(
                             status=assessment.status,
                             goal_progress=assessment.goal_progress,
