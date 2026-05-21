@@ -1,7 +1,7 @@
 """User message envelope builder for execute-step (RFC-214).
 
 Builds the XML envelope that wraps per-turn dynamic content:
-- <CURRENT_GOAL> then <USER_QUERY> up front (what to do this turn)
+- <USER_QUERY> up front (what to do this turn)
 - Slash-skill turns: ``goal_user_submission`` is a ``/skill:`` line; the trailing user
   text is repeated in ``<USER_PRIMARY_QUERY>`` before long skill reference in
   ``<FULL_GOAL_AND_SKILL_CONTEXT>`` so the model keeps focus on the short query.
@@ -63,7 +63,7 @@ def _slash_skill_trailing_user_text(goal_user_submission: str | None) -> str | N
 
 
 def _goal_text_for_execute_step_envelope(goal: str | None) -> str:
-    """Normalize goal string for ``<CURRENT_GOAL>`` (strip trailing iteration suffix)."""
+    """Normalize goal string for slash-skill ``<FULL_GOAL_AND_SKILL_CONTEXT>`` (strip iteration suffix)."""
     raw = (goal or "").strip()
     if not raw:
         return "No goal specified"
@@ -111,25 +111,24 @@ def build_execute_step_envelope(
     date_str = now.strftime("%Y-%m-%d")
     timestamp = now.isoformat()
 
-    goal_text = _goal_text_for_execute_step_envelope(goal)
-    skill_tail = _slash_skill_trailing_user_text(goal_user_submission)
-    if skill_tail is not None:
-        focus = skill_tail.strip() if skill_tail.strip() else _EMPTY_SKILL_USER_TEXT_PLACEHOLDER
-        current_goal = (
-            "<CURRENT_GOAL>\n"
-            "<USER_PRIMARY_QUERY>\n"
-            f"{focus}\n"
-            "</USER_PRIMARY_QUERY>\n"
-            "<FULL_GOAL_AND_SKILL_CONTEXT>\n"
-            f"{goal_text}\n"
-            "</FULL_GOAL_AND_SKILL_CONTEXT>\n"
-            "</CURRENT_GOAL>"
-        )
-    else:
-        current_goal = f"<CURRENT_GOAL>\n{goal_text}\n</CURRENT_GOAL>"
     user_query = f"<USER_QUERY>\n{step_description}\n</USER_QUERY>"
 
-    # <DYNAMIC_CONTEXT>: hints + context only (goal and step instruction are above the fold)
+    skill_tail = _slash_skill_trailing_user_text(goal_user_submission)
+    if skill_tail is not None:
+        goal_text = _goal_text_for_execute_step_envelope(goal)
+        focus = skill_tail.strip() if skill_tail.strip() else _EMPTY_SKILL_USER_TEXT_PLACEHOLDER
+        prefix = (
+            "<USER_PRIMARY_QUERY>\n"
+            f"{focus}\n"
+            "</USER_PRIMARY_QUERY>\n\n"
+            "<FULL_GOAL_AND_SKILL_CONTEXT>\n"
+            f"{goal_text}\n"
+            "</FULL_GOAL_AND_SKILL_CONTEXT>"
+        )
+    else:
+        prefix = ""
+
+    # <DYNAMIC_CONTEXT>: hints + context only (step instruction is above the fold)
     dynamic_parts: list[str] = []
 
     if execution_hints:
@@ -147,7 +146,10 @@ def build_execute_step_envelope(
 
     dynamic_context = "<DYNAMIC_CONTEXT>\n" + "\n".join(dynamic_parts) + "\n</DYNAMIC_CONTEXT>"
 
-    return current_goal + "\n\n" + user_query + _EXECUTE_STEP_CONTEXT_SEPARATOR + dynamic_context
+    body = user_query + _EXECUTE_STEP_CONTEXT_SEPARATOR + dynamic_context
+    if prefix:
+        return prefix + "\n\n" + body
+    return body
 
 
 def build_plan_context_envelope(
