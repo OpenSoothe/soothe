@@ -4946,7 +4946,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
     { name = "sentence-transformers", marker = "extra == 'all'", specifier = ">=2.2.0" },
     { name = "sentence-transformers", marker = "extra == 'semantic'", specifier = ">=2.2.0" },
-    { name = "soothe-community", marker = "extra == 'dev'", specifier = ">=0.2.0,<1.0.0" },
+    { name = "soothe-community", marker = "extra == 'dev'", specifier = ">=0.2.4,<1.0.0" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "sqlite-vec", specifier = ">=0.1.0" },
     { name = "tavily-python", marker = "extra == 'all'", specifier = ">=0.5.0" },
@@ -5001,7 +5001,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "soothe-community"
-version = "0.2.0"
+version = "0.2.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "arxiv" },
@@ -5014,9 +5014,9 @@ dependencies = [
     { name = "soothe-sdk" },
     { name = "tiktoken" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fa/a1/76277bc88600cd170bf93a8f10b4e8e37bace426b0c4d4038dc5d94e087d/soothe_community-0.2.0.tar.gz", hash = "sha256:447c1edc8a8c09c566e16a4f96aaf56fe6729883927971d491cf3727146b855c", size = 77269, upload-time = "2026-05-21T12:29:16.877Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e5/92/a7a5e4eba2a0b1e1d57e4801099237a21b75b191ee304ba49eeccc4e5432/soothe_community-0.2.4.tar.gz", hash = "sha256:d5fb0b956dc725eb98af58be99cb3d5a5912fde4e0772c6e2ac4e45e566ee49f", size = 467452, upload-time = "2026-05-21T13:59:29.146Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a1/9a/500e4cd9d2a5dab7012dbf536c0e5a871f3d96b4fa9c5307c954beef6972/soothe_community-0.2.0-py3-none-any.whl", hash = "sha256:bad4562ee7c9436e439157aab26ad0f2997a0b7cc94549ce291c88f922761808", size = 83073, upload-time = "2026-05-21T12:29:15.244Z" },
+    { url = "https://files.pythonhosted.org/packages/a1/f8/9185efdc0524a7554b91403c7920b299e5c51cd975f49ef6d6790f747a71/soothe_community-0.2.4-py3-none-any.whl", hash = "sha256:19018fe34f8a075c9f09270d45a08b93a6552473eb8c6321d1874351b9a201e7", size = 83461, upload-time = "2026-05-21T13:59:27.443Z" },
 ]
 
 [[package]]
