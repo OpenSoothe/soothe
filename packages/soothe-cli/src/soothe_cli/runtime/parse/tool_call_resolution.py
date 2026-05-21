@@ -39,6 +39,40 @@ def tool_args_meaningful(raw: Any) -> bool:
     return True
 
 
+def is_main_step_level_tool_call_id(tool_call_id: str) -> bool:
+    """True for unified main-graph step tools (``{step}:s:{tool}:{n}``), not ``task`` rows."""
+    from soothe_sdk.ux.task_namespace import is_step_level_task_tool_id, parse_unified_tool_call_id
+
+    tcid = str(tool_call_id or "").strip()
+    if not tcid:
+        return False
+    _, type_code, _, _ = parse_unified_tool_call_id(tcid)
+    if type_code != "s":
+        return False
+    return not is_step_level_task_tool_id(tcid)
+
+
+def should_ingest_tool_for_step_stats(
+    *,
+    is_main_agent: bool,
+    tool_name: str,
+    tool_call_id: str,
+    args_meaningful: bool,
+) -> bool:
+    """Whether the TUI should register a tool row for step-card stats.
+
+    Main step-level tools are tracked as soon as ``tool_call_id`` and ``tool_name``
+    are known; display does not wait for streamed args.
+    """
+    name = str(tool_name or "").strip()
+    tcid = str(tool_call_id or "").strip()
+    if not name or not tcid or name == "task":
+        return False
+    if args_meaningful:
+        return True
+    return is_main_agent and is_main_step_level_tool_call_id(tcid)
+
+
 def _args_from_toolish_block(block: dict[str, Any]) -> dict[str, Any]:
     """Normalize args from a ``tool_call`` / ``tool_use`` / ``tool_call_chunk`` block."""
     btype = block.get("type")
@@ -431,10 +465,12 @@ def build_streaming_args_overlay(
 __all__ = [
     "ResolvedToolInvocation",
     "build_streaming_args_overlay",
+    "is_main_step_level_tool_call_id",
     "is_toolish_display_block",
     "materialize_ai_blocks_with_resolved_tools",
     "merge_tool_display_args",
     "resolve_stream_tool_name",
     "resolve_tool_invocations_for_display",
+    "should_ingest_tool_for_step_stats",
     "tool_args_meaningful",
 ]

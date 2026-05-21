@@ -92,7 +92,6 @@ def _build_sources(
         List of InformationSource instances.
     """
     from .sources.academic import AcademicSource
-    from .sources.browser import BrowserSource
     from .sources.cli import CLISource
     from .sources.document import DocumentSource
     from .sources.filesystem import FilesystemSource
@@ -101,27 +100,26 @@ def _build_sources(
     allow_out = config.security.allow_paths_outside_workspace
 
     if domain == "web":
-        return [WebSource(config=config), AcademicSource()]
+        return [WebSource(config=config), AcademicSource(config=config)]
     if domain == "code":
         return [
             FilesystemSource(work_dir=work_dir, allow_outside_workdir=allow_out),
-            CLISource(workspace_root=work_dir),
+            CLISource(workspace_root=work_dir, allow_outside_workdir=allow_out),
         ]
     if domain == "deep":
         return [
             WebSource(config=config),
-            AcademicSource(),
+            AcademicSource(config=config),
             FilesystemSource(work_dir=work_dir, allow_outside_workdir=allow_out),
-            CLISource(workspace_root=work_dir),
+            CLISource(workspace_root=work_dir, allow_outside_workdir=allow_out),
             DocumentSource(config=config),
-            BrowserSource(config=config),
         ]
 
     # auto domain (default)
     return [
         WebSource(config=config),
-        AcademicSource(),
+        AcademicSource(config=config),
         FilesystemSource(work_dir=work_dir, allow_outside_workdir=allow_out),
-        CLISource(workspace_root=work_dir),
+        CLISource(workspace_root=work_dir, allow_outside_workdir=allow_out),
         DocumentSource(config=config),
     ]

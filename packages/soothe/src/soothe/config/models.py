@@ -731,6 +731,63 @@ class InfrastructureLimitsConfig(BaseModel):
     tool_retry: ToolRetryConfig = Field(default_factory=ToolRetryConfig)
 
 
+class OutputStreamingConfig(BaseModel):
+    """Configuration for output streaming behavior (RFC-614).
+
+    Controls how goal_completion synthesis and other assistant outputs are
+    delivered from daemon to client. Supports batch (coalesce all) and adaptive
+    (stream small outputs, batch large outputs) modes.
+
+    Args:
+        mode: Streaming mode - "batch" (coalesce all) or "adaptive" (stream small, batch large).
+        streaming_interval_ms: Daemon WebSocket batching interval (milliseconds).
+        tui_flush_interval_ms: TUI rendering flush interval (milliseconds).
+        adaptive_threshold_chars: Threshold for adaptive mode switching (chars).
+        file_output_threshold_chars: Threshold to write goal_completion to file (0 = never).
+        file_output_preview_chars: Preview chars in TUI when output saved to file.
+        file_output_dir: Directory for output files (default: current workspace root/.soothe/output).
+    """
+
+    mode: Literal["batch", "adaptive"] = Field(
+        default="adaptive",
+        description="Streaming mode - batch: coalesce all, adaptive: stream small, batch large",
+    )
+    streaming_interval_ms: int = Field(
+        default=200,
+        ge=50,
+        le=1000,
+        description="Daemon WebSocket batching interval (milliseconds)",
+    )
+    tui_flush_interval_ms: int = Field(
+        default=200,
+        ge=50,
+        le=1000,
+        description="TUI markdown stream flush interval (milliseconds)",
+    )
+    adaptive_threshold_chars: int = Field(
+        default=500,
+        ge=100,
+        le=10000,
+        description="Chars threshold for adaptive mode switching",
+    )
+    file_output_threshold_chars: int = Field(
+        default=5000,
+        ge=0,
+        le=100000,
+        description="Chars threshold to write goal_completion to file",
+    )
+    file_output_preview_chars: int = Field(
+        default=500,
+        ge=0,
+        le=5000,
+        description="Preview chars when output saved to file",
+    )
+    file_output_dir: str | None = Field(
+        default=None,
+        description="Directory for output files (default: current workspace root/.soothe/output)",
+    )
+
+
 class AgentLoopConfig(BaseModel):
     """Configuration for agent loop execution mode (RFC-201, IG-407: unified config).
 
@@ -816,9 +873,9 @@ class AgentLoopConfig(BaseModel):
         le=1_000_000,
     )
 
-    output_streaming: bool = Field(
-        default=True,
-        description="Enable streaming mode for all AI outputs (true=stream chunks, false=batch final only)",
+    output_streaming: OutputStreamingConfig = Field(
+        default_factory=OutputStreamingConfig,
+        description="Output streaming configuration (RFC-614)",
     )
 
     loop_orchestrator_evidence_validate: bool = Field(
@@ -1174,8 +1231,8 @@ class CodeInterpreterConfig(BaseModel):
         snapshot_between_turns: Preserve interpreter state between conversation turns.
     """
 
-    enabled: bool = False
-    """Enable the code interpreter middleware. Disabled by default (opt-in)."""
+    enabled: bool = True
+    """Enable the code interpreter middleware. Enabled by default."""
 
     ptc_allowlist: list[str] = Field(default_factory=list)
     """Tools exposed to interpreter via tools.* namespace. Empty = security-first default."""

@@ -65,6 +65,15 @@ subagents:
 
 agent_loop:
   max_iterations: 99
+  # Output streaming configuration (RFC-614)
+  output_streaming:
+    mode: adaptive                    # batch | adaptive (stream small, batch large)
+    streaming_interval_ms: 200        # Daemon WebSocket batching interval
+    tui_flush_interval_ms: 200        # TUI rendering flush interval
+    adaptive_threshold_chars: 500     # Adaptive switch threshold (chars)
+    file_output_threshold_chars: 5000 # Write goal_completion to file when larger (0 = never)
+    file_output_preview_chars: 500    # Preview chars in TUI when saved to file
+    file_output_dir: null             # Default: current workspace root/.soothe/output
   plan_prompt_ledger:
     plan_ledger_max_messages: 20
   limits:
@@ -102,15 +111,3 @@ vector_stores:
 
 vector_store_router:
   default: pgvector_dev:soothe_default
-
-# Code interpreter configuration (IG-423): Disabled by default for dev
-# Enable with caution - requires langchain-quickjs package
-code_interpreter:
-  enabled: false
-  ptc_allowlist: []
-  memory_limit_mb: 128
-  timeout_seconds: 30
-  max_ptc_calls: 50
-  max_result_size: 10000
-  console_capture: true
-  snapshot_between_turns: false

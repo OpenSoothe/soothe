@@ -114,6 +114,14 @@ tools:
     allow_dangerous_requests: true
     headers: {}
     verify_ssl: true
+  # DeepXiv: Academic paper search and progressive reading
+  # Get a token at https://data.rag.ac.cn/register (10,000 requests/day)
+  # If not provided, auto-registers anonymous token (1,000 requests/day)
+  deepxiv:
+    enabled: true
+    token: ${DEEPXIV_API_KEY:-}
+    timeout: 60
+    max_retries: 3
 mcp_servers: []
 plugins: []
 skills: []
@@ -190,7 +198,15 @@ agent_loop:
   goal_completion_mode: llm_only
   prior_conversation_limit: 10
   context_window_limit: 200000
-  output_streaming: true
+  # Output streaming configuration (RFC-614)
+  output_streaming:
+    mode: adaptive                    # batch | adaptive (stream small, batch large)
+    streaming_interval_ms: 200        # Daemon WebSocket batching interval
+    tui_flush_interval_ms: 200        # TUI rendering flush interval
+    adaptive_threshold_chars: 500     # Adaptive switch threshold (chars)
+    file_output_threshold_chars: 5000 # Write goal_completion to file when larger (0 = never)
+    file_output_preview_chars: 500    # Preview chars in TUI when saved to file
+    file_output_dir: null             # Default: current workspace root/.soothe/output
   loop_orchestrator_evidence_validate: true
   planning:
     simple_max_tokens: 50
@@ -338,7 +354,7 @@ filesystem_middleware:
 # Code interpreter configuration (IG-423): Embedded QuickJS for programmatic tool calling
 # Reference: https://www.langchain.com/blog/give-your-agents-an-interpreter
 code_interpreter:
-  enabled: false
+  enabled: true
   ptc_allowlist: []
   memory_limit_mb: 128
   timeout_seconds: 30

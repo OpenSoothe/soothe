@@ -8,12 +8,12 @@ from pathlib import Path
 from soothe.subagents.explore.tools import get_explore_tools
 
 
-def test_get_explore_tools_includes_file_info_and_run_command() -> None:
-    """Explore uses curated subset: filesystem recon + run_command shell tool."""
+def test_get_explore_tools_filesystem_only() -> None:
+    """Explore uses curated read-only filesystem tools (no shell)."""
     td = tempfile.mkdtemp()
     tools = get_explore_tools(workspace=td, allow_paths_outside_workspace=False)
     names = [t.name for t in tools]
-    assert names == ["glob", "grep", "ls", "read_file", "file_info", "run_command"]
+    assert names == ["glob", "grep", "ls", "read_file", "file_info"]
 
 
 def test_file_info_invokes_against_workspace_file() -> None:
@@ -48,13 +48,13 @@ def test_read_file_accepts_host_absolute_and_virtual_paths() -> None:
     assert "hello" in r2.file_data["content"]
 
 
-def test_mutating_tools_not_exposed() -> None:
-    """Explore exposes run_command but not write/edit/delete surgical tools."""
+def test_mutating_and_shell_tools_not_exposed() -> None:
+    """Explore does not expose write, edit, delete, or shell tools."""
     td = tempfile.mkdtemp()
     tools = get_explore_tools(workspace=td, allow_paths_outside_workspace=False)
     names = {t.name for t in tools}
     assert "write_file" not in names
     assert "edit_file" not in names
-    assert "run_command" in names
+    assert "run_command" not in names
     assert "delete_file" not in names
     assert "apply_diff" not in names

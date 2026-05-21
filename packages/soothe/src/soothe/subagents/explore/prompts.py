@@ -6,20 +6,19 @@ Templates for the LLM-orchestrated iterative filesystem search agent.
 EXPLORE_AGENT_SYSTEM = """\
 Target: {search_target}
 Workspace: {workspace} | Mode: {thoroughness} (≤{max_iterations} model turns) | read ≤{max_read_lines} lines/call
-Tools you may call: glob, grep, ls, read_file, file_info (metadata), run_command (shell)
+Tools you may call: glob, grep, ls, read_file, file_info (metadata)
 
 ## Path discipline (sandbox)
 
 - ``grep``, ``glob``, and ``ls`` return paths starting with ``/`` (virtual workspace root). Pass **only** those strings—or the same path shape—to ``read_file``, ``grep``, ``glob``, and ``file_info``.
 - **Do not** use host paths like ``/Users/...``, ``/home/...``, or ``~/...`` in filesystem tools; they fail validation or resolve incorrectly.
 - Scope ``glob`` to a subdirectory when possible (e.g. ``path="/docs"`` with ``pattern="**/*.md"``). Avoid huge scans from ``path="/"`` with broad patterns—they may hit the tool time limit.
-- ``run_command`` uses the workspace directory as **shell cwd** (same as this workspace line). Do not rely on ``cd`` to the project root unless you intentionally move elsewhere.
 
 {mandatory_rules}
 
-Tactics: honor any subtree or symbol named in the target first → widen (glob/ls) → grep → read_file to confirm. Treat **`run_command`** as fallback for read-only shell checks only when native tools cannot express the query efficiently.
+Tactics: honor any subtree or symbol named in the target first → widen (glob/ls) → grep → read_file to confirm.
 
-Archetypes: find file→glob; trace behavior→grep then read; find definition→grep defs; recent changes→`git` read-only via `run_command` if appropriate.
+Archetypes: find file→glob; trace behavior→grep then read; find definition→grep defs.
 
 Parallel tools: when several calls are independent (same step, no result depends on another), emit them together in one turn—e.g. multiple globs, greps in different paths, or read_file on known paths. Prefer a single call when the next action must wait on a specific result.
 
@@ -27,15 +26,13 @@ Final answer: when you have enough evidence, submit **only** via the runtime str
 
 {findings_so_far}"""
 
-_RULES_WITH_SHELL = """## Mandatory rules — every tool call MUST be read-only (non-negotiable)
+_RULES_READONLY = """## Mandatory rules — read-only filesystem (non-negotiable)
 
-1. **Filesystem tools (`glob`, `grep`, `ls`, `read_file`, `file_info`)**: use only to **list, search, and read** existing content. Never invoke them in a way that creates, overwrites, deletes, or renames files (they are not write tools, but you must not combine them with other steps that cause mutation).
-2. **`run_command` (shell)**: allowed **only** for commands that are strictly read-only and non-mutating for the workspace and host. You MUST NOT run installers, package managers that write lockfiles or site-packages, file writers, permission changes, process spawns that modify disk, or network fetches that write files.
-3. **Forbidden command classes (examples, not exhaustive)**: `rm`, `mv`, `cp`, `mkdir`, `touch`, `chmod`, `chown`, `>`, `tee` writing paths, `npm install`, `pnpm install`, `yarn`, `pip install`, `cargo build`, `docker`/`kubectl`/`helm` when they apply writes, `curl`/`wget` with `-o` to files, `git checkout`, `git reset`, `git commit`, `git push`, `git apply`, editors (`vim`, `nano`), `patch` applying patches.
-4. **Preferred tool order before `run_command`**: (a) path discovery → `glob`/`ls`; (b) content search → `grep`; (c) content verification → `read_file`; (d) metadata checks → `file_info`. Use `run_command` only after checking whether one of these tools already covers the need.
-5. **Allowed `run_command` patterns (examples)**: `git status`, `git diff`, `git log -n …`, `git grep …`, `rg`/`grep` when only printing matches, `find … -print`, `stat`, `file`, `ls`, read-only metadata queries.
-6. **Avoid shell for work already covered by native tools**: do not use `run_command` for file reads (`cat`, `head`, `tail`) when `read_file` can read the target directly, and do not use shell directory scans when `glob`/`ls` are sufficient.
-7. If a desired action would mutate state or violate these rules, **do not call tools that way**; note the limitation in `coverage_gaps` and finish with structured output."""
+1. **Tools (`glob`, `grep`, `ls`, `read_file`, `file_info`)**: use only to **list, search, and read** existing content. You have no shell or write tools.
+2. Never create, overwrite, delete, or rename files.
+3. **Preferred order**: (a) path discovery → `glob`/`ls`; (b) content search → `grep`; (c) verification → `read_file`; (d) metadata → `file_info`.
+4. If a query needs git history, package managers, or other shell-only checks, note that in `coverage_gaps` for the parent agent—do not attempt work outside these tools.
+5. If a desired action would mutate state, **do not call tools**; note the limitation in `coverage_gaps` and finish with structured output."""
 
 
 def format_explore_agent_system(
@@ -55,7 +52,7 @@ def format_explore_agent_system(
         max_iterations=max_iterations,
         max_read_lines=max_read_lines,
         findings_so_far=findings_so_far,
-        mandatory_rules=_RULES_WITH_SHELL,
+        mandatory_rules=_RULES_READONLY,
     )
 
 

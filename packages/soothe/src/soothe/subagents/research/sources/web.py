@@ -36,6 +36,20 @@ class WebSource:
         """Initialize the web source with optional config."""
         self._config = config
         self._search_tool: Any | None = None
+        self._wikipedia_tool: Any | None = None
+        self._tools_loaded = False
+
+    def _ensure_wikipedia(self) -> None:
+        """Lazy-load Wikipedia tool for encyclopedic queries."""
+        if self._wikipedia_tool is not None:
+            return
+        try:
+            from langchain_community.tools import WikipediaQueryRun
+            from langchain_community.utilities import WikipediaAPIWrapper
+
+            self._wikipedia_tool = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
+        except Exception:
+            logger.debug("Wikipedia tool not available", exc_info=True)
 
     def _ensure_tools(self) -> None:
         if self._search_tool is not None:
@@ -73,21 +87,44 @@ class WebSource:
     async def query(self, query: str, context: GatherContext) -> list[SourceResult]:
         """Execute web search and return normalised results.
 
+        Also queries Wikipedia for encyclopedic queries.
+
         Args:
             query: Search query string.
             context: Current research context.
 
         Returns:
-            List of SourceResult from web search engines.
+            List of SourceResult from web search engines and Wikipedia.
         """
         _ = context
         self._ensure_tools()
-        if not self._search_tool:
-            return []
-
         results: list[SourceResult] = []
-        raw = await self._search_tool._arun(query=query)
-        results.extend(self._parse_search_output(raw, query))
+
+        # Web search
+        if self._search_tool:
+            try:
+                raw = await self._search_tool._arun(query=query)
+                results.extend(self._parse_search_output(raw, query))
+            except Exception:
+                logger.debug("Web search failed for: %s", query, exc_info=True)
+
+        # Wikipedia for encyclopedic queries
+        if self._is_encyclopedic_query(query.lower()):
+            self._ensure_wikipedia()
+            if self._wikipedia_tool:
+                try:
+                    raw = await self._wikipedia_tool._arun(query)
+                    if raw and "No good" not in raw:
+                        results.append(
+                            SourceResult(
+                                content=raw[:3000],
+                                source_ref="wikipedia",
+                                source_name="web_search",
+                                metadata={"sub_source": "wikipedia"},
+                            )
+                        )
+                except Exception:
+                    logger.debug("Wikipedia query failed for: %s", query, exc_info=True)
 
         return results
 
@@ -115,6 +152,15 @@ class WebSource:
             return _ACADEMIC_HINT_SCORE
 
         return _DEFAULT_WEB_SCORE
+
+    # -- Heuristics ----------------------------------------------------------
+
+    @staticmethod
+    def _is_encyclopedic_query(q: str) -> bool:
+        """Check if query looks encyclopedic (definitions, concepts, etc.)."""
+        from ._scoring import _ENCYCLOPEDIC_KEYWORDS, keyword_score
+
+        return keyword_score(q, _ENCYCLOPEDIC_KEYWORDS, weight=0.2) > 0.15
 
     # -- Parsing helpers -----------------------------------------------------
 
