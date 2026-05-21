@@ -893,7 +893,7 @@ class AgentLoopConfig(BaseModel):
     loop_orchestrator_evidence_validate: bool = Field(
         default=True,
         description=(
-            "When evidence_ledger is non-empty, require valid StepAction.evidence_refs (RFC-220)."
+            "Enable plan evidence validation node in the loop orchestrator (RFC-220; currently a no-op)."
         ),
     )
 

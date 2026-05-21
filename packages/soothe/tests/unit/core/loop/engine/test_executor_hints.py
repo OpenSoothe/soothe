@@ -38,8 +38,8 @@ class TestExecutorHints:
         assert configurable["soothe_step_expected_output"] == "Config file list"
 
     @pytest.mark.asyncio
-    async def test_executor_passes_subagent_hint(self):
-        """Test Executor passes subagent hint via config."""
+    async def test_executor_passes_wire_subagent_hint(self):
+        """Test Executor passes wire preferred_subagent via config when routing_hint=subagent."""
         mock_agent = MagicMock()
         mock_agent.astream = AsyncMock(return_value=iter([]))
 
@@ -48,11 +48,13 @@ class TestExecutorHints:
         step = StepAction(
             id="step-1",
             description="Map repository layout",
-            subagent="explore",
             expected_output="Matching paths",
         )
+        routing = {"routing_hint": "subagent", "preferred_subagent": "explore"}
 
-        await executor._execute_step_collecting_events(step, "thread-456")
+        await executor._execute_step_collecting_events(
+            step, "thread-456", routing_classification=routing
+        )
 
         call_args = mock_agent.astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
@@ -115,13 +117,15 @@ class TestExecutorHints:
         step = StepAction(
             id="step-1",
             description="Find files",
-            subagent="explore",
             expected_output="File list",
         )
+        routing = {"routing_hint": "subagent", "preferred_subagent": "explore"}
 
-        await executor._execute_step_collecting_events(step, "thread-123")
+        await executor._execute_step_collecting_events(
+            step, "thread-123", routing_classification=routing
+        )
 
-        assert "subagent=explore" in caplog.text
+        assert "wire_subagent=explore" in caplog.text
 
     @pytest.mark.asyncio
     async def test_executor_stream_thread_id_branches_langgraph_config(self) -> None:

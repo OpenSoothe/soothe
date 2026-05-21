@@ -74,6 +74,24 @@ logger = logging.getLogger(__name__)
 _DEFAULT_MAX_TOOL_CALLS_PER_STEP = 99
 
 
+def _wire_subagent_from_routing(routing_classification: Any | None) -> str | None:
+    """Subagent name when wire routing requests explicit subagent delegation (IG-349)."""
+    if routing_classification is None:
+        return None
+    if isinstance(routing_classification, dict):
+        routing_hint = routing_classification.get("routing_hint")
+        preferred = routing_classification.get("preferred_subagent")
+    else:
+        routing_hint = getattr(routing_classification, "routing_hint", None)
+        preferred = getattr(routing_classification, "preferred_subagent", None)
+    if routing_hint != "subagent" or not preferred:
+        return None
+    if isinstance(preferred, str):
+        stripped = preferred.strip()
+        return stripped or None
+    return str(preferred) if preferred is not None else None
+
+
 def _make_step_tool_call_id(step_id: str, raw_tid: str, call_idx: int) -> str:
     """Generate unified step-level tool call ID.
 
@@ -346,7 +364,7 @@ def _enrich_execute_step_task_kwargs_on_message(
 
     Parallel execute often streams ``tool_calls`` with empty ``args`` and no
     ``tool_call_chunks`` on the terminal chunk. The model still has the step brief in the
-    HumanMessage envelope; copy that (and optional ``step.subagent``) onto ``task`` kwargs
+    HumanMessage envelope; copy wire ``preferred_subagent`` onto ``task`` kwargs when set
     at emit time so clients always receive a real delegation description.
     """
     from copy import deepcopy
@@ -1767,7 +1785,9 @@ class Executor:
                 budget=budget,
                 step_id=first_step_id,
                 step_description=steps[0].description if steps else "",
-                step_subagent=steps[0].subagent if steps else None,
+                step_subagent=_wire_subagent_from_routing(
+                    getattr(state, "routing_classification", None)
+                ),
             ):
                 if event is not None:
                     event_count += 1
@@ -1974,17 +1994,19 @@ class Executor:
         )
 
         try:
+            wire_subagent = _wire_subagent_from_routing(routing_classification)
+
             logger.debug(
-                "execute step: id=%s desc=%s hints: subagent=%s",
+                "execute step: id=%s desc=%s hints: wire_subagent=%s",
                 step.id,
                 preview_first(step.description, 100),
-                step.subagent,
+                wire_subagent,
             )
 
             cfg_thread = stream_thread_id or thread_id
             configurable: dict[str, Any] = {
                 "thread_id": cfg_thread,
-                "soothe_step_subagent": step.subagent,
+                "soothe_step_subagent": wire_subagent,
                 "soothe_step_expected_output": step.expected_output,
             }
             if workspace:
@@ -2036,8 +2058,8 @@ class Executor:
                         )
 
             hints_parts: list[str] = []
-            if step.subagent:
-                hints_parts.append(f"Suggested subagent: {step.subagent}")
+            if wire_subagent:
+                hints_parts.append(f"Suggested subagent: {wire_subagent}")
             if step.expected_output:
                 hints_parts.append(f"Expected output: {step.expected_output}")
             execution_hints = None
@@ -2098,7 +2120,7 @@ class Executor:
                 budget=budget,
                 step_id=step.id,
                 step_description=step.description,
-                step_subagent=step.subagent,
+                step_subagent=wire_subagent,
             ):
                 if event is not None:
                     _append_parallel_stream_event(events, event, live_event_queue)
@@ -2154,28 +2176,28 @@ class Executor:
         except asyncio.CancelledError:
             duration_ms = int((time.perf_counter() - start) * 1000)
             logger.info(
-                "Step %s cancelled after %dms [subagent=%s]",
+                "Step %s cancelled after %dms [wire_subagent=%s]",
                 step.id,
                 duration_ms,
-                step.subagent,
+                wire_subagent,
             )
             raise
         except Exception as e:
             duration_ms = int((time.perf_counter() - start) * 1000)
             if _is_expected_connection_refusal(e):
                 logger.warning(
-                    "Step %s failed after %dms [subagent=%s]: %s",
+                    "Step %s failed after %dms [wire_subagent=%s]: %s",
                     step.id,
                     duration_ms,
-                    step.subagent,
+                    wire_subagent,
                     _format_connection_refusal_message(e),
                 )
             else:
                 logger.exception(
-                    "Step %s failed after %dms [subagent=%s]",
+                    "Step %s failed after %dms [wire_subagent=%s]",
                     step.id,
                     duration_ms,
-                    step.subagent,
+                    wire_subagent,
                 )
 
             error_msg = self._extract_error_message(e, "Step execution failed")
@@ -2514,12 +2536,13 @@ class Executor:
             first_human_in_wave=True,
         )
 
+        wire_subagent = _wire_subagent_from_routing(getattr(state, "routing_classification", None))
         messages = []
         for step_index, step in enumerate(steps):
             # Build execution hints from step metadata (RFC-214: hints in user envelope)
             hints_parts: list[str] = []
-            if step.subagent:
-                hints_parts.append(f"Suggested subagent: {step.subagent}")
+            if wire_subagent:
+                hints_parts.append(f"Suggested subagent: {wire_subagent}")
             if step.expected_output:
                 hints_parts.append(f"Expected output: {step.expected_output}")
             execution_hints = None

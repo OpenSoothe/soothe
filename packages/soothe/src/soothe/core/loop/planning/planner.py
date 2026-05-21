@@ -16,8 +16,10 @@ from soothe.core.loop.state.schemas import (
     LoopState,
     PlanGeneration,
     StepAction,
+    plan_generate_steps_to_step_actions,
     plan_generation_model_for_iteration,
     renumber_decision_local_step_ids_for_goal_continuation,
+    step_actions_to_plan_generate_steps,
 )
 from soothe.core.loop.utils.json_parsing import (
     _extract_balanced_json_object,
@@ -700,7 +702,7 @@ class LLMPlanner:
         decision: AgentDecision,
         subagent_name: str,
     ) -> AgentDecision:
-        """Apply wire ``preferred_subagent`` to ``AgentDecision`` steps (IG-349, mirrors Plan path)."""
+        """Apply wire ``preferred_subagent`` to ``AgentDecision`` step descriptions (IG-349)."""
         if not decision.steps:
             return decision
         n = len(decision.steps)
@@ -713,7 +715,6 @@ class LLMPlanner:
             new_steps.append(
                 step.model_copy(
                     update={
-                        "subagent": subagent_name,
                         "description": LLMPlanner._preferred_subagent_step_description(
                             step.description, subagent_name
                         ),
@@ -929,7 +930,9 @@ class LLMPlanner:
             type="execute_steps",
             execution_mode="sequential",
             reasoning="Fallback default plan after plan generation failure.",
-            steps=_default_agent_decision(goal, iteration).steps,
+            steps=step_actions_to_plan_generate_steps(
+                _default_agent_decision(goal, iteration).steps
+            ),
             next_action="I'll proceed with a default plan.",
         ), None
 
@@ -948,7 +951,7 @@ class LLMPlanner:
             return None
         return AgentDecision(
             type=plan_result.type,
-            steps=plan_result.steps,
+            steps=plan_generate_steps_to_step_actions(plan_result.steps),
             execution_mode=plan_result.execution_mode,
             reasoning=plan_result.reasoning or "",
             adaptive_granularity=plan_result.adaptive_granularity,
@@ -1214,7 +1217,9 @@ class LLMPlanner:
                     type="execute_steps",
                     execution_mode="sequential",
                     reasoning="Initial execution to gather evidence for goal assessment",
-                    steps=_default_agent_decision(goal, state.iteration).steps,
+                    steps=step_actions_to_plan_generate_steps(
+                        _default_agent_decision(goal, state.iteration).steps
+                    ),
                     next_action=f"I'll proceed with analyzing: {preview_first(goal, 80)}",
                 )
 

@@ -13,6 +13,7 @@ from soothe.core.loop.state.schemas import (
     LoopState,
     PlanGeneration,
     PlanResult,
+    PlanGenerateStep,
     StepAction,
     StepResult,
     allocate_plan_id,
@@ -37,7 +38,6 @@ class TestStepAction:
 
         assert step.description == "Test step"
         assert step.expected_output == "Test output"
-        assert step.subagent is None
         assert step.dependencies is None
         assert len(step.id) == 8  # Auto-generated ID
 
@@ -387,6 +387,33 @@ class TestPlanResult:
 class TestPlanGeneration:
     """Tests for flattened PlanGeneration schema."""
 
+    def test_plan_generate_step_schema_omits_subagent_and_evidence_refs(self) -> None:
+        from soothe.core.loop.state.schemas import plan_generation_model_for_iteration
+
+        props = plan_generation_model_for_iteration(0).model_json_schema()["$defs"][
+            "PlanGenerateStep"
+        ]["properties"]
+        assert "subagent" not in props
+        assert "evidence_refs" not in props
+        assert {"id", "description", "expected_output", "dependencies"} <= set(props.keys())
+
+    def test_plan_generate_steps_convert_to_step_actions(self) -> None:
+        from soothe.core.loop.state.schemas import plan_generate_steps_to_step_actions
+
+        steps = [
+            PlanGenerateStep(
+                id="01",
+                description="Search papers",
+                expected_output="List",
+                dependencies=None,
+            )
+        ]
+        out = plan_generate_steps_to_step_actions(steps)
+        assert len(out) == 1
+        assert out[0].description == "Search papers"
+        assert "subagent" not in out[0].model_fields
+        assert "evidence_refs" not in out[0].model_fields
+
     def test_new_requires_flattened_fields(self) -> None:
         """plan_action=new requires top-level decision fields."""
         with pytest.raises(ValidationError):
@@ -427,7 +454,7 @@ class TestPlanGeneration:
 
     def test_new_execute_steps_defaults_execution_mode(self) -> None:
         """execute_steps accepts omitted execution_mode; steps are still required."""
-        step = StepAction(description="Do work", expected_output="ok")
+        step = PlanGenerateStep(description="Do work", expected_output="ok")
         out = PlanGeneration(
             plan_action="new",
             type="execute_steps",
@@ -447,7 +474,8 @@ class TestPlanGeneration:
 
         schema = plan_generation_model_for_iteration(0)
         steps = [
-            StepAction(id="01", description=f"step {i}", expected_output="ok") for i in range(3)
+            PlanGenerateStep(id="01", description=f"step {i}", expected_output="ok")
+            for i in range(3)
         ]
         with pytest.raises(ValidationError):
             schema(
@@ -467,8 +495,8 @@ class TestPlanGeneration:
             type="execute_steps",
             execution_mode="sequential",
             steps=[
-                StepAction(id="01", description="recon", expected_output="map"),
-                StepAction(id="02", description="implement", expected_output="done"),
+                PlanGenerateStep(id="01", description="recon", expected_output="map"),
+                PlanGenerateStep(id="02", description="implement", expected_output="done"),
             ],
             next_action="Starting.",
         )
@@ -484,7 +512,8 @@ class TestPlanGeneration:
             type="execute_steps",
             execution_mode="sequential",
             steps=[
-                StepAction(id="01", description=f"step {i}", expected_output="ok") for i in range(3)
+                PlanGenerateStep(id="01", description=f"step {i}", expected_output="ok")
+                for i in range(3)
             ],
             next_action="Proceed.",
         )

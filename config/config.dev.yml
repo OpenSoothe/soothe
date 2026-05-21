@@ -49,13 +49,13 @@ router:
 # See: https://github.com/OpenSoothe/soothe-community for community agent extensions.
 subagents:
   claude:
-    enabled: false  # Requires soothe-community package
+    enabled: true
     model: null
     config:
       permission_mode: accept-edits
       max_turns: 20
   browser:
-    enabled: false  # Requires soothe-community package
+    enabled: true
     model: null
     config:
       headless: true

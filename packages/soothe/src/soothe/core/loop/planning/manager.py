@@ -178,12 +178,11 @@ class PlanManager:
         for cid in sorted(dag.nodes.keys()):
             node = dag.nodes[cid]
             dep_s = ", ".join(sorted(node.dependencies)) if node.dependencies else "—"
-            sub = f" | subagent `{node.subagent}`" if node.subagent else ""
             status_label = node.status.upper()
             desc = (node.description or "").replace("\n", " ").strip()
             if len(desc) > 280:
                 desc = desc[:277] + "..."
-            lines.append(f"- **{cid}** — {status_label}{sub}")
+            lines.append(f"- **{cid}** — {status_label}")
             lines.append(f"  - Depends on: {dep_s}")
             if desc:
                 lines.append(f"  - {desc}")
@@ -311,10 +310,6 @@ class PlanManager:
 
         if self.dag.failed_steps > 0:
             logger.info("PlanManager: failed steps (%d) → synthesize", self.dag.failed_steps)
-            return True
-
-        if self.dag.used_subagents:
-            logger.info("PlanManager: subagents used → synthesize")
             return True
 
         if self.dag.max_chain_depth >= 3:
