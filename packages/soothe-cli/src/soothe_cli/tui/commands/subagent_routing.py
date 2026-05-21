@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
-    "research": "Research",
+    "tacitus": "Tacitus",
     "explore": "Explore",
 }
 
 # Lowercase ids matched after ``/`` for preferred_subagent routing (core only).
-SUBAGENT_SLASH_ROUTE_IDS: tuple[str, ...] = ("research", "explore")
+SUBAGENT_SLASH_ROUTE_IDS: tuple[str, ...] = ("tacitus", "explore")
 
 BUILTIN_SUBAGENT_NAMES: list[str] = list(SUBAGENT_SLASH_ROUTE_IDS)
 
@@ -31,7 +31,7 @@ def get_subagent_display_name(technical_name: str) -> str:
 def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
     """Parse subagent subcommand from user input.
 
-    Detects subagent routing commands (e.g. ``/research``, ``/explore``)
+    Detects subagent routing commands (e.g. ``/tacitus``, ``/explore``)
     and extracts the subagent name along with the cleaned input text.
 
     Args:
@@ -43,7 +43,7 @@ def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
         The subcommand is removed from ``cleaned_text``.
 
     Examples:
-        ``"/research check this"`` -> ``("research", "check this")``
+        ``"/tacitus check this"`` -> ``("tacitus", "check this")``
         ``"/explore map the repo"`` -> ``("explore", "map the repo")``
         ``"hello world"`` -> ``(None, "hello world")``
     """

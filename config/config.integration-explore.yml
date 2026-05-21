@@ -83,7 +83,7 @@ tools:
     enabled: false
 
 subagents:
-  research:
+  tacitus:
     enabled: false
   explore:
     enabled: true

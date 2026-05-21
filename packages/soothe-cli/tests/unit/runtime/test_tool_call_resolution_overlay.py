@@ -214,7 +214,7 @@ def test_richest_pending_same_step_different_task_index() -> None:
         },
         "WAV_01:s:task:1": {
             "name": "task",
-            "args_str": '{"description": "Second delegation", "subagent_type": "research"}',
+            "args_str": '{"description": "Second delegation", "subagent_type": "tacitus"}',
             "is_complete_json": True,
             "emitted": False,
             "is_main": True,

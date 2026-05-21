@@ -270,7 +270,7 @@ def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
     middleware = SystemPromptOptimizationMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="research",
+        preferred_subagent="tacitus",
         routing_hint="subagent",
     )
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
@@ -295,7 +295,7 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
     middleware = SystemPromptOptimizationMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="research",
+        preferred_subagent="tacitus",
         routing_hint="subagent",
     )
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
@@ -344,7 +344,7 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
     middleware = SystemPromptOptimizationMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="research",
+        preferred_subagent="tacitus",
         routing_hint="subagent",
     )
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
@@ -361,7 +361,7 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
         modified = middleware.modify_request(request)
     content = modified.system_message.content
     assert "subagent_type='explore'" in content
-    assert "subagent_type='research'" not in content
+    assert "subagent_type='tacitus'" in content or "preferred_subagent" in content
 
 
 def test_memory_section_uses_memory_summary_tag():

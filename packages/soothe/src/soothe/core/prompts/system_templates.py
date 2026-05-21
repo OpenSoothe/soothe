@@ -88,7 +88,7 @@ _RESEARCH_GUIDE = """\
 Research tools:
 - search_web: Quick web search for factual lookups, news, current events (single call).
 - crawl_web: Extract clean content from a web page URL.
-- research: Deep investigation requiring multiple sources, iteration, and synthesis.
+- tacitus: Public-domain deep investigation (web, Wikipedia, academic, URLs).
   Set domain='web' for internet, 'code' for codebase, 'deep' for all, 'auto' to decide.\
 """
 
@@ -115,7 +115,7 @@ Subagents (via the `task` tool) -- delegate ONLY when the task requires \
 the subagent's unique capability:
 - explore: Readonly repo search (glob/grep/list/read); locate/map/trace; not edits or shell.
 - plan: Agentic recon then plan — multiple explore batches/rounds, then iterative markdown plan; one report.
-- research: Web or multi-source deep investigation—not trivial directory walks.
+- tacitus: Web or multi-source public-domain investigation—not trivial directory walks.
 Additional subagents may be available from installed plugins; use only names listed in your runtime capabilities.\
 """
 
@@ -142,7 +142,7 @@ Tool selection rules (follow strictly):
 Key rules:
 - Prefer single-purpose tools over unified dispatch tools.
 - Use surgical editing (edit_file_lines) instead of full-file rewrites.
-- Use websearch for quick lookups; use research for thorough investigation.
+- Use websearch for quick lookups; use tacitus for thorough public-domain investigation.
 - Use run_command for shell execution, run_python for Python code.\
 """
 

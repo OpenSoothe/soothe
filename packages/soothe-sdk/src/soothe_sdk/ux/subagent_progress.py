@@ -22,9 +22,9 @@ from soothe_sdk.core.subagent_wire import (
     SUBAGENT_EXPLORE_MILESTONE,
     SUBAGENT_EXPLORE_STARTED,
     SUBAGENT_EXPLORE_STEP_COMPLETED,
-    SUBAGENT_RESEARCH_COMPLETED,
-    SUBAGENT_RESEARCH_GATHER_SUMMARY,
-    SUBAGENT_RESEARCH_STARTED,
+    SUBAGENT_TACITUS_COMPLETED,
+    SUBAGENT_TACITUS_GATHER_SUMMARY,
+    SUBAGENT_TACITUS_STARTED,
 )
 
 
@@ -116,15 +116,15 @@ def summarize_subagent_wire_activity(event_type: str, data: Mapping[str, Any]) -
         ms = int(data.get("duration_ms", 0) or 0)
         return f"{tf} findings ({ms}ms)"
 
-    if event_type == SUBAGENT_RESEARCH_STARTED:
+    if event_type == SUBAGENT_TACITUS_STARTED:
         return preview_first(str(data.get("topic_preview", "")), 120)
-    if event_type == SUBAGENT_RESEARCH_GATHER_SUMMARY:
+    if event_type == SUBAGENT_TACITUS_GATHER_SUMMARY:
         rc = int(data.get("result_count", 0) or 0)
         st = int(data.get("sources_touched", 0) or 0)
         qp = preview_first(str(data.get("query_preview", "")), 60)
         tail = f"{rc} hits, {st} sources"
         return f"{qp} → {tail}" if qp else tail
-    if event_type == SUBAGENT_RESEARCH_COMPLETED:
+    if event_type == SUBAGENT_TACITUS_COMPLETED:
         al = int(data.get("answer_length", 0) or 0)
         ms = int(data.get("duration_ms", 0) or 0)
         return f"{al} chars ({ms}ms)"

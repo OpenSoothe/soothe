@@ -267,10 +267,10 @@ def test_resolve_task_parent_for_unified_task_level_id() -> None:
 def test_resolve_task_parent_uses_spawns_by_task_id_for_parallel_tasks() -> None:
     first_card = object()
     second_card = object()
-    spawns_by_step = {"WAV-01": ("WAV_01:s:task:1", "research", "WAV-01")}
+    spawns_by_step = {"WAV-01": ("WAV_01:s:task:1", "tacitus", "WAV-01")}
     spawns_by_task = {
         "WAV_01:s:task:0": ("WAV_01:s:task:0", "explore", "WAV-01"),
-        "WAV_01:s:task:1": ("WAV_01:s:task:1", "research", "WAV-01"),
+        "WAV_01:s:task:1": ("WAV_01:s:task:1", "tacitus", "WAV-01"),
     }
     display = {
         "WAV_01:s:task:0": first_card,
@@ -334,7 +334,7 @@ def test_task_scope_task_idx_parses_from_task_tool_call_id() -> None:
     assert task_scope_task_idx(scope, "ABC-01") == 0
 
     # Task index 1: ABC_01:s:task:1 → 1
-    scope = ("ABC_01:s:task:1", "research", "ABC-01")
+    scope = ("ABC_01:s:task:1", "tacitus", "ABC-01")
     assert task_scope_task_idx(scope, "ABC-01") == 1
 
     # Task index 2: GHT_02:s:task:2 → 2

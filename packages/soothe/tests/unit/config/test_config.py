@@ -61,7 +61,7 @@ class TestSootheConfig:
         cfg = SootheConfig()
         assert "explore" in cfg.subagents
         assert "plan" in cfg.subagents
-        assert "research" in cfg.subagents
+        assert "tacitus" in cfg.subagents
         # skillify and weaver are community plugins, not built-in
         assert "scout" not in cfg.subagents
         for name, sub_cfg in cfg.subagents.items():
@@ -182,11 +182,11 @@ class TestLoggingConfig:
         cfg = SootheConfig(
             subagents={
                 "scout": SubagentConfig(enabled=True),
-                "research": SubagentConfig(enabled=False),
+                "tacitus": SubagentConfig(enabled=False),
             }
         )
         assert cfg.subagents["scout"].enabled is True
-        assert cfg.subagents["research"].enabled is False
+        assert cfg.subagents["tacitus"].enabled is False
 
     def test_mcp_server_config_stdio(self) -> None:
         cfg = MCPServerConfig(command="npx", args=["-y", "@my/server"])

@@ -45,7 +45,7 @@ BUILTIN_TOOL_TRIGGERS: dict[str, list[str]] = {
     "transcribe_audio": [],
     "analyze_video": [],
     # Subagents (task tool targets — core: explore, plan, research; plugins add more)
-    "research": ["RESEARCH_RULES", "context"],
+    "tacitus": ["TACITUS_RULES", "context"],
     # Goal management tools
     "create_goal": ["THREAD", "PROTOCOLS"],
     "list_goals": ["THREAD"],

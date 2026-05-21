@@ -135,9 +135,9 @@ Sparse **`soothe.subagent.*`** events are emitted on the LangGraph **`custom`** 
 | `soothe.subagent.explore.started` | `search_target`, `thoroughness` | NORMAL |
 | `soothe.subagent.explore.milestone` | `decision`, `findings_count`, `iterations_used` | NORMAL |
 | `soothe.subagent.explore.completed` | `total_findings`, `thoroughness`, `iterations_used`, `duration_ms` | NORMAL |
-| `soothe.subagent.research.started` | `topic_preview` | NORMAL |
-| `soothe.subagent.research.gather.summary` | `query_preview`, `result_count`, `sources_touched` | NORMAL |
-| `soothe.subagent.research.completed` | `duration_ms`, `answer_length` | NORMAL |
+| `soothe.subagent.tacitus.started` | `topic_preview` | NORMAL |
+| `soothe.subagent.tacitus.gather.summary` | `query_preview`, `result_count`, `sources_touched` | NORMAL |
+| `soothe.subagent.tacitus.completed` | `duration_ms`, `answer_length`, `summary` | NORMAL |
 
 **Removed / not emitted**: `soothe.capability.*` (hard cut). Historical per-phase names such as `soothe.subagent.claude.text` or `soothe.subagent.research.gather` are **not** part of the built-in wire contract unless reintroduced under IG-339-style review.
 
