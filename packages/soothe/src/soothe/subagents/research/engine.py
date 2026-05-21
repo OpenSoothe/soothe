@@ -94,7 +94,7 @@ Topic: {topic}
 
 Respond as JSON:
 {{"sub_questions": [
-    {{"question": "...", "suggested_domain": "web|academic|filesystem|cli|browser|document"}}
+    {{"question": "...", "suggested_domain": "web|academic|filesystem|cli|document"}}
 ]}}"""
 
 _GENERATE_QUERIES = """\
@@ -109,7 +109,7 @@ Sub-questions:
 
 Respond as JSON:
 {{"queries": [
-    {{"query": "...", "domain_hint": "web|academic|filesystem|cli|browser|document"}}
+    {{"query": "...", "domain_hint": "web|academic|filesystem|cli|document"}}
 ]}}"""
 
 _SUMMARIZE = """\

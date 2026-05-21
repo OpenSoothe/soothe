@@ -17,7 +17,6 @@ SourceType = Literal[
     "academic",
     "filesystem",
     "cli",
-    "browser",
     "document",
 ]
 
@@ -87,7 +86,7 @@ class ResearchConfig(BaseModel):
         default_factory=lambda: {
             "web": ["web", "academic"],
             "code": ["filesystem", "cli"],
-            "deep": ["web", "academic", "filesystem", "cli", "browser", "document"],
+            "deep": ["web", "academic", "filesystem", "cli", "document"],
         },
     )
 

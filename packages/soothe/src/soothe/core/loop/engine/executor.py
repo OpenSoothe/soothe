@@ -2497,7 +2497,7 @@ class Executor:
         """Build N LoopHumanMessage inputs for batch execution (RFC-214).
 
         Each step gets its own LoopHumanMessage with the user message envelope:
-        <CURRENT_GOAL>, <USER_QUERY>, then ``--- Context ---`` and <DYNAMIC_CONTEXT>
+        <USER_QUERY>, then ``--- Context ---`` and <DYNAMIC_CONTEXT>
         (execution hints, timestamp, and related context).
 
         Args:

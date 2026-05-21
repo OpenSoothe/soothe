@@ -11,10 +11,12 @@ from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 
 from soothe.core.loop.state.schemas import (
+    FIRST_WAVE_MAX_STEPS,
     AgentDecision,
     LoopState,
     PlanGeneration,
     StepAction,
+    plan_generation_model_for_iteration,
     renumber_decision_local_step_ids_for_goal_continuation,
 )
 from soothe.core.loop.utils.json_parsing import (
@@ -875,7 +877,7 @@ class LLMPlanner:
         """
         from langchain_core.messages import SystemMessage
 
-        from soothe.core.loop.state.schemas import PlanGeneration
+        plan_schema = plan_generation_model_for_iteration(iteration)
 
         # Add assessment context to plan generation prompt
         context_msg = SystemMessage(
@@ -883,9 +885,7 @@ class LLMPlanner:
         )
         plan_messages = messages + [context_msg]
 
-        structured_model = _plan_phase_chat_model(self._model).with_structured_output(
-            PlanGeneration
-        )
+        structured_model = _plan_phase_chat_model(self._model).with_structured_output(plan_schema)
 
         try:
             lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="plan-generate")
@@ -1006,8 +1006,21 @@ class LLMPlanner:
             and result.decision is not None
             and result.decision.steps
         ):
-            # Full step list is kept; ``agent_loop.limits.max_parallel_steps`` only caps how many
-            # steps run concurrently per batch inside ``Executor`` (multiple batches per execute).
+            if state.iteration == 0 and len(result.decision.steps) > FIRST_WAVE_MAX_STEPS:
+                logger.warning(
+                    "[PlanGen] Truncated first-wave steps from %d to %d",
+                    len(result.decision.steps),
+                    FIRST_WAVE_MAX_STEPS,
+                )
+                result = result.model_copy(
+                    update={
+                        "decision": result.decision.model_copy(
+                            update={
+                                "steps": result.decision.steps[:FIRST_WAVE_MAX_STEPS],
+                            }
+                        ),
+                    }
+                )
 
             result = result.model_copy(
                 update={

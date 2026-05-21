@@ -235,8 +235,7 @@ class DeepxivSearchTool(BaseTool):
 
     def __init__(self, toolkit: DeepxivToolkit, **data: Any) -> None:
         """Initialize with toolkit reference."""
-        super().__init__(**data)
-        self.toolkit = toolkit
+        super().__init__(toolkit=toolkit, **data)
 
     @_safe_call
     def _run(
@@ -333,8 +332,7 @@ class DeepxivPaperBriefTool(BaseTool):
 
     def __init__(self, toolkit: DeepxivToolkit, **data: Any) -> None:
         """Initialize with toolkit reference."""
-        super().__init__(**data)
-        self.toolkit = toolkit
+        super().__init__(toolkit=toolkit, **data)
 
     @_safe_call
     def _run(
@@ -404,8 +402,7 @@ class DeepxivPaperMetadataTool(BaseTool):
 
     def __init__(self, toolkit: DeepxivToolkit, **data: Any) -> None:
         """Initialize with toolkit reference."""
-        super().__init__(**data)
-        self.toolkit = toolkit
+        super().__init__(toolkit=toolkit, **data)
 
     @_safe_call
     def _run(
@@ -492,8 +489,7 @@ class DeepxivReadSectionTool(BaseTool):
 
     def __init__(self, toolkit: DeepxivToolkit, **data: Any) -> None:
         """Initialize with toolkit reference."""
-        super().__init__(**data)
-        self.toolkit = toolkit
+        super().__init__(toolkit=toolkit, **data)
 
     @_safe_call
     def _run(
@@ -538,8 +534,7 @@ class DeepxivGetFullPaperTool(BaseTool):
 
     def __init__(self, toolkit: DeepxivToolkit, **data: Any) -> None:
         """Initialize with toolkit reference."""
-        super().__init__(**data)
-        self.toolkit = toolkit
+        super().__init__(toolkit=toolkit, **data)
 
     @_safe_call
     def _run(
@@ -581,8 +576,7 @@ class DeepxivTrendingTool(BaseTool):
 
     def __init__(self, toolkit: DeepxivToolkit, **data: Any) -> None:
         """Initialize with toolkit reference."""
-        super().__init__(**data)
-        self.toolkit = toolkit
+        super().__init__(toolkit=toolkit, **data)
 
     @_safe_call
     def _run(
@@ -643,8 +637,7 @@ class DeepxivWebsearchTool(BaseTool):
 
     def __init__(self, toolkit: DeepxivToolkit, **data: Any) -> None:
         """Initialize with toolkit reference."""
-        super().__init__(**data)
-        self.toolkit = toolkit
+        super().__init__(toolkit=toolkit, **data)
 
     @_safe_call
     def _run(

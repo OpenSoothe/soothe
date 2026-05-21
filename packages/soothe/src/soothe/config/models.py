@@ -466,7 +466,6 @@ class PlanningConfig(BaseModel):
 
     Args:
         simple_max_tokens: Skip planning for queries < N tokens.
-        medium_max_steps: Lightweight planning step limit.
         complexity_threshold: Tokens threshold for complex planning.
         force_keywords: Keywords that force comprehensive planning.
         adaptive_escalation: Escalate planning if iteration shows complexity.
@@ -475,10 +474,6 @@ class PlanningConfig(BaseModel):
     simple_max_tokens: int = Field(
         default=50,
         description="Skip planning for queries < N tokens",
-    )
-    medium_max_steps: int = Field(
-        default=3,
-        description="Lightweight planning step limit",
     )
     complexity_threshold: int = Field(
         default=160,

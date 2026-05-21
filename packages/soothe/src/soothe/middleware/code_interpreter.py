@@ -11,15 +11,21 @@ Reference: https://www.langchain.com/blog/give-your-agents-an-interpreter
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware
+from langchain.agents.middleware.types import ModelRequest, ModelResponse, ToolCallRequest
+from langchain_core.messages import ToolMessage
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentState
     from langgraph.runtime import Runtime
+    from langgraph.types import Command
 
     from soothe.config import SootheConfig
+else:
+    from langgraph.types import Command
 
 logger = logging.getLogger(__name__)
 
@@ -81,13 +87,14 @@ class CodeInterpreterMiddleware(AgentMiddleware):
             config: Soothe configuration. If provided, other args are overridden
                 by config.code_interpreter values.
             ptc_allowlist: List of tool names exposed via tools.* namespace.
-            memory_limit_mb: Interpreter memory limit in MB.
-            timeout_seconds: Per-eval timeout in seconds.
+            memory_limit_mb: Interpreter memory limit in MB (mapped to ``memory_limit`` bytes).
+            timeout_seconds: Per-eval timeout in seconds (mapped to ``timeout`` float).
             max_ptc_calls: Maximum programmatic tool calls per eval.
-            max_result_size: Maximum result size in characters.
-            console_capture: Capture console.log output.
+            max_result_size: Maximum result size in characters (mapped to ``max_result_chars``).
+            console_capture: Capture console.log output (mapped to ``capture_console``).
             snapshot_between_turns: Preserve state between conversation turns.
         """
+        super().__init__()
         # Use config values if provided, otherwise use explicit args
         if config is not None:
             ci_config = config.code_interpreter
@@ -108,9 +115,10 @@ class CodeInterpreterMiddleware(AgentMiddleware):
             self._snapshot_between_turns = snapshot_between_turns
 
         self._inner_middleware: AgentMiddleware | None = None
+        self.tools: list[Any] = []
 
     def _initialize_inner(self) -> AgentMiddleware | None:
-        """Initialize the underlying deepagents CodeInterpreterMiddleware.
+        """Initialize the underlying langchain_quickjs CodeInterpreterMiddleware.
 
         Returns:
             The initialized middleware or None if langchain_quickjs is not available.
@@ -119,18 +127,19 @@ class CodeInterpreterMiddleware(AgentMiddleware):
             return self._inner_middleware
 
         try:
-            # Try to import from langchain_quickjs (the deepagents integration)
             from langchain_quickjs import CodeInterpreterMiddleware as QuickJSMiddleware
 
             self._inner_middleware = QuickJSMiddleware(
-                ptc=self._ptc_allowlist,
-                memory_limit_mb=self._memory_limit_mb,
-                timeout_seconds=self._timeout_seconds,
+                ptc=self._ptc_allowlist or None,
+                memory_limit=self._memory_limit_mb * 1024 * 1024,
+                timeout=float(self._timeout_seconds),
                 max_ptc_calls=self._max_ptc_calls,
-                max_result_size=self._max_result_size,
-                console_capture=self._console_capture,
+                max_result_chars=self._max_result_size,
+                capture_console=self._console_capture,
                 snapshot_between_turns=self._snapshot_between_turns,
             )
+            self.tools = list(self._inner_middleware.tools)
+            self.state_schema = self._inner_middleware.state_schema
             logger.info(
                 "[CodeInterpreter] Initialized with ptc_allowlist=%s, memory=%dMB, timeout=%ds",
                 self._ptc_allowlist,
@@ -150,10 +159,7 @@ class CodeInterpreterMiddleware(AgentMiddleware):
         state: AgentState,
         runtime: Runtime,
     ) -> dict[str, Any] | None:
-        """Hook called before agent execution.
-
-        Delegates to inner middleware if initialized.
-        """
+        """Hook called before agent execution."""
         inner = self._initialize_inner()
         if inner is not None:
             return await inner.abefore_agent(state, runtime)
@@ -163,41 +169,39 @@ class CodeInterpreterMiddleware(AgentMiddleware):
         self,
         state: AgentState,
         runtime: Runtime,
-        output: Any,
-    ) -> Any:
-        """Hook called after agent execution.
-
-        Delegates to inner middleware if initialized.
-        """
+    ) -> dict[str, Any] | None:
+        """Hook called after agent execution."""
         inner = self._initialize_inner()
         if inner is not None:
-            return await inner.aafter_agent(state, runtime, output)
-        return output
+            return await inner.aafter_agent(state, runtime)
+        return None
 
     async def awrap_tool_call(
         self,
-        request: Any,
-        handler: Any,
-    ) -> Any:
-        """Hook called for tool call wrapping.
-
-        Delegates to inner middleware if initialized.
-        """
-        inner = self._initialize_inner()
-        if inner is not None:
-            return await inner.awrap_tool_call(request, handler)
+        request: ToolCallRequest,
+        handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]],
+    ) -> ToolMessage | Command[Any]:
+        """Pass through — QuickJS middleware uses model-call hooks, not tool wrapping."""
         return await handler(request)
 
-    async def awrap_llm_call(
+    def wrap_model_call(
         self,
-        request: Any,
-        handler: Any,
-    ) -> Any:
-        """Hook called for LLM call wrapping.
-
-        Delegates to inner middleware if initialized.
-        """
+        request: ModelRequest[Any],
+        handler: Callable[[ModelRequest[Any]], ModelResponse[Any]],
+    ) -> ModelResponse[Any]:
+        """Delegate REPL system prompt and PTC setup to langchain_quickjs."""
         inner = self._initialize_inner()
         if inner is not None:
-            return await inner.awrap_llm_call(request, handler)
+            return inner.wrap_model_call(request, handler)
+        return handler(request)
+
+    async def awrap_model_call(
+        self,
+        request: ModelRequest[Any],
+        handler: Callable[[ModelRequest[Any]], Awaitable[ModelResponse[Any]]],
+    ) -> ModelResponse[Any]:
+        """Delegate REPL system prompt and PTC setup to langchain_quickjs (async path)."""
+        inner = self._initialize_inner()
+        if inner is not None:
+            return await inner.awrap_model_call(request, handler)
         return await handler(request)
