@@ -106,7 +106,7 @@ dev = [
     "ruff>=0.12.0",
     "mypy>=1.0.0",
     "soothe[langfuse]",
-    "soothe-community>=0.2.1,<1.0.0",
+    "soothe-community>=0.2.2,<1.0.0",
 ]
 
 [project.urls]
