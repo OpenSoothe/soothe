@@ -45,7 +45,7 @@ router:
   embedding: "dashscope:multimodal-embedding-v1"
 
 # Built-in subagents (explore, plan, tacitus are registered in resolver/_resolver_tools.py).
-# Community subagents (claude, browser) require soothe-community package — disable in core config.
+# Community subagents (claude, browser_use) require soothe-community package — disable in core config.
 # See: https://github.com/OpenSoothe/soothe-community for community agent extensions.
 subagents:
   claude:
@@ -54,7 +54,7 @@ subagents:
     config:
       permission_mode: accept-edits
       max_turns: 20
-  browser:
+  browser_use:
     enabled: true
     model: null
     config:
