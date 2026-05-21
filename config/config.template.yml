@@ -210,7 +210,6 @@ agent_loop:
   loop_orchestrator_evidence_validate: true
   planning:
     simple_max_tokens: 50
-    medium_max_steps: 3
     complexity_threshold: 160
     force_keywords:
     - plan for

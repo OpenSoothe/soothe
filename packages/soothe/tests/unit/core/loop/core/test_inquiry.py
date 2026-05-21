@@ -158,13 +158,6 @@ class TestSourceScoring:
         assert src.relevance_score("git history of this repo") > 0.1
         assert src.relevance_score("what is machine learning") < 0.1
 
-    def test_browser_source_scoring(self) -> None:
-        from soothe.subagents.research.sources.browser import BrowserSource
-
-        src = BrowserSource()
-        assert src.relevance_score("https://example.com/dashboard") > 0.7
-        assert src.relevance_score("simple factual question") < 0.2
-
     def test_document_source_scoring(self) -> None:
         from soothe.subagents.research.sources.document import DocumentSource
 

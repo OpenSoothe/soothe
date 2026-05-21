@@ -76,7 +76,7 @@ async def test_parallel_branch_prepends_predecessor_ledger_before_envelope() -> 
     assert messages[1] is not ledger[1]
     assert isinstance(messages[2], LoopHumanMessage)
     assert messages[2].phase == "execute_step"
-    assert "Branch goal text" in str(messages[2].content)
+    assert "<CURRENT_GOAL>" not in str(messages[2].content)
     assert "second" in str(messages[2].content)
 
     cfg = mock_agent.astream.call_args.kwargs["config"]["configurable"]

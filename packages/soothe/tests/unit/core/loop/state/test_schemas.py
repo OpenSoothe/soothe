@@ -442,6 +442,54 @@ class TestPlanGeneration:
         assert out.plan_action == "keep"
         assert out.steps == []
 
+    def test_first_wave_model_rejects_more_than_two_steps(self) -> None:
+        from soothe.core.loop.state.schemas import plan_generation_model_for_iteration
+
+        schema = plan_generation_model_for_iteration(0)
+        steps = [
+            StepAction(id="01", description=f"step {i}", expected_output="ok") for i in range(3)
+        ]
+        with pytest.raises(ValidationError):
+            schema(
+                plan_action="new",
+                type="execute_steps",
+                execution_mode="sequential",
+                steps=steps,
+                next_action="Proceed.",
+            )
+
+    def test_first_wave_model_accepts_two_steps(self) -> None:
+        from soothe.core.loop.state.schemas import plan_generation_model_for_iteration
+
+        schema = plan_generation_model_for_iteration(0)
+        out = schema(
+            plan_action="new",
+            type="execute_steps",
+            execution_mode="sequential",
+            steps=[
+                StepAction(id="01", description="recon", expected_output="map"),
+                StepAction(id="02", description="implement", expected_output="done"),
+            ],
+            next_action="Starting.",
+        )
+        assert len(out.steps) == 2
+
+    def test_later_iteration_model_allows_three_steps(self) -> None:
+        from soothe.core.loop.state.schemas import plan_generation_model_for_iteration
+
+        schema = plan_generation_model_for_iteration(1)
+        assert schema is PlanGeneration
+        out = PlanGeneration(
+            plan_action="new",
+            type="execute_steps",
+            execution_mode="sequential",
+            steps=[
+                StepAction(id="01", description=f"step {i}", expected_output="ok") for i in range(3)
+            ],
+            next_action="Proceed.",
+        )
+        assert len(out.steps) == 3
+
 
 class TestStepResult:
     """Tests for StepResult schema."""

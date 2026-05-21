@@ -19,16 +19,15 @@ def test_execute_envelope_includes_response_language_hint() -> None:
     assert "<CONTEXT_INFO>" in envelope
 
 
-def test_execute_envelope_strips_trailing_iteration_suffix_from_goal() -> None:
+def test_execute_envelope_omits_goal_block_for_plain_goals() -> None:
     envelope = build_execute_step_envelope(
         goal="analyze why the exec interrupted. how to fix (iteration 1/99)",
         step_description="Do the thing",
         execution_hints=None,
     )
-    assert (
-        "<CURRENT_GOAL>\nanalyze why the exec interrupted. how to fix\n</CURRENT_GOAL>" in envelope
-    )
-    assert "(iteration 1/99)" not in envelope
+    assert "<CURRENT_GOAL>" not in envelope
+    assert "analyze why the exec interrupted" not in envelope
+    assert envelope.startswith("<USER_QUERY>")
 
 
 def test_execute_envelope_slash_skill_surfaces_primary_query_first() -> None:
@@ -39,6 +38,7 @@ def test_execute_envelope_slash_skill_surfaces_primary_query_first() -> None:
         step_description="Run the planned step",
         goal_user_submission="/skill:demo summarize the README",
     )
+    assert "<CURRENT_GOAL>" not in envelope
     assert "<USER_PRIMARY_QUERY>" in envelope
     assert "summarize the README" in envelope
     assert "<FULL_GOAL_AND_SKILL_CONTEXT>" in envelope

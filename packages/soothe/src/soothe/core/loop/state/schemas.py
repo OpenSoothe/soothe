@@ -485,6 +485,10 @@ class StatusAssessment(BaseModel):
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
 
 
+FIRST_WAVE_MAX_STEPS = 2
+"""Maximum plan steps on the first execute cycle (``state.iteration == 0``)."""
+
+
 class PlanGeneration(BaseModel):
     """PlanGeneration: generate execution plan when goal incomplete (RFC-604).
 
@@ -545,6 +549,25 @@ class PlanGeneration(BaseModel):
                     "plan_action 'new' with type 'execute_steps' requires non-empty steps"
                 )
         return self
+
+
+def plan_generation_model_for_iteration(iteration: int) -> type[PlanGeneration]:
+    """Structured-output schema for plan-generate, with a first-wave step cap when needed.
+
+    Args:
+        iteration: AgentLoop iteration (0 = first plan-generate for a new goal).
+
+    Returns:
+        ``PlanGeneration`` for iteration > 0; a subclass capped at ``FIRST_WAVE_MAX_STEPS`` steps
+        when ``iteration == 0``.
+    """
+    if iteration != 0:
+        return PlanGeneration
+
+    class PlanGenerationFirstWave(PlanGeneration):
+        steps: list[StepAction] = Field(default_factory=list, max_length=FIRST_WAVE_MAX_STEPS)
+
+    return PlanGenerationFirstWave
 
 
 class StepResult(BaseModel):

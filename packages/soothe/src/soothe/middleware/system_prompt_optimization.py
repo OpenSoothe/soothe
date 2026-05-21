@@ -288,7 +288,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         NOT in system prompt (moved to user message envelope):
         - Date/time → <CONTEXT_INFO>
         - Execution hints → <EXECUTION_HINTS>
-        - Current goal context → <CURRENT_GOAL>
+        - Current goal context → ledger / plan turns (not repeated on execute-step envelope)
         - Per-turn recalled memories → <RETRIEVED_KNOWLEDGE><MEMORY>
 
         Args:
