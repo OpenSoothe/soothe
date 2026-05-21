@@ -79,8 +79,8 @@ class TestPublicSemanticRouter:
     def test_selects_sources_for_public_domain(self) -> None:
         sources = [
             MockPublicSource("web", "web", "web_search", "Web search."),
-            MockPublicSource("wiki", "encyclopedia", "wikipedia", "Wikipedia."),
             MockPublicSource("acad", "academic", "academic_search", "Academic papers."),
+            MockPublicSource("crawl", "url", "url_crawl", "URL crawl."),
         ]
         router = PublicSemanticRouter(sources, TacitusConfig(max_sources_per_query=2))
         selected = router.select("transformer architecture papers", domain="public")

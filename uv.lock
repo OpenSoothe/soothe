@@ -4827,7 +4827,6 @@ all = [
     { name = "pypdf" },
     { name = "sentence-transformers" },
     { name = "tavily-python" },
-    { name = "wikipedia" },
     { name = "wizsearch" },
     { name = "yt-dlp" },
 ]
@@ -4865,7 +4864,6 @@ research = [
     { name = "deepxiv-sdk" },
     { name = "langchain-tavily" },
     { name = "tavily-python" },
-    { name = "wikipedia" },
     { name = "wizsearch" },
 ]
 semantic = [
@@ -4948,13 +4946,11 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
     { name = "sentence-transformers", marker = "extra == 'all'", specifier = ">=2.2.0" },
     { name = "sentence-transformers", marker = "extra == 'semantic'", specifier = ">=2.2.0" },
-    { name = "soothe-community", marker = "extra == 'dev'", specifier = ">=0.1.0,<1.0.0" },
+    { name = "soothe-community", marker = "extra == 'dev'", specifier = ">=0.2.0,<1.0.0" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "sqlite-vec", specifier = ">=0.1.0" },
     { name = "tavily-python", marker = "extra == 'all'", specifier = ">=0.5.0" },
     { name = "tavily-python", marker = "extra == 'research'", specifier = ">=0.5.0" },
-    { name = "wikipedia", marker = "extra == 'all'", specifier = ">=1.4.0" },
-    { name = "wikipedia", marker = "extra == 'research'", specifier = ">=1.4.0" },
     { name = "wizsearch", marker = "extra == 'all'", specifier = ">=1.1.8,<2.0.0" },
     { name = "wizsearch", marker = "extra == 'research'", specifier = ">=1.1.8,<2.0.0" },
     { name = "yt-dlp", marker = "extra == 'all'", specifier = ">=2023.0.0" },
@@ -5005,7 +5001,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "soothe-community"
-version = "0.1.0"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "arxiv" },
@@ -5018,9 +5014,9 @@ dependencies = [
     { name = "soothe-sdk" },
     { name = "tiktoken" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5e/d3/90a24464d915911259bc636eb80730784394f85a3a7645bb6b1afa21beb4/soothe_community-0.1.0.tar.gz", hash = "sha256:99df1282f9eeb41207d6d61391cd6abf13cf20c32becb1485015b9858121988e", size = 54073, upload-time = "2026-04-18T14:29:46.222Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fa/a1/76277bc88600cd170bf93a8f10b4e8e37bace426b0c4d4038dc5d94e087d/soothe_community-0.2.0.tar.gz", hash = "sha256:447c1edc8a8c09c566e16a4f96aaf56fe6729883927971d491cf3727146b855c", size = 77269, upload-time = "2026-05-21T12:29:16.877Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/41/fc/5200e867a90bb2b00561db20ada9a325a805b0574a0dff059b3044439913/soothe_community-0.1.0-py3-none-any.whl", hash = "sha256:c5151e8bf810387d6c91ed20ef36d9e5dcfce72ef4a9ab9668b9c47894e2e051", size = 59836, upload-time = "2026-04-18T14:29:42.433Z" },
+    { url = "https://files.pythonhosted.org/packages/a1/9a/500e4cd9d2a5dab7012dbf536c0e5a871f3d96b4fa9c5307c954beef6972/soothe_community-0.2.0-py3-none-any.whl", hash = "sha256:bad4562ee7c9436e439157aab26ad0f2997a0b7cc94549ce291c88f922761808", size = 83073, upload-time = "2026-05-21T12:29:15.244Z" },
 ]
 
 [[package]]
@@ -6075,16 +6071,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/53/43/62f04f661286ce2c93310fb0682c1c6665c9804567923861b2382676c91d/whenever-0.10.0-cp314-cp314t-win_amd64.whl", hash = "sha256:8f7482cc1b1d019fbcfad83b31f783b0eaf5390aada329f044dc04921bb5ea2b", size = 560313, upload-time = "2026-04-05T18:43:46.293Z" },
     { url = "https://files.pythonhosted.org/packages/ed/b5/38fba836844233b961a0026d96f39f893eab63757e7757fd1d16fb02aa80/whenever-0.10.0-py3-none-any.whl", hash = "sha256:70feda454af6b2c231abd428b9430cd75492a000ca1d1edc42976d6fea265eec", size = 119264, upload-time = "2026-04-05T18:43:48.077Z" },
 ]
-
-[[package]]
-name = "wikipedia"
-version = "1.4.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "beautifulsoup4" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/67/35/25e68fbc99e672127cc6fbb14b8ec1ba3dfef035bf1e4c90f78f24a80b7d/wikipedia-1.4.0.tar.gz", hash = "sha256:db0fad1829fdd441b1852306e9856398204dc0786d2996dd2e0c8bb8e26133b2", size = 27748, upload-time = "2014-11-15T15:59:49.808Z" }
 
 [[package]]
 name = "wizsearch"
