@@ -35,7 +35,7 @@ class PlanStep(BaseModel):
         id: Unique step identifier.
         description: What this step should accomplish.
         execution_hint: Preferred execution method.
-        subagent: Delegate name when routing through a subagent (parity with ``StepAction.subagent``, IG-352).
+        subagent: Delegate name when routing through a subagent (legacy ``LLMPlanner`` Plan path, IG-352).
         status: Current step status.
         result: Output from execution (set after completion).
         depends_on: IDs of steps that must complete before this one.

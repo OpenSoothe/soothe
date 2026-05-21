@@ -5,16 +5,80 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from deepagents.backends.protocol import BackendProtocol
 from deepagents.backends.utils import validate_path
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain.tools import ToolRuntime
+from langchain.tools.tool_node import ToolCallRequest
+from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool, StructuredTool
+from langgraph.types import Command
 from pydantic import BaseModel, Field
+
+# OpenAI-compatible chat APIs used by many Soothe providers (e.g. coding-plan) reject
+# LangChain ``file`` / ``audio`` tool-result blocks. ``read_file`` on PDFs returns those.
+_PROVIDER_SAFE_TOOL_BLOCK_TYPES = frozenset(
+    {"text", "image", "image_url", "video", "video_url"},
+)
+
+def coerce_provider_safe_tool_message(
+    message: ToolMessage | Command[Any],
+) -> ToolMessage | Command[Any]:
+    """Replace unsupported multimodal tool blocks with plain-text guidance.
+
+    Deepagents ``read_file`` returns ``file`` blocks for PDFs and ``audio`` blocks for
+    audio files. Providers that only accept ``text``, ``image_url``, and ``video*``
+    then fail the next model turn with ``Invalid value: file``.
+
+    Args:
+        message: Tool result from filesystem middleware (or a Command wrapper).
+
+    Returns:
+        A copy of the message with unsafe blocks converted to text, or the original
+        value when no conversion is needed.
+    """
+    if not isinstance(message, ToolMessage):
+        return message
+
+    blocks = message.content_blocks
+    if not blocks:
+        return message
+
+    safe_blocks: list[dict[str, Any]] = []
+    converted = False
+    for block in blocks:
+        block_type = block.get("type") if isinstance(block, dict) else None
+        if block_type in _PROVIDER_SAFE_TOOL_BLOCK_TYPES:
+            safe_blocks.append(block)
+            continue
+
+        converted = True
+        path = message.additional_kwargs.get("read_file_path", "")
+        mime = block.get("mime_type") if isinstance(block, dict) else None
+        mime_part = f", mime_type={mime}" if mime else ""
+        path_part = f" at {path}" if path else ""
+        safe_blocks.append(
+            {
+                "type": "text",
+                "text": (
+                    "System reminder: read_file returned a document or media file"
+                    f"{path_part} (block type={block_type!r}{mime_part}) that cannot be "
+                    "sent inline to this chat model. Use goal attachment text, "
+                    "run_command (e.g. pdftotext or a PDF parser), or paginated text "
+                    "reads on extracted files instead of read_file on this path."
+                ),
+            }
+        )
+
+    if not converted:
+        return message
+
+    return message.model_copy(update={"content": safe_blocks})
 
 
 # Tool schemas (following deepagents pattern)
@@ -184,6 +248,24 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
                 self._create_apply_diff_tool(),
             ]
         )
+
+    def wrap_tool_call(
+        self,
+        request: ToolCallRequest,
+        handler: Callable[[ToolCallRequest], ToolMessage | Command[Any]],
+    ) -> ToolMessage | Command[Any]:
+        """Evict oversized tool results and coerce unsupported multimodal blocks."""
+        result = super().wrap_tool_call(request, handler)
+        return coerce_provider_safe_tool_message(result)
+
+    async def awrap_tool_call(
+        self,
+        request: ToolCallRequest,
+        handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]],
+    ) -> ToolMessage | Command[Any]:
+        """Async: evict oversized tool results and coerce unsupported multimodal blocks."""
+        result = await super().awrap_tool_call(request, handler)
+        return coerce_provider_safe_tool_message(result)
 
     def _backend_for_tools(self, runtime: ToolRuntime | None) -> BackendProtocol:
         """Resolve backend for surgical tools (IG-316, IG-328).

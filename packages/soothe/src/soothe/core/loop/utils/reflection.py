@@ -348,8 +348,6 @@ def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
     """Build AgentDecision from a parsed JSON object (step list at top level)."""
     from soothe.core.loop.state.schemas import AgentDecision, StepAction
 
-    known_subagents = {"browser", "claude", "explore", "plan", "tacitus"}
-
     steps = []
     for i, step_data in enumerate(data.get("steps", [])):
         if not isinstance(step_data, dict):
@@ -361,21 +359,10 @@ def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
             else [str(d) for d in deps if d is not None]
         )
 
-        step_tools = step_data.get("tools") or []
-        if step_tools:
-            subagent_tools = [t for t in step_tools if t in known_subagents]
-            if subagent_tools and not step_data.get("subagent"):
-                step_data["subagent"] = subagent_tools[0]
-                logger.debug(
-                    "Normalized subagent '%s' from tools field to subagent field",
-                    subagent_tools[0],
-                )
-
         steps.append(
             StepAction(
                 id=str(i + 1),
                 description=step_data.get("description", ""),
-                subagent=step_data.get("subagent"),
                 expected_output=step_data.get("expected_output", ""),
                 dependencies=deps,
             )

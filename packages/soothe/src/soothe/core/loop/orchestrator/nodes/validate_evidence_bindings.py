@@ -33,7 +33,7 @@ async def node_validate_evidence_bindings(
         await ctx.emit(
             "fatal_error",
             {
-                "error": "Plan steps missing valid evidence_refs for non-empty evidence ledger",
+                "error": "Plan evidence validation failed",
                 "step_id": "",
             },
         )

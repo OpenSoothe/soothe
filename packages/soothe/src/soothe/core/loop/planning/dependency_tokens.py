@@ -10,7 +10,7 @@ def expand_dependency_satisfaction_ids(completed_step_ids: Iterable[str]) -> set
 
     After ``assign_plan_step_ids``, successful steps are keyed by composite ids such as
     ``KFA-01``. Later plans may reference prior work using the model-local token ``01``
-    (or ``1``) in ``dependencies`` / ``evidence_refs``. Runtime completion sets only
+    (or ``1``) in ``dependencies``. Runtime completion sets only
     contained composite ids, so :meth:`~soothe.core.loop.state.schemas.AgentDecision.get_ready_steps`
     would block the entire wave.
 

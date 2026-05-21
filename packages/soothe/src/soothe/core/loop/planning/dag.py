@@ -23,8 +23,6 @@ class PlanNode:
     plan_iteration: int
     status: Literal["pending", "completed", "failed"] = "pending"
     dependencies: list[str] = field(default_factory=list)
-    evidence_refs: list[str] = field(default_factory=list)
-    subagent: str | None = None
     outcome: StepResult | None = None
 
 
@@ -61,10 +59,6 @@ class PlanDAG:
                     # Refresh dependencies if this is a replan
                     if step.dependencies:
                         existing.dependencies = list(step.dependencies)
-                    if step.evidence_refs:
-                        existing.evidence_refs = list(step.evidence_refs)
-                    if step.subagent:
-                        existing.subagent = step.subagent
                 continue
 
             deps = list(step.dependencies) if step.dependencies else []
@@ -74,8 +68,6 @@ class PlanDAG:
                 plan_id=plan_id or "unknown",
                 plan_iteration=iteration,
                 dependencies=deps,
-                evidence_refs=list(step.evidence_refs) if step.evidence_refs else [],
-                subagent=step.subagent,
             )
 
         logger.debug(
@@ -168,10 +160,6 @@ class PlanDAG:
         if executed == 0:
             return 1.0
         return self.completed_steps / executed
-
-    @property
-    def used_subagents(self) -> bool:
-        return any(n.subagent for n in self.nodes.values())
 
     def get_completed_step_ids(self) -> set[str]:
         return {cid for cid, n in self.nodes.items() if n.status == "completed"}

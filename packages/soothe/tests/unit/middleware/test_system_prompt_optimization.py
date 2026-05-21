@@ -339,7 +339,7 @@ def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
 
 
 def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
-    """Per-step subagent hint wins over wire ``preferred_subagent`` for directive text."""
+    """``soothe_step_subagent`` configurable wins over wire ``preferred_subagent`` on first hop."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
     classification = RoutingClassification(
@@ -361,7 +361,7 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
         modified = middleware.modify_request(request)
     content = modified.system_message.content
     assert "subagent_type='explore'" in content
-    assert "subagent_type='tacitus'" in content or "preferred_subagent" in content
+    assert "subagent_type='tacitus'" not in content
 
 
 def test_memory_section_uses_memory_summary_tag():
