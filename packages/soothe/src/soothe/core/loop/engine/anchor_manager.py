@@ -55,7 +55,8 @@ class CheckpointAnchorManager:
         checkpoint_tuple = await checkpointer.aget_tuple(config)
 
         if not checkpoint_tuple:
-            logger.warning(
+            log = logger.debug if iteration == 0 else logger.warning
+            log(
                 "No checkpoint found for thread=%s iteration=%d, skipping anchor capture",
                 thread_id,
                 iteration,
@@ -103,7 +104,8 @@ class CheckpointAnchorManager:
         checkpoint_tuple = await checkpointer.aget_tuple(config)
 
         if not checkpoint_tuple:
-            logger.warning(
+            log = logger.debug if iteration == 0 else logger.warning
+            log(
                 "No checkpoint found for thread=%s iteration=%d, skipping anchor capture",
                 thread_id,
                 iteration,

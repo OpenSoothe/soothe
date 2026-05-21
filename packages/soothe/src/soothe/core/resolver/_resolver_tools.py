@@ -479,17 +479,22 @@ def _resolve_single_tool_group_uncached(
         return toolkit.get_tools()
 
     if name == "deepxiv":
-        from soothe.toolkits.deepxiv import DeepxivToolkit
+        from soothe.toolkits.deepxiv import DeepxivToolkit, resolve_deepxiv_token
 
-        deepxiv_config: dict[str, Any] = {}
-        if config and hasattr(config, "tools") and hasattr(config.tools, "deepxiv"):
-            dx = config.tools.deepxiv
-            deepxiv_config = {
-                "token": dx.token if hasattr(dx, "token") else None,
-                "timeout": dx.timeout if hasattr(dx, "timeout") else 60,
-                "max_retries": dx.max_retries if hasattr(dx, "max_retries") else 3,
-            }
-        toolkit = DeepxivToolkit(**deepxiv_config)
+        token: str | None = None
+        timeout = 60
+        max_retries = 3
+        if config and hasattr(config, "tools"):
+            dx = getattr(config.tools, "deepxiv", None)
+            if dx:
+                token = getattr(dx, "token", None)
+                timeout = getattr(dx, "timeout", 60)
+                max_retries = getattr(dx, "max_retries", 3)
+        toolkit = DeepxivToolkit(
+            token=resolve_deepxiv_token(token),
+            timeout=timeout,
+            max_retries=max_retries,
+        )
         return toolkit.get_tools()
 
     # Support individual data tool names (map to consolidated group)

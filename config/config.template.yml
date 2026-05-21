@@ -116,12 +116,12 @@ tools:
     allow_dangerous_requests: true
     headers: {}
     verify_ssl: true
-  # DeepXiv: Academic paper search and progressive reading
-  # Get a token at https://data.rag.ac.cn/register (10,000 requests/day)
-  # If not provided, auto-registers anonymous token (1,000 requests/day)
+  # DeepXiv: Academic paper search and progressive reading (enabled by default)
+  # Token: set DEEPXIV_API_KEY or DEEPXIV_TOKEN, or override token below
+  # Register at https://data.rag.ac.cn (10,000 req/day); omit token for anonymous tier
   deepxiv:
     enabled: true
-    token: ${DEEPXIV_API_KEY:-}
+    token: null
     timeout: 60
     max_retries: 3
 mcp_servers: []

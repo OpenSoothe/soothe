@@ -221,6 +221,21 @@ class WebSearchConfig(ToolConfig):
     timeout: int = 30
 
 
+class DeepxivToolsConfig(ToolConfig):
+    """DeepXiv academic paper search and reading tools.
+
+    Args:
+        enabled: Whether DeepXiv tools are enabled.
+        token: API token, ``${DEEPXIV_API_KEY}`` / ``${DEEPXIV_TOKEN}``, or null for env lookup.
+        timeout: Request timeout in seconds.
+        max_retries: Maximum retry attempts per request.
+    """
+
+    token: str | None = None
+    timeout: int = 60
+    max_retries: int = 3
+
+
 class HttpRequestsToolsConfig(ToolConfig):
     """LangChain Community ``RequestsToolkit`` (HTTP verbs).
 
@@ -261,6 +276,7 @@ class ToolsConfig(BaseModel):
         audio: Audio transcription tools config.
         video: Video analysis tools config.
         http_requests: LangChain Requests toolkit (HTTP GET/POST/PATCH/PUT/DELETE).
+        deepxiv: DeepXiv academic paper search tools (enabled by default).
     """
 
     execution: ToolConfig = Field(default_factory=ToolConfig)
@@ -272,6 +288,7 @@ class ToolsConfig(BaseModel):
     audio: ToolConfig = Field(default_factory=ToolConfig)
     video: ToolConfig = Field(default_factory=ToolConfig)
     http_requests: HttpRequestsToolsConfig = Field(default_factory=HttpRequestsToolsConfig)
+    deepxiv: DeepxivToolsConfig = Field(default_factory=DeepxivToolsConfig)
 
 
 class PersistenceConfig(BaseModel):
