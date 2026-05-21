@@ -28,7 +28,7 @@ __all__ = [
 @plugin(
     name="tacitus",
     version="3.0.0",
-    description="Public-domain research subagent (web, Wikipedia, academic, URLs)",
+    description="Public-domain research subagent (web, academic, URLs)",
     trust_level="built-in",
 )
 class TacitusPlugin:
@@ -43,7 +43,7 @@ class TacitusPlugin:
     @subagent(
         name="tacitus",
         description=(
-            "Tacitus: deep public-domain research across web search, Wikipedia, academic "
+            "Tacitus: deep public-domain research across web search, academic "
             "papers, and public URLs. Use for thorough investigation and cross-validation. "
             "Do not use for local codebase exploration (use explore)."
         ),

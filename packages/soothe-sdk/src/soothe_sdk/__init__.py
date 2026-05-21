@@ -24,8 +24,20 @@ import importlib.metadata
 # Load before plugin stack so LangGraph serde import-time Reviver() warning is filtered.
 importlib.import_module("soothe_sdk._upstream_warnings")
 
+from soothe_sdk.client.config import SOOTHE_HOME  # noqa: E402, F401
+from soothe_sdk.core.events import SubagentEvent  # noqa: E402, F401
 from soothe_sdk.core.exceptions import PluginError  # noqa: E402, F401
+from soothe_sdk.core.verbosity import VerbosityTier  # noqa: E402, F401
 from soothe_sdk.plugin import plugin, subagent, tool, tool_group  # noqa: E402, F401
+from soothe_sdk.plugin.emit import emit_progress  # noqa: E402, F401
+from soothe_sdk.plugin.registry import register_event  # noqa: E402, F401
+from soothe_sdk.protocols import (  # noqa: E402, F401
+    ActionRequest,
+    PermissionSet,
+    PersistStore,
+    PolicyContext,
+    VectorStoreProtocol,
+)
 
 try:
     __version__ = importlib.metadata.version("soothe-sdk")
@@ -34,15 +46,26 @@ except importlib.metadata.PackageNotFoundError:
 
 __soothe_required_version__ = ">=0.5.0,<1.0.0"
 
-# Minimal exports - version + plugin decorators only
 __all__ = [
     "__version__",
     "__soothe_required_version__",
-    # Core exception (legacy convenience import)
+    # Core
     "PluginError",
-    # Plugin decorators (convenience re-exports)
+    "SubagentEvent",
+    "VerbosityTier",
+    # Plugin API
     "plugin",
     "subagent",
     "tool",
     "tool_group",
+    "register_event",
+    "emit_progress",
+    # Protocols (legacy root imports)
+    "PersistStore",
+    "VectorStoreProtocol",
+    "ActionRequest",
+    "PermissionSet",
+    "PolicyContext",
+    # Client config
+    "SOOTHE_HOME",
 ]

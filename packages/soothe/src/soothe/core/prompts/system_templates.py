@@ -88,7 +88,7 @@ _RESEARCH_GUIDE = """\
 Research tools:
 - search_web: Quick web search for factual lookups, news, current events (single call).
 - crawl_web: Extract clean content from a web page URL.
-- tacitus: Public-domain deep investigation (web, Wikipedia, academic, URLs).
+- tacitus: Public-domain deep investigation (web, academic, URLs).
   Set domain='web' for internet, 'code' for codebase, 'deep' for all, 'auto' to decide.\
 """
 

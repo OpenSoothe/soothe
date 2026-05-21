@@ -51,12 +51,10 @@ def _build_public_sources(config: SootheConfig) -> list[Any]:
         AcademicSearchSource,
         UrlCrawlSource,
         WebSearchSource,
-        WikipediaSource,
     )
 
     return [
         WebSearchSource(config=config),
-        WikipediaSource(),
         AcademicSearchSource(config=config),
         UrlCrawlSource(config=config),
     ]
@@ -106,7 +104,7 @@ def create_tacitus_subagent(
     return {
         "name": "tacitus",
         "description": (
-            "Tacitus: deep public-domain research across web search, Wikipedia, academic "
+            "Tacitus: deep public-domain research across web search, academic "
             "papers, and public URLs. Use for thorough investigation and cross-validation. "
             "Do not use for local codebase or file exploration (use explore)."
         ),
