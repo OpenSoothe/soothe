@@ -1,4 +1,8 @@
-"""Academic and encyclopedic InformationSource wrapping arxiv and wikipedia."""
+"""Academic InformationSource wrapping DeepXiv SDK.
+
+Provides semantic paper search across arXiv, bioRxiv, medRxiv, and PubMed Central
+with AI-generated TLDRs and progressive content loading.
+"""
 
 from __future__ import annotations
 
@@ -13,50 +17,46 @@ _KEYWORD_MATCH_THRESHOLD = 0.15
 
 
 class AcademicSource:
-    """Information source backed by academic and encyclopedic databases.
+    """Information source backed by DeepXiv academic databases.
 
-    Wraps langchain ``ArxivQueryRun`` and ``WikipediaQueryRun``.
-    Chooses between them based on query heuristics.
+    Wraps DeepXiv SDK Reader for semantic paper search across multiple
+    academic repositories (arXiv, bioRxiv, medRxiv, PubMed Central).
 
     Args:
-        enable_arxiv: Enable ArXiv search (default True).
-        enable_wikipedia: Enable Wikipedia lookup (default True).
+        config: Optional Soothe config for DeepXiv settings.
     """
 
     def __init__(
         self,
-        *,
-        enable_arxiv: bool = True,
-        enable_wikipedia: bool = True,
+        config: Any | None = None,
     ) -> None:
-        """Initialize the academic source with arxiv and/or wikipedia."""
-        self._enable_arxiv = enable_arxiv
-        self._enable_wikipedia = enable_wikipedia
-        self._arxiv_tool: Any | None = None
-        self._wikipedia_tool: Any | None = None
+        """Initialize the academic source with optional config."""
+        self._config = config
+        self._deepxiv_tool: Any | None = None
         self._tools_loaded = False
 
     def _ensure_tools(self) -> None:
+        """Lazy-load DeepXiv search tool."""
         if self._tools_loaded:
             return
         self._tools_loaded = True
 
-        if self._enable_arxiv:
-            try:
-                from langchain_community.tools import ArxivQueryRun
+        try:
+            from soothe.toolkits.deepxiv import DeepxivSearchTool
 
-                self._arxiv_tool = ArxivQueryRun()
-            except Exception:
-                logger.debug("ArXiv tool not available", exc_info=True)
+            deepxiv_config: dict[str, Any] = {}
+            if self._config and hasattr(self._config, "tools"):
+                dx = getattr(self._config.tools, "deepxiv", None)
+                if dx:
+                    deepxiv_config = {
+                        "token": dx.token if hasattr(dx, "token") else None,
+                        "timeout": dx.timeout if hasattr(dx, "timeout") else 60,
+                        "max_retries": dx.max_retries if hasattr(dx, "max_retries") else 3,
+                    }
 
-        if self._enable_wikipedia:
-            try:
-                from langchain_community.tools import WikipediaQueryRun
-                from langchain_community.utilities import WikipediaAPIWrapper
-
-                self._wikipedia_tool = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
-            except Exception:
-                logger.debug("Wikipedia tool not available", exc_info=True)
+            self._deepxiv_tool = DeepxivSearchTool(**deepxiv_config)
+        except Exception:
+            logger.debug("DeepXiv tool not available", exc_info=True)
 
     # -- InformationSource protocol ------------------------------------------
 
@@ -71,10 +71,10 @@ class AcademicSource:
         return "academic"
 
     async def query(self, query: str, context: GatherContext) -> list[SourceResult]:
-        """Query academic/encyclopedic sources.
+        """Query academic sources using DeepXiv.
 
-        If the query looks academic, arxiv is tried first.  Wikipedia is
-        used for encyclopedic or definitional queries.
+        Performs semantic paper search and returns formatted results
+        with paper metadata and TLDR summaries.
 
         Args:
             query: Search query.
@@ -87,56 +87,37 @@ class AcademicSource:
         self._ensure_tools()
         results: list[SourceResult] = []
 
+        if not self._deepxiv_tool:
+            return results
+
         q_lower = query.lower()
         is_academic = self._is_academic_query(q_lower)
-        is_encyclopedic = self._is_encyclopedic_query(q_lower)
 
-        if is_academic and self._arxiv_tool:
+        if is_academic:
             try:
-                raw = await self._arxiv_tool._arun(query)
-                if raw and "No good" not in raw:
+                raw = await self._deepxiv_tool._arun(query=query, size=5)
+                if raw and not raw.startswith("Error"):
                     results.append(
                         SourceResult(
-                            content=raw[:3000],
-                            source_ref="arxiv",
+                            content=raw[:4000],
+                            source_ref="deepxiv",
                             source_name="academic",
-                            metadata={"sub_source": "arxiv"},
+                            metadata={"sub_source": "deepxiv"},
                         )
                     )
             except Exception:
-                logger.debug("ArXiv query failed for: %s", query, exc_info=True)
-
-        if (is_encyclopedic or not results) and self._wikipedia_tool:
-            try:
-                raw = await self._wikipedia_tool._arun(query)
-                if raw and "No good" not in raw:
-                    results.append(
-                        SourceResult(
-                            content=raw[:3000],
-                            source_ref="wikipedia",
-                            source_name="academic",
-                            metadata={"sub_source": "wikipedia"},
-                        )
-                    )
-            except Exception:
-                logger.debug("Wikipedia query failed for: %s", query, exc_info=True)
+                logger.debug("DeepXiv query failed for: %s", query, exc_info=True)
 
         return results
 
     def relevance_score(self, query: str) -> float:
-        """Score high for academic/encyclopedic queries."""
-        from ._scoring import (
-            _ACADEMIC_KEYWORDS,
-            _ENCYCLOPEDIC_KEYWORDS,
-            keyword_score,
-        )
+        """Score high for academic queries."""
+        from ._scoring import _ACADEMIC_KEYWORDS, keyword_score
 
         q_lower = query.lower()
         acad = keyword_score(q_lower, _ACADEMIC_KEYWORDS, weight=0.2)
-        ency = keyword_score(q_lower, _ENCYCLOPEDIC_KEYWORDS, weight=0.2)
 
-        score = max(acad, ency)
-        return min(1.0, max(0.05, score))
+        return min(1.0, max(0.05, acad))
 
     # -- Heuristics ----------------------------------------------------------
 
@@ -145,9 +126,3 @@ class AcademicSource:
         from ._scoring import _ACADEMIC_KEYWORDS, keyword_score
 
         return keyword_score(q, _ACADEMIC_KEYWORDS, weight=0.2) > _KEYWORD_MATCH_THRESHOLD
-
-    @staticmethod
-    def _is_encyclopedic_query(q: str) -> bool:
-        from ._scoring import _ENCYCLOPEDIC_KEYWORDS, keyword_score
-
-        return keyword_score(q, _ENCYCLOPEDIC_KEYWORDS, weight=0.2) > _KEYWORD_MATCH_THRESHOLD

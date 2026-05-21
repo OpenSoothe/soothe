@@ -149,6 +149,7 @@ def resolve_tools(
             "image",
             "audio",
             "video",
+            "deepxiv",
         ]
         if getattr(tools_config, name, None) and getattr(tools_config, name).enabled
     ]
@@ -475,6 +476,20 @@ def _resolve_single_tool_group_uncached(
         from soothe.toolkits.data import DataToolkit
 
         toolkit = DataToolkit(config=config)
+        return toolkit.get_tools()
+
+    if name == "deepxiv":
+        from soothe.toolkits.deepxiv import DeepxivToolkit
+
+        deepxiv_config: dict[str, Any] = {}
+        if config and hasattr(config, "tools") and hasattr(config.tools, "deepxiv"):
+            dx = config.tools.deepxiv
+            deepxiv_config = {
+                "token": dx.token if hasattr(dx, "token") else None,
+                "timeout": dx.timeout if hasattr(dx, "timeout") else 60,
+                "max_retries": dx.max_retries if hasattr(dx, "max_retries") else 3,
+            }
+        toolkit = DeepxivToolkit(**deepxiv_config)
         return toolkit.get_tools()
 
     # Support individual data tool names (map to consolidated group)

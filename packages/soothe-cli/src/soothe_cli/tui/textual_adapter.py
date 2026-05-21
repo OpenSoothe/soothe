@@ -62,6 +62,7 @@ from soothe_cli.runtime.parse.tool_call_resolution import (
     materialize_ai_blocks_with_resolved_tools,
     merge_tool_display_args,
     resolve_stream_tool_name,
+    should_ingest_tool_for_step_stats,
     tool_args_meaningful,
 )
 from soothe_cli.runtime.parse.tool_result import extract_tool_result_payload
@@ -783,14 +784,21 @@ async def apply_tool_call_wire_update(
 
     name = str(data.get("name") or "").strip() or "tool"
     raw_args = data.get("args")
-    if not isinstance(raw_args, dict) or not raw_args:
+    if not isinstance(raw_args, dict):
+        raw_args = {}
+    is_main = ns_key == ()
+    if not raw_args and not should_ingest_tool_for_step_stats(
+        is_main_agent=is_main,
+        tool_name=name,
+        tool_call_id=tcid,
+        args_meaningful=False,
+    ):
         return True
 
     if ui_coalesce is not None and ui_coalesce.note_wire_apply(tcid, raw_args):
         return True
 
     overlay = streaming_overlay if streaming_overlay is not None else {}
-    is_main = ns_key == ()
     ts = router.resolve_task_scope(ns_key) if ns_key else None
     merge_id, row_key = (
         (tcid, tcid) if is_main else canonical_subgraph_tool_ids(ns_key, tcid, task_scope=ts)
@@ -2100,12 +2108,18 @@ async def execute_task_textual(
                                     assistant_message_by_namespace.pop(ns_key, None)
 
                                 args_meaningful = tool_args_meaningful(parsed_args)
+                                ingest_for_stats = should_ingest_tool_for_step_stats(
+                                    is_main_agent=is_main_agent,
+                                    tool_name=str(buffer_name or ""),
+                                    tool_call_id=str(lookup_id or ""),
+                                    args_meaningful=args_meaningful,
+                                )
 
-                                if args_still_streaming and not args_meaningful:
+                                if args_still_streaming and not ingest_for_stats:
                                     continue
 
-                                if lookup_id and buffer_name and args_meaningful:
-                                    if buffer_name in FILE_CHANGE_TOOLS:
+                                if lookup_id and buffer_name and ingest_for_stats:
+                                    if buffer_name in FILE_CHANGE_TOOLS and args_meaningful:
                                         file_tcid = str(lookup_id)
                                         if not is_main_agent:
                                             ts_file = router.resolve_task_scope(ns_key)

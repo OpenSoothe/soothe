@@ -97,8 +97,9 @@ def test_task_branch_child_line_shows_stats_and_running_status() -> None:
         parent_tool_call_id="ABC_01:s:task:0",
     )
     text = _plain(card._step_task_activity_content())
-    assert "Grep(1) · running" in text
     assert "Running..." in text
+    assert "· Grep(1)" in text
+    assert " · running" not in text
 
 
 def test_pending_step_shows_branch_pending_without_task_rows() -> None:

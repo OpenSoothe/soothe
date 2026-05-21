@@ -1,8 +1,7 @@
-"""Explore subagent filesystem + shell tools (RFC-613).
+"""Explore subagent filesystem tools (RFC-613).
 
-Uses ``SootheFilesystemMiddleware`` with a curated subset: filesystem reconnaissance
-tools plus ``run_command`` from Soothe's execution toolkit for **read-only** shell
-commands (enforced by prompts and operator policy).
+Uses ``SootheFilesystemMiddleware`` with a curated read-only subset: filesystem
+reconnaissance only (no shell, no write tools).
 
 IG-328: Backend uses callable pattern to resolve workspace from thread state at runtime,
 not from static resolver context.
@@ -17,7 +16,6 @@ from typing import Any
 
 from soothe.core.workspace.backend import NormalizedPathBackend, get_workspace_backend
 from soothe.middleware.filesystem import SootheFilesystemMiddleware
-from soothe.toolkits.execution import RunCommandShellTool
 
 logger = logging.getLogger(__name__)
 
@@ -73,12 +71,11 @@ def get_explore_tools(
     virtual_mode: bool | None = None,
     allow_paths_outside_workspace: bool | None = None,
 ) -> list[Any]:
-    """Get explore tools: readonly filesystem surface + ``run_command`` shell tool.
+    """Get explore tools: read-only filesystem surface only.
 
-    Exposed tools (mutation tools from middleware are filtered out):
+    Exposed tools (mutation and shell tools from middleware are filtered out):
     - glob, grep, ls, read_file: deepagents (via middleware base)
     - file_info: Soothe (metadata)
-    - run_command: Soothe shell tool with operation security and workspace-aware cwd
 
     IG-328: Backend is callable so workspace resolves from thread state at runtime,
     not from static resolver workspace.
@@ -120,13 +117,4 @@ def get_explore_tools(
         "file_info",
     )
     by_name = {t.name: t for t in middleware.tools}
-    tools = [by_name[name] for name in filesystem_tool_names if name in by_name]
-
-    # Add run_command from Soothe execution toolkit (operation security, workspace-aware cwd)
-    tools.append(
-        RunCommandShellTool(
-            workspace_root=root,
-        )
-    )
-
-    return tools
+    return [by_name[name] for name in filesystem_tool_names if name in by_name]

@@ -60,8 +60,8 @@ def build_explore_engine(
     )
 
     explore_preamble = (
-        "You are Soothe's explore agent: every tool call must be read-only "
-        "(including run_command). Full rules are in the system message each model turn."
+        "You are Soothe's explore agent: use only read-only filesystem tools "
+        "(glob, grep, ls, read_file, file_info). Full rules are in the system message each model turn."
     )
 
     graph = create_agent(
