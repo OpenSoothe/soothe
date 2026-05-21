@@ -1637,8 +1637,12 @@ class CognitionStepMessage(Vertical):
     ) -> str:
         """Derived phase for a task delegation from its subgraph tool rows."""
         if child_rows:
-            return self._task_children_aggregate_phase(child_rows)
-        return (task_row.phase or "pending").strip().lower()
+            phase = self._task_children_aggregate_phase(child_rows)
+        else:
+            phase = (task_row.phase or "pending").strip().lower()
+        if self._status == "success" and phase in ("pending", "running", "skipped"):
+            return "success"
+        return phase
 
     def _touch_task_activity_start(self, task_key: str) -> None:
         """Record when subgraph activity began for elapsed-time display."""
@@ -2451,10 +2455,30 @@ class CognitionStepMessage(Vertical):
 
     def mark_unfinished_tools_skipped(self) -> None:
         """Mark pending/running rows skipped when the step ends without results."""
+        self.mark_unfinished_tools_on_step_complete(success=False)
+
+    def mark_unfinished_tools_on_step_complete(self, *, success: bool) -> None:
+        """Finalize open tool rows when the step card completes.
+
+        On successful steps, pending/running/skipped subgraph tools are marked
+        ``success`` so task branches show Done instead of Skipped/Pending when
+        the subagent finished without per-tool ToolMessage events.
+        """
+        terminal = "success" if success else "skipped"
+        open_phases = ("pending", "running") if not success else ("pending", "running", "skipped")
         for row in self._rows:
-            if row.phase in ("pending", "running"):
-                row.phase = "skipped"
+            if row.phase in open_phases:
+                row.phase = terminal
                 row.started_at = None
+        if success:
+            for task_row in self._iter_task_delegation_rows():
+                if (task_row.phase or "pending").strip().lower() in (
+                    "pending",
+                    "running",
+                    "skipped",
+                ):
+                    task_row.phase = "success"
+                    task_row.started_at = None
         self._refresh_task_activity_display()
         self._refresh_tools_display()
 
@@ -2648,7 +2672,7 @@ class CognitionStepMessage(Vertical):
             self._deferred_complete = (success, duration_ms, tool_call_count, summary)
             return
 
-        self.mark_unfinished_tools_skipped()
+        self.mark_unfinished_tools_on_step_complete(success=success)
         self._tools_body_collapsed = True
         self._refresh_tools_display(force=True)
 
@@ -2662,6 +2686,7 @@ class CognitionStepMessage(Vertical):
         if success:
             status_body = f"Completed ({dur_str}){tool_part}"
             self._update_step_footer_status_line(status_body, success=True)
+            self._refresh_task_activity_display()
             if prose:
                 self._detail_widget.update(self._step_branched_execute_body(prose, muted=True))
                 self._detail_widget.display = True
