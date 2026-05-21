@@ -980,8 +980,11 @@ class MessageRouter:
 
         verbosity = msg.get("verbosity", "normal")
         stream_delivery = msg.get("stream_delivery", "batch")
-        if stream_delivery not in ("batch", "streaming"):
+        # Accept "streaming" for backwards compatibility, map to "adaptive"
+        if stream_delivery not in ("batch", "streaming", "adaptive"):
             stream_delivery = "batch"
+        if stream_delivery == "streaming":
+            stream_delivery = "adaptive"  # Map old mode to new adaptive mode
         await d._session_manager.subscribe_loop(
             client_id,
             loop_id,

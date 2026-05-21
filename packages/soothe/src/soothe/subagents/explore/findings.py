@@ -7,7 +7,7 @@ from typing import Any
 from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import ToolMessage
 
-_EXPLORE_TOOL_NAMES = frozenset({"glob", "grep", "ls", "read_file", "file_info", "run_command"})
+_EXPLORE_TOOL_NAMES = frozenset({"glob", "grep", "ls", "read_file", "file_info"})
 
 
 def should_record_findings(tool_name: str) -> bool:
@@ -97,21 +97,5 @@ def extract_findings_from_tool_result(
             snippet = result_data.strip()[:500]
         if path != "unknown" or snippet:
             findings.append({"path": path, "snippet": snippet, "relevance": "unknown"})
-
-    elif tool_name == "run_command":
-        command = str(args.get("command", "") or "unknown")
-        output_str = ""
-        if isinstance(result_data, str):
-            output_str = result_data
-        elif result_data is not None:
-            output_str = str(result_data)
-        if output_str.strip():
-            findings.append(
-                {
-                    "path": f"$ {command}",
-                    "snippet": output_str[:500],
-                    "relevance": "unknown",
-                }
-            )
 
     return findings

@@ -788,8 +788,8 @@ class AssistantMessage(Vertical):
     }
     """
 
-    # Performance optimization: batch streaming updates to reduce render frequency
-    _STREAM_FLUSH_INTERVAL: float = 0.05  # 50ms batching for streaming
+    # Default flush interval (can be overridden by config)
+    DEFAULT_STREAM_FLUSH_INTERVAL: float = 0.2  # 200ms batching for streaming
 
     def __init__(self, content: str = "", **kwargs: Any) -> None:
         """Initialize an assistant message.
@@ -808,14 +808,25 @@ class AssistantMessage(Vertical):
         # Batching buffer for streaming content
         self._pending_buffer: str = ""
         self._flush_timer: Timer | None = None
+        self._stream_flush_interval: float = self.DEFAULT_STREAM_FLUSH_INTERVAL
 
-        # Determine markdown rendering from config
+        # Determine markdown rendering and flush interval from config
         self._render_markdown: bool = True
         try:
             from soothe_cli.config.loader import load_config
 
             config = load_config()
             self._render_markdown = config.render_markdown
+            # Load flush interval from output_streaming config (RFC-614)
+            streaming_cfg = getattr(config, "output_streaming", None)
+            if streaming_cfg is None:
+                # Try agent_loop.output_streaming path
+                agent_loop = getattr(config, "agent_loop", None)
+                if agent_loop:
+                    streaming_cfg = getattr(agent_loop, "output_streaming", None)
+            if streaming_cfg:
+                ms = getattr(streaming_cfg, "tui_flush_interval_ms", 200)
+                self._stream_flush_interval = ms / 1000.0
         except Exception:
             pass  # Default to True if config unavailable
 
@@ -894,7 +905,7 @@ class AssistantMessage(Vertical):
         # Schedule batched flush if not already scheduled
         if self._flush_timer is None:
             self._flush_timer = self.set_timer(
-                self._STREAM_FLUSH_INTERVAL,
+                self._stream_flush_interval,
                 self._flush_pending_content,
             )
 
@@ -1619,21 +1630,6 @@ class CognitionStepMessage(Vertical):
             return "pending"
         return "pending"
 
-    def _task_children_aggregate_status(self, rows: list[_StepToolRow]) -> str:
-        """Status suffix for nested tools under one task (running / failed / done)."""
-        phase = self._task_children_aggregate_phase(rows)
-        if phase == "running":
-            return " · running"
-        if phase == "failed":
-            return " · failed"
-        if phase == "success":
-            return " · done"
-        if phase == "skipped":
-            return " · skipped"
-        if phase == "pending":
-            return " · pending"
-        return ""
-
     def _effective_task_delegation_phase(
         self,
         task_row: _StepToolRow,
@@ -1735,6 +1731,51 @@ class CognitionStepMessage(Vertical):
             text += f" +{extra} more"
         return text
 
+    def _tool_stats_title_suffix_for_rows(self, rows: list[_StepToolRow]) -> str:
+        """`` · Name(n), …`` suffix for task branches (matches step footer running line)."""
+        bare = self._tool_stats_suffix_for_rows(rows)
+        return f" · {bare}" if bare else ""
+
+    def _task_branch_status_line(
+        self,
+        *,
+        phase: str,
+        child_rows: list[_StepToolRow],
+        task_key: str,
+        child_gutter: str,
+        g: Any,
+        colors: Any,
+    ) -> tuple[str, str]:
+        """Build one status line for a task delegation branch (footer-aligned format)."""
+        stats_suffix = self._tool_stats_title_suffix_for_rows(child_rows)
+        p = (phase or "pending").strip().lower()
+        if p == "running":
+            elapsed = self._task_delegation_elapsed_suffix(task_key)
+            toggle = ""
+            if self._card_collapsed:
+                toggle = f" {g.expand}"
+            elif self._has_task_activity_body():
+                toggle = f" {g.collapse}"
+            frame = self._phase_icon("running", g, animate_running=True)
+            return (
+                f"{child_gutter}{frame} Running...{elapsed}{stats_suffix}{toggle}",
+                colors.cognition,
+            )
+        icon = self._phase_icon(p, g, animate_running=False)
+        status_word = {
+            "success": "Done",
+            "done": "Done",
+            "failed": "Failed",
+            "error": "Failed",
+            "rejected": "Failed",
+            "skipped": "Skipped",
+            "pending": "Pending",
+        }.get(p, "Pending")
+        return (
+            f"{child_gutter}{icon} {status_word}{stats_suffix}",
+            self._task_children_stats_tone(p, colors),
+        )
+
     def _normalized_task_note_key(self, task_tool_call_id: str) -> str:
         tcid = str(task_tool_call_id).strip()
         if not tcid:
@@ -1782,31 +1823,31 @@ class CognitionStepMessage(Vertical):
             )
 
             if child_rows:
-                child_stats = self._tool_stats_suffix_for_rows(child_rows)
-                if child_stats:
-                    child_status = self._task_children_aggregate_status(child_rows)
-                    parts.append("\n")
-                    parts.append(
-                        Content.styled(
-                            f"{child_gutter}{child_stats}{child_status}",
-                            self._task_children_stats_tone(eff_phase, colors),
-                        )
+                line_body, line_tone = self._task_branch_status_line(
+                    phase=eff_phase,
+                    child_rows=child_rows,
+                    task_key=task_key,
+                    child_gutter=child_gutter,
+                    g=g,
+                    colors=colors,
+                )
+                parts.append("\n")
+                parts.append(Content.styled(line_body, line_tone))
+            elif eff_phase == "running":
+                elapsed = self._task_delegation_elapsed_suffix(task_key)
+                toggle = ""
+                if self._card_collapsed:
+                    toggle = f" {g.expand}"
+                elif self._has_task_activity_body():
+                    toggle = f" {g.collapse}"
+                frame = self._phase_icon("running", g, animate_running=True)
+                parts.append("\n")
+                parts.append(
+                    Content.styled(
+                        f"{child_gutter}{frame} Running...{elapsed}{toggle}",
+                        colors.cognition,
                     )
-                if eff_phase == "running":
-                    elapsed = self._task_delegation_elapsed_suffix(task_key)
-                    toggle = ""
-                    if self._card_collapsed:
-                        toggle = f" {g.expand}"
-                    elif self._has_task_activity_body():
-                        toggle = f" {g.collapse}"
-                    frame = self._phase_icon("running", g, animate_running=True)
-                    parts.append("\n")
-                    parts.append(
-                        Content.styled(
-                            f"{child_gutter}{frame} Running...{elapsed}{toggle}",
-                            colors.cognition,
-                        )
-                    )
+                )
             elif self._status in ("pending", "queued"):
                 wait_word = "Queued..." if self._status == "queued" else "Pending..."
                 parts.append("\n")

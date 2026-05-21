@@ -94,6 +94,7 @@ class ClientSessionManager:
         event_bus: EventBus instance for routing events
         cancel_callback: Optional async callback to cancel work for a loop_id on disconnect.
         dispatch_cleanup_callback: Optional async callback to cleanup dispatch tasks (IG-258).
+        config: Optional SootheConfig for streaming interval configuration (RFC-614).
     """
 
     def __init__(
@@ -101,6 +102,7 @@ class ClientSessionManager:
         event_bus: EventBus,
         cancel_callback: Callable[[str], Coroutine[None, None, None]] | None = None,
         dispatch_cleanup_callback: Callable[[str], Coroutine[None, None, None]] | None = None,
+        config: SootheConfig | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._sessions: dict[str, ClientSession] = {}
@@ -109,6 +111,7 @@ class ClientSessionManager:
         self._loop_stream_delivery: dict[str, StreamDeliveryMode] = {}
         self._cancel_callback = cancel_callback
         self._dispatch_cleanup_callback = dispatch_cleanup_callback
+        self._config = config
 
     async def create_session(
         self,
@@ -140,7 +143,7 @@ class ClientSessionManager:
         return client_id
 
     def get_stream_delivery(self, loop_id: str) -> StreamDeliveryMode:
-        """Return stream shaping mode for a loop (``batch`` or ``streaming``)."""
+        """Return stream shaping mode for a loop (``batch`` or ``adaptive``)."""
         return self._loop_stream_delivery.get(loop_id, "batch")
 
     async def subscribe_loop(
@@ -169,8 +172,9 @@ class ClientSessionManager:
             return False
 
         session.verbosity = verbosity
+        # Accept "streaming" for backwards compatibility, map to "adaptive"
         delivery: StreamDeliveryMode = (
-            stream_delivery if stream_delivery in ("batch", "streaming") else "batch"
+            stream_delivery if stream_delivery in ("batch", "adaptive") else "batch"
         )
         self._loop_stream_delivery[loop_id] = delivery
 
@@ -312,7 +316,7 @@ class ClientSessionManager:
         # Set logging context for full client_id in daemon.log
         set_client_id(session.client_id)
         logger.debug("Sender loop started for client %s", session.client_id)
-        batch_timeout = 0.05  # 50ms batch window (IG-258)
+        batch_timeout = self._get_batch_timeout()
 
         try:
             batch: list[dict[str, Any]] = []
@@ -399,6 +403,20 @@ class ClientSessionManager:
             set_client_id(session.client_id)
             logger.debug("Sender task cancelled for client %s", session.client_id)
             raise
+
+    def _get_batch_timeout(self) -> float:
+        """Get batch timeout from config (RFC-614).
+
+        Returns:
+            Timeout in seconds (default 0.2 = 200ms).
+        """
+        if self._config is None:
+            return 0.2  # 200ms default
+        streaming_cfg = getattr(self._config.agent_loop, "output_streaming", None)
+        if streaming_cfg is None:
+            return 0.2
+        ms = getattr(streaming_cfg, "streaming_interval_ms", 200)
+        return ms / 1000.0
 
     @property
     def session_count(self) -> int:

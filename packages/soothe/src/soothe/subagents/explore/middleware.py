@@ -110,7 +110,7 @@ class ExploreWireMiddleware(AgentMiddleware[ExploreAgentState, None]):
         search_target = resolve_explore_search_target(messages, explicit)
         updates: dict[str, Any] = {}
         # Persist thread workspace on graph state so ``ToolRuntime.state`` exposes it to
-        # ``run_command`` (cwd) and matches callable filesystem backends (IG-328).
+        # Thread workspace for filesystem tools (IG-328).
         if not str(state.get("workspace") or "").strip():
             tw = _thread_workspace_from_agent_runtime(runtime)
             if tw:

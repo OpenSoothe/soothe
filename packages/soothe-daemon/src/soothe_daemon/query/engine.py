@@ -313,6 +313,41 @@ class QueryEngine:
             )
         )
 
+    def _get_output_streaming_config(self, daemon: Any) -> dict[str, Any]:
+        """Get output streaming config parameters from daemon config (RFC-614)."""
+        config = getattr(daemon, "_config", None)
+        if config is None:
+            return {
+                "adaptive_threshold_chars": 500,
+                "file_output_threshold_chars": 5000,
+                "file_output_preview_chars": 500,
+                "file_output_dir": None,
+            }
+        agent_loop = getattr(config, "agent_loop", None)
+        if agent_loop is None:
+            return {
+                "adaptive_threshold_chars": 500,
+                "file_output_threshold_chars": 5000,
+                "file_output_preview_chars": 500,
+                "file_output_dir": None,
+            }
+        streaming_cfg = getattr(agent_loop, "output_streaming", None)
+        if streaming_cfg is None:
+            return {
+                "adaptive_threshold_chars": 500,
+                "file_output_threshold_chars": 5000,
+                "file_output_preview_chars": 500,
+                "file_output_dir": None,
+            }
+        return {
+            "adaptive_threshold_chars": getattr(streaming_cfg, "adaptive_threshold_chars", 500),
+            "file_output_threshold_chars": getattr(
+                streaming_cfg, "file_output_threshold_chars", 5000
+            ),
+            "file_output_preview_chars": getattr(streaming_cfg, "file_output_preview_chars", 500),
+            "file_output_dir": getattr(streaming_cfg, "file_output_dir", None),
+        }
+
     async def _enrich_with_vision_throttled(
         self,
         config: Any,
@@ -615,6 +650,8 @@ class QueryEngine:
                     model_params=model_params or {},
                     intent_hint=intent_hint,
                 )
+                # Extract workspace for file output (RFC-614)
+                run_workspace = stream_kwargs.get("workspace")
                 loop_runner = d._runner_factory.create_runner(_runner_key)
                 self._active_runners[_runner_key] = loop_runner
 
@@ -627,7 +664,18 @@ class QueryEngine:
                     if effective_loop_id
                     else "batch"
                 )
-                coalescer = StreamDeliveryCoalescer(delivery_mode)
+                # Get streaming config parameters (RFC-614)
+                streaming_cfg = self._get_output_streaming_config(d)
+                coalescer = StreamDeliveryCoalescer(
+                    delivery_mode,
+                    adaptive_threshold_chars=streaming_cfg.get("adaptive_threshold_chars", 500),
+                    file_output_threshold_chars=streaming_cfg.get(
+                        "file_output_threshold_chars", 5000
+                    ),
+                    file_output_preview_chars=streaming_cfg.get("file_output_preview_chars", 500),
+                    file_output_dir=streaming_cfg.get("file_output_dir"),
+                    workspace=run_workspace,
+                )
 
                 async def _process_stream() -> None:
                     nonlocal chunk_count, warning_sent

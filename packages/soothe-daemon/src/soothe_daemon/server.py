@@ -147,6 +147,7 @@ class SootheDaemon(DaemonHandlersMixin):
             self._event_bus,
             cancel_callback=self._cancel_loop_for_session,
             dispatch_cleanup_callback=self._cleanup_dispatch_tasks,  # IG-258
+            config=self._config,  # RFC-614: for streaming interval config
         )
         # Keys: LangGraph checkpoint id (``configurable.thread_id``), not ``loop_id``.
         self._active_threads: dict[str, asyncio.Task] = {}

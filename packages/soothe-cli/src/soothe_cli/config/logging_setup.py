@@ -13,14 +13,24 @@ _QUIET_AT_INFO = (
     "soothe.ux.tui.trace",
 )
 
+# Third-party per-frame wire traces (``< TEXT ...``) flood ``cli.log`` at DEBUG.
+_QUIET_ALWAYS = (
+    "websockets",
+    "websockets.client",
+)
+
 
 def setup_logging(level: str, *, log_file: Path | None = None) -> None:
     """Configure CLI logging (SDK file handler; stderr stays WARNING).
 
     At ``INFO``, routing and optional TUI trace loggers are capped at ``WARNING``
-    so ``cli.log`` stays readable. Set ``SOOTHE_LOG_LEVEL=DEBUG`` for full traces.
+    so ``cli.log`` stays readable. The ``websockets`` library is always capped at
+    ``WARNING`` so frame-level wire logs never appear even when
+    ``SOOTHE_LOG_LEVEL=DEBUG``. Set ``SOOTHE_LOG_LEVEL=DEBUG`` for full app traces.
     """
     _setup_sdk_logging(level, log_file=log_file)
+    for name in _QUIET_ALWAYS:
+        logging.getLogger(name).setLevel(logging.WARNING)
     if level.upper() == "INFO":
         for name in _QUIET_AT_INFO:
             logging.getLogger(name).setLevel(logging.WARNING)

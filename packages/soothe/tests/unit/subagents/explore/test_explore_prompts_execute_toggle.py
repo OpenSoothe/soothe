@@ -1,11 +1,11 @@
-"""Explore system prompt includes run_command shell tool."""
+"""Explore system prompt: filesystem-only tools and read-only rules."""
 
 from __future__ import annotations
 
 from soothe.subagents.explore.prompts import format_explore_agent_system
 
 
-def test_format_explore_agent_system_includes_run_command() -> None:
+def test_format_explore_agent_system_lists_filesystem_tools_only() -> None:
     body = format_explore_agent_system(
         search_target="foo",
         workspace="/ws",
@@ -14,8 +14,8 @@ def test_format_explore_agent_system_includes_run_command() -> None:
         max_read_lines=100,
         findings_so_far="",
     )
-    assert "run_command (shell)" in body
-    assert "`run_command`" in body
+    assert "glob, grep, ls, read_file, file_info" in body
+    assert "run_command" not in body
 
 
 def test_format_explore_agent_system_includes_read_only_rules() -> None:
@@ -28,10 +28,10 @@ def test_format_explore_agent_system_includes_read_only_rules() -> None:
         findings_so_far="",
     )
     assert "read-only" in body
-    assert "Forbidden command classes" in body
+    assert "no shell or write tools" in body
 
 
-def test_format_explore_agent_system_prefers_native_tools_before_run_command() -> None:
+def test_format_explore_agent_system_prefers_native_tool_order() -> None:
     body = format_explore_agent_system(
         search_target="foo",
         workspace="/ws",
@@ -40,5 +40,5 @@ def test_format_explore_agent_system_prefers_native_tools_before_run_command() -
         max_read_lines=100,
         findings_so_far="",
     )
-    assert "Preferred tool order before `run_command`" in body
-    assert "do not use `run_command` for file reads (`cat`, `head`, `tail`)" in body
+    assert "Preferred order" in body
+    assert "path discovery" in body

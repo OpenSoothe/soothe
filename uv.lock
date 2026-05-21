@@ -983,6 +983,20 @@ wheels = [
 ]
 
 [[package]]
+name = "deepxiv-sdk"
+version = "0.2.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "python-dotenv" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d3/6e/02748e9aa9d7157e16a6fe9fd67e55b5aa2131eef8ba27a4a73db72f65f6/deepxiv_sdk-0.2.5.tar.gz", hash = "sha256:cee3cc785c3f540710f7903ba6a9af6f98276eede93177bc25d1b95a34ec7594", size = 63009, upload-time = "2026-04-20T03:26:58.029Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/21/5e/394b0b452b5de4b0ddd26152410ec13578a3b20d478fa08012aeedf314e4/deepxiv_sdk-0.2.5-py3-none-any.whl", hash = "sha256:c04bde129fd1e81d616de87f27c5a629c08e39708a7def61de9ade1724916ff9", size = 52596, upload-time = "2026-04-20T03:26:56.554Z" },
+]
+
+[[package]]
 name = "distro"
 version = "1.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4799,6 +4813,7 @@ all = [
     { name = "arxiv" },
     { name = "chardet" },
     { name = "dashscope" },
+    { name = "deepxiv-sdk" },
     { name = "docx2txt" },
     { name = "langchain-tavily" },
     { name = "langfuse" },
@@ -4847,6 +4862,7 @@ media = [
 research = [
     { name = "arxiv" },
     { name = "chardet" },
+    { name = "deepxiv-sdk" },
     { name = "langchain-tavily" },
     { name = "tavily-python" },
     { name = "wikipedia" },
@@ -4878,6 +4894,8 @@ requires-dist = [
     { name = "dashscope", marker = "extra == 'all'", specifier = ">=1.20.0" },
     { name = "dashscope", marker = "extra == 'dashscope'", specifier = ">=1.20.0" },
     { name = "deepagents", specifier = ">=0.4.10,<1.0.0" },
+    { name = "deepxiv-sdk", marker = "extra == 'all'", specifier = ">=0.2.5" },
+    { name = "deepxiv-sdk", marker = "extra == 'research'", specifier = ">=0.2.5" },
     { name = "docx2txt", marker = "extra == 'all'", specifier = ">=0.8.0" },
     { name = "docx2txt", marker = "extra == 'document'", specifier = ">=0.8.0" },
     { name = "jsonschema", specifier = ">=4.0.0,<5.0.0" },

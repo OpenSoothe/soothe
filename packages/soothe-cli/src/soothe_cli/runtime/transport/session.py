@@ -56,17 +56,53 @@ class TuiDaemonSession:
 
     async def _bootstrap_loop(self, *, resume_loop_id: str | None = None) -> dict[str, Any]:
         """Create or attach to a loop on an already-connected websocket."""
+        # Determine stream_delivery mode from config (RFC-614)
+        stream_delivery = self._resolve_stream_delivery_mode()
+
         status_event = await bootstrap_loop_session(
             self._client,
             resume_loop_id=resume_loop_id,
             verbosity="normal",
-            stream_delivery="streaming",
+            stream_delivery=stream_delivery,
             workspace=self._workspace,
         )
         if status_event.get("type") == "error":
             raise RuntimeError(str(status_event.get("message", "daemon bootstrap failed")))
         self._loop_id = status_event.get("loop_id")
         return status_event
+
+    def _resolve_stream_delivery_mode(self) -> str:
+        """Determine stream delivery mode from config (RFC-614).
+
+        Returns "batch" or "adaptive" based on config. Maps old "streaming"
+        to "adaptive" for backwards compatibility.
+        """
+        # CLI override takes precedence
+        if (
+            self._cfg
+            and hasattr(self._cfg, "output_streaming_mode")
+            and self._cfg.output_streaming_mode
+        ):
+            mode = self._cfg.output_streaming_mode
+            # Map old "streaming" to "adaptive" for backwards compatibility
+            return "adaptive" if mode == "streaming" else mode
+
+        # Check daemon config's output_streaming section
+        streaming_cfg = None
+        if self._cfg:
+            # Try agent_loop.output_streaming first (new config structure)
+            agent_loop = getattr(self._cfg, "agent_loop", None)
+            if agent_loop:
+                streaming_cfg = getattr(agent_loop, "output_streaming", None)
+            # Fallback to direct output_streaming attribute
+            if streaming_cfg is None:
+                streaming_cfg = getattr(self._cfg, "output_streaming", None)
+
+        if streaming_cfg:
+            mode = getattr(streaming_cfg, "mode", "adaptive")
+            return "adaptive" if mode == "streaming" else mode
+
+        return "adaptive"  # Default to adaptive mode
 
     async def new_loop(self) -> dict[str, Any]:
         """Start a new AgentLoop conversation."""
