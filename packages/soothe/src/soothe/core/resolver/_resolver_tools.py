@@ -36,12 +36,12 @@ def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubA
     """
     from soothe.subagents.explore import create_explore_subagent
     from soothe.subagents.plan import create_plan_subagent
-    from soothe.subagents.research import create_research_subagent
+    from soothe.subagents.tacitus import create_tacitus_subagent
 
     return {
         "explore": create_explore_subagent,
         "plan": create_plan_subagent,
-        "research": create_research_subagent,
+        "tacitus": create_tacitus_subagent,
     }
 
 
@@ -136,7 +136,7 @@ def resolve_tools(
     import time
 
     # Get list of enabled tool group names
-    # Note: "research" is a subagent, not a tool group - handled in resolve_subagents()
+    # Note: "tacitus" is a subagent, not a tool group - handled in resolve_subagents()
     enabled_tools = [
         name
         for name in [
@@ -608,7 +608,7 @@ def resolve_subagents(
 
         if name == "claude":
             model_override = None
-        elif name == "explore":
+        elif name in ("explore", "tacitus"):
             model_override = sub_cfg.model or config.create_chat_model("fast")
         elif name == "plan":
             # Built-in: always the router ``think`` role (ignore ``subagents.plan.model``).
@@ -634,7 +634,7 @@ def resolve_subagents(
             continue
 
         extra_kwargs: dict = dict(sub_cfg.config)
-        if name == "research":
+        if name == "tacitus":
             extra_kwargs["config"] = config
             if "context" not in extra_kwargs:
                 extra_kwargs["context"] = {"work_dir": resolved_cwd}

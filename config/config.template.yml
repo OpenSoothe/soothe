@@ -81,12 +81,14 @@ subagents:
     url: null
     config: {}
     runtime_dir: ''
-  research:
+  tacitus:
     enabled: true
-    model: null
+    model: null  # null → router.fast (see router.fast)
     transport: local
     url: null
-    config: {}
+    config:
+      llm_role: fast
+      synthesis_role: think  # set fast for lower-latency final report
     runtime_dir: ''
 tools:
   execution:

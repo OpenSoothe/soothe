@@ -150,7 +150,7 @@ class SootheConfig(BaseSettings):
     subagents: dict[str, SubagentConfig] = Field(default_factory=dict)
     """Subagent name to config mapping. Set ``enabled: false`` to disable.
 
-    Builtin subagents (explore, plan, research) are added automatically.
+    Builtin subagents (explore, plan, tacitus) are added automatically.
     Plugin-discovered subagents are merged during config validation.
     """
 
@@ -212,7 +212,7 @@ class SootheConfig(BaseSettings):
         builtin_subagents = {
             "explore": SubagentConfig(),
             "plan": SubagentConfig(),
-            "research": SubagentConfig(),
+            "tacitus": SubagentConfig(),
         }
 
         # Import here to avoid circular dependency

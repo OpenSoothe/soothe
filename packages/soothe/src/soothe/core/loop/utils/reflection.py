@@ -348,7 +348,7 @@ def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
     """Build AgentDecision from a parsed JSON object (step list at top level)."""
     from soothe.core.loop.state.schemas import AgentDecision, StepAction
 
-    known_subagents = {"browser", "claude", "explore", "plan", "research"}
+    known_subagents = {"browser", "claude", "explore", "plan", "tacitus"}
 
     steps = []
     for i, step_data in enumerate(data.get("steps", [])):

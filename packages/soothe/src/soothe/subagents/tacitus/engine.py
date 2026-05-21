@@ -1,13 +1,6 @@
-"""Research engine -- tool-agnostic iterative research loop.
+"""Tacitus engine — iterative public-domain research loop.
 
-Implements the research paradigm as a LangGraph:
-
-  analyze_topic -> generate_queries -> [route_and_gather] ->
-  summarize -> reflect -> [continue | synthesize] -> END
-
-The engine is parameterised by a list of ``InformationSource``
-instances and a ``SourceRouter``. It knows nothing about web_search,
-file_edit, or any specific tool -- those details live in the sources.
+analyze_topic -> generate_queries -> gather -> summarize -> reflect -> synthesize
 """
 
 from __future__ import annotations
@@ -15,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import atexit
 import datetime
-import json
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -28,13 +20,20 @@ from langgraph.types import Send
 
 from soothe.utils.subagent_emit import emit_subagent_wire_event
 
-from .display_summary import research_answer_summary_for_display
-from .events import ResearchCompletedEvent, ResearchGatherSummaryEvent, ResearchStartedEvent
+from .display_summary import tacitus_answer_summary_for_display
+from .events import TacitusCompletedEvent, TacitusGatherSummaryEvent, TacitusStartedEvent
+from .json_util import (
+    compact_search_query,
+    fallback_queries,
+    fallback_sub_questions,
+    llm_response_text,
+    parse_json_object,
+)
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-    from .protocol import InformationSource, ResearchConfig
+    from .protocol import PublicInformationSource, TacitusConfig
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +46,7 @@ def _get_shared_pool() -> ThreadPoolExecutor:
     """Get or create the shared thread pool."""
     global _shared_pool
     if _shared_pool is None:
-        _shared_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="research-async")
+        _shared_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="tacitus-async")
         atexit.register(_cleanup_pool)
     return _shared_pool
 
@@ -65,16 +64,22 @@ def _cleanup_pool() -> None:
 # ---------------------------------------------------------------------------
 
 
-class ResearchEngineState(dict):
-    """Top-level state for the research engine graph."""
+class TacitusEngineState(dict):
+    """Top-level state for the Tacitus engine graph."""
 
     messages: Annotated[list, add_messages]
     research_topic: str
-    domain: str  # source domain hint ("auto", "web", "code", "deep")
+    domain: str  # profile hint: public | web | academic
     search_summaries: Annotated[list[str], add]
     sources_gathered: Annotated[list[str], add]
     max_loops: int
     loop_count: int
+    # Loop scratch (must be declared or LangGraph drops them between nodes).
+    _sub_questions: list
+    _queries: list
+    _is_sufficient: bool
+    _follow_up_queries: list
+    answer: str
 
 
 # ---------------------------------------------------------------------------
@@ -86,15 +91,15 @@ You are a research analyst. Analyse the following topic and identify the key \
 sub-questions that need to be answered.  For each sub-question, indicate \
 which information domain is most likely to have the answer.
 
-Domains available: {domains}
+Profiles available: {domains} (public, web, academic)
 
 Current date: {current_date}
 
 Topic: {topic}
 
-Respond as JSON:
+Return ONLY a raw JSON object (no markdown fences):
 {{"sub_questions": [
-    {{"question": "...", "suggested_domain": "web|academic|filesystem|cli|document"}}
+    {{"question": "...", "suggested_domain": "public|web|academic"}}
 ]}}"""
 
 _GENERATE_QUERIES = """\
@@ -107,9 +112,9 @@ Current date: {current_date}
 Sub-questions:
 {sub_questions}
 
-Respond as JSON:
+Return ONLY a raw JSON object (no markdown fences):
 {{"queries": [
-    {{"query": "...", "domain_hint": "web|academic|filesystem|cli|document"}}
+    {{"query": "...", "domain_hint": "public|web|academic"}}
 ]}}"""
 
 _SUMMARIZE = """\
@@ -137,11 +142,11 @@ is best.
 Summaries:
 {summaries}
 
-Respond as JSON:
+Return ONLY a raw JSON object (no markdown fences):
 {{"is_sufficient": true/false,
   "knowledge_gap": "...",
   "follow_up_queries": [
-    {{"query": "...", "domain_hint": "auto"}}
+    {{"query": "...", "domain_hint": "public"}}
   ]}}"""
 
 _SYNTHESIZE = """\
@@ -184,35 +189,28 @@ def _now_str() -> str:
 # ---------------------------------------------------------------------------
 
 
-def build_research_engine(
+def build_tacitus_engine(
     model: BaseChatModel,
-    sources: list[InformationSource],
-    config: ResearchConfig | None = None,
+    sources: list[PublicInformationSource],
+    config: TacitusConfig | None = None,
     *,
-    _domain: str = "auto",
+    synthesis_model: BaseChatModel | None = None,
+    _domain: str = "public",
 ) -> Any:
-    """Build and compile the tool-agnostic research LangGraph.
+    """Build and compile the Tacitus LangGraph."""
+    from .protocol import TacitusConfig
+    from .router import PublicSemanticRouter
 
-    Args:
-        model: LLM for analysis, reflection, and synthesis.
-        sources: Available information sources.
-        config: Engine configuration (max loops, parallelism, profiles).
-        _domain: Default source domain hint (reserved for future use).
-
-    Returns:
-        Compiled LangGraph runnable.
-    """
-    from .protocol import ResearchConfig
-    from .router import SourceRouter
-
-    _default_config = config or ResearchConfig()
-    router = SourceRouter(sources, _default_config)
-    available_domains = ", ".join(router.available_source_types())
+    _default_config = config or TacitusConfig()
+    loop_model = model
+    final_model = synthesis_model or model
+    router = PublicSemanticRouter(sources, _default_config)
+    available_domains = "public, web, academic"
 
     def analyze_topic_node(state: dict[str, Any]) -> dict[str, Any]:
         topic = _extract_topic(state)
         emit_subagent_wire_event(
-            ResearchStartedEvent(topic_preview=str(topic)[:200]).to_dict(),
+            TacitusStartedEvent(topic_preview=str(topic)[:200]).to_dict(),
             logger,
         )
         prompt = _ANALYZE_TOPIC.format(
@@ -221,17 +219,19 @@ def build_research_engine(
             topic=topic,
         )
 
-        resp = model.invoke([{"role": "user", "content": prompt}])
-        content = str(resp.content)
-
-        try:
-            parsed = json.loads(content)
+        resp = loop_model.invoke([{"role": "user", "content": prompt}])
+        parsed = parse_json_object(llm_response_text(resp))
+        domain_hint = state.get("domain", _domain) or "public"
+        if parsed:
             sub_questions = parsed.get("sub_questions", [])
-        except json.JSONDecodeError:
-            logger.warning("Research: parse failed, using fallback")
-            sub_questions = [{"question": topic, "suggested_domain": "auto"}]
+        else:
+            logger.warning("[Tacitus] analyze parse failed, using fallback")
+            sub_questions = []
+        if not sub_questions:
+            logger.warning("[Tacitus] analyze returned no sub-questions, using fallback")
+            sub_questions = fallback_sub_questions(topic, domain=domain_hint)
 
-        logger.info("Research: found %d sub-questions", len(sub_questions))
+        logger.info("[Tacitus] found %d sub-questions", len(sub_questions))
         return {
             "_sub_questions": sub_questions,
             "search_summaries": [],
@@ -240,7 +240,11 @@ def build_research_engine(
         }
 
     def generate_queries_node(state: dict[str, Any]) -> dict[str, Any]:
+        topic = _extract_topic(state)
+        domain_hint = state.get("domain", _domain) or "public"
         sub_questions = state.get("_sub_questions", [])
+        if not sub_questions:
+            sub_questions = fallback_sub_questions(topic, domain=domain_hint)
         sq_text = "\n".join(
             f"- {sq.get('question', sq)}" if isinstance(sq, dict) else f"- {sq}"
             for sq in sub_questions
@@ -251,26 +255,40 @@ def build_research_engine(
             sub_questions=sq_text,
         )
 
-        resp = model.invoke([{"role": "user", "content": prompt}])
-        content = str(resp.content)
-
-        try:
-            parsed = json.loads(content)
+        resp = loop_model.invoke([{"role": "user", "content": prompt}])
+        parsed = parse_json_object(llm_response_text(resp))
+        if parsed:
             queries = parsed.get("queries", [])
-        except json.JSONDecodeError:
-            logger.warning("Research: parse failed, using fallback")
-            queries = [{"query": _extract_topic(state), "domain_hint": "auto"}]
+        else:
+            logger.warning("[Tacitus] query generation parse failed, using fallback")
+            queries = []
+        if not queries:
+            logger.warning("[Tacitus] query generation returned no queries, using fallback")
+            queries = fallback_queries(topic, sub_questions, default_domain=domain_hint)
 
-        logger.info("Research: generated %d queries", len(queries))
+        logger.info("[Tacitus] generated %d queries", len(queries))
         return {"_queries": queries}
 
     def route_to_gather(state: dict[str, Any]) -> list[Send]:
         queries = state.get("_queries", [])
+        if not queries:
+            topic = _extract_topic(state)
+            domain_hint = state.get("domain", _domain) or "public"
+            logger.warning("[Tacitus] no queries to gather, using topic fallback")
+            queries = fallback_queries(
+                topic,
+                state.get("_sub_questions"),
+                default_domain=domain_hint,
+            )
         sends = []
         for q in queries:
-            query_str = q.get("query", q) if isinstance(q, dict) else str(q)
+            query_str = compact_search_query(
+                q.get("query", q) if isinstance(q, dict) else str(q), max_len=120
+            )
             domain_hint = (
-                q.get("domain_hint", state.get("domain", "auto")) if isinstance(q, dict) else "auto"
+                q.get("domain_hint", state.get("domain", "public"))
+                if isinstance(q, dict)
+                else "public"
             )
             sends.append(
                 Send(
@@ -286,12 +304,12 @@ def build_research_engine(
 
     def gather_node(state: dict[str, Any]) -> dict[str, Any]:
         query = state.get("_gather_query", "")
-        domain_hint = state.get("_gather_domain", "auto")
+        domain_hint = state.get("_gather_domain", "public")
 
         selected = router.select(query, domain=domain_hint)
         if not selected:
             emit_subagent_wire_event(
-                ResearchGatherSummaryEvent(
+                TacitusGatherSummaryEvent(
                     query_preview=str(query)[:120],
                     result_count=0,
                     sources_touched=0,
@@ -337,7 +355,7 @@ def build_research_engine(
 
         if not all_results:
             emit_subagent_wire_event(
-                ResearchGatherSummaryEvent(
+                TacitusGatherSummaryEvent(
                     query_preview=str(query)[:120],
                     result_count=0,
                     sources_touched=len(selected),
@@ -356,7 +374,7 @@ def build_research_engine(
             source_refs.append(f"{r.source_name}:{r.source_ref}")
 
         emit_subagent_wire_event(
-            ResearchGatherSummaryEvent(
+            TacitusGatherSummaryEvent(
                 query_preview=str(query)[:120],
                 result_count=len(all_results),
                 sources_touched=len(source_refs),
@@ -385,7 +403,7 @@ def build_research_engine(
             existing_summaries=existing[:3000],
             new_results=new_results[:3000],
         )
-        resp = model.invoke([{"role": "user", "content": prompt}])
+        resp = loop_model.invoke([{"role": "user", "content": prompt}])
         integrated = str(resp.content)
 
         return {"search_summaries": [integrated]}
@@ -400,19 +418,18 @@ def build_research_engine(
             summaries=summaries[:4000] or "(no summaries yet)",
         )
 
-        resp = model.invoke([{"role": "user", "content": prompt}])
-        content = str(resp.content)
-
-        try:
-            parsed = json.loads(content)
-        except json.JSONDecodeError:
-            parsed = {"is_sufficient": True, "knowledge_gap": "", "follow_up_queries": []}
+        resp = loop_model.invoke([{"role": "user", "content": prompt}])
+        parsed = parse_json_object(llm_response_text(resp)) or {
+            "is_sufficient": True,
+            "knowledge_gap": "",
+            "follow_up_queries": [],
+        }
 
         is_sufficient = parsed.get("is_sufficient", True)
         follow_ups = parsed.get("follow_up_queries", [])
 
         logger.info(
-            "Research: loop %d, sufficient=%s, follow_ups=%d",
+            "[Tacitus] loop %d, sufficient=%s, follow_ups=%d",
             loop_count + 1,
             is_sufficient,
             len(follow_ups),
@@ -433,8 +450,11 @@ def build_research_engine(
         if follow_ups:
             sends = []
             for fq in follow_ups:
-                query_str = fq.get("query", fq) if isinstance(fq, dict) else str(fq)
-                domain_hint = fq.get("domain_hint", "auto") if isinstance(fq, dict) else "auto"
+                query_str = compact_search_query(
+                    fq.get("query", fq) if isinstance(fq, dict) else str(fq),
+                    max_len=120,
+                )
+                domain_hint = fq.get("domain_hint", "public") if isinstance(fq, dict) else "public"
                 sends.append(
                     Send(
                         "gather",
@@ -460,14 +480,14 @@ def build_research_engine(
             summaries=summaries[:6000],
         )
         synth_t0 = time.perf_counter()
-        resp = model.invoke([{"role": "user", "content": prompt}])
+        resp = final_model.invoke([{"role": "user", "content": prompt}])
         answer = str(resp.content)
         elapsed_ms = int((time.perf_counter() - synth_t0) * 1000)
 
-        logger.info("Research: synthesized %d chars from %d sources", len(answer), num_sources)
-        completion_summary = research_answer_summary_for_display(answer)
+        logger.info("[Tacitus] synthesized %d chars from %d sources", len(answer), num_sources)
+        completion_summary = tacitus_answer_summary_for_display(answer)
         emit_subagent_wire_event(
-            ResearchCompletedEvent(
+            TacitusCompletedEvent(
                 duration_ms=elapsed_ms,
                 answer_length=len(answer),
                 summary=completion_summary,
@@ -476,7 +496,7 @@ def build_research_engine(
         )
         return {"answer": answer}
 
-    graph = StateGraph(ResearchEngineState)
+    graph = StateGraph(TacitusEngineState)
 
     graph.add_node("analyze_topic", analyze_topic_node)
     graph.add_node("generate_queries", generate_queries_node)

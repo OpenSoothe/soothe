@@ -25,10 +25,10 @@ SUBAGENT_EXPLORE_MILESTONE = "soothe.subagent.explore.milestone"
 SUBAGENT_EXPLORE_STEP_COMPLETED = "soothe.subagent.explore.step.completed"
 SUBAGENT_EXPLORE_COMPLETED = "soothe.subagent.explore.completed"
 
-# --- Research ---
-SUBAGENT_RESEARCH_STARTED = "soothe.subagent.research.started"
-SUBAGENT_RESEARCH_GATHER_SUMMARY = "soothe.subagent.research.gather.summary"
-SUBAGENT_RESEARCH_COMPLETED = "soothe.subagent.research.completed"
+# --- Tacitus (public-domain research; RFC-619) ---
+SUBAGENT_TACITUS_STARTED = "soothe.subagent.tacitus.started"
+SUBAGENT_TACITUS_GATHER_SUMMARY = "soothe.subagent.tacitus.gather.summary"
+SUBAGENT_TACITUS_COMPLETED = "soothe.subagent.tacitus.completed"
 
 ALLOWLISTED_SUBAGENT_EVENT_TYPES: frozenset[str] = frozenset(
     {
@@ -43,9 +43,9 @@ ALLOWLISTED_SUBAGENT_EVENT_TYPES: frozenset[str] = frozenset(
         SUBAGENT_EXPLORE_MILESTONE,
         SUBAGENT_EXPLORE_STEP_COMPLETED,
         SUBAGENT_EXPLORE_COMPLETED,
-        SUBAGENT_RESEARCH_STARTED,
-        SUBAGENT_RESEARCH_GATHER_SUMMARY,
-        SUBAGENT_RESEARCH_COMPLETED,
+        SUBAGENT_TACITUS_STARTED,
+        SUBAGENT_TACITUS_GATHER_SUMMARY,
+        SUBAGENT_TACITUS_COMPLETED,
     }
 )
 
@@ -144,9 +144,9 @@ __all__ = [
     "SUBAGENT_EXPLORE_MILESTONE",
     "SUBAGENT_EXPLORE_STEP_COMPLETED",
     "SUBAGENT_EXPLORE_STARTED",
-    "SUBAGENT_RESEARCH_COMPLETED",
-    "SUBAGENT_RESEARCH_GATHER_SUMMARY",
-    "SUBAGENT_RESEARCH_STARTED",
+    "SUBAGENT_TACITUS_COMPLETED",
+    "SUBAGENT_TACITUS_GATHER_SUMMARY",
+    "SUBAGENT_TACITUS_STARTED",
     "clip_wire_event_payload",
     "emit_subagent_wire_event",
     "is_allowlisted_subagent_event_type",
