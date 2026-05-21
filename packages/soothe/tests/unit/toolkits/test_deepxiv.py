@@ -26,7 +26,9 @@ from soothe.toolkits.deepxiv import (
     DeepxivTrendingTool,
     DeepxivWebsearchInput,
     DeepxivWebsearchTool,
+    _deepxiv_exception_message,
     _safe_call,
+    resolve_deepxiv_token,
 )
 
 # -----------------------------------------------------------------------------
@@ -711,6 +713,62 @@ class TestErrorHandling:
 
         result = failing_func()
         assert "Error" in result
+
+    def test_safe_call_maps_authentication_error(self, search_tool):
+        """Test _safe_call maps deepxiv_sdk.reader.AuthenticationError without traceback spam."""
+        from deepxiv_sdk import AuthenticationError
+
+        search_tool.toolkit.reader.search.side_effect = AuthenticationError(
+            "Invalid or expired token. Run 'deepxiv config' to set a valid token."
+        )
+
+        result = search_tool._run(query="MoE papers", size=5)
+
+        assert "Invalid DeepXiv token" in result
+        assert "DEEPXIV_API_KEY" in result
+        assert "DeepXiv operation failed" not in result
+
+    def test_deepxiv_exception_message_for_auth(self):
+        """Test auth errors use the dedicated user message."""
+        from deepxiv_sdk import AuthenticationError
+
+        msg = _deepxiv_exception_message(
+            AuthenticationError("Invalid or expired token"),
+        )
+        assert "Invalid DeepXiv token" in msg
+
+
+class TestResolveDeepxivToken:
+    """Tests for token resolution."""
+
+    def test_resolve_from_env_api_key(self, monkeypatch):
+        """Test DEEPXIV_API_KEY env fallback."""
+        monkeypatch.delenv("DEEPXIV_TOKEN", raising=False)
+        monkeypatch.setenv("DEEPXIV_API_KEY", "env-token")
+        assert resolve_deepxiv_token(None) == "env-token"
+
+    def test_resolve_from_env_token(self, monkeypatch):
+        """Test DEEPXIV_TOKEN env fallback when API key unset."""
+        monkeypatch.delenv("DEEPXIV_API_KEY", raising=False)
+        monkeypatch.setenv("DEEPXIV_TOKEN", "token-env")
+        assert resolve_deepxiv_token(None) == "token-env"
+
+    def test_resolve_api_key_precedence_over_token(self, monkeypatch):
+        """DEEPXIV_API_KEY wins when both env vars are set."""
+        monkeypatch.setenv("DEEPXIV_API_KEY", "api-key")
+        monkeypatch.setenv("DEEPXIV_TOKEN", "other-token")
+        assert resolve_deepxiv_token(None) == "api-key"
+
+    def test_resolve_env_placeholder(self, monkeypatch):
+        """Test ${DEEPXIV_API_KEY} config placeholder."""
+        monkeypatch.setenv("DEEPXIV_API_KEY", "from-env")
+        assert resolve_deepxiv_token("${DEEPXIV_API_KEY}") == "from-env"
+
+    def test_resolve_env_placeholder_token(self, monkeypatch):
+        """Test ${DEEPXIV_TOKEN} config placeholder."""
+        monkeypatch.delenv("DEEPXIV_API_KEY", raising=False)
+        monkeypatch.setenv("DEEPXIV_TOKEN", "from-token-env")
+        assert resolve_deepxiv_token("${DEEPXIV_TOKEN}") == "from-token-env"
 
 
 # -----------------------------------------------------------------------------

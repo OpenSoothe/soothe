@@ -43,24 +43,22 @@ class StepAction(BaseModel):
         subagent: Subagent to invoke (optional, executor hint)
         expected_output: Expected result for evidence accumulation
         evidence_refs: Machine-checkable ids into ``LoopState.evidence_ledger`` or prior step ids (RFC-220).
-        dependencies: Step IDs this depends on (for DAG execution). Use the same local ``id``
-            strings as sibling steps (e.g. ``01``, ``02``); runtime remaps aliases such as ``1`` → ``01``
-            when unambiguous (IG-379).
+        dependencies: Step IDs this depends on (for DAG execution).
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     description: str = Field(
         ...,
-        description="Imperative step; parallel explore passes must name disjoint repo slices.",
+        description="Imperative milestone description (under 20 words).",
     )
     subagent: str | None = Field(
         default=None,
-        description='Optional; use "explore" for readonly workspace search via task tool.',
+        description="Optional subagent hint for executor.",
     )
     expected_output: str = "Step completed successfully"
     evidence_refs: list[str] = Field(
         default_factory=list,
-        description="Evidence ids (RFC-220); required when evidence_ledger is non-empty.",
+        description="Evidence ids for validation (RFC-220).",
     )
     dependencies: list[str] | None = None
 
