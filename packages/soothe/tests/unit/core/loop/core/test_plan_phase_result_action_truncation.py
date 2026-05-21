@@ -12,6 +12,7 @@ from soothe.core.loop.planning.planner import LLMPlanner
 from soothe.core.loop.state.schemas import (
     AgentDecision,
     PlanGeneration,
+    PlanGenerateStep,
     PlanResult,
     StatusAssessment,
     StepAction,
@@ -34,7 +35,7 @@ def sample_plan_result() -> PlanGeneration:
         plan_action="new",
         type="execute_steps",
         steps=[
-            StepAction(
+            PlanGenerateStep(
                 id="step-001",
                 description="Read key implementation files from cli/, shared/, and tui/",
                 expected_output="Architecture understanding",

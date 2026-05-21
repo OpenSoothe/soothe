@@ -34,8 +34,8 @@ _VALID_TASK_COMPLEXITY = frozenset({"minimal", "simple", "medium", "complex"})
 def _configurable_step_subagent() -> str | None:
     """Return AgentLoop per-step subagent hint from LangGraph RunnableConfig when set.
 
-    Executor passes ``soothe_step_subagent`` in ``config.configurable`` (from
-    ``StepAction.subagent``). This must drive the same task-only enforcement as
+    Executor passes ``soothe_step_subagent`` in ``config.configurable`` (from wire
+    ``preferred_subagent`` when ``routing_hint=subagent``). This must drive the same task-only enforcement as
     wire ``routing_hint=subagent`` (IG-386).
 
     Returns:

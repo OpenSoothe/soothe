@@ -22,7 +22,7 @@ class EvidenceEntry(BaseModel):
     """Evidence row for plan validation (RFC-220).
 
     Attributes:
-        evidence_id: Stable id referenced by ``StepAction.evidence_refs``.
+        evidence_id: Stable id for the evidence ledger.
         summary: Compact summary for prompts and validation.
         kind: Provenance classification.
     """
@@ -30,6 +30,49 @@ class EvidenceEntry(BaseModel):
     evidence_id: str
     summary: str = ""
     kind: Literal["tool", "bootstrap", "ledger"] = "bootstrap"
+
+
+class PlanGenerateStep(BaseModel):
+    """Single step in plan-generate structured output (RFC-604, IG-329).
+
+    Separate from ``StepAction`` so the LLM schema omits executor-only fields
+    (``subagent``, ``evidence_refs``). Converted to ``StepAction`` when building
+    ``AgentDecision``.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
+    description: str = Field(
+        ...,
+        description="Imperative milestone description (under 20 words).",
+    )
+    expected_output: str = "Step completed successfully"
+    dependencies: list[str] | None = None
+
+
+def plan_generate_steps_to_step_actions(steps: list[PlanGenerateStep]) -> list[StepAction]:
+    """Convert plan-generate steps into runtime ``StepAction`` rows."""
+    return [
+        StepAction(
+            id=s.id,
+            description=s.description,
+            expected_output=s.expected_output,
+            dependencies=s.dependencies,
+        )
+        for s in steps
+    ]
+
+
+def step_actions_to_plan_generate_steps(steps: list[StepAction]) -> list[PlanGenerateStep]:
+    """Convert runtime steps into plan-generate schema rows (fallback paths)."""
+    return [
+        PlanGenerateStep(
+            id=s.id,
+            description=s.description,
+            expected_output=s.expected_output,
+            dependencies=s.dependencies,
+        )
+        for s in steps
+    ]
 
 
 class StepAction(BaseModel):
@@ -40,9 +83,7 @@ class StepAction(BaseModel):
     Attributes:
         id: Step identifier; after plan assembly use ``assign_plan_step_ids`` (IG-303: ``<PLANID>-<model-id>``).
         description: What this step does
-        subagent: Subagent to invoke (optional, executor hint)
         expected_output: Expected result for evidence accumulation
-        evidence_refs: Machine-checkable ids into ``LoopState.evidence_ledger`` or prior step ids (RFC-220).
         dependencies: Step IDs this depends on (for DAG execution).
     """
 
@@ -51,15 +92,7 @@ class StepAction(BaseModel):
         ...,
         description="Imperative milestone description (under 20 words).",
     )
-    subagent: str | None = Field(
-        default=None,
-        description="Optional subagent hint for executor.",
-    )
     expected_output: str = "Step completed successfully"
-    evidence_refs: list[str] = Field(
-        default_factory=list,
-        description="Evidence ids for validation (RFC-220).",
-    )
     dependencies: list[str] | None = None
 
 
@@ -506,7 +539,7 @@ class PlanGeneration(BaseModel):
 
     plan_action: Literal["keep", "new"] = "new"
     type: Literal["execute_steps", "final"] | None = None
-    steps: list[StepAction] = Field(default_factory=list)
+    steps: list[PlanGenerateStep] = Field(default_factory=list)
     execution_mode: Literal["parallel", "sequential", "dependency"] | None = None
     reasoning: str = ""
     adaptive_granularity: Literal["atomic", "semantic"] | None = None
@@ -563,7 +596,7 @@ def plan_generation_model_for_iteration(iteration: int) -> type[PlanGeneration]:
         return PlanGeneration
 
     class PlanGenerationFirstWave(PlanGeneration):
-        steps: list[StepAction] = Field(default_factory=list, max_length=FIRST_WAVE_MAX_STEPS)
+        steps: list[PlanGenerateStep] = Field(default_factory=list, max_length=FIRST_WAVE_MAX_STEPS)
 
     return PlanGenerationFirstWave
 

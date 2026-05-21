@@ -10,6 +10,8 @@ from deepagents.backends.filesystem import FilesystemBackend
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel
 
+from langchain_core.messages import ToolMessage
+
 from soothe.middleware.filesystem import (
     ApplyDiffSchema,
     DeleteFileSchema,
@@ -18,7 +20,51 @@ from soothe.middleware.filesystem import (
     FileInfoSchema,
     InsertLinesSchema,
     SootheFilesystemMiddleware,
+    coerce_provider_safe_tool_message,
 )
+
+
+class TestCoerceProviderSafeToolMessage:
+    """read_file PDF/audio blocks must not reach OpenAI-compatible chat APIs."""
+
+    def test_leaves_text_tool_message_unchanged(self) -> None:
+        msg = ToolMessage(content="hello", tool_call_id="t1", name="read_file")
+        assert coerce_provider_safe_tool_message(msg) is msg
+
+    def test_converts_file_block_to_text(self) -> None:
+        msg = ToolMessage(
+            content=[{"type": "file", "base64": "abc", "mime_type": "application/pdf"}],
+            tool_call_id="t1",
+            name="read_file",
+            additional_kwargs={"read_file_path": "/docs/paper.pdf"},
+        )
+        out = coerce_provider_safe_tool_message(msg)
+        assert out is not msg
+        assert out.content == [
+            {
+                "type": "text",
+                "text": (
+                    "System reminder: read_file returned a document or media file"
+                    " at /docs/paper.pdf (block type='file', mime_type=application/pdf)"
+                    " that cannot be sent inline to this chat model. Use goal attachment"
+                    " text, run_command (e.g. pdftotext or a PDF parser), or paginated"
+                    " text reads on extracted files instead of read_file on this path."
+                ),
+            }
+        ]
+
+    def test_preserves_image_block(self) -> None:
+        block = {
+            "type": "image",
+            "base64": "abc",
+            "mime_type": "image/png",
+        }
+        msg = ToolMessage(
+            content=[block],
+            tool_call_id="t1",
+            name="read_file",
+        )
+        assert coerce_provider_safe_tool_message(msg) is msg
 
 
 class TestSootheFilesystemMiddlewareSchemas:
