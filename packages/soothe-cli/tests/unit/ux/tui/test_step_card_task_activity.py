@@ -48,7 +48,7 @@ def test_task_activity_links_children_by_unified_task_index() -> None:
     card.add_tool_call(
         "YKF_01:s:task:0",
         "task",
-        {"subagent_type": "research", "description": "find docs"},
+        {"subagent_type": "tacitus", "description": "find docs"},
         is_task_row=True,
     )
     card.add_tool_call("YKF_01:t0:read_file:1", "read_file", {"path": "a.md"})

@@ -120,7 +120,7 @@ class TestOutcomeTypeCoverage:
 
     def test_subagent_tools_have_correct_outcome_type(self) -> None:
         """Subagent tools should have outcome_type='subagent'."""
-        subagent_tools = ["task", "research"]
+        subagent_tools = ["task", "tacitus"]
         for name in subagent_tools:
             meta = get_tool_meta(name)
             assert meta is not None
@@ -199,7 +199,7 @@ class TestToolMetaDisplayNames:
             "fetch_url": "Web Crawl",
             "wizsearch_search": "Multi-Engine Search",
             "wizsearch_crawl": "Headless Crawl",
-            "research": "Research",
+            "tacitus": "Tacitus",
         }
         for name, expected_display in expected.items():
             assert get_tool_display_name(name) == expected_display, (

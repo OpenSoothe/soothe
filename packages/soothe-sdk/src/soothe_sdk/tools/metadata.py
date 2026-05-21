@@ -436,13 +436,13 @@ _register(
 )
 
 # ---------------------------------------------------------------------------
-# soothe research subagent (invoked via task tool; not a tools.* group)
+# soothe tacitus subagent (invoked via task tool; not a tools.* group)
 # ---------------------------------------------------------------------------
 
 _register(
     ToolMeta(
-        name="research",
-        display_name="Research",
+        name="tacitus",
+        display_name="Tacitus",
         arg_keys=("topic", "domain"),
         category="subagent",
         outcome_type="subagent",

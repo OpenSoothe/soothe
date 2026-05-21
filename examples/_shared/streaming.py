@@ -18,7 +18,7 @@ from langgraph.graph.state import CompiledStateGraph
 SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
     "planner": "Planner",
     "scout": "Scout",
-    "research": "Research",
+    "tacitus": "Tacitus",
 }
 
 _TASK_NAME_RE = re.compile(r'"?name"?\s*:\s*"?(\w+)"?')
