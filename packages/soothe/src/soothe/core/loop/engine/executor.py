@@ -18,10 +18,8 @@ replay (IG-355); it is True iff provenance is ``task_tool_aggregate``.
 from __future__ import annotations
 
 import asyncio
-import errno
 import json
 import logging
-import re
 import time
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
@@ -64,6 +62,12 @@ from soothe.core.loop.state.schemas import (
 )
 from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.middleware.tool_concurrency import init_tool_concurrency_for_thread
+from soothe.utils.network_errors import (
+    format_tool_network_error as _format_tool_network_error,
+)
+from soothe.utils.network_errors import (
+    is_recoverable_tool_network_error as _is_recoverable_tool_network_error,
+)
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, log_preview, preview, preview_first
 
@@ -632,51 +636,6 @@ def provenance_is_task_delegate(snapshot: ActWaveFinalizeSnapshot) -> bool:
 
 
 # --- Helper functions ---
-
-
-def _collect_related_exceptions(exc: BaseException) -> list[BaseException]:
-    """Collect this exception plus chained ``__cause__`` / ``__context__`` (deduplicated)."""
-    out: list[BaseException] = []
-    seen: set[int] = set()
-
-    def visit(e: BaseException | None) -> None:
-        if e is None or id(e) in seen:
-            return
-        seen.add(id(e))
-        out.append(e)
-        visit(e.__cause__)
-        ctx = getattr(e, "__context__", None)
-        if ctx is not None and ctx is not e.__cause__:
-            visit(ctx)
-
-    visit(exc)
-    return out
-
-
-def _is_expected_connection_refusal(exc: BaseException) -> bool:
-    """True when failure is connection refused (local service down / wrong port)."""
-    for e in _collect_related_exceptions(exc):
-        if isinstance(e, ConnectionRefusedError):
-            return True
-        if isinstance(e, OSError) and getattr(e, "errno", None) == errno.ECONNREFUSED:
-            return True
-    return False
-
-
-def _format_connection_refusal_message(exc: BaseException) -> str:
-    """Short, actionable message for connection-refused chains (e.g. aiohttp → OSError)."""
-    combined = " ".join(str(e) for e in _collect_related_exceptions(exc))
-    m = re.search(r"Connect call failed\s*\(\s*'([^']+)'\s*,\s*(\d+)", combined)
-    if m:
-        host, port = m.group(1), m.group(2)
-        return (
-            f"Connection refused to {host}:{port} — nothing is listening there. "
-            "Start the service or correct the host/port."
-        )
-    return (
-        "Connection refused — the target service is not accepting connections. "
-        "Verify it is running and that the host and port are correct."
-    )
 
 
 def _log_dependency_execution_residual(
@@ -1778,10 +1737,10 @@ class Executor:
             raise
         except Exception as e:
             duration_ms = int((time.perf_counter() - start) * 1000)
-            if _is_expected_connection_refusal(e):
+            if _is_recoverable_tool_network_error(e):
                 logger.warning(
                     "Sequential execution failed: %s",
-                    _format_connection_refusal_message(e),
+                    _format_tool_network_error(e),
                 )
             else:
                 logger.exception("Sequential execution failed")
@@ -2112,13 +2071,13 @@ class Executor:
             raise
         except Exception as e:
             duration_ms = int((time.perf_counter() - start) * 1000)
-            if _is_expected_connection_refusal(e):
+            if _is_recoverable_tool_network_error(e):
                 logger.warning(
                     "Step %s failed after %dms [wire_subagent=%s]: %s",
                     step.id,
                     duration_ms,
                     wire_subagent,
-                    _format_connection_refusal_message(e),
+                    _format_tool_network_error(e),
                 )
             else:
                 logger.exception(
@@ -2758,8 +2717,8 @@ class Executor:
         """
         from soothe.middleware.llm_rate_limit import EnhancedTimeoutError
 
-        if _is_expected_connection_refusal(exc):
-            return _format_connection_refusal_message(exc)
+        if _is_recoverable_tool_network_error(exc):
+            return _format_tool_network_error(exc)
 
         # IG-295: Enhanced timeout error with metadata
         if isinstance(exc, EnhancedTimeoutError):

@@ -110,6 +110,7 @@ def build_soothe_middleware_stack(
     from .policy import SoothePolicyMiddleware
     from .system_prompt_optimization import SystemPromptOptimizationMiddleware
     from .tool_concurrency import ToolConcurrencyMiddleware
+    from .tool_network_errors import NetworkToolErrorsMiddleware
     from .workspace_context import WorkspaceContextMiddleware
 
     stack: list[AgentMiddleware] = []
@@ -131,6 +132,10 @@ def build_soothe_middleware_stack(
         "[Middleware] Tool concurrency enabled: max_parallel_tools=%d",
         max_parallel_tools,
     )
+
+    # 2b. Recoverable outbound network errors → tool messages (TLS verify, connection refused)
+    stack.append(NetworkToolErrorsMiddleware())
+    logger.debug("[Middleware] Network tool error recovery enabled")
 
     # 3. System prompt optimization (requires routing_classification from AgentLoop / runner)
     trigger_registry, context_registry = _build_tool_registries(config)
