@@ -160,11 +160,11 @@ def test_resume_skips_internal_loop_checkpoint_when_cognition_replay_provided() 
         MessageData(
             type=MessageType.COGNITION_REASON,
             content="",
-            cognition_plan_next_action="Inspect outputs",
+            cognition_plan_next_action="",
             cognition_plan_status="continue",
             cognition_plan_iteration=1,
             cognition_plan_action="keep",
-            cognition_plan_assessment="",
+            cognition_plan_assessment="Inspect outputs",
             cognition_plan_strategy="",
             timestamp=1_000.0,
         )
@@ -226,7 +226,7 @@ def test_convert_loop_events_maps_cognition_events_to_specialized_cards() -> Non
             "metadata": {
                 "data": {
                     "type": "soothe.cognition.agent_loop.reasoned",
-                    "next_action": "I will inspect tool outputs.",
+                    "next_action": "",
                     "status": "continue",
                     "iteration": 2,
                     "plan_action": "keep",
@@ -255,7 +255,8 @@ def test_convert_loop_events_maps_cognition_events_to_specialized_cards() -> Non
         MessageType.COGNITION_REASON,
         MessageType.STEP_PROGRESS,
     ]
-    assert data[1].cognition_plan_next_action == "I will inspect tool outputs."
+    assert data[1].cognition_plan_next_action == ""
+    assert data[1].cognition_plan_assessment == "Current plan is effective."
     assert data[2].step_progress_id == "S_3"
     assert data[2].step_progress_phase == "running"
 

@@ -96,6 +96,7 @@ from soothe_cli.runtime.turn.prepare import (
 from soothe_cli.tui._cli_context import CLIContext
 from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui.config import build_stream_config
+from soothe_cli.tui.file_change_notify import mount_file_change_preview
 from soothe_cli.tui.hooks import dispatch_hook
 from soothe_cli.tui.input import MediaTracker, parse_file_mentions
 from soothe_cli.tui.media_utils import create_multimodal_content
@@ -180,6 +181,12 @@ class TextualUIAdapter:
         self._step_router = StepTaskRouter()
         """Per-turn routing for parallel steps, root tools, and subagent namespaces."""
 
+        self._file_change_previews_shown: set[str] = set()
+        """tool_call_ids that already have a non-blocking file-change preview card."""
+
+        self._file_preview_assistant_id: str | None = None
+        """Agent id for the active turn (path resolution in file previews)."""
+
         # Token display callbacks (set by the app after construction)
         self._on_tokens_update: _TokensUpdateCallback | None = None
         """Called with total context tokens after each LLM response."""
@@ -208,6 +215,8 @@ class TextualUIAdapter:
         self._step_router.reset_turn()
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
+        self._file_change_previews_shown.clear()
+        self._file_preview_assistant_id = None
 
         # Clear active streaming message to avoid stale "active" state in the store.
         if self._set_active_message:
@@ -827,8 +836,16 @@ async def apply_tool_call_wire_update(
         tool_name=name,
     )
 
-    if file_op_tracker is not None and name in FILE_CHANGE_TOOLS:
-        track_file_operation(file_op_tracker, name, raw_args, merge_id or tcid)
+    if file_op_tracker is not None and name in FILE_CHANGE_TOOLS and tool_args_meaningful(raw_args):
+        file_tcid = str(merge_id or tcid)
+        track_file_operation(file_op_tracker, name, raw_args, file_tcid)
+        await mount_file_change_preview(
+            adapter,
+            tool_name=name,
+            args=raw_args,
+            tool_call_id=file_tcid,
+            assistant_id=adapter._file_preview_assistant_id,
+        )
 
     if is_main and name == "task":
         if is_inner_subgraph_task_tool_id(tcid):
@@ -1499,6 +1516,8 @@ async def execute_task_textual(
         adapter._on_tokens_hide()
 
     file_op_tracker = FileOpTracker(assistant_id=assistant_id)
+    adapter._file_preview_assistant_id = assistant_id
+    adapter._file_change_previews_shown.clear()
     router = adapter._step_router
     router.reset_turn()
     ui_coalesce = TurnToolUiCoalescer()
@@ -2133,6 +2152,13 @@ async def execute_task_textual(
                                             parsed_args,
                                             file_tcid,
                                         )
+                                        await mount_file_change_preview(
+                                            adapter,
+                                            tool_name=buffer_name,
+                                            args=parsed_args,
+                                            tool_call_id=file_tcid,
+                                            assistant_id=assistant_id,
+                                        )
 
                                     if is_main_agent and buffer_name == "task":
                                         if not is_inner_subgraph_task_tool_id(str(lookup_id)):
@@ -2414,6 +2440,12 @@ async def execute_task_textual(
                                     continue
 
                             if event_type == LOOP_REASON_EVENT_TYPE:
+                                assessment_reasoning = str(
+                                    data.get("assessment_reasoning", "")
+                                ).strip()
+                                plan_reasoning = str(data.get("plan_reasoning", "")).strip()
+                                if not assessment_reasoning and not plan_reasoning:
+                                    continue
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
                                     await _flush_assistant_text_ns(
@@ -2428,12 +2460,12 @@ async def execute_task_textual(
                                 pa_raw = data.get("plan_action", "")
                                 plan_action = pa_raw if pa_raw in ("keep", "new") else ""
                                 plan_widget = CognitionReasonMessage(
-                                    next_action=str(data.get("next_action", "")),
+                                    next_action="",
                                     status=str(data.get("status", "")),
                                     iteration=int(data.get("iteration", 0)),
                                     plan_action=str(plan_action),
-                                    assessment_reasoning=str(data.get("assessment_reasoning", "")),
-                                    plan_reasoning=str(data.get("plan_reasoning", "")),
+                                    assessment_reasoning=assessment_reasoning,
+                                    plan_reasoning=plan_reasoning,
                                     id=f"plan-{uuid.uuid4().hex[:8]}",
                                 )
                                 await adapter._mount_message(plan_widget)

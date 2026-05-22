@@ -38,8 +38,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _AGENTIC_FINAL_STDOUT_CAP = 50_000
-_DEFAULT_GOAL_ACHIEVED_MESSAGE = "Goal achieved successfully"
-
 # TUI step cards show the full brief; avoid mid-string abbr markers on long plans.
 _AGENTIC_STEP_DESC_UI_MAX = 4000
 
@@ -244,13 +242,16 @@ def _clip_agentic_step_description(
     return text[: max_len - 1].rstrip() + "…"
 
 
-def _should_emit_loop_reason_event(*, status: str, next_action: str) -> bool:
+def _should_emit_loop_reason_event(
+    *,
+    assessment_reasoning: str,
+    plan_reasoning: str,
+) -> bool:
     """Whether to forward a loop reason event to clients.
 
-    Suppress synthetic completion-only reason lines so clients don't display
-    the default "Goal achieved successfully" status text.
+    Reason cards show assess/plan reasoning only — not plan-generate ``next_action``.
     """
-    return not (status == "done" and next_action.strip() == _DEFAULT_GOAL_ACHIEVED_MESSAGE)
+    return bool(assessment_reasoning.strip() or plan_reasoning.strip())
 
 
 class AgenticMixin:
@@ -410,7 +411,8 @@ class AgenticMixin:
                         LoopAgentReasonEvent(
                             status="",
                             progress="",
-                            next_action=display_goal,
+                            next_action="",
+                            assessment_reasoning=display_goal,
                             iteration=0,
                             plan_action="",
                         ).to_dict()
@@ -505,16 +507,19 @@ class AgenticMixin:
                     )
 
             elif event_type == "plan":
-                status = str(event_data.get("status", ""))
-                next_action = str(event_data.get("next_action", ""))
-                if _should_emit_loop_reason_event(status=status, next_action=next_action):
+                assessment_reasoning = str(event_data.get("assessment_reasoning", "")).strip()
+                plan_reasoning = str(event_data.get("plan_reasoning", "")).strip()
+                if _should_emit_loop_reason_event(
+                    assessment_reasoning=assessment_reasoning,
+                    plan_reasoning=plan_reasoning,
+                ):
                     yield _custom(
                         LoopAgentReasonEvent(
-                            status=status,
+                            status=str(event_data.get("status", "")),
                             progress=event_data["progress"],
-                            next_action=next_action,
-                            assessment_reasoning=event_data.get("assessment_reasoning", ""),
-                            plan_reasoning=event_data.get("plan_reasoning", ""),
+                            next_action="",
+                            assessment_reasoning=assessment_reasoning,
+                            plan_reasoning=plan_reasoning,
                             plan_action=event_data.get("plan_action", "new"),
                             iteration=event_data["iteration"],
                         ).to_dict()

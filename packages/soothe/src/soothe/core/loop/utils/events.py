@@ -25,5 +25,5 @@ class LoopAgentReasonEvent(ProtocolEvent):
 register_event(
     LoopAgentReasonEvent,
     verbosity=VerbosityTier.NORMAL,
-    summary_template="{next_action}",
+    summary_template="{assessment_reasoning}",
 )

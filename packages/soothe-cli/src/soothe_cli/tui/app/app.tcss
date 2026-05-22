@@ -128,7 +128,7 @@ Screen {
     margin-bottom: 1;
 }
 
-/* Tool approval widgets */
+/* Tool approval widgets (legacy class names) */
 .tool-approval-widget {
     height: auto;
 }
@@ -137,7 +137,25 @@ Screen {
     color: $text-muted;
 }
 
-/* Diff styling — used by EditFileApprovalWidget (fg + bg + padding) */
+/* Non-blocking filesystem change previews (write / edit / delete) */
+.file-change-preview {
+    height: auto;
+    padding: 1;
+    margin: 0 0 1 0;
+    background: $surface-darken-1;
+    border: solid $secondary;
+}
+
+.file-change-preview-label {
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+.file-change-preview-body {
+    color: $text-muted;
+}
+
+/* Diff styling — previews and DiffMessage (fg + bg + padding) */
 .diff-removed {
     height: auto;
     color: $text-error;

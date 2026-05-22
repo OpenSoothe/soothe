@@ -2758,7 +2758,7 @@ class CognitionStepMessage(Vertical):
 
 
 class CognitionReasonMessage(_TimestampClickMixin, Vertical):
-    """Single card for plan assessment, plan reasoning, and next action (keep/new).
+    """Single card for plan assessment and plan reasoning (keep/new suffix).
 
     Header uses the same cognition-colored label plus foreground body as ``CognitionStepMessage``.
     """
@@ -2805,7 +2805,7 @@ class CognitionReasonMessage(_TimestampClickMixin, Vertical):
         """Initialize a plan-reason card.
 
         Args:
-            next_action: User-facing next step line.
+            next_action: Deprecated; retained for message-store replay only.
             status: Plan status (continue, replan, done).
             iteration: Agent-loop iteration index.
             plan_action: ``keep`` or ``new`` (execution strategy).
@@ -2822,28 +2822,21 @@ class CognitionReasonMessage(_TimestampClickMixin, Vertical):
         self._plan_reasoning = plan_reasoning.strip()
 
     def _plan_header_content(self) -> Content:
-        # Assess-only card: only assessment_reasoning populated
-        if self._assessment_reasoning and not self._plan_reasoning and not self._next_action:
-            return _assemble_card_header(self, "💭 ", self._assessment_reasoning)
-
-        # Concatenate plan_reasoning and next_action with proper separation
         parts: list[str] = []
+        if self._assessment_reasoning:
+            parts.append(self._assessment_reasoning)
         if self._plan_reasoning:
             parts.append(self._plan_reasoning)
-        if self._next_action:
-            parts.append(self._next_action)
-        # Join with period and space if both present, ensuring proper sentence separation
         if len(parts) == 2:
-            # Ensure plan_reasoning ends with period before adding next_action
-            pr = parts[0]
-            if not pr.endswith((".", "!", "?")):
-                pr = f"{pr}."
-            body = f"{pr} {parts[1]}"
+            first = parts[0]
+            if not first.endswith((".", "!", "?")):
+                first = f"{first}."
+            body = f"{first} {parts[1]}"
         elif parts:
             body = parts[0]
         else:
-            body = ""
-        if self._plan_action in ("keep", "new"):
+            body = self._next_action or ""
+        if self._plan_action in ("keep", "new") and body:
             body = f"{body} · {self._plan_action}"
         return _assemble_card_header(self, "💭 ", body)
 

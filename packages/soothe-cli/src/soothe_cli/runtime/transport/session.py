@@ -222,7 +222,7 @@ class TuiDaemonSession:
             self.turn_event_stats.post_idle_drained += 1
             yield (namespace, mode, data)
             if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
-                return
+                continue
 
     async def iter_turn_chunks(self) -> Any:
         """Yield `(namespace, mode, data)` chunks for the active daemon turn."""
@@ -291,8 +291,9 @@ class TuiDaemonSession:
                     namespace = tuple(event.get("namespace", []) or [])
                     mode = str(event.get("mode", ""))
                     yield (namespace, mode, data)
+                    # Graph may auto-resume after HITL interrupts; keep consuming events.
                     if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
-                        break
+                        continue
             finally:
                 self._streaming = False
 
