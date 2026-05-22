@@ -14,10 +14,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
+
+from soothe.core.persistence.postgres_pool_lifecycle import (
+    apply_row_factory,
+    close_async_pool,
+    postgres_pool_timing_from_config,
+    release_idle_pool_connections,
+)
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
@@ -48,15 +54,23 @@ class SharedPostgreSQLPool:
         await pool.close()
     """
 
-    def __init__(self, dsn: str, pool_size: int = 12) -> None:
+    def __init__(
+        self,
+        dsn: str,
+        pool_size: int = 12,
+        *,
+        pool_timing: dict[str, Any] | None = None,
+    ) -> None:
         """Initialize shared pool configuration.
 
         Args:
             dsn: PostgreSQL DSN for soothe_checkpoints database.
             pool_size: Shared pool ``max_size`` (default matches ``PersistenceConfig``).
+            pool_timing: Optional psycopg pool options (timeout, max_idle, max_lifetime).
         """
         self.dsn = dsn
         self.pool_size = pool_size
+        self._pool_timing = pool_timing
         self._pool: AsyncConnectionPool | None = None
         self._init_lock = asyncio.Lock()
         self._initialized = False
@@ -74,18 +88,14 @@ class SharedPostgreSQLPool:
             if self._pool is not None and self._initialized:
                 return self._pool
 
-            # Create connection pool (min_size=1: avoid psycopg default min_size=4 when max is small)
-            self._pool = AsyncConnectionPool(
-                self.dsn,
-                min_size=1,
-                max_size=self.pool_size,
-                kwargs={
-                    "autocommit": True,
-                    "prepare_threshold": 0,
-                    "row_factory": dict_row,
-                },
-                open=False,
-            )
+            pool_kwargs: dict[str, Any] = {
+                "min_size": 1,
+                "max_size": self.pool_size,
+                "open": False,
+            }
+            if self._pool_timing:
+                pool_kwargs.update(self._pool_timing)
+            self._pool = AsyncConnectionPool(self.dsn, **apply_row_factory(pool_kwargs))
 
             # Open pool
             await self._pool.open()
@@ -242,13 +252,16 @@ class SharedPostgreSQLPool:
                     "Shared PostgreSQL schema initialized (4 tables: checkpoints, anchors, branches, goals)"
                 )
 
+    async def release_idle_connections(self) -> None:
+        """Return idle connections to PgBouncer (``Pool.check``)."""
+        await release_idle_pool_connections(self._pool, label="AgentLoop")
+
     async def close(self) -> None:
         """Close the shared connection pool."""
         if self._pool is not None:
-            await self._pool.close()
+            await close_async_pool(self._pool, label="AgentLoop")
             self._pool = None
             self._initialized = False
-            logger.info("Shared PostgreSQL pool closed")
 
     def get_pool(self) -> AsyncConnectionPool | None:
         """Get the underlying pool instance (for direct access).
@@ -280,11 +293,24 @@ class SharedPostgreSQLPool:
             if _shared_pool is None:
                 dsn = config.resolve_postgres_dsn_for_database("checkpoints")
                 pool_size = config.persistence.agentloop_pool_size
-                _shared_pool = SharedPostgreSQLPool(dsn, pool_size=pool_size)
+                timing = postgres_pool_timing_from_config(config)
+                _shared_pool = SharedPostgreSQLPool(
+                    dsn,
+                    pool_size=pool_size,
+                    pool_timing=timing,
+                )
                 await _shared_pool.open()
                 logger.info("Created singleton shared PostgreSQL pool (size=%d)", pool_size)
 
             return _shared_pool
+
+    @classmethod
+    async def release_idle_shared(cls) -> None:
+        """Release idle connections on the daemon singleton (if open)."""
+        global _shared_pool
+
+        if _shared_pool is not None:
+            await _shared_pool.release_idle_connections()
 
     @classmethod
     async def close_shared_instance(cls) -> None:

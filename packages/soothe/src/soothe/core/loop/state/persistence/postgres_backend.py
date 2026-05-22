@@ -10,6 +10,7 @@ IG-406: Supports shared pool for high-concurrency (200+ threads) support.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 from datetime import UTC, datetime
@@ -517,6 +518,9 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
             "total_thread_switches",
             "total_duration_ms",
             "total_tokens_used",
+            "is_ephemeral",
+            "last_message_at",
+            "current_workspace",
         }
         updates = {k: v for k, v in fields.items() if k in _allowed}
         if not updates:
@@ -621,6 +625,85 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                 }
             )
         return result
+
+    async def touch_loop_last_message(self, loop_id: str) -> None:
+        """Record user turn activity for ephemeral loop TTL."""
+        now = datetime.now(UTC).isoformat()
+        await self.update_loop_metadata(loop_id, last_message_at=now)
+
+    async def list_expired_ephemeral_loops(
+        self,
+        idle_before: datetime,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Return ephemeral loops idle since ``idle_before`` (excludes running)."""
+        idle_iso = idle_before.isoformat()
+        pool = await self._ensure_pool()
+
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    SELECT loop_id, status, thread_id AS current_thread_id,
+                           checkpoint_data, client_workspace, created_at, updated_at
+                    FROM agentloop_checkpoints
+                    WHERE COALESCE((checkpoint_data->>'is_ephemeral')::boolean, false) = true
+                      AND status != 'running'
+                      AND COALESCE(
+                            checkpoint_data->>'last_message_at',
+                            checkpoint_data->>'created_at',
+                            created_at::text
+                          ) < %s
+                    ORDER BY COALESCE(
+                        checkpoint_data->>'last_message_at',
+                        checkpoint_data->>'created_at',
+                        created_at::text
+                    ) ASC
+                    LIMIT %s
+                    """,
+                    (idle_iso, limit),
+                )
+                rows = await cur.fetchall()
+
+        result: list[dict] = []
+        for row in rows:
+            data = dict(row["checkpoint_data"]) if row.get("checkpoint_data") else {}
+            raw_tids = data.get("thread_ids")
+            thread_ids = raw_tids if isinstance(raw_tids, list) else []
+            if isinstance(raw_tids, str):
+                with contextlib.suppress(ValueError, TypeError):
+                    thread_ids = json.loads(raw_tids)
+            result.append(
+                {
+                    "loop_id": row["loop_id"],
+                    "thread_ids": thread_ids,
+                    "current_thread_id": row.get("current_thread_id")
+                    or data.get("current_thread_id"),
+                    "status": row["status"],
+                    "client_workspace": row.get("client_workspace") or data.get("client_workspace"),
+                    "current_workspace": data.get("current_workspace"),
+                    "user_id": data.get("user_id"),
+                    "client_workspace_id": data.get("client_workspace_id"),
+                    "last_message_at": data.get("last_message_at"),
+                    "created_at": data.get("created_at"),
+                    "is_ephemeral": True,
+                }
+            )
+        return result
+
+    async def purge_loop_execution_data(self, loop_id: str) -> None:
+        """Delete loop row and related execution tables (keeps workspace dirs)."""
+        pool = await self._ensure_pool()
+
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("DELETE FROM checkpoint_anchors WHERE loop_id = %s", (loop_id,))
+                await cur.execute("DELETE FROM failed_branches WHERE loop_id = %s", (loop_id,))
+                await cur.execute("DELETE FROM goal_records WHERE loop_id = %s", (loop_id,))
+                await cur.execute(
+                    "DELETE FROM agentloop_checkpoints WHERE loop_id = %s", (loop_id,)
+                )
+        logger.info("Purged loop execution data from PostgreSQL: loop=%s", loop_id)
 
     async def save_checkpoint_anchor(
         self,

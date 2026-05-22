@@ -16,6 +16,7 @@ from soothe.config import SOOTHE_HOME
 
 from soothe_daemon.config.models import (
     DistributedConfig,
+    EphemeralLoopGcConfig,
     ThreadPoolConfig,
     TransportConfig,
     WorkerPoolConfig,
@@ -125,6 +126,11 @@ class SootheDaemonConfig(BaseSettings):
         default=120,
         ge=30,
         description="Suppress stats logs after this many seconds without any published events",
+    )
+
+    ephemeral_loop_gc: EphemeralLoopGcConfig = Field(
+        default_factory=EphemeralLoopGcConfig,
+        description="Idle ephemeral loop garbage collection",
     )
 
     # --- Loop runner mode (RFC-221) -----------------------------------------

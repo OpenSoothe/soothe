@@ -168,7 +168,7 @@ class HealthChecker:
         Returns:
             CategoryResult with persistence check results
         """
-        from soothe_daemon.health.checks.persistence_check import check_persistence
+        from soothe_daemon.persistence.health_check import check_persistence
 
         return await check_persistence(self.config)
 

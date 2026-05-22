@@ -101,13 +101,11 @@ def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Che
     """
     backend = config.resolve_checkpointer_backend()  # Resolve inheritance
     if backend == "postgresql":
-        # RFC-612: Use dedicated checkpoints database
-        dsn = config.resolve_postgres_dsn_for_database("checkpoints")
-        result = _resolve_postgres_checkpointer(
-            dsn, max_pool_size=config.persistence.checkpointer_pool_size
-        )
-        if result:
-            return result  # (None, pool)
+        from soothe.core.resolver.shared_checkpointer_pool import SharedCheckpointerPool
+
+        pool = SharedCheckpointerPool.get_or_create_pool(config)
+        if pool is not None:
+            return (None, pool)
         logger.error("PostgreSQL checkpointer unavailable")
         raise ConfigurationError(
             "PostgreSQL checkpointer requested but failed.\n"

@@ -115,6 +115,23 @@ class AgentLoopCheckpointPersistenceManager:
         """
         return await self._backend.list_loops(status_filter=status_filter, limit=limit)
 
+    async def touch_loop_last_message(self, loop_id: str) -> None:
+        """Record user turn activity for ephemeral loop TTL."""
+        await self._backend.touch_loop_last_message(loop_id)
+
+    async def list_expired_ephemeral_loops(
+        self,
+        idle_before: datetime,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Return ephemeral loops idle since ``idle_before`` (excludes running)."""
+        return await self._backend.list_expired_ephemeral_loops(idle_before, limit)
+
+    async def purge_loop_execution_data(self, loop_id: str) -> None:
+        """Delete loop row and related execution tables (keeps workspace dirs)."""
+        await self._backend.purge_loop_execution_data(loop_id)
+        logger.info("Purged loop execution data: loop=%s", loop_id)
+
     async def save_checkpoint_anchor(
         self,
         loop_id: str,

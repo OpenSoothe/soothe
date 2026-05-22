@@ -380,9 +380,14 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
 
             try:
                 if not is_sqlite:
-                    # PostgreSQL pool needs explicit closing
-                    await self._checkpointer_pool.close()
-                    logger.info("Closed PostgreSQL checkpointer connection pool")
+                    from soothe.core.resolver.shared_checkpointer_pool import (
+                        SharedCheckpointerPool,
+                    )
+
+                    if not SharedCheckpointerPool.is_shared_pool(self._checkpointer_pool):
+                        await self._checkpointer_pool.close()
+                        logger.info("Closed PostgreSQL checkpointer connection pool")
+                    # Shared singleton is closed at daemon shutdown (LoopRunnerFactory).
                 # SQLite checkpointer manages its own connection via AsyncSqliteSaver
             except Exception:
                 logger.debug("Failed to close checkpointer pool", exc_info=True)

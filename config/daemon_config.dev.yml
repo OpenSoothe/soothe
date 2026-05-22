@@ -34,6 +34,15 @@ query_timeout_action: cancel
 auto_cancel_on_startup: true
 
 # ============================================================================
+# EPHEMERAL LOOP GC
+# ============================================================================
+ephemeral_loop_gc:
+  enabled: true
+  interval_seconds: 3600
+  idle_hours: 24
+  batch_size: 50
+
+# ============================================================================
 # OBSERVABILITY - Diagnostic metrics and logging
 # ============================================================================
 event_size_stats_enabled: true
@@ -42,15 +51,15 @@ event_size_stats_interval_seconds: 30   # More frequent for dev diagnostics
 # ============================================================================
 # RUNNER MODES - Thread pool enabled for faster dev iteration
 #
-# PostgreSQL Pool Sharing (IG-406): Thread pool mode uses daemon-level singleton
-# pools shared by ALL threads. Use larger persistence.pool_size values (8-12).
+# PostgreSQL (IG-406): thread_pool shares ONE checkpointer pool + ONE AgentLoop pool
+# in the daemon process. Set config.yml agentloop_pool_size ≈ max_pool_size + 2.
 # ============================================================================
 thread_pool:
   enabled: true                      # Dev default: thread pool for fast startup
   min_pool_size: 2
-  max_pool_size: 8
-  idle_timeout_seconds: 300
-  max_requests_per_thread: 100
+  max_pool_size: 6                   # Lower than 8 to match agentloop_pool_size=8 in config.dev.yml
+  idle_timeout_seconds: 120          # Exit idle threads faster → release runner/PG pressure
+  max_requests_per_thread: 50        # Recycle threads periodically
 
 worker_pool:
   enabled: false                     # Disabled: thread pool takes precedence
