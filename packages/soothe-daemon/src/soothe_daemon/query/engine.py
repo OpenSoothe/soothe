@@ -368,9 +368,7 @@ class QueryEngine:
             }
         return {
             "adaptive_threshold_chars": getattr(streaming_cfg, "adaptive_threshold_chars", 500),
-            "file_output_threshold_chars": getattr(
-                streaming_cfg, "file_output_threshold_chars", 0
-            ),
+            "file_output_threshold_chars": getattr(streaming_cfg, "file_output_threshold_chars", 0),
             "file_output_preview_chars": getattr(streaming_cfg, "file_output_preview_chars", 500),
             "file_output_dir": getattr(streaming_cfg, "file_output_dir", None),
             "streaming_interval_ms": getattr(streaming_cfg, "streaming_interval_ms", 200),
@@ -701,9 +699,7 @@ class QueryEngine:
                 coalescer = StreamDeliveryCoalescer(
                     delivery_mode,
                     adaptive_threshold_chars=streaming_cfg.get("adaptive_threshold_chars", 500),
-                    file_output_threshold_chars=streaming_cfg.get(
-                        "file_output_threshold_chars", 0
-                    ),
+                    file_output_threshold_chars=streaming_cfg.get("file_output_threshold_chars", 0),
                     file_output_preview_chars=streaming_cfg.get("file_output_preview_chars", 500),
                     file_output_dir=streaming_cfg.get("file_output_dir"),
                     workspace=run_workspace,

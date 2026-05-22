@@ -66,7 +66,7 @@ Shift from *human-in-the-loop* to **agent-in-the-loop**: define intent, let the 
 |--------|-----------|
 | ✅ | **Single-Session Autonomy** — End-to-end goal execution |
 | ✅ | **Cross-Thread Continuity** — Persistent context across threads |
-| ⏳ | **Multi-Goal Orchestration** — Interdependent long-horizon workflows |
+| ✅ | **Multi-Goal Orchestration** — Interdependent long-horizon workflows |
 | ⏳ | **Benchmark Reproduction** — [Compiler experiment](https://github.com/anthropics/claudes-c-compiler) |  
 
 ## Getting Started
@@ -127,11 +127,9 @@ soothe -p "Research top 5 Python web frameworks"
 
 | Resource | Description |
 |----------|-------------|
-| [Wiki](docs/wiki/) | End-user guides |
-| [User Guide](docs/user_guide.md) | Comprehensive usage |
-| [RFCs](docs/specs/) | Architecture specs (RFC-000, RFC-200, RFC-600) |
+| [User Guide](docs/user_guide.md) | End-user usage guide |
+| [RFCs](docs/specs/) | Architecture specs |
 | [CLAUDE.md](CLAUDE.md) | AI agent dev guide |
-| [Implementation Guides](docs/impl/) | Implementation docs |
 
 ## License
 

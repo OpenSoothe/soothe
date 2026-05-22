@@ -42,34 +42,42 @@ def _format_arg_value(tool_name: str, key: str, value: Any) -> str:
     return preview_first(text, _ARG_PREVIEW_MAX_CHARS)
 
 
-def _primary_arg_preview(tool_name: str, args: dict[str, Any]) -> str:
+def _ordered_arg_keys(tool_name: str, clean: dict[str, Any]) -> list[str]:
+    """Meta priority first, then any remaining keys (stable sorted)."""
+    meta = get_tool_meta(_normalize_tool_name_for_arg_map(tool_name))
+    ordered: list[str] = []
+    if meta and meta.arg_keys:
+        ordered.extend(k for k in meta.arg_keys if k in clean)
+    for key in sorted(clean.keys()):
+        if key not in ordered:
+            ordered.append(key)
+    return ordered
+
+
+def _args_preview(tool_name: str, args: dict[str, Any]) -> str:
+    """Comma-separated arg summary: primary value bare, extras as ``key=value``."""
     clean = {k: v for k, v in (args or {}).items() if k not in _SKIP_ARG_KEYS}
     if not clean:
         return ""
-    meta = get_tool_meta(_normalize_tool_name_for_arg_map(tool_name))
-    keys: tuple[str, ...] = ()
-    if meta and meta.arg_keys:
-        keys = meta.arg_keys
-    else:
-        keys = tuple(sorted(clean.keys()))
-    for key in keys:
-        if key not in clean:
-            continue
+    segments: list[str] = []
+    primary_emitted = False
+    for key in _ordered_arg_keys(tool_name, clean):
         text = _format_arg_value(tool_name, key, clean[key])
-        if text:
-            return text
-    for key, value in clean.items():
-        text = _format_arg_value(tool_name, key, value)
-        if text:
-            return text
-    return ""
+        if not text:
+            continue
+        if not primary_emitted:
+            segments.append(text)
+            primary_emitted = True
+        else:
+            segments.append(f"{key}={text}")
+    return ", ".join(segments)
 
 
 def format_step_tool_activity_command(tool_name: str, args: dict[str, Any]) -> str:
     """One-line invocation summary: ``DisplayName(arg)`` or ``DisplayName``."""
     canonical = _normalize_tool_name_for_arg_map((tool_name or "").strip() or "tool")
     display = get_tool_display_name(canonical)
-    preview = _primary_arg_preview(canonical, args or {})
+    preview = _args_preview(canonical, args or {})
     if preview:
         return f"{display}({preview})"
     return display
