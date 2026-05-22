@@ -21,6 +21,11 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import ToolMessage
 
+from soothe.middleware.tool_call_args_registry import (
+    init_tool_call_args_registry,
+    record_tool_call_args_from_request,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -69,6 +74,7 @@ class ToolConcurrencyMiddleware(AgentMiddleware):
         Returns:
             Tool execution result.
         """
+        record_tool_call_args_from_request(request)
         sem = get_tool_semaphore()
         if sem is None:
             # Unlimited mode (limit=0 or not initialized)
@@ -105,6 +111,7 @@ def init_tool_concurrency_for_thread(limit: int = DEFAULT_MAX_PARALLEL_TOOLS) ->
     Args:
         limit: Maximum concurrent tool calls (default: 5). 0 = unlimited.
     """
+    init_tool_call_args_registry()
     if limit <= 0:
         set_tool_semaphore(None)
         logger.debug("[ToolConcurrency] Thread semaphore disabled (unlimited)")
