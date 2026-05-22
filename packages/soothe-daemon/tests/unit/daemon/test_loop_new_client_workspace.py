@@ -308,10 +308,15 @@ async def test_bind_execution_thread_replaces_legacy_loop_id_alias(
 async def test_bind_execution_thread_falls_back_when_client_workspace_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """When metadata has no client_workspace the per-loop daemon dir is used."""
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+    """When metadata has no client_workspace use anonymous/ws_<hash(loop_id)>."""
+    soothe_home = tmp_path / "soothe-home"
+    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(soothe_home))
 
     from soothe.config import SootheConfig
+    from soothe.core.workspace.loop_workspace import (
+        compute_scoped_workspace_dir_name,
+        normalize_user_id,
+    )
 
     config = SootheConfig()
     daemon = _make_daemon_with_pm(config)
@@ -350,9 +355,8 @@ async def test_bind_execution_thread_falls_back_when_client_workspace_missing(
         await bind_execution_thread_for_loop(bind_daemon, loop_id)
 
         assert set_workspace_calls, "set_workspace must be invoked"
-        expected_loop_ws = (
-            Path(tmp_path / "soothe-home").resolve() / "data" / "loops" / loop_id / "workspace"
-        )
+        ws_name = compute_scoped_workspace_dir_name(None, loop_id)
+        expected_loop_ws = soothe_home.resolve() / "workspaces" / normalize_user_id(None) / ws_name
         assert set_workspace_calls[0] == expected_loop_ws
     finally:
         await daemon.close()

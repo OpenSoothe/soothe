@@ -510,6 +510,8 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
             "current_thread_id",
             "thread_ids",
             "client_workspace",
+            "client_workspace_id",
+            "user_id",
             "detached_at",
             "total_goals_completed",
             "total_thread_switches",

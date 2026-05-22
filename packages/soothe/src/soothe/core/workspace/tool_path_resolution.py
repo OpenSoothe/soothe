@@ -9,9 +9,30 @@ workspace. Virtual absolute paths (for example ``/src/foo.py`` under
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from soothe.config import SootheConfig
 from soothe.core.workspace.backend import NormalizedPathBackend
+from soothe.core.workspace.resolution import resolve_daemon_workspace
+
+
+def config_workspace_root(config: Any | None) -> str | None:
+    """Return configured ``filesystem_middleware.workspace_root`` when set."""
+    if config is None:
+        return None
+    fs = getattr(config, "filesystem_middleware", None)
+    root = getattr(fs, "workspace_root", None) if fs is not None else None
+    if isinstance(root, str) and root.strip():
+        return root
+    return None
+
+
+def workspace_path_for_tool_resolution(config: Any | None) -> Path:
+    """Workspace root for toolkit path resolution (config override, else daemon default)."""
+    root = config_workspace_root(config)
+    if root:
+        return Path(root).expanduser().resolve()
+    return resolve_daemon_workspace()
 
 
 def resolve_backend_os_path(

@@ -474,7 +474,7 @@ def _pool_worker_body(
                     async for chunk in runner.astream(
                         req.user_input,
                         thread_id=req.thread_id,
-                        workspace=req.workspace,
+                        workspace=req.resolve_workspace_path(),
                         autonomous=req.autonomous,
                         max_iterations=req.max_iterations,
                         preferred_subagent=req.preferred_subagent,

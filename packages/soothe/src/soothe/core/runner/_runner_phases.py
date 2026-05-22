@@ -396,8 +396,15 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
 
         from soothe.core.workspace import resolve_daemon_workspace
 
+        # Check config's filesystem_middleware.workspace_root first
+        config_workspace = (
+            self._config.filesystem_middleware.workspace_root
+            if self._config and self._config.filesystem_middleware.workspace_root
+            else None
+        )
+
         resolved = resolve_workspace_for_stream(
-            installation_default=str(resolve_daemon_workspace()),
+            installation_default=config_workspace or str(resolve_daemon_workspace()),
         )
         state.workspace = resolved.path
 
