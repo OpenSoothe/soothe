@@ -19,7 +19,9 @@ from soothe_cli.tui.commands.subagent_routing import (
         ("hello", None, "hello"),
     ],
 )
-def test_parse_subagent_from_input(raw: str, expected_subagent: str | None, expected_cleaned: str) -> None:
+def test_parse_subagent_from_input(
+    raw: str, expected_subagent: str | None, expected_cleaned: str
+) -> None:
     subagent, cleaned = parse_subagent_from_input(raw)
     assert subagent == expected_subagent
     assert cleaned == expected_cleaned

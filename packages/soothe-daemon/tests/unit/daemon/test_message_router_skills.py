@@ -26,11 +26,16 @@ async def test_skills_list_response_shape(tmp_path: Any) -> None:
 
     sent: list[tuple[Any, dict[str, Any]]] = []
 
+    class _FakeSessionManager:
+        async def get_session(self, client_id: Any) -> None:
+            return None
+
     class _FakeDaemon:
         _config = cfg
         _query_running = False
         _active_threads: set[Any] = set()
         _runner = SimpleNamespace(current_thread_id="t-router")
+        _session_manager = _FakeSessionManager()
 
         async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
             sent.append((client_id, msg))

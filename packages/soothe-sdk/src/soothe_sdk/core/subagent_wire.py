@@ -13,9 +13,7 @@ from typing import Any
 _REGISTERED_SUBAGENT_WIRE_TYPES: set[str] = set()
 
 # ``soothe.subagent.<agent>.<signal>`` — clients may accept before producers register types.
-_CURATED_SUBAGENT_WIRE_RE = re.compile(
-    r"^soothe\.subagent\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_.]+$"
-)
+_CURATED_SUBAGENT_WIRE_RE = re.compile(r"^soothe\.subagent\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_.]+$")
 
 _DEFAULT_PREVIEW_LEN = 120
 _LONG_PREVIEW_LEN = 200
@@ -57,9 +55,9 @@ def is_emit_allowed_subagent_wire_event_type(event_type: str) -> bool:
 
 def is_allowlisted_subagent_event_type(event_type: str) -> bool:
     """Return True when a consumer may treat ``event_type`` as curated subagent wire."""
-    return is_emit_allowed_subagent_wire_event_type(event_type) or is_curated_subagent_wire_event_type(
+    return is_emit_allowed_subagent_wire_event_type(
         event_type
-    )
+    ) or is_curated_subagent_wire_event_type(event_type)
 
 
 def parse_subagent_wire_agent(event_type: str) -> str | None:

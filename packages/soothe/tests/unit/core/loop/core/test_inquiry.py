@@ -6,7 +6,6 @@ import pytest
 
 from soothe.subagents.tacitus import (
     GatherContext,
-    InformationSource,
     SourceResult,
     TacitusConfig,
 )

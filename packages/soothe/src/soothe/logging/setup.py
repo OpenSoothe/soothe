@@ -16,6 +16,10 @@ from soothe.logging.context import get_thread_id
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
+# Community plugins (soothe-community) use this logger tree; mirror soothe handlers here.
+COMMUNITY_LOGGER_NAME = "soothe_community"
+PACKAGE_LOGGER_NAMES: tuple[str, ...] = ("soothe", COMMUNITY_LOGGER_NAME)
+
 # Suffix length for conversation thread id in log lines (full id stays in context vars).
 _THREAD_ID_LOG_SUFFIX_LEN = 4
 
@@ -51,11 +55,86 @@ class ThreadFormatter(ShortLevelFormatter):
         return super().format(record)
 
 
-def setup_logging(config: SootheConfig | None = None, *, foreground: bool = False) -> None:
-    """Configure the ``soothe`` logger hierarchy with file and optional console handlers.
+def _package_loggers() -> tuple[logging.Logger, ...]:
+    """Return package loggers that receive shared Soothe file/console handlers."""
+    return tuple(logging.getLogger(name) for name in PACKAGE_LOGGER_NAMES)
 
-    Writes to ``SOOTHE_HOME/logs/soothe.log`` (rotating, 5 MB max, 3 backups).
-    Optionally outputs to console when enabled in config.
+
+def _rotating_handler_path(handler: RotatingFileHandler) -> Path | None:
+    """Resolve a rotating handler target path, or ``None`` if unavailable."""
+    base = getattr(handler, "baseFilename", None)
+    if base is None:
+        return None
+    try:
+        return Path(str(base)).resolve()
+    except OSError:
+        return None
+
+
+def _has_rotating_file_handler_at(logger: logging.Logger, log_path: Path) -> bool:
+    """Return whether ``logger`` already has a rotating handler for ``log_path``."""
+    resolved = log_path.resolve()
+    return any(
+        isinstance(handler, RotatingFileHandler) and _rotating_handler_path(handler) == resolved
+        for handler in logger.handlers
+    )
+
+
+def _add_rotating_file_handler(
+    loggers: tuple[logging.Logger, ...],
+    *,
+    log_file: str,
+    file_level: int,
+    max_bytes: int,
+    backup_count: int,
+) -> None:
+    """Attach a rotating file handler to each logger that lacks one for ``log_file``."""
+    log_path = Path(log_file).resolve()
+    formatter = ThreadFormatter(
+        "%(asctime)s %(level_short)s %(thread_id)s %(name)s:%(lineno)d %(message)s"
+    )
+    for logger in loggers:
+        if _has_rotating_file_handler_at(logger, log_path):
+            continue
+        file_handler = RotatingFileHandler(
+            str(log_path),
+            maxBytes=max_bytes,
+            backupCount=backup_count,
+            encoding="utf-8",
+        )
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(file_level)
+        logger.addHandler(file_handler)
+
+
+def _add_console_handler_if_missing(
+    loggers: tuple[logging.Logger, ...],
+    *,
+    stream: object,
+    console_level: int,
+    console_format: str,
+) -> None:
+    """Attach a console stream handler to each logger that lacks one for ``stream``."""
+    for logger in loggers:
+        if any(
+            isinstance(handler, logging.StreamHandler)
+            and not isinstance(handler, RotatingFileHandler)
+            and handler.stream == stream
+            for handler in logger.handlers
+        ):
+            continue
+        console_handler = logging.StreamHandler(stream)  # type: ignore[arg-type]
+        console_handler.setFormatter(ShortLevelFormatter(console_format))
+        console_handler.setLevel(console_level)
+        logger.addHandler(console_handler)
+
+
+def setup_logging(config: SootheConfig | None = None, *, foreground: bool = False) -> None:
+    """Configure Soothe and community package loggers with file and optional console handlers.
+
+    Writes to ``SOOTHE_HOME/logs/soothe.log`` (rotating, 5 MB max, 3 backups) for both
+    ``soothe.*`` and ``soothe_community.*`` loggers. Optionally outputs to console when
+    enabled in config.
 
     Args:
         config: Optional config to read logging configuration from.
@@ -80,40 +159,33 @@ def setup_logging(config: SootheConfig | None = None, *, foreground: bool = Fals
     file_level = getattr(logging, file_level_name, logging.INFO)
     console_level = getattr(logging, console_level_name, logging.WARNING)
 
-    root_logger = logging.getLogger("soothe")
-    root_logger.setLevel(min(file_level, console_level))
+    package_loggers = _package_loggers()
+    min_level = min(file_level, console_level)
+    for logger in package_loggers:
+        logger.setLevel(min_level)
 
     log_file = cfg.logging.file.path or str(log_dir / "soothe.log")
-    if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
-        file_handler = RotatingFileHandler(
-            log_file,
-            maxBytes=cfg.logging.file.max_bytes,
-            backupCount=cfg.logging.file.backup_count,
-            encoding="utf-8",
-        )
-        file_handler.setFormatter(
-            ThreadFormatter(
-                "%(asctime)s %(level_short)s %(thread_id)s %(name)s:%(lineno)d %(message)s"
-            )
-        )
-        file_handler.setLevel(file_level)
-        root_logger.addHandler(file_handler)
+    _add_rotating_file_handler(
+        package_loggers,
+        log_file=log_file,
+        file_level=file_level,
+        max_bytes=cfg.logging.file.max_bytes,
+        backup_count=cfg.logging.file.backup_count,
+    )
 
     console_enabled = cfg.logging.console.enabled or foreground
-    console_stream = (
-        sys.stderr
-        if foreground
-        else (sys.stderr if cfg.logging.console.stream == "stderr" else sys.stdout)
-    )
     if console_enabled:
-        if not any(
-            isinstance(h, logging.StreamHandler) and h.stream == console_stream
-            for h in root_logger.handlers
-        ):
-            console_handler = logging.StreamHandler(console_stream)
-            console_handler.setFormatter(ShortLevelFormatter(cfg.logging.console.format))
-            console_handler.setLevel(console_level)
-            root_logger.addHandler(console_handler)
+        console_stream = (
+            sys.stderr
+            if foreground
+            else (sys.stderr if cfg.logging.console.stream == "stderr" else sys.stdout)
+        )
+        _add_console_handler_if_missing(
+            package_loggers,
+            stream=console_stream,
+            console_level=console_level,
+            console_format=cfg.logging.console.format,
+        )
 
     _suppress_noisy_third_party()
 

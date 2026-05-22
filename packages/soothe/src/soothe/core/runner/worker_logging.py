@@ -13,7 +13,12 @@ from pathlib import Path
 from soothe.config.settings import SootheConfig
 from soothe.core.loop.state.persistence.directory_manager import PersistenceDirectoryManager
 from soothe.logging.context import set_thread_id
-from soothe.logging.setup import ThreadFormatter, _suppress_noisy_third_party
+from soothe.logging.setup import (
+    ThreadFormatter,
+    _has_rotating_file_handler_at,
+    _package_loggers,
+    _suppress_noisy_third_party,
+)
 
 _LOG = logging.getLogger(__name__)
 
@@ -43,36 +48,33 @@ def configure_loop_runner_worker_logging(config: SootheConfig, loop_id: str) -> 
     log_path = loop_dir / RUNNER_LOG_FILENAME
     resolved = log_path.resolve()
 
-    root_logger = logging.getLogger("soothe")
-    _remove_stale_loop_runner_handlers(root_logger, keep_path=resolved)
+    package_loggers = _package_loggers()
+    for pkg_logger in package_loggers:
+        _remove_stale_loop_runner_handlers(pkg_logger, keep_path=resolved)
 
     file_level_name = config.logging.file.level.upper()
     if config.debug:
         file_level_name = "DEBUG"
     file_level = getattr(logging, file_level_name, logging.INFO)
 
-    root_logger.setLevel(file_level)
+    for pkg_logger in package_loggers:
+        pkg_logger.setLevel(file_level)
 
-    for h in root_logger.handlers:
-        if isinstance(h, RotatingFileHandler):
-            bf = getattr(h, "baseFilename", None)
-            try:
-                if bf is not None and Path(str(bf)).resolve() == resolved:
-                    return log_path
-            except OSError:
-                continue
-
-    fh = RotatingFileHandler(
-        str(log_path),
-        maxBytes=config.logging.file.max_bytes,
-        backupCount=config.logging.file.backup_count,
-        encoding="utf-8",
+    formatter = ThreadFormatter(
+        "%(asctime)s %(level_short)s %(thread_id)s %(name)s:%(lineno)d %(message)s"
     )
-    fh.setFormatter(
-        ThreadFormatter("%(asctime)s %(level_short)s %(thread_id)s %(name)s:%(lineno)d %(message)s")
-    )
-    fh.setLevel(file_level)
-    root_logger.addHandler(fh)
+    for pkg_logger in package_loggers:
+        if _has_rotating_file_handler_at(pkg_logger, resolved):
+            continue
+        fh = RotatingFileHandler(
+            str(log_path),
+            maxBytes=config.logging.file.max_bytes,
+            backupCount=config.logging.file.backup_count,
+            encoding="utf-8",
+        )
+        fh.setFormatter(formatter)
+        fh.setLevel(file_level)
+        pkg_logger.addHandler(fh)
 
     _suppress_noisy_third_party()
 

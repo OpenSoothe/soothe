@@ -120,7 +120,10 @@ def _parse_skill_directory(skill_dir: str | Path) -> dict[str, Any] | None:
 # ---------------------------------------------------------------------------
 
 
-def wire_entries_for_agent_config(config: SootheConfig) -> list[dict[str, str]]:
+def wire_entries_for_agent_config(
+    config: SootheConfig,
+    workspace: str | None = None,
+) -> list[dict[str, str]]:
     """Return wire-safe skill metadata sorted by name.
 
     Scans built-in, user, and project skill directories declared in the
@@ -129,12 +132,15 @@ def wire_entries_for_agent_config(config: SootheConfig) -> list[dict[str, str]]:
 
     Args:
         config: SootheConfig with optional ``config.skills`` directories.
+        workspace: Optional workspace directory for project-local skills
+            (scans `<workspace>/.soothe/skills/`). Falls back to cwd if not provided.
 
     Returns:
         List of ``{name, description, source, version?}`` dicts sorted
         alphabetically by name. No ``path`` field is included.
     """
-    all_dirs: list[str] = list(get_built_in_skills_paths())
+    ws = workspace or str(Path.cwd().resolve())
+    all_dirs: list[str] = list(get_built_in_skills_paths(ws))
     if config.skills:
         all_dirs.extend(config.skills)
 
@@ -147,7 +153,7 @@ def wire_entries_for_agent_config(config: SootheConfig) -> list[dict[str, str]]:
             continue
 
         # Determine source label
-        builtin_dirs = get_built_in_skills_paths()
+        builtin_dirs = get_built_in_skills_paths(ws)
         if dir_path in builtin_dirs or "built_in_skills" in dir_path:
             source = "builtin"
         else:
@@ -174,6 +180,7 @@ def wire_entries_for_agent_config(config: SootheConfig) -> list[dict[str, str]]:
 def resolve_skill_directory(
     config: SootheConfig,
     skill_name: str,
+    workspace: str | None = None,
 ) -> dict[str, Any] | None:
     """Resolve skill name to metadata with path (last-wins precedence).
 
@@ -184,12 +191,15 @@ def resolve_skill_directory(
     Args:
         config: SootheConfig with optional ``config.skills`` directories.
         skill_name: Skill name to resolve.
+        workspace: Optional workspace directory for project-local skills.
+            Falls back to cwd if not provided.
 
     Returns:
         Metadata dict with ``path`` field for daemon-side file access,
         or ``None`` if the skill is not found.
     """
-    all_dirs: list[str] = list(get_built_in_skills_paths())
+    ws = workspace or str(Path.cwd().resolve())
+    all_dirs: list[str] = list(get_built_in_skills_paths(ws))
     if config.skills:
         all_dirs.extend(config.skills)
 
@@ -355,6 +365,7 @@ def build_skill_invocation_envelope(
 def try_expand_slash_skill_user_line(
     text: str,
     config: SootheConfig,
+    workspace: str | None = None,
 ) -> SkillInvocationEnvelope | None:
     """If ``text`` is a ``/skill:`` line, resolve the skill and build the model envelope.
 
@@ -364,6 +375,7 @@ def try_expand_slash_skill_user_line(
     Args:
         text: Raw user input.
         config: Active ``SootheConfig`` for skill path resolution.
+        workspace: Optional workspace directory for project-local skills.
 
     Returns:
         A populated ``SkillInvocationEnvelope``, or ``None`` when not a slash-skill
@@ -373,7 +385,7 @@ def try_expand_slash_skill_user_line(
     if parsed is None:
         return None
     skill_name, args = parsed
-    meta = resolve_skill_directory(config, skill_name)
+    meta = resolve_skill_directory(config, skill_name, workspace)
     if meta is None:
         return None
     md = read_skill_markdown(meta)

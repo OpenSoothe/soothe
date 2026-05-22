@@ -299,7 +299,17 @@ class MessageRouter:
         d = self._daemon
         from soothe.skills.catalog import wire_entries_for_agent_config
 
-        skills = wire_entries_for_agent_config(d._config)
+        # Use client's loop workspace if subscribed, otherwise cwd
+        workspace: str | None = None
+        loop_id = await self._client_subscribed_loop_id(client_id)
+        if loop_id:
+            try:
+                ws_path = resolve_loop_daemon_workspace(loop_id)
+                workspace = str(ws_path)
+            except (ValueError, OSError):
+                pass  # Fall back to cwd
+
+        skills = wire_entries_for_agent_config(d._config, workspace)
         await d._send_client_message(
             client_id,
             {
@@ -352,7 +362,17 @@ class MessageRouter:
         args_val = msg.get("args", "")
         args = args_val if isinstance(args_val, str) else ""
 
-        meta = resolve_skill_directory(d._config, raw_skill)
+        # Use client's loop workspace if subscribed, otherwise cwd
+        workspace: str | None = None
+        loop_id = await self._client_subscribed_loop_id(client_id)
+        if loop_id:
+            try:
+                ws_path = resolve_loop_daemon_workspace(loop_id)
+                workspace = str(ws_path)
+            except (ValueError, OSError):
+                pass  # Fall back to cwd
+
+        meta = resolve_skill_directory(d._config, raw_skill, workspace)
         if meta is None:
             await d._send_client_message(
                 client_id,

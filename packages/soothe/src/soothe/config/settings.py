@@ -510,7 +510,6 @@ class SootheConfig(BaseSettings):
 
         cache_key = router_str
         if cache_key in self._vector_store_cache:
-            logger.debug("Using cached vector store for '%s'", router_str)
             return self._vector_store_cache[cache_key]
 
         provider_type, kwargs = self._vector_store_provider_kwargs(provider_name)
@@ -674,7 +673,6 @@ class SootheConfig(BaseSettings):
 
         cache_key = f"{model_str}:streaming"
         if cache_key in self._model_cache:
-            logger.debug("Using cached model for '%s'", model_str)
             return self._model_cache[cache_key]
 
         provider_type, kwargs = self._provider_kwargs(provider_name)
@@ -794,7 +792,6 @@ class SootheConfig(BaseSettings):
 
         cache_key = model_str
         if cache_key in self._embedding_cache:
-            logger.debug("Using cached embedding model for '%s'", model_str)
             return self._embedding_cache[cache_key]
 
         provider_type, kwargs = self._provider_kwargs(provider_name)

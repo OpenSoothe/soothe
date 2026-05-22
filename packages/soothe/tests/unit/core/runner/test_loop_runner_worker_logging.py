@@ -14,6 +14,7 @@ from soothe.core.runner.worker_logging import (
     RUNNER_LOG_FILENAME,
     configure_loop_runner_worker_logging,
 )
+from soothe.logging.setup import COMMUNITY_LOGGER_NAME, PACKAGE_LOGGER_NAMES
 
 
 @pytest.fixture
@@ -22,12 +23,16 @@ def soothe_home_tmp(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _clear_package_handlers() -> None:
+    for name in PACKAGE_LOGGER_NAMES:
+        logging.getLogger(name).handlers.clear()
+
+
 def test_configure_writes_runner_log(soothe_home_tmp: Path) -> None:
     cfg = SootheConfig()
     loop_id = "019e0bcd-fead-7531-a0bb-b6d1dfba353f"
 
-    root = logging.getLogger("soothe")
-    root.handlers.clear()
+    _clear_package_handlers()
 
     path = configure_loop_runner_worker_logging(cfg, loop_id)
     assert path is not None
@@ -35,7 +40,12 @@ def test_configure_writes_runner_log(soothe_home_tmp: Path) -> None:
     assert path == expected
     assert path.exists()
 
-    root.handlers.clear()
+    community = logging.getLogger(COMMUNITY_LOGGER_NAME)
+    community_handlers = [h for h in community.handlers if isinstance(h, RotatingFileHandler)]
+    assert len(community_handlers) == 1
+    assert Path(community_handlers[0].baseFilename) == path
+
+    _clear_package_handlers()
 
 
 def test_configure_sets_log_context_to_loop_id(soothe_home_tmp: Path) -> None:
@@ -44,23 +54,21 @@ def test_configure_sets_log_context_to_loop_id(soothe_home_tmp: Path) -> None:
 
     cfg = SootheConfig()
     loop_id = "019e0bcd-fead-7531-a0bb-b6d1dfba353f"
-    root = logging.getLogger("soothe")
-    root.handlers.clear()
+    _clear_package_handlers()
 
     configure_loop_runner_worker_logging(cfg, loop_id)
     assert get_thread_id() == loop_id
-    root.handlers.clear()
+    _clear_package_handlers()
 
 
 def test_configure_skips_empty_loop_id(soothe_home_tmp: Path) -> None:
     cfg = SootheConfig()
-    root = logging.getLogger("soothe")
-    root.handlers.clear()
+    _clear_package_handlers()
 
     assert configure_loop_runner_worker_logging(cfg, "") is None
     assert configure_loop_runner_worker_logging(cfg, "   ") is None
 
-    root.handlers.clear()
+    _clear_package_handlers()
 
 
 def test_configure_replaces_handler_when_loop_id_changes(soothe_home_tmp: Path) -> None:
@@ -69,37 +77,39 @@ def test_configure_replaces_handler_when_loop_id_changes(soothe_home_tmp: Path) 
     loop_a = "loop-a-1111"
     loop_b = "loop-b-2222"
 
-    root = logging.getLogger("soothe")
-    root.handlers.clear()
+    _clear_package_handlers()
 
     path_a = configure_loop_runner_worker_logging(cfg, loop_a)
     path_b = configure_loop_runner_worker_logging(cfg, loop_b)
     assert path_a is not None and path_b is not None
 
-    loop_handlers = [
-        h
-        for h in root.handlers
-        if isinstance(h, RotatingFileHandler)
-        and getattr(h, "baseFilename", "").endswith(RUNNER_LOG_FILENAME)
-    ]
-    assert len(loop_handlers) == 1
-    assert Path(loop_handlers[0].baseFilename).resolve() == path_b.resolve()
+    for name in PACKAGE_LOGGER_NAMES:
+        pkg_logger = logging.getLogger(name)
+        loop_handlers = [
+            h
+            for h in pkg_logger.handlers
+            if isinstance(h, RotatingFileHandler)
+            and getattr(h, "baseFilename", "").endswith(RUNNER_LOG_FILENAME)
+        ]
+        assert len(loop_handlers) == 1
+        assert Path(loop_handlers[0].baseFilename).resolve() == path_b.resolve()
 
-    root.handlers.clear()
+    _clear_package_handlers()
 
 
 def test_configure_idempotent_same_path(soothe_home_tmp: Path) -> None:
     cfg = SootheConfig()
     loop_id = "loop-idem-1"
 
-    root = logging.getLogger("soothe")
-    root.handlers.clear()
+    _clear_package_handlers()
 
     p1 = configure_loop_runner_worker_logging(cfg, loop_id)
-    handlers_after_first = len(root.handlers)
+    soothe_handlers_after_first = len(logging.getLogger("soothe").handlers)
+    community_handlers_after_first = len(logging.getLogger(COMMUNITY_LOGGER_NAME).handlers)
     p2 = configure_loop_runner_worker_logging(cfg, loop_id)
 
     assert p1 == p2
-    assert len(root.handlers) == handlers_after_first
+    assert len(logging.getLogger("soothe").handlers) == soothe_handlers_after_first
+    assert len(logging.getLogger(COMMUNITY_LOGGER_NAME).handlers) == community_handlers_after_first
 
-    root.handlers.clear()
+    _clear_package_handlers()
