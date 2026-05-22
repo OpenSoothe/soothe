@@ -14,14 +14,21 @@ from soothe_cli.runtime.parse.message_processing import _normalize_tool_name_for
 from soothe_cli.runtime.presentation.duration_format import format_duration_ms
 
 _ARG_PREVIEW_MAX_CHARS = 80
+_EDIT_STRING_PREVIEW_MAX_CHARS = 30
+_EDIT_STRING_ARG_KEYS = frozenset({"old_string", "new_string"})
 _SKIP_ARG_KEYS = frozenset({"_raw"})
+
+
+def _compact_arg_text(text: str) -> str:
+    """Collapse whitespace/newlines so activity lines stay on one row."""
+    return " ".join(text.split())
 
 
 def _coerce_arg_text(value: Any) -> str:
     if value is None:
         return ""
     if isinstance(value, str):
-        return value.strip()
+        return _compact_arg_text(value.strip())
     if isinstance(value, (int, float, bool)):
         return str(value)
     if isinstance(value, (list, dict)):
@@ -32,6 +39,12 @@ def _coerce_arg_text(value: Any) -> str:
     return preview_first(str(value), _ARG_PREVIEW_MAX_CHARS)
 
 
+def _arg_preview_max_chars(key: str) -> int:
+    if key in _EDIT_STRING_ARG_KEYS:
+        return _EDIT_STRING_PREVIEW_MAX_CHARS
+    return _ARG_PREVIEW_MAX_CHARS
+
+
 def _format_arg_value(tool_name: str, key: str, value: Any) -> str:
     text = _coerce_arg_text(value)
     if not text:
@@ -39,7 +52,7 @@ def _format_arg_value(tool_name: str, key: str, value: Any) -> str:
     meta = get_tool_meta(_normalize_tool_name_for_arg_map(tool_name))
     if meta and key in meta.path_arg_keys:
         return convert_and_abbreviate_path(text)
-    return preview_first(text, _ARG_PREVIEW_MAX_CHARS)
+    return preview_first(text, _arg_preview_max_chars(key))
 
 
 def _ordered_arg_keys(tool_name: str, clean: dict[str, Any]) -> list[str]:

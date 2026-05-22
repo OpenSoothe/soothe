@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from soothe_sdk.client.protocol import preview_first
+
 from soothe_cli.tui.tool_display import (
     format_step_tool_activity_command,
     format_step_tool_activity_line,
@@ -52,3 +54,23 @@ def test_format_activity_line_combines_command_and_tail() -> None:
         "running",
     )
     assert line == "Glob(**/*.py) · running"
+
+
+def test_format_command_edit_file_multiline_args_single_line() -> None:
+    """edit_file old_string/new_string previews must not break activity rows."""
+    old_string = "### Design Specifications\n| RFC | Title |\n|---|---|"
+    new_string = "### Design Specifications\n| RFC | Title |\n|---|---|\n| [RFC-000](specs/RFC-000)"
+    line = format_step_tool_activity_command(
+        "edit_file",
+        {
+            "file_path": "/Users/tester/project/docs/user_guide.md",
+            "old_string": old_string,
+            "new_string": new_string,
+        },
+    )
+    compact_old = " ".join(old_string.split())
+    compact_new = " ".join(new_string.split())
+    assert "\n" not in line
+    assert line.startswith("EditFile(")
+    assert f"new_string={preview_first(compact_new, 30)}" in line
+    assert f"old_string={preview_first(compact_old, 30)}" in line

@@ -117,8 +117,11 @@ subagents:
     enabled: true
   plan:
     enabled: true
-  research:
+  tacitus:
     enabled: true
+
+# Optional: integrate soothe-community for additional delegated agents
+# pip install soothe-community
 ```
 
 ## Configuration Locations
@@ -321,7 +324,7 @@ Learn more: [Daemon Management Guide](daemon-management.md)
 Install additional capabilities as needed:
 
 ```bash
-# Optional: install soothe-community for additional delegated agents (see that repo).
+# Vector storage for Skillify and Weaver
 pip install soothe[pgvector]
 
 # Local models with Ollama
@@ -330,6 +333,35 @@ pip install soothe[ollama]
 # Everything
 pip install soothe[all]
 ```
+
+## soothe-community Integration
+
+The [soothe-community](https://github.com/OpenSoothe/soothe-community) package provides additional delegated agents and extensions:
+
+```bash
+# Install soothe-community
+pip install soothe-community
+```
+
+**Available in soothe-community**:
+- Additional specialized subagents (numeric slots 2-6)
+- Extra slash commands
+- Community-contributed tools and integrations
+
+**Usage**:
+```bash
+# After installing soothe-community, additional agents are available
+# via numeric prefixes (see TUI Guide for current mapping)
+
+# Example: Route to community agent
+2 Analyze security vulnerabilities
+```
+
+See the [soothe-community repository](https://github.com/OpenSoothe/soothe-community) for:
+- Full list of available agents
+- Installation and setup instructions
+- Configuration options
+- Contribution guidelines
 
 ## Verify Installation
 
