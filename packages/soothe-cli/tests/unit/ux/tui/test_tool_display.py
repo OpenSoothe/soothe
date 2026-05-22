@@ -9,9 +9,22 @@ from soothe_cli.tui.tool_display import (
 )
 
 
-def test_format_command_uses_meta_arg_keys() -> None:
+def test_format_command_shows_all_present_args() -> None:
     line = format_step_tool_activity_command("grep", {"pattern": "foo", "path": "/tmp"})
-    assert line == "Grep(foo)"
+    assert line.startswith("Grep(foo")
+    assert "path=" in line
+
+
+def test_format_command_includes_read_file_offset() -> None:
+    line = format_step_tool_activity_command(
+        "read_file",
+        {
+            "file_path": "/Users/tester/project/README.md",
+            "offset": 100,
+        },
+    )
+    assert line.startswith("ReadFile(")
+    assert "offset=100" in line
 
 
 def test_format_command_abbreviates_path_arg() -> None:
@@ -21,6 +34,7 @@ def test_format_command_abbreviates_path_arg() -> None:
     )
     assert line.startswith("ReadFile(")
     assert "~/" in line or "main.py" in line
+    assert "offset=" not in line
 
 
 def test_format_command_without_args_is_display_name_only() -> None:

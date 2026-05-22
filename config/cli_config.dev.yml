@@ -1,9 +1,0 @@
-# Local CLI/TUI defaults — install: ~/.soothe/config/cli_config.yml
-
-logging_level: DEBUG
-
-daemon:
-  transports:
-    websocket:
-      host: "127.0.0.1"
-      port: 8765
