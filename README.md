@@ -7,8 +7,9 @@
 
   [![Python](https://img.shields.io/pypi/pyversions/soothe)](https://pypi.org/project/soothe/)
   [![soothe](https://img.shields.io/pypi/v/soothe?label=soothe)](https://pypi.org/project/soothe/)
-  [![soothe-sdk](https://img.shields.io/pypi/v/soothe-sdk?label=soothe-sdk)](https://pypi.org/project/soothe-sdk/)
+  [![soothe-daemon](https://img.shields.io/pypi/v/soothe-daemon?label=soothe-daemon)](https://pypi.org/project/soothe-daemon/)
   [![soothe-cli](https://img.shields.io/pypi/v/soothe-cli?label=soothe-cli)](https://pypi.org/project/soothe-cli/)
+  [![soothe-sdk](https://img.shields.io/pypi/v/soothe-sdk?label=soothe-sdk)](https://pypi.org/project/soothe-sdk/)
   [![License](https://img.shields.io/github/license/OpenSoothe/soothe)](https://github.com/OpenSoothe/soothe/blob/main/LICENSE)
   [![GitHub Stars](https://img.shields.io/github/stars/OpenSoothe/soothe)](https://github.com/OpenSoothe/soothe)
   [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/OpenSoothe/soothe)
@@ -16,34 +17,22 @@
   🎥 [Watch the demo video on Vimeo](https://player.vimeo.com/video/1185023866?h=72febe1ed2)
 </div>
 
-Soothe is **not** another single-vendor coding-agent shell clone. 
+Soothe is an **agent-harnessing framework**—an *Agentic OS* that pushes humans **out of the execution loop**.
 
-Its ambition is to become an **agent-harnessing framework**, an *Agentic OS*, designed to push humans **out of the execution loop**.
+Built on LangChain / DeepAgents, it adds a persistent **agentic loop** and **goal engine** that maintains context across sessions, sustains long-running goals, coordinates multiple objectives, and autonomously steers complex tasks.
 
-After months of real-world "vibe coding" with coding agents, a clear pain emerged:  
-humans are still responsible for holding everything together, driving agents across sessions, verifying intermediate results, recovering lost context, re-aligning goals, and manually relaying critical information between tools and skills. This constant supervision creates a heavy cognitive burden.
-
-**Soothe was built to eliminate that loop.**
-
-Instead of treating agents as isolated executors, Soothe introduces a higher-order orchestration layer. Built on top of LangChain / DeepAgents, it adds a persistent **agentic loop** and **goal engine** that can:
-
-- maintain context across sessions  
-- sustain and recover long-running goals  
-- coordinate multiple objectives simultaneously  
-- autonomously steer complex, long-horizon tasks  
-
-In short, Soothe shifts the paradigm from *human-in-the-loop* to **agent-in-the-loop** systems—where humans define intent, and the system handles execution, continuity, and adaptation.
+Shift from *human-in-the-loop* to **agent-in-the-loop**: define intent, let the system handle execution.
 
 ---
 
 ## 🚀 Key Features
 
-- ✨ **Thinks Ahead** — Plans multi-step workflows and adapts dynamically based on outcomes  
-- 🚀 **Acts Autonomously** — Executes tasks across research, coding, file ops, and optional plugin-driven automation  
-- 🧠 **Learns & Remembers** — Persistent memory across sessions—no more repeating yourself  
-- 🔒 **Stays Secure** — Enforces least-privilege access and keeps data under your control  
-- 🔌 **Extends Easily** — Plugin system for custom tools and specialized sub-agents  
-- 🌐 **Works Anywhere** — Multi-transport daemon (Unix, WebSocket, HTTP REST)
+- ✨ **Thinks Ahead** — Multi-step planning with dynamic adaptation
+- 🚀 **Acts Autonomously** — Research, coding, file ops, plugin automation
+- 🧠 **Learns & Remembers** — Persistent memory across sessions
+- 🔒 **Stays Secure** — Least-privilege, local-first architecture
+- 🔌 **Extends Easily** — Decorator-based plugins, custom tools, subagents
+- 🌐 **Works Anywhere** — Multi-transport daemon (WebSocket, HTTP REST)
 
 ## Architecture
 
@@ -51,126 +40,98 @@ In short, Soothe shifts the paradigm from *human-in-the-loop* to **agent-in-the-
   <img src="assets/logical-arch.png" alt="Arch" width="800" />
 </div>
 
+**Core Stack**: CLI → Daemon → Agent Loop → Goal Engine → Protocols → Backends → Capabilities (tools/subagents/MCP)
+
 ## Design Philosophy
 
-**Plan → Execute**: Autonomous execution loop that plans, acts, evaluates, and adapts without manual intervention.
-
-**Persistent Memory**: Sessions accumulate knowledge. Resume threads, recall context, and track long-running goals across conversations.
-
-**Security First**: Local execution with least-privilege policies. Your infrastructure, your data, your control.
-
-**Plugin Architecture**: Built-in tools for web search, code execution, and extension via plugins. Extend with custom plugins via decorator APIs.
+| Principle | Description |
+|-----------|-------------|
+| **Plan → Execute** | Autonomous loop: plan, act, evaluate, adapt |
+| **Persistent Memory** | Resume threads, recall context, track goals |
+| **Security First** | Local execution, least-privilege policies |
+| **Plugin Architecture** | Decorator-based tools, subagents, MCP servers |
 
 ## What Can Soothe Do?
 
-**Deep Research**: Multi-source web search, academic papers, document analysis with automatic synthesis and citations.
-
-**Autonomous Execution**: Multi-step workflows with automatic planning, file operations, code execution, and optional automation through plugins.
-
-**Long-Running Operations**: Background daemon mode with thread management, persistent state, and resume capabilities.
-
-**Custom Plugins**: Extend with decorator-based tools, specialized subagents, and MCP server integration.
+| Capability | Features |
+|------------|----------|
+| **Deep Research** | Multi-source web search, academic papers (arXiv, DeepXiv), document analysis |
+| **Autonomous Execution** | Multi-step workflows, file ops, code execution, shell commands |
+| **Long-Running Ops** | Background daemon, thread management, persistent state |
+| **Custom Plugins** | `@tool`, `@subagent`, `@plugin` decorators, MCP server integration |
 
 ## Milestones
 
-- ✅ **Single-Session Autonomy** — Solve a complex goal end-to-end within a single session, fully out of the human loop  
-- ✅ **Cross-Thread Continuity** — Sustain and complete complex tasks across multiple threads with persistent context  
-- ⏳ **Multi-Goal Orchestration** — Handle multiple interdependent goals over long-horizon workflows  
-- ⏳ **Benchmark Reproduction** — Reproduce a public [compiler experiment](https://github.com/anthropics/claudes-c-compiler) from upstream research tooling  
+| Status | Milestone |
+|--------|-----------|
+| ✅ | **Single-Session Autonomy** — End-to-end goal execution |
+| ✅ | **Cross-Thread Continuity** — Persistent context across threads |
+| ⏳ | **Multi-Goal Orchestration** — Interdependent long-horizon workflows |
+| ⏳ | **Benchmark Reproduction** — [Compiler experiment](https://github.com/anthropics/claudes-c-compiler) |  
 
 ## Getting Started
 
 ### Installation
 
-Soothe is published as a monorepo with multiple packages:
+Monorepo packages:
 
-- **`soothe`** — Core functionalities with daemon
-- **`soothe-cli`** — Standalone WebSocket client
-- **`soothe-sdk`** — Shared SDK for custom clients
-- **`soothe-community`** — Optional community plugins ([github.com/OpenSoothe/soothe-community](https://github.com/OpenSoothe/soothe-community))
-
-Install the main package:
+| Package | Purpose |
+|---------|---------|
+| `soothe` | Core agent framework + daemon server |
+| `soothe-daemon` | Standalone daemon (WebSocket/HTTP) |
+| `soothe-cli` | CLI client + TUI |
+| `soothe-sdk` | SDK for plugins & custom clients |
+| `soothe-community` | Community plugins ([separate repo](https://github.com/OpenSoothe/soothe-community)) |
 
 ```bash
+# Full install
 pip install -U 'soothe[all]'
+
+# Or minimal
+pip install soothe soothe-cli
 ```
 
 ### Quick Start
 
-**1. Configure your LLM provider**:
+**1. Configure**:
 
 ```bash
-# Create config directory
 mkdir -p ~/.soothe/config
-
-# Copy config template
 cp config/config.template.yml ~/.soothe/config/config.yml
-
-# Set your API key
-export OPENAI_API_KEY="sk-..."
-# or export ANTHROPIC_API_KEY="sk-ant-..."
-# or export DASHSCOPE_API_KEY="sk-..."
-
-# Edit config with your preferred models (optional)
-vim ~/.soothe/config/config.yml
+export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY, DASHSCOPE_API_KEY
 ```
 
-The config template contains all available settings with examples. For minimal setup, configure your provider and router, and leave other settings at their defaults.
-
-**2. Run Soothe**:
-
-**CLI Side**:
+**2. Run**:
 
 ```bash
+# Start daemon
+soothed start
+
 # Interactive TUI
 soothe
 
 # Single prompt
-soothe -p "Research the top 5 Python web frameworks and create a comparison table"
+soothe -p "Research top 5 Python web frameworks"
 ```
 
-**Daemon Side**:
+**Commands**:
 
-```bash
-# Start daemon server
-soothed start
+| Command | Description |
+|---------|-------------|
+| `soothe` | Interactive TUI |
+| `soothe -p "query"` | Single prompt |
+| `soothed start/stop/status` | Daemon management |
+| `soothed doctor` | Health diagnostics |
 
-# Check daemon status
-soothed status
+## Documentation
 
-# Stop daemon
-soothed stop
-```
-
-**Command Reference**:
-
-- `soothe` — Interactive client (TUI by default)
-- `soothe -p "query"` — Single-prompt execution
-- `soothe --help` — View all options
-- `soothed start|stop|status|logs` — Daemon management
-- `soothed doctor` — Health diagnostics
-
-## Learn More
-
-### 📚 Documentation
-
-- **[Wiki](docs/wiki/)** - End-user guides organized by topic
-  - [Getting Started](docs/wiki/getting-started.md) - Installation and first steps
-  - [CLI Reference](docs/wiki/cli-reference.md) - Complete command documentation
-  - [Configuration](docs/wiki/configuration.md) - Environment variables and YAML config
-  - [Troubleshooting](docs/wiki/troubleshooting.md) - Common issues and solutions
-
-- **[User Guide](docs/user_guide.md)** - Comprehensive usage guide with examples
-
-- **[RFCs & Specs](docs/specs/)** - Technical specifications and architecture design
-  - [RFC-000](docs/specs/RFC-000-system-conceptual-design.md) - System conceptual design
-  - [RFC-200](docs/specs/RFC-200-agentic-goal-execution.md) - Execution architecture
-  - [RFC-600](docs/specs/RFC-600-plugin-extension-system.md) - Plugin system design
-
-### 🛠️ For Developers
-
-- **[CLAUDE.md](CLAUDE.md)** - Development guide for AI agents
-- **[Implementation Guides](docs/impl/)** - Detailed implementation documentation
+| Resource | Description |
+|----------|-------------|
+| [Wiki](docs/wiki/) | End-user guides |
+| [User Guide](docs/user_guide.md) | Comprehensive usage |
+| [RFCs](docs/specs/) | Architecture specs (RFC-000, RFC-200, RFC-600) |
+| [CLAUDE.md](CLAUDE.md) | AI agent dev guide |
+| [Implementation Guides](docs/impl/) | Implementation docs |
 
 ## License
 
