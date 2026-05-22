@@ -20,6 +20,21 @@ def _gc_chunk(content: str, *, last: bool = False) -> tuple[tuple[()], str, tupl
     return ((), "messages", (msg, {}))
 
 
+def _text_chunk(content: str, *, last: bool = False) -> tuple[tuple[()], str, tuple]:
+    msg: dict = {"type": "AIMessageChunk", "content": content}
+    if last:
+        msg["chunk_position"] = "last"
+    return ((), "messages", (msg, {}))
+
+
+def _tool_chunk() -> tuple[tuple[()], str, tuple]:
+    return (
+        (),
+        "messages",
+        ({"type": "tool", "content": "ok", "tool_call_id": "tc-1"}, {}),
+    )
+
+
 def test_batch_mode_suppresses_goal_completion_until_completed() -> None:
     coalescer = StreamDeliveryCoalescer("batch")
     assert coalescer.ingest(*_gc_chunk("a")) == []
@@ -38,7 +53,66 @@ def test_batch_mode_suppresses_goal_completion_until_completed() -> None:
     assert coalescer.turn_complete_pending
 
 
-def test_streaming_mode_passthrough() -> None:
-    coalescer = StreamDeliveryCoalescer("streaming")
+def test_adaptive_small_goal_completion_passthrough() -> None:
+    coalescer = StreamDeliveryCoalescer("adaptive")
     chunk = _gc_chunk("passthrough")
-    assert coalescer.ingest(*chunk) == [chunk]
+    out = coalescer.ingest(*chunk)
+    assert len(out) == 1
+    assert out[0][1] == "messages"
+    assert out[0][2][0]["content"] == "passthrough"
+    assert out[0][2][0]["phase"] == "goal_completion"
+
+
+def test_text_chunks_coalesce_until_last() -> None:
+    coalescer = StreamDeliveryCoalescer("adaptive", coalesce_interval_ms=10_000)
+    assert coalescer.ingest(*_text_chunk("a")) == []
+    assert coalescer.ingest(*_text_chunk("b")) == []
+    flushed = coalescer.ingest(*_text_chunk("c", last=True))
+    assert len(flushed) == 1
+    msg = flushed[0][2][0]
+    assert msg["content"] == "abc"
+    assert msg.get("chunk_position") == "last"
+    assert coalescer.coalesce_flush_count == 1
+
+
+def test_tool_message_flushes_pending_text_first() -> None:
+    coalescer = StreamDeliveryCoalescer("adaptive", coalesce_interval_ms=10_000)
+    assert coalescer.ingest(*_text_chunk("pending")) == []
+    out = coalescer.ingest(*_tool_chunk())
+    assert len(out) == 2
+    assert out[0][2][0]["content"] == "pending"
+    assert out[1][1] == "messages"
+    assert out[1][2][0]["type"] == "tool"
+
+
+def test_updates_mode_dropped_unless_interrupt() -> None:
+    coalescer = StreamDeliveryCoalescer("adaptive")
+    assert coalescer.ingest((), "updates", {"model": {"messages": []}}) == []
+    kept = coalescer.ingest((), "updates", {"__interrupt__": []})
+    assert kept == [((), "updates", {"__interrupt__": []})]
+
+
+def test_custom_event_flushes_text_buffer() -> None:
+    coalescer = StreamDeliveryCoalescer("adaptive", coalesce_interval_ms=10_000)
+    assert coalescer.ingest(*_text_chunk("buf")) == []
+    out = coalescer.ingest(
+        (), "custom", {"type": "soothe.stream.tool_call.update", "tool_call_id": "x"}
+    )
+    assert len(out) == 2
+    assert out[0][2][0]["content"] == "buf"
+
+
+def test_strip_tool_metadata_for_batch() -> None:
+    coalescer = StreamDeliveryCoalescer("adaptive")
+    wire = (
+        {
+            "type": "ai",
+            "content": "",
+            "tool_calls": [{"id": "tc-1", "name": "read_file", "args": {"path": "/x"}}],
+        },
+        {},
+    )
+    stripped = coalescer.strip_tool_metadata_for_batch(wire)
+    body = stripped[0]
+    assert "tool_calls" not in body
+    assert "tool_call_chunks" not in body

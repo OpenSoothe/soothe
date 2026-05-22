@@ -758,6 +758,7 @@ class OutputStreamingConfig(BaseModel):
         file_output_threshold_chars: Threshold to write goal_completion to file (0 = never).
         file_output_preview_chars: Preview chars in TUI when output saved to file.
         file_output_dir: Directory for output files (default: current workspace root/.soothe/output).
+        message_coalesce_enabled: When true, coalesce plain assistant text chunks per namespace.
     """
 
     mode: Literal["batch", "adaptive"] = Field(
@@ -797,6 +798,10 @@ class OutputStreamingConfig(BaseModel):
     file_output_dir: str | None = Field(
         default=None,
         description="Directory for output files (default: current workspace root/.soothe/output)",
+    )
+    message_coalesce_enabled: bool = Field(
+        default=True,
+        description="Coalesce plain assistant AIMessageChunk text before WebSocket broadcast",
     )
 
 

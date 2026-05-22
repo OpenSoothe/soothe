@@ -11,6 +11,7 @@ import json
 from typing import Any
 
 STREAM_TOOL_CALL_UPDATE = "soothe.stream.tool_call.update"
+TOOL_CALL_UPDATES_BATCH = "tool_call_updates_batch"
 
 
 def tool_call_update_event(
@@ -106,6 +107,7 @@ def extract_tool_call_updates_from_wire_message(
 
 __all__ = [
     "STREAM_TOOL_CALL_UPDATE",
+    "TOOL_CALL_UPDATES_BATCH",
     "extract_tool_call_updates_from_wire_message",
     "tool_call_update_event",
 ]

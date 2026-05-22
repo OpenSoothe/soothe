@@ -20,7 +20,10 @@ from soothe.logging import ThreadLogger, set_thread_id
 from soothe.utils.error_format import emit_error_event
 from soothe_sdk.client.protocol import _serialize_for_json
 from soothe_sdk.client.wire import prepare_stream_data_for_wire
-from soothe_sdk.ux.stream_tool_wire import extract_tool_call_updates_from_wire_message
+from soothe_sdk.ux.stream_tool_wire import (
+    TOOL_CALL_UPDATES_BATCH,
+    extract_tool_call_updates_from_wire_message,
+)
 
 from soothe_daemon.image_understanding import enrich_user_text_with_vision
 from soothe_daemon.logging import set_client_id, set_loop_id
@@ -276,6 +279,8 @@ class QueryEngine:
         namespace: tuple[str, ...],
         mode: str,
         data: Any,
+        *,
+        coalescer: Any | None = None,
     ) -> None:
         """Broadcast one runner stream tuple to loop subscribers."""
         d = self._daemon
@@ -284,6 +289,7 @@ class QueryEngine:
             wire_data = prepare_stream_data_for_wire(data)
         # Batch tool call updates into single event (IG-426)
         tool_updates: list[dict[str, Any]] = []
+        stripped_tool_metadata = False
         if (
             mode == "messages"
             and isinstance(wire_data, (tuple, list))
@@ -301,13 +307,27 @@ class QueryEngine:
                                 "namespace": list(namespace),
                                 "mode": "custom",
                                 "data": {
-                                    "type": "tool_call_updates_batch",
+                                    "type": TOOL_CALL_UPDATES_BATCH,
                                     "updates": tool_updates,
                                     "count": len(tool_updates),
                                 },
                             },
                         )
                     )
+                    if coalescer is not None:
+                        wire_data = coalescer.strip_tool_metadata_for_batch(wire_data)
+                        stripped_tool_metadata = True
+        if stripped_tool_metadata:
+            body = wire_data[0] if wire_data else None
+            if isinstance(body, dict):
+                from soothe_sdk.client.wire import flatten_enveloped_message_dict
+
+                flat = flatten_enveloped_message_dict(body)
+                text = "".join(extract_text_from_ai_message(flat)).strip()
+                has_content = bool(text)
+                has_phase = bool(flat.get("phase"))
+                if not has_content and not has_phase:
+                    return
         await d._broadcast(
             self._loop_scoped_client_message(
                 loop_id,
@@ -353,6 +373,8 @@ class QueryEngine:
             ),
             "file_output_preview_chars": getattr(streaming_cfg, "file_output_preview_chars", 500),
             "file_output_dir": getattr(streaming_cfg, "file_output_dir", None),
+            "streaming_interval_ms": getattr(streaming_cfg, "streaming_interval_ms", 200),
+            "message_coalesce_enabled": getattr(streaming_cfg, "message_coalesce_enabled", True),
         }
 
     async def _enrich_with_vision_throttled(
@@ -685,6 +707,8 @@ class QueryEngine:
                     file_output_preview_chars=streaming_cfg.get("file_output_preview_chars", 500),
                     file_output_dir=streaming_cfg.get("file_output_dir"),
                     workspace=run_workspace,
+                    message_coalesce_enabled=streaming_cfg.get("message_coalesce_enabled", True),
+                    coalesce_interval_ms=streaming_cfg.get("streaming_interval_ms", 200),
                 )
 
                 async def _process_stream() -> None:
@@ -749,7 +773,11 @@ class QueryEngine:
                                 ns_tuple, mode, data
                             ):
                                 await self._broadcast_stream_tuple(
-                                    effective_loop_id, out_ns, out_mode, out_data
+                                    effective_loop_id,
+                                    out_ns,
+                                    out_mode,
+                                    out_data,
+                                    coalescer=coalescer,
                                 )
                             if coalescer.consume_turn_complete_pending():
                                 await self._signal_turn_idle(effective_loop_id)
@@ -757,7 +785,11 @@ class QueryEngine:
                     for out_ns, out_mode, out_data in coalescer.flush():
                         if effective_loop_id:
                             await self._broadcast_stream_tuple(
-                                effective_loop_id, out_ns, out_mode, out_data
+                                effective_loop_id,
+                                out_ns,
+                                out_mode,
+                                out_data,
+                                coalescer=coalescer,
                             )
 
                     logger.debug("runner.astream() completed, total chunks: %d", chunk_count)

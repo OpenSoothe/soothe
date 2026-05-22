@@ -16,6 +16,7 @@ from soothe_sdk.client import (
 from soothe_sdk.client.protocol import _serialize_for_json
 
 from soothe_cli.runtime.state.session_stats import TurnEventStats
+from soothe_cli.runtime.wire.chunk_filter import should_drop_stream_chunk_early
 
 if TYPE_CHECKING:
     pass
@@ -219,6 +220,9 @@ class TuiDaemonSession:
                 continue
             namespace = tuple(event.get("namespace", []) or [])
             mode = str(event.get("mode", ""))
+            if should_drop_stream_chunk_early(namespace, mode, data):
+                self.turn_event_stats.filtered_early += 1
+                continue
             self.turn_event_stats.post_idle_drained += 1
             yield (namespace, mode, data)
             if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
@@ -290,6 +294,9 @@ class TuiDaemonSession:
 
                     namespace = tuple(event.get("namespace", []) or [])
                     mode = str(event.get("mode", ""))
+                    if should_drop_stream_chunk_early(namespace, mode, data):
+                        self.turn_event_stats.filtered_early += 1
+                        continue
                     yield (namespace, mode, data)
                     # Graph may auto-resume after HITL interrupts; keep consuming events.
                     if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
