@@ -33,8 +33,8 @@ from soothe_sdk.plugin.emit import emit_progress  # noqa: E402, F401
 from soothe_sdk.plugin.registry import register_event  # noqa: E402, F401
 from soothe_sdk.protocols import (  # noqa: E402, F401
     ActionRequest,
+    AsyncPersistStore,
     PermissionSet,
-    PersistStore,
     PolicyContext,
     VectorStoreProtocol,
 )
@@ -61,7 +61,7 @@ __all__ = [
     "register_event",
     "emit_progress",
     # Protocols (legacy root imports)
-    "PersistStore",
+    "AsyncPersistStore",
     "VectorStoreProtocol",
     "ActionRequest",
     "PermissionSet",

@@ -10,7 +10,7 @@ from soothe.utils.similarity import embedding_model_ready_without_download, sema
 from soothe.utils.text_preview import log_preview
 
 if TYPE_CHECKING:
-    from .protocol import CapabilityId, PublicInformationSource, TacitusConfig
+    from .protocol import CapabilityId, PublicInformationSource, SourceType, TacitusConfig
 
 logger = logging.getLogger(__name__)
 
@@ -158,8 +158,6 @@ class PublicSemanticRouter:
         return [s for s in self._sources if s.capability_id in allowed]
 
     def available_source_types(self) -> list[SourceType]:
-        from .protocol import SourceType
-
         seen: set[SourceType] = set()
         ordered: list[SourceType] = []
         for src in self._sources:

@@ -11,9 +11,9 @@ from soothe.core.loop.state import schemas as schemas_mod
 from soothe.core.loop.state.schemas import (
     AgentDecision,
     LoopState,
+    PlanGenerateStep,
     PlanGeneration,
     PlanResult,
-    PlanGenerateStep,
     StepAction,
     StepResult,
     allocate_plan_id,

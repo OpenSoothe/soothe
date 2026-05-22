@@ -54,7 +54,7 @@ def test_task_activity_links_children_by_unified_task_index() -> None:
     card.add_tool_call("YKF_01:t0:read_file:1", "read_file", {"path": "a.md"})
 
     text = _plain(card._step_task_activity_content())
-    assert "Research(find docs)" in text
+    assert "Tacitus(find docs)" in text
     assert "ReadFile(1)" in text
 
 

@@ -11,8 +11,8 @@ import pytest
 from soothe.core.loop.planning.planner import LLMPlanner
 from soothe.core.loop.state.schemas import (
     AgentDecision,
-    PlanGeneration,
     PlanGenerateStep,
+    PlanGeneration,
     PlanResult,
     StatusAssessment,
     StepAction,
@@ -108,7 +108,6 @@ def test_schema_max_length_updated() -> None:
     )  # 159 chars
 
     # Create a minimal decision (required when status!=done and plan_action=new)
-    from soothe.core.loop.state.schemas import StepAction
 
     decision = AgentDecision(
         type="execute_steps",

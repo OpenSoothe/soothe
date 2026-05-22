@@ -40,7 +40,7 @@ _embedding_executor: ThreadPoolExecutor | None = None
 _model_load_executor: ThreadPoolExecutor | None = None
 _model_load_thread_lock = threading.Lock()
 _model_load_async_lock: asyncio.Lock | None = None
-_MODEL_LOAD_TIMEOUT_SECONDS = 300.0
+_MODEL_LOAD_TIMEOUT_SECONDS = 30.0
 
 
 def hf_embedding_cache_dir() -> Path:
@@ -90,10 +90,29 @@ def _load_transformer_model_in_thread() -> SentenceTransformer | None:
         return None
     cache_dir = hf_embedding_cache_dir()
     cache_dir.mkdir(parents=True, exist_ok=True)
-    return SentenceTransformer(
-        EMBEDDING_MODEL_NAME,
-        cache_folder=str(cache_dir),
-    )
+
+    # Use local_files_only=True when model is already cached to avoid network timeouts
+    # when HuggingFace Hub is unreachable. Falls back to download mode if not cached.
+    use_offline = is_embedding_model_cached_locally()
+    if use_offline:
+        logger.debug("Loading embedding model in offline mode (cached locally)")
+
+    try:
+        return SentenceTransformer(
+            EMBEDDING_MODEL_NAME,
+            cache_folder=str(cache_dir),
+            local_files_only=use_offline,
+        )
+    except OSError as e:
+        # OSError raised when local_files_only=True but model not fully cached
+        if use_offline:
+            logger.warning("Cached model incomplete, attempting online download: %s", e)
+            return SentenceTransformer(
+                EMBEDDING_MODEL_NAME,
+                cache_folder=str(cache_dir),
+                local_files_only=False,
+            )
+        raise
 
 
 def _complete_transformer_model_load(

@@ -71,6 +71,7 @@ class WizsearchSearchTool(BaseTool):
                 self.default_timeout = self.config["timeout"]
             self.debug_mode = self.config.get("debug", False)
 
+    @tool_error_handler("wizsearch_search", return_type="str")
     def _run(
         self,
         query: str,
@@ -98,6 +99,7 @@ class WizsearchSearchTool(BaseTool):
             )
         )
 
+    @tool_error_handler("wizsearch_search", return_type="str")
     async def _arun(
         self,
         query: str,
