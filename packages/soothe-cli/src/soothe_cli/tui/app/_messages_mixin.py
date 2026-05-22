@@ -23,15 +23,18 @@ from soothe_cli.tui.app._module_init import (
     _LoopHistoryPayload,
     _write_iterm_escape,
 )
+from soothe_cli.tui.widgets.file_change_preview import FileChangePreviewWidget
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
     CognitionGoalTreeMessage,
     CognitionReasonMessage,
     CognitionStepMessage,
+    DiffMessage,
     ErrorMessage,
     QueuedUserMessage,
     SkillMessage,
+    SummarizationMessage,
 )
 
 logger = logging.getLogger(__name__)
@@ -153,7 +156,12 @@ class _MessagesMixin:
         | SkillMessage
         | CognitionStepMessage
         | CognitionReasonMessage
-        | CognitionGoalTreeMessage,
+        | CognitionGoalTreeMessage
+        | FileChangePreviewWidget
+        | DiffMessage
+        | SummarizationMessage
+        | ErrorMessage
+        | AppMessage,
     ) -> None:
         """Mount a message widget to the messages area.
 

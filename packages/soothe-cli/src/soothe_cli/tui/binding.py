@@ -270,6 +270,13 @@ def message_from_widget(widget: Widget) -> MessageData:
             diff_file_path=widget._file_path,
         )
 
+    from soothe_cli.tui.widgets.file_change_preview import FileChangePreviewWidget
+
+    if isinstance(widget, FileChangePreviewWidget):
+        path = str(widget.data.get("file_path") or widget.data.get("path") or "")
+        summary = f"{widget._action_label}: {path}" if path else widget._action_label
+        return MessageData(type=MessageType.APP, content=summary or "File change", id=widget_id)
+
     if isinstance(widget, SummarizationMessage):
         return MessageData(
             type=MessageType.SUMMARIZATION,

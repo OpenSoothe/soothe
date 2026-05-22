@@ -8,7 +8,7 @@ from soothe_cli.tui.widgets.messages import CognitionReasonMessage
 def test_cognition_plan_message_store_round_trip() -> None:
     """Serialize and restore a cognition plan card."""
     w = CognitionReasonMessage(
-        next_action="Read src/foo.py",
+        next_action="",
         status="continue",
         iteration=2,
         plan_action="new",
@@ -18,7 +18,7 @@ def test_cognition_plan_message_store_round_trip() -> None:
     )
     md = message_from_widget(w)
     assert md.type == MessageType.COGNITION_REASON
-    assert md.cognition_plan_next_action == "Read src/foo.py"
+    assert md.cognition_plan_next_action == ""
     assert md.cognition_plan_status == "continue"
     assert md.cognition_plan_iteration == 2
     assert md.cognition_plan_action == "new"
@@ -27,7 +27,7 @@ def test_cognition_plan_message_store_round_trip() -> None:
 
     restored = message_to_widget(md)
     assert isinstance(restored, CognitionReasonMessage)
-    assert restored._next_action == "Read src/foo.py"
+    assert restored._assessment_reasoning == "Progress looks good."
     assert restored._plan_reasoning == "Need to verify imports."
 
 
@@ -56,22 +56,23 @@ def test_assess_only_card_round_trip() -> None:
 
 
 def test_intent_only_card_round_trip() -> None:
-    """Intent card stores and restores friendly_message via next_action."""
+    """Intent card stores and restores friendly_message via assessment_reasoning."""
     w = CognitionReasonMessage(
-        next_action="I'll help you refactor the module.",
+        next_action="",
         status="",
         iteration=0,
         plan_action="",
-        assessment_reasoning="",
+        assessment_reasoning="I'll help you refactor the module.",
         plan_reasoning="",
         id="msg-intent-01",
     )
     md = message_from_widget(w)
     assert md.type == MessageType.COGNITION_REASON
-    assert md.cognition_plan_next_action == "I'll help you refactor the module."
+    assert md.cognition_plan_next_action == ""
+    assert md.cognition_plan_assessment == "I'll help you refactor the module."
     assert md.cognition_plan_action == ""
 
     restored = message_to_widget(md)
     assert isinstance(restored, CognitionReasonMessage)
-    assert restored._next_action == "I'll help you refactor the module."
+    assert restored._assessment_reasoning == "I'll help you refactor the module."
     assert restored._plan_action == ""
