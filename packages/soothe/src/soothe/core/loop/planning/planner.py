@@ -622,7 +622,7 @@ class LLMPlanner:
             "<EFFICIENCY_RULES>",
             "- Trivial local skim: one step (list_files + selective read_file); heavy readonly recon: prefer subagent explore (scoped target per step)",
             "- For project structure: single step listing top-level directories",
-            "- Avoid duplicate paths; batch sequential related reads—independent readonly probes may stay separate steps",
+            "- Avoid duplicate paths; combine related reads in one step when safe—independent readonly probes may stay separate steps",
             "- explore subagent steps: name likely subtrees (e.g. docs/, packages/, benchmarks/) in the step text so search stays scoped; avoid vague whole-repo recon without directory hints",
             "</EFFICIENCY_RULES>",
         ]
@@ -928,7 +928,7 @@ class LLMPlanner:
         return PlanGeneration(
             plan_action="new",
             type="execute_steps",
-            execution_mode="sequential",
+            execution_mode="parallel",
             reasoning="Fallback default plan after plan generation failure.",
             steps=step_actions_to_plan_generate_steps(
                 _default_agent_decision(goal, iteration).steps
@@ -1167,7 +1167,7 @@ class LLMPlanner:
                 plan_action="new",
                 decision=AgentDecision(
                     type="execute_steps",
-                    execution_mode="sequential",
+                    execution_mode="parallel",
                     reasoning="Simple-query bypass: skip plan-generate.",
                     steps=[
                         StepAction(
@@ -1215,7 +1215,7 @@ class LLMPlanner:
                 plan_result = PlanGeneration(
                     plan_action="new",
                     type="execute_steps",
-                    execution_mode="sequential",
+                    execution_mode="parallel",
                     reasoning="Initial execution to gather evidence for goal assessment",
                     steps=step_actions_to_plan_generate_steps(
                         _default_agent_decision(goal, state.iteration).steps
@@ -1375,7 +1375,7 @@ class LLMPlanner:
                             plan_action="new",
                             decision=AgentDecision(
                                 type="execute_steps",
-                                execution_mode="sequential",
+                                execution_mode="parallel",
                                 reasoning="Simple-query bypass: skip plan-generate.",
                                 steps=[
                                     StepAction(

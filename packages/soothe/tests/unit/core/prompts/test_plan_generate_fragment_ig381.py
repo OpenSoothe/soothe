@@ -10,6 +10,8 @@ def test_plan_generate_uses_flattened_decision_fields() -> None:
     assert "subagent" not in text
     assert "evidence_refs" not in text
     assert "supportive_evidence" not in text
+    assert "Never output ``sequential``" in text
+    assert "only ``parallel`` or ``dependency``" in text
 
 
 def test_plan_generate_execution_policy_uses_readonly_discovery_wording() -> None:
@@ -30,3 +32,10 @@ def test_execution_policies_first_wave_overrides_three_step_cap() -> None:
     assert "First wave (iteration 1" in EXECUTION_POLICIES_FRAGMENT
     assert "1–2 steps" in EXECUTION_POLICIES_FRAGMENT
     assert "never 3+" in EXECUTION_POLICIES_FRAGMENT
+
+
+def test_execution_policies_forbids_sequential_mode() -> None:
+    from soothe.core.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
+
+    assert "never ``sequential``" in EXECUTION_POLICIES_FRAGMENT
+    assert "only ``parallel`` or ``dependency``" in EXECUTION_POLICIES_FRAGMENT

@@ -17,6 +17,9 @@ from soothe.protocols.planner import planner_outcome_text_preview
 
 logger = logging.getLogger(__name__)
 
+ExecutionMode = Literal["parallel", "dependency"]
+"""Planner/executor execution mode for step waves."""
+
 
 class EvidenceEntry(BaseModel):
     """Evidence row for plan validation (RFC-220).
@@ -105,15 +108,19 @@ class AgentDecision(BaseModel):
     Attributes:
         type: "execute_steps" or "final"
         steps: Steps to execute (can be 1 or N)
-        execution_mode: "parallel", "sequential", or "dependency"
+        execution_mode: ``parallel`` (default) or ``dependency`` when steps have dependencies
         reasoning: Why these steps advance toward goal (used by planning_utils)
         adaptive_granularity: Step granularity chosen by LLM (used by planning_utils)
     """
 
     type: Literal["execute_steps", "final"]
     steps: list[StepAction]
-    execution_mode: Literal["parallel", "sequential", "dependency"] = Field(
-        description="parallel only for independent steps; sequential default; dependency for DAG-ordered work.",
+    execution_mode: ExecutionMode = Field(
+        default="parallel",
+        description=(
+            "Execute routing: 'parallel' (default) or 'dependency' when steps use dependencies. "
+            "Never 'sequential'."
+        ),
     )
     reasoning: str = ""
     adaptive_granularity: Literal["atomic", "semantic"] | None = None
@@ -531,7 +538,7 @@ class PlanGeneration(BaseModel):
         steps: Steps for a new plan. Required non-empty when ``plan_action='new'`` and
             ``type='execute_steps'``. May be empty when ``type='final'`` (same as ``AgentDecision``).
         execution_mode: Execution mode for ``steps``. When ``plan_action='new'`` and ``type`` is set
-            but the model omits this field, it defaults to ``sequential``.
+            but the model omits this field, it defaults to ``parallel``.
         reasoning: Internal rationale for the decision.
         adaptive_granularity: Optional step granularity hint.
         next_action: User-facing next step (plan-specific, max 300 chars).
@@ -540,7 +547,13 @@ class PlanGeneration(BaseModel):
     plan_action: Literal["keep", "new"] = "new"
     type: Literal["execute_steps", "final"] | None = None
     steps: list[PlanGenerateStep] = Field(default_factory=list)
-    execution_mode: Literal["parallel", "sequential", "dependency"] | None = None
+    execution_mode: ExecutionMode | None = Field(
+        default=None,
+        description=(
+            "Only 'parallel' (default when omitted) or 'dependency' if steps declare dependencies. "
+            "Never 'sequential'."
+        ),
+    )
     reasoning: str = ""
     adaptive_granularity: Literal["atomic", "semantic"] | None = None
 
@@ -562,7 +575,7 @@ class PlanGeneration(BaseModel):
         if data.get("type") is None:
             return data
         if data.get("execution_mode") is None:
-            return {**data, "execution_mode": "sequential"}
+            return {**data, "execution_mode": "parallel"}
         return data
 
     @model_validator(mode="after")

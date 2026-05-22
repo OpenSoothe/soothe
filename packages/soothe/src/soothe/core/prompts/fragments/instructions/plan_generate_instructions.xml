@@ -17,7 +17,10 @@ Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal and it
 - ``expected_output``: Checkable completion signal.
 - ``dependencies``: Optional; step ids this depends on.
 
-**execution_mode**: ``sequential`` (default); ``parallel`` per EXECUTION_POLICIES; ``dependency`` when steps have dependencies.
+**execution_mode** (required when ``type=execute_steps``): only ``parallel`` or ``dependency``.
+- ``parallel`` (default): independent steps; executor may run them concurrently (bounded by config).
+- ``dependency``: only when one or more steps set ``dependencies``; executor respects the DAG.
+- Never output ``sequential`` (removed); invalid values fail validation.
 
 **reasoning**: Brief third-person justification.
 **next_action**: First person, one sentence, max ~300 chars.

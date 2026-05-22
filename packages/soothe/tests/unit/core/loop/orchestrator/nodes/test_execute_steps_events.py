@@ -134,7 +134,7 @@ async def test_execute_emits_step_started_when_dependency_unlocks() -> None:
             StepAction(id="WAA-01", description="First"),
             StepAction(id="WAA-02", description="Second", dependencies=["WAA-01"]),
         ],
-        execution_mode="sequential",
+        execution_mode="parallel",
     )
     loop_state = MagicMock()
     loop_state.dependency_completion_ids.return_value = set()

@@ -65,13 +65,13 @@ class TestAgentDecision:
         decision = AgentDecision(
             type="execute_steps",
             steps=[step],
-            execution_mode="sequential",
+            execution_mode="parallel",
             reasoning="Simple task",
         )
 
         assert decision.type == "execute_steps"
         assert len(decision.steps) == 1
-        assert decision.execution_mode == "sequential"
+        assert decision.execution_mode == "parallel"
         assert decision.reasoning == "Simple task"
 
     def test_multi_step_decision(self):
@@ -93,7 +93,7 @@ class TestAgentDecision:
             AgentDecision(
                 type="execute_steps",
                 steps=[],
-                execution_mode="sequential",
+                execution_mode="parallel",
                 reasoning="Invalid",
             )
 
@@ -105,7 +105,7 @@ class TestAgentDecision:
         decision = AgentDecision(
             type="execute_steps",
             steps=[step1, step2],
-            execution_mode="sequential",
+            execution_mode="parallel",
             reasoning="Test",
         )
 
@@ -180,7 +180,7 @@ class TestAgentDecision:
         decision = AgentDecision(
             type="execute_steps",
             steps=[d0, d1, d2],
-            execution_mode="sequential",
+            execution_mode="parallel",
             reasoning="t",
         )
         out = assign_plan_step_ids(decision, plan_id="KFA")
@@ -240,7 +240,7 @@ class TestAgentDecision:
         decision = AgentDecision(
             type="execute_steps",
             steps=[d0, d1],
-            execution_mode="sequential",
+            execution_mode="parallel",
             reasoning="t",
         )
         with pytest.raises(ValueError, match="duplicate composite"):
@@ -251,7 +251,7 @@ class TestAgentDecision:
         decision = AgentDecision(
             type="execute_steps",
             steps=[StepAction(id="001", description="x", expected_output="o")],
-            execution_mode="sequential",
+            execution_mode="parallel",
             reasoning="r",
         )
         reserved = {"KFA-001"}
@@ -276,7 +276,7 @@ class TestAgentDecision:
         decision = AgentDecision(
             type="execute_steps",
             steps=[new_step],
-            execution_mode="sequential",
+            execution_mode="parallel",
             reasoning="r",
         )
         reserved = set(state.dependency_completion_ids())
@@ -324,7 +324,7 @@ class TestPlanResult:
             decision=AgentDecision(
                 type="execute_steps",
                 steps=[StepAction(description="s", expected_output="o")],
-                execution_mode="sequential",
+                execution_mode="parallel",
                 reasoning="x",
             ),
             next_action="I'll continue working.",
@@ -340,7 +340,7 @@ class TestPlanResult:
             decision=AgentDecision(
                 type="execute_steps",
                 steps=[StepAction(description="s", expected_output="o")],
-                execution_mode="sequential",
+                execution_mode="parallel",
                 reasoning="r",
             ),
             next_action="I'll replan.",
@@ -397,6 +397,27 @@ class TestPlanGeneration:
         assert "evidence_refs" not in props
         assert {"id", "description", "expected_output", "dependencies"} <= set(props.keys())
 
+    def test_plan_generation_schema_execution_mode_excludes_sequential(self) -> None:
+        """Structured plan-generate output must not offer sequential to the LLM."""
+        from soothe.core.loop.state.schemas import plan_generation_model_for_iteration
+
+        for iteration in (0, 1):
+            schema = plan_generation_model_for_iteration(iteration).model_json_schema()
+            em = schema["properties"]["execution_mode"]
+            enum_values: set[str] = set()
+            if "enum" in em:
+                enum_values.update(em["enum"])
+            for variant in em.get("anyOf", []):
+                if isinstance(variant, dict) and "enum" in variant:
+                    enum_values.update(variant["enum"])
+            assert enum_values <= {"parallel", "dependency", None} or enum_values <= {
+                "parallel",
+                "dependency",
+            }
+            assert "sequential" not in enum_values
+        agent_em = AgentDecision.model_json_schema()["properties"]["execution_mode"]["enum"]
+        assert set(agent_em) == {"parallel", "dependency"}
+
     def test_plan_generate_steps_convert_to_step_actions(self) -> None:
         from soothe.core.loop.state.schemas import plan_generate_steps_to_step_actions
 
@@ -424,7 +445,7 @@ class TestPlanGeneration:
         out = PlanGeneration(
             plan_action="new",
             type="final",
-            execution_mode="sequential",
+            execution_mode="parallel",
             steps=[],
             next_action="Wrapping up.",
         )
@@ -437,20 +458,20 @@ class TestPlanGeneration:
             PlanGeneration(
                 plan_action="new",
                 type="execute_steps",
-                execution_mode="sequential",
+                execution_mode="parallel",
                 steps=[],
                 next_action="x",
             )
 
     def test_new_defaults_execution_mode_when_omitted(self) -> None:
-        """Omitted execution_mode defaults to sequential (common LLM omission for type=final)."""
+        """Omitted execution_mode defaults to parallel (common LLM omission for type=final)."""
         out = PlanGeneration(
             plan_action="new",
             type="final",
             steps=[],
             next_action="Done.",
         )
-        assert out.execution_mode == "sequential"
+        assert out.execution_mode == "parallel"
 
     def test_new_execute_steps_defaults_execution_mode(self) -> None:
         """execute_steps accepts omitted execution_mode; steps are still required."""
@@ -461,7 +482,24 @@ class TestPlanGeneration:
             steps=[step],
             next_action="Running.",
         )
-        assert out.execution_mode == "sequential"
+        assert out.execution_mode == "parallel"
+
+    def test_rejects_sequential_execution_mode(self) -> None:
+        """Removed sequential mode is not accepted."""
+        with pytest.raises(ValidationError):
+            PlanGeneration(
+                plan_action="new",
+                type="execute_steps",
+                steps=[PlanGenerateStep(description="x", expected_output="ok")],
+                execution_mode="sequential",
+                next_action="Run.",
+            )
+        with pytest.raises(ValidationError):
+            AgentDecision(
+                type="execute_steps",
+                steps=[StepAction(id="s1", description="d", expected_output="ok")],
+                execution_mode="sequential",
+            )
 
     def test_keep_can_omit_decision_fields(self) -> None:
         """plan_action=keep does not require decision fields."""
@@ -481,7 +519,7 @@ class TestPlanGeneration:
             schema(
                 plan_action="new",
                 type="execute_steps",
-                execution_mode="sequential",
+                execution_mode="parallel",
                 steps=steps,
                 next_action="Proceed.",
             )
@@ -493,7 +531,7 @@ class TestPlanGeneration:
         out = schema(
             plan_action="new",
             type="execute_steps",
-            execution_mode="sequential",
+            execution_mode="parallel",
             steps=[
                 PlanGenerateStep(id="01", description="recon", expected_output="map"),
                 PlanGenerateStep(id="02", description="implement", expected_output="done"),
@@ -510,7 +548,7 @@ class TestPlanGeneration:
         out = PlanGeneration(
             plan_action="new",
             type="execute_steps",
-            execution_mode="sequential",
+            execution_mode="parallel",
             steps=[
                 PlanGenerateStep(id="01", description=f"step {i}", expected_output="ok")
                 for i in range(3)
@@ -687,7 +725,7 @@ class TestLoopState:
         state.current_decision = AgentDecision(
             type="execute_steps",
             steps=[step],
-            execution_mode="sequential",
+            execution_mode="parallel",
             reasoning="Test",
         )
 
@@ -719,7 +757,7 @@ class TestLoopState:
         decision = AgentDecision(
             type="execute_steps",
             steps=[follow_up],
-            execution_mode="sequential",
+            execution_mode="parallel",
             reasoning="Continue after explore",
         )
 
@@ -753,7 +791,7 @@ class TestGoalContinuousStepIdsIg388:
             steps=[
                 StepAction(id="ABC-05", description="pending", expected_output="x"),
             ],
-            execution_mode="sequential",
+            execution_mode="parallel",
             reasoning="",
         )
         assert next_goal_local_step_id_start(state) == 6

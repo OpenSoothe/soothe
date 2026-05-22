@@ -25,7 +25,7 @@ def _three_step_decision() -> AgentDecision:
             StepAction(id="s2", description="Step 2", expected_output="Output 2"),
             StepAction(id="s3", description="Step 3", expected_output="Output 3"),
         ],
-        execution_mode="sequential",
+        execution_mode="parallel",
         reasoning="Initial plan",
     )
 
@@ -413,7 +413,7 @@ async def test_loop_agent_max_iterations() -> None:
                             expected_output="more",
                         )
                     ],
-                    execution_mode="sequential",
+                    execution_mode="parallel",
                     reasoning="more work",
                 ),
                 next_action="I'll take another step toward the goal.",
@@ -434,7 +434,7 @@ async def test_loop_agent_max_iterations() -> None:
                             expected_output="more",
                         )
                     ],
-                    execution_mode="sequential",
+                    execution_mode="parallel",
                     reasoning="more work",
                 ),
                 next_action="I'll take another step toward the goal.",

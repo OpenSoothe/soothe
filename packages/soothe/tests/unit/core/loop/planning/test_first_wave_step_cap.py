@@ -28,7 +28,7 @@ def test_finalize_truncates_first_wave_to_two_steps() -> None:
     decision = AgentDecision(
         type="execute_steps",
         steps=[_step(i) for i in range(1, 6)],
-        execution_mode="sequential",
+        execution_mode="parallel",
         reasoning="over-planned",
     )
     result = PlanResult(
@@ -58,7 +58,7 @@ def test_finalize_keeps_three_steps_on_later_iteration() -> None:
     decision = AgentDecision(
         type="execute_steps",
         steps=[_step(i) for i in range(1, 4)],
-        execution_mode="sequential",
+        execution_mode="parallel",
         reasoning="replan",
     )
     result = PlanResult(
