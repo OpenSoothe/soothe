@@ -44,7 +44,7 @@ class SharedPostgreSQLPool:
 
     Usage:
         # Initialize at daemon startup
-        pool = SharedPostgreSQLPool(dsn, pool_size=12)
+        pool = SharedPostgreSQLPool(dsn, pool_size=24)
         await pool.open()
 
         # Pass to AgentLoopStateManager
@@ -57,7 +57,7 @@ class SharedPostgreSQLPool:
     def __init__(
         self,
         dsn: str,
-        pool_size: int = 12,
+        pool_size: int = 24,
         *,
         pool_timing: dict[str, Any] | None = None,
     ) -> None:
@@ -89,12 +89,13 @@ class SharedPostgreSQLPool:
                 return self._pool
 
             pool_kwargs: dict[str, Any] = {
-                "min_size": 1,
                 "max_size": self.pool_size,
                 "open": False,
             }
             if self._pool_timing:
                 pool_kwargs.update(self._pool_timing)
+            else:
+                pool_kwargs["min_size"] = 4
             self._pool = AsyncConnectionPool(self.dsn, **apply_row_factory(pool_kwargs))
 
             # Open pool

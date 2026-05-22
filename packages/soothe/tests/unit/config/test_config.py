@@ -281,14 +281,11 @@ class TestModelRouter:
         assert cfg.resolve_backend("sqlite") == "sqlite"
 
     def test_persistence_postgres_pool_size_defaults(self) -> None:
-        """Worker_pool mode defaults for PostgreSQL pools (small per-process pools).
-
-        Thread_pool mode can override to 8-12 for daemon-level singleton pools (IG-406).
-        """
+        """Shared PostgreSQL pool defaults (min 4, max 24 per pool)."""
         p = PersistenceConfig(default_backend="postgresql")
-        # Worker_pool defaults: small pools per worker process
-        assert p.checkpointer_pool_size == 2
-        assert p.agentloop_pool_size == 4
+        assert p.postgres_pool_min_size == 4
+        assert p.checkpointer_pool_size == 24
+        assert p.agentloop_pool_size == 24
 
 
 class TestModelProvider:
