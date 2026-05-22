@@ -50,6 +50,9 @@ from soothe_cli.tui.widgets.clipboard import (
 )
 from soothe_cli.tui.widgets.diff import compose_diff_lines
 
+# Pattern for fenced code blocks (IG-426)
+_FENCED_CODE_BLOCK_PATTERN = re.compile(r"```[\s\S]*?```", re.MULTILINE)
+
 if TYPE_CHECKING:
     from textual.app import ComposeResult
     from textual.timer import Timer
@@ -939,14 +942,17 @@ class AssistantMessage(Vertical):
             # leave fenced code blocks / merged tails inconsistent once the stream
             # ends. Re-parse the full document so the finished card matches what a
             # one-shot render would produce.
+            # IG-426: Only re-render if fenced code blocks detected (expensive operation)
             if stream_was_active and self._content:
-                try:
-                    await self._get_markdown().update(self._content)
-                except Exception:
-                    logger.debug(
-                        "AssistantMessage: full markdown refresh after stream failed",
-                        exc_info=True,
-                    )
+                has_code_blocks = bool(_FENCED_CODE_BLOCK_PATTERN.search(self._content))
+                if has_code_blocks:
+                    try:
+                        await self._get_markdown().update(self._content)
+                    except Exception:
+                        logger.debug(
+                            "AssistantMessage: full markdown refresh after stream failed",
+                            exc_info=True,
+                        )
         elif self._body is not None:
             await self._body.update(self._content)
 

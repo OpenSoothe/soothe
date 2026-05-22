@@ -218,7 +218,7 @@ class ToolCallArgsCollector:
         before_rewrite: BaseMessage,
         after_rewrite: BaseMessage,
         *,
-        step_id: str,
+        step_id: str = "",
         task_idx: int | None = None,
     ) -> None:
         """Record kwargs from pre- and post-id-rewrite AI messages (stream path)."""
