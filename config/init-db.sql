@@ -23,5 +23,5 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'soothe_memory')\gexec
 \c soothe_vectors
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Note: soothe_checkpoints will have AgentLoop tables created automatically by
--- PostgreSQLPersistenceBackend when AgentLoop initializes (IG-055)
+-- Note: soothe_checkpoints AgentLoop tables are created/upgraded automatically on
+-- pool open from packages/soothe/.../persistence/sql/soothe_checkpoints/*.sql
