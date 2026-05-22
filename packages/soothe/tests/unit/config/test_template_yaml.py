@@ -32,6 +32,9 @@ def _normalize_for_default_compare(data: dict) -> dict:
             sub["config"] = {}
         if name == "plan" and PlanSubagentConfig(**cfg) == PlanSubagentConfig():
             sub["config"] = {}
+        # tacitus.config with llm_role/synthesis_role is an example (no schema class)
+        if name == "tacitus" and cfg:
+            sub["config"] = {}
         subs[name] = sub
     return out
 

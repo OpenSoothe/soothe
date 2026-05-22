@@ -6,12 +6,8 @@ This directory contains builtin skills that ship with Soothe. Skills are self-co
 
 | Skill | Purpose | Dependencies |
 |-------|---------|--------------|
-| **create-subagent** | Guide for creating new subagents (SubAgent vs CompiledSubAgent) | None |
 | **weather** | Get current weather and forecasts (no API key required) | curl |
 | **github** | Interact with GitHub via `gh` CLI | gh |
-| **tmux** | Remote-control tmux sessions for interactive CLIs | tmux |
-| **summarize** | Summarize URLs, files, YouTube videos | summarize CLI |
-| **cron** | Schedule reminders and recurring tasks | cron tool |
 | **clawhub** | Search and install skills from ClawHub registry | Node.js/npx |
 | **skill-creator** | Create and package new AgentSkills | None |
 
@@ -43,18 +39,26 @@ config = SootheConfig(
 
 See the `skill-creator` skill for comprehensive guidance on creating new skills.
 
-Quick start:
+Quick start (project workspace — preferred):
 ```bash
+WORKSPACE="$(pwd)"   # Soothe workspace root
+SKILLS_DIR="${WORKSPACE}/.soothe/skills"
+mkdir -p "${SKILLS_DIR}"
+
 # Initialize a new skill
-python src/soothe/skills/skill-creator/scripts/init_skill.py my-skill --path ~/.soothe/skills
+python packages/soothe/src/soothe/built_in_skills/skill-creator/scripts/init_skill.py \
+  my-skill --path "${SKILLS_DIR}"
 
 # Edit the SKILL.md
-cd ~/.soothe/skills/my-skill
+cd "${SKILLS_DIR}/my-skill"
 # Edit SKILL.md...
 
 # Package the skill
-python src/soothe/skills/skill-creator/scripts/package_skill.py ~/.soothe/skills/my-skill
+python packages/soothe/src/soothe/built_in_skills/skill-creator/scripts/package_skill.py \
+  "${SKILLS_DIR}/my-skill"
 ```
+
+User-wide install: use `--path ~/.soothe/skills` instead of `${SKILLS_DIR}`.
 
 ## Progressive Disclosure
 
@@ -72,7 +76,5 @@ Some skills require external CLI tools:
 | Skill | Tool | Install |
 |-------|------|---------|
 | github | `gh` | `brew install gh` or `apt install gh` |
-| tmux | `tmux` | `brew install tmux` or `apt install tmux` |
-| summarize | `summarize` | `brew install steipete/tap/summarize` |
 
 These are documented in each skill's metadata for graceful degradation.

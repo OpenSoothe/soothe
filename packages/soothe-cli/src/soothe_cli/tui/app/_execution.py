@@ -427,7 +427,7 @@ class _ExecutionMixin:
             help_body = (
                 "Commands: /quit, /clear, /editor, /autopilot, /mcp, "
                 "/model [--model-params JSON] [--default], /notifications, "
-                "/reload, /skill:<name>, /remember, /theme, "
+                "/reload, /skill:<name>, /theme, "
                 "/tokens, /loops, "
                 "/research, /explore, /plan, /«subagent» (when configured), "
                 "/update, /auto-update, /changelog, /docs, /feedback, /help\n\n"
@@ -562,12 +562,6 @@ class _ExecutionMixin:
                     parts.append(model_name)
 
                 await self._mount_message(AppMessage(" · ".join(parts)))
-        elif cmd == "/remember" or cmd.startswith("/remember "):
-            # Convenience alias for /skill:remember — shorter and discoverable
-            # before skill loading completes.
-            args = command.strip()[len("/remember") :].strip()
-            rewritten = f"/skill:remember {args}" if args else "/skill:remember"
-            await self._handle_skill_command(rewritten)
         elif cmd == "/skill-creator" or cmd.startswith("/skill-creator "):
             # Convenience alias for /skill:skill-creator — shorter and
             # discoverable before skill loading completes.
