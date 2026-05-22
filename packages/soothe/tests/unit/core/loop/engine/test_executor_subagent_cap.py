@@ -8,7 +8,7 @@ import pytest
 
 from soothe.config import SootheConfig
 from soothe.core.loop.engine.executor import Executor
-from soothe.core.loop.state.schemas import LoopState, StepAction, StepResult
+from soothe.core.loop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
 
 
 def _make_step() -> StepAction:
@@ -45,7 +45,13 @@ async def test_stream_stops_after_subagent_cap(monkeypatch: pytest.MonkeyPatch) 
     state = LoopState(goal="g", thread_id="t", max_iterations=3)
     step = _make_step()
 
-    out = [item async for item in ex._execute_sequential_chunk([step], state)]
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step],
+        execution_mode="parallel",
+        reasoning="",
+    )
+    out = [item async for item in ex.execute(decision, state)]
 
     results = [x for x in out if isinstance(x, StepResult)]
     assert len(results) == 1
@@ -78,7 +84,13 @@ async def test_unlimited_subagent_when_cap_zero(monkeypatch: pytest.MonkeyPatch)
     state = LoopState(goal="g", thread_id="t", max_iterations=3)
     step = _make_step()
 
-    out = [item async for item in ex._execute_sequential_chunk([step], state)]
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step],
+        execution_mode="parallel",
+        reasoning="",
+    )
+    out = [item async for item in ex.execute(decision, state)]
 
     results = [x for x in out if isinstance(x, StepResult)]
     sr = results[0]

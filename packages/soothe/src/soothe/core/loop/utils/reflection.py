@@ -373,7 +373,7 @@ def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
     return AgentDecision(
         type=data.get("type", "execute_steps"),
         steps=steps,
-        execution_mode=data.get("execution_mode", "sequential"),
+        execution_mode=data.get("execution_mode", "parallel"),
         reasoning=data.get("reasoning", ""),
         adaptive_granularity=data.get("adaptive_granularity"),
     )
@@ -411,7 +411,7 @@ def _default_agent_decision(goal: str, iteration: int = 0) -> Any:
                 expected_output="Concrete findings or artifacts that satisfy the goal",
             )
         ],
-        execution_mode="sequential",
+        execution_mode="parallel",
         reasoning=f"Default decision due to parse error at iteration {iteration}",
     )
 

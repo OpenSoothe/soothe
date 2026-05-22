@@ -135,7 +135,7 @@ def build_continue_thread_bootstrap_plan(_goal: str) -> PlanResult:
         _goal: Loop goal text (reserved for callers; body uses ``LoopState``).
 
     Returns:
-        ``PlanResult`` with ``status=continue`` and a single sequential step.
+        ``PlanResult`` with ``status=continue`` and a single parallel step.
     """
     next_action = random.choice(_CONTINUE_THREAD_DESCRIPTIONS)
     decision = AgentDecision(
@@ -149,7 +149,7 @@ def build_continue_thread_bootstrap_plan(_goal: str) -> PlanResult:
                 ),
             )
         ],
-        execution_mode="sequential",
+        execution_mode="parallel",
         reasoning="Continue-thread first-plan bootstrap (no planner LLM).",
     )
     return PlanResult(

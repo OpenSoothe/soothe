@@ -176,7 +176,7 @@ def test_heuristic_failed_steps_low_success_rate():
             StepAction(id="S1", description="Step 1"),
             StepAction(id="S2", description="Step 2"),
         ],
-        execution_mode="sequential",
+        execution_mode="parallel",
     )
     pr = PlanResult(
         status="continue", goal_progress="low", plan_action="new", decision=d, next_action=""
@@ -289,7 +289,7 @@ def test_plandag_ingest_plan_new():
             StepAction(id="01", description="Step 1"),
             StepAction(id="02", description="Step 2"),
         ],
-        execution_mode="sequential",
+        execution_mode="parallel",
     )
     plan_result = PlanResult(
         status="continue",
@@ -310,7 +310,7 @@ def test_plandag_mark_completed():
     decision = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="01", description="Step 1")],
-        execution_mode="sequential",
+        execution_mode="parallel",
     )
     plan_result = PlanResult(
         status="continue", goal_progress="low", plan_action="new", decision=decision, next_action=""
@@ -327,7 +327,7 @@ def test_plandag_mark_failed():
     decision = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="01", description="Step 1")],
-        execution_mode="sequential",
+        execution_mode="parallel",
     )
     plan_result = PlanResult(
         status="continue", goal_progress="low", plan_action="new", decision=decision, next_action=""
@@ -366,7 +366,7 @@ def test_plandag_multiple_plans():
     d1 = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="01", description="Step 1")],
-        execution_mode="sequential",
+        execution_mode="parallel",
     )
     pr1 = PlanResult(
         status="continue", goal_progress="low", plan_action="new", decision=d1, next_action=""
@@ -377,7 +377,7 @@ def test_plandag_multiple_plans():
     d2 = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="KFA-02", description="New step")],
-        execution_mode="sequential",
+        execution_mode="parallel",
     )
     pr2 = PlanResult(
         status="continue", goal_progress="medium", plan_action="new", decision=d2, next_action=""
@@ -407,7 +407,7 @@ def test_strategy_ledger_direct_simple():
     d = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="01", description="Step 1")],
-        execution_mode="sequential",
+        execution_mode="parallel",
     )
     pr = PlanResult(
         status="done",
@@ -432,7 +432,7 @@ def test_strategy_synthesize_multiple_plans():
     d1 = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="01", description="Step 1")],
-        execution_mode="sequential",
+        execution_mode="parallel",
     )
     pr1 = PlanResult(
         status="continue", goal_progress="low", plan_action="new", decision=d1, next_action=""
@@ -442,7 +442,7 @@ def test_strategy_synthesize_multiple_plans():
     d2 = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="02", description="Step 2")],
-        execution_mode="sequential",
+        execution_mode="parallel",
     )
     pr2 = PlanResult(
         status="done",
@@ -466,7 +466,7 @@ def test_strategy_synthesize_failed_steps():
             StepAction(id="01", description="Step 1"),
             StepAction(id="02", description="Step 2"),
         ],
-        execution_mode="sequential",
+        execution_mode="parallel",
     )
     pr = PlanResult(
         status="done",

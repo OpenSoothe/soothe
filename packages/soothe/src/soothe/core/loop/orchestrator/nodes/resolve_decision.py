@@ -44,7 +44,7 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
                         description=state.goal or "Execute task",
                     )
                 ],
-                execution_mode="sequential",
+                execution_mode="parallel",
                 reasoning="Initial execution to gather evidence for goal assessment",
             )
         else:

@@ -102,7 +102,7 @@ async def test_goal_completion_logs_planning_dag_at_info(
     decision = AgentDecision(
         type="execute_steps",
         steps=[StepAction(id="ABC-01", description="One thing", dependencies=None)],
-        execution_mode="sequential",
+        execution_mode="parallel",
     )
     plan_result = PlanResult(
         status="done",

@@ -4,8 +4,7 @@ import pytest
 
 from soothe.config import SootheConfig
 from soothe.core.loop.engine.executor import Executor
-from soothe.core.loop.state.schemas import LoopState, StepAction, StepResult
-from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.core.loop.state.schemas import LoopState, StepResult
 
 
 @pytest.fixture
@@ -243,44 +242,3 @@ def test_aggregate_metrics_multiple_cap_hits(mock_core_agent, config, state):
 
     # Any cap hit = True
     assert state.last_wave_hit_subagent_cap is True
-
-
-def test_record_batch_ledger_pairs_splits_wave_duration(mock_core_agent, config, state):
-    """RFC-214 batch: wave wall time is split across StepResults (sums to wave duration)."""
-    executor = Executor(mock_core_agent, config=config)
-    steps = [
-        StepAction(id="a", description="one", dependencies=[]),
-        StepAction(id="b", description="two", dependencies=[]),
-        StepAction(id="c", description="three", dependencies=[]),
-    ]
-    step_messages = [
-        LoopHumanMessage(
-            content="h1", thread_id=state.thread_id, iteration=1, phase="execute_step"
-        ),
-        LoopHumanMessage(
-            content="h2", thread_id=state.thread_id, iteration=1, phase="execute_step"
-        ),
-        LoopHumanMessage(
-            content="h3", thread_id=state.thread_id, iteration=1, phase="execute_step"
-        ),
-    ]
-    step_outcomes = {
-        "a": LoopAIMessage(content="o1", thread_id=state.thread_id, iteration=1),
-        "b": LoopAIMessage(content="o2", thread_id=state.thread_id, iteration=1),
-        "c": LoopAIMessage(content="o3", thread_id=state.thread_id, iteration=1),
-    }
-    wave_ms = 100
-    results = executor._record_batch_ledger_pairs(
-        state,
-        step_messages,
-        step_outcomes,
-        steps,
-        duration_ms=wave_ms,
-        subagent_task_completions=0,
-        hit_subagent_cap=False,
-        tool_call_count=5,
-    )
-    assert [r.duration_ms for r in results] == [34, 33, 33]
-    assert sum(r.duration_ms for r in results) == wave_ms
-    assert results[0].tool_call_count == 5
-    assert results[1].tool_call_count == 0

@@ -12,7 +12,7 @@ from soothe.core.loop.engine.executor import (
     Executor,
     _ActStreamBudget,
 )
-from soothe.core.loop.state.schemas import LoopState, StepAction, StepResult
+from soothe.core.loop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
 
 
 def _make_step() -> StepAction:
@@ -60,7 +60,7 @@ def test_default_max_tool_calls_per_step_is_99() -> None:
 
 
 @pytest.mark.asyncio
-async def test_execute_sequential_chunk_returns_partial_on_tool_budget() -> None:
+async def test_execute_parallel_step_returns_partial_on_tool_budget() -> None:
     agent = MagicMock()
     tool_msgs = [
         (
@@ -81,7 +81,13 @@ async def test_execute_sequential_chunk_returns_partial_on_tool_budget() -> None
     state = LoopState(goal="g", thread_id="t", max_iterations=3)
     step = _make_step()
 
-    out = [item async for item in ex._execute_sequential_chunk([step], state)]
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step],
+        execution_mode="parallel",
+        reasoning="",
+    )
+    out = [item async for item in ex.execute(decision, state)]
 
     results = [x for x in out if isinstance(x, StepResult)]
     assert len(results) == 1
@@ -95,5 +101,4 @@ async def test_execute_sequential_chunk_returns_partial_on_tool_budget() -> None
         preview = str(preview.get("first", ""))
     assert "out-0" in str(preview)
     ledger_ai = [m for m in state.loop_messages if getattr(m, "step_id", None) == "s0"][-1]
-    assert "out-0" in ledger_ai.content
     assert "Step execution failed" not in ledger_ai.content

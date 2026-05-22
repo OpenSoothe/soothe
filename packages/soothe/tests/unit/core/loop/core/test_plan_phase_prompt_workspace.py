@@ -142,7 +142,7 @@ def test_build_loop_plan_messages_plan_continue_when_steps_remain() -> None:
             StepAction(id="a", description="x", expected_output="o"),
             StepAction(id="b", description="y", expected_output="o"),
         ],
-        execution_mode="sequential",
+        execution_mode="parallel",
         reasoning="r",
     )
     state.completed_step_ids = {"a"}

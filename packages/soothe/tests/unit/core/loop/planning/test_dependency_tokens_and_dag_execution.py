@@ -103,7 +103,7 @@ class TestPlanDagIngestAndMarkCompleted:
                 steps=[
                     StepAction(id="KFA-01", description="first", expected_output="o"),
                 ],
-                execution_mode="sequential",
+                execution_mode="parallel",
                 reasoning="r",
             ),
             next_action="go",
@@ -131,7 +131,7 @@ class TestPlanDagIngestAndMarkCompleted:
                 decision=AgentDecision(
                     type="execute_steps",
                     steps=[StepAction(id="AAA-01", description="bootstrap", expected_output="o")],
-                    execution_mode="sequential",
+                    execution_mode="parallel",
                     reasoning="r",
                 ),
                 next_action="a",
@@ -185,7 +185,7 @@ class TestPlanManagerIngestRecordFlow:
             decision=AgentDecision(
                 type="execute_steps",
                 steps=[StepAction(id="ZZZ-01", description="s", expected_output="o")],
-                execution_mode="sequential",
+                execution_mode="parallel",
                 reasoning="r",
             ),
             next_action="n",
@@ -216,7 +216,7 @@ class TestPlanDagMaxChainDepthExternalSatisfied:
                 decision=AgentDecision(
                     type="execute_steps",
                     steps=[StepAction(id="M-01", description="root", expected_output="o")],
-                    execution_mode="sequential",
+                    execution_mode="parallel",
                     reasoning="r",
                 ),
                 next_action="x",
@@ -249,7 +249,7 @@ class TestPlanDagMaxChainDepthExternalSatisfied:
                             dependencies=["01"],
                         ),
                     ],
-                    execution_mode="sequential",
+                    execution_mode="parallel",
                     reasoning="r",
                 ),
                 next_action="y",

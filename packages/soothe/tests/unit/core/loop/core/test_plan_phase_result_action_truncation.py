@@ -41,7 +41,7 @@ def sample_plan_result() -> PlanGeneration:
                 expected_output="Architecture understanding",
             ),
         ],
-        execution_mode="sequential",
+        execution_mode="parallel",
         reasoning="Need to check implementation details",
         next_action="Read key implementation files from cli/, shared/, and tui/ directories",
     )
@@ -118,7 +118,7 @@ def test_schema_max_length_updated() -> None:
                 expected_output="Test output",
             ),
         ],
-        execution_mode="sequential",
+        execution_mode="parallel",
         reasoning="Test",
     )
 
