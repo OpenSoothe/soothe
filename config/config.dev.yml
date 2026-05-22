@@ -23,7 +23,7 @@ providers:
     api_key: "${DASHSCOPE_CP_API_KEY}"
     models:
       - glm-5
-      - qwen3.5-plus
+      - qwen3.6-plus
       - kimi-k2.5
       - MiniMax-M2.5
       - deepseek-v3.2
@@ -41,7 +41,7 @@ router:
   default: "coding-plan:glm-5"
   fast: "coding-plan:kimi-k2.5"
   think: "coding-plan:glm-5"
-  image: "coding-plan:qwen3.5-plus"
+  image: "coding-plan:qwen3.6-plus"
   embedding: "dashscope:multimodal-embedding-v1"
 
 # Built-in subagents (explore, plan, tacitus are registered in resolver/_resolver_tools.py).
