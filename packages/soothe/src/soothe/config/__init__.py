@@ -18,7 +18,6 @@ from soothe.config.env import (
     SOOTHE_HOME,
     _resolve_env,
     _resolve_provider_env,
-    default_soothe_workspace_dir,
 )
 from soothe.config.models import (
     AgentLoopConfig,
@@ -103,5 +102,4 @@ __all__ = [
     "WebSearchConfig",
     "_resolve_env",
     "_resolve_provider_env",
-    "default_soothe_workspace_dir",
 ]
