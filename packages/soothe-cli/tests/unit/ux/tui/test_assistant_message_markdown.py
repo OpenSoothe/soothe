@@ -10,13 +10,15 @@ from soothe_cli.tui.widgets.messages import AssistantMessage
 
 
 @pytest.mark.asyncio
-async def test_stop_stream_finalizes_markdown_stream() -> None:
+async def test_stop_stream_finalizes_markdown_stream_with_code_blocks() -> None:
+    """IG-426: Full markdown refresh only happens when content has fenced code blocks."""
     msg = AssistantMessage(id="asst-test")
     stream = MagicMock()
     stream.stop = AsyncMock()
     msg._stream = stream
-    msg._content = "Hello"
+    msg._content = "```python\nprint('hello')\n```"  # Content with code blocks
     msg._streaming_active = True
+    msg._render_markdown = True
     md = MagicMock()
     md.update = AsyncMock()
     msg._markdown = md
@@ -25,7 +27,28 @@ async def test_stop_stream_finalizes_markdown_stream() -> None:
 
     stream.stop.assert_awaited_once()
     assert msg._stream is None
-    md.update.assert_awaited_once_with("Hello")
+    md.update.assert_awaited_once_with("```python\nprint('hello')\n```")
+
+
+@pytest.mark.asyncio
+async def test_stop_stream_skips_full_refresh_without_code_blocks() -> None:
+    """IG-426: Optimization - skip expensive full markdown refresh when no code blocks."""
+    msg = AssistantMessage(id="asst-test")
+    stream = MagicMock()
+    stream.stop = AsyncMock()
+    msg._stream = stream
+    msg._content = "Hello"  # Plain text without code blocks
+    msg._streaming_active = True
+    msg._render_markdown = True
+    md = MagicMock()
+    md.update = AsyncMock()
+    msg._markdown = md
+
+    await msg.stop_stream()
+
+    stream.stop.assert_awaited_once()
+    assert msg._stream is None
+    md.update.assert_not_called()  # Optimization: no refresh for plain text
 
 
 @pytest.mark.asyncio

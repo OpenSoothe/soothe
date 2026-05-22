@@ -41,7 +41,13 @@ from soothe_cli.tui.preview_limits import (
     SKILL_CARD_PREVIEW_CHARS,
     SKILL_CARD_PREVIEW_LINES,
     STEP_CARD_SHOW_TOOL_ROW_DETAILS,
+    STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT,
     STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD,
+)
+from soothe_cli.tui.tool_display import (
+    format_step_tool_activity_command,
+    format_step_tool_activity_line,
+    format_step_tool_activity_status_tail,
 )
 from soothe_cli.tui.widgets._links import open_style_link
 from soothe_cli.tui.widgets.clipboard import (
@@ -1085,11 +1091,11 @@ class CognitionStepMessage(Vertical):
     """Agent-loop act step card: aggregates main-agent tool calls (IG-402).
 
     Header is the step description only. Task delegations render in a branch panel
-    (``Name(desc)`` plus nested tool lines with phase). Per-tool-kind counts of direct
-    main-agent tools appear on the footer status line via :meth:`_stats_title_suffix`
-    (e.g. ``Glob(10)``). The status line is always the last body line (running,
-    pending, completed, failed). Individual CLI-style tool rows are optional
-    (``STEP_CARD_SHOW_TOOL_ROW_DETAILS``). When tool rows are enabled and exceed
+    (``Name(desc)`` plus the latest tool activity lines and nested stats). Per-tool-kind
+    counts of direct main-agent tools appear on the footer status line via
+    :meth:`_stats_title_suffix` (e.g. ``Glob(10)``). The status line is always the last
+    body line (running, pending, completed, failed). Optional full tool lists use
+    ``STEP_CARD_SHOW_TOOL_ROW_DETAILS``. When full tool rows are enabled and exceed
     ``_STEP_TOOL_PREVIEW_ROWS``, click first folds or unfolds the tool list; otherwise
     click toggles whole-card collapse. Subagent notes and execute prose can
     auto-collapse the card body until the user expands it (a new ``set_running`` clears
@@ -1241,6 +1247,12 @@ class CognitionStepMessage(Vertical):
             n += 1
         if STEP_CARD_SHOW_TOOL_ROW_DETAILS:
             n += len(self._rows)
+        else:
+            for task_row in self._iter_task_delegation_rows():
+                child_rows = self._child_rows_for_task(task_row)
+                n += min(STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT, len(child_rows))
+            main_rows = self._main_agent_tool_rows_for_preview()
+            n += min(STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT, len(main_rows))
         buf = (self._execute_assistant_buffer or "").strip()
         if buf:
             n += len(buf.splitlines())
@@ -1447,14 +1459,56 @@ class CognitionStepMessage(Vertical):
         self._detail_widget.display = True
 
     def _has_task_activity_body(self) -> bool:
-        """True when the step card should show the task-activity tree panel.
-
-        Only show when sub agents are actually scheduled/executing, not when
-        step is merely queued/pending.
-        """
+        """True when the step card should show the task-activity tree panel."""
         if self._subagent_notes or self._subagent_notes_by_task:
             return True
-        return bool(self._iter_task_delegation_rows())
+        if self._iter_task_delegation_rows():
+            return True
+        return bool(self._main_agent_tool_rows_for_preview())
+
+    @staticmethod
+    def _latest_preview_rows(
+        rows: list[_StepToolRow],
+        limit: int = STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT,
+    ) -> list[_StepToolRow]:
+        """Return the most recently appended rows, capped at ``limit``."""
+        if not rows:
+            return []
+        if len(rows) <= limit:
+            return list(rows)
+        return rows[-limit:]
+
+    def _main_agent_tool_rows_for_preview(self) -> list[_StepToolRow]:
+        """Direct main-agent tool rows (excludes task delegations and subgraph tools)."""
+        return [r for r in self._rows if self._row_counts_for_step_status_line(r)]
+
+    def _append_tool_activity_lines(
+        self,
+        parts: list[object],
+        rows: list[_StepToolRow],
+        *,
+        gutter: str,
+        g: Any,
+        colors: Any,
+        animate_running: bool,
+    ) -> None:
+        """Append capped per-tool activity lines under a task or step branch."""
+        for row in rows:
+            if parts:
+                parts.append("\n")
+            phase = (row.phase or "pending").strip().lower()
+            icon = self._phase_icon(
+                row.phase or "pending",
+                g,
+                animate_running=animate_running and phase == "running",
+            )
+            command = format_step_tool_activity_command(row.tool_name, row.args or {})
+            tail = format_step_tool_activity_status_tail(
+                row.phase or "pending",
+                duration_ms=row.duration_ms,
+            )
+            tone = self._task_tool_row_tone(row, colors)
+            parts.append(Content.styled(f"{gutter}{icon} {command}{tail}", tone))
 
     def _task_delegation_dedupe_key(self, row: _StepToolRow) -> str:
         """Stable key for one main-graph task delegation (aliases share one branch)."""
@@ -1795,7 +1849,7 @@ class CognitionStepMessage(Vertical):
         return tcid
 
     def _step_task_activity_content(self) -> Content:
-        """Task delegations under the step title: ``Name(desc)`` and child tool stats."""
+        """Task delegations, latest tool activity lines, and notes under the step title."""
         g = get_glyphs()
         branch_gutter = f"{g.output_prefix} "
         child_gutter = f"{g.output_prefix}   "
@@ -1807,10 +1861,10 @@ class CognitionStepMessage(Vertical):
         first_block = True
 
         task_rows = self._iter_task_delegation_rows()
-        # Only show content when sub agents are actually scheduled/executing.
-        # Step queued/pending status is handled by _status_widget, not here.
-        if not task_rows:
-            return Content("")
+        main_preview = self._latest_preview_rows(self._main_agent_tool_rows_for_preview())
+        if not task_rows and not main_preview and not self._subagent_notes:
+            if not self._subagent_notes_by_task:
+                return Content("")
 
         for task_row in task_rows:
             if not first_block:
@@ -1831,6 +1885,17 @@ class CognitionStepMessage(Vertical):
                     task_tone if eff_phase != "pending" else colors.foreground,
                 )
             )
+
+            child_preview = self._latest_preview_rows(child_rows)
+            if child_preview:
+                self._append_tool_activity_lines(
+                    parts,
+                    child_preview,
+                    gutter=child_gutter,
+                    g=g,
+                    colors=colors,
+                    animate_running=eff_phase == "running",
+                )
 
             if child_rows:
                 line_body, line_tone = self._task_branch_status_line(
@@ -1874,6 +1939,19 @@ class CognitionStepMessage(Vertical):
                     continue
                 parts.append("\n")
                 parts.append(Content.styled(f"{child_gutter}{text}", colors.muted))
+
+        if main_preview:
+            if not first_block:
+                parts.append("\n")
+            first_block = False
+            self._append_tool_activity_lines(
+                parts,
+                main_preview,
+                gutter=branch_gutter,
+                g=g,
+                colors=colors,
+                animate_running=self._status == "running",
+            )
 
         for note in self._subagent_notes:
             t = (note or "").strip()
@@ -2000,9 +2078,27 @@ class CognitionStepMessage(Vertical):
         return f"{get_glyphs().output_prefix} "
 
     def _row_to_content(self, row: _StepToolRow) -> Content:
-        """Tool rows are not rendered in the TUI (stats-only tracking)."""
-        del row
-        return Content("")
+        """One CLI-style tool activity row for the optional full tools panel."""
+        g = get_glyphs()
+        gutter = f"{g.output_prefix} "
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
+        phase = (row.phase or "pending").strip().lower()
+        icon = self._phase_icon(
+            row.phase or "pending",
+            g,
+            animate_running=phase == "running",
+        )
+        body = format_step_tool_activity_line(
+            row.tool_name,
+            row.args or {},
+            row.phase or "pending",
+            duration_ms=row.duration_ms,
+        )
+        tone = self._task_tool_row_tone(row, colors)
+        return Content.styled(f"{gutter}{icon} {body}", tone)
 
     def _step_branched_execute_body(self, body: str, *, muted: bool = True) -> Content:
         """Streamed execute-phase prose: tree gutter per line."""
@@ -2281,8 +2377,7 @@ class CognitionStepMessage(Vertical):
         self._rebuild_tool_stats()
         self._refresh_header_title()
         self.request_tools_display_refresh(immediate=True)
-        if is_task_row or parent_tool_call_id:
-            self._refresh_task_activity_display()
+        self._refresh_task_activity_display()
         self._sync_running_status_line()
 
         self._promote_pending_to_running_if_needed()
@@ -2400,8 +2495,7 @@ class CognitionStepMessage(Vertical):
             return
         row.args = merged
         self._rebuild_tool_stats()
-        if row.is_task_row or is_step_level_task_tool_id(str(tool_call_id)):
-            self._refresh_task_activity_display()
+        self._refresh_task_activity_display()
         self._sync_running_status_line()
         self.request_tools_display_refresh()
 

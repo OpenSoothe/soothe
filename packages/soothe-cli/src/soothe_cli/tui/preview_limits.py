@@ -9,9 +9,13 @@ from __future__ import annotations
 from typing import Final
 
 # --- Step cognition cards (`CognitionStepMessage`) ---
-# When False, step cards track tools internally but show only per-kind counts on the
-# running status line (no per-tool rows in the card body).
+# When False, step cards show the latest N tool activity lines in the branch tree
+# (task + main-agent scopes) plus per-kind counts on the running status line.
+# When True, the full nested tool list also renders in `#step-cognition-tools`.
 STEP_CARD_SHOW_TOOL_ROW_DETAILS: Final[bool] = False
+
+# Latest per-tool invocation lines shown per scope (task branch vs main-agent branch).
+STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT: Final[int] = 3
 
 # When estimated body lines exceed this count, the card auto-collapses (strict `>`).
 STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD: Final[int] = 3
@@ -21,10 +25,10 @@ SKILL_CARD_PREVIEW_LINES: Final[int] = 4
 SKILL_CARD_PREVIEW_CHARS: Final[int] = 300
 
 # --- Write / edit / delete file change preview widgets (`file_change_preview`) ---
-TOOL_APPROVAL_PREVIEW_LINES: Final[int] = 15
+TOOL_APPROVAL_PREVIEW_LINES: Final[int] = 10
 TOOL_APPROVAL_VALUE_PREVIEW_CHARS: Final[int] = 200
-TOOL_APPROVAL_BODY_MAX_LINES: Final[int] = 15
-TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES: Final[int] = 15
+TOOL_APPROVAL_BODY_MAX_LINES: Final[int] = 10
+TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES: Final[int] = 10
 
 # --- Clipboard copy toast ---
 CLIPBOARD_TOAST_PREVIEW_CHARS: Final[int] = 40

@@ -97,9 +97,9 @@ def test_task_branch_child_line_shows_stats_and_running_status() -> None:
         parent_tool_call_id="ABC_01:s:task:0",
     )
     text = _plain(card._step_task_activity_content())
-    assert "Running..." in text
+    assert "Grep(x)" in text
+    assert text.index("Grep(x)") < text.index("Running...")
     assert "· Grep(1)" in text
-    assert " · running" not in text
 
 
 def test_pending_step_shows_branch_pending_without_task_rows() -> None:
@@ -259,3 +259,69 @@ def test_status_line_still_excludes_nested_task_tools() -> None:
     suffix = card._stats_title_suffix()
     assert "Grep(1)" in suffix
     assert "Glob" not in suffix
+
+
+def test_task_branch_shows_latest_three_child_tools_above_running() -> None:
+    card = CognitionStepMessage("ABC-01", "Scan", id="stp-child-preview")
+    card.add_tool_call(
+        "ABC_01:s:task:0",
+        "task",
+        {"subagent_type": "explore", "description": "scan"},
+        is_task_row=True,
+    )
+    for i in range(5):
+        card.add_tool_call(
+            f"ABC_01:t0:grep:{i}",
+            "grep",
+            {"pattern": f"p{i}"},
+            parent_tool_call_id="ABC_01:s:task:0",
+        )
+    card.set_running()
+    text = _plain(card._step_task_activity_content())
+    assert "Grep(p2)" in text
+    assert "Grep(p3)" in text
+    assert "Grep(p4)" in text
+    assert "Grep(p0)" not in text
+    assert "Grep(p1)" not in text
+    assert text.index("Grep(p4)") < text.index("Running...")
+
+
+def test_step_first_level_shows_latest_three_main_tools() -> None:
+    card = CognitionStepMessage("ABC-01", "Scan only", id="stp-main-preview")
+    for i in range(5):
+        card.add_tool_call(f"ABC_01:s:grep:{i}", "grep", {"pattern": f"m{i}"})
+    assert card._has_task_activity_body()
+    text = _plain(card._step_task_activity_content())
+    assert not text.startswith("\n")
+    assert "Grep(m2)" in text
+    assert "Grep(m3)" in text
+    assert "Grep(m4)" in text
+    assert "Grep(m0)" not in text
+    assert "Grep(m1)" not in text
+
+
+def test_combined_task_and_main_tools() -> None:
+    card = CognitionStepMessage("ABC-01", "Mixed", id="stp-mixed-preview")
+    card.add_tool_call(
+        "ABC_01:s:task:0",
+        "task",
+        {"subagent_type": "explore", "description": "scan repo"},
+        is_task_row=True,
+    )
+    for i in range(4):
+        card.add_tool_call(
+            f"ABC_01:t0:glob:{i}",
+            "glob",
+            {"pattern": f"t{i}"},
+            parent_tool_call_id="ABC_01:s:task:0",
+        )
+    for i in range(4):
+        card.add_tool_call(f"ABC_01:s:read_file:{i}", "read_file", {"file_path": f"/a{i}.py"})
+    card.set_running()
+    text = _plain(card._step_task_activity_content())
+    assert "Explore(scan repo)" in text
+    assert "Glob(t3)" in text
+    assert "Glob(t0)" not in text
+    assert "ReadFile" in text
+    assert text.index("Explore(scan repo)") < text.index("ReadFile")
+    assert "Glob(1)" in text or "Glob(4)" in text or "Glob(3)" in text

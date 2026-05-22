@@ -45,24 +45,25 @@ def _create_structured_runnable(
     strict: bool,
 ) -> Any:
     """Build a structured-output runnable, mirroring IntentClassifier method order."""
-    extra: dict[str, Any] = {"schema_name": schema_name, "strict": strict}
+    # Inject top-level title if missing (langchain requires it for function calling)
+    schema_with_title = dict(json_schema)
+    if "title" not in schema_with_title:
+        schema_with_title["title"] = schema_name
 
     for method in ("function_calling", None, "json_mode"):
-        for use_extra in (True, False):
-            try:
-                kwargs = extra if use_extra else {}
-                if method is None:
-                    return chat.with_structured_output(json_schema, **kwargs)
-                return chat.with_structured_output(json_schema, method=method, **kwargs)
-            except Exception:
-                if use_extra:
-                    logger.debug(
-                        "with_structured_output failed for method=%s (with schema hints)",
-                        method,
-                        exc_info=True,
-                    )
-                    continue
-                logger.debug("with_structured_output failed for method=%s", method, exc_info=True)
+        try:
+            kwargs: dict[str, Any] = {"strict": strict}
+            if method is None:
+                # json_mode doesn't support strict parameter
+                return chat.with_structured_output(schema_with_title)
+            return chat.with_structured_output(schema_with_title, method=method, **kwargs)
+        except Exception:
+            logger.debug(
+                "with_structured_output failed for method=%s",
+                method,
+                exc_info=True,
+            )
+            continue
 
     msg = "all structured output methods failed for the configured model"
     raise StructuredOutputError(msg)
