@@ -18,6 +18,7 @@ from soothe.config.env import (
     SOOTHE_HOME,
     _resolve_env,
     _resolve_provider_env,
+    default_soothe_workspace_dir,
 )
 from soothe.config.models import (
     AgentLoopConfig,
@@ -72,14 +73,14 @@ __all__ = [
     "_SIMPLE_SYSTEM_PROMPT",
     "_TOOL_ORCHESTRATION_GUIDE",
     "AgentLoopConfig",
-    "InfrastructureLimitsConfig",
     "AutonomousConfig",
     "AutopilotConfig",
     "ComplexityThresholds",
     "ConsoleLoggingConfig",
     "DurabilityProtocolConfig",
-    "HttpRequestsToolsConfig",
     "FileLoggingConfig",
+    "HttpRequestsToolsConfig",
+    "InfrastructureLimitsConfig",
     "MCPServerConfig",
     "MemUConfig",
     "ModelProviderConfig",
@@ -102,4 +103,5 @@ __all__ = [
     "WebSearchConfig",
     "_resolve_env",
     "_resolve_provider_env",
+    "default_soothe_workspace_dir",
 ]

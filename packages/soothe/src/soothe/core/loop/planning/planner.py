@@ -778,7 +778,7 @@ class LLMPlanner:
                 raise ValueError("StatusAssessment returned None")
 
             logger.debug(
-                "Assess: status=%s prog=%s",
+                "[Assess] status=%s prog=%s",
                 assessment.status,
                 assessment.goal_progress,
             )
@@ -899,7 +899,7 @@ class LLMPlanner:
                 raise ValueError("PlanGeneration returned None")
 
             logger.debug(
-                "Plan: action=%s steps=%d next=%s",
+                "[Plan] action=%s steps=%d next=%s",
                 plan_result.plan_action,
                 len(plan_result.steps)
                 if plan_result.plan_action == "new" and isinstance(plan_result.steps, list)
@@ -979,7 +979,7 @@ class LLMPlanner:
         # Use plan_result.next_action (concrete, actionable)
         action_text = plan_result.next_action.strip()
 
-        logger.debug("Plan action: %s", preview_first(action_text, chars=80))
+        logger.debug("[PlanAction] %s", preview_first(action_text, chars=80))
         decision = self._plan_generation_to_decision(plan_result)
 
         # Build final PlanResult

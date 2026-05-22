@@ -162,7 +162,12 @@ def parse_line_range_args(args: dict[str, Any]) -> tuple[int, int] | None:
         return None
     if isinstance(start, int) and isinstance(end, int):
         return start, end
-    if isinstance(start, float) and isinstance(end, float) and start.is_integer() and end.is_integer():
+    if (
+        isinstance(start, float)
+        and isinstance(end, float)
+        and start.is_integer()
+        and end.is_integer()
+    ):
         return int(start), int(end)
     return None
 
