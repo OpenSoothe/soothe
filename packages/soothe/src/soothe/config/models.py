@@ -353,8 +353,29 @@ class PersistenceConfig(BaseModel):
             "Shared AgentLoop persistence pool max_size per process (checkpoints DB). "
             "Thread pool mode: single daemon-level singleton shared by all threads (IG-406). "
             "Worker pool mode: each worker process creates its own singleton (not cross-process shared). "
-            "Default 4 suits worker_pool; thread_pool can use 12-30 for 200+ thread scenarios."
+            "Default 4 suits worker_pool; thread_pool typically uses max_pool_size + 2 (see daemon_config)."
         ),
+    )
+    postgres_pool_max_idle_seconds: float = Field(
+        default=120.0,
+        ge=10.0,
+        le=3600.0,
+        description=(
+            "Close idle PostgreSQL pool connections after this many seconds (psycopg max_idle). "
+            "Lower values return connections to PgBouncer faster under bursty load."
+        ),
+    )
+    postgres_pool_max_lifetime_seconds: float = Field(
+        default=1800.0,
+        ge=60.0,
+        le=86400.0,
+        description="Recycle pool connections after this many seconds (psycopg max_lifetime).",
+    )
+    postgres_pool_acquire_timeout_seconds: float = Field(
+        default=30.0,
+        ge=1.0,
+        le=300.0,
+        description="Seconds to wait for a free pool connection before PoolTimeout.",
     )
 
     # IG-055: Unified SQLite architecture (metadata.db + soothe_checkpoints.db)

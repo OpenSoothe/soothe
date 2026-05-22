@@ -467,6 +467,7 @@ class WebSocketClient:
         user_id: str | None = None,
         client_workspace_id: str | None = None,
         workspace: str | None = None,
+        is_ephemeral: bool = False,
         request_id: str | None = None,
     ) -> None:
         """Create new loop via daemon RPC (RFC-503 ``loop_new``).
@@ -478,6 +479,7 @@ class WebSocketClient:
             user_id: Optional user segment under ``$SOOTHE_HOME/workspaces/``.
             client_workspace_id: Optional stable scope when ``client_workspace`` is unset.
             workspace: Deprecated alias for ``client_workspace``.
+            is_ephemeral: When True, execution data is GC'd after idle period.
             request_id: Optional request correlation ID.
         """
         payload: dict[str, Any] = {"type": "loop_new"}
@@ -488,6 +490,8 @@ class WebSocketClient:
             payload["user_id"] = str(user_id).strip()
         if client_workspace_id and str(client_workspace_id).strip():
             payload["client_workspace_id"] = str(client_workspace_id).strip()
+        if is_ephemeral:
+            payload["is_ephemeral"] = True
         if request_id is not None:
             payload["request_id"] = request_id
         await self.send(payload)

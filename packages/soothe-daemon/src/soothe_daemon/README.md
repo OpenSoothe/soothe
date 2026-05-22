@@ -53,6 +53,25 @@ daemon **never** duplicates protocol, memory, or planning logic.
 | `singleton.py` | Single-instance enforcement |
 | `paths.py` | `pid_path()` — canonical PID file path |
 | `health/` | `HealthChecker` and per-category check implementations |
+| `persistence/` | PostgreSQL pool lifecycle, worker cleanup, pool sizing, persistence health |
+
+---
+
+## persistence/ subpackage
+
+Daemon-side persistence helpers (shared PostgreSQL pools, stale worker cleanup,
+pool sizing aligned with `thread_pool`, and `check_persistence` for doctor).
+
+```
+daemon/persistence/
+├── __init__.py           # Public exports
+├── pools.py              # Pre-open, idle release, periodic maintenance, shutdown
+├── pool_sizing.py        # recommended_*_pool_size helpers
+├── process_cleanup.py    # reap_stale_soothe_worker_processes
+└── health_check.py       # Persistence category for HealthChecker
+```
+
+CLI: `python -m soothe_daemon.persistence` (optional `--dry-run`).
 
 ---
 
@@ -70,7 +89,6 @@ daemon/health/
 └── checks/
     ├── config_check.py
     ├── daemon_check.py  # uses soothe_daemon.paths (pid_path)
-    ├── persistence_check.py
     ├── protocols_check.py
     ├── providers_check.py
     ├── vector_stores_check.py

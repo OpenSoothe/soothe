@@ -101,17 +101,9 @@ class LoopRunnerFactory:
 
         self._pool_initialized = False
 
-        # Close shared AgentLoop PostgreSQL pool (IG-406)
-        # Pool is shared across all threads/workers; close at daemon shutdown
-        try:
-            from soothe.core.loop.state.persistence.shared_pool import SharedPostgreSQLPool
+        from soothe_daemon.persistence.pools import close_shared_postgres_pools
 
-            await SharedPostgreSQLPool.close_shared_instance()
-            logger.info("LoopRunnerFactory: shared AgentLoop PostgreSQL pool shutdown")
-        except ImportError:
-            pass  # Module not available in some test contexts
-        except Exception:
-            logger.debug("Failed to close shared AgentLoop pool", exc_info=True)
+        await close_shared_postgres_pools()
 
     def create_runner(self, loop_id: str) -> LoopRunnerProtocol:
         """Return a runner instance for ``loop_id``."""

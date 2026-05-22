@@ -264,12 +264,15 @@ def build_daemon_config(
             "port": ws_p,
         }
 
+    fs_middleware = base_config.filesystem_middleware.model_copy(
+        update={"workspace_root": str(tmp_path / "workspace")}
+    )
     agent = SootheConfig(
         providers=base_config.providers,
         router=base_config.router,
         vector_stores=base_config.vector_stores,
         vector_store_router=base_config.vector_store_router,
-        workspace_dir=str(tmp_path / "workspace"),
+        filesystem_middleware=fs_middleware,
         persistence={"persist_dir": str(tmp_path / "persistence")},
         protocols={
             "memory": {"enabled": False},

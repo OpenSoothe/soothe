@@ -887,7 +887,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
             from soothe_cli.tui.model_config import save_loop_relative_time
 
             self.run_worker(
-                asyncio.to_loop(save_loop_relative_time, event.value),
+                asyncio.to_thread(save_loop_relative_time, event.value),
                 group="loop-selector-save",
             )
             self._schedule_list_rebuild()
@@ -911,7 +911,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         from soothe_cli.tui.model_config import save_loop_columns
 
         self.run_worker(
-            asyncio.to_loop(save_loop_columns, snapshot),
+            asyncio.to_thread(save_loop_columns, snapshot),
             group="loop-selector-save",
         )
         self._schedule_list_rebuild()
@@ -1055,7 +1055,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         loops = list(self._loops)
         sort_by_updated = self._sort_by_updated
 
-        filtered = await asyncio.to_loop(self._compute_filtered, query, loops, sort_by_updated)
+        filtered = await asyncio.to_thread(self._compute_filtered, query, loops, sort_by_updated)
         self._filtered_loops = filtered
         if query:
             self._selected_index = 0
@@ -1524,7 +1524,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         async def _save() -> None:
             from soothe_cli.tui.model_config import save_loop_sort_order
 
-            ok = await asyncio.to_loop(save_loop_sort_order, order)
+            ok = await asyncio.to_thread(save_loop_sort_order, order)
             if not ok:
                 self.app.notify("Could not save sort preference", severity="warning")
 

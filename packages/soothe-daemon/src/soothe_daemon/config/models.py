@@ -342,8 +342,31 @@ class ThreadPoolConfig(BaseModel):
         return max(self.min_pool_size, self.max_pool_size)
 
 
+class EphemeralLoopGcConfig(BaseModel):
+    """Background GC for idle ephemeral loops (IG-430)."""
+
+    enabled: bool = Field(default=True, description="Run periodic ephemeral loop GC")
+    interval_seconds: int = Field(
+        default=3600,
+        ge=60,
+        description="Seconds between GC scans",
+    )
+    idle_hours: int = Field(
+        default=24,
+        ge=1,
+        description="Purge ephemeral loops with no loop_input for this many hours",
+    )
+    batch_size: int = Field(
+        default=50,
+        ge=1,
+        le=500,
+        description="Maximum loops purged per GC tick",
+    )
+
+
 __all__ = [
     "DistributedConfig",
+    "EphemeralLoopGcConfig",
     "HttpRestConfig",
     "RayClusterConfig",
     "ThreadPoolConfig",

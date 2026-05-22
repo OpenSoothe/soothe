@@ -48,6 +48,15 @@ query_timeout_action: cancel         # Action on timeout: 'cancel' or 'terminate
 auto_cancel_on_startup: true         # Cancel stale queries from previous session
 
 # ============================================================================
+# EPHEMERAL LOOP GC - Purge idle ephemeral loops (loop_new is_ephemeral=true)
+# ============================================================================
+ephemeral_loop_gc:
+  enabled: true
+  interval_seconds: 3600             # Scan every hour
+  idle_hours: 24                     # No loop_input for 24h → eligible for purge
+  batch_size: 50
+
+# ============================================================================
 # OBSERVABILITY - Diagnostic metrics and logging
 # ============================================================================
 event_size_stats_enabled: true       # Track JSON wire-size distribution
@@ -79,9 +88,10 @@ event_size_stats_idle_pause_seconds: 120
 thread_pool:
   enabled: true
   min_pool_size: 2
-  max_pool_size: 8
-  idle_timeout_seconds: 300
-  max_requests_per_thread: 100
+  max_pool_size: 6
+  idle_timeout_seconds: 120
+  max_requests_per_thread: 50
+  # With thread_pool, set config persistence.agentloop_pool_size to about max_pool_size + 2.
   request_timeout_seconds: 0         # 0 = no per-request timeout
   thread_startup_timeout_seconds: 10
 

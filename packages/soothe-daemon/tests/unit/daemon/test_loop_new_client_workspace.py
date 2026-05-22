@@ -98,6 +98,36 @@ async def test_loop_new_persists_client_workspace(
 
 
 @pytest.mark.asyncio
+async def test_loop_new_persists_is_ephemeral(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``is_ephemeral`` on loop_new is stored in loop metadata."""
+    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+
+    from soothe.config import SootheConfig
+
+    config = SootheConfig()
+    daemon = _make_daemon_with_pm(config)
+    router = MessageRouter(daemon)
+
+    try:
+        await router._handle_loop_new(
+            client_id="client-1",
+            msg={"type": "loop_new", "is_ephemeral": True, "request_id": "rid-eph"},
+        )
+
+        response = daemon.sent[-1]
+        assert response.get("is_ephemeral") is True
+        loop_id = response["loop_id"]
+        metadata = await _read_metadata(loop_id, config)
+        assert metadata.get("is_ephemeral") is True
+        assert metadata.get("current_workspace")
+        assert metadata.get("last_message_at")
+    finally:
+        await daemon.close()
+
+
+@pytest.mark.asyncio
 async def test_loop_new_omits_client_workspace_when_invalid(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

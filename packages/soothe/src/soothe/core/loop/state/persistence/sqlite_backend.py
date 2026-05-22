@@ -27,6 +27,13 @@ T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
 
+_LOOP_COLUMN_MIGRATIONS: dict[str, str] = {
+    "client_workspace_id": "TEXT",
+    "is_ephemeral": "INTEGER NOT NULL DEFAULT 0",
+    "last_message_at": "TEXT",
+    "current_workspace": "TEXT",
+}
+
 
 class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
     """SQLite backend for AgentLoop checkpoint persistence.
@@ -177,7 +184,8 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             SELECT thread_ids, current_thread_id, status, created_at, updated_at,
                    total_goals_completed, total_thread_switches,
                    total_duration_ms, total_tokens_used, schema_version,
-                   client_workspace, detached_at
+                   client_workspace, detached_at, user_id, client_workspace_id,
+                   is_ephemeral, last_message_at, current_workspace
             FROM agentloop_loops WHERE loop_id = ?
         """,
             (loop_id,),
@@ -200,6 +208,11 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             "schema_version": row[9],
             "client_workspace": row[10],
             "detached_at": row[11],
+            "user_id": row[12],
+            "client_workspace_id": row[13],
+            "is_ephemeral": bool(row[14]) if row[14] is not None else False,
+            "last_message_at": row[15],
+            "current_workspace": row[16],
         }
 
     async def update_loop_metadata(self, loop_id: str, **fields: Any) -> None:
@@ -223,10 +236,15 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             "total_duration_ms",
             "total_tokens_used",
             "updated_at",
+            "is_ephemeral",
+            "last_message_at",
+            "current_workspace",
         }
         updates = {k: v for k, v in fields.items() if k in _allowed}
         if not updates:
             return
+        if "is_ephemeral" in updates:
+            updates["is_ephemeral"] = 1 if updates["is_ephemeral"] else 0
         if "thread_ids" in updates and isinstance(updates["thread_ids"], list):
             updates["thread_ids"] = json.dumps(updates["thread_ids"])
         updates.setdefault("updated_at", datetime.now(UTC).isoformat())
@@ -296,6 +314,78 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             }
             result.append(d)
         return result
+
+    async def touch_loop_last_message(self, loop_id: str) -> None:
+        """Record user turn activity for ephemeral loop TTL."""
+        now = datetime.now(UTC).isoformat()
+        await self.update_loop_metadata(loop_id, last_message_at=now, updated_at=now)
+
+    async def list_expired_ephemeral_loops(
+        self,
+        idle_before: datetime,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Return ephemeral loops idle since ``idle_before`` (excludes running)."""
+        idle_iso = idle_before.isoformat()
+        return await self._writer_to_thread(
+            self._list_expired_ephemeral_loops_sync,
+            idle_iso,
+            limit,
+        )
+
+    def _list_expired_ephemeral_loops_sync(
+        self,
+        conn: sqlite3.Connection,
+        idle_before_iso: str,
+        limit: int,
+    ) -> list[dict]:
+        """Sync list expired ephemeral loops."""
+        cursor = conn.execute(
+            """
+            SELECT loop_id, thread_ids, current_thread_id, status,
+                   client_workspace, current_workspace, user_id, client_workspace_id,
+                   last_message_at, created_at
+            FROM agentloop_loops
+            WHERE is_ephemeral = 1
+              AND status != 'running'
+              AND COALESCE(last_message_at, created_at) < ?
+            ORDER BY COALESCE(last_message_at, created_at) ASC
+            LIMIT ?
+            """,
+            (idle_before_iso, limit),
+        )
+        rows = cursor.fetchall()
+        result: list[dict] = []
+        for row in rows:
+            result.append(
+                {
+                    "loop_id": row[0],
+                    "thread_ids": json.loads(row[1]) if row[1] else [],
+                    "current_thread_id": row[2],
+                    "status": row[3],
+                    "client_workspace": row[4],
+                    "current_workspace": row[5],
+                    "user_id": row[6],
+                    "client_workspace_id": row[7],
+                    "last_message_at": row[8],
+                    "created_at": row[9],
+                    "is_ephemeral": True,
+                }
+            )
+        return result
+
+    async def purge_loop_execution_data(self, loop_id: str) -> None:
+        """Delete loop row and related execution tables (keeps workspace dirs)."""
+        await self._writer_to_thread(self._purge_loop_execution_data_sync, loop_id)
+
+    def _purge_loop_execution_data_sync(self, conn: sqlite3.Connection, loop_id: str) -> None:
+        """Sync purge loop execution data from SQLite."""
+        conn.execute("DELETE FROM checkpoint_anchors WHERE loop_id = ?", (loop_id,))
+        conn.execute("DELETE FROM failed_branches WHERE loop_id = ?", (loop_id,))
+        conn.execute("DELETE FROM goal_records WHERE loop_id = ?", (loop_id,))
+        conn.execute("DELETE FROM agentloop_loops WHERE loop_id = ?", (loop_id,))
+        conn.commit()
+        logger.info("Purged loop execution data from SQLite: loop=%s", loop_id)
 
     async def save_checkpoint_anchor(
         self,
@@ -772,6 +862,22 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
         logger.info("SQLite backend closed")
 
     @staticmethod
+    def _ensure_loop_columns(db: sqlite3.Connection) -> None:
+        """Add ephemeral-loop columns to existing ``agentloop_loops`` tables."""
+        cursor = db.execute("PRAGMA table_info(agentloop_loops)")
+        existing = {row[1] for row in cursor.fetchall()}
+        for col, typedef in _LOOP_COLUMN_MIGRATIONS.items():
+            if col not in existing:
+                db.execute(f"ALTER TABLE agentloop_loops ADD COLUMN {col} {typedef}")  # noqa: S608
+
+    @staticmethod
+    def _ensure_loop_columns_on_path(db_path: Path) -> None:
+        """Migrate ``agentloop_loops`` columns on an existing database file."""
+        with sqlite3.connect(db_path) as db:
+            SQLitePersistenceBackend._ensure_loop_columns(db)
+            db.commit()
+
+    @staticmethod
     def initialize_database_sync(db_path: Path) -> None:
         """Initialize SQLite database schema (synchronous version).
 
@@ -812,9 +918,15 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                     schema_version TEXT DEFAULT '3.1',
                     client_workspace TEXT,
                     detached_at TEXT,
-                    user_id TEXT
+                    user_id TEXT,
+                    client_workspace_id TEXT,
+                    is_ephemeral INTEGER NOT NULL DEFAULT 0,
+                    last_message_at TEXT,
+                    current_workspace TEXT
                 )
             """)
+
+            SQLitePersistenceBackend._ensure_loop_columns(db)
 
             # Create checkpoint_anchors table
             db.execute("""
@@ -960,7 +1072,11 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                     schema_version TEXT DEFAULT '3.1',
                     client_workspace TEXT,
                     detached_at TEXT,
-                    user_id TEXT
+                    user_id TEXT,
+                    client_workspace_id TEXT,
+                    is_ephemeral INTEGER NOT NULL DEFAULT 0,
+                    last_message_at TEXT,
+                    current_workspace TEXT
                 )
             """)
 
@@ -1065,6 +1181,8 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
             """)
 
             await db.commit()
+
+        SQLitePersistenceBackend._ensure_loop_columns_on_path(db_path)
 
         logger.info("Initialized SQLite database schema at %s", db_path)
 

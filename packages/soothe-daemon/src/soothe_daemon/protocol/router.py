@@ -638,7 +638,10 @@ class MessageRouter:
             "created_at": metadata.get("created_at", "unknown"),
             "updated_at": metadata.get("updated_at", "unknown"),
             "client_workspace": metadata.get("client_workspace"),
+            "current_workspace": metadata.get("current_workspace"),
             "detached_at": metadata.get("detached_at"),
+            "is_ephemeral": bool(metadata.get("is_ephemeral", False)),
+            "last_message_at": metadata.get("last_message_at"),
             "failed_branches": branches,
             "checkpoint_anchors": anchors,
         }
@@ -819,11 +822,7 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message with loop_id.
         """
-        import shutil
-
-        from soothe.core.loop.state.persistence.directory_manager import (
-            PersistenceDirectoryManager,
-        )
+        from soothe_daemon.loop_gc import purge_loop_fully
 
         d = self._daemon
         request_id = msg.get("request_id")
@@ -841,9 +840,8 @@ class MessageRouter:
             )
             return
 
-        # Check loop exists in DB
-        if not await self._ensure_loop_exists(loop_id):
-            # Already deleted or never existed
+        metadata = await d._persistence_manager.get_loop_metadata(loop_id)
+        if metadata is None:
             await d._send_client_message(
                 client_id,
                 {
@@ -855,72 +853,26 @@ class MessageRouter:
             )
             return
 
-        # Comprehensive in-memory cleanup before filesystem deletion
-        # 1. Cancel running queries for this loop
         try:
-            await d._query_engine.cancel_loop(loop_id)
-        except Exception:
-            logger.warning("Failed to cancel running queries for loop %s", loop_id, exc_info=True)
-
-        # 2. Unsubscribe all clients from this loop's topic
-        for cid in list(d._session_manager._sessions.keys()):
-            await d._session_manager.unsubscribe_loop(cid, loop_id)
-
-        # 3. Clean up LoopInputDispatcher queue/worker for this loop
-        await d._loop_input_dispatcher.cleanup_loop(loop_id)
-
-        # 4. Clean up ThreadStateRegistry entries for this loop
-        removed_threads = d._thread_registry.cleanup_loop(loop_id)
-
-        # 5. Clean up optional plugin session cache for removed threads (optional community package)
-        if removed_threads:
-            try:
-                from soothe_community.claude.session_bridge import cleanup_claude_sessions
-            except ImportError:
-                cleanup_claude_sessions = None  # type: ignore[assignment]
-            if cleanup_claude_sessions is not None:
-                cleanup_claude_sessions(removed_threads)
-
-        # Delete loop directory and database data (IG-246: comprehensive cleanup)
-        try:
-            import aiosqlite
-
-            # Delete filesystem directory (may not exist for DB-only loops)
-            loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
-            if loop_dir.exists():
-                shutil.rmtree(loop_dir)
-                logger.info("Deleted loop directory: %s", loop_id)
-
-            # Delete from SQLite (all 4 tables)
-            db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
-            if db_path.exists():
-                async with aiosqlite.connect(db_path) as db:
-                    await db.execute("DELETE FROM agentloop_loops WHERE loop_id = ?", (loop_id,))
-                    await db.execute("DELETE FROM checkpoint_anchors WHERE loop_id = ?", (loop_id,))
-                    await db.execute("DELETE FROM failed_branches WHERE loop_id = ?", (loop_id,))
-                    await db.execute("DELETE FROM goal_records WHERE loop_id = ?", (loop_id,))
-                    await db.commit()
-                    logger.info("Deleted loop %s from SQLite database", loop_id)
-
+            await purge_loop_fully(d, loop_id, metadata)
             response = {
                 "type": "loop_delete_response",
                 "request_id": request_id,
                 "success": True,
                 "message": f"Loop {loop_id} deleted successfully",
             }
-
             await d._send_client_message(client_id, response)
         except Exception as e:
             logger.error("Failed to delete loop %s: %s", loop_id, str(e))
-
-            response = {
-                "type": "loop_delete_response",
-                "request_id": request_id,
-                "success": False,
-                "message": f"Failed to delete loop: {str(e)}",
-            }
-
-            await d._send_client_message(client_id, response)
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "loop_delete_response",
+                    "request_id": request_id,
+                    "success": False,
+                    "message": f"Failed to delete loop: {str(e)}",
+                },
+            )
 
     async def _handle_loop_reattach(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle loop_reattach RPC request (RFC-411).
@@ -1106,14 +1058,17 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message; may contain optional ``workspace`` and ``user`` fields.
         """
+        from datetime import UTC, datetime
+
         from soothe.core.loop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
         )
-        from soothe.core.workspace import validate_client_workspace
+        from soothe.core.workspace import resolve_loop_workspace, validate_client_workspace
         from uuid_utils import uuid7
 
         d = self._daemon
         request_id = msg.get("request_id")
+        is_ephemeral = bool(msg.get("is_ephemeral", False))
 
         # Generate new loop_id
         loop_id = str(uuid7())
@@ -1144,6 +1099,30 @@ class MessageRouter:
             user = raw_user.strip()
             logger.info("[loop_new] Loop %s user identity: %s", loop_id, user)
 
+        raw_client_ws_id = msg.get("client_workspace_id")
+        client_workspace_id: str | None = None
+        if isinstance(raw_client_ws_id, str) and raw_client_ws_id.strip():
+            client_workspace_id = raw_client_ws_id.strip()
+
+        try:
+            resolved_workspace = resolve_loop_workspace(
+                loop_id=loop_id,
+                client_workspace=client_workspace,
+                user_id=user,
+                client_workspace_id=client_workspace_id,
+            )
+        except ValueError as e:
+            logger.warning(
+                "[loop_new] Loop %s workspace resolution failed (%s); using daemon workspace",
+                loop_id,
+                e,
+            )
+            from soothe.core.workspace import resolve_daemon_workspace
+
+            resolved_workspace = resolve_daemon_workspace()
+
+        now = datetime.now(UTC).isoformat()
+
         # Create loop directory (still needed for goals/ and working_memory/ subdirs)
         loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
         loop_dir.mkdir(parents=True, exist_ok=True)
@@ -1156,21 +1135,25 @@ class MessageRouter:
             status="created",
         )
 
-        # Store metadata
+        meta_updates: dict[str, Any] = {
+            "is_ephemeral": is_ephemeral,
+            "last_message_at": now,
+            "current_workspace": str(resolved_workspace),
+        }
         if client_workspace is not None:
-            await d._persistence_manager.update_loop_metadata(
-                loop_id, client_workspace=client_workspace
-            )
+            meta_updates["client_workspace"] = client_workspace
         if user is not None:
-            await d._persistence_manager.update_loop_metadata(loop_id, user_id=user)
+            meta_updates["user_id"] = user
+        if client_workspace_id is not None:
+            meta_updates["client_workspace_id"] = client_workspace_id
+        await d._persistence_manager.update_loop_metadata(loop_id, **meta_updates)
 
-        raw_client_ws_id = msg.get("client_workspace_id")
-        if isinstance(raw_client_ws_id, str) and raw_client_ws_id.strip():
-            await d._persistence_manager.update_loop_metadata(
-                loop_id, client_workspace_id=raw_client_ws_id.strip()
-            )
-
-        logger.info("Created new loop %s", loop_id)
+        logger.info(
+            "Created new loop %s (ephemeral=%s workspace=%s)",
+            loop_id,
+            is_ephemeral,
+            resolved_workspace,
+        )
 
         # Send response
         await d._send_client_message(
@@ -1179,6 +1162,7 @@ class MessageRouter:
                 "type": "loop_new_response",
                 "loop_id": loop_id,
                 "success": True,
+                "is_ephemeral": is_ephemeral,
                 "request_id": request_id,
             },
         )
@@ -1319,6 +1303,11 @@ class MessageRouter:
             queue_payload["attachments"] = attachments_for_queue
 
         await d._loop_input_dispatcher.enqueue(loop_id, queue_payload)
+
+        try:
+            await d._persistence_manager.touch_loop_last_message(loop_id)
+        except Exception:
+            logger.warning("Failed to update last_message_at for loop %s", loop_id, exc_info=True)
 
         await d._send_client_message(
             client_id,
