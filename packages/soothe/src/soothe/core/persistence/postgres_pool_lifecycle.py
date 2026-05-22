@@ -17,7 +17,7 @@ def postgres_pool_timing_from_config(config: SootheConfig) -> dict[str, Any]:
     """Shared psycopg pool timing options from ``PersistenceConfig`` (caller sets max_size)."""
     p = config.persistence
     return {
-        "min_size": 1,
+        "min_size": p.postgres_pool_min_size,
         "timeout": float(p.postgres_pool_acquire_timeout_seconds),
         "max_idle": float(p.postgres_pool_max_idle_seconds),
         "max_lifetime": float(p.postgres_pool_max_lifetime_seconds),

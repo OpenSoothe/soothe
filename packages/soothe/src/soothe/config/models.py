@@ -334,26 +334,35 @@ class PersistenceConfig(BaseModel):
 
     default_backend: Literal["postgresql", "sqlite"] = "sqlite"
 
+    postgres_pool_min_size: int = Field(
+        default=4,
+        ge=1,
+        le=32,
+        description=(
+            "psycopg ``AsyncConnectionPool`` min_size for shared LangGraph and AgentLoop pools. "
+            "Keeps warm connections ready under thread_pool load."
+        ),
+    )
     checkpointer_pool_size: int = Field(
-        default=2,
+        default=24,
         ge=1,
         le=64,
         description=(
             "LangGraph PostgreSQL checkpointer pool max_size per process. "
             "Worker pool mode: each worker process has its own pool (N workers × pool_size connections). "
             "Thread pool mode: pool is shared across threads (daemon-level singleton via IG-406). "
-            "Default 2 suits worker_pool mode; thread_pool can use 8-12 for higher concurrency."
+            "Default 24 with postgres_pool_min_size=4 suits thread_pool; lower for worker_pool."
         ),
     )
     agentloop_pool_size: int = Field(
-        default=4,
+        default=24,
         ge=1,
         le=128,
         description=(
             "Shared AgentLoop persistence pool max_size per process (checkpoints DB). "
             "Thread pool mode: single daemon-level singleton shared by all threads (IG-406). "
             "Worker pool mode: each worker process creates its own singleton (not cross-process shared). "
-            "Default 4 suits worker_pool; thread_pool typically uses max_pool_size + 2 (see daemon_config)."
+            "Default 24 with postgres_pool_min_size=4; tune with thread_pool concurrency if needed."
         ),
     )
     postgres_pool_max_idle_seconds: float = Field(
