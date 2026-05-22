@@ -1783,6 +1783,14 @@ class ChatInput(Vertical):
         self.clear_completion_suggestions()
         return True
 
+    def clear_input(self) -> None:
+        """Clear draft text, completion UI, and input mode without submitting."""
+        self.dismiss_completion()
+        self.exit_mode()
+        self._pending_submit_text = None
+        if self._text_area:
+            self._text_area.clear_text()
+
     def dismiss_completion(self) -> bool:
         """Dismiss completion: clear view and reset controller state.
 

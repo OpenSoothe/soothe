@@ -81,14 +81,14 @@ class TurnEventPipeline(Generic[T]):
                 except queue.Empty:
                     continue
                 if item is _SENTINEL:
-                    self._put_outbound(PRIORITY_HIGH, _SENTINEL)
+                    self._put_outbound(PRIORITY_LOW, _SENTINEL)
                     break
                 try:
                     prepared = process_fn(item)
                 except Exception as exc:
                     logger.exception("Turn chunk processor failed")
                     self._processor_error = exc
-                    self._put_outbound(PRIORITY_HIGH, _SENTINEL)
+                    self._put_outbound(PRIORITY_LOW, _SENTINEL)
                     break
                 if prepared is None:
                     continue
