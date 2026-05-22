@@ -10,20 +10,6 @@ from pathlib import Path
 SOOTHE_HOME: Path = Path(os.environ.get("SOOTHE_HOME", str(Path.home() / ".soothe"))).expanduser()
 """Default Soothe home directory. Overridable via ``SOOTHE_HOME`` env var."""
 
-
-def default_soothe_workspace_dir() -> str:
-    """Default install workspace directory (``$SOOTHE_HOME/Workspace``).
-
-    Used for ``SootheConfig.workspace_dir`` and daemon resolution when no
-    explicit path is configured (IG-327).
-
-    Returns:
-        Absolute path string (not necessarily created on disk yet).
-    """
-    # Tests patch ``SOOTHE_HOME`` to ``str`` via monkeypatch; normalize to Path.
-    return str(Path(SOOTHE_HOME).expanduser() / "Workspace")
-
-
 _ENV_VAR_RE = re.compile(r"^\$\{(\w+)\}$")
 
 _logger = logging.getLogger(__name__)

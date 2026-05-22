@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
-from soothe.config.env import _resolve_env, _resolve_provider_env, default_soothe_workspace_dir
+from soothe.config.env import _resolve_env, _resolve_provider_env
 from soothe.config.models import (
     AgentLoopConfig,
     AutonomousConfig,
@@ -236,14 +236,6 @@ class SootheConfig(BaseSettings):
         self.subagents = builtin_subagents
         return self
 
-    @model_validator(mode="after")
-    def _coerce_legacy_workspace_dir(self) -> SootheConfig:
-        """Map legacy empty/`.` workspace to install default (IG-327)."""
-        wd = (self.workspace_dir or "").strip()
-        if not wd or wd == ".":
-            self.workspace_dir = default_soothe_workspace_dir()
-        return self
-
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     """Tool group configurations. Each tool can be enabled/disabled and configured."""
 
@@ -258,9 +250,6 @@ class SootheConfig(BaseSettings):
 
     memory: list[str] = Field(default_factory=list)
     """AGENTS.md file paths passed to deepagents MemoryMiddleware."""
-
-    workspace_dir: str = Field(default_factory=default_soothe_workspace_dir)
-    """Root directory for filesystem operations. Defaults to ``$SOOTHE_HOME/Workspace`` (IG-327)."""
 
     debug: bool = False
     """Enable debug mode for the underlying LangGraph agent."""

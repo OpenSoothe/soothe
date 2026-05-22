@@ -52,9 +52,10 @@ class FrameworkFilesystem:
             Initialized FilesystemBackend instance (workspace-aware wrapper).
         """
         from soothe.core.workspace.backend import WorkspaceAwareBackend
-        from soothe.utils import expand_path
+        from soothe.core.workspace.resolution import resolve_daemon_workspace
 
-        resolved_workspace = expand_path(config.workspace_dir)
+        # Use daemon workspace (TEMP unless SOOTHE_WORKSPACE set) as default
+        resolved_workspace = resolve_daemon_workspace()
 
         # virtual_mode semantics (documented clearly, not as a "bug"):
         # - True: All paths treated as virtual under root_dir (sandboxed)

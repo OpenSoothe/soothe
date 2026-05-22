@@ -7,7 +7,7 @@ from pathlib import Path
 from soothe.core.workspace import ResolvedWorkspace, resolve_workspace_for_stream
 
 
-def test_resolve_prefers_explicit_over_thread_and_config(tmp_path: Path, monkeypatch) -> None:
+def test_resolve_prefers_explicit_over_thread_and_daemon(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     explicit = tmp_path / "a"
     explicit.mkdir()
@@ -16,7 +16,7 @@ def test_resolve_prefers_explicit_over_thread_and_config(tmp_path: Path, monkeyp
     r = resolve_workspace_for_stream(
         explicit=str(explicit),
         thread_workspace=str(thread),
-        config_workspace_dir=str(tmp_path),
+        installation_default=str(tmp_path),
     )
     assert r.source == "explicit"
     assert Path(r.path).resolve() == explicit.resolve()
@@ -40,19 +40,9 @@ def test_resolve_daemon_default_when_no_thread(tmp_path: Path, monkeypatch) -> N
     default.mkdir()
     r = resolve_workspace_for_stream(
         installation_default=str(default),
-        config_workspace_dir=str(tmp_path),
     )
     assert r.source == "daemon_default"
     assert Path(r.path).resolve() == default.resolve()
-
-
-def test_resolve_config_when_no_higher_priority(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    cfg_dir = tmp_path / "from_config"
-    cfg_dir.mkdir()
-    r = resolve_workspace_for_stream(config_workspace_dir=str(cfg_dir))
-    assert r.source == "config"
-    assert Path(r.path).resolve() == cfg_dir.resolve()
 
 
 def test_resolve_cwd_when_nothing_else(tmp_path: Path, monkeypatch) -> None:
@@ -74,6 +64,6 @@ def test_blank_explicit_falls_through(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_frozen_dataclass() -> None:
-    w = ResolvedWorkspace(path="/tmp", source="config")
+    w = ResolvedWorkspace(path="/tmp", source="daemon_default")
     assert w.path == "/tmp"
-    assert w.source == "config"
+    assert w.source == "daemon_default"

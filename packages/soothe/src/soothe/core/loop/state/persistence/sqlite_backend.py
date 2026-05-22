@@ -809,7 +809,8 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                     updated_at TEXT NOT NULL,
                     schema_version TEXT DEFAULT '3.1',
                     client_workspace TEXT,
-                    detached_at TEXT
+                    detached_at TEXT,
+                    user_id TEXT
                 )
             """)
 
@@ -956,7 +957,8 @@ class SQLitePersistenceBackend(AgentLoopPersistenceBackend):
                     updated_at TEXT NOT NULL,
                     schema_version TEXT DEFAULT '3.1',
                     client_workspace TEXT,
-                    detached_at TEXT
+                    detached_at TEXT,
+                    user_id TEXT
                 )
             """)
 
