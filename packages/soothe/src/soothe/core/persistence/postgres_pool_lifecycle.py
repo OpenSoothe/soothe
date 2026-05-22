@@ -13,11 +13,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def postgres_pool_timing_from_config(config: SootheConfig) -> dict[str, Any]:
-    """Shared psycopg pool timing options from ``PersistenceConfig`` (caller sets max_size)."""
+def postgres_pool_timing_from_config(
+    config: SootheConfig,
+    *,
+    max_size: int | None = None,
+) -> dict[str, Any]:
+    """Shared psycopg pool timing options from ``PersistenceConfig`` (caller sets max_size).
+
+    When *max_size* is given, ``min_size`` is capped so psycopg's ``max_size >= min_size`` holds
+    (e.g. small ``checkpointer_pool_size`` in tests or worker_pool tuning).
+    """
     p = config.persistence
+    min_size = p.postgres_pool_min_size
+    if max_size is not None:
+        min_size = min(min_size, max_size)
     return {
-        "min_size": p.postgres_pool_min_size,
+        "min_size": min_size,
         "timeout": float(p.postgres_pool_acquire_timeout_seconds),
         "max_idle": float(p.postgres_pool_max_idle_seconds),
         "max_lifetime": float(p.postgres_pool_max_lifetime_seconds),
