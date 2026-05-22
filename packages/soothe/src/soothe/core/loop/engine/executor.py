@@ -51,6 +51,11 @@ from soothe.core.loop.engine.predecessor_branch_context import (
     predecessor_execute_messages_for_branch,
     transitive_dependency_step_ids,
 )
+from soothe.core.loop.engine.tool_call_args import (
+    ToolCallArgsCollector,
+    format_args_for_log,
+    wire_updates_from_ai_message,
+)
 from soothe.core.loop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -142,6 +147,9 @@ _TASK_KWARG_DESC_KEYS = ("description", "prompt", "task", "instruction")
 def _coerce_tool_call_args_mapping(raw: Any) -> dict[str, Any]:
     """Normalize tool-call ``args`` to a dict when possible."""
     if isinstance(raw, dict):
+        inp = raw.get("input")
+        if isinstance(inp, dict) and inp:
+            return dict(inp)
         return dict(raw)
     if isinstance(raw, str) and raw.strip():
         try:
@@ -171,85 +179,6 @@ def _chunk_args_dict(chunk: dict[str, Any]) -> dict[str, Any]:
     if isinstance(cargs, str) and cargs.strip():
         return _coerce_tool_call_args_mapping(cargs)
     return {}
-
-
-def _tool_call_update_custom_events_from_ai_message(msg: BaseMessage) -> list[dict[str, Any]]:
-    """Build ``soothe.stream.tool_call.update`` payloads from a post-backfill AI message."""
-    from langchain_core.messages import AIMessage, AIMessageChunk
-    from soothe_sdk.ux.stream_tool_wire import tool_call_update_event
-
-    if not isinstance(msg, (AIMessage, AIMessageChunk)):
-        return []
-    out: list[dict[str, Any]] = []
-    seen: set[str] = set()
-
-    def _append(tid: str, name: str, args: dict[str, Any]) -> None:
-        key = tid.strip()
-        if not key or key in seen or not args:
-            return
-        seen.add(key)
-        out.append(
-            tool_call_update_event(
-                tool_call_id=key,
-                name=name.strip() or "tool",
-                args=dict(args),
-            )
-        )
-
-    for tc in getattr(msg, "tool_calls", None) or []:
-        if not isinstance(tc, dict):
-            continue
-        tid = str(tc.get("id") or "").strip()
-        args = _coerce_tool_call_args_mapping(tc.get("args"))
-        if args:
-            _append(tid, str(tc.get("name") or ""), args)
-
-    for ch in getattr(msg, "tool_call_chunks", None) or []:
-        if not isinstance(ch, dict):
-            continue
-        tid = str(ch.get("id") or "").strip()
-        if not tid or tid in seen:
-            continue
-        args = _chunk_args_dict(ch)
-        if args:
-            _append(tid, str(ch.get("name") or ""), args)
-
-    return out
-
-
-def _record_tool_call_args_by_id(
-    msg: BaseMessage,
-    dest: dict[str, dict[str, Any]],
-) -> None:
-    """Merge tool-call kwargs into *dest* keyed by tool_call_id (later writes win)."""
-    if not isinstance(msg, (AIMessage, AIMessageChunk)):
-        return
-    filled = _backfill_tool_calls_args_from_chunks(msg)
-    for tc in getattr(filled, "tool_calls", None) or []:
-        if not isinstance(tc, dict):
-            continue
-        tid = str(tc.get("id") or "").strip()
-        args = _coerce_tool_call_args_mapping(tc.get("args"))
-        if tid and args:
-            dest[tid] = args
-    for ch in getattr(filled, "tool_call_chunks", None) or []:
-        if not isinstance(ch, dict):
-            continue
-        tid = str(ch.get("id") or "").strip()
-        args = _chunk_args_dict(ch)
-        if tid and args:
-            dest[tid] = args
-
-
-def _format_tool_call_args_for_log(args: dict[str, Any], *, max_chars: int = 500) -> str:
-    """Serialize tool kwargs for debug logs (truncated)."""
-    if not args:
-        return "{}"
-    try:
-        text = json.dumps(args, ensure_ascii=False, default=str)
-    except (TypeError, ValueError):
-        text = str(args)
-    return log_preview(text, chars=max_chars)
 
 
 def _backfill_tool_calls_args_from_chunks(msg: BaseMessage) -> BaseMessage:
@@ -434,7 +363,6 @@ def _stringify_tool_call_chunk_args_on_message(msg: BaseMessage) -> BaseMessage:
     chunks = getattr(msg, "tool_call_chunks", None) or []
     if not chunks:
         return msg
-    import json
 
     changed = False
     new_chunks: list[Any] = []
@@ -2280,7 +2208,7 @@ class Executor:
         messages: list[BaseMessage] = []  # IG-151: Collect messages for token extraction
         delegate_task_final_parts: list[str] = []
         delegate_task_ids_seen: set[str] = set()
-        tool_args_by_call_id: dict[str, dict[str, Any]] = {}
+        tool_args = ToolCallArgsCollector()
 
         # RFC-211: Collect per-tool outcome metadata (structured, no filesystem cache; IG-387)
         outcomes: list[dict] = []
@@ -2307,10 +2235,12 @@ class Executor:
 
         async for chunk in stream:
             stream_chunk_count += 1
+            stream_ns: tuple[str, ...] = ()
 
             # Handle tuple format (namespace, mode, data) - deepagents canonical
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                 _ns_chunk, mode_chunk, data_chunk = chunk
+                stream_ns = _ns_chunk if _ns_chunk else ()
                 # IG-416: Unify message tool_call_ids for client row/result matching.
                 emit_chunk = chunk
                 tool_update_events: list[dict[str, Any]] = []
@@ -2327,6 +2257,12 @@ class Executor:
                         rewritten_msg = _rewrite_tool_call_ids_to_unified(
                             filled_msg, step_id, task_idx=task_idx
                         )
+                        tool_args.record_ai_pair(
+                            filled_msg,
+                            rewritten_msg,
+                            step_id=step_id,
+                            task_idx=task_idx,
+                        )
                         enriched_msg = _enrich_execute_step_task_kwargs_on_message(
                             rewritten_msg,
                             step_description=step_description,
@@ -2336,12 +2272,12 @@ class Executor:
                         wire_msg = _stringify_tool_call_chunk_args_on_message(enriched_msg)
                         if wire_msg is not msg0:
                             emit_chunk = (_ns_chunk, mode_chunk, (wire_msg, data_chunk[1]))
-                        tool_update_events = _tool_call_update_custom_events_from_ai_message(
-                            enriched_msg
-                        )
+                        tool_update_events = wire_updates_from_ai_message(enriched_msg)
                     elif isinstance(msg0, ToolMessage):
-                        modified_msg = _rewrite_tool_message_tool_call_id(
-                            msg0, step_id, task_idx=task_idx
+                        modified_msg, tool_update_events = tool_args.promote_tool_message(
+                            msg0,
+                            step_id=step_id,
+                            task_idx=task_idx,
                         )
                         if modified_msg is not msg0:
                             emit_chunk = (_ns_chunk, mode_chunk, (modified_msg, data_chunk[1]))
@@ -2392,13 +2328,13 @@ class Executor:
                                 clipped = clipped[:_DELEGATE_FINAL_PER_TASK_CAP]
                             delegate_task_final_parts.append(clipped)
 
-                    logged_args = tool_args_by_call_id.get(tool_call_id or "", {})
+                    logged_args = tool_args.lookup(tool_call_id or "")
                     logger.debug(
                         "[Tool#%d] %s(%s) args=%s → %s, %dB",
                         tool_call_count,
                         tool_name,
                         tool_call_id,
-                        _format_tool_call_args_for_log(logged_args),
+                        format_args_for_log(logged_args),
                         outcome.get("type", "unknown"),
                         outcome.get("size_bytes", 0),
                     )
@@ -2415,13 +2351,25 @@ class Executor:
                             stop_act_stream = True
                             break
                 elif isinstance(msg, AIMessageChunk):
-                    _record_tool_call_args_by_id(msg, tool_args_by_call_id)
+                    if not step_id:
+                        tool_args.record_ai_pair(
+                            msg,
+                            msg,
+                            step_id="",
+                            task_idx=0 if stream_ns else None,
+                        )
                     messages.append(msg)  # Collect chunks for assistant text extraction
                     t = extract_text_from_message_content(msg.content)
                     if t:
                         chunks.append(t)
                 elif isinstance(msg, AIMessage):
-                    _record_tool_call_args_by_id(msg, tool_args_by_call_id)
+                    if not step_id:
+                        tool_args.record_ai_pair(
+                            msg,
+                            msg,
+                            step_id="",
+                            task_idx=0 if stream_ns else None,
+                        )
                     messages.append(msg)
                     t = extract_text_from_message_content(msg.content)
                     if t:
@@ -2445,24 +2393,9 @@ class Executor:
                     body_preview,
                 )
                 if tcid and tname != "task":
-                    from soothe_sdk.ux.stream_tool_wire import tool_call_update_event
-                    from soothe_sdk.ux.task_namespace import is_unified_tool_call_id
-
-                    if is_unified_tool_call_id(tcid):
-                        args = dict(tool_args_by_call_id.get(tcid) or {})
-                        if not args:
-                            args = {"_subgraph_tool": True}
-                        if args:
-                            subgraph_tool_updates.append(
-                                (
-                                    ns_tuple,
-                                    tool_call_update_event(
-                                        tool_call_id=tcid,
-                                        name=tname,
-                                        args=args,
-                                    ),
-                                )
-                            )
+                    tool_ev = tool_args.subgraph_placeholder_update(tcid, tname)
+                    if tool_ev is not None:
+                        subgraph_tool_updates.append((ns_tuple, tool_ev))
             for ns_tuple, tool_ev in subgraph_tool_updates:
                 yield None, (ns_tuple, "custom", tool_ev), 0, [], "", []
 

@@ -8,11 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
-from soothe.core.loop.engine.executor import (
-    Executor,
-    _format_tool_call_args_for_log,
-    _record_tool_call_args_by_id,
-)
+from soothe.core.loop.engine.executor import Executor
 
 
 @pytest.mark.asyncio
@@ -504,28 +500,144 @@ async def test_stream_and_collect_rewrites_root_tool_message_to_unified_id() -> 
     assert msg.tool_call_id == "GHT_01:s:grep:0"
 
 
-def test_format_tool_call_args_for_log_truncates_long_payload() -> None:
-    args = {"command": "x" * 600}
-    preview = _format_tool_call_args_for_log(args, max_chars=80)
-    assert preview.endswith("...")
-    assert len(preview) <= 83
+@pytest.mark.asyncio
+async def test_stream_and_collect_logs_tool_call_args_from_index_chunk(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Tool kwargs from index-only chunks appear in debug logs after id rewrite."""
+    from langchain_core.messages import AIMessageChunk
 
-
-def test_record_tool_call_args_by_id_backfills_from_chunks() -> None:
-    msg = AIMessage(
+    ai = AIMessageChunk(
         content="",
-        tool_calls=[{"id": "call_1", "name": "grep", "args": {}}],
         tool_call_chunks=[
             {
-                "id": "call_1",
-                "name": "grep",
-                "args": '{"pattern": "foo", "path": "."}',
-            }
+                "index": 0,
+                "name": "read_file",
+                "args": '{"file_path": "/tmp/foo.txt"}',
+            },
         ],
     )
-    dest: dict = {}
-    _record_tool_call_args_by_id(msg, dest)
-    assert dest["call_1"] == {"pattern": "foo", "path": "."}
+    tool_msg = ToolMessage(
+        content="hello",
+        tool_call_id="functions.read_file:0",
+        name="read_file",
+    )
+
+    async def fake_stream():
+        yield ((), "messages", (ai, {}))
+        yield ((), "messages", (tool_msg, {}))
+
+    executor = Executor(MagicMock())
+    caplog.set_level(logging.DEBUG, logger="soothe.core.loop.engine.executor")
+    async for _row in executor._stream_and_collect(
+        fake_stream(),
+        budget=None,
+        step_id="STP-01",
+    ):
+        pass
+
+    assert any(
+        "read_file" in rec.message and "file_path" in rec.message and "/tmp/foo.txt" in rec.message
+        for rec in caplog.records
+        if rec.levelname == "DEBUG" and "[Tool#" in rec.message
+    )
+
+
+@pytest.mark.asyncio
+async def test_stream_and_collect_emits_late_tool_call_update_on_tool_message() -> None:
+    """Wire update is emitted on ToolMessage when args were recorded from index chunks."""
+    from langchain_core.messages import AIMessageChunk
+    from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
+
+    ai = AIMessageChunk(
+        content="",
+        tool_call_chunks=[
+            {
+                "index": 3,
+                "name": "edit_file",
+                "args": '{"file_path": "README.md"}',
+            },
+        ],
+    )
+    tool_msg = ToolMessage(
+        content="ok",
+        tool_call_id="functions.edit_file:3",
+        name="edit_file",
+    )
+
+    async def fake_stream():
+        yield ((), "messages", (ai, {}))
+        yield ((), "messages", (tool_msg, {}))
+
+    executor = Executor(MagicMock())
+    custom_payloads: list[dict] = []
+    async for _out, event, _tc, _msgs, _df, _outcomes in executor._stream_and_collect(
+        fake_stream(),
+        budget=None,
+        step_id="YJH-01",
+    ):
+        if isinstance(event, tuple) and len(event) == 3 and event[1] == "custom":  # noqa: PLR2004
+            data = event[2]
+            if isinstance(data, dict):
+                custom_payloads.append(data)
+
+    assert any(
+        p.get("type") == STREAM_TOOL_CALL_UPDATE
+        and p.get("tool_call_id") == "YJH_01:s:edit_file:3"
+        and p.get("args", {}).get("file_path") == "README.md"
+        for p in custom_payloads
+    )
+
+
+@pytest.mark.asyncio
+async def test_stream_and_collect_logs_tool_call_args_from_invocation_registry(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Tool kwargs come from middleware invocation registry when stream has no AI chunks."""
+    from langchain.agents.middleware.types import ToolCallRequest
+
+    from soothe.middleware.tool_call_args_registry import (
+        get_recorded_tool_call_args,
+        record_tool_call_args_from_request,
+    )
+    from soothe.middleware.tool_concurrency import init_tool_concurrency_for_thread
+
+    init_tool_concurrency_for_thread(limit=5)
+    registry_key = "functions.read_file:0"
+    record_tool_call_args_from_request(
+        ToolCallRequest(
+            tool_call={
+                "id": registry_key,
+                "name": "read_file",
+                "args": {"file_path": "/tmp/foo.txt"},
+            }
+        )
+    )
+
+    tool_msg = ToolMessage(
+        content="hello",
+        tool_call_id=registry_key,
+        name="read_file",
+    )
+
+    async def fake_stream():
+        yield ((), "messages", (tool_msg, {}))
+
+    executor = Executor(MagicMock())
+    caplog.set_level(logging.DEBUG, logger="soothe.core.loop.engine.executor")
+    async for _row in executor._stream_and_collect(
+        fake_stream(),
+        budget=None,
+        step_id="STP-01",
+    ):
+        pass
+
+    assert get_recorded_tool_call_args(registry_key)["file_path"] == "/tmp/foo.txt"
+    assert any(
+        "read_file" in rec.message and "file_path" in rec.message and "/tmp/foo.txt" in rec.message
+        for rec in caplog.records
+        if rec.levelname == "DEBUG" and "[Tool#" in rec.message
+    )
 
 
 @pytest.mark.asyncio
