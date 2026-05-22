@@ -18,6 +18,9 @@ from typing import TYPE_CHECKING, Any
 
 from psycopg_pool import AsyncConnectionPool
 
+from soothe.core.loop.state.persistence.postgres_schema import (
+    initialize_agentloop_postgres_schema,
+)
 from soothe.core.persistence.postgres_pool_lifecycle import (
     apply_row_factory,
     close_async_pool,
@@ -113,145 +116,8 @@ class SharedPostgreSQLPool:
             return self._pool
 
     async def _initialize_schema(self, pool: AsyncConnectionPool) -> None:
-        """Create AgentLoop checkpoint tables if not exist.
-
-        Schema matches PostgreSQLPersistenceBackend._initialize_schema()
-        for compatibility with existing backend operations.
-
-        Args:
-            pool: Connection pool to use for schema creation.
-        """
-        async with pool.connection() as conn:
-            async with conn.cursor() as cur:
-                # Create agentloop_checkpoints table
-                await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS agentloop_checkpoints (
-                        loop_id TEXT PRIMARY KEY,
-                        thread_id TEXT NOT NULL,
-                        status TEXT NOT NULL,
-                        created_at TIMESTAMPTZ DEFAULT NOW(),
-                        updated_at TIMESTAMPTZ DEFAULT NOW(),
-                        checkpoint_data JSONB NOT NULL
-                    )
-                """)
-
-                # Create indexes
-                await cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_agentloop_checkpoints_thread_id
-                    ON agentloop_checkpoints(thread_id)
-                """)
-                await cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_agentloop_checkpoints_status
-                    ON agentloop_checkpoints(status)
-                """)
-                await cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_agentloop_checkpoints_updated_at
-                    ON agentloop_checkpoints(updated_at DESC)
-                """)
-
-                # Create checkpoint_anchors table
-                await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS checkpoint_anchors (
-                        anchor_id SERIAL PRIMARY KEY,
-                        loop_id TEXT NOT NULL,
-                        iteration INTEGER NOT NULL,
-                        thread_id TEXT NOT NULL,
-                        checkpoint_id TEXT NOT NULL,
-                        checkpoint_ns TEXT DEFAULT '',
-                        anchor_type TEXT NOT NULL,
-                        timestamp TIMESTAMPTZ NOT NULL,
-                        iteration_status TEXT,
-                        next_action_summary TEXT,
-                        tools_executed JSONB,
-                        reasoning_decision TEXT,
-                        FOREIGN KEY (loop_id) REFERENCES agentloop_checkpoints(loop_id),
-                        UNIQUE(loop_id, iteration, anchor_type)
-                    )
-                """)
-
-                # Create indexes for checkpoint_anchors
-                await cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_anchors_loop_iteration
-                    ON checkpoint_anchors(loop_id, iteration)
-                """)
-                await cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_anchors_thread
-                    ON checkpoint_anchors(thread_id)
-                """)
-                await cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_anchors_loop_thread
-                    ON checkpoint_anchors(loop_id, thread_id)
-                """)
-
-                # Create failed_branches table
-                await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS failed_branches (
-                        branch_id TEXT PRIMARY KEY,
-                        loop_id TEXT NOT NULL,
-                        iteration INTEGER NOT NULL,
-                        thread_id TEXT NOT NULL,
-                        root_checkpoint_id TEXT NOT NULL,
-                        failure_checkpoint_id TEXT NOT NULL,
-                        failure_reason TEXT NOT NULL,
-                        execution_path JSONB NOT NULL,
-                        failure_insights JSONB,
-                        avoid_patterns JSONB,
-                        suggested_adjustments JSONB,
-                        created_at TIMESTAMPTZ NOT NULL,
-                        analyzed_at TIMESTAMPTZ,
-                        pruned_at TIMESTAMPTZ,
-                        FOREIGN KEY (loop_id) REFERENCES agentloop_checkpoints(loop_id)
-                    )
-                """)
-
-                # Create indexes for failed_branches
-                await cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_branches_loop
-                    ON failed_branches(loop_id)
-                """)
-                await cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_branches_thread
-                    ON failed_branches(thread_id)
-                """)
-                await cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_branches_iteration
-                    ON failed_branches(loop_id, iteration)
-                """)
-
-                # Create goal_records table
-                await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS goal_records (
-                        goal_id TEXT PRIMARY KEY,
-                        loop_id TEXT NOT NULL,
-                        goal_text TEXT NOT NULL,
-                        thread_id TEXT NOT NULL,
-                        iteration INTEGER NOT NULL,
-                        status TEXT NOT NULL,
-                        reason_history JSONB,
-                        act_history JSONB,
-                        goal_completion TEXT,
-                        evidence_summary TEXT,
-                        duration_ms INTEGER DEFAULT 0,
-                        tokens_used INTEGER DEFAULT 0,
-                        started_at TIMESTAMPTZ NOT NULL,
-                        completed_at TIMESTAMPTZ,
-                        FOREIGN KEY (loop_id) REFERENCES agentloop_checkpoints(loop_id)
-                    )
-                """)
-
-                # Create indexes for goal_records
-                await cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_goals_loop
-                    ON goal_records(loop_id)
-                """)
-                await cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_goals_thread
-                    ON goal_records(thread_id)
-                """)
-
-                logger.info(
-                    "Shared PostgreSQL schema initialized (4 tables: checkpoints, anchors, branches, goals)"
-                )
+        """Recreate AgentLoop tables using the canonical PostgreSQL schema."""
+        await initialize_agentloop_postgres_schema(pool)
 
     async def release_idle_connections(self) -> None:
         """Return idle connections to PgBouncer (``Pool.check``)."""
