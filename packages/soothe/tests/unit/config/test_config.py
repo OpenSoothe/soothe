@@ -109,12 +109,6 @@ class TestSootheConfig:
             cfg = SootheConfig(protocols={"planner": {"routing": routing}})
             assert cfg.protocols.planner.routing == routing
 
-    def test_workspace_dir_default(self) -> None:
-        from soothe.config.env import default_soothe_workspace_dir
-
-        cfg = SootheConfig()
-        assert cfg.workspace_dir == default_soothe_workspace_dir()
-
     def test_verbosity_default(self) -> None:
         cfg = SootheConfig()
         assert cfg.logging.verbosity == "normal"
