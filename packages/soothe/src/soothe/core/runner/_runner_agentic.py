@@ -185,29 +185,36 @@ def _is_ai_messages_stream_chunk(chunk: object) -> bool:
     return False
 
 
-def _is_subgraph_tool_call_update_chunk(chunk: object) -> bool:
-    """Return True if chunk is a ``custom`` mode tool call update from subgraph.
+def _is_tool_call_update_chunk(chunk: object) -> bool:
+    """Return True if chunk is a ``custom`` mode ``soothe.stream.tool_call.update`` event.
 
-    Executor yields subgraph tool invocations as custom events with type
-    ``soothe.stream.tool_call.update`` so the CLI can display tool stats on
-    step cards (IG-416).
+    Executor emits these for main-graph and subgraph tool invocations so the CLI
+    can seed tool kwargs (step stats, file-change previews) before ``ToolMessage``
+    results arrive. Main-graph updates are not guaranteed on messages-mode AI
+    chunks alone (parallel tool waves).
 
     Args:
         chunk: Deepagents stream chunk ``(namespace, mode, data)``.
 
     Returns:
-        True for namespaced custom tool_call_update events.
+        True for custom tool_call_update events (any namespace, including root).
     """
     if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
         return False
-    namespace, mode, data = chunk
-    # Only forward namespaced (subgraph) tool updates; main graph updates
-    # are already in messages mode AI chunks.
-    if not namespace or mode != "custom":
+    _namespace, mode, data = chunk
+    if mode != "custom":
         return False
     if not isinstance(data, dict):
         return False
     return str(data.get("type", "")) == STREAM_TOOL_CALL_UPDATE
+
+
+def _is_subgraph_tool_call_update_chunk(chunk: object) -> bool:
+    """Return True for namespaced ``tool_call.update`` custom events (compat)."""
+    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
+        return False
+    namespace, _, _ = chunk
+    return bool(namespace) and _is_tool_call_update_chunk(chunk)
 
 
 def _forward_messages_chunk(
@@ -217,7 +224,7 @@ def _forward_messages_chunk(
 
     Forwards:
     - ``messages`` mode: ``ToolMessage`` and ``AIMessage`` / ``AIMessageChunk`` (IG-330)
-    - ``custom`` mode: namespaced ``soothe.stream.tool_call.update`` events (IG-416)
+    - ``custom`` mode: ``soothe.stream.tool_call.update`` (main graph and subgraph)
 
     Args:
         chunk: Deepagents stream chunk ``(namespace, mode, data)``.
@@ -228,7 +235,7 @@ def _forward_messages_chunk(
     return (
         _is_tool_stream_chunk(chunk)
         or _is_ai_messages_stream_chunk(chunk)
-        or _is_subgraph_tool_call_update_chunk(chunk)
+        or _is_tool_call_update_chunk(chunk)
     )
 
 
@@ -488,7 +495,7 @@ class AgenticMixin:
 
             elif event_type == "stream_event":
                 # IG-330: Forward full ``messages`` stream for AI + tool payloads (no strip).
-                # IG-416: Also forward namespaced custom tool_call_update events.
+                # IG-416: Forward custom tool_call_update (main + subgraph).
                 if _forward_messages_chunk(event_data):
                     yield event_data
 

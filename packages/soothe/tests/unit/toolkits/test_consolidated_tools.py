@@ -334,7 +334,7 @@ class TestDomainScopedPrompts:
         )
 
         assert "websearch" in _RESEARCH_GUIDE or "search_web" in _RESEARCH_GUIDE
-        assert "research" in _RESEARCH_GUIDE
+        assert "research" in _RESEARCH_GUIDE.lower()
         assert "read_file" in _FILE_OPS_GUIDE or "file" in _FILE_OPS_GUIDE.lower()
         assert "run_command" in _SHELL_GUIDE or "execute" in _SHELL_GUIDE.lower()
         assert "data" in _DATA_GUIDE.lower()

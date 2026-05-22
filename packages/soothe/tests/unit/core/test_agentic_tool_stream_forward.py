@@ -14,6 +14,7 @@ from soothe.core.runner._runner_agentic import (
     _is_ai_messages_stream_chunk,
     _is_ai_tool_invocation_messages_chunk,
     _is_subgraph_tool_call_update_chunk,
+    _is_tool_call_update_chunk,
     _is_tool_stream_chunk,
 )
 
@@ -121,20 +122,25 @@ def test_subgraph_tool_call_update_forwarded() -> None:
     assert _forward_messages_chunk(chunk) is True
 
 
-def test_main_graph_tool_call_update_not_forwarded_as_subgraph() -> None:
-    """Main-graph (empty namespace) tool_call_update is not a subgraph event."""
+def test_main_graph_tool_call_update_forwarded() -> None:
+    """Main-graph tool_call_update custom events are forwarded to clients."""
     chunk = (
         (),
         "custom",
         {
             "type": STREAM_TOOL_CALL_UPDATE,
-            "tool_call_id": "DKG_01:s:task:0",
-            "name": "task",
-            "args": {"description": "test"},
+            "tool_call_id": "DKG_01:s:edit_file:0",
+            "name": "edit_file",
+            "args": {
+                "file_path": "/tmp/a.py",
+                "old_string": "foo",
+                "new_string": "bar",
+            },
         },
     )
     assert _is_subgraph_tool_call_update_chunk(chunk) is False
-    # Main-graph tool_call_update events are already in messages mode AI chunks
+    assert _is_tool_call_update_chunk(chunk) is True
+    assert _forward_messages_chunk(chunk) is True
 
 
 def test_custom_event_non_tool_update_not_forwarded() -> None:
