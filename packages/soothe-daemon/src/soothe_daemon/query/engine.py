@@ -282,6 +282,8 @@ class QueryEngine:
         wire_data = data
         if mode == "messages":
             wire_data = prepare_stream_data_for_wire(data)
+        # Batch tool call updates into single event (IG-426)
+        tool_updates: list[dict[str, Any]] = []
         if (
             mode == "messages"
             and isinstance(wire_data, (tuple, list))
@@ -289,7 +291,8 @@ class QueryEngine:
         ):
             msg_wire = wire_data[0] if wire_data else None
             if isinstance(msg_wire, dict):
-                for tool_ev in extract_tool_call_updates_from_wire_message(msg_wire):
+                tool_updates = list(extract_tool_call_updates_from_wire_message(msg_wire))
+                if tool_updates:
                     await d._broadcast(
                         self._loop_scoped_client_message(
                             loop_id,
@@ -297,7 +300,11 @@ class QueryEngine:
                                 "type": "event",
                                 "namespace": list(namespace),
                                 "mode": "custom",
-                                "data": tool_ev,
+                                "data": {
+                                    "type": "tool_call_updates_batch",
+                                    "updates": tool_updates,
+                                    "count": len(tool_updates),
+                                },
                             },
                         )
                     )

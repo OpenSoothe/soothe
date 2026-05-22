@@ -10,7 +10,6 @@ from langchain_core.messages import ToolMessage
 
 from soothe.middleware.tool_call_args_registry import (
     get_recorded_tool_call_args,
-    init_tool_call_args_registry,
     record_tool_call_args_from_request,
 )
 from soothe.middleware.tool_concurrency import (

@@ -2506,27 +2506,34 @@ async def execute_task_textual(
             if adapter._set_spinner and not _adapter_has_pending_tools(adapter):
                 await adapter._set_spinner("Thinking")
 
-        # Flush any remaining text from all namespaces
+        # Flush any remaining text from all namespaces (IG-426: parallelized)
+        flush_tasks: list[Any] = []
         for ns_key, pending_text in list(pending_text_by_namespace.items()):
             if pending_text:
-                await _flush_assistant_text_ns(
-                    adapter,
-                    pending_text,
-                    ns_key,
-                    assistant_message_by_namespace,
-                    router=router,
+                flush_tasks.append(
+                    _flush_assistant_text_ns(
+                        adapter,
+                        pending_text,
+                        ns_key,
+                        assistant_message_by_namespace,
+                        router=router,
+                    )
                 )
         for ns_key, stream_msg in list(goal_completion_stream_by_namespace.items()):
-            await _finalize_goal_completion_stream(
-                adapter,
-                stream_msg,
-                ns_key=ns_key,
-                goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
-                assistant_message_by_namespace=assistant_message_by_namespace,
-                extra_text="",
-                goal_loop_start_monotonic=goal_loop_start_monotonic,
-                turn_start_monotonic=start_time,
+            flush_tasks.append(
+                _finalize_goal_completion_stream(
+                    adapter,
+                    stream_msg,
+                    ns_key=ns_key,
+                    goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+                    assistant_message_by_namespace=assistant_message_by_namespace,
+                    extra_text="",
+                    goal_loop_start_monotonic=goal_loop_start_monotonic,
+                    turn_start_monotonic=start_time,
+                )
             )
+        if flush_tasks:
+            await asyncio.gather(*flush_tasks)
         pending_text_by_namespace.clear()
         assistant_message_by_namespace.clear()
         task_loop_assistant_by_tcid.clear()
