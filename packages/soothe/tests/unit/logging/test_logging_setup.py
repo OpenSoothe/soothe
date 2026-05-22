@@ -10,6 +10,7 @@ import pytest
 
 from soothe.config import SootheConfig
 from soothe.logging import setup_logging
+from soothe.logging.setup import COMMUNITY_LOGGER_NAME, PACKAGE_LOGGER_NAMES
 
 
 class TestLoggingSetup:
@@ -17,11 +18,12 @@ class TestLoggingSetup:
 
     @pytest.fixture(autouse=True)
     def clear_logger_handlers(self):
-        """Clear soothe logger handlers before each test."""
-        logger = logging.getLogger("soothe")
-        logger.handlers.clear()
+        """Clear package logger handlers before each test."""
+        for name in PACKAGE_LOGGER_NAMES:
+            logging.getLogger(name).handlers.clear()
         yield
-        logger.handlers.clear()
+        for name in PACKAGE_LOGGER_NAMES:
+            logging.getLogger(name).handlers.clear()
 
     def test_file_handler_creation(self, tmp_path: Path) -> None:
         """Test that file handler is created with correct configuration."""
@@ -251,6 +253,42 @@ class TestLoggingSetup:
         file_handlers = [h for h in root_logger.handlers if isinstance(h, RotatingFileHandler)]
         assert len(file_handlers) == 1
         assert Path(file_handlers[0].baseFilename) == log_file
+
+    def test_community_logger_receives_file_handler(self, tmp_path: Path) -> None:
+        """soothe_community.* loggers share the same rotating file handler as soothe.*."""
+        log_file = tmp_path / "test.log"
+        cfg = SootheConfig(
+            observability={
+                "log_file_level": "INFO",
+                "log_file_path": str(log_file),
+            }
+        )
+
+        setup_logging(cfg)
+
+        community_logger = logging.getLogger(COMMUNITY_LOGGER_NAME)
+        file_handlers = [h for h in community_logger.handlers if isinstance(h, RotatingFileHandler)]
+        assert len(file_handlers) == 1
+        assert Path(file_handlers[0].baseFilename) == log_file
+
+        community_logger.info("community runtime probe")
+        assert "community runtime probe" in log_file.read_text(encoding="utf-8")
+
+    def test_no_duplicate_handlers_on_community_logger(self, tmp_path: Path) -> None:
+        """Repeated setup_logging does not duplicate soothe_community file handlers."""
+        log_file = tmp_path / "test.log"
+        cfg = SootheConfig(
+            observability={
+                "log_file_path": str(log_file),
+            }
+        )
+
+        setup_logging(cfg)
+        setup_logging(cfg)
+
+        community_logger = logging.getLogger(COMMUNITY_LOGGER_NAME)
+        file_handlers = [h for h in community_logger.handlers if isinstance(h, RotatingFileHandler)]
+        assert len(file_handlers) == 1
 
 
 class TestThreadFormatter:

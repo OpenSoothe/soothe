@@ -26,6 +26,7 @@ _PROVIDER_SAFE_TOOL_BLOCK_TYPES = frozenset(
     {"text", "image", "image_url", "video", "video_url"},
 )
 
+
 def coerce_provider_safe_tool_message(
     message: ToolMessage | Command[Any],
 ) -> ToolMessage | Command[Any]:

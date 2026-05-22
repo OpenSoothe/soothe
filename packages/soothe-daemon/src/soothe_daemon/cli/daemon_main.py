@@ -88,7 +88,8 @@ def daemon_start(
 
     typer.echo("Starting daemon...")
     # Daemon initialization can take several seconds (runner + transport startup).
-    for _ in range(120):
+    # Model loading timeout is 30s; give 45s total buffer for all startup tasks.
+    for _ in range(450):
         if SootheDaemon.is_running():
             pid = SootheDaemon.find_pid()
 

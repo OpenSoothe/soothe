@@ -6,6 +6,7 @@ from soothe_sdk.core.subagent_wire import (
     is_emit_allowed_subagent_wire_event_type,
     register_subagent_wire_event_types,
 )
+
 from soothe.subagents.explore import events as explore_events
 from soothe.subagents.tacitus import events as tacitus_events
 
