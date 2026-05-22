@@ -59,22 +59,22 @@ async def test_invoke_structured_chat_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_invoke_structured_chat_retries_json_mode_after_thinking_tool_choice_error() -> None:
-    """Thinking-mode models reject tool_choice; fall back to json_mode at invoke time."""
+async def test_invoke_structured_chat_retries_json_schema_after_thinking_tool_choice_error() -> None:
+    """Thinking-mode models reject tool_choice; fall back to json_schema at invoke time."""
     chat = MagicMock()
     fc_runnable = MagicMock()
     thinking_err = RuntimeError(
         "tool_choice parameter does not support being set to required in thinking mode"
     )
     fc_runnable.ainvoke = AsyncMock(side_effect=thinking_err)
-    json_runnable = MagicMock()
-    json_runnable.ainvoke = AsyncMock(return_value={"word": "OK"})
+    json_schema_runnable = MagicMock()
+    json_schema_runnable.ainvoke = AsyncMock(return_value={"word": "OK"})
 
     def _with_structured_output(
         _schema: object, method: str | None = None, **kwargs: object
     ) -> MagicMock:
-        if method == "json_mode":
-            return json_runnable
+        if method == "json_schema":
+            return json_schema_runnable
         return fc_runnable
 
     chat.with_structured_output = MagicMock(side_effect=_with_structured_output)
@@ -86,7 +86,34 @@ async def test_invoke_structured_chat_retries_json_mode_after_thinking_tool_choi
         schema_name="WordReply",
     )
     assert out == {"word": "OK"}
-    assert json_runnable.ainvoke.await_count == 1
+    assert json_schema_runnable.ainvoke.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_invoke_structured_chat_json_mode_omits_strict_at_bind() -> None:
+    """json_mode bind must not pass strict= (LangChain ValueError); strict applies post-parse."""
+    chat = MagicMock()
+    json_runnable = MagicMock()
+    json_runnable.ainvoke = AsyncMock(return_value={"word": "OK"})
+
+    def _with_structured_output(
+        _schema: object, method: str | None = None, **kwargs: object
+    ) -> MagicMock:
+        if method == "json_mode":
+            assert "strict" not in kwargs
+            return json_runnable
+        raise RuntimeError("unexpected method")
+
+    chat.with_structured_output = MagicMock(side_effect=_with_structured_output)
+
+    out = await invoke_structured_chat(
+        chat,
+        [HumanMessage(content="hi")],
+        json_schema=_WORD_SCHEMA,
+        schema_name="WordReply",
+        strict=True,
+    )
+    assert out == {"word": "OK"}
 
 
 @pytest.mark.asyncio

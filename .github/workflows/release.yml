@@ -17,6 +17,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v5
+      with:
+        submodules: true
 
     - name: Install uv
       uses: astral-sh/setup-uv@v4
@@ -87,6 +89,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v5
+      with:
+        submodules: true
 
     - name: Install uv
       uses: astral-sh/setup-uv@v4
@@ -158,6 +162,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v5
+      with:
+        submodules: true
 
     - name: Install uv
       uses: astral-sh/setup-uv@v4

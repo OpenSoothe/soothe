@@ -13,7 +13,14 @@ from soothe.utils.llm.schema_wire import resolve_schema_name, validate_response_
 
 logger = logging.getLogger(__name__)
 
-_STRUCTURED_METHODS: tuple[str | None, ...] = ("function_calling", None, "json_mode")
+# json_schema before json_mode: thinking models reject tool_choice (function_calling/None)
+# but accept response_format; json_mode cannot take strict=True at bind time.
+_STRUCTURED_METHODS: tuple[str | None, ...] = (
+    "function_calling",
+    None,
+    "json_schema",
+    "json_mode",
+)
 
 
 class StructuredOutputError(Exception):
@@ -56,13 +63,16 @@ def _try_create_structured_runnable(
     """Build a structured-output runnable for a single method, or raise."""
     if method is None:
         return chat.with_structured_output(schema_with_title)
+    if method == "json_mode":
+        # LangChain rejects strict= with json_mode; post-validate in invoke_structured_chat.
+        return chat.with_structured_output(schema_with_title, method="json_mode")
     return chat.with_structured_output(schema_with_title, method=method, strict=strict)
 
 
 def _is_retriable_structured_invoke_error(exc: Exception) -> bool:
     """Return True when another structured-output method may succeed (e.g. thinking models)."""
     msg = str(exc).lower()
-    return "thinking mode" in msg and "tool_choice" in msg
+    return "tool_choice" in msg and "thinking mode" in msg
 
 
 def _create_structured_runnable(
