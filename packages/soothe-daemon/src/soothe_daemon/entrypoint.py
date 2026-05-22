@@ -60,7 +60,11 @@ def main() -> None:
     """CLI entry point for the daemon module."""
     from soothe.logging import setup_logging
 
-    from soothe_daemon.logging import _daemon_log_level_from_soothe_config, setup_daemon_logging
+    from soothe_daemon.logging import (
+        _daemon_log_level_from_soothe_config,
+        default_daemon_log_path,
+        setup_daemon_logging,
+    )
 
     parser = argparse.ArgumentParser(description="Soothe daemon")
     parser.add_argument(
@@ -105,10 +109,11 @@ def main() -> None:
     else:
         cfg = daemon_cfg.load_soothe_config()
 
-    # Soothe library logs to soothe.log; daemon logs to daemon.log
-    setup_logging(cfg, foreground=args.foreground)
+    unified_log = str(default_daemon_log_path())
+    setup_logging(cfg, foreground=args.foreground, log_file=unified_log)
     setup_daemon_logging(
         level=_daemon_log_level_from_soothe_config(cfg),
+        log_file=unified_log,
         foreground=args.foreground,
     )
 
