@@ -127,7 +127,8 @@ class PostgreSQLPersistenceBackend(AgentLoopPersistenceBackend):
                         updated_at TIMESTAMPTZ DEFAULT NOW(),
                         checkpoint_data JSONB NOT NULL,
                         client_workspace TEXT,
-                        detached_at TIMESTAMPTZ
+                        detached_at TIMESTAMPTZ,
+                        user_id TEXT
                     )
                 """)
 

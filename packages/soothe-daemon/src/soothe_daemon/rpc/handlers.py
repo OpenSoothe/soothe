@@ -275,7 +275,6 @@ async def _cmd_config(
             {"name": p.name, "models": list(p.models.keys()) if p.models else []}
             for p in (self._runner.config.providers or [])
         ],
-        "workspace_dir": str(self._runner.config.workspace_dir or ""),
         "verbosity": str(self._runner.config.observability.verbosity),
     }
     return {"config": config_data}

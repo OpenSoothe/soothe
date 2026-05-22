@@ -374,7 +374,6 @@ class QueryEngine:
         return resolve_workspace_for_stream(
             thread_workspace=d._thread_registry.get_workspace(thread_id),
             installation_default=d._daemon_workspace,
-            config_workspace_dir=d._config.workspace_dir,
         ).path
 
     async def _resolve_query_checkpoint_thread_id(

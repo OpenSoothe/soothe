@@ -7,15 +7,14 @@ protocol and infrastructure resolution.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
+from soothe.core.workspace.resolution import resolve_daemon_workspace
 from soothe.core.workspace.tool_path_resolution import (
     filesystem_virtual_mode_from_soothe_config,
     max_file_size_mb_for_filesystem_backend,
 )
-from soothe.utils import expand_path
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -27,6 +26,11 @@ if TYPE_CHECKING:
     from soothe.core.goal_engine import GoalEngine
 
 logger = logging.getLogger(__name__)
+
+
+def _get_default_workspace() -> str:
+    """Get default workspace path for tool resolution."""
+    return str(resolve_daemon_workspace())
 
 
 def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubAgent]]:
@@ -326,11 +330,7 @@ def _resolve_single_tool_group_uncached(
     if name == "execution":
         from soothe.toolkits.execution import ExecutionToolkit
 
-        resolved_cwd = (
-            str(expand_path(config.workspace_dir))
-            if config and config.workspace_dir
-            else str(Path.cwd())
-        )
+        resolved_cwd = _get_default_workspace()
         toolkit = ExecutionToolkit(
             workspace_root=resolved_cwd,
             security_config=(getattr(config, "security", None) if config else None),
@@ -348,11 +348,7 @@ def _resolve_single_tool_group_uncached(
         # Host-execution tools do not require a sandbox backend.
         from soothe.toolkits.execution import ExecutionToolkit
 
-        resolved_cwd = (
-            str(expand_path(config.workspace_dir))
-            if config and config.workspace_dir
-            else str(Path.cwd())
-        )
+        resolved_cwd = _get_default_workspace()
         toolkit = ExecutionToolkit(
             workspace_root=resolved_cwd,
             security_config=(getattr(config, "security", None) if config else None),
@@ -369,11 +365,7 @@ def _resolve_single_tool_group_uncached(
 
         from soothe.middleware.filesystem import SootheFilesystemMiddleware  # noqa: I001
 
-        resolved_cwd = (
-            str(expand_path(config.workspace_dir))
-            if config and config.workspace_dir
-            else str(Path.cwd())
-        )
+        resolved_cwd = _get_default_workspace()
 
         virtual_mode = filesystem_virtual_mode_from_soothe_config(config) if config else False
         max_file_size_mb = max_file_size_mb_for_filesystem_backend(config) if config else 10
@@ -422,11 +414,7 @@ def _resolve_single_tool_group_uncached(
 
         from soothe.middleware.filesystem import SootheFilesystemMiddleware  # noqa: I001
 
-        resolved_cwd = (
-            str(expand_path(config.workspace_dir))
-            if config and config.workspace_dir
-            else str(Path.cwd())
-        )
+        resolved_cwd = _get_default_workspace()
 
         virtual_mode = filesystem_virtual_mode_from_soothe_config(config) if config else False
         max_file_size_mb = max_file_size_mb_for_filesystem_backend(config) if config else 10
@@ -581,9 +569,7 @@ def resolve_subagents(
 
     # Collect (name, factory, kwargs) tuples for enabled subagents
     pending: list[tuple[str, Callable, dict]] = []
-    resolved_cwd = (
-        str(expand_path(config.workspace_dir)) if config.workspace_dir else str(Path.cwd())
-    )
+    resolved_cwd = _get_default_workspace()
 
     for name, sub_cfg in config.subagents.items():
         if not sub_cfg.enabled:

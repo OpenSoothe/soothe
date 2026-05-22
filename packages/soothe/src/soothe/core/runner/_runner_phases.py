@@ -394,12 +394,10 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
         elif raw is not None:
             return
 
-        cfg = getattr(self, "_config", None)
-        cfg_dir = getattr(cfg, "workspace_dir", None) if cfg is not None else None
-        installation_ws = str(getattr(self, "_installation_workspace", ""))
+        from soothe.core.workspace import resolve_daemon_workspace
+
         resolved = resolve_workspace_for_stream(
-            installation_default=installation_ws,
-            config_workspace_dir=cfg_dir,
+            installation_default=str(resolve_daemon_workspace()),
         )
         state.workspace = resolved.path
 
