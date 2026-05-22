@@ -335,6 +335,28 @@ class TestDeepxivSearchTool:
 
         assert "Author 1, Author 2, Author 3 et al." in result
 
+    def test_search_string_authors(self, search_tool, toolkit):
+        """Test search when API returns authors as plain strings."""
+        mock_result = {
+            "result": [
+                {
+                    "arxiv_id": "2409.05591",
+                    "title": "Test Paper",
+                    "abstract": "Abstract text",
+                    "score": 0.9,
+                    "citation_count": 10,
+                    "authors": ["Alice Smith", "Bob Jones"],
+                    "categories": [],
+                }
+            ],
+            "total_count": 1,
+        }
+        toolkit._reader.search.return_value = mock_result
+
+        result = search_tool._run(query="test")
+
+        assert "Alice Smith, Bob Jones" in result
+
     async def test_arun_delegates_to_run(self, search_tool, toolkit):
         """Test async run delegates to sync run."""
         toolkit._reader.search.return_value = {"result": [], "total_count": 0}
@@ -490,6 +512,21 @@ class TestDeepxivPaperMetadataTool:
         result = metadata_tool._run(paper_id="2409.05591")
 
         assert "et al." in result
+
+    def test_metadata_string_authors(self, metadata_tool, toolkit):
+        """Test metadata when API returns authors as plain strings."""
+        mock_result = {
+            "title": "String Authors Paper",
+            "authors": ["Alice Smith", "Bob Jones"],
+            "categories": [],
+            "abstract": "Abstract",
+            "sections": {},
+        }
+        toolkit._reader.head.return_value = mock_result
+
+        result = metadata_tool._run(paper_id="2409.05591")
+
+        assert "**Authors:** Alice Smith, Bob Jones" in result
 
 
 # -----------------------------------------------------------------------------
