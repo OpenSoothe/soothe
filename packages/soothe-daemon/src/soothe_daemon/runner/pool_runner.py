@@ -742,8 +742,8 @@ class WorkerPool:
         self._metrics_latencies: list[float] = []
         # Track pending responses by request_id
         self._pending_responses: dict[str, asyncio.Queue] = {}
-        # Background task to poll worker response queues
-        self._poll_task: asyncio.Task | None = None
+        self._health_task: asyncio.Task | None = None
+        self._bridge_tasks: dict[str, asyncio.Task[None]] = {}
         # Client disconnect: finish routing worker stream until done/error
         self._abandon_drain_tasks: set[asyncio.Task[None]] = set()
         # Next worker slot index for scaling up
@@ -816,8 +816,7 @@ class WorkerPool:
             self._next_worker_index = i + 1
 
         self._running = True
-        # Start background poll task to route responses
-        self._poll_task = asyncio.create_task(self._poll_worker_responses())
+        self._health_task = asyncio.create_task(self._worker_health_watchdog())
         if self._dispatch_stats is not None:
             self._dispatch_stats_task = asyncio.create_task(self._periodic_dispatch_stats())
 
@@ -863,9 +862,121 @@ class WorkerPool:
             started_at=datetime.now(),
         )
         self._workers[worker_id] = worker
+        self._start_worker_bridge(worker_id)
 
         logger.debug("WorkerPool: spawned worker %s (pid=%d)", worker_id, process.pid)
         return worker
+
+    def _start_worker_bridge(self, worker_id: str) -> None:
+        """Start per-worker response bridge (blocking mp get → asyncio queue, IG-429)."""
+        old = self._bridge_tasks.pop(worker_id, None)
+        if old is not None:
+            old.cancel()
+        self._bridge_tasks[worker_id] = asyncio.create_task(
+            self._bridge_worker_responses(worker_id),
+            name=f"pool-bridge-{worker_id}",
+        )
+
+    async def _bridge_worker_responses(self, worker_id: str) -> None:
+        """Route worker mp.Queue messages without 50ms poll throttle."""
+        loop = asyncio.get_event_loop()
+
+        while self._running:
+            worker = self._workers.get(worker_id)
+            if worker is None:
+                break
+
+            try:
+                msg = await loop.run_in_executor(
+                    None,
+                    worker.response_queue.get,
+                    True,
+                    0.5,
+                )
+            except queue.Empty:
+                continue
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                if not self._running:
+                    break
+                logger.debug(
+                    "WorkerPool: bridge read failed worker=%s",
+                    worker_id,
+                    exc_info=True,
+                )
+                continue
+
+            if not isinstance(msg, tuple) or len(msg) != 3:
+                logger.debug(
+                    "WorkerPool: bridge ignoring malformed message worker=%s: %r",
+                    worker_id,
+                    msg,
+                )
+                continue
+
+            msg_type, request_id, payload = msg
+            await self._route_worker_message(worker, msg_type, request_id, payload)
+
+    async def _route_worker_message(
+        self,
+        worker: WorkerProcess,
+        msg_type: str,
+        request_id: str,
+        payload: Any,
+    ) -> None:
+        """Deliver one worker message to the pending asyncio response queue."""
+        worker_id = worker.worker_id
+
+        if msg_type == "heartbeat":
+            worker.last_heartbeat_at = datetime.now()
+            logger.debug(
+                "WorkerPool: heartbeat from worker=%s request_id=%s elapsed=%.1fs",
+                worker_id,
+                request_id,
+                payload.get("elapsed_seconds", 0) if isinstance(payload, dict) else 0,
+            )
+            return
+
+        if msg_type == "timeout":
+            response_queue = self._pending_responses.get(request_id)
+            if response_queue is not None:
+                await response_queue.put(("error", payload))
+            await self._mark_worker_idle_and_notify(worker)
+            self._workers_by_loop_id.pop(worker.current_loop_id or "", None)
+            self._pending_responses.pop(request_id, None)
+            logger.warning(
+                "WorkerPool: worker %s request %s timed out",
+                worker_id,
+                request_id,
+            )
+            return
+
+        if msg_type == "cancelled":
+            response_queue = self._pending_responses.get(request_id)
+            if response_queue is not None:
+                await response_queue.put(("error", asyncio.CancelledError()))
+            await self._mark_worker_idle_and_notify(worker)
+            self._workers_by_loop_id.pop(worker.current_loop_id or "", None)
+            self._pending_responses.pop(request_id, None)
+            logger.info(
+                "WorkerPool: worker %s request %s cancelled cooperatively",
+                worker_id,
+                request_id,
+            )
+            return
+
+        response_queue = self._pending_responses.get(request_id)
+        if response_queue is not None:
+            await response_queue.put((msg_type, payload))
+            if worker.status == WorkerStatus.BUSY:
+                worker.last_heartbeat_at = datetime.now()
+        else:
+            logger.debug(
+                "WorkerPool: no pending route for request_id=%s (%s); discarding",
+                request_id,
+                msg_type,
+            )
 
     def _schedule_abandon_drain(
         self,
@@ -1046,8 +1157,8 @@ class WorkerPool:
         except Exception:
             logger.exception("WorkerPool: failed to respawn dead worker %s", worker.worker_id)
 
-    async def _poll_worker_responses(self) -> None:
-        """Background task: poll worker response queues and route to pending requests."""
+    async def _worker_health_watchdog(self) -> None:
+        """Stuck/dead worker detection and idle stale-queue drain (no chunk relay; IG-429)."""
         loop = asyncio.get_event_loop()
 
         while self._running:
@@ -1057,7 +1168,6 @@ class WorkerPool:
                     if age_sec >= 5.0:
                         self._worker_rapid_death_streak.pop(worker_id, None)
 
-                # STUCK WORKER DETECTION: Check if busy worker hasn't sent heartbeat
                 if worker.status == WorkerStatus.BUSY:
                     now = datetime.now()
                     if worker.last_heartbeat_at is not None:
@@ -1072,7 +1182,6 @@ class WorkerPool:
                             await self._handle_stuck_worker(worker)
                             continue
                     else:
-                        # No heartbeat yet but worker is busy - check elapsed time since dispatch
                         elapsed = (now - worker.last_activity).total_seconds()
                         if elapsed > self._stuck_worker_timeout_seconds * 2:
                             logger.warning(
@@ -1087,98 +1196,31 @@ class WorkerPool:
                 if not worker.is_alive():
                     await self._handle_dead_worker(worker)
                     continue
-                if worker.current_request_id is None:
-                    # Drain any stale multiprocessing queue items in one pass (e.g. races
-                    # or after worker process oddities) without per-item log spam.
-                    drained = 0
-                    last_kind: str | None = None
-                    while True:
-                        try:
-                            msg = await loop.run_in_executor(
-                                None,
-                                worker.response_queue.get_nowait,
-                            )
-                        except queue.Empty:
-                            break
-                        drained += 1
-                        last_kind = msg[0]
-                    if drained:
-                        logger.debug(
-                            "WorkerPool: drained %d stale response(s) from idle worker %s "
-                            "(last=%s)",
-                            drained,
-                            worker_id,
-                            last_kind,
+
+                if worker.current_request_id is not None:
+                    continue
+
+                drained = 0
+                last_kind: str | None = None
+                while True:
+                    try:
+                        msg = await loop.run_in_executor(
+                            None,
+                            worker.response_queue.get_nowait,
                         )
-                    continue
-
-                try:
-                    # Non-blocking get from response queue
-                    msg = await loop.run_in_executor(
-                        None,
-                        worker.response_queue.get_nowait,
-                    )
-                except queue.Empty:
-                    continue
-
-                # Parse: (msg_type, request_id, payload)
-                msg_type, request_id, payload = msg
-
-                # HEARTBEAT handling: Update worker heartbeat timestamp
-                if msg_type == "heartbeat":
-                    worker.last_heartbeat_at = datetime.now()
+                    except queue.Empty:
+                        break
+                    drained += 1
+                    last_kind = msg[0]
+                if drained:
                     logger.debug(
-                        "WorkerPool: heartbeat from worker=%s request_id=%s elapsed=%.1fs",
+                        "WorkerPool: drained %d stale response(s) from idle worker %s (last=%s)",
+                        drained,
                         worker_id,
-                        request_id,
-                        payload.get("elapsed_seconds", 0) if isinstance(payload, dict) else 0,
-                    )
-                    continue
-
-                # TIMEOUT handling: Worker exceeded request timeout
-                if msg_type == "timeout":
-                    response_queue = self._pending_responses.get(request_id)
-                    if response_queue is not None:
-                        await response_queue.put(("error", payload))
-                    await self._mark_worker_idle_and_notify(worker)
-                    self._workers_by_loop_id.pop(worker.current_loop_id or "", None)
-                    self._pending_responses.pop(request_id, None)
-                    logger.warning(
-                        "WorkerPool: worker %s request %s timed out", worker_id, request_id
-                    )
-                    continue
-
-                # CANCELLED handling: Worker cooperatively cancelled
-                if msg_type == "cancelled":
-                    response_queue = self._pending_responses.get(request_id)
-                    if response_queue is not None:
-                        await response_queue.put(("error", asyncio.CancelledError()))
-                    await self._mark_worker_idle_and_notify(worker)
-                    self._workers_by_loop_id.pop(worker.current_loop_id or "", None)
-                    self._pending_responses.pop(request_id, None)
-                    logger.info(
-                        "WorkerPool: worker %s request %s cancelled cooperatively",
-                        worker_id,
-                        request_id,
-                    )
-                    continue
-
-                # Route chunk/done/error to pending response queue
-                response_queue = self._pending_responses.get(request_id)
-                if response_queue is not None:
-                    await response_queue.put((msg_type, payload))
-                    # Update heartbeat timestamp on any message from busy worker
-                    if worker.status == WorkerStatus.BUSY:
-                        worker.last_heartbeat_at = datetime.now()
-                else:
-                    logger.debug(
-                        "WorkerPool: no pending route for request_id=%s (%s); discarding",
-                        request_id,
-                        msg_type,
+                        last_kind,
                     )
 
-            # Short sleep to avoid busy polling
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(1.0)
 
     async def _handle_stuck_worker(self, worker: WorkerProcess) -> None:
         """Handle a worker that hasn't sent heartbeat for too long."""
@@ -1504,13 +1546,22 @@ class WorkerPool:
                 pass
             self._dispatch_stats_task = None
 
-        # Stop poll task
-        if self._poll_task is not None:
-            self._poll_task.cancel()
+        if self._health_task is not None:
+            self._health_task.cancel()
             try:
-                await self._poll_task
+                await self._health_task
             except asyncio.CancelledError:
                 pass
+            self._health_task = None
+
+        for task in list(self._bridge_tasks.values()):
+            task.cancel()
+        for task in list(self._bridge_tasks.values()):
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        self._bridge_tasks.clear()
 
         for t in list(self._abandon_drain_tasks):
             t.cancel()
