@@ -291,6 +291,12 @@ grep -i "langfuse\|observability" ~/.soothe/logs/soothed.log | tail -100
 
 ### Workflow 3: Debug Connection/Transport Issues
 
+**Stale worker_pool subprocesses** (orphaned `multiprocessing.spawn` children after crashes or old daemon runs):
+
+- **Automatic** (long-running daemon): enable `worker_pool` and `stale_worker_reap` in `daemon_config.yml` (`interval_seconds`, default 1800). The daemon reaps on start/stop and periodically while running; live pool workers are skipped.
+- **Manual** (daemon stopped or one-off cleanup): `uv run python -m soothe_daemon.persistence` (add `--dry-run` to preview).
+- **thread_pool mode**: periodic reap is not started (no spawn workers); startup/shutdown reap and the CLI remain harmless.
+
 **Scenario**: CLI can't connect to daemon, WebSocket errors, timeout issues.
 
 **Steps**:

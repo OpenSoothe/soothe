@@ -342,6 +342,20 @@ class ThreadPoolConfig(BaseModel):
         return max(self.min_pool_size, self.max_pool_size)
 
 
+class StaleWorkerReapConfig(BaseModel):
+    """Periodic reap of orphaned ``multiprocessing.spawn`` worker_pool children."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Run periodic stale worker cleanup (effective when worker_pool is enabled)",
+    )
+    interval_seconds: int = Field(
+        default=1800,
+        ge=300,
+        description="Seconds between stale worker reap scans",
+    )
+
+
 class EphemeralLoopGcConfig(BaseModel):
     """Background GC for idle ephemeral loops (IG-430)."""
 
@@ -367,6 +381,7 @@ class EphemeralLoopGcConfig(BaseModel):
 __all__ = [
     "DistributedConfig",
     "EphemeralLoopGcConfig",
+    "StaleWorkerReapConfig",
     "HttpRestConfig",
     "RayClusterConfig",
     "ThreadPoolConfig",

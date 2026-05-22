@@ -17,6 +17,7 @@ from soothe.config import SOOTHE_HOME
 from soothe_daemon.config.models import (
     DistributedConfig,
     EphemeralLoopGcConfig,
+    StaleWorkerReapConfig,
     ThreadPoolConfig,
     TransportConfig,
     WorkerPoolConfig,
@@ -131,6 +132,10 @@ class SootheDaemonConfig(BaseSettings):
     ephemeral_loop_gc: EphemeralLoopGcConfig = Field(
         default_factory=EphemeralLoopGcConfig,
         description="Idle ephemeral loop garbage collection",
+    )
+    stale_worker_reap: StaleWorkerReapConfig = Field(
+        default_factory=StaleWorkerReapConfig,
+        description="Periodic cleanup of orphaned worker_pool subprocesses",
     )
 
     # --- Loop runner mode (RFC-221) -----------------------------------------

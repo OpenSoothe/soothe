@@ -78,7 +78,7 @@ async def websocket_daemon_patched(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         return f"{text}\n--- Vision summary ---\nstub-vision\n---\n"
 
     monkeypatch.setattr(
-        "soothe_daemon.query_engine.enrich_user_text_with_vision",
+        "soothe_daemon.query.engine.enrich_user_text_with_vision",
         _fake_enrich,
         raising=True,
     )

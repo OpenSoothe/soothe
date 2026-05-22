@@ -42,6 +42,11 @@ ephemeral_loop_gc:
   idle_hours: 24
   batch_size: 50
 
+# Stale worker reap only applies when worker_pool is enabled (dev uses thread_pool).
+stale_worker_reap:
+  enabled: true
+  interval_seconds: 1800
+
 # ============================================================================
 # OBSERVABILITY - Diagnostic metrics and logging
 # ============================================================================

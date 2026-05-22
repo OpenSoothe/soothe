@@ -74,6 +74,21 @@ def _has_valid_api_key() -> bool:
     )
 
 
+def integration_llm_idle_timeout() -> float:
+    """Seconds to wait for daemon idle after an LLM-backed turn (override via env)."""
+    raw = os.getenv("SOOTHE_INTEGRATION_LLM_IDLE_TIMEOUT", "180").strip()
+    try:
+        return max(10.0, float(raw))
+    except ValueError:
+        return 90.0
+
+
+@pytest.fixture
+def llm_idle_timeout() -> float:
+    """Fixture exposing :func:`integration_llm_idle_timeout` for slow LLM integration tests."""
+    return integration_llm_idle_timeout()
+
+
 # ---------------------------------------------------------------------------
 # Shared Daemon Test Utilities
 # ---------------------------------------------------------------------------

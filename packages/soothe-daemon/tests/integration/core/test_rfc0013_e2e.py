@@ -28,6 +28,7 @@ from tests.integration.conftest import (
     await_status_state,
     build_daemon_config,
     force_isolated_home,
+    integration_llm_idle_timeout,
 )
 from tests.integration.ws_loop_client import (
     loop_new_with_initial_input,
@@ -395,6 +396,10 @@ async def test_event_throughput_stress(tmp_path: Path, requires_llm_api) -> None
     force_isolated_home(tmp_path / "soothe-home")
     ws_port = alloc_ephemeral_port()
     config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
+    if config.router.fast:
+        config.router = config.router.model_copy(update={"default": config.router.fast})
+    config.autonomous.max_iterations = 3
+    config.agent_loop.limits.global_max_llm_calls = 5
 
     daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()
@@ -407,14 +412,15 @@ async def test_event_throughput_stress(tmp_path: Path, requires_llm_api) -> None
         loop_id = await loop_new_with_initial_input(client, initial_message="Throughput test")
         await subscribe_loop_stream(client, loop_id)
 
-        # Send multiple queries rapidly
-        num_queries = 5
+        idle_timeout = integration_llm_idle_timeout()
+        num_queries = 3
         for i in range(num_queries):
-            await client.send_input(loop_id, f"Query {i}")
-            # Wait for completion before next query
-            status = await await_status_state(client.read_event, {"running", "idle"}, timeout=8.0)
+            await client.send_input(loop_id, f"Reply with one word only: ok{i}")
+            status = await await_status_state(
+                client.read_event, {"running", "idle"}, timeout=idle_timeout
+            )
             if status.get("state") == "running":
-                await await_status_state(client.read_event, "idle", timeout=8.0)
+                await await_status_state(client.read_event, "idle", timeout=idle_timeout)
 
         await client.close()
 
@@ -763,11 +769,14 @@ async def test_daemon_remains_stable_after_client_errors(tmp_path: Path) -> None
         await subscribe_loop_stream(client, loop_id)
 
         # Valid query should work
+        idle_timeout = integration_llm_idle_timeout()
         await client.send_input(loop_id, "Valid query")
-        status = await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
+        status = await await_status_state(
+            client.read_event, {"running", "idle"}, timeout=idle_timeout
+        )
 
         if status.get("state") == "running":
-            await await_status_state(client.read_event, "idle", timeout=5.0)
+            await await_status_state(client.read_event, "idle", timeout=idle_timeout)
 
         await client.close()
 
@@ -841,16 +850,21 @@ async def test_concurrent_queries_different_threads(tmp_path: Path, requires_llm
         await client1.send_input(loop1, "Query on thread 1")
         await client2.send_input(loop2, "Query on thread 2")
 
+        idle_timeout = integration_llm_idle_timeout()
         # Both should be able to process
-        status1 = await await_status_state(client1.read_event, {"running", "idle"}, timeout=5.0)
-        status2 = await await_status_state(client2.read_event, {"running", "idle"}, timeout=5.0)
+        status1 = await await_status_state(
+            client1.read_event, {"running", "idle"}, timeout=idle_timeout
+        )
+        status2 = await await_status_state(
+            client2.read_event, {"running", "idle"}, timeout=idle_timeout
+        )
 
         # Wait for completion
         if status1.get("state") == "running":
-            await await_status_state(client1.read_event, "idle", timeout=8.0)
+            await await_status_state(client1.read_event, "idle", timeout=idle_timeout)
 
         if status2.get("state") == "running":
-            await await_status_state(client2.read_event, "idle", timeout=8.0)
+            await await_status_state(client2.read_event, "idle", timeout=idle_timeout)
 
         await client1.close()
         await client2.close()

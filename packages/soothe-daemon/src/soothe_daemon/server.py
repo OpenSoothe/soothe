@@ -124,6 +124,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._postgres_pool_task: asyncio.Task[None] | None = None
         self._inactivity_check_task: asyncio.Task[None] | None = None
         self._ephemeral_gc_task: asyncio.Task[None] | None = None
+        self._stale_worker_reap_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._event_size_stats_task: asyncio.Task[None] | None = None
         # Smart heartbeat tracking (IG-426)
@@ -300,6 +301,11 @@ class SootheDaemon(DaemonHandlersMixin):
             gc_cfg = self._daemon_config.ephemeral_loop_gc
             if gc_cfg.enabled:
                 self._ephemeral_gc_task = asyncio.create_task(self._periodic_ephemeral_loop_gc())
+            reap_cfg = self._daemon_config.stale_worker_reap
+            if self._daemon_config.worker_pool.enabled and reap_cfg.enabled:
+                self._stale_worker_reap_task = asyncio.create_task(
+                    self._periodic_stale_worker_reap()
+                )
             self._heartbeat_task = asyncio.create_task(self._periodic_heartbeat())
             self._queue_monitoring_task: asyncio.Task[None] = asyncio.create_task(
                 self._periodic_queue_monitoring()
@@ -545,6 +551,17 @@ class SootheDaemon(DaemonHandlersMixin):
 
         await periodic_postgres_pool_maintenance(is_running=lambda: self._running)
 
+    async def _periodic_stale_worker_reap(self) -> None:
+        """Reap orphaned worker_pool subprocesses on a fixed interval."""
+        from soothe_daemon.persistence.process_cleanup import periodic_stale_worker_reap
+
+        reap_cfg = self._daemon_config.stale_worker_reap
+        await periodic_stale_worker_reap(
+            is_running=lambda: self._running,
+            interval_s=reap_cfg.interval_seconds,
+            daemon_pid=os.getpid(),
+        )
+
     async def _periodic_inactivity_check(self) -> None:
         """Check for inactive threads every hour and suspend them."""
         while self._running:
@@ -782,6 +799,11 @@ class SootheDaemon(DaemonHandlersMixin):
             self._ephemeral_gc_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._ephemeral_gc_task
+
+        if self._stale_worker_reap_task and not self._stale_worker_reap_task.done():
+            self._stale_worker_reap_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._stale_worker_reap_task
 
         if self._heartbeat_task and not self._heartbeat_task.done():
             self._heartbeat_task.cancel()
