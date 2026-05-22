@@ -125,6 +125,7 @@ class TurnEventStats:
         text_chunks: ``messages`` chunks containing assistant text deltas.
         heartbeats_dropped: Heartbeat events silently dropped before yielding.
         post_idle_drained: Chunks received during the post-idle drain window.
+        filtered_early: Chunks dropped before the turn pipeline (noop updates/empty AI).
     """
 
     total: int = 0
@@ -132,6 +133,7 @@ class TurnEventStats:
     updates: int = 0
     custom: int = 0
     skipped: int = 0
+    filtered_early: int = 0
     tool_calls: int = 0
     tool_results: int = 0
     text_chunks: int = 0
@@ -184,6 +186,7 @@ class TurnEventStats:
         self.text_chunks += other.text_chunks
         self.heartbeats_dropped += other.heartbeats_dropped
         self.post_idle_drained += other.post_idle_drained
+        self.filtered_early += other.filtered_early
 
     def summary_line(self) -> str:
         """Return a one-line summary suitable for structured logging.
@@ -211,6 +214,8 @@ class TurnEventStats:
             detail_parts.append(f"{self.text_chunks} text")
         if self.skipped:
             detail_parts.append(f"{self.skipped} skipped")
+        if self.filtered_early:
+            detail_parts.append(f"{self.filtered_early} filtered-early")
         if self.heartbeats_dropped:
             detail_parts.append(f"{self.heartbeats_dropped} hb-drop")
         if self.post_idle_drained:

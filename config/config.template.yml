@@ -204,6 +204,7 @@ agent_loop:
   output_streaming:
     mode: adaptive                    # batch | adaptive (stream small, batch large)
     streaming_interval_ms: 200        # Daemon WebSocket batching interval
+    message_coalesce_enabled: true    # Coalesce plain assistant text chunks before broadcast
     tui_flush_interval_ms: 200        # TUI rendering flush interval
     adaptive_threshold_chars: 500     # Adaptive switch threshold (chars)
     file_output_threshold_chars: 5000 # Write goal_completion to file when larger (0 = never)

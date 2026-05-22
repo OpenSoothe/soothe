@@ -26,6 +26,7 @@ from soothe.core.loop.utils.messages import (
     loop_assistant_messages_chunk,
     loop_message_assistant_output_phase,
 )
+from soothe.core.loop.utils.stream_normalize import extract_text_from_message_content
 from soothe.core.runner._runner_shared import StreamChunk, _custom
 from soothe.utils.text_preview import preview_first
 
@@ -146,11 +147,34 @@ def _is_ai_tool_invocation_messages_chunk(chunk: object) -> bool:
     return _message_has_tool_invocation_metadata(data[0])
 
 
+def _ai_chunk_has_actionable_payload(msg: object) -> bool:
+    """True when an AI message should be forwarded (text, tools, or loop phase)."""
+    from langchain_core.messages import AIMessage, AIMessageChunk
+
+    if loop_message_assistant_output_phase(msg) is not None:
+        return True
+    if _message_has_tool_invocation_metadata(msg):
+        return True
+    if isinstance(msg, (AIMessage, AIMessageChunk)):
+        text = extract_text_from_message_content(msg.content)
+        return bool(str(text or "").strip())
+    if isinstance(msg, dict):
+        if loop_message_assistant_output_phase(msg) is not None:
+            return True
+        if _message_has_tool_invocation_metadata(msg):
+            return True
+        from soothe.foundation import extract_text_from_ai_message
+
+        return bool("".join(extract_text_from_ai_message(msg)).strip())
+    return False
+
+
 def _is_ai_messages_stream_chunk(chunk: object) -> bool:
     """True for ``messages`` chunks whose payload is assistant AI (not human/tool).
 
     Used so daemon clients receive full streamed assistant content from subgraphs
-    and execute phases, not only tool rows (IG-330).
+    and execute phases, not only tool rows (IG-330). Empty AI chunks with no tool
+    metadata are dropped to reduce stream volume.
     """
     if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
         return False
@@ -164,8 +188,6 @@ def _is_ai_messages_stream_chunk(chunk: object) -> bool:
 
     if isinstance(msg, HumanMessage):
         return False
-    if isinstance(msg, (AIMessage, AIMessageChunk)):
-        return True
     if isinstance(msg, dict):
         raw_type = msg.get("type")
         if isinstance(raw_type, str):
@@ -173,16 +195,11 @@ def _is_ai_messages_stream_chunk(chunk: object) -> bool:
                 return False
             if raw_type in ("tool", "ToolMessage") or raw_type.endswith("ToolMessage"):
                 return False
-            if raw_type in ("ai", "AIMessage", "AIMessageChunk") or raw_type.endswith(
-                "AIMessageChunk"
-            ):
-                return True
-        if loop_message_assistant_output_phase(msg) is not None:
-            rt = msg.get("type")
-            if isinstance(rt, str) and rt in ("human", "HumanMessage"):
-                return False
-            return True
-    return False
+        elif not isinstance(raw_type, str):
+            return False
+    elif not isinstance(msg, (AIMessage, AIMessageChunk)):
+        return False
+    return _ai_chunk_has_actionable_payload(msg)
 
 
 def _is_tool_call_update_chunk(chunk: object) -> bool:

@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from langchain_core.messages import ToolMessage
 from soothe_sdk.core.events import (
     AGENT_LOOP_GOAL_COMPLETED,
     AGENT_LOOP_GOAL_STARTED,
@@ -19,12 +20,17 @@ from soothe_sdk.core.events import (
 )
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux.classification import classify_event_to_tier
-from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
+from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
 
 from soothe_cli.runtime.parse.message_processing import ingest_tool_call_stream_state
 from soothe_cli.runtime.presentation.engine import PresentationEngine
 from soothe_cli.runtime.state.session_stats import TurnEventStats
 from soothe_cli.runtime.state.step_router import StepTaskRouter
+from soothe_cli.runtime.turn.pipeline import PRIORITY_HIGH, PRIORITY_LOW, PRIORITY_NORMAL
+from soothe_cli.runtime.wire.chunk_filter import (
+    message_has_tool_invocation_metadata,
+    updates_chunk_is_noop,
+)
 from soothe_cli.runtime.wire.messages import is_summarization_chunk, normalize_lc_stream_message
 
 _STREAM_CHUNK_LEN = 3
@@ -33,6 +39,7 @@ _MSG_PAIR_LEN = 2
 _MAIN_LOOP_CUSTOM_TYPES = frozenset(
     {
         STREAM_TOOL_CALL_UPDATE,
+        TOOL_CALL_UPDATES_BATCH,
         AGENT_LOOP_GOAL_STARTED,
         AGENT_LOOP_GOAL_COMPLETED,
         AGENT_LOOP_PLAN_DECISION,
@@ -50,6 +57,7 @@ class PreparedTurnChunk:
     namespace: tuple[Any, ...]
     mode: str
     data: Any
+    priority: int = PRIORITY_LOW
     skip: bool = False
     normalized_message: Any | None = None
     message_metadata: Any | None = None
@@ -84,6 +92,16 @@ class TurnPrepareState:
         )
 
 
+def _message_priority(message: Any, *, is_summarization: bool) -> int:
+    if isinstance(message, ToolMessage):
+        return PRIORITY_NORMAL
+    if message_has_tool_invocation_metadata(message):
+        return PRIORITY_NORMAL
+    if is_summarization:
+        return PRIORITY_NORMAL
+    return PRIORITY_LOW
+
+
 def prepare_turn_chunk(state: TurnPrepareState, chunk: Any) -> PreparedTurnChunk | None:
     """Prepare one daemon chunk on the processor thread."""
     if not isinstance(chunk, (list, tuple)) or len(chunk) != _STREAM_CHUNK_LEN:
@@ -92,6 +110,11 @@ def prepare_turn_chunk(state: TurnPrepareState, chunk: Any) -> PreparedTurnChunk
 
     namespace, mode, data = chunk
     ns_key = tuple(namespace) if namespace else ()
+
+    if mode == "updates" and updates_chunk_is_noop(data):
+        state.ev_stats.filtered_early += 1
+        return None
+
     state.ev_stats.record(str(mode))
 
     prepared = PreparedTurnChunk(namespace=ns_key, mode=str(mode), data=data)
@@ -101,6 +124,7 @@ def prepare_turn_chunk(state: TurnPrepareState, chunk: Any) -> PreparedTurnChunk
     if mode == "custom" and isinstance(data, dict):
         return _prepare_custom_chunk(state, prepared, ns_key, data)
     if mode == "updates":
+        prepared.priority = PRIORITY_NORMAL
         return prepared
     return prepared
 
@@ -117,11 +141,12 @@ def _prepare_messages_chunk(
     if not isinstance(data, (list, tuple)) or len(data) != _MSG_PAIR_LEN:
         return None
 
-    message, metadata = data
+    message, metadata = data[0], data[1] if len(data) > 1 else {}
     message = normalize_lc_stream_message(message)
     prepared.normalized_message = message
     prepared.message_metadata = metadata
     prepared.is_summarization = is_summarization_chunk(metadata)
+    prepared.priority = _message_priority(message, is_summarization=prepared.is_summarization)
 
     is_main = ns_key == ()
     if not prepared.is_summarization:
@@ -140,9 +165,11 @@ def _prepare_custom_chunk(
     event_type = str(data.get("type", ""))
 
     if event_type.startswith("soothe.error"):
+        prepared.priority = PRIORITY_HIGH
         return prepared
 
-    if event_type in _MAIN_LOOP_CUSTOM_TYPES:
+    if event_type in _MAIN_LOOP_CUSTOM_TYPES or event_type == TOOL_CALL_UPDATES_BATCH:
+        prepared.priority = PRIORITY_HIGH
         prepared.skip_custom_progress = True
         return prepared
 

@@ -94,6 +94,14 @@ class _FakeThreadRegistry:
     def set_workspace(self, _thread_id: str, _workspace: Path) -> None:
         return None
 
+    def get_client_thread(self, _client_id: str) -> str:
+        return ""
+
+
+class _FakePersistenceManager:
+    async def get_loop_metadata(self, _loop_id: str) -> dict[str, Any] | None:
+        return None
+
 
 @pytest.mark.asyncio
 async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
@@ -135,6 +143,7 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
             subscribe_loop=lambda *_args, **_kwargs: True,
             get_stream_delivery=lambda *_args, **_kwargs: "batch",
         ),
+        _persistence_manager=_FakePersistenceManager(),
     )
 
     engine = QueryEngine(daemon)
@@ -202,6 +211,7 @@ def _daemon_factory(
             subscribe_loop=lambda *_args, **_kwargs: True,
             get_stream_delivery=lambda *_args, **_kwargs: "batch",
         ),
+        _persistence_manager=_FakePersistenceManager(),
     )
 
 
@@ -332,6 +342,7 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
             subscribe_loop=lambda *_args, **_kwargs: True,
             get_stream_delivery=lambda *_args, **_kwargs: "batch",
         ),
+        _persistence_manager=_FakePersistenceManager(),
     )
 
     engine = QueryEngine(daemon)
