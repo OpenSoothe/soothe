@@ -146,11 +146,11 @@ persistence:
   soothe_postgres_dsn: postgresql://postgres:postgres@localhost:5432/soothe
   default_backend: sqlite
   # PostgreSQL pool sizing depends on runner mode (daemon_config.yml):
-  # - worker_pool: Each subprocess has own singleton pools (N workers × pool_size). Use 2-4.
+  # - worker_pool: Each subprocess has own singleton pools (N workers × pool_size). Lower max if needed.
   # - thread_pool: One checkpointer + one AgentLoop pool per daemon process (IG-406).
-  #   agentloop_pool_size ≈ thread_pool.max_pool_size + 2; checkpointer ≈ max_pool_size/2 + 2.
-  checkpointer_pool_size: 2      # worker_pool per-process singleton; thread_pool: shared, use 3-6
-  agentloop_pool_size: 4         # worker_pool per-process singleton; thread_pool: shared, use 6-10
+  postgres_pool_min_size: 4
+  checkpointer_pool_size: 24
+  agentloop_pool_size: 24
   postgres_pool_max_idle_seconds: 120
   postgres_pool_max_lifetime_seconds: 1800
   postgres_pool_acquire_timeout_seconds: 30

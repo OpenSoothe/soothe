@@ -158,13 +158,14 @@ def _resolve_sqlite_checkpointer(config: SootheConfig) -> tuple[Checkpointer | N
 
 
 def _resolve_postgres_checkpointer(
-    dsn: str, *, max_pool_size: int = 8
+    dsn: str, *, min_pool_size: int = 4, max_pool_size: int = 24
 ) -> tuple[Checkpointer, Any] | None:
     """Initialize PostgreSQL checkpointer with provided DSN.
 
     Args:
         dsn: PostgreSQL connection string for the checkpoints database.
-        max_pool_size: ``AsyncConnectionPool`` max_size (``min_size`` is 1 for worker-friendly sizing).
+        min_pool_size: ``AsyncConnectionPool`` min_size (warm connections).
+        max_pool_size: ``AsyncConnectionPool`` max_size.
 
     Returns:
         A tuple of (None, AsyncConnectionPool) if successful, None otherwise.
@@ -199,7 +200,7 @@ def _resolve_postgres_checkpointer(
     try:
         pool = AsyncConnectionPool(
             dsn,
-            min_size=1,
+            min_size=min_pool_size,
             max_size=max_pool_size,
             kwargs={
                 "autocommit": True,

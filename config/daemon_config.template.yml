@@ -79,9 +79,9 @@ event_size_stats_idle_pause_seconds: 120
 # - worker_pool: Each subprocess has its OWN pool (N × pool_size connections)
 #   Due to multiprocessing spawn isolation, pools cannot be cross-process shared.
 #
-# Pool Size Recommendations:
-# - thread_pool mode: Larger pools (8-12 checkpointer, 12-30 agentloop) benefit all threads
-# - worker_pool mode: Small pools (2-4 checkpointer, 4-8 agentloop) to avoid connection bloat
+# Pool Size Recommendations (config persistence: postgres_pool_min_size, *pool_size max):
+# - thread_pool mode: Defaults min 4 / max 24 per shared checkpointer and agentloop pool
+# - worker_pool mode: Lower *pool_size per process to avoid N×connection bloat
 #   Total connections = (min_pool_size + scale) × pool_size per worker
 # ============================================================================
 
@@ -90,7 +90,7 @@ event_size_stats_idle_pause_seconds: 120
 # Best for: Dev/testing, I/O-bound async workloads
 #
 # PostgreSQL connection sharing: Daemon-level singleton pools (IG-406) are shared by
-# ALL threads. Use larger persistence pool sizes (8-12 checkpointer, 12-30 agentloop)
+# ALL threads. Defaults: postgres_pool_min_size 4, checkpointer/agentloop max 24 each
 # since threads benefit from shared pool capacity without multiplying connections.
 thread_pool:
   enabled: true
@@ -98,7 +98,7 @@ thread_pool:
   max_pool_size: 6
   idle_timeout_seconds: 120
   max_requests_per_thread: 50
-  # With thread_pool, set config persistence.agentloop_pool_size to about max_pool_size + 2.
+  # With thread_pool, tune config persistence pool sizes if thread_pool.max_pool_size is raised.
   request_timeout_seconds: 0         # 0 = no per-request timeout
   thread_startup_timeout_seconds: 10
 
