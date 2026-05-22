@@ -67,11 +67,12 @@ daemon/persistence/
 ├── __init__.py           # Public exports
 ├── pools.py              # Pre-open, idle release, periodic maintenance, shutdown
 ├── pool_sizing.py        # recommended_*_pool_size helpers
-├── process_cleanup.py    # reap_stale_soothe_worker_processes
+├── process_cleanup.py    # reap + periodic_stale_worker_reap (asyncio + to_thread)
 └── health_check.py       # Persistence category for HealthChecker
 ```
 
-CLI: `python -m soothe_daemon.persistence` (optional `--dry-run`).
+- **CLI**: `python -m soothe_daemon.persistence` (optional `--dry-run`) — manual reap when the daemon is stopped or after crashes.
+- **Automatic**: start/stop one-shot reap; with `worker_pool.enabled` and `stale_worker_reap.enabled`, periodic reap every `stale_worker_reap.interval_seconds` (default 1800s) via an asyncio task (does not block the event loop).
 
 ---
 

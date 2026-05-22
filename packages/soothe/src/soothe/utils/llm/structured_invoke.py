@@ -13,6 +13,8 @@ from soothe.utils.llm.schema_wire import resolve_schema_name, validate_response_
 
 logger = logging.getLogger(__name__)
 
+_STRUCTURED_METHODS: tuple[str | None, ...] = ("function_calling", None, "json_mode")
+
 
 class StructuredOutputError(Exception):
     """Raised when structured output cannot be produced for a requested schema."""
@@ -37,6 +39,32 @@ def post_validate_structured_dict(data: dict[str, Any], json_schema: dict[str, A
         raise StructuredOutputError(msg) from exc
 
 
+def _schema_with_title(json_schema: dict[str, Any], schema_name: str) -> dict[str, Any]:
+    schema_with_title = dict(json_schema)
+    if "title" not in schema_with_title:
+        schema_with_title["title"] = schema_name
+    return schema_with_title
+
+
+def _try_create_structured_runnable(
+    chat: BaseChatModel,
+    schema_with_title: dict[str, Any],
+    *,
+    method: str | None,
+    strict: bool,
+) -> Any:
+    """Build a structured-output runnable for a single method, or raise."""
+    if method is None:
+        return chat.with_structured_output(schema_with_title)
+    return chat.with_structured_output(schema_with_title, method=method, strict=strict)
+
+
+def _is_retriable_structured_invoke_error(exc: Exception) -> bool:
+    """Return True when another structured-output method may succeed (e.g. thinking models)."""
+    msg = str(exc).lower()
+    return "thinking mode" in msg and "tool_choice" in msg
+
+
 def _create_structured_runnable(
     chat: BaseChatModel,
     json_schema: dict[str, Any],
@@ -45,18 +73,16 @@ def _create_structured_runnable(
     strict: bool,
 ) -> Any:
     """Build a structured-output runnable, mirroring IntentClassifier method order."""
-    # Inject top-level title if missing (langchain requires it for function calling)
-    schema_with_title = dict(json_schema)
-    if "title" not in schema_with_title:
-        schema_with_title["title"] = schema_name
+    schema_with_title = _schema_with_title(json_schema, schema_name)
 
-    for method in ("function_calling", None, "json_mode"):
+    for method in _STRUCTURED_METHODS:
         try:
-            kwargs: dict[str, Any] = {"strict": strict}
-            if method is None:
-                # json_mode doesn't support strict parameter
-                return chat.with_structured_output(schema_with_title)
-            return chat.with_structured_output(schema_with_title, method=method, **kwargs)
+            return _try_create_structured_runnable(
+                chat,
+                schema_with_title,
+                method=method,
+                strict=strict,
+            )
         except Exception:
             logger.debug(
                 "with_structured_output failed for method=%s",
@@ -96,26 +122,53 @@ async def invoke_structured_chat(
     """
     schema = validate_response_schema(json_schema)
     name = resolve_schema_name(schema, schema_name)
+    schema_with_title = _schema_with_title(schema, name)
     invoke_cfg = config or {}
 
-    structured = _create_structured_runnable(
-        chat,
-        schema,
-        schema_name=name,
-        strict=strict,
-    )
-    try:
-        result = await structured.ainvoke(messages, config=invoke_cfg)
-    except StructuredOutputError:
-        raise
-    except Exception as exc:
-        msg = f"structured model invoke failed: {exc}"
-        raise StructuredOutputError(msg) from exc
+    last_exc: Exception | None = None
+    for method in _STRUCTURED_METHODS:
+        try:
+            structured = _try_create_structured_runnable(
+                chat,
+                schema_with_title,
+                method=method,
+                strict=strict,
+            )
+        except Exception:
+            logger.debug(
+                "with_structured_output failed for method=%s",
+                method,
+                exc_info=True,
+            )
+            continue
 
-    data = normalize_structured_result(result)
-    if strict:
-        post_validate_structured_dict(data, schema)
-    return data
+        try:
+            result = await structured.ainvoke(messages, config=invoke_cfg)
+        except StructuredOutputError:
+            raise
+        except Exception as exc:
+            last_exc = exc
+            if method != _STRUCTURED_METHODS[-1] and _is_retriable_structured_invoke_error(exc):
+                logger.debug(
+                    "structured invoke retrying after method=%s failure",
+                    method,
+                    exc_info=True,
+                )
+                continue
+            msg = f"structured model invoke failed: {exc}"
+            raise StructuredOutputError(msg) from exc
+
+        data = normalize_structured_result(result)
+        if strict:
+            post_validate_structured_dict(data, schema)
+        return data
+
+    if last_exc is not None:
+        msg = f"structured model invoke failed: {last_exc}"
+        raise StructuredOutputError(msg) from last_exc
+
+    msg = "all structured output methods failed for the configured model"
+    raise StructuredOutputError(msg)
 
 
 __all__ = [

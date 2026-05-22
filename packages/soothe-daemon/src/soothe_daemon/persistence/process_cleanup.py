@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import signal
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -59,6 +61,8 @@ def reap_stale_soothe_worker_processes(
     *,
     dry_run: bool = False,
     soothe_project_root: Path | None = None,
+    daemon_pid: int | None = None,
+    protect_pids: frozenset[int] | None = None,
 ) -> int:
     """Terminate orphaned ``multiprocessing.spawn`` workers from old daemon runs.
 
@@ -68,6 +72,8 @@ def reap_stale_soothe_worker_processes(
     Args:
         dry_run: Log candidates without sending SIGTERM.
         soothe_project_root: Optional repo/venv root to narrow matches.
+        daemon_pid: Skip spawn workers whose parent is this PID (defaults to current process).
+        protect_pids: Optional PIDs to never terminate (e.g. live pool workers).
 
     Returns:
         Number of processes sent SIGTERM (0 in dry_run).
@@ -75,6 +81,9 @@ def reap_stale_soothe_worker_processes(
     root = soothe_project_root
     if root is None:
         root = Path(__file__).resolve().parents[4]
+
+    effective_daemon_pid = os.getpid() if daemon_pid is None else daemon_pid
+    protected = protect_pids or frozenset()
 
     try:
         out = subprocess.run(
@@ -106,7 +115,12 @@ def reap_stale_soothe_worker_processes(
         cmd = parts[2]
         if pid == current_pid or pid <= 1:
             continue
+        if pid in protected:
+            continue
         if not _looks_like_soothe_spawn(cmd, root):
+            continue
+
+        if ppid == effective_daemon_pid:
             continue
 
         parent_cmd = _read_cmdline(ppid) if _parent_alive(ppid) else ""
@@ -137,6 +151,28 @@ def reap_stale_soothe_worker_processes(
     if reaped:
         logger.info("Reaped %d stale soothe multiprocessing worker process(es)", reaped)
     return reaped
+
+
+async def periodic_stale_worker_reap(
+    *,
+    is_running: Callable[[], bool],
+    interval_s: int,
+    daemon_pid: int | None = None,
+    protect_pids: frozenset[int] | None = None,
+) -> None:
+    """Reap orphaned spawn workers on a fixed interval without blocking the event loop."""
+    while is_running():
+        await asyncio.sleep(interval_s)
+        if not is_running():
+            break
+        try:
+            await asyncio.to_thread(
+                reap_stale_soothe_worker_processes,
+                daemon_pid=daemon_pid,
+                protect_pids=protect_pids,
+            )
+        except Exception:
+            logger.debug("Periodic stale worker reap failed", exc_info=True)
 
 
 def reap_from_cli() -> None:

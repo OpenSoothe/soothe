@@ -28,9 +28,15 @@ def _reset_plugin_registry_between_tests() -> None:
         if is_plugins_loaded():
             await shutdown_plugins()
 
-    asyncio.run(_shutdown())
+    def _run_shutdown() -> None:
+        try:
+            asyncio.run(_shutdown())
+        except asyncio.CancelledError:
+            pass
+
+    _run_shutdown()
     yield
-    asyncio.run(_shutdown())
+    _run_shutdown()
 
 
 def _minimal_config_sample_echo_only() -> SootheConfig:
