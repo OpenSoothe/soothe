@@ -37,7 +37,8 @@ def extract_ai_text_for_display(message: Any) -> str:
     """Extract assistant-visible text from AI message payloads."""
     try:
         if hasattr(message, "text"):
-            extracted = str(message.text() or "").strip()
+            # LangChain TextAccessor: use property/str(), not .text() (deprecated).
+            extracted = str(message.text or "").strip()
             if extracted:
                 return extracted
     except Exception:

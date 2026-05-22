@@ -639,9 +639,11 @@ def resolve_subagents(
 
         extra_kwargs: dict = dict(sub_cfg.config)
         if name == "tacitus":
+            # Tacitus YAML options live in ``config.subagents["tacitus"].config`` only.
+            # ``create_tacitus_subagent`` accepts ``model``, ``SootheConfig``, and ``context``.
+            extra_kwargs.clear()
             extra_kwargs["config"] = config
-            if "context" not in extra_kwargs:
-                extra_kwargs["context"] = {"work_dir": resolved_cwd}
+            extra_kwargs["context"] = {"work_dir": resolved_cwd}
         elif name == "explore":
             # Explore YAML options live in ``config.subagents["explore"].config`` only.
             # Do not spread them as kwargs — ``create_explore_subagent`` accepts ``model``,
