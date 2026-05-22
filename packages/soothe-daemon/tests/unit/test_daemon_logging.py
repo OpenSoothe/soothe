@@ -7,8 +7,8 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import pytest
-
 from soothe.logging.setup import PACKAGE_LOGGER_NAMES
+
 from soothe_daemon.logging import DEFAULT_DAEMON_LOG, default_daemon_log_path, setup_daemon_logging
 
 
@@ -24,7 +24,9 @@ class TestDaemonLogging:
         for name in ("soothe_daemon", *PACKAGE_LOGGER_NAMES):
             logging.getLogger(name).handlers.clear()
 
-    def test_default_daemon_log_path_ends_with_daemon_log(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_default_daemon_log_path_ends_with_daemon_log(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Default path is under SOOTHE_HOME/logs/daemon.log."""
         home = Path("/tmp/soothe-test-home")
         monkeypatch.setattr("soothe_daemon.logging.SOOTHE_HOME", str(home))

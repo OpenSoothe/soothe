@@ -98,7 +98,7 @@ class SharedPostgreSQLPool:
             if self._pool_timing:
                 pool_kwargs.update(self._pool_timing)
             else:
-                pool_kwargs["min_size"] = 4
+                pool_kwargs["min_size"] = min(4, self.pool_size)
             self._pool = AsyncConnectionPool(self.dsn, **apply_row_factory(pool_kwargs))
 
             # Open pool
@@ -160,7 +160,7 @@ class SharedPostgreSQLPool:
             if _shared_pool is None:
                 dsn = config.resolve_postgres_dsn_for_database("checkpoints")
                 pool_size = config.persistence.agentloop_pool_size
-                timing = postgres_pool_timing_from_config(config)
+                timing = postgres_pool_timing_from_config(config, max_size=pool_size)
                 _shared_pool = SharedPostgreSQLPool(
                     dsn,
                     pool_size=pool_size,

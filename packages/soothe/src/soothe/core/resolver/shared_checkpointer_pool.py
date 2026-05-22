@@ -62,8 +62,8 @@ class SharedCheckpointerPool:
                 return None
 
             dsn = config.resolve_postgres_dsn_for_database("checkpoints")
-            timing = postgres_pool_timing_from_config(config)
             max_size = config.persistence.checkpointer_pool_size
+            timing = postgres_pool_timing_from_config(config, max_size=max_size)
             pool_kwargs: dict[str, Any] = {
                 "max_size": max_size,
                 "open": False,
