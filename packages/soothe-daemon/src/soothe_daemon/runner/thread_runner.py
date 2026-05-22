@@ -26,12 +26,13 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from soothe.config.settings import SootheConfig
 from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
 
 from soothe_daemon.config import SootheDaemonConfig
+from soothe_daemon.runner.response_bridge import ResponsePusher
 
 if TYPE_CHECKING:
     from soothe.core.runner._runner_shared import StreamChunk
@@ -143,11 +144,17 @@ def _thread_worker_body(
 
     requests_completed = 0
 
-    def _run_single(req: LoopRunRequest, request_id: str) -> None:
+    def _run_single(req: LoopRunRequest, request_id: str, pusher: ResponsePusher | None) -> None:
         """Execute one request with fresh SootheRunner."""
         from soothe.core.runner import SootheRunner
         from soothe.core.runner._worker_utils import parse_intent_hint
         from soothe.core.runner.worker_logging import configure_loop_runner_worker_logging
+
+        def _emit(msg_type: str, payload: Any = None) -> None:
+            if pusher is not None:
+                pusher.push_from_worker(msg_type, payload)
+            else:
+                response_queue.put((msg_type, request_id, payload))
 
         configure_loop_runner_worker_logging(config, req.loop_id)
 
@@ -189,13 +196,12 @@ def _thread_worker_body(
                                 req.loop_id,
                                 request_id,
                             )
-                            response_queue.put(("cancelled", request_id, None))
+                            _emit("cancelled")
                             return
 
-                        # Tag response with request_id for routing
-                        response_queue.put(("chunk", request_id, chunk))
+                        _emit("chunk", chunk)
 
-                    response_queue.put(("done", request_id, None))
+                    _emit("done")
 
                 async def _stream_with_cancel_poll() -> None:
                     stream_task = asyncio.create_task(_stream())
@@ -234,7 +240,7 @@ def _thread_worker_body(
                     req.loop_id,
                     request_id,
                 )
-                response_queue.put(("cancelled", request_id, None))
+                _emit("cancelled")
             except TimeoutError:
                 logger.warning(
                     "Thread worker %s: request timeout (%ds) loop=%s request_id=%s",
@@ -243,15 +249,12 @@ def _thread_worker_body(
                     req.loop_id,
                     request_id,
                 )
-                response_queue.put(
-                    (
-                        "timeout",
-                        request_id,
-                        RuntimeError(f"Request exceeded {timeout_seconds}s timeout"),
-                    )
+                _emit(
+                    "timeout",
+                    RuntimeError(f"Request exceeded {timeout_seconds}s timeout"),
                 )
             except Exception as exc:
-                response_queue.put(("error", request_id, exc))
+                _emit("error", exc)
             finally:
                 if runner is not None:
                     try:
@@ -282,7 +285,7 @@ def _thread_worker_body(
                 request_id,
             )
             try:
-                response_queue.put(("cancelled", request_id, None))
+                _emit("cancelled")
             except Exception:
                 logger.exception(
                     "Thread worker %s: failed to enqueue cancelled request_id=%s",
@@ -297,7 +300,7 @@ def _thread_worker_body(
                 request_id,
             )
             try:
-                response_queue.put(("error", request_id, exc))
+                _emit("error", exc)
             except Exception:
                 logger.exception(
                     "Thread worker %s: failed to enqueue error request_id=%s",
@@ -322,8 +325,8 @@ def _thread_worker_body(
                 logger.info("Thread worker %s received shutdown signal, exiting", worker_id)
                 break
 
-            # Parse message: ("request", request_id, LoopRunRequest)
-            msg_type, request_id, req = msg
+            # Parse: ("request", request_id, LoopRunRequest[, ResponsePusher])
+            msg_type = msg[0]
             if msg_type != "request":
                 logger.warning(
                     "Thread worker %s received unexpected message type: %s",
@@ -332,13 +335,17 @@ def _thread_worker_body(
                 )
                 continue
 
+            request_id = msg[1]
+            req = msg[2]
+            pusher = msg[3] if len(msg) > 3 else None
+
             logger.debug(
                 "Thread worker %s starting request loop=%s request_id=%s",
                 worker_id,
                 req.loop_id,
                 request_id,
             )
-            _run_single(req, request_id)
+            _run_single(req, request_id, pusher)
             requests_completed += 1
             logger.debug(
                 "Thread worker %s completed request %d/%d loop=%s request_id=%s",
@@ -403,7 +410,8 @@ class ThreadPool:
         self._metrics_requests_total = 0
         self._metrics_latencies: list[float] = []
         self._pending_responses: dict[str, asyncio.Queue] = {}
-        self._poll_task: asyncio.Task | None = None
+        self._main_loop: asyncio.AbstractEventLoop | None = None
+        self._health_task: asyncio.Task | None = None
         self._abandon_drain_tasks: set[asyncio.Task[None]] = set()
         self._next_worker_index: int = 0
 
@@ -463,7 +471,8 @@ class ThreadPool:
             self._next_worker_index = i + 1
 
         self._running = True
-        self._poll_task = asyncio.create_task(self._poll_worker_responses())
+        self._main_loop = asyncio.get_running_loop()
+        self._health_task = asyncio.create_task(self._worker_health_watchdog())
 
         logger.info(
             "ThreadPool: pre-warmed %d threads (min=%d, max=%d, idle_timeout=%ds, max_requests=%d)",
@@ -629,8 +638,8 @@ class ThreadPool:
         except Exception:
             logger.exception("ThreadPool: failed to respawn dead worker %s", worker.worker_id)
 
-    async def _poll_worker_responses(self) -> None:
-        """Background task: poll threading.Queue and route to pending requests."""
+    async def _worker_health_watchdog(self) -> None:
+        """Dead-worker recovery and idle stale-queue drain (no chunk relay; IG-429)."""
         loop = asyncio.get_event_loop()
 
         while self._running:
@@ -639,81 +648,27 @@ class ThreadPool:
                     await self._handle_dead_worker(worker)
                     continue
 
-                if worker.current_request_id is None:
-                    # Drain stale queue items
-                    drained = 0
-                    while True:
-                        try:
-                            msg = await loop.run_in_executor(
-                                None,
-                                worker.response_queue.get_nowait,
-                            )
-                        except queue.Empty:
-                            break
-                        drained += 1
-                    if drained:
-                        logger.debug(
-                            "ThreadPool: drained %d stale response(s) from idle worker %s",
-                            drained,
-                            worker_id,
+                if worker.current_request_id is not None:
+                    continue
+
+                drained = 0
+                while True:
+                    try:
+                        await loop.run_in_executor(
+                            None,
+                            worker.response_queue.get_nowait,
                         )
-                    continue
-
-                try:
-                    msg = await loop.run_in_executor(
-                        None,
-                        worker.response_queue.get_nowait,
-                    )
-                except queue.Empty:
-                    continue
-
-                # Parse: (msg_type, request_id, payload)
-                msg_type, request_id, payload = msg
-
-                # TIMEOUT handling
-                if msg_type == "timeout":
-                    response_queue = self._pending_responses.get(request_id)
-                    if response_queue is not None:
-                        await response_queue.put(("error", payload))
-                    await self._mark_worker_idle_and_notify(worker)
-                    self._workers_by_loop_id.pop(worker.current_loop_id or "", None)
-                    self._pending_responses.pop(request_id, None)
-                    logger.warning(
-                        "ThreadPool: worker %s request %s timed out",
-                        worker_id,
-                        request_id,
-                    )
-                    continue
-
-                # CANCELLED handling
-                if msg_type == "cancelled":
-                    response_queue = self._pending_responses.get(request_id)
-                    if response_queue is not None:
-                        await response_queue.put(("error", asyncio.CancelledError()))
-                    await self._mark_worker_idle_and_notify(worker)
-                    self._workers_by_loop_id.pop(worker.current_loop_id or "", None)
-                    self._pending_responses.pop(request_id, None)
-                    logger.info(
-                        "ThreadPool: worker %s request %s cancelled cooperatively",
-                        worker_id,
-                        request_id,
-                    )
-                    continue
-
-                # Route chunk/done/error to pending response queue
-                response_queue = self._pending_responses.get(request_id)
-                if response_queue is not None:
-                    await response_queue.put((msg_type, payload))
-                    if worker.status == WorkerThreadStatus.BUSY:
-                        worker.last_heartbeat_at = datetime.now()
-                else:
+                    except queue.Empty:
+                        break
+                    drained += 1
+                if drained:
                     logger.debug(
-                        "ThreadPool: no pending route for request_id=%s (%s); discarding",
-                        request_id,
-                        msg_type,
+                        "ThreadPool: drained %d stale response(s) from idle worker %s",
+                        drained,
+                        worker_id,
                     )
 
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(1.0)
 
     async def _respawn_worker(self, dead_worker: WorkerThreadState) -> None:
         """Replace a dead worker with a fresh one."""
@@ -790,11 +745,13 @@ class ThreadPool:
                         finally:
                             self._waiting_for_worker_slot -= 1
 
-                response_queue = asyncio.Queue()
+                response_queue: asyncio.Queue[Any] = asyncio.Queue()
                 self._pending_responses[request_id] = response_queue
                 self._workers_by_loop_id[request.loop_id] = worker.worker_id
                 worker.mark_busy(request.loop_id, request_id)
-                worker.request_queue.put(("request", request_id, request))
+                main_loop = self._main_loop or asyncio.get_running_loop()
+                pusher = ResponsePusher(main_loop, response_queue)
+                worker.request_queue.put(("request", request_id, request, pusher))
                 if worker.is_alive():
                     break
 
@@ -936,13 +893,13 @@ class ThreadPool:
 
         await self._notify_worker_slot_available()
 
-        if self._poll_task is not None:
-            self._poll_task.cancel()
+        if self._health_task is not None:
+            self._health_task.cancel()
             try:
-                await self._poll_task
+                await self._health_task
             except asyncio.CancelledError:
                 pass
-            self._poll_task = None
+            self._health_task = None
 
         for t in list(self._abandon_drain_tasks):
             t.cancel()

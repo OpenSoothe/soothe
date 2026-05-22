@@ -40,7 +40,7 @@ Route queries to specialized subagents:
 
 | Command | Subagent | Use Case |
 |---------|----------|----------|
-| `/research <query>` | Research | Multi-source investigation |
+| `/tacitus <query>` | Tacitus | Multi-source public-domain research |
 | `/explore <query>` | Explore | Readonly repo search |
 | `/plan` | Plan | Plan-mode routing |
 | `/«id» <query>` | Configured id | Optional plugins from soothe-community (see that repo for ids) |
@@ -120,6 +120,55 @@ The TUI shows real-time progress through:
 - **Plan Panel**: Task decomposition and step status
 - **Activity Panel**: Last 5 lines of subagent activity and tool calls
 - **Conversation Panel**: User turns and final responses
+- **Step Cards**: Tool activity preview and file change previews
+
+## Step Cards
+
+Step cards display progress for each step in the plan, including tool activity and file changes.
+
+### Tool Activity Preview
+
+Step cards show the latest tool invocations to help you track what's happening:
+
+- **Location**: Each step card displays up to 3 recent tool activity lines
+- **Content**: Shows tool name with arguments and execution phase
+- **Nested Tasks**: Inner subagent tool calls appear under their parent task branch
+- **Format**: `ToolName(args)` with status indicator
+
+**Example**:
+```
+[Step Card: Update documentation]
+├── Grep(pattern="tacitus") - Searching...
+├── ReadFile(path="docs/wiki/subagents.md") - Reading...
+├── EditFile(path="docs/wiki/subagents.md") - Complete
+└── Status: Running (3 tools)
+```
+
+### File Change Preview
+
+When files are modified, the TUI displays a diff preview widget:
+
+- **Trigger**: Appears automatically on file edit operations
+- **Content**: Shows unified diff of changes (added/removed lines)
+- **Navigation**: Scroll through changes with arrow keys
+- **Dismiss**: Press `q` or `Esc` to close the preview
+
+**Features**:
+- Syntax highlighting for common file types
+- Line numbers for reference
+- Collapsed context around changes
+- Summary statistics (files changed, insertions, deletions)
+
+## Streaming Performance
+
+The TUI has been optimized for low-latency streaming:
+
+- **Reduced Event Volume**: Server-side batching reduces WebSocket events by ~80%
+- **Priority Queue**: Tool updates display before text streaming completes
+- **Fast Drain**: Post-goal completion drain time reduced from ~50s to <5s
+- **Coalesced Text**: Plain assistant text is buffered and delivered in chunks
+
+These optimizations ensure the UI stays responsive even during long-running tasks with heavy output.
 
 ## Related Guides
 

@@ -775,8 +775,6 @@ class QueryEngine:
                                     out_data,
                                     coalescer=coalescer,
                                 )
-                            if coalescer.consume_turn_complete_pending():
-                                await self._signal_turn_idle(effective_loop_id)
 
                     for out_ns, out_mode, out_data in coalescer.flush():
                         if effective_loop_id:

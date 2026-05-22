@@ -80,6 +80,14 @@ Set the working directory:
 workspace_dir: "."
 ```
 
+For user-scoped isolation, use the home directory pattern:
+
+```yaml
+workspace_dir: "~/.soothe/workspaces/default"
+```
+
+See [Workspace Isolation](#workspace-isolation) for advanced workspace configuration.
+
 ## Model Router
 
 The router maps purpose-based roles to specific models:
@@ -124,7 +132,7 @@ subagents:
     enabled: true
   plan:
     enabled: true
-  research:
+  tacitus:
     enabled: true
 
   skillify:
@@ -247,6 +255,78 @@ tools:
 ```
 
 **Note**: deepagents provides file operations, shell execution, and task tracking by default.
+
+## Code Interpreter
+
+Enable the embedded QuickJS interpreter for programmatic tool calling and stateful code execution (requires `langchain-quickjs`).
+
+**Configuration**:
+```yaml
+interpreter:
+  enabled: false  # Disabled by default (opt-in feature)
+  ptc_allowlist: []  # Tools exposed to interpreter via tools.* namespace
+  memory_limit_mb: 128  # Interpreter memory limit
+  timeout_seconds: 30  # Per-eval timeout
+  max_ptc_calls: 50  # Maximum programmatic tool calls per eval
+  max_result_size: 10000  # Maximum result size in characters
+  console_capture: true  # Capture console.log output
+  snapshot_between_turns: false  # Preserve state between conversation turns
+```
+
+**PTC Allowlist Example**:
+```yaml
+interpreter:
+  enabled: true
+  ptc_allowlist:
+    - read_file
+    - write_file
+    - edit_file
+    - grep
+    - glob
+```
+
+**Security Notes**:
+- The interpreter is disabled by default and must be explicitly enabled
+- Tools must be explicitly allowlisted to be accessible via `tools.*` namespace
+- Execution is sandboxed within the QuickJS runtime
+- Memory and timeout limits prevent runaway execution
+
+## Workspace Isolation
+
+Configure user-scoped workspace isolation and ephemeral daemon workspaces.
+
+**Configuration**:
+```yaml
+# User-scoped workspace (default: ~/.soothe/workspaces/{username})
+workspace_dir: "~/.soothe/workspaces/default"
+
+# Or use current directory
+workspace_dir: "."
+
+# Ephemeral daemon workspace (isolated per daemon instance)
+# Set via environment variable:
+export SOOTHE_EPHEMERAL_WORKSPACE=true
+```
+
+**Workspace Structure**:
+```
+~/.soothe/
+├── workspaces/
+│   ├── default/           # Default workspace
+│   │   ├── files/         # Working files
+│   │   ├── runs/          # Execution data
+│   │   └── logs/          # Workspace-specific logs
+│   └── {username}/        # User-scoped workspace
+│       ├── files/
+│       ├── runs/
+│       └── logs/
+```
+
+**Ephemeral Workspace**:
+- Created fresh for each daemon instance
+- Automatically cleaned up on daemon shutdown
+- Isolated from other daemon instances
+- Useful for CI/CD and automated workflows
 
 ## Protocols
 
