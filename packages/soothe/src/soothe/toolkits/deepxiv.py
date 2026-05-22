@@ -141,6 +141,30 @@ def _preview(value: object, *, max_len: int = _PREVIEW_LEN) -> str:
     return text
 
 
+def _author_display_name(author: object) -> str:
+    """Extract display name from a DeepXiv author entry (dict or plain string)."""
+    if isinstance(author, str):
+        return author.strip()
+    if isinstance(author, dict):
+        name = author.get("name")
+        if name is not None:
+            return str(name).strip()
+    return ""
+
+
+def _format_author_names(authors: list[object], *, limit: int) -> str:
+    """Join author names for display, with optional 'et al.' when truncated."""
+    if not authors:
+        return ""
+    names = [n for n in (_author_display_name(a) for a in authors[:limit]) if n]
+    if not names:
+        return ""
+    text = ", ".join(names)
+    if len(authors) > limit:
+        text += " et al."
+    return text
+
+
 def _format_call_preview(args: tuple[object, ...], kwargs: dict[str, object]) -> str:
     """Build a short log fragment from tool call arguments."""
     parts: list[str] = []
@@ -466,9 +490,7 @@ class DeepxivSearchTool(BaseTool):
             score = paper.get("score", 0)
             citations = paper.get("citation_count", 0)
             authors = paper.get("authors", [])
-            author_names = ", ".join(a.get("name", "") for a in authors[:3])
-            if len(authors) > 3:
-                author_names += " et al."
+            author_names = _format_author_names(authors, limit=3)
             categories = paper.get("categories", [])
             cat_str = ", ".join(categories[:3]) if categories else ""
 
@@ -598,10 +620,8 @@ class DeepxivPaperMetadataTool(BaseTool):
         ]
 
         authors = result.get("authors", [])
-        if authors:
-            author_names = ", ".join(a.get("name", "") for a in authors[:5])
-            if len(authors) > 5:
-                author_names += " et al."
+        author_names = _format_author_names(authors, limit=5)
+        if author_names:
             lines.append(f"**Authors:** {author_names}")
 
         categories = result.get("categories", [])
