@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from soothe_sdk.utils import get_tool_display_name
 from soothe_sdk.ux.task_namespace import (
     _step_id_from_unified_fragment,
+    is_inner_subgraph_task_tool_id,
     is_step_level_task_tool_id,
     normalize_step_task_tool_call_id,
     parse_unified_tool_call_id,
@@ -1589,7 +1590,11 @@ class CognitionStepMessage(Vertical):
         task_idx = self._task_idx_from_delegation_row(task_row)
         by_id: dict[str, _StepToolRow] = {}
         for row in self._rows:
-            if row.is_task_row or is_step_level_task_tool_id(row.tool_call_id):
+            if (
+                row.is_task_row
+                or is_step_level_task_tool_id(row.tool_call_id)
+                or is_inner_subgraph_task_tool_id(row.tool_call_id)
+            ):
                 continue
             tcid = str(row.tool_call_id).strip()
             if not tcid:

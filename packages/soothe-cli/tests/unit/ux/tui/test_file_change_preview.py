@@ -60,6 +60,26 @@ def test_build_write_file_preview_shows_diff_on_overwrite(tmp_path: Path) -> Non
     assert any(line.startswith("-") or line.startswith("+") for line in data["diff_lines"])
 
 
+def test_write_file_overwrite_diff_compose_renders_diff_lines(tmp_path: Path) -> None:
+    """Regression: overwrite preview must use base diff renderer, not EditFile-only methods."""
+    target = tmp_path / "existing.txt"
+    target.write_text("old\n", encoding="utf-8")
+    built = build_file_change_preview(
+        "write_file",
+        {"file_path": str(target), "content": "new\n"},
+        assistant_id=None,
+    )
+    assert built is not None
+    _, data = built
+    widget = WriteFilePreviewWidget(data)
+    children = list(widget.compose())
+    assert children
+    classes = {getattr(c, "classes", None) for c in children}
+    assert frozenset({"diff-removed", "diff-added"}) & {
+        cls for group in classes if group for cls in group
+    }
+
+
 def test_build_edit_file_preview_has_diff_lines() -> None:
     """edit_file preview includes unified diff body lines."""
     built = build_file_change_preview(

@@ -83,6 +83,45 @@ class FileChangePreviewWidget(Vertical):
             )
         yield Static("Change details not available", classes="file-change-preview-body")
 
+    def _render_diff_lines_only(self, diff_lines: list[str]) -> ComposeResult:
+        lines_shown = 0
+        for line in diff_lines:
+            if lines_shown >= TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES:
+                yield Static(
+                    Content.styled(f"... ({len(diff_lines) - lines_shown} more lines)", "dim")
+                )
+                break
+            if line.startswith(("@@", "---", "+++")):
+                continue
+            widget = self._render_diff_line(line)
+            if widget:
+                yield widget
+                lines_shown += 1
+
+    @staticmethod
+    def _render_diff_line(line: str) -> Static | None:
+        raw = line[1:] if len(line) > 1 else ""
+        if line.startswith("-"):
+            return Static(Content.from_markup("- $text", text=raw), classes="diff-removed")
+        if line.startswith("+"):
+            return Static(Content.from_markup("+ $text", text=raw), classes="diff-added")
+        if line.startswith(" "):
+            return Static(Content.from_markup("  $text", text=raw), classes="diff-context")
+        if line.strip():
+            return Static(line, markup=False)
+        return None
+
+    @staticmethod
+    def _render_string_lines(text: str, *, is_addition: bool) -> ComposeResult:
+        lines = text.split("\n")
+        sign = "+" if is_addition else "-"
+        cls = "diff-added" if is_addition else "diff-removed"
+        for line in lines[:TOOL_APPROVAL_PREVIEW_LINES]:
+            yield Static(Content.from_markup(f"{sign} $text", text=line), classes=cls)
+        if len(lines) > TOOL_APPROVAL_PREVIEW_LINES:
+            remaining = len(lines) - TOOL_APPROVAL_PREVIEW_LINES
+            yield Static(Content.styled(f"... ({remaining} more lines)", "dim"))
+
 
 class WriteFilePreviewWidget(FileChangePreviewWidget):
     """Preview for write_file — diff on overwrite, syntax body for new files."""
@@ -140,7 +179,7 @@ class WriteFilePreviewWidget(FileChangePreviewWidget):
         if not diff_lines:
             yield Static("No changes to display", classes="file-change-preview-body")
             return
-        yield from EditFilePreviewWidget._render_diff_lines_only(self, diff_lines)
+        yield from self._render_diff_lines_only(diff_lines)
 
 
 class DeleteFilePreviewWidget(FileChangePreviewWidget):
@@ -222,21 +261,6 @@ class EditFilePreviewWidget(FileChangePreviewWidget):
         else:
             yield from self._render_strings_only(old_string, new_string)
 
-    def _render_diff_lines_only(self, diff_lines: list[str]) -> ComposeResult:
-        lines_shown = 0
-        for line in diff_lines:
-            if lines_shown >= TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES:
-                yield Static(
-                    Content.styled(f"... ({len(diff_lines) - lines_shown} more lines)", "dim")
-                )
-                break
-            if line.startswith(("@@", "---", "+++")):
-                continue
-            widget = self._render_diff_line(line)
-            if widget:
-                yield widget
-                lines_shown += 1
-
     def _render_strings_only(self, old_string: str, new_string: str) -> ComposeResult:
         colors = theme.get_theme_colors()
         if old_string:
@@ -246,30 +270,6 @@ class EditFilePreviewWidget(FileChangePreviewWidget):
         if new_string:
             yield Static(Content.styled("Adding:", f"bold {colors.success}"))
             yield from self._render_string_lines(new_string, is_addition=True)
-
-    @staticmethod
-    def _render_diff_line(line: str) -> Static | None:
-        raw = line[1:] if len(line) > 1 else ""
-        if line.startswith("-"):
-            return Static(Content.from_markup("- $text", text=raw), classes="diff-removed")
-        if line.startswith("+"):
-            return Static(Content.from_markup("+ $text", text=raw), classes="diff-added")
-        if line.startswith(" "):
-            return Static(Content.from_markup("  $text", text=raw), classes="diff-context")
-        if line.strip():
-            return Static(line, markup=False)
-        return None
-
-    @staticmethod
-    def _render_string_lines(text: str, *, is_addition: bool) -> ComposeResult:
-        lines = text.split("\n")
-        sign = "+" if is_addition else "-"
-        cls = "diff-added" if is_addition else "diff-removed"
-        for line in lines[:TOOL_APPROVAL_PREVIEW_LINES]:
-            yield Static(Content.from_markup(f"{sign} $text", text=line), classes=cls)
-        if len(lines) > TOOL_APPROVAL_PREVIEW_LINES:
-            remaining = len(lines) - TOOL_APPROVAL_PREVIEW_LINES
-            yield Static(Content.styled(f"... ({remaining} more lines)", "dim"))
 
 
 class EditFileLinesPreviewWidget(EditFilePreviewWidget):
