@@ -784,7 +784,7 @@ class OutputStreamingConfig(BaseModel):
         description="Chars threshold for adaptive mode switching",
     )
     file_output_threshold_chars: int = Field(
-        default=5000,
+        default=0,
         ge=0,
         le=100000,
         description="Chars threshold to write goal_completion to file",

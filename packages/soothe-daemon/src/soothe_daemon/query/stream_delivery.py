@@ -156,7 +156,7 @@ class StreamDeliveryCoalescer:
         mode: StreamDeliveryMode,
         *,
         adaptive_threshold_chars: int = 500,
-        file_output_threshold_chars: int = 5000,
+        file_output_threshold_chars: int = 0,
         file_output_preview_chars: int = 500,
         file_output_dir: str | None = None,
         workspace: str | None = None,
