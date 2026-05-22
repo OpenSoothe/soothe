@@ -207,7 +207,7 @@ agent_loop:
     message_coalesce_enabled: true    # Coalesce plain assistant text chunks before broadcast
     tui_flush_interval_ms: 200        # TUI rendering flush interval
     adaptive_threshold_chars: 500     # Adaptive switch threshold (chars)
-    file_output_threshold_chars: 5000 # Write goal_completion to file when larger (0 = never)
+    file_output_threshold_chars: 0 # Write goal_completion to file when larger (0 = disabled)
     file_output_preview_chars: 500    # Preview chars in TUI when saved to file
     file_output_dir: null             # Default: current workspace root/.soothe/output
   loop_orchestrator_evidence_validate: true
