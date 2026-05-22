@@ -395,12 +395,14 @@ vector_stores:
 vector_store_router:
   default: sqlite_vec_default:soothe_default
 
-# Workspace Configuration (新方案)
+# Workspace configuration
 # ====================
-# Daemon workspace 默认为临时目录（SOOTHE_WORKSPACE env 可覆盖）。
-# Per-user workspace 自动创建在 $SOOTHE_HOME/workspaces/<WorkspaceID>/。
-# WorkspaceID = "ws_" + SHA256(user_id:client_workspace)[:16] (认证用户)
-#           或 "anon_" + SHA256(client_workspace)[:16] (匿名用户)
-# 匿名 workspace 在 daemon 关闭时自动清理。
+# Daemon fallback workspace defaults to a temp directory (override with SOOTHE_WORKSPACE).
+# When loop_new sets client_workspace (RPC field: workspace), the runner uses that path directly.
+# When client_workspace is unset, persisted sandboxes live under:
+#   $SOOTHE_HOME/workspaces/<user>/ws_<hash>/
+#   - Empty user_id → directory segment "anonymous"; hash uses "" as the user part.
+#   - hash = SHA256(user_id, client_workspace_id or loop_id)[:16]
+# The anonymous workspace tree is removed on daemon shutdown.
 #
-# RPC loop_new 消息支持 user_id 字段来传递用户身份。
+# loop_new RPC fields: client_workspace (or legacy workspace), user_id, client_workspace_id.

@@ -7,11 +7,11 @@ from typing import Any
 
 from deepagents.backends.utils import validate_path
 
-from soothe.core.workspace.resolution import resolve_daemon_workspace
 from soothe.core.workspace.tool_path_resolution import (
     filesystem_virtual_mode_from_soothe_config,
     max_file_size_mb_for_filesystem_backend,
     resolve_backend_os_path,
+    workspace_path_for_tool_resolution,
 )
 
 
@@ -34,7 +34,7 @@ def resolve_toolkit_local_path(file_path: str, *, config: Any | None) -> Path:
         return Path(file_path).expanduser().resolve()
 
     logical = validate_path(file_path)
-    workspace = resolve_daemon_workspace()
+    workspace = workspace_path_for_tool_resolution(config)
     return resolve_backend_os_path(
         logical,
         workspace=workspace,

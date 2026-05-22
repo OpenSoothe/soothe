@@ -1,4 +1,4 @@
-"""Test that workspace_dir with ~ is correctly expanded."""
+"""Test that filesystem_middleware.workspace_root with ~ is correctly expanded."""
 
 from pathlib import Path
 
@@ -6,14 +6,18 @@ from soothe.config import SootheConfig
 from soothe.utils import expand_path
 
 
-def test_workspace_dir_tilde_expansion():
-    """Test that workspace_dir with ~ is expanded correctly in config."""
+def test_workspace_root_tilde_expansion():
+    """Test that workspace_root with ~ is expanded correctly in config."""
     config_dict = {
-        "workspace_dir": "~/.soothe/test",
+        "filesystem_middleware": {
+            "workspace_root": "~/.soothe/test",
+        },
     }
     config = SootheConfig(**config_dict)
 
-    # Verify the workspace_dir is stored correctly
+    # Verify the workspace_root is stored correctly (accessed via property)
+    assert config.filesystem_middleware.workspace_root == "~/.soothe/test"
+    # Property backward compat should also work
     assert config.workspace_dir == "~/.soothe/test"
 
     # Verify that expand_path resolves it correctly
@@ -31,9 +35,11 @@ def test_workspace_dir_tilde_expansion():
 
 
 def test_workspace_dir_expansion_in_resolver():
-    """Test that workspace_dir is properly expanded when used in resolver context."""
+    """Test that workspace_root is properly expanded when used in resolver context."""
     config_dict = {
-        "workspace_dir": "~/.soothe/test",
+        "filesystem_middleware": {
+            "workspace_root": "~/.soothe/test",
+        },
     }
     config = SootheConfig(**config_dict)
 
@@ -52,7 +58,9 @@ def test_workspace_dir_expansion_in_resolver():
 def test_workspace_dir_absolute_path_unchanged():
     """Test that absolute paths are handled correctly."""
     config_dict = {
-        "workspace_dir": "/absolute/path/to/workspace",
+        "filesystem_middleware": {
+            "workspace_root": "/absolute/path/to/workspace",
+        },
     }
     config = SootheConfig(**config_dict)
 
@@ -61,12 +69,14 @@ def test_workspace_dir_absolute_path_unchanged():
 
 
 def test_workspace_dir_env_var_expansion():
-    """Test that environment variables in workspace_dir are expanded."""
+    """Test that environment variables in workspace_root are expanded."""
     import os
 
     os.environ["TEST_WORKSPACE"] = "/test/workspace"
     config_dict = {
-        "workspace_dir": "$TEST_WORKSPACE/project",
+        "filesystem_middleware": {
+            "workspace_root": "$TEST_WORKSPACE/project",
+        },
     }
     config = SootheConfig(**config_dict)
 
@@ -74,3 +84,21 @@ def test_workspace_dir_env_var_expansion():
     assert str(expanded).startswith("/test/workspace/project")
 
     del os.environ["TEST_WORKSPACE"]
+
+
+def test_workspace_dir_backward_compat_property():
+    """Test that workspace_dir property maps to filesystem_middleware.workspace_root."""
+    config = SootheConfig()
+
+    # Default should be None
+    assert config.filesystem_middleware.workspace_root is None
+    assert config.workspace_dir is None
+
+    # Set via filesystem_middleware
+    config_dict = {
+        "filesystem_middleware": {
+            "workspace_root": "/test/workspace",
+        },
+    }
+    config = SootheConfig(**config_dict)
+    assert config.workspace_dir == "/test/workspace"

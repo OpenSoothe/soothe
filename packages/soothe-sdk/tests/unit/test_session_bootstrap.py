@@ -58,7 +58,7 @@ async def test_bootstrap_new_loop_allocates_and_subscribes(tmp_path: Path) -> No
     assert rr[0][1]["type"] == "loop_new"
     # IG-409: client workspace must be forwarded to the daemon on loop_new so the
     # agent's filesystem tools default to the user's CWD, not the per-loop scratch dir.
-    assert rr[0][1]["workspace"] == str(workspace)
+    assert rr[0][1]["client_workspace"] == str(workspace)
     assert rr[1][1]["type"] == "loop_subscribe"
     assert rr[1][1]["loop_id"] == "loop-created"
     assert rr[1][1]["verbosity"] == "normal"
@@ -81,7 +81,7 @@ async def test_bootstrap_new_loop_omits_workspace_when_none() -> None:
     rr = [c for c in client.calls if c[0] == "request_response"]
     loop_new_payload = rr[0][1]
     assert loop_new_payload["type"] == "loop_new"
-    assert "workspace" not in loop_new_payload
+    assert "client_workspace" not in loop_new_payload
 
 
 @pytest.mark.asyncio

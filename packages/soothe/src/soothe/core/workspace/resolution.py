@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import os
 import subprocess
@@ -48,24 +47,13 @@ def resolve_daemon_workspace() -> Path:
 
 
 def compute_workspace_id(user: str | None, client_workspace: str) -> str:
-    """Compute deterministic WorkspaceID from user + client_workspace.
+    """Compute legacy flat workspace dir name (deprecated).
 
-    Args:
-        user: User identifier (may be None for anonymous).
-        client_workspace: Client's current working directory.
-
-    Returns:
-        WorkspaceID string: "ws_<hash>" for authenticated, "anon_<hash>" for anonymous.
+    Prefer ``compute_scoped_workspace_dir_name`` and ``resolve_loop_workspace``.
     """
-    normalized_cw = str(Path(client_workspace).resolve())
+    from soothe.core.workspace.loop_workspace import compute_scoped_workspace_dir_name
 
-    if user and user.strip():
-        key = f"{user.strip()}:{normalized_cw}"
-        hash_hex = hashlib.sha256(key.encode()).hexdigest()[:16]
-        return f"ws_{hash_hex}"
-    else:
-        hash_hex = hashlib.sha256(normalized_cw.encode()).hexdigest()[:16]
-        return f"anon_{hash_hex}"
+    return compute_scoped_workspace_dir_name(user, str(Path(client_workspace).resolve()))
 
 
 def resolve_user_workspace(
@@ -75,37 +63,19 @@ def resolve_user_workspace(
     soothe_home: Path | None = None,
     create: bool = True,
 ) -> Path:
-    """Resolve per-user workspace path based on user identity + client CWD.
+    """Resolve workspace when only a client path is available (deprecated layout).
 
-    Args:
-        user: User identifier (may be None for anonymous).
-        client_workspace: Client's current working directory (CWD).
-        soothe_home: Optional SOOTHE_HOME override (for testing).
-        create: If True, create directory if missing.
-
-    Returns:
-        Absolute path to user workspace directory.
-
-    Raises:
-        ValueError: If client_workspace is invalid system directory.
+    Delegates to ``resolve_loop_workspace`` with a synthetic loop scope.
     """
-    from soothe.config import SOOTHE_HOME
+    from soothe.core.workspace.loop_workspace import resolve_loop_workspace
 
-    # Validate client_workspace
-    validate_client_workspace(client_workspace)
-
-    # Compute deterministic ID
-    workspace_id = compute_workspace_id(user, client_workspace)
-
-    # Construct path
-    home = Path(soothe_home or SOOTHE_HOME).expanduser().resolve()
-    workspace_path = home / "workspaces" / workspace_id
-
-    if create:
-        workspace_path.mkdir(parents=True, exist_ok=True)
-        logger.info("Resolved user workspace: %s -> %s", workspace_id, workspace_path)
-
-    return workspace_path
+    return resolve_loop_workspace(
+        loop_id="legacy",
+        client_workspace=client_workspace,
+        user_id=user,
+        soothe_home=soothe_home,
+        create=create,
+    )
 
 
 def cleanup_legacy_per_loop_workspaces() -> None:
@@ -140,28 +110,38 @@ def cleanup_legacy_per_loop_workspaces() -> None:
 def cleanup_anonymous_workspaces() -> None:
     """Clean up anonymous workspace directories (daemon shutdown).
 
-    Removes all `anon_*` directories under `$SOOTHE_HOME/workspaces/`.
+    Removes ``$SOOTHE_HOME/workspaces/anonymous/`` and legacy flat ``anon_*`` dirs.
     """
     import shutil
 
     from soothe.config import SOOTHE_HOME
+    from soothe.core.workspace.loop_workspace import normalize_user_id
 
     workspaces_dir = Path(SOOTHE_HOME) / "workspaces"
     if not workspaces_dir.exists():
         return
 
     cleaned = 0
+    anon_tree = workspaces_dir / normalize_user_id(None)
+    if anon_tree.is_dir():
+        try:
+            shutil.rmtree(anon_tree)
+            cleaned += 1
+            logger.info("Cleaned anonymous workspace tree: %s", anon_tree)
+        except OSError as e:
+            logger.warning("Failed to cleanup %s: %s", anon_tree, e)
+
     for ws_dir in workspaces_dir.glob("anon_*"):
         if ws_dir.is_dir():
             try:
                 shutil.rmtree(ws_dir)
                 cleaned += 1
-                logger.info("Cleaned anonymous workspace: %s", ws_dir)
+                logger.info("Cleaned legacy anonymous workspace: %s", ws_dir)
             except OSError as e:
                 logger.warning("Failed to cleanup %s: %s", ws_dir, e)
 
     if cleaned > 0:
-        logger.info("Cleaned %d anonymous workspace directories", cleaned)
+        logger.info("Cleaned %d anonymous workspace location(s)", cleaned)
 
 
 def _validate_workspace_dir(path: Path) -> None:

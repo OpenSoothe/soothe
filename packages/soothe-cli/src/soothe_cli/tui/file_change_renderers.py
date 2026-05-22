@@ -62,13 +62,21 @@ def build_file_change_preview(
         if "." in path_str:
             file_extension = path_str.rsplit(".", 1)[-1]
         physical = resolve_physical_path(path_str, assistant_id)
-        existed = bool(physical and physical.exists())
-        return WriteFilePreviewWidget, {
+        before = ""
+        if physical and physical.is_file():
+            before = read_physical_file_text(physical) or ""
+        is_new_file = not before
+        data: dict[str, Any] = {
             "file_path": path_str,
             "content": content,
             "file_extension": file_extension,
-            "is_new_file": not existed,
+            "is_new_file": is_new_file,
         }
+        if not is_new_file and before != content:
+            data["diff_lines"] = unified_diff_body_lines(before, content)
+            data["old_string"] = before
+            data["new_string"] = content
+        return WriteFilePreviewWidget, data
 
     if tool_name == "edit_file":
         old_string = str(args.get("old_string") or "")

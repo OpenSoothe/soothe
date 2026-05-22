@@ -628,10 +628,13 @@ class QueryEngine:
             warning_sent = False
 
             try:
-                stream_kwargs: dict[str, Any] = {
-                    "thread_id": thread_id,
-                    "workspace": self._workspace_str_for_thread(thread_id),
-                }
+                loop_meta: dict[str, Any] = {}
+                if effective_loop_id:
+                    loop_meta = (
+                        await d._persistence_manager.get_loop_metadata(effective_loop_id) or {}
+                    )
+
+                stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
                 if autonomous:
                     stream_kwargs["autonomous"] = True
                     if max_iterations is not None:
@@ -648,7 +651,9 @@ class QueryEngine:
                     loop_id=effective_loop_id or thread_id,
                     thread_id=thread_id,
                     user_input=effective_text,
-                    workspace=stream_kwargs.get("workspace"),
+                    client_workspace=loop_meta.get("client_workspace"),
+                    user_id=loop_meta.get("user_id") or loop_meta.get("user"),
+                    client_workspace_id=loop_meta.get("client_workspace_id"),
                     autonomous=stream_kwargs.get("autonomous", False),
                     max_iterations=stream_kwargs.get("max_iterations"),
                     preferred_subagent=stream_kwargs.get("preferred_subagent"),
@@ -656,8 +661,7 @@ class QueryEngine:
                     model_params=model_params or {},
                     intent_hint=intent_hint,
                 )
-                # Extract workspace for file output (RFC-614)
-                run_workspace = stream_kwargs.get("workspace")
+                run_workspace = run_request.resolve_workspace_path()
                 loop_runner = d._runner_factory.create_runner(_runner_key)
                 self._active_runners[_runner_key] = loop_runner
 
