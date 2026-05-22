@@ -35,7 +35,8 @@ from soothe.config.models import (
     VectorStoreProviderConfig,
     VectorStoreRouter,
 )
-from soothe.core.prompts import _DEFAULT_SYSTEM_PROMPT
+
+# Lazy import to avoid circular dependency - _DEFAULT_SYSTEM_PROMPT imported in methods that use it
 
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings
@@ -837,6 +838,8 @@ class SootheConfig(BaseSettings):
             The system prompt string.
         """
         import datetime as dt
+
+        from soothe.core.prompts import _DEFAULT_SYSTEM_PROMPT
 
         now = dt.datetime.now(dt.UTC).astimezone()
         current_date = now.strftime("%Y-%m-%d")

@@ -1721,7 +1721,7 @@ class Executor:
 
         # Compact input summary log
         logger.debug(
-            "[Execute-Seq] steps=%d thread=%s workspace=%s",
+            "[ExecuteSeq] steps=%d thread=%s workspace=%s",
             len(steps),
             state.thread_id[:12] if state.thread_id else "none",
             state.workspace if state.workspace else "none",
@@ -2394,7 +2394,7 @@ class Executor:
 
                     logged_args = tool_args_by_call_id.get(tool_call_id or "", {})
                     logger.debug(
-                        "Tool #%d %s(%s) args=%s → %s, %dB",
+                        "[Tool#%d] %s(%s) args=%s → %s, %dB",
                         tool_call_count,
                         tool_name,
                         tool_call_id,
