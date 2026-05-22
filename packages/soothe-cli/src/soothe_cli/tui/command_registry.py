@@ -89,11 +89,6 @@ COMMANDS: tuple[SlashCommand, ...] = (
         bypass_tier=BypassTier.IMMEDIATE_UI,
         hidden_keywords="warnings alerts suppress",
     ),
-    SlashCommand(  # Static alias; not auto-generated from skill discovery
-        name="/remember",
-        description="Update memory and skills from conversation",
-        bypass_tier=BypassTier.QUEUED,
-    ),
     SlashCommand(
         name="/loops",
         description="Browse and resume AgentLoop instances",
@@ -263,14 +258,12 @@ def parse_skill_command(command: str) -> tuple[str, str]:
     return skill_name, args
 
 
-_STATIC_SKILL_ALIASES: frozenset[str] = frozenset({"remember"})
-"""Built-in skill names that have a dedicated top-level slash command.
+_STATIC_SKILL_ALIASES: frozenset[str] = frozenset()
+"""Skill names that have a dedicated top-level slash command in `COMMANDS`.
 
-Only list skills whose `/skill:<name>` form is redundant because a `/<name>`
-convenience alias exists in `COMMANDS`.  Do **not** add every command name
-here — that would silently suppress unrelated user skills that happen to share a
-name with a slash command (e.g., a user skill called `model` should still
-appear as `/skill:model`).
+Only list skills whose `/skill:<name>` autocomplete entry is redundant because
+a `/<name>` convenience alias exists. Do **not** add every command name here —
+that would suppress unrelated user skills that share a name with a slash command.
 """
 
 
@@ -304,9 +297,8 @@ def build_skill_commands(
     Each skill becomes a `/skill:<name>` entry with its description
     and the skill name as a hidden keyword for fuzzy matching.
 
-    Skills that already have a dedicated slash command in `COMMANDS`
-    (e.g., `remember` → `/remember`) are excluded to avoid duplicate
-    autocomplete entries.
+    Skills listed in `_STATIC_SKILL_ALIASES` are excluded to avoid duplicate
+    autocomplete entries when a top-level alias exists.
 
     Args:
         skills: List of discovered skill metadata.

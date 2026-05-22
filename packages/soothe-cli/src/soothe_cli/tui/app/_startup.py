@@ -250,7 +250,6 @@ class _StartupMixin:
             lines.append(f"  • {name}: {desc}" if desc else f"  • {name}")
         lines.append("")
         lines.append("Usage: `/skill:<name> [args]`")
-        lines.append("Top-level alias: `/remember` (same as `/skill:remember`).")
         return "\n".join(lines)
 
     @staticmethod
@@ -263,7 +262,6 @@ class _StartupMixin:
             lines.append(f"  • {name}: {desc}" if desc else f"  • {name}")
         lines.append("")
         lines.append("Usage: `/skill:<name> [args]`")
-        lines.append("Top-level alias: `/remember` (same as `/skill:remember`).")
         return "\n".join(lines)
 
     async def _mount_bare_skill_list(self, command: str) -> None:
