@@ -50,6 +50,7 @@ async def bootstrap_loop_session(
     user_id: str | None = None,
     client_workspace_id: str | None = None,
     stream_delivery: str = "streaming",
+    is_ephemeral: bool = False,
     daemon_ready_timeout_s: float = _DAEMON_READY_TIMEOUT_S,
     subscribe_timeout_s: float = _SESSION_BOOTSTRAP_TIMEOUT_S,
 ) -> dict[str, Any]:
@@ -60,6 +61,7 @@ async def bootstrap_loop_session(
         resume_loop_id: If set, subscribe to this existing loop. Otherwise create ``loop_new``.
         verbosity: Event verbosity for ``loop_subscribe``.
         stream_delivery: Daemon stream shaping — ``streaming`` (default) or ``batch``.
+        is_ephemeral: When True, loop execution data is GC'd after idle period.
         workspace: Optional client project directory (e.g. user's CWD). Sent as
             ``client_workspace`` on ``loop_new`` and used directly by the runner when set.
             Ignored on resume when the loop already has workspace metadata.
@@ -96,6 +98,8 @@ async def bootstrap_loop_session(
             loop_new_payload["user_id"] = str(user_id).strip()
         if client_workspace_id is not None and str(client_workspace_id).strip():
             loop_new_payload["client_workspace_id"] = str(client_workspace_id).strip()
+        if is_ephemeral:
+            loop_new_payload["is_ephemeral"] = True
         new_resp = await client.request_response(
             loop_new_payload,
             response_type="loop_new_response",

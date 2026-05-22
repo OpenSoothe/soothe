@@ -121,7 +121,9 @@ class SootheDaemon(DaemonHandlersMixin):
         max_queue_size = self._daemon_config.max_input_queue_size
         self._loop_input_dispatcher = LoopInputDispatcher(self, max_queue_size=max_queue_size)
         self._cleanup_task: asyncio.Task[None] | None = None
+        self._postgres_pool_task: asyncio.Task[None] | None = None
         self._inactivity_check_task: asyncio.Task[None] | None = None
+        self._ephemeral_gc_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._event_size_stats_task: asyncio.Task[None] | None = None
         # Smart heartbeat tracking (IG-426)
@@ -228,14 +230,33 @@ class SootheDaemon(DaemonHandlersMixin):
                 self._readiness_message = str(exc)
                 raise
 
-            # RFC-221 enhancement: pre-warm worker pool if enabled
-            if self._daemon_config.worker_pool.enabled:
+            # Reap orphaned worker_pool subprocesses left after crashes / restarts.
+            try:
+                from soothe_daemon.persistence import reap_stale_soothe_worker_processes
+
+                reap_stale_soothe_worker_processes()
+            except Exception:
+                logger.debug("Stale worker process cleanup skipped", exc_info=True)
+
+            # RFC-221: pre-warm runner pool (worker_pool or thread_pool).
+            if self._daemon_config.worker_pool.enabled or self._daemon_config.thread_pool.enabled:
                 try:
                     await self._runner_factory.initialize_pool()
                 except Exception as exc:
                     self._readiness_state = "error"
                     self._readiness_message = str(exc)
                     raise
+
+            # Pre-open shared PostgreSQL pools in thread_pool mode.
+            try:
+                from soothe_daemon.persistence.pools import preopen_shared_postgres_pools
+
+                await preopen_shared_postgres_pools(self._config, self._daemon_config)
+            except Exception:
+                logger.warning(
+                    "Failed to pre-open shared PostgreSQL pools at startup",
+                    exc_info=True,
+                )
 
             # QueryEngine is created in __init__; runner is now available for queries
             # Initialize global cross-thread input history
@@ -269,7 +290,16 @@ class SootheDaemon(DaemonHandlersMixin):
             await self._transport_manager.start_all()
 
             self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
+            from soothe_daemon.persistence.pools import uses_postgresql_persistence
+
+            if uses_postgresql_persistence(self._config):
+                self._postgres_pool_task = asyncio.create_task(
+                    self._periodic_postgres_pool_maintenance()
+                )
             self._inactivity_check_task = asyncio.create_task(self._periodic_inactivity_check())
+            gc_cfg = self._daemon_config.ephemeral_loop_gc
+            if gc_cfg.enabled:
+                self._ephemeral_gc_task = asyncio.create_task(self._periodic_ephemeral_loop_gc())
             self._heartbeat_task = asyncio.create_task(self._periodic_heartbeat())
             self._queue_monitoring_task: asyncio.Task[None] = asyncio.create_task(
                 self._periodic_queue_monitoring()
@@ -509,6 +539,12 @@ class SootheDaemon(DaemonHandlersMixin):
                 except Exception:
                     logger.warning("Periodic cleanup failed", exc_info=True)
 
+    async def _periodic_postgres_pool_maintenance(self) -> None:
+        """Release idle connections on shared daemon pools (every 5 minutes)."""
+        from soothe_daemon.persistence.pools import periodic_postgres_pool_maintenance
+
+        await periodic_postgres_pool_maintenance(is_running=lambda: self._running)
+
     async def _periodic_inactivity_check(self) -> None:
         """Check for inactive threads every hour and suspend them."""
         while self._running:
@@ -517,6 +553,42 @@ class SootheDaemon(DaemonHandlersMixin):
                 await self._suspend_inactive_threads()
             except Exception:
                 logger.warning("Periodic inactivity check failed", exc_info=True)
+
+    async def _periodic_ephemeral_loop_gc(self) -> None:
+        """Purge idle ephemeral loops (execution data only; workspaces retained)."""
+        from datetime import UTC, datetime, timedelta
+
+        from soothe_daemon.loop_gc import purge_loop_execution_data
+
+        gc_cfg = self._daemon_config.ephemeral_loop_gc
+        interval = float(gc_cfg.interval_seconds)
+        while self._running:
+            await asyncio.sleep(interval)
+            if not self._running:
+                break
+            try:
+                idle_before = datetime.now(UTC) - timedelta(hours=gc_cfg.idle_hours)
+                expired = await self._persistence_manager.list_expired_ephemeral_loops(
+                    idle_before,
+                    limit=gc_cfg.batch_size,
+                )
+                if not expired:
+                    continue
+                purged = 0
+                for row in expired:
+                    loop_id = str(row.get("loop_id") or "").strip()
+                    if not loop_id:
+                        continue
+                    if await purge_loop_execution_data(self, loop_id, row):
+                        purged += 1
+                if purged:
+                    logger.info(
+                        "Ephemeral loop GC purged %d loop(s) (idle > %d hours)",
+                        purged,
+                        gc_cfg.idle_hours,
+                    )
+            except Exception:
+                logger.warning("Ephemeral loop GC failed", exc_info=True)
 
     async def _periodic_event_size_stats(self) -> None:
         """Log EventBus wire-size distribution on a fixed interval (IG-403).
@@ -697,10 +769,19 @@ class SootheDaemon(DaemonHandlersMixin):
             with contextlib.suppress(asyncio.CancelledError):
                 await self._cleanup_task
 
+        if self._postgres_pool_task and not self._postgres_pool_task.done():
+            self._postgres_pool_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._postgres_pool_task
+
         if self._inactivity_check_task and not self._inactivity_check_task.done():
             self._inactivity_check_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._inactivity_check_task
+        if self._ephemeral_gc_task and not self._ephemeral_gc_task.done():
+            self._ephemeral_gc_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._ephemeral_gc_task
 
         if self._heartbeat_task and not self._heartbeat_task.done():
             self._heartbeat_task.cancel()
@@ -736,12 +817,19 @@ class SootheDaemon(DaemonHandlersMixin):
             except Exception:
                 logger.debug("Failed to cleanup runner", exc_info=True)
 
-        # RFC-221 enhancement: shutdown worker pool if active
+        # RFC-221 enhancement: shutdown runner pool and shared PG pools
         if hasattr(self, "_runner_factory") and self._runner_factory:
             try:
                 await self._runner_factory.shutdown_pool()
             except Exception:
-                logger.debug("Failed to shutdown worker pool", exc_info=True)
+                logger.debug("Failed to shutdown runner pool", exc_info=True)
+
+        try:
+            from soothe_daemon.persistence import reap_stale_soothe_worker_processes
+
+            reap_stale_soothe_worker_processes()
+        except Exception:
+            logger.debug("Stale worker cleanup on shutdown skipped", exc_info=True)
 
         # Close shared persistence manager
         with contextlib.suppress(Exception):

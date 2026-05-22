@@ -95,6 +95,14 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
 
     daemon._thread_registry.set_workspace(thread_id, loop_workspace)
     daemon._thread_registry.set_thread_loop(thread_id, loop_id)
+
+    try:
+        await daemon._persistence_manager.update_loop_metadata(
+            loop_id, current_workspace=str(loop_workspace)
+        )
+    except Exception as e:
+        logger.warning("Failed to persist current_workspace for loop %s: %s", loop_id, e)
+
     # RFC-221: set_current_thread_id() removed — thread binding is passed via LoopRunRequest
     # and applied inside the per-loop subprocess. The utility _runner singleton is no longer
     # mutated here, eliminating the data race under concurrent loop execution.

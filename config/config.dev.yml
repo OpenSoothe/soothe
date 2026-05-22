@@ -94,10 +94,13 @@ observability:
 
 persistence:
   default_backend: postgresql
-  # Thread pool mode (daemon_config.dev.yml): pools are daemon-level singletons (IG-406)
-  # Can use larger pools for high concurrency since they're shared across all threads.
-  checkpointer_pool_size: 8      # Thread pool: shared singleton, larger for concurrency
-  agentloop_pool_size: 12        # Thread pool: shared singleton (IG-406)
+  # Thread pool (daemon_config.dev.yml): one checkpointer + one AgentLoop pool per daemon process.
+  # Sized for max_pool_size=6 threads: ~half+2 checkpointer slots, threads+2 agentloop slots.
+  checkpointer_pool_size: 5      # Shared singleton (was 8 per SootheRunner — caused PoolTimeout)
+  agentloop_pool_size: 8         # Shared singleton (align with thread_pool.max_pool_size + 2)
+  postgres_pool_max_idle_seconds: 90
+  postgres_pool_max_lifetime_seconds: 900
+  postgres_pool_acquire_timeout_seconds: 30
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
 
 vector_stores:

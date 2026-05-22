@@ -16,12 +16,15 @@ async def loop_new(
     client: WebSocketClient,
     *,
     workspace: str | None = None,
+    is_ephemeral: bool = False,
     timeout: float = 60.0,
 ) -> str:
     """Create a loop and return ``loop_id`` (waits for ``loop_new_response``)."""
     payload: dict[str, Any] = {"type": "loop_new"}
     if workspace:
         payload["workspace"] = workspace
+    if is_ephemeral:
+        payload["is_ephemeral"] = True
     resp = await client.request_response(
         payload,
         response_type="loop_new_response",
