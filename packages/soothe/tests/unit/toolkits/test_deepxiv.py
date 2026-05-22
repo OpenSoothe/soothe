@@ -187,10 +187,11 @@ class TestDeepxivToolkit:
 
     def test_toolkit_default_values(self):
         """Test toolkit initialization with default values."""
-        toolkit = DeepxivToolkit()
-        assert toolkit.token is None
-        assert toolkit.timeout == 60
-        assert toolkit.max_retries == 3
+        with patch.dict("os.environ", {"DEEPXIV_API_KEY": "", "DEEPXIV_TOKEN": ""}, clear=True):
+            toolkit = DeepxivToolkit()
+            assert toolkit.token is None
+            assert toolkit.timeout == 60
+            assert toolkit.max_retries == 3
 
     def test_get_tools_returns_seven_tools(self, toolkit):
         """Test get_tools returns all 7 DeepXiv tools."""
