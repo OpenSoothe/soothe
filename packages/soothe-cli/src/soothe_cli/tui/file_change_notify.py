@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -15,6 +16,27 @@ if TYPE_CHECKING:
     from soothe_cli.tui.textual_adapter import TextualUIAdapter
 
 logger = logging.getLogger(__name__)
+
+
+def textual_widget_id(prefix: str, tool_call_id: str) -> str:
+    """Build a Textual-safe widget id from a unified tool call id.
+
+    Unified ids use colons (e.g. ``JWZ_01:s:write_file:23``) which Textual rejects.
+
+    Args:
+        prefix: Stable prefix (e.g. ``file-preview``).
+        tool_call_id: LangChain / unified tool call id.
+
+    Returns:
+        Identifier containing only letters, digits, underscores, and hyphens.
+    """
+    raw = f"{prefix}-{tool_call_id}"
+    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw)
+    if not safe:
+        safe = f"{prefix}-unknown"
+    if safe[0].isdigit():
+        safe = f"_{safe}"
+    return safe
 
 
 async def mount_file_change_preview(
@@ -61,8 +83,12 @@ async def mount_file_change_preview(
     label = file_change_preview_label(tool_name)
     try:
         widget = widget_cls(data, action_label=label)
-        widget.id = f"file-preview-{tcid}"
+        widget.id = textual_widget_id("file-preview", tcid)
         await adapter._mount_message(widget)
         adapter._file_change_previews_shown.add(tcid)
+    except asyncio.CancelledError:
+        raise
     except Exception:
+        # Mark shown so streaming arg updates do not retry-mount and flood logs.
+        adapter._file_change_previews_shown.add(tcid)
         logger.debug("Failed to mount file change preview", exc_info=True)

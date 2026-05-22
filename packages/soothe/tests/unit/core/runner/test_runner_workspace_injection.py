@@ -19,13 +19,14 @@ class _PhasesOnly(PhasesMixin):
 def test_ensure_runner_state_workspace_fills_when_missing(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     cfg = SootheConfig()
-    cfg.workspace_dir = str(tmp_path / "ws")
-    Path(cfg.workspace_dir).mkdir()
+    ws_path = str(tmp_path / "ws")
+    cfg.filesystem_middleware.workspace_root = ws_path
+    Path(ws_path).mkdir()
 
     r = _PhasesOnly(cfg)
     st = RunnerState()
     r._ensure_runner_state_workspace(st)
-    assert Path(st.workspace).resolve() == Path(cfg.workspace_dir).resolve()
+    assert Path(st.workspace).resolve() == Path(ws_path).resolve()
 
 
 def test_ensure_runner_state_workspace_skips_nonempty_string(tmp_path, monkeypatch) -> None:

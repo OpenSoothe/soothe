@@ -62,7 +62,7 @@ class _FakeLoopRunner:
         async for chunk in self._runner.astream(
             request.user_input,
             thread_id=request.thread_id,
-            workspace=request.workspace,
+            workspace=request.resolve_workspace_path(),
             autonomous=request.autonomous,
             max_iterations=request.max_iterations,
             preferred_subagent=request.preferred_subagent,

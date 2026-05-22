@@ -47,6 +47,8 @@ async def bootstrap_loop_session(
     resume_loop_id: str | None,
     verbosity: str,
     workspace: str | Path | None = None,
+    user_id: str | None = None,
+    client_workspace_id: str | None = None,
     stream_delivery: str = "streaming",
     daemon_ready_timeout_s: float = _DAEMON_READY_TIMEOUT_S,
     subscribe_timeout_s: float = _SESSION_BOOTSTRAP_TIMEOUT_S,
@@ -58,10 +60,11 @@ async def bootstrap_loop_session(
         resume_loop_id: If set, subscribe to this existing loop. Otherwise create ``loop_new``.
         verbosity: Event verbosity for ``loop_subscribe``.
         stream_delivery: Daemon stream shaping — ``streaming`` (default) or ``batch``.
-        workspace: Optional client workspace hint (e.g., user's CWD). Forwarded to the
-            daemon on ``loop_new`` so filesystem tools default to the user's project
-            directory instead of the per-loop daemon scratch dir (IG-409). Ignored on
-            resume since the existing loop already has a workspace recorded.
+        workspace: Optional client project directory (e.g. user's CWD). Sent as
+            ``client_workspace`` on ``loop_new`` and used directly by the runner when set.
+            Ignored on resume when the loop already has workspace metadata.
+        user_id: Optional user id for ``$SOOTHE_HOME/workspaces/<user>/`` layout.
+        client_workspace_id: Optional stable scope when ``workspace`` is omitted.
         daemon_ready_timeout_s: Max seconds for daemon ready handshake.
         subscribe_timeout_s: Max seconds for ``loop_new`` / ``loop_subscribe`` RPCs.
 
@@ -88,7 +91,11 @@ async def bootstrap_loop_session(
         if workspace is not None:
             workspace_str = str(workspace).strip()
             if workspace_str:
-                loop_new_payload["workspace"] = workspace_str
+                loop_new_payload["client_workspace"] = workspace_str
+        if user_id is not None and str(user_id).strip():
+            loop_new_payload["user_id"] = str(user_id).strip()
+        if client_workspace_id is not None and str(client_workspace_id).strip():
+            loop_new_payload["client_workspace_id"] = str(client_workspace_id).strip()
         new_resp = await client.request_response(
             loop_new_payload,
             response_type="loop_new_response",

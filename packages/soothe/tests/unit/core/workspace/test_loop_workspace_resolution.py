@@ -1,73 +1,94 @@
-"""Tests for user workspace resolution."""
+"""Tests for loop workspace resolution (LoopRunRequest + daemon bind)."""
+
+from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
 import soothe.config as soothe_config
+from soothe.core.workspace.loop_workspace import (
+    compute_scoped_workspace_dir_name,
+    normalize_user_id,
+    resolve_loop_workspace,
+    resolve_persisted_loop_workspace,
+    user_id_for_hash,
+)
+from soothe.protocols.runner import LoopRunRequest
 
 
-def test_compute_workspace_id_authenticated_user() -> None:
-    """Test workspace ID generation for authenticated users."""
-    from soothe.core.workspace.resolution import compute_workspace_id
-
-    # Same user + same workspace = same ID
-    ws1 = compute_workspace_id("alice", "/Users/alice/Projects/app1")
-    ws2 = compute_workspace_id("alice", "/Users/alice/Projects/app1")
-    assert ws1 == ws2
-    assert ws1.startswith("ws_")
-    assert len(ws1) == 19  # "ws_" + 16 hex chars
-
-    # Different workspace = different ID
-    ws3 = compute_workspace_id("alice", "/Users/alice/Projects/app2")
-    assert ws3 != ws1
-    assert ws3.startswith("ws_")
-
-    # Different user = different ID (even with same workspace)
-    ws4 = compute_workspace_id("bob", "/Users/alice/Projects/app1")
-    assert ws4 != ws1
-    assert ws4.startswith("ws_")
+def test_normalize_user_id_anonymous() -> None:
+    assert normalize_user_id(None) == "anonymous"
+    assert normalize_user_id("") == "anonymous"
+    assert normalize_user_id("   ") == "anonymous"
 
 
-def test_compute_workspace_id_anonymous_user() -> None:
-    """Test workspace ID generation for anonymous users."""
-    from soothe.core.workspace.resolution import compute_workspace_id
-
-    # Anonymous user = anon_ prefix
-    ws1 = compute_workspace_id(None, "/tmp/project")
-    assert ws1.startswith("anon_")
-    assert len(ws1) == 21  # "anon_" + 16 hex chars
-
-    # Same workspace = same ID
-    ws2 = compute_workspace_id(None, "/tmp/project")
-    assert ws1 == ws2
-
-    # Different workspace = different ID
-    ws3 = compute_workspace_id(None, "/tmp/other")
-    assert ws3 != ws1
+def test_normalize_user_id_sanitizes() -> None:
+    assert normalize_user_id("alice@corp") == "alice@corp"
+    assert normalize_user_id("bob/smith") == "bob_smith"
 
 
-def test_resolve_user_workspace_creates_directory(
+def test_user_id_for_hash_empty_when_anonymous() -> None:
+    assert user_id_for_hash(None) == ""
+    assert user_id_for_hash("") == ""
+
+
+def test_compute_scoped_workspace_dir_name_deterministic() -> None:
+    a = compute_scoped_workspace_dir_name("alice", "scope-a")
+    b = compute_scoped_workspace_dir_name("alice", "scope-a")
+    c = compute_scoped_workspace_dir_name("alice", "scope-b")
+    d = compute_scoped_workspace_dir_name(None, "scope-a")
+
+    assert a == b
+    assert a.startswith("ws_")
+    assert c != a
+    assert d.startswith("ws_")
+    assert d != a
+
+
+def test_resolve_loop_workspace_uses_client_path_directly(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    ws = resolve_loop_workspace(loop_id="loop-1", client_workspace=str(project))
+    assert ws == project.resolve()
+
+
+def test_resolve_loop_workspace_persisted_with_user_and_workspace_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test that resolve_user_workspace creates the workspace directory."""
     monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path))
-    from soothe.core.workspace.resolution import resolve_user_workspace
-
-    ws = resolve_user_workspace("alice", "/Users/alice/Projects/app", soothe_home=tmp_path)
+    ws = resolve_loop_workspace(
+        loop_id="loop-abc",
+        user_id="alice",
+        client_workspace_id="my-app",
+        soothe_home=tmp_path,
+    )
+    expected_name = compute_scoped_workspace_dir_name("alice", "my-app")
+    assert ws == tmp_path / "workspaces" / "alice" / expected_name
     assert ws.is_dir()
-    assert ws.parent.name == "workspaces"
-    assert ws.name.startswith("ws_")
 
 
-def test_resolve_user_workspace_anonymous_creates_directory(
+def test_resolve_loop_workspace_persisted_anonymous_uses_loop_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test anonymous workspace directory creation."""
     monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path))
-    from soothe.core.workspace.resolution import resolve_user_workspace
+    loop_id = "019e4e5f-3f09-70f3-8246-b34fe2bc0e66"
+    ws = resolve_persisted_loop_workspace(
+        loop_id=loop_id,
+        user_id=None,
+        soothe_home=tmp_path,
+    )
+    expected_name = compute_scoped_workspace_dir_name(None, loop_id)
+    assert ws == tmp_path / "workspaces" / "anonymous" / expected_name
 
-    ws = resolve_user_workspace(None, "/tmp/project", soothe_home=tmp_path)
-    assert ws.is_dir()
-    assert ws.parent.name == "workspaces"
-    assert ws.name.startswith("anon_")
+
+def test_loop_run_request_resolve_workspace_path(tmp_path: Path) -> None:
+    project = tmp_path / "repo"
+    project.mkdir()
+    req = LoopRunRequest(
+        loop_id="loop-1",
+        thread_id="thread-1",
+        user_input="hi",
+        client_workspace=str(project),
+    )
+    assert Path(req.resolve_workspace_path()) == project.resolve()

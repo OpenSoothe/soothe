@@ -1231,11 +1231,20 @@ async def _handle_interrupt_cleanup(
     )
 
     # Ensure the daemon-side query is cancelled, not detached (detach is quit-only).
-    try:
-        await daemon_session.cancel_remote_query()
-        logger.info("Sent cancel to daemon during interrupt cleanup")
-    except Exception:
-        logger.warning("Failed to send cancel to daemon during interrupt cleanup", exc_info=True)
+    client = getattr(daemon_session, "_client", None)
+    if client is not None and not client.is_connected:
+        logger.debug("Skipping daemon cancel — connection already closed")
+    else:
+        try:
+            await daemon_session.cancel_remote_query()
+            logger.info("Sent cancel to daemon during interrupt cleanup")
+        except ConnectionError:
+            logger.debug("Daemon connection closed before cancel during interrupt cleanup")
+        except Exception:
+            logger.warning(
+                "Failed to send cancel to daemon during interrupt cleanup",
+                exc_info=True,
+            )
 
 
 async def _persist_context_tokens(

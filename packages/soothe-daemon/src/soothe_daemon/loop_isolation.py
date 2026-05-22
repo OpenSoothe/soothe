@@ -10,11 +10,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.core.runner._types import generate_thread_id
-from soothe.core.workspace import resolve_daemon_workspace, resolve_user_workspace
+from soothe.core.workspace import resolve_daemon_workspace, resolve_loop_workspace
 
 from soothe_daemon.logging import set_loop_id
 
@@ -71,30 +70,27 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
 
     daemon._thread_registry.ensure(thread_id, is_draft=False)
 
-    # Workspace resolution — user-scoped persistence:
-    #   1. user + client_workspace → per-user workspace dir ($SOOTHE_HOME/workspaces/ws_<hash>/)
-    #   2. client_workspace only → anonymous workspace ($SOOTHE_HOME/workspaces/anon_<hash>/)
-    #   3. daemon fallback workspace (TEMP)
-    loop_workspace: Path | None = None
-
-    raw_user = metadata.get("user_id") or metadata.get("user")  # Support both field names
+    raw_user = metadata.get("user_id") or metadata.get("user")
     raw_client_ws = metadata.get("client_workspace")
+    raw_client_ws_id = metadata.get("client_workspace_id")
 
     user = str(raw_user).strip() if raw_user else None
     client_ws = str(raw_client_ws).strip() if raw_client_ws else None
+    client_ws_id = str(raw_client_ws_id).strip() if raw_client_ws_id else None
 
-    if client_ws:
-        try:
-            loop_workspace = resolve_user_workspace(user, client_ws)
-        except ValueError as e:
-            logger.warning(
-                "Loop %s: invalid client_workspace %r: %s; falling back to daemon workspace",
-                loop_id,
-                client_ws,
-                e,
-            )
-
-    if loop_workspace is None:
+    try:
+        loop_workspace = resolve_loop_workspace(
+            loop_id=loop_id,
+            client_workspace=client_ws,
+            user_id=user,
+            client_workspace_id=client_ws_id,
+        )
+    except ValueError as e:
+        logger.warning(
+            "Loop %s: workspace resolution failed (%s); falling back to daemon workspace",
+            loop_id,
+            e,
+        )
         loop_workspace = resolve_daemon_workspace()
 
     daemon._thread_registry.set_workspace(thread_id, loop_workspace)

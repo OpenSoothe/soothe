@@ -463,6 +463,9 @@ class WebSocketClient:
     async def send_loop_new(
         self,
         *,
+        client_workspace: str | None = None,
+        user_id: str | None = None,
+        client_workspace_id: str | None = None,
         workspace: str | None = None,
         request_id: str | None = None,
     ) -> None:
@@ -471,14 +474,20 @@ class WebSocketClient:
         Creates fresh loop with new loop_id for new query/conversation.
 
         Args:
-            workspace: Optional client workspace path (e.g., user's CWD). When provided,
-                the daemon validates and records it as the loop's filesystem workspace
-                (IG-409); otherwise the daemon falls back to a per-loop scratch dir.
+            client_workspace: Optional project directory (used directly when set).
+            user_id: Optional user segment under ``$SOOTHE_HOME/workspaces/``.
+            client_workspace_id: Optional stable scope when ``client_workspace`` is unset.
+            workspace: Deprecated alias for ``client_workspace``.
             request_id: Optional request correlation ID.
         """
         payload: dict[str, Any] = {"type": "loop_new"}
-        if workspace:
-            payload["workspace"] = workspace
+        cw = (client_workspace or workspace or "").strip()
+        if cw:
+            payload["client_workspace"] = cw
+        if user_id and str(user_id).strip():
+            payload["user_id"] = str(user_id).strip()
+        if client_workspace_id and str(client_workspace_id).strip():
+            payload["client_workspace_id"] = str(client_workspace_id).strip()
         if request_id is not None:
             payload["request_id"] = request_id
         await self.send(payload)

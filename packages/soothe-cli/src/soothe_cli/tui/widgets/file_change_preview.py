@@ -85,10 +85,10 @@ class FileChangePreviewWidget(Vertical):
 
 
 class WriteFilePreviewWidget(FileChangePreviewWidget):
-    """Preview for write_file — new or overwritten content."""
+    """Preview for write_file — diff on overwrite, syntax body for new files."""
 
     def compose(self) -> ComposeResult:
-        """Compose file path header and syntax-highlighted body."""
+        """Compose file path header and content or unified diff."""
         if self._action_label:
             yield Static(
                 Content.from_markup("[bold]$label[/bold]", label=self._action_label),
@@ -99,6 +99,11 @@ class WriteFilePreviewWidget(FileChangePreviewWidget):
         content = self.data.get("content", "")
         file_extension = self.data.get("file_extension", "text")
         is_new_file = bool(self.data.get("is_new_file"))
+        diff_lines: list[str] = self.data.get("diff_lines", [])
+
+        if not is_new_file and diff_lines:
+            yield from self._compose_overwrite_diff(file_path, diff_lines)
+            return
 
         lines = content.split("\n")
         total_lines = len(lines)
@@ -125,6 +130,17 @@ class WriteFilePreviewWidget(FileChangePreviewWidget):
             yield Markdown(f"```{file_extension}\n{truncated_content}\n```")
         else:
             yield Markdown(f"```{file_extension}\n{content}\n```")
+
+    def _compose_overwrite_diff(self, file_path: str, diff_lines: list[str]) -> ComposeResult:
+        """Render unified diff when write_file replaces existing content."""
+        old_string = self.data.get("old_string", "")
+        new_string = self.data.get("new_string", "")
+        additions, deletions = _count_diff_stats(diff_lines, old_string, new_string)
+        yield from _file_header(file_path, additions, deletions)
+        if not diff_lines:
+            yield Static("No changes to display", classes="file-change-preview-body")
+            return
+        yield from EditFilePreviewWidget._render_diff_lines_only(self, diff_lines)
 
 
 class DeleteFilePreviewWidget(FileChangePreviewWidget):

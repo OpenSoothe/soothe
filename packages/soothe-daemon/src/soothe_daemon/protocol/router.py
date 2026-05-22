@@ -1121,7 +1121,7 @@ class MessageRouter:
         # Resolve optional client workspace hint. Invalid hints fall back to
         # daemon workspace via _bind_execution_thread_for_loop.
         client_workspace: str | None = None
-        raw_workspace = msg.get("workspace")
+        raw_workspace = msg.get("client_workspace") or msg.get("workspace")
         if isinstance(raw_workspace, str) and raw_workspace.strip():
             try:
                 resolved = validate_client_workspace(raw_workspace)
@@ -1163,6 +1163,12 @@ class MessageRouter:
             )
         if user is not None:
             await d._persistence_manager.update_loop_metadata(loop_id, user_id=user)
+
+        raw_client_ws_id = msg.get("client_workspace_id")
+        if isinstance(raw_client_ws_id, str) and raw_client_ws_id.strip():
+            await d._persistence_manager.update_loop_metadata(
+                loop_id, client_workspace_id=raw_client_ws_id.strip()
+            )
 
         logger.info("Created new loop %s", loop_id)
 
