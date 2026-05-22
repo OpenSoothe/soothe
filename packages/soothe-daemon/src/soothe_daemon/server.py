@@ -124,6 +124,8 @@ class SootheDaemon(DaemonHandlersMixin):
         self._inactivity_check_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._event_size_stats_task: asyncio.Task[None] | None = None
+        # Smart heartbeat tracking (IG-426)
+        self._last_broadcast_monotonic: float = 0.0
         # Message dispatch concurrency control (IG-258)
         self._dispatch_semaphore: asyncio.Semaphore = asyncio.Semaphore(
             self._daemon_config.max_concurrent_dispatches
@@ -579,8 +581,10 @@ class SootheDaemon(DaemonHandlersMixin):
         long requests. The heartbeat is only broadcast when a query is running.
 
         RFC-0013: Heartbeat is broadcast every 5 seconds.
+        IG-426: Skip heartbeat if stream is actively flowing (last broadcast < 5s).
         """
         from datetime import UTC, datetime
+        from time import monotonic
 
         from soothe.core.events import DaemonHeartbeatEvent
 
@@ -589,6 +593,12 @@ class SootheDaemon(DaemonHandlersMixin):
 
             # Only send heartbeat when query is running (clients need it most)
             if not self._query_running:
+                continue
+
+            # Smart heartbeat: skip if stream actively flowing (IG-426)
+            now = monotonic()
+            if now - self._last_broadcast_monotonic < _HEARTBEAT_INTERVAL_S:
+                # Stream is active, heartbeat not needed
                 continue
 
             try:
@@ -778,6 +788,11 @@ class SootheDaemon(DaemonHandlersMixin):
         Client-visible delivery is keyed strictly by ``loop_id`` on the message envelope.
         Internal CoreAgent ``thread_id`` is not used to infer routing.
         """
+        # Track last broadcast for smart heartbeat (IG-426)
+        from time import monotonic
+
+        self._last_broadcast_monotonic = monotonic()
+
         msg_type = msg.get("type", "")
         lid = str(msg.get("loop_id") or "").strip()
 

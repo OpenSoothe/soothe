@@ -610,7 +610,10 @@ async def test_stream_and_collect_logs_tool_call_args_from_invocation_registry(
                 "id": registry_key,
                 "name": "read_file",
                 "args": {"file_path": "/tmp/foo.txt"},
-            }
+            },
+            tool=None,
+            state={"messages": []},
+            runtime=MagicMock(),
         )
     )
 
