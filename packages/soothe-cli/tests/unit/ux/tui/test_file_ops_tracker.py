@@ -58,6 +58,35 @@ def test_edit_file_produces_diff(tmp_path: Path) -> None:
     assert file_change_action_label(record) == "Updated"
 
 
+def test_edit_file_lines_produces_diff(tmp_path: Path) -> None:
+    """Tracked edit_file_lines shows a unified diff after the tool result."""
+    target = tmp_path / "surgical.txt"
+    target.write_text("line1\nline2\nline3\n", encoding="utf-8")
+    tracker = FileOpTracker(assistant_id=None)
+    track_file_operation(
+        tracker,
+        "edit_file_lines",
+        {
+            "file_path": str(target),
+            "start_line": 2,
+            "end_line": 2,
+            "new_content": "LINE2\n",
+        },
+        "tc-lines",
+    )
+
+    target.write_text("line1\nLINE2\nline3\n", encoding="utf-8")
+    record = tracker.complete_with_message(
+        SimpleNamespace(tool_call_id="tc-lines", content="ok", status="success")
+    )
+
+    assert record is not None
+    assert record.diff is not None
+    assert "-line2" in record.diff
+    assert "+LINE2" in record.diff
+    assert file_change_action_label(record) == "Updated"
+
+
 def test_delete_file_produces_deletion_diff(tmp_path: Path) -> None:
     """Tracked delete_file diff shows removed lines."""
     target = tmp_path / "remove.txt"

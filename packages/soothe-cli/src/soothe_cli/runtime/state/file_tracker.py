@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 
 FileOpStatus = Literal["pending", "success", "error"]
 
-FILE_CHANGE_TOOLS: frozenset[str] = frozenset({"write_file", "edit_file", "delete_file"})
+FILE_CHANGE_TOOLS: frozenset[str] = frozenset(
+    {"write_file", "edit_file", "edit_file_lines", "delete_file"}
+)
 """Filesystem tools that produce before/after diffs in the TUI chat."""
 
 
@@ -29,6 +31,17 @@ def _safe_read(path: Path) -> str | None:
     except (OSError, UnicodeDecodeError) as e:
         logger.debug("Failed to read file %s: %s", path, e)
         return None
+
+
+def read_physical_file_text(path: Path | None) -> str | None:
+    """Read UTF-8 text from a resolved physical path.
+
+    Returns:
+        File content, or None when ``path`` is missing or unreadable.
+    """
+    if path is None:
+        return None
+    return _safe_read(path)
 
 
 def _count_lines(text: str) -> int:
@@ -135,6 +148,64 @@ def resolve_physical_path(path_str: str | None, assistant_id: str | None) -> Pat
         return (Path.cwd() / path).resolve()
     except (OSError, ValueError):
         return None
+
+
+def parse_line_range_args(args: dict[str, Any]) -> tuple[int, int] | None:
+    """Parse ``start_line`` and ``end_line`` from tool args (1-indexed inclusive).
+
+    Returns:
+        ``(start_line, end_line)`` or None when missing or not integers.
+    """
+    start = args.get("start_line")
+    end = args.get("end_line")
+    if isinstance(start, bool) or isinstance(end, bool):
+        return None
+    if isinstance(start, int) and isinstance(end, int):
+        return start, end
+    if isinstance(start, float) and isinstance(end, float) and start.is_integer() and end.is_integer():
+        return int(start), int(end)
+    return None
+
+
+def extract_line_range_text(content: str, start_line: int, end_line: int) -> str:
+    """Return the text of lines ``start_line``..``end_line`` (1-indexed inclusive).
+
+    Returns:
+        Joined line text including original line endings, or empty when out of range.
+    """
+    lines = content.splitlines(keepends=True)
+    total = len(lines)
+    if total == 0:
+        return ""
+    if start_line < 1 or start_line > total or end_line < start_line:
+        return ""
+    end_line = min(end_line, total)
+    return "".join(lines[start_line - 1 : end_line])
+
+
+def apply_edit_file_lines_to_content(
+    content: str,
+    start_line: int,
+    end_line: int,
+    new_content: str,
+) -> str | None:
+    """Apply a line-range replacement to file content (matches middleware semantics).
+
+    Returns:
+        Modified file text, or None when the line range is invalid for ``content``.
+    """
+    lines = content.splitlines(keepends=True)
+    total = len(lines)
+    if total == 0 and content:
+        lines = [content]
+        total = 1
+    if start_line < 1 or start_line > total or end_line < start_line or end_line > total:
+        return None
+    new_lines = new_content.splitlines(keepends=True)
+    if new_lines and not new_lines[-1].endswith("\n"):
+        new_lines[-1] += "\n"
+    lines[start_line - 1 : end_line] = new_lines
+    return "".join(lines)
 
 
 def format_display_path(path_str: str | None) -> str:
@@ -325,6 +396,6 @@ def file_change_action_label(record: FileOperationRecord) -> str:
         return "New file"
     if record.tool_name == "write_file":
         return "Written"
-    if record.tool_name == "edit_file":
+    if record.tool_name in ("edit_file", "edit_file_lines"):
         return "Updated"
     return "Changed"

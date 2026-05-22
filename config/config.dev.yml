@@ -52,12 +52,8 @@ subagents:
     enabled: true
   browser_use:
     enabled: true
-    model: null
-    config:
-      headless: true
-      max_steps: 10
-      use_vision: true
-      profile_mode: ephemeral
+  claude:
+    enabled: true
 
 agent_loop:
   max_iterations: 99

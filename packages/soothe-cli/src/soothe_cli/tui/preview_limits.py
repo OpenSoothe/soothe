@@ -20,7 +20,7 @@ STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD: Final[int] = 3
 SKILL_CARD_PREVIEW_LINES: Final[int] = 4
 SKILL_CARD_PREVIEW_CHARS: Final[int] = 300
 
-# --- Write / edit / delete tool approval widgets (`tool_widgets`) ---
+# --- Write / edit / delete file change preview widgets (`file_change_preview`) ---
 TOOL_APPROVAL_PREVIEW_LINES: Final[int] = 15
 TOOL_APPROVAL_VALUE_PREVIEW_CHARS: Final[int] = 200
 TOOL_APPROVAL_BODY_MAX_LINES: Final[int] = 15
