@@ -1,4 +1,4 @@
-"""Executor sequential waves: one StepResult per StepAction (scheme B), chunked by max_parallel_steps."""
+"""Executor parallel waves: one StepResult per StepAction, chunked by max_parallel_steps."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ async def _empty_agent_stream() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sequential_single_wave_yields_one_result_per_step() -> None:
+async def test_parallel_single_wave_yields_one_result_per_step() -> None:
     mock_agent = MagicMock()
     mock_agent.astream = MagicMock(side_effect=lambda *a, **k: _empty_agent_stream())
 
@@ -33,7 +33,7 @@ async def test_sequential_single_wave_yields_one_result_per_step() -> None:
             StepAction(id="a", description="first", expected_output="o1"),
             StepAction(id="b", description="second", expected_output="o2"),
         ],
-        execution_mode="sequential",
+        execution_mode="parallel",
         reasoning="r",
     )
     state = LoopState(goal="g", thread_id="t-main")
@@ -42,11 +42,11 @@ async def test_sequential_single_wave_yields_one_result_per_step() -> None:
     assert len(out) == 2
     assert {r.step_id for r in out} == {"a", "b"}
     assert all(r.success for r in out)
-    assert mock_agent.astream.call_count == 1
+    assert mock_agent.astream.call_count == 2
 
 
 @pytest.mark.asyncio
-async def test_sequential_respects_max_parallel_steps_multiple_waves() -> None:
+async def test_parallel_respects_max_parallel_steps_multiple_waves() -> None:
     mock_agent = MagicMock()
     mock_agent.astream = MagicMock(side_effect=lambda *a, **k: _empty_agent_stream())
 
@@ -57,7 +57,7 @@ async def test_sequential_respects_max_parallel_steps_multiple_waves() -> None:
             StepAction(id="a", description="first", expected_output="o1"),
             StepAction(id="b", description="second", expected_output="o2"),
         ],
-        execution_mode="sequential",
+        execution_mode="parallel",
         reasoning="r",
     )
     state = LoopState(goal="g", thread_id="t-main")
@@ -68,7 +68,7 @@ async def test_sequential_respects_max_parallel_steps_multiple_waves() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sequential_plan_with_dependencies_drains_ready_chain() -> None:
+async def test_plan_with_dependencies_drains_ready_chain() -> None:
     mock_agent = MagicMock()
     mock_agent.astream = MagicMock(side_effect=lambda *a, **k: _empty_agent_stream())
 
@@ -90,7 +90,7 @@ async def test_sequential_plan_with_dependencies_drains_ready_chain() -> None:
                 dependencies=["02"],
             ),
         ],
-        execution_mode="sequential",
+        execution_mode="parallel",
         reasoning="r",
     )
     state = LoopState(goal="g", thread_id="t-main")
@@ -101,20 +101,20 @@ async def test_sequential_plan_with_dependencies_drains_ready_chain() -> None:
     assert mock_agent.astream.call_count == 3
 
 
-def test_extract_sequential_outcomes_single_step_fills_ledger_from_chunks_ig373() -> None:
-    """Trailing empty AIMessage after chunks must not produce empty LoopAIMessage content (IG-373)."""
+def test_ledger_execute_ai_content_single_step_fills_from_chunks_ig373() -> None:
+    """Trailing empty AIMessage after chunks must not produce empty ledger body (IG-373)."""
     mock_agent = MagicMock()
     executor = Executor(mock_agent, max_parallel_steps=4)
-    state = LoopState(goal="g", thread_id="tid", iteration=0, max_iterations=8)
-    steps = [StepAction(id="9oi", description="read readme top", expected_output="lines")]
     messages: list = [
         AIMessageChunk(content="Here are the first lines:\n"),
         AIMessageChunk(content="A\nB\n"),
         AIMessage(content=""),
     ]
-    outcomes = executor._extract_sequential_outcomes(messages, steps, state)
-    assert "9oi" in outcomes
-    body = outcomes["9oi"].content
+    body = executor._ledger_execute_ai_content(
+        messages=messages,
+        final_ai_msg=messages[-1],
+        total_steps=1,
+    )
     assert "Here are the first lines" in body
     assert "A\nB" in body
 

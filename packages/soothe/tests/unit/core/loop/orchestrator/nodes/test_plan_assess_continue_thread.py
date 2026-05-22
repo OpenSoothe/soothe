@@ -147,7 +147,7 @@ def test_build_bootstrap_plan_shape() -> None:
     assert pr.decision is not None
     assert pr.decision.type == "execute_steps"
     assert len(pr.decision.steps) == 1
-    assert pr.decision.execution_mode == "sequential"
+    assert pr.decision.execution_mode == "parallel"
 
 
 def _minimal_checkpoint(*, goals: list[GoalExecutionRecord]) -> AgentLoopCheckpoint:

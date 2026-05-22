@@ -7,7 +7,10 @@
 
 **Progress-aware**: ``high`` → 1–2 closing steps. ``none/low/medium`` → stage within cap.
 
-**Parallel execution**: Only for independent readonly steps with disjoint scopes. Default ``sequential``.
+**Execution mode** (plan field): only ``parallel`` or ``dependency``—never ``sequential``.
+- ``parallel`` (default): steps run in per-step execute waves; ``max_parallel_steps`` caps concurrency.
+- ``dependency``: use when steps declare ``dependencies``; executor runs DAG-ready waves.
+**Independent steps**: May share a parallel wave when scopes do not conflict (readonly, disjoint paths).
 
 **DAG dependencies**: Use ``dependencies`` field referencing sibling ``id`` strings (e.g. ``01`` → ``02``).
 
