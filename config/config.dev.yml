@@ -48,6 +48,8 @@ router:
 # Community subagents (claude, browser_use) require soothe-community package — disable in core config.
 # See: https://github.com/OpenSoothe/soothe-community for community agent extensions.
 subagents:
+  sample_echo:
+    enabled: true
   browser_use:
     enabled: true
     model: null
