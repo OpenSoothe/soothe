@@ -268,21 +268,49 @@ Skip this step only if the skill being developed already exists, and iteration o
 
 When creating a new skill from scratch, always run the `init_skill.py` script. The script conveniently generates a new template skill directory that automatically includes everything a skill requires, making the skill creation process much more efficient and reliable.
 
-For Soothe, custom skills should live under `~/.soothe/skills/` or configured paths so they can be discovered automatically at runtime.
+#### Where to create skills (Soothe)
 
-Usage:
+**Default:** project workspace skills directory `<workspace>/.soothe/skills/`.
+
+| Target | `--path` value | Soothe discovery |
+|--------|----------------|------------------|
+| **Project (preferred)** | `<workspace>/.soothe/skills` | When the run has that workspace |
+| **User-wide** | `~/.soothe/skills` | All runs (`get_built_in_skills_paths`) |
+| **Custom** | Any directory listed in `SootheConfig.skills` | Per config |
+
+Resolve `<workspace>` before initializing:
+
+1. Workspace from the current Soothe session / loop (preferred).
+2. Else the user's project root.
+3. Else `SOOTHE_WORKSPACE` if set.
+
+```bash
+WORKSPACE="/path/to/project"   # absolute Soothe workspace root
+SKILLS_DIR="${WORKSPACE}/.soothe/skills"
+mkdir -p "${SKILLS_DIR}"
+```
+
+Usage (run from this skill's directory, or pass the full path to `scripts/init_skill.py`):
 
 ```bash
 scripts/init_skill.py <skill-name> --path <output-directory> [--resources scripts,references,assets] [--examples]
 ```
 
-Examples:
+Examples (workspace — preferred):
+
+```bash
+scripts/init_skill.py my-skill --path "${SKILLS_DIR}"
+scripts/init_skill.py my-skill --path "${SKILLS_DIR}" --resources scripts,references
+scripts/init_skill.py my-skill --path "${SKILLS_DIR}" --resources scripts --examples
+```
+
+User-wide fallback:
 
 ```bash
 scripts/init_skill.py my-skill --path ~/.soothe/skills
-scripts/init_skill.py my-skill --path ~/.soothe/skills --resources scripts,references
-scripts/init_skill.py my-skill --path ~/.soothe/skills --resources scripts --examples
 ```
+
+Creates `<output-directory>/<skill-name>/` with `SKILL.md`. After creation, the user needs a **new Soothe session** (or loop restart) for discovery to pick up the skill.
 
 The script:
 
@@ -340,6 +368,12 @@ Once development of the skill is complete, it must be packaged into a distributa
 
 ```bash
 scripts/package_skill.py <path/to/skill-folder>
+```
+
+Workspace example:
+
+```bash
+scripts/package_skill.py "${WORKSPACE}/.soothe/skills/my-skill"
 ```
 
 Optional output directory specification:

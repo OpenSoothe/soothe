@@ -54,6 +54,10 @@ subagents:
     enabled: true
   claude:
     enabled: true
+  tacitus:
+    config:
+      llm_role: fast
+      synthesis_role: think
 
 agent_loop:
   max_iterations: 99
