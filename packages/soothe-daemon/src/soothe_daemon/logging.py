@@ -1,7 +1,8 @@
 """Logging configuration for Soothe daemon server.
 
-Separate from soothe library's soothe.log — daemon writes to daemon.log
-for its own transport, session, and orchestration logs.
+Daemon process logs (``soothe_daemon.*`` and in-process ``soothe.*`` agent logs)
+share ``SOOTHE_HOME/logs/daemon.log``. Standalone CLI/agent runs still use
+``soothe.log`` via ``soothe.logging.setup_logging``.
 """
 
 from __future__ import annotations
@@ -21,6 +22,12 @@ from soothe_sdk.utils.logging import (
 DEFAULT_DAEMON_LOG = "daemon.log"
 DEFAULT_MAX_BYTES = DEFAULT_LOG_MAX_BYTES
 DEFAULT_BACKUP_COUNT = DEFAULT_LOG_BACKUP_COUNT
+
+
+def default_daemon_log_path() -> Path:
+    """Return the default rotating log path for the daemon process."""
+    return Path(SOOTHE_HOME) / "logs" / DEFAULT_DAEMON_LOG
+
 
 # Context variables for loop_id and client_id (always log full IDs)
 loop_id_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar("loop_id", default=None)
@@ -101,7 +108,8 @@ def setup_daemon_logging(
     """Configure the ``soothe_daemon`` logger hierarchy.
 
     Writes to ``SOOTHE_HOME/logs/daemon.log`` (rotating, 5 MB max, 3 backups).
-    Separate from soothe library's ``soothe.log``.
+    Pair with ``soothe.logging.setup_logging(..., log_file=...)`` using the same
+    path so agent and daemon logs land in one file.
 
     Args:
         level: Log level for file output (DEBUG, INFO, WARNING, ERROR).
@@ -117,7 +125,7 @@ def setup_daemon_logging(
     daemon_logger = logging.getLogger("soothe_daemon")
     daemon_logger.setLevel(file_level)
 
-    actual_log_file = log_file or str(log_dir / DEFAULT_DAEMON_LOG)
+    actual_log_file = log_file or str(default_daemon_log_path())
     if not any(isinstance(h, RotatingFileHandler) for h in daemon_logger.handlers):
         file_handler = RotatingFileHandler(
             actual_log_file,
@@ -167,5 +175,6 @@ def _suppress_daemon_noisy_loggers() -> None:
 __all__ = [
     "DEFAULT_DAEMON_LOG",
     "_daemon_log_level_from_soothe_config",
+    "default_daemon_log_path",
     "setup_daemon_logging",
 ]

@@ -238,6 +238,23 @@ class TestLoggingSetup:
         assert len(stream_handlers) == 1
         assert stream_handlers[0].level == logging.DEBUG
 
+    def test_log_file_kwarg_overrides_config_path(self, tmp_path: Path) -> None:
+        """Explicit log_file wins over observability.log_file_path."""
+        config_path = tmp_path / "config.log"
+        override_path = tmp_path / "daemon.log"
+        cfg = SootheConfig(
+            observability={
+                "log_file_path": str(config_path),
+            }
+        )
+
+        setup_logging(cfg, log_file=override_path)
+
+        root_logger = logging.getLogger("soothe")
+        file_handlers = [h for h in root_logger.handlers if isinstance(h, RotatingFileHandler)]
+        assert len(file_handlers) == 1
+        assert Path(file_handlers[0].baseFilename) == override_path
+
     def test_foreground_still_creates_file_handler(self, tmp_path: Path) -> None:
         """Test foreground still creates file handler."""
         log_file = tmp_path / "test.log"

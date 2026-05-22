@@ -129,17 +129,23 @@ def _add_console_handler_if_missing(
         logger.addHandler(console_handler)
 
 
-def setup_logging(config: SootheConfig | None = None, *, foreground: bool = False) -> None:
+def setup_logging(
+    config: SootheConfig | None = None,
+    *,
+    foreground: bool = False,
+    log_file: str | Path | None = None,
+) -> None:
     """Configure Soothe and community package loggers with file and optional console handlers.
 
     Writes to ``SOOTHE_HOME/logs/soothe.log`` (rotating, 5 MB max, 3 backups) for both
-    ``soothe.*`` and ``soothe_community.*`` loggers. Optionally outputs to console when
-    enabled in config.
+    ``soothe.*`` and ``soothe_community.*`` loggers unless ``log_file`` overrides the path.
+    Optionally outputs to console when enabled in config.
 
     Args:
         config: Optional config to read logging configuration from.
         foreground: When ``True``, forces console logging to stdout at INFO level
             regardless of config settings. Useful for foreground process mode.
+        log_file: Optional log file path override (e.g. daemon unified ``daemon.log``).
     """
     from soothe.config import SootheConfig as _SootheConfig
 
@@ -164,10 +170,14 @@ def setup_logging(config: SootheConfig | None = None, *, foreground: bool = Fals
     for logger in package_loggers:
         logger.setLevel(min_level)
 
-    log_file = cfg.logging.file.path or str(log_dir / "soothe.log")
+    resolved_log_file = (
+        str(log_file)
+        if log_file is not None
+        else (cfg.logging.file.path or str(log_dir / "soothe.log"))
+    )
     _add_rotating_file_handler(
         package_loggers,
-        log_file=log_file,
+        log_file=resolved_log_file,
         file_level=file_level,
         max_bytes=cfg.logging.file.max_bytes,
         backup_count=cfg.logging.file.backup_count,
