@@ -84,6 +84,8 @@ async def test_invoke_skill_response_then_queued_input(tmp_path: Any) -> None:
         _session_manager = SimpleNamespace(
             get_session=AsyncMock(return_value=SimpleNamespace(subscriptions={loop_id}))
         )
+        _thread_registry = SimpleNamespace(get_workspace=lambda _tid: None)
+        _current_thread_id = "t-inv"
 
         async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
             sent.append((client_id, msg))

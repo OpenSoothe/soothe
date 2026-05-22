@@ -43,7 +43,7 @@ from soothe_sdk.langchain_wire import (
     messages_from_wire_dicts,
 )
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
-from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
+from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
     is_inner_subgraph_task_tool_id,
@@ -2256,6 +2256,22 @@ async def execute_task_textual(
                     elif current_stream_mode == "custom":
                         if isinstance(data, dict):
                             event_type = str(data.get("type", ""))
+                            if event_type == TOOL_CALL_UPDATES_BATCH:
+                                updates = data.get("updates")
+                                if isinstance(updates, list):
+                                    for upd in updates:
+                                        if isinstance(upd, dict):
+                                            await apply_tool_call_wire_update(
+                                                adapter,
+                                                router,
+                                                data=upd,
+                                                ns_key=ns_key,
+                                                pending_tool_calls_lc=pending_tool_calls_lc,
+                                                streaming_overlay=streaming_overlay,
+                                                ui_coalesce=ui_coalesce,
+                                                file_op_tracker=file_op_tracker,
+                                            )
+                                continue
                             if await apply_tool_call_wire_update(
                                 adapter,
                                 router,

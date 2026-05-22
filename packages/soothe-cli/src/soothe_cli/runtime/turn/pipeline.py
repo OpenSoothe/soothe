@@ -10,6 +10,7 @@ Three stages run concurrently during a TUI turn:
    updates.
 
 The websocket client stays on the main asyncio loop; only synchronous work moves off it.
+High-priority chunks (tool wire, loop step events) are applied before low-priority text.
 """
 
 from __future__ import annotations
@@ -26,6 +27,11 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 _SENTINEL = object()
 
+# Lower number = higher priority (matches asyncio.PriorityQueue ordering).
+PRIORITY_HIGH = 0
+PRIORITY_NORMAL = 1
+PRIORITY_LOW = 2
+
 
 class TurnEventPipeline(Generic[T]):
     """Bridge daemon chunk ingestion, background processing, and UI application."""
@@ -34,12 +40,16 @@ class TurnEventPipeline(Generic[T]):
         self,
         loop: asyncio.AbstractEventLoop,
         *,
-        inbound_maxsize: int = 512,
-        outbound_maxsize: int = 256,
+        inbound_maxsize: int = 1024,
+        outbound_maxsize: int = 512,
     ) -> None:
         self._loop = loop
         self._inbound: queue.Queue[Any] = queue.Queue(maxsize=inbound_maxsize)
-        self._outbound: asyncio.Queue[Any] = asyncio.Queue(maxsize=outbound_maxsize)
+        # Thread-safe outbound bridge: processor puts without blocking the event loop.
+        self._outbound: queue.PriorityQueue[tuple[int, int, Any]] = queue.PriorityQueue(
+            maxsize=outbound_maxsize
+        )
+        self._outbound_seq = 0
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._processor_error: BaseException | None = None
@@ -71,16 +81,19 @@ class TurnEventPipeline(Generic[T]):
                 except queue.Empty:
                     continue
                 if item is _SENTINEL:
-                    self._put_outbound(_SENTINEL)
+                    self._put_outbound(PRIORITY_HIGH, _SENTINEL)
                     break
                 try:
                     prepared = process_fn(item)
                 except Exception as exc:
                     logger.exception("Turn chunk processor failed")
                     self._processor_error = exc
-                    self._put_outbound(_SENTINEL)
+                    self._put_outbound(PRIORITY_HIGH, _SENTINEL)
                     break
-                self._put_outbound(prepared)
+                if prepared is None:
+                    continue
+                priority = getattr(prepared, "priority", PRIORITY_LOW)
+                self._put_outbound(int(priority), prepared)
 
         self._thread = threading.Thread(
             target=_worker,
@@ -89,14 +102,19 @@ class TurnEventPipeline(Generic[T]):
         )
         self._thread.start()
 
-    def _put_outbound(self, item: Any) -> None:
-        future = asyncio.run_coroutine_threadsafe(self._outbound.put(item), self._loop)
-        future.result()
+    def _put_outbound(self, priority: int, item: Any) -> None:
+        """Enqueue a prepared chunk from the processor thread (thread-safe, non-blocking)."""
+        seq = self._outbound_seq
+        self._outbound_seq += 1
+        try:
+            self._outbound.put_nowait((priority, seq, item))
+        except queue.Full:
+            logger.warning("Turn outbound queue full; dropping prepared chunk")
 
     async def iter_prepared(self) -> AsyncIterator[T]:
         """Yield prepared chunk plans until the stream ends."""
         while True:
-            item = await self._outbound.get()
+            _priority, _seq, item = await asyncio.to_thread(self._outbound.get)
             if item is _SENTINEL:
                 if self._processor_error is not None:
                     raise self._processor_error
@@ -139,4 +157,10 @@ async def run_turn_pipeline(
         pipeline.shutdown()
 
 
-__all__ = ["TurnEventPipeline", "run_turn_pipeline"]
+__all__ = [
+    "PRIORITY_HIGH",
+    "PRIORITY_LOW",
+    "PRIORITY_NORMAL",
+    "TurnEventPipeline",
+    "run_turn_pipeline",
+]

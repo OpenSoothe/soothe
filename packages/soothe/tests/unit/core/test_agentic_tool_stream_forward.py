@@ -143,6 +143,29 @@ def test_main_graph_tool_call_update_forwarded() -> None:
     assert _forward_messages_chunk(chunk) is True
 
 
+def test_empty_ai_chunk_not_forwarded() -> None:
+    chunk = ((), "messages", (AIMessage(content=""), {}))
+    assert _is_ai_messages_stream_chunk(chunk) is False
+    assert _forward_messages_chunk(chunk) is False
+
+
+def test_empty_ai_chunk_with_tool_calls_still_forwarded() -> None:
+    msg = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "edit_file",
+                "args": {"file_path": "a.py"},
+                "id": "call-1",
+                "type": "tool_call",
+            }
+        ],
+    )
+    chunk = ((), "messages", (msg, {}))
+    assert _is_ai_messages_stream_chunk(chunk) is True
+    assert _forward_messages_chunk(chunk) is True
+
+
 def test_custom_event_non_tool_update_not_forwarded() -> None:
     """Other custom events (not tool_call_update) should not be forwarded."""
     chunk = (
