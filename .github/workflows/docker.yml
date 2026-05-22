@@ -41,6 +41,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          submodules: true
 
       - name: Resolve Soothe version for Docker build
         id: soothe_version
