@@ -57,6 +57,13 @@ ephemeral_loop_gc:
   batch_size: 50
 
 # ============================================================================
+# STALE WORKER REAP - Orphaned multiprocessing.spawn processes (worker_pool)
+# ============================================================================
+stale_worker_reap:
+  enabled: true                      # Server also requires worker_pool.enabled
+  interval_seconds: 1800             # Every 30 minutes
+
+# ============================================================================
 # OBSERVABILITY - Diagnostic metrics and logging
 # ============================================================================
 event_size_stats_enabled: true       # Track JSON wire-size distribution

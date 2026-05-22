@@ -14,6 +14,7 @@ from soothe_daemon.persistence.pools import (
     uses_postgresql_persistence,
 )
 from soothe_daemon.persistence.process_cleanup import (
+    periodic_stale_worker_reap,
     reap_from_cli,
     reap_stale_soothe_worker_processes,
 )
@@ -23,6 +24,7 @@ __all__ = [
     "check_persistence",
     "close_shared_postgres_pools",
     "periodic_postgres_pool_maintenance",
+    "periodic_stale_worker_reap",
     "preopen_shared_postgres_pools",
     "recommended_agentloop_pool_size",
     "recommended_checkpointer_pool_size",

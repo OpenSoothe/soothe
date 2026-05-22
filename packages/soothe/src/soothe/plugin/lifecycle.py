@@ -114,6 +114,8 @@ class PluginLifecycleManager:
 
                 logger.info("Shutdown plugin '%s'", name)
 
+            except asyncio.CancelledError:
+                logger.debug("Plugin unload cancelled for '%s'", name)
             except Exception:
                 logger.exception("Failed to shutdown plugin '%s'", name)
 
