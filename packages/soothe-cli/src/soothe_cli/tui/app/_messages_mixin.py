@@ -414,7 +414,7 @@ class _MessagesMixin:
         2. If ask_user menu is active, cancel it
         3. If agent is running, interrupt it (preserve input)
         4. If double press (quit_pending), quit
-        5. Otherwise show quit hint
+        5. Otherwise clear draft input and show quit hint
         """
         from soothe_cli.tui.widgets.clipboard import copy_selection_to_clipboard
 
@@ -453,11 +453,13 @@ class _MessagesMixin:
             self._arm_quit_pending("Ctrl+C")
 
     def _arm_quit_pending(self, shortcut: str) -> None:
-        """Set the pending-quit flag and show a matching hint.
+        """Set the pending-quit flag, clear draft input, and show a matching hint.
 
         Args:
             shortcut: The key chord to show in the quit hint.
         """
+        if self._chat_input:
+            self._chat_input.clear_input()
         self._quit_pending = True
         quit_timeout = 3
         self.notify(f"Press {shortcut} again to quit", timeout=quit_timeout, markup=False)

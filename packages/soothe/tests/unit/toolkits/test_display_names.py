@@ -79,8 +79,9 @@ def test_subagent_decorator_auto_conversion():
     plugin = TestPlugin()
     wrapped_subagent = plugin.create_agent
 
-    # Should not have _subagent_display_name attribute (removed)
-    assert not hasattr(wrapped_subagent, "_subagent_display_name")
+    # Subagent metadata should be set
+    assert hasattr(wrapped_subagent, "_is_subagent")
+    assert wrapped_subagent._subagent_name == "my_agent"
 
-    # But the name should auto-convert (no spaces)
+    # Display name auto-converts via registry function (no spaces)
     assert get_tool_display_name("my_agent") == "MyAgent"
