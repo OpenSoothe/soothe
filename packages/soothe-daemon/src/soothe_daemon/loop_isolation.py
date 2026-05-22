@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.core.runner._types import generate_thread_id
-from soothe.core.workspace import resolve_loop_daemon_workspace
+from soothe.core.workspace import resolve_daemon_workspace, resolve_user_workspace
 
 from soothe_daemon.logging import set_loop_id
 
@@ -71,24 +71,31 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
 
     daemon._thread_registry.ensure(thread_id, is_draft=False)
 
-    # Workspace resolution — two tiers only:
-    #   1. client_workspace from loop metadata (IG-409): the user's CWD passed via loop_new.
-    #   2. per-loop daemon scratch dir: $SOOTHE_HOME/data/loops/<loop_id>/workspace/ (IG-300).
+    # Workspace resolution — user-scoped persistence:
+    #   1. user + client_workspace → per-user workspace dir ($SOOTHE_HOME/workspaces/ws_<hash>/)
+    #   2. client_workspace only → anonymous workspace ($SOOTHE_HOME/workspaces/anon_<hash>/)
+    #   3. daemon fallback workspace (TEMP)
     loop_workspace: Path | None = None
+
+    raw_user = metadata.get("user_id") or metadata.get("user")  # Support both field names
     raw_client_ws = metadata.get("client_workspace")
-    if isinstance(raw_client_ws, str) and raw_client_ws.strip():
-        candidate = Path(raw_client_ws).expanduser()
-        if candidate.is_dir():
-            loop_workspace = candidate.resolve()
-        else:
+
+    user = str(raw_user).strip() if raw_user else None
+    client_ws = str(raw_client_ws).strip() if raw_client_ws else None
+
+    if client_ws:
+        try:
+            loop_workspace = resolve_user_workspace(user, client_ws)
+        except ValueError as e:
             logger.warning(
-                "Loop %s client_workspace %r is not a directory; falling back to per-loop dir",
+                "Loop %s: invalid client_workspace %r: %s; falling back to daemon workspace",
                 loop_id,
-                raw_client_ws,
+                client_ws,
+                e,
             )
 
     if loop_workspace is None:
-        loop_workspace = resolve_loop_daemon_workspace(loop_id)
+        loop_workspace = resolve_daemon_workspace()
 
     daemon._thread_registry.set_workspace(thread_id, loop_workspace)
     daemon._thread_registry.set_thread_loop(thread_id, loop_id)

@@ -14,6 +14,7 @@ from typing import Any
 from soothe.config import SootheConfig
 from soothe.core import resolve_daemon_workspace
 from soothe.core.loop.state.persistence.manager import AgentLoopCheckpointPersistenceManager
+from soothe.core.workspace import cleanup_anonymous_workspaces, cleanup_legacy_per_loop_workspaces
 from soothe.logging import ThreadLogger
 from soothe_sdk.client.protocol import encode
 
@@ -105,12 +106,10 @@ class SootheDaemon(DaemonHandlersMixin):
         # Shared persistence manager (avoids per-RPC pool creation/teardown)
         self._persistence_manager = AgentLoopCheckpointPersistenceManager(config=self._config)
 
-        # Resolve daemon workspace
-        self._daemon_workspace = resolve_daemon_workspace(self._config.workspace_dir)
+        # Resolve daemon workspace (ephemeral TEMP unless SOOTHE_WORKSPACE set)
+        self._daemon_workspace = resolve_daemon_workspace()
         logger.info("Daemon workspace: %s", self._daemon_workspace)
 
-        # Update config with resolved workspace
-        self._config.workspace_dir = str(self._daemon_workspace)
         self._clients: list[_ClientConn] = []
         self._server: asyncio.AbstractServer | None = None
         self._runner: Any = None
@@ -737,6 +736,10 @@ class SootheDaemon(DaemonHandlersMixin):
         # Close shared persistence manager
         with contextlib.suppress(Exception):
             await self._persistence_manager.close()
+
+        # Clean up anonymous workspace directories
+        cleanup_anonymous_workspaces()
+        cleanup_legacy_per_loop_workspaces()
 
         # Stop transport manager
         if self._transport_manager:

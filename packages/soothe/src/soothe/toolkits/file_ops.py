@@ -18,8 +18,6 @@ import logging
 from langchain_core.tools import BaseTool
 from soothe_sdk.plugin import plugin
 
-from soothe.utils import expand_path
-
 logger = logging.getLogger(__name__)
 
 
@@ -47,6 +45,7 @@ class FileOpsPlugin:
         """
         from deepagents.backends.filesystem import FilesystemBackend
 
+        from soothe.core.workspace.resolution import resolve_daemon_workspace
         from soothe.core.workspace.tool_path_resolution import (
             filesystem_virtual_mode_from_soothe_config,
             max_file_size_mb_for_filesystem_backend,
@@ -54,7 +53,7 @@ class FileOpsPlugin:
         from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
         sc = context.soothe_config
-        workspace_root = context.config.get("workspace_root") or str(expand_path(sc.workspace_dir))
+        workspace_root = context.config.get("workspace_root") or str(resolve_daemon_workspace())
         fs_config = dict(context.config.get("filesystem_middleware", {}))
         if "virtual_mode" not in fs_config:
             fs_config["virtual_mode"] = filesystem_virtual_mode_from_soothe_config(sc)

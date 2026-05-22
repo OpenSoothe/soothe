@@ -430,7 +430,7 @@ def run_textual_tui(
     """
 
     # Caller cwd is forwarded as the loop workspace hint (IG-344).
-    # config.workspace_dir is the daemon default (~/.soothe/Workspace), not the project dir.
+    # Daemon workspace is ephemeral TEMP unless SOOTHE_WORKSPACE env set.
     cwd = os.getcwd()
 
     return asyncio.run(

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
-import re
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -14,62 +15,23 @@ from soothe_sdk.utils import INVALID_WORKSPACE_DIRS
 
 logger = logging.getLogger(__name__)
 
-_LOOP_ID_SAFE = re.compile(r"^[A-Za-z0-9._-]{1,256}$")
 
-
-def resolve_loop_daemon_workspace(loop_id: str) -> Path:
-    """Resolve per-loop daemon workspace under ``$SOOTHE_HOME/data/loops/<loop_id>/workspace/``.
-
-    Used when an AgentLoop owns execution across threads so filesystem tools
-    default to an isolated directory instead of the global daemon workspace
-    (IG-300).
-
-    Args:
-        loop_id: Agent loop identifier (UUID-style string).
-
-    Returns:
-        Absolute path to the loop workspace directory (created if missing).
-
-    Raises:
-        ValueError: If *loop_id* is empty or contains unsafe characters, or the
-            resolved directory is invalid (see ``INVALID_WORKSPACE_DIRS``).
-    """
-    from soothe.config import SOOTHE_HOME
-
-    text = str(loop_id).strip()
-    if not text:
-        msg = "loop_id must be non-empty"
-        raise ValueError(msg)
-    if not _LOOP_ID_SAFE.match(text) or ".." in text or "/" in text or "\\" in text:
-        msg = f"Invalid loop_id for workspace directory: {loop_id!r}"
-        raise ValueError(msg)
-
-    root = (Path(SOOTHE_HOME) / "data" / "loops" / text / "workspace").resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    _validate_workspace_dir(root)
-    return root
-
-
-def resolve_daemon_workspace(config_workspace_dir: str = "") -> Path:
-    """Resolve daemon workspace directory.
+def resolve_daemon_workspace() -> Path:
+    """Resolve daemon fallback workspace (ephemeral TEMP unless overridden).
 
     Priority:
     1. ``SOOTHE_WORKSPACE`` environment variable (absolute override).
-    2. ``workspace_dir`` from ``SootheConfig`` / YAML. Legacy empty or ``.``
-       resolves to ``$SOOTHE_HOME/Workspace`` (IG-327).
+    2. TEMP directory (ephemeral, not persisted across restarts).
 
-    Args:
-        config_workspace_dir: ``workspace_dir`` from configuration.
+    The daemon workspace is only used as a fallback when no user workspace
+    can be resolved (anonymous users without client_workspace).
 
     Returns:
-        Resolved absolute workspace path (created if missing, except when
-        ``SOOTHE_WORKSPACE`` points at an existing path only).
+        Resolved absolute workspace path.
 
     Raises:
         ValueError: If resolved workspace is invalid system directory.
     """
-    from soothe.config.env import default_soothe_workspace_dir
-
     env_workspace = os.environ.get("SOOTHE_WORKSPACE")
     if env_workspace:
         workspace = Path(env_workspace).expanduser().resolve()
@@ -77,15 +39,129 @@ def resolve_daemon_workspace(config_workspace_dir: str = "") -> Path:
         logger.info("Using SOOTHE_WORKSPACE: %s", workspace)
         return workspace
 
-    text = (config_workspace_dir or "").strip()
-    if not text or text == ".":
-        workspace = Path(default_soothe_workspace_dir()).expanduser().resolve()
-    else:
-        workspace = Path(config_workspace_dir).expanduser().resolve()
-    _validate_workspace_dir(workspace)
+    # Ephemeral TEMP fallback
+    workspace = Path(tempfile.gettempdir()) / "soothe-daemon-workspace"
     workspace.mkdir(parents=True, exist_ok=True)
-    logger.info("Using workspace_dir: %s", workspace)
+    _validate_workspace_dir(workspace)
+    logger.info("Using ephemeral daemon workspace: %s", workspace)
     return workspace
+
+
+def compute_workspace_id(user: str | None, client_workspace: str) -> str:
+    """Compute deterministic WorkspaceID from user + client_workspace.
+
+    Args:
+        user: User identifier (may be None for anonymous).
+        client_workspace: Client's current working directory.
+
+    Returns:
+        WorkspaceID string: "ws_<hash>" for authenticated, "anon_<hash>" for anonymous.
+    """
+    normalized_cw = str(Path(client_workspace).resolve())
+
+    if user and user.strip():
+        key = f"{user.strip()}:{normalized_cw}"
+        hash_hex = hashlib.sha256(key.encode()).hexdigest()[:16]
+        return f"ws_{hash_hex}"
+    else:
+        hash_hex = hashlib.sha256(normalized_cw.encode()).hexdigest()[:16]
+        return f"anon_{hash_hex}"
+
+
+def resolve_user_workspace(
+    user: str | None,
+    client_workspace: str,
+    *,
+    soothe_home: Path | None = None,
+    create: bool = True,
+) -> Path:
+    """Resolve per-user workspace path based on user identity + client CWD.
+
+    Args:
+        user: User identifier (may be None for anonymous).
+        client_workspace: Client's current working directory (CWD).
+        soothe_home: Optional SOOTHE_HOME override (for testing).
+        create: If True, create directory if missing.
+
+    Returns:
+        Absolute path to user workspace directory.
+
+    Raises:
+        ValueError: If client_workspace is invalid system directory.
+    """
+    from soothe.config import SOOTHE_HOME
+
+    # Validate client_workspace
+    validate_client_workspace(client_workspace)
+
+    # Compute deterministic ID
+    workspace_id = compute_workspace_id(user, client_workspace)
+
+    # Construct path
+    home = Path(soothe_home or SOOTHE_HOME).expanduser().resolve()
+    workspace_path = home / "workspaces" / workspace_id
+
+    if create:
+        workspace_path.mkdir(parents=True, exist_ok=True)
+        logger.info("Resolved user workspace: %s -> %s", workspace_id, workspace_path)
+
+    return workspace_path
+
+
+def cleanup_legacy_per_loop_workspaces() -> None:
+    """Clean up old per-loop workspace directories (one-time migration).
+
+    Removes `$SOOTHE_HOME/data/loops/*/workspace/` directories created by
+    the previous per-loop workspace scheme.
+    """
+    import shutil
+
+    from soothe.config import SOOTHE_HOME
+
+    loops_dir = Path(SOOTHE_HOME) / "data" / "loops"
+    if not loops_dir.exists():
+        return
+
+    cleaned = 0
+    for loop_dir in loops_dir.iterdir():
+        ws = loop_dir / "workspace"
+        if ws.is_dir():
+            try:
+                shutil.rmtree(ws)
+                cleaned += 1
+                logger.info("Cleaned legacy per-loop workspace: %s", ws)
+            except OSError as e:
+                logger.warning("Failed to cleanup %s: %s", ws, e)
+
+    if cleaned > 0:
+        logger.info("Cleaned %d legacy per-loop workspace directories", cleaned)
+
+
+def cleanup_anonymous_workspaces() -> None:
+    """Clean up anonymous workspace directories (daemon shutdown).
+
+    Removes all `anon_*` directories under `$SOOTHE_HOME/workspaces/`.
+    """
+    import shutil
+
+    from soothe.config import SOOTHE_HOME
+
+    workspaces_dir = Path(SOOTHE_HOME) / "workspaces"
+    if not workspaces_dir.exists():
+        return
+
+    cleaned = 0
+    for ws_dir in workspaces_dir.glob("anon_*"):
+        if ws_dir.is_dir():
+            try:
+                shutil.rmtree(ws_dir)
+                cleaned += 1
+                logger.info("Cleaned anonymous workspace: %s", ws_dir)
+            except OSError as e:
+                logger.warning("Failed to cleanup %s: %s", ws_dir, e)
+
+    if cleaned > 0:
+        logger.info("Cleaned %d anonymous workspace directories", cleaned)
 
 
 def _validate_workspace_dir(path: Path) -> None:
@@ -100,10 +176,7 @@ def _validate_workspace_dir(path: Path) -> None:
     path_str = str(path.resolve())
 
     if path_str in INVALID_WORKSPACE_DIRS:
-        msg = (
-            f"Invalid workspace: {path} is a system directory. "
-            f"Set SOOTHE_WORKSPACE env var or workspace_dir in config.yml."
-        )
+        msg = f"Invalid workspace: {path} is a system directory. Set SOOTHE_WORKSPACE env var."
         raise ValueError(msg)
 
 

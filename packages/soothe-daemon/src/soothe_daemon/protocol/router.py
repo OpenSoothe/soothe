@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.core.workspace import resolve_loop_daemon_workspace
 from soothe.utils.text_preview import preview_first
 from soothe_sdk.client.protocol import _serialize_for_json
 
@@ -303,11 +302,10 @@ class MessageRouter:
         workspace: str | None = None
         loop_id = await self._client_subscribed_loop_id(client_id)
         if loop_id:
-            try:
-                ws_path = resolve_loop_daemon_workspace(loop_id)
+            # Get workspace from thread registry (set by bind_execution_thread_for_loop)
+            ws_path = d._thread_registry.get_workspace(d._current_thread_id or loop_id)
+            if ws_path:
                 workspace = str(ws_path)
-            except (ValueError, OSError):
-                pass  # Fall back to cwd
 
         skills = wire_entries_for_agent_config(d._config, workspace)
         await d._send_client_message(
@@ -366,11 +364,10 @@ class MessageRouter:
         workspace: str | None = None
         loop_id = await self._client_subscribed_loop_id(client_id)
         if loop_id:
-            try:
-                ws_path = resolve_loop_daemon_workspace(loop_id)
+            # Get workspace from thread registry (set by bind_execution_thread_for_loop)
+            ws_path = d._thread_registry.get_workspace(d._current_thread_id or loop_id)
+            if ws_path:
                 workspace = str(ws_path)
-            except (ValueError, OSError):
-                pass  # Fall back to cwd
 
         meta = resolve_skill_directory(d._config, raw_skill, workspace)
         if meta is None:
@@ -1102,12 +1099,12 @@ class MessageRouter:
 
         Create fresh loop with new loop_id for new query/conversation. If the client
         provides a ``workspace`` field (e.g., user's CWD), validate it and record it
-        as the loop's filesystem workspace so file/shell tools default to the user's
-        project directory instead of the per-loop daemon scratch dir (IG-409).
+        as the loop's filesystem workspace. If client provides ``user`` field, store
+        for workspace isolation (per-user workspace under $SOOTHE_HOME/workspaces/).
 
         Args:
             client_id: Client connection identifier.
-            msg: Request message; may contain optional ``workspace`` (string path).
+            msg: Request message; may contain optional ``workspace`` and ``user`` fields.
         """
         from soothe.core.loop.state.persistence.directory_manager import (
             PersistenceDirectoryManager,
@@ -1121,15 +1118,8 @@ class MessageRouter:
         # Generate new loop_id
         loop_id = str(uuid7())
 
-        try:
-            resolve_loop_daemon_workspace(loop_id)
-        except ValueError:
-            logger.warning("Skipping loop workspace init for invalid loop_id %s", loop_id)
-        except OSError as e:
-            logger.warning("Could not create loop workspace directory: %s", e)
-
-        # Resolve optional client workspace hint (IG-409). Invalid hints fall back to
-        # the per-loop daemon workspace via _bind_execution_thread_for_loop.
+        # Resolve optional client workspace hint. Invalid hints fall back to
+        # daemon workspace via _bind_execution_thread_for_loop.
         client_workspace: str | None = None
         raw_workspace = msg.get("workspace")
         if isinstance(raw_workspace, str) and raw_workspace.strip():
@@ -1147,6 +1137,13 @@ class MessageRouter:
                     client_workspace,
                 )
 
+        # Extract user identity for workspace isolation
+        user: str | None = None
+        raw_user = msg.get("user_id") or msg.get("user")  # Support both field names
+        if isinstance(raw_user, str) and raw_user.strip():
+            user = raw_user.strip()
+            logger.info("[loop_new] Loop %s user identity: %s", loop_id, user)
+
         # Create loop directory (still needed for goals/ and working_memory/ subdirs)
         loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
         loop_dir.mkdir(parents=True, exist_ok=True)
@@ -1158,10 +1155,14 @@ class MessageRouter:
             current_thread_id="",
             status="created",
         )
+
+        # Store metadata
         if client_workspace is not None:
             await d._persistence_manager.update_loop_metadata(
                 loop_id, client_workspace=client_workspace
             )
+        if user is not None:
+            await d._persistence_manager.update_loop_metadata(loop_id, user_id=user)
 
         logger.info("Created new loop %s", loop_id)
 
