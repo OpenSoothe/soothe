@@ -145,7 +145,7 @@ def setup_logging(
         config: Optional config to read logging configuration from.
         foreground: When ``True``, forces console logging to stdout at INFO level
             regardless of config settings. Useful for foreground process mode.
-        log_file: Optional log file path override (e.g. daemon unified ``daemon.log``).
+        log_file: Optional log file path override (default ``SOOTHE_HOME/logs/soothe.log``).
     """
     from soothe.config import SootheConfig as _SootheConfig
 
