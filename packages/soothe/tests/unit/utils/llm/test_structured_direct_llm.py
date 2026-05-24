@@ -59,7 +59,9 @@ async def test_invoke_structured_chat_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_invoke_structured_chat_retries_json_schema_after_thinking_tool_choice_error() -> None:
+async def test_invoke_structured_chat_retries_json_schema_after_thinking_tool_choice_error() -> (
+    None
+):
     """Thinking-mode models reject tool_choice; fall back to json_schema at invoke time."""
     chat = MagicMock()
     fc_runnable = MagicMock()

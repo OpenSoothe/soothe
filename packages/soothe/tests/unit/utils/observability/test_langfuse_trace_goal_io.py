@@ -13,6 +13,7 @@ def test_loop_graph_langfuse_run_display_name() -> None:
 
 
 def test_patch_langfuse_trace_goal_io_skips_without_handler() -> None:
+    pytest.importorskip("langfuse")
     from soothe.utils.observability.langfuse import patch_langfuse_trace_goal_io
 
     with patch("langfuse.get_client") as gc:

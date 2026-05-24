@@ -165,3 +165,106 @@ async def test_loop_input_image_to_text_without_attachments_returns_error(
     assert err["type"] == "error"
     assert err["code"] == "INVALID_REQUEST"
     assert "attachment" in err["message"].lower()
+
+
+TINY_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+
+def _router_with_enqueue_stub(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[MessageRouter, AsyncMock, list[tuple[Any, dict[str, Any]]], str]:
+    async def _stub_ensure(_self: MessageRouter, _loop_id: str) -> bool:
+        return True
+
+    monkeypatch.setattr(MessageRouter, "_ensure_loop_exists", _stub_ensure)
+
+    sent: list[tuple[Any, dict[str, Any]]] = []
+    enqueue = AsyncMock()
+    loop_id = "019e0000-0000-7000-8000-000000000002"
+
+    class _FakeDaemon:
+        _config = SootheConfig()
+        _query_running = False
+        _active_threads: set[Any] = set()
+        _runner = SimpleNamespace(current_thread_id="thr-router-direct")
+        _loop_input_dispatcher = SimpleNamespace(enqueue=enqueue)
+        _session_manager = SimpleNamespace(
+            get_session=AsyncMock(return_value=SimpleNamespace(subscriptions={loop_id}))
+        )
+        _persistence_manager = SimpleNamespace(touch_loop_last_message=AsyncMock())
+
+        async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
+            sent.append((client_id, msg))
+
+    router = MessageRouter(_FakeDaemon())
+    return router, enqueue, sent, loop_id
+
+
+@pytest.mark.asyncio
+async def test_loop_input_direct_llm_attachments_only_enqueues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """direct_llm with attachments and empty content is valid."""
+    router, enqueue, sent, loop_id = _router_with_enqueue_stub(monkeypatch)
+
+    await router.dispatch(
+        "client-go-parity",
+        {
+            "type": "loop_input",
+            "loop_id": loop_id,
+            "content": "",
+            "intent_hint": "direct_llm",
+            "attachments": [{"mime_type": "image/png", "data": TINY_PNG_B64}],
+        },
+    )
+
+    enqueue.assert_awaited_once()
+    payload = enqueue.await_args.args[1]
+    assert payload["intent_hint"] == "direct_llm"
+    assert payload["attachments"]
+    assert sent[-1][1]["type"] == "loop_input_response"
+
+
+@pytest.mark.asyncio
+async def test_loop_input_direct_llm_without_content_or_attachments_returns_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    router, enqueue, sent, loop_id = _router_with_enqueue_stub(monkeypatch)
+
+    await router.dispatch(
+        "client-go-parity",
+        {
+            "type": "loop_input",
+            "loop_id": loop_id,
+            "content": "",
+            "intent_hint": "direct_llm",
+        },
+    )
+
+    enqueue.assert_not_awaited()
+    err = sent[-1][1]
+    assert err["type"] == "error"
+    assert err["code"] == "INVALID_REQUEST"
+    assert "content or attachments" in err["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_loop_input_image_to_text_normalizes_intent_hint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    router, enqueue, _, loop_id = _router_with_enqueue_stub(monkeypatch)
+
+    await router.dispatch(
+        "client-go-parity",
+        {
+            "type": "loop_input",
+            "loop_id": loop_id,
+            "content": "describe",
+            "intent_hint": "image_to_text",
+            "attachments": [{"mime_type": "image/png", "data": TINY_PNG_B64}],
+        },
+    )
+
+    enqueue.assert_awaited_once()
+    payload = enqueue.await_args.args[1]
+    assert payload["intent_hint"] == "direct_llm"
