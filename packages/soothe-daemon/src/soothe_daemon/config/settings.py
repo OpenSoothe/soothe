@@ -59,9 +59,9 @@ class SootheDaemonConfig(BaseSettings):
         default=100, description="Maximum concurrent threads (0 = unlimited)"
     )
     max_query_duration_minutes: int = Field(
-        default=4320,
+        default=0,
         ge=0,
-        description="Maximum query duration in minutes (0 = unlimited, default 3 days)",
+        description="Maximum query duration in minutes (0 = unlimited)",
     )
     cancel_grace_seconds: int = Field(
         default=30,

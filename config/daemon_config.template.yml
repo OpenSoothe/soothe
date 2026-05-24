@@ -38,7 +38,7 @@ max_input_queue_size: 1000           # Pending requests before rejection
 # ============================================================================
 # TIMEOUTS & CANCELLATION - Query lifecycle and graceful shutdown
 # ============================================================================
-max_query_duration_minutes: 4320     # 3 days max query runtime (0 = unlimited)
+max_query_duration_minutes: 0        # 0 = unlimited; set e.g. 4320 for a 3-day cap
 thread_max_age_hours: 24             # Thread recycling age
 cancel_grace_seconds: 30             # Initial grace period before cancel sequence
 cancel_retry_count: 3                # Cooperative cancel attempts before force kill
