@@ -193,6 +193,7 @@ class StepTaskRouter:
                     self._spawns_by_step_id,
                     item.ns_key,
                     cand,
+                    spawns_by_task_id=self._spawns_by_task_id,
                 ):
                     bound += 1
                     try:
@@ -448,6 +449,7 @@ class StepTaskRouter:
                 self._spawns_by_step_id,
                 ns_key,
                 cand,
+                spawns_by_task_id=self._spawns_by_task_id,
             ):
                 try:
                     self._pending_unscoped_namespaces.remove(ns_key)
@@ -508,6 +510,7 @@ class StepTaskRouter:
                     self._spawns_by_step_id,
                     item.ns_key,
                     cand,
+                    spawns_by_task_id=self._spawns_by_task_id,
                 ):
                     try:
                         self._pending_unscoped_namespaces.remove(item.ns_key)

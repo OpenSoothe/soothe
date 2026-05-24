@@ -85,14 +85,10 @@ def test_prepare_turn_chunk_skips_invisible_custom_events() -> None:
     """Custom events below the active verbosity tier are dropped in prepare."""
     from soothe_cli.runtime.presentation.engine import PresentationEngine
     from soothe_cli.runtime.state.session_stats import TurnEventStats
-    from soothe_cli.runtime.state.step_router import StepTaskRouter
 
     state = TurnPrepareState(
         ev_stats=TurnEventStats(),
-        router=StepTaskRouter(),
         presentation=PresentationEngine(),
-        pending_tool_calls_lc={},
-        streaming_overlay={},
     )
     prepared = prepare_turn_chunk(
         state,
@@ -109,14 +105,10 @@ def test_prepare_turn_chunk_skips_invisible_custom_events() -> None:
 def test_prepare_turn_chunk_skips_noop_updates_only() -> None:
     from soothe_cli.runtime.presentation.engine import PresentationEngine
     from soothe_cli.runtime.state.session_stats import TurnEventStats
-    from soothe_cli.runtime.state.step_router import StepTaskRouter
 
     state = TurnPrepareState(
         ev_stats=TurnEventStats(),
-        router=StepTaskRouter(),
         presentation=PresentationEngine(),
-        pending_tool_calls_lc={},
-        streaming_overlay={},
     )
     assert prepare_turn_chunk(state, ((), "updates", {"model": {}})) is None
     assert state.ev_stats.filtered_early == 1

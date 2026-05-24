@@ -15,6 +15,7 @@ from soothe_sdk.ux.task_namespace import (
     resolve_task_parent_for_unified_tool_id,
     resolve_task_parent_lookup,
     resolve_task_scope_for_namespace,
+    resolve_task_scope_for_subgraph_tool,
     row_key_for_subgraph_tool,
     scoped_subgraph_tool_key,
     step_level_parent_task_call_id,
@@ -340,6 +341,68 @@ def test_task_scope_task_idx_parses_from_task_tool_call_id() -> None:
     # Task index 2: GHT_02:s:task:2 → 2
     scope = ("GHT_02:s:task:2", "plan", "GHT-02")
     assert task_scope_task_idx(scope, "GHT-02") == 2
+
+
+def test_resolve_task_scope_for_subgraph_tool_uses_spawns_by_task_id() -> None:
+    """Second ``task:N`` on one step must not steal bindings from the first."""
+    spawns_by_step = {"WAV-01": ("WAV_01:s:task:1", "tacitus", "WAV-01")}
+    spawns_by_task = {
+        "WAV_01:s:task:0": ("WAV_01:s:task:0", "explore", "WAV-01"),
+        "WAV_01:s:task:1": ("WAV_01:s:task:1", "tacitus", "WAV-01"),
+    }
+    scope0 = resolve_task_scope_for_subgraph_tool(
+        "WAV_01:t0:grep:0",
+        spawns_by_step,
+        spawns_by_task,
+    )
+    scope1 = resolve_task_scope_for_subgraph_tool(
+        "WAV_01:t1:grep:0",
+        spawns_by_step,
+        spawns_by_task,
+    )
+    assert scope0 == ("WAV_01:s:task:0", "explore", "WAV-01")
+    assert scope1 == ("WAV_01:s:task:1", "tacitus", "WAV-01")
+
+
+def test_register_second_task_on_same_step_preserves_first_spawn() -> None:
+    bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
+    queue: deque[tuple[str, str, str]] = deque()
+    spawns_by_step: dict[str, tuple[str, str, str]] = {}
+    spawns_by_task: dict[str, tuple[str, str, str]] = {}
+    register_task_spawn_for_step(
+        bindings,
+        queue,
+        spawns_by_step,
+        ("WAV_01:s:task:0", "explore", "WAV-01"),
+        spawns_by_task_id=spawns_by_task,
+    )
+    register_task_spawn_for_step(
+        bindings,
+        queue,
+        spawns_by_step,
+        ("WAV_01:s:task:1", "tacitus", "WAV-01"),
+        spawns_by_task_id=spawns_by_task,
+    )
+    assert spawns_by_step["WAV-01"] == ("WAV_01:s:task:0", "explore", "WAV-01")
+    assert spawns_by_task["WAV_01:s:task:0"][1] == "explore"
+    assert spawns_by_task["WAV_01:s:task:1"][1] == "tacitus"
+
+
+def test_try_bind_namespace_uses_spawns_by_task_id_for_parallel_tasks() -> None:
+    bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
+    spawns_by_step = {"WAV-01": ("WAV_01:s:task:1", "tacitus", "WAV-01")}
+    spawns_by_task = {
+        "WAV_01:s:task:0": ("WAV_01:s:task:0", "explore", "WAV-01"),
+        "WAV_01:s:task:1": ("WAV_01:s:task:1", "tacitus", "WAV-01"),
+    }
+    assert try_bind_namespace_from_tool_call_id(
+        bindings,
+        spawns_by_step,
+        ("tools:first",),
+        "WAV_01:t0:grep:0",
+        spawns_by_task_id=spawns_by_task,
+    )
+    assert bindings[("tools:first",)] == ("WAV_01:s:task:0", "explore", "WAV-01")
 
 
 def test_task_scope_task_idx_returns_zero_for_invalid_scope() -> None:

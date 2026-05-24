@@ -22,10 +22,8 @@ from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux.classification import classify_event_to_tier
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
 
-from soothe_cli.runtime.parse.message_processing import ingest_tool_call_stream_state
 from soothe_cli.runtime.presentation.engine import PresentationEngine
 from soothe_cli.runtime.state.session_stats import TurnEventStats
-from soothe_cli.runtime.state.step_router import StepTaskRouter
 from soothe_cli.runtime.turn.pipeline import PRIORITY_HIGH, PRIORITY_LOW, PRIORITY_NORMAL
 from soothe_cli.runtime.wire.chunk_filter import (
     message_has_tool_invocation_metadata,
@@ -68,28 +66,14 @@ class PreparedTurnChunk:
 
 @dataclass
 class TurnPrepareState:
-    """Mutable per-turn state accessed only from the processor thread."""
+    """Mutable per-turn state accessed only from the processor thread.
+
+    Tool-call pending buffers and ``StepTaskRouter`` are updated on the main loop
+    only (see ``execute_task_textual`` applier) to avoid races during parallel steps.
+    """
 
     ev_stats: TurnEventStats
-    router: StepTaskRouter
     presentation: PresentationEngine
-    pending_tool_calls_lc: dict[str, dict[str, Any]]
-    streaming_overlay: dict[str, dict[str, Any]]
-    last_active_tool_call_id: str = ""
-
-    def ingest_message_tool_stream(
-        self,
-        message: Any,
-        *,
-        is_main: bool,
-    ) -> None:
-        """Accumulate streaming tool-call args on the processor thread."""
-        self.last_active_tool_call_id = ingest_tool_call_stream_state(
-            self.pending_tool_calls_lc,
-            message,
-            is_main=is_main,
-            last_active_id=self.last_active_tool_call_id,
-        )
 
 
 def _message_priority(message: Any, *, is_summarization: bool) -> int:
@@ -135,9 +119,6 @@ def _prepare_messages_chunk(
     ns_key: tuple[Any, ...],
     data: Any,
 ) -> PreparedTurnChunk | None:
-    if ns_key:
-        state.router.on_subgraph_namespace(ns_key)
-
     if not isinstance(data, (list, tuple)) or len(data) != _MSG_PAIR_LEN:
         return None
 
@@ -148,9 +129,7 @@ def _prepare_messages_chunk(
     prepared.is_summarization = is_summarization_chunk(metadata)
     prepared.priority = _message_priority(message, is_summarization=prepared.is_summarization)
 
-    is_main = ns_key == ()
-    if not prepared.is_summarization:
-        state.ingest_message_tool_stream(message, is_main=is_main)
+    if not prepared.is_summarization and message_has_tool_invocation_metadata(message):
         prepared.tool_stream_touched = True
 
     return prepared
