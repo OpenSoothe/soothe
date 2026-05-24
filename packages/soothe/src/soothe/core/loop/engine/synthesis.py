@@ -51,6 +51,7 @@ _DEFAULT_LOOP_MESSAGE_MIN_SIMILARITY = 0.15
 _DEFAULT_LOOP_MESSAGE_MIN_AI_COUNT = 5
 
 _SYNTH_GC_MARKER = "__synth_gc__"
+SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY = "soothe_goal_synthesis"
 
 
 def synthesis_checkpoint_thread_id(parent_thread_id: str) -> str:
@@ -177,7 +178,10 @@ class SynthesisGenerator:
 
         # IG-302: Fresh checkpoint thread so LangGraph does not replay full AgentLoop history.
         checkpoint_thread_id = synthesis_checkpoint_thread_id(state.thread_id)
-        configurable: dict[str, str] = {"thread_id": checkpoint_thread_id}
+        configurable: dict[str, Any] = {
+            "thread_id": checkpoint_thread_id,
+            SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY: True,
+        }
         if state.workspace:
             configurable["workspace"] = state.workspace
         logger.info(
@@ -418,4 +422,5 @@ INSTRUCTIONS:
 5. Focus on the contextual areas identified above.
 6. Be concrete and actionable — present findings, artifacts, and conclusions (file contents, search results, tool outcomes) where they matter to the goal; avoid empty confirmations.
 7. If prior turns are missing or sparse, state what is unknown rather than inventing execution detail.
-8. Write all user-facing text (headings, narrative, lists) in the same primary natural language as the goal above; if the goal explicitly requests a language, follow it. Keep code, file paths, identifiers, and quoted literals unchanged."""
+8. Write all user-facing text (headings, narrative, lists) in the same primary natural language as the goal above; if the goal explicitly requests a language, follow it. Keep code, file paths, identifiers, and quoted literals unchanged.
+9. Do not invoke tools, subagents, or filesystem commands — synthesize exclusively from the ledger messages above."""

@@ -31,6 +31,25 @@ _EXECUTION_HINTS_MARKER = "\n\nExecution hints:"
 _VALID_TASK_COMPLEXITY = frozenset({"minimal", "simple", "medium", "complex"})
 
 
+def _configurable_goal_synthesis() -> bool:
+    """Return True when CoreAgent is running goal-completion synthesis (read-only).
+
+    ``SynthesisGenerator`` sets ``soothe_goal_synthesis`` in ``config.configurable``.
+    """
+    try:
+        from langgraph.config import get_config
+
+        lg_cfg = get_config()
+    except Exception:
+        return False
+    if not isinstance(lg_cfg, dict):
+        return False
+    conf = lg_cfg.get("configurable")
+    if not isinstance(conf, dict):
+        return False
+    return bool(conf.get("soothe_goal_synthesis"))
+
+
 def _configurable_step_subagent() -> str | None:
     """Return AgentLoop per-step subagent hint from LangGraph RunnableConfig when set.
 
@@ -650,8 +669,12 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         step_enforce = step_subagent is not None and first_after_user
         wire_enforce = explicit_subagent and first_after_user
 
+        goal_synthesis = _configurable_goal_synthesis()
+
         # Per-step hint wins over wire routing when both apply (IG-386).
-        if step_enforce:
+        if goal_synthesis:
+            logger.info("Goal synthesis read-only: disabling model tools")
+        elif step_enforce:
             directive = step_subagent
             logger.info(
                 "AgentLoop step subagent hint (enforce): soothe_step_subagent=%s",
@@ -670,7 +693,6 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             )
             request.state["_subagent_routing_directive"] = directive
         else:
-            # Drop directive after the first model hop so follow-up synthesis can use normal tools.
             try:
                 request.state.pop("_subagent_routing_directive", None)
             except (AttributeError, TypeError):
@@ -703,7 +725,9 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         new_system_message = SystemMessage(content=optimized_prompt)
         overrides: dict[str, Any] = {"system_message": new_system_message}
 
-        if step_enforce or wire_enforce:
+        if goal_synthesis:
+            overrides["tools"] = []
+        elif step_enforce or wire_enforce:
             tool_list = getattr(request, "tools", None) or []
             task_only = _filter_tools_to_task_only(tool_list)
             if task_only:
