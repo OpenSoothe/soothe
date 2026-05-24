@@ -9,6 +9,29 @@ def _plain(content: object) -> str:
     return str(content)
 
 
+def test_no_blank_line_between_task_branch_and_main_step_tools() -> None:
+    """Main-graph tools (e.g. ListFiles) must sit directly under the task branch."""
+    card = CognitionStepMessage("PGY-01", "Scan Frontend and Backend", id="stp-no-gap")
+    card.add_tool_call(
+        "PGY_01:s:task:0",
+        "task",
+        {"subagent_type": "explore", "description": "scan both trees"},
+        is_task_row=True,
+    )
+    card.add_tool_call(
+        "PGY_01:s:list_files:0",
+        "list_files",
+        {"path": "~/Workspace/Longan"},
+    )
+    text = _plain(card._step_task_activity_content())
+    assert "Explore(scan both trees)" in text
+    assert "ListFiles" in text
+    lines = [ln for ln in text.split("\n") if ln.strip()]
+    list_idx = next(i for i, ln in enumerate(lines) if "ListFiles" in ln)
+    assert list_idx > 0
+    assert "scan both" in lines[list_idx - 1]
+
+
 def test_task_activity_tree_shows_name_desc_and_child_stats() -> None:
     card = CognitionStepMessage("ABC-01", "Scan workspace", id="stp-task-tree")
     card.add_tool_call(

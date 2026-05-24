@@ -262,6 +262,33 @@ def test_richest_pending_task_args_scoped_to_execute_step() -> None:
     assert "First step" not in str(merged.get("description", ""))
 
 
+def test_richest_pending_parallel_subgraph_grep_scoped_by_step() -> None:
+    """Parallel PGY steps must not cross-match ``grep`` pending buffers."""
+    from soothe_cli.runtime.parse.message_processing import richest_pending_args_for_lookup
+
+    pending = {
+        "PGY_01:t0:grep:0": {
+            "name": "grep",
+            "args_str": '{"pattern": "frontend", "path": "packages/frontend"}',
+            "emitted": False,
+            "is_main": False,
+        },
+        "PGY_02:t0:grep:0": {
+            "name": "grep",
+            "args_str": '{"pattern": "backend", "path": "packages/backend"}',
+            "emitted": False,
+            "is_main": False,
+        },
+    }
+    merged = richest_pending_args_for_lookup(
+        pending,
+        "PGY_02:t0:grep:0",
+        tool_name="grep",
+    )
+    assert merged.get("pattern") == "backend"
+    assert "frontend" not in str(merged.get("path", ""))
+
+
 def test_richest_pending_does_not_steal_task_args_for_inner_tool() -> None:
     """Task pending buffer must not supply kwargs to unrelated subgraph tools."""
     from soothe_cli.runtime.parse.message_processing import richest_pending_args_for_lookup

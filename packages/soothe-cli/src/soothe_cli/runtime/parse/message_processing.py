@@ -347,7 +347,7 @@ def richest_pending_args_for_lookup(
     if not name or name == "tool":
         return {}
     best: dict[str, Any] = {}
-    for pid, pend in pending_tool_calls.items():
+    for pid, pend in list(pending_tool_calls.items()):
         if not isinstance(pend, dict):
             continue
         if str(pend.get("name") or "").strip() != name:

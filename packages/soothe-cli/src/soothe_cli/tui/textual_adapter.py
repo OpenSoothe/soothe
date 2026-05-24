@@ -526,7 +526,7 @@ def _resolve_step_widget_for_tool(
     step_w = adapter._step_by_namespace.get(ns_key)
     if step_w is not None:
         return step_w
-    if len(router.active_step_ids) == 1:
+    if len(router.active_step_ids) == 1 and not sid:
         only_sid = next(iter(router.active_step_ids))
         return adapter._current_step_messages.get(only_sid)
     return None
@@ -1581,11 +1581,7 @@ async def execute_task_textual(
 
         prep_state = TurnPrepareState(
             ev_stats=ev_stats,
-            router=router,
             presentation=presentation,
-            pending_tool_calls_lc=pending_tool_calls_lc,
-            streaming_overlay=streaming_overlay,
-            last_active_tool_call_id=last_active_tool_call_id,
         )
 
         async def _apply_turn_chunk(prepared: PreparedTurnChunk | None) -> None:
@@ -1633,6 +1629,9 @@ async def execute_task_textual(
                         else:
                             message, metadata = data
                             message = _normalize_lc_stream_message(message)
+
+                        if ns_key:
+                            router.on_subgraph_namespace(ns_key)
 
                         # Filter out summarization model output, but keep UI feedback.
                         # The summarization model streams AIMessage chunks tagged
@@ -1761,9 +1760,7 @@ async def execute_task_textual(
                         touched_tool_ids = tool_ids_touched_by_stream_message(message)
                         if touched_tool_ids:
                             ev_stats.tool_calls += 1
-                        if prepared.tool_stream_touched:
-                            last_active_tool_call_id = prep_state.last_active_tool_call_id
-                        else:
+                        if prepared.tool_stream_touched or touched_tool_ids:
                             last_active_tool_call_id = ingest_tool_call_stream_state(
                                 pending_tool_calls_lc,
                                 message,
@@ -2513,7 +2510,6 @@ async def execute_task_textual(
             lambda raw: prepare_turn_chunk(prep_state, raw),
             _apply_turn_chunk,
         )
-        last_active_tool_call_id = prep_state.last_active_tool_call_id
 
         await ui_coalesce.flush_final()
 
