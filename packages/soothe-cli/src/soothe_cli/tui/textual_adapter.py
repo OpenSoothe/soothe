@@ -31,9 +31,9 @@ if TYPE_CHECKING:
 
 from langchain_core.messages import AIMessage, HumanMessage
 from soothe_sdk.core.events import (
-    AGENT_LOOP_GOAL_COMPLETED,
-    AGENT_LOOP_GOAL_STARTED,
+    AGENT_LOOP_COMPLETED,
     AGENT_LOOP_PLAN_DECISION,
+    AGENT_LOOP_STARTED,
     AGENT_LOOP_STEP_COMPLETED,
     AGENT_LOOP_STEP_QUEUED,
     AGENT_LOOP_STEP_STARTED,
@@ -2294,7 +2294,7 @@ async def execute_task_textual(
                                     await adapter._set_spinner(None)
                                 continue
 
-                            if event_type == AGENT_LOOP_GOAL_STARTED:
+                            if event_type == AGENT_LOOP_STARTED:
                                 if not ns_key:
                                     goal_loop_start_monotonic = time.monotonic()
                                     ui_coalesce.execute_wave_active = True
@@ -2313,7 +2313,7 @@ async def execute_task_textual(
                                     assistant_message_by_namespace.pop(ns_key, None)
                                 continue
 
-                            if event_type == AGENT_LOOP_GOAL_COMPLETED:
+                            if event_type == AGENT_LOOP_COMPLETED:
                                 continue
 
                             if event_type == AGENT_LOOP_PLAN_DECISION and not ns_key:
@@ -2633,8 +2633,8 @@ __all__ = [
     "SessionStats",
     "SpinnerStatus",
     "format_token_count",
-    "AGENT_LOOP_GOAL_COMPLETED",
-    "AGENT_LOOP_GOAL_STARTED",
+    "AGENT_LOOP_COMPLETED",
+    "AGENT_LOOP_STARTED",
     "AGENT_LOOP_STEP_COMPLETED",
     "AGENT_LOOP_STEP_QUEUED",
     "AGENT_LOOP_STEP_STARTED",

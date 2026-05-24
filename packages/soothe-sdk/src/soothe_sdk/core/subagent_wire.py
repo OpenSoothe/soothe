@@ -36,10 +36,6 @@ def get_allowlisted_subagent_event_types() -> frozenset[str]:
     return frozenset(_REGISTERED_SUBAGENT_WIRE_TYPES)
 
 
-# Backward-compatible alias for scripts/tests (snapshot at import; prefer get_* in new code).
-ALLOWLISTED_SUBAGENT_EVENT_TYPES = get_allowlisted_subagent_event_types()
-
-
 def is_curated_subagent_wire_event_type(event_type: str) -> bool:
     """Return True for structurally valid curated ``soothe.subagent.*`` wire types.
 
@@ -132,7 +128,6 @@ def emit_subagent_wire_event(event: dict[str, Any], logger: logging.Logger) -> N
 
 
 __all__ = [
-    "ALLOWLISTED_SUBAGENT_EVENT_TYPES",
     "clip_wire_event_payload",
     "emit_subagent_wire_event",
     "get_allowlisted_subagent_event_types",

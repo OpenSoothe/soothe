@@ -3,21 +3,21 @@
 from soothe_sdk.ux.subagent_progress import summarize_subagent_wire_activity
 
 
-def test_summarize_browser_step_without_sdk_constants() -> None:
+def test_summarize_explore_step_without_sdk_constants() -> None:
     line = summarize_subagent_wire_activity(
-        "soothe.subagent.browser.step.completed",
-        {"status": "ok", "action_preview": "click", "url": "https://example.com"},
+        "soothe.subagent.explore.step.completed",
+        {"tool_name": "grep", "args_preview": "pattern=foo"},
     )
-    assert "ok" in line
-    assert "click" in line
+    assert "grep" in line
+    assert "pattern=foo" in line
 
 
-def test_summarize_claude_completed_cost() -> None:
+def test_summarize_explore_completed_findings() -> None:
     line = summarize_subagent_wire_activity(
-        "soothe.subagent.claude.completed",
-        {"cost_usd": 1.5, "duration_ms": 2000},
+        "soothe.subagent.explore.completed",
+        {"total_findings": 5, "duration_ms": 2000},
     )
-    assert "$1.50" in line
+    assert "5 findings" in line
     assert "2000ms" in line
 
 
