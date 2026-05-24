@@ -24,7 +24,7 @@ max_input_queue_size: 1000
 # ============================================================================
 # TIMEOUTS & CANCELLATION - Shorter timeouts for faster dev iteration
 # ============================================================================
-max_query_duration_minutes: 60       # Shorter for dev testing (vs 4320 prod)
+max_query_duration_minutes: 0        # 0 = unlimited
 thread_max_age_hours: 24
 cancel_grace_seconds: 10             # Faster cancel for dev testing
 cancel_retry_count: 3
