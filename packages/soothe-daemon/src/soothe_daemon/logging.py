@@ -1,8 +1,9 @@
 """Logging configuration for Soothe daemon server.
 
-Daemon process logs (``soothe_daemon.*`` and in-process ``soothe.*`` agent logs)
-share ``SOOTHE_HOME/logs/daemon.log``. Standalone CLI/agent runs still use
-``soothe.log`` via ``soothe.logging.setup_logging``.
+``soothe_daemon.*`` logs go to ``SOOTHE_HOME/logs/daemon.log``. In-process
+``soothe.*`` / ``soothe_community.*`` agent logs use ``soothe.log`` via
+``soothe.logging.setup_logging`` (separate file by default). Standalone CLI
+runs use the same ``soothe.log`` path when not attached to a daemon.
 """
 
 from __future__ import annotations
@@ -108,8 +109,8 @@ def setup_daemon_logging(
     """Configure the ``soothe_daemon`` logger hierarchy.
 
     Writes to ``SOOTHE_HOME/logs/daemon.log`` (rotating, 5 MB max, 3 backups).
-    Pair with ``soothe.logging.setup_logging(..., log_file=...)`` using the same
-    path so agent and daemon logs land in one file.
+    Call ``soothe.logging.setup_logging`` separately for ``soothe.*`` handlers
+    (defaults to ``soothe.log`` unless ``log_file`` is overridden).
 
     Args:
         level: Log level for file output (DEBUG, INFO, WARNING, ERROR).

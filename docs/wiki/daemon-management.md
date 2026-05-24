@@ -154,18 +154,19 @@ Daemon logs are stored in:
 
 ```bash
 ~/.soothe/logs/
-├── daemon.log          # Main daemon log
-├── daemon-2026-03-22.log  # Daily logs
-└── threads/
-    ├── abc123.log      # Per-thread logs
-    └── def456.log
+├── daemon.log          # Daemon transport, sessions, routing (soothe_daemon.*)
+├── soothe.log          # In-process agent core (soothe.*, soothe_community.*)
+└── soothe-cli.log      # CLI client (when using soothe TUI/CLI)
 ```
 
 ### View Logs
 
 ```bash
-# Tail daemon log
+# Daemon server (WebSocket, HTTP, session lifecycle)
 tail -f ~/.soothe/logs/daemon.log
+
+# Agent execution inside the daemon process
+tail -f ~/.soothe/logs/soothe.log
 
 # View specific thread log
 tail -f ~/.soothe/logs/threads/abc123.log
