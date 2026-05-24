@@ -8,6 +8,7 @@ import pytest
 
 from soothe.core.loop.engine.scenario_classifier import ScenarioClassification
 from soothe.core.loop.engine.synthesis import (
+    SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY,
     SynthesisGenerator,
     synthesis_checkpoint_thread_id,
 )
@@ -30,6 +31,7 @@ def test_build_synthesis_instruction_discourages_chronological_replay() -> None:
     assert "major processing logic" in text
     assert "not by message order" in text
     assert "Now let me" in text
+    assert "Do not invoke tools" in text
 
 
 def test_synthesis_checkpoint_thread_id_is_unique_and_prefixed() -> None:
@@ -97,6 +99,7 @@ async def test_generate_synthesis_astream_uses_isolated_thread_and_workspace() -
     assert tid.startswith("parent-thread__synth_gc__")
     assert tid != "parent-thread"
     assert conf.get("workspace") == "/workspace/repo"
+    assert conf.get(SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY) is True
 
 
 @pytest.mark.asyncio
