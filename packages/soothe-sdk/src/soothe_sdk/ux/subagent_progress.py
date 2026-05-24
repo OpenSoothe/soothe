@@ -45,7 +45,7 @@ def _summarize_started(data: Mapping[str, Any]) -> str:
     return ""
 
 
-def _summarize_browser_step(data: Mapping[str, Any]) -> str:
+def _summarize_action_step(data: Mapping[str, Any]) -> str:
     parts = [
         str(data.get("status", "") or "").strip(),
         preview_first(str(data.get("action_preview", "")), 80),
@@ -100,9 +100,9 @@ def summarize_subagent_wire_activity(event_type: str, data: Mapping[str, Any]) -
         return _summarize_started(data)
     if event_type.endswith(".step.completed"):
         if any(k in data for k in ("action_preview", "url", "status")):
-            browser_line = _summarize_browser_step(data)
-            if browser_line:
-                return browser_line
+            action_line = _summarize_action_step(data)
+            if action_line:
+                return action_line
         return _summarize_tool_step(data)
     if event_type.endswith(".milestone"):
         decision = str(data.get("decision", "") or "").strip()

@@ -10,15 +10,15 @@ from soothe_sdk.core.subagent_wire import (
 
 def test_curated_structural_match_for_soothe_subagent_types() -> None:
     assert is_curated_subagent_wire_event_type("soothe.subagent.tacitus.started")
-    assert is_curated_subagent_wire_event_type("soothe.subagent.explore.gather.summary")
-    assert is_curated_subagent_wire_event_type("soothe.subagent.browser.started")
+    assert is_curated_subagent_wire_event_type("soothe.subagent.explore.milestone")
+    assert is_curated_subagent_wire_event_type("soothe.subagent.explore.started")
     assert not is_curated_subagent_wire_event_type("soothe.capability.browser.started")
 
 
 def test_emit_requires_registration() -> None:
     unregistered = "soothe.subagent._test_emit_gate.started"
     assert not is_emit_allowed_subagent_wire_event_type(unregistered)
-    assert not is_emit_allowed_subagent_wire_event_type("soothe.subagent.browser.started")
+    assert not is_emit_allowed_subagent_wire_event_type("soothe.subagent.explore.started")
 
     register_subagent_wire_event_types(unregistered)
     assert is_emit_allowed_subagent_wire_event_type(unregistered)
@@ -26,7 +26,7 @@ def test_emit_requires_registration() -> None:
 
 def test_consumer_allowlist_includes_structural_curated_types() -> None:
     assert is_allowlisted_subagent_event_type("soothe.subagent.tacitus.completed")
-    assert is_allowlisted_subagent_event_type("soothe.subagent.browser.started")
+    assert is_allowlisted_subagent_event_type("soothe.subagent.explore.started")
 
 
 def test_sdk_exports_no_subagent_type_constants() -> None:

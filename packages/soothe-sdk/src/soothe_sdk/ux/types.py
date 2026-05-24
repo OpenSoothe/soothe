@@ -3,7 +3,7 @@
 from typing import Final
 
 # Milestone custom event types that clients typically always surface in progress UI
-# (RFC-501 / legacy RFC-0020 "pipeline" framing).
+# (RFC-501 pipeline framing).
 #
 # IG-317 / RFC-614: User-visible **assistant answer text** for the main agent loop is not
 # modeled as `soothe.output.*` types. It arrives on the LangGraph ``mode="messages"`` stream
