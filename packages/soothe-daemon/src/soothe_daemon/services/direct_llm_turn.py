@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 _LOG_PREVIEW_CHARS = 800
 
+_DEFAULT_VISION_INSTRUCTION = "Describe the attached image(s) and answer any implied questions."
+
 
 def _build_direct_invoke_config(
     config: Any,
@@ -40,6 +42,50 @@ def _build_direct_invoke_config(
         return {}
 
 
+async def _run_direct_vision_turn(
+    config: Any,
+    *,
+    user_text: str,
+    attachments: list[dict[str, str]],
+    session_id: str | None = None,
+) -> str:
+    """Run the configured ``image`` role model on images plus user instructions."""
+    if not attachments:
+        msg = "direct_llm vision path requires at least one attachment"
+        raise ValueError(msg)
+
+    model = config.create_chat_model("image")
+    instruction = (user_text or "").strip() or _DEFAULT_VISION_INSTRUCTION
+    blocks: list[str | dict[str, Any]] = [{"type": "text", "text": instruction}]
+    for att in attachments:
+        mime = att["mime_type"]
+        b64 = att["data"]
+        blocks.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
+
+    att_meta = [
+        {"mime_type": a["mime_type"], "data_chars": len(a.get("data", ""))} for a in attachments
+    ]
+    logger.info(
+        "[intent_hint direct_llm] vision request session_id=%s instruction=%s attachments=%s",
+        session_id,
+        log_preview(instruction, chars=_LOG_PREVIEW_CHARS),
+        att_meta,
+    )
+
+    msg = HumanMessage(content=blocks)
+    invoke_cfg = _build_vision_invoke_config(config, session_id=session_id)
+    response = await model.ainvoke([msg], config=invoke_cfg)
+    out = str(response.content).strip()
+    if not out:
+        out = "(Image model returned empty content.)"
+    logger.info(
+        "[intent_hint direct_llm] vision response session_id=%s content=%s",
+        session_id,
+        log_preview(out, chars=_LOG_PREVIEW_CHARS),
+    )
+    return out
+
+
 async def run_image_to_text_turn(
     config: Any,
     *,
@@ -47,7 +93,7 @@ async def run_image_to_text_turn(
     attachments: list[dict[str, str]],
     session_id: str | None = None,
 ) -> str:
-    """Run the configured ``image`` role chat model on images plus user instructions.
+    """Deprecated alias for ``run_direct_llm_turn`` with ``attachments``.
 
     Args:
         config: ``SootheConfig`` instance.
@@ -62,42 +108,12 @@ async def run_image_to_text_turn(
     Raises:
         Exception: Propagated from the underlying model provider.
     """
-    if not attachments:
-        msg = "run_image_to_text_turn requires at least one attachment"
-        raise ValueError(msg)
-
-    model = config.create_chat_model("image")
-    instruction = (user_text or "").strip() or (
-        "Describe the attached image(s) and answer any implied questions."
+    return await run_direct_llm_turn(
+        config,
+        user_text=user_text,
+        attachments=attachments,
+        session_id=session_id,
     )
-    blocks: list[str | dict[str, Any]] = [{"type": "text", "text": instruction}]
-    for att in attachments:
-        mime = att["mime_type"]
-        b64 = att["data"]
-        blocks.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
-
-    att_meta = [
-        {"mime_type": a["mime_type"], "data_chars": len(a.get("data", ""))} for a in attachments
-    ]
-    logger.info(
-        "[intent_hint image_to_text] request session_id=%s instruction=%s attachments=%s",
-        session_id,
-        log_preview(instruction, chars=_LOG_PREVIEW_CHARS),
-        att_meta,
-    )
-
-    msg = HumanMessage(content=blocks)
-    invoke_cfg = _build_vision_invoke_config(config, session_id=session_id)
-    response = await model.ainvoke([msg], config=invoke_cfg)
-    out = str(response.content).strip()
-    if not out:
-        out = "(Image model returned empty content.)"
-    logger.info(
-        "[intent_hint image_to_text] response session_id=%s content=%s",
-        session_id,
-        log_preview(out, chars=_LOG_PREVIEW_CHARS),
-    )
-    return out
 
 
 async def run_direct_llm_turn(
@@ -107,19 +123,26 @@ async def run_direct_llm_turn(
     model: str | None = None,
     model_params: dict[str, Any] | None = None,
     session_id: str | None = None,
+    attachments: list[dict[str, str]] | None = None,
     response_schema: dict[str, Any] | None = None,
     response_schema_name: str | None = None,
     response_schema_strict: bool | None = None,
 ) -> str:
-    """Run the configured ``default`` role model (or an explicit ``provider:model`` spec).
+    """Run a configured chat model directly (no Soothe agent graph).
+
+    Text-only turns use the ``default`` role (or an explicit ``provider:model`` spec).
+    When ``attachments`` are present, the configured ``image`` role vision model is used
+    instead (``model`` / ``model_params`` overrides are ignored on the vision path).
 
     Args:
         config: ``SootheConfig`` instance.
-        user_text: User message (must be non-empty; enforced by caller).
-        model: Optional ``provider:model`` override (same wire field as agent turns).
+        user_text: User message. Required for text-only turns; optional when attachments
+            are present (a default vision instruction is used when empty).
+        model: Optional ``provider:model`` override for text-only turns.
         model_params: Optional extra kwargs for ``init_chat_model`` when using override.
         session_id: Optional Langfuse session id.
-        response_schema: Optional client JSON Schema for structured output (``direct_llm`` only).
+        attachments: Optional normalized image attachments for vision turns.
+        response_schema: Optional client JSON Schema for structured text-only output.
         response_schema_name: Optional provider schema name override.
         response_schema_strict: When set, controls strict json_schema mode (default True).
 
@@ -127,12 +150,27 @@ async def run_direct_llm_turn(
         Stripped model text, or canonical JSON string when ``response_schema`` is set.
 
     Raises:
+        ValueError: When input is invalid (empty text and no attachments, or structured
+            output requested with attachments).
         StructuredOutputError: When structured output was requested but could not be produced.
         Exception: Propagated from the underlying model provider.
     """
+    att = list(attachments or [])
     stripped = (user_text or "").strip()
+
+    if att:
+        if response_schema is not None:
+            msg = "response_schema is not supported with direct_llm image attachments"
+            raise ValueError(msg)
+        return await _run_direct_vision_turn(
+            config,
+            user_text=user_text,
+            attachments=att,
+            session_id=session_id,
+        )
+
     if not stripped:
-        msg = "run_direct_llm_turn requires non-empty user_text"
+        msg = "run_direct_llm_turn requires non-empty user_text or attachments"
         raise ValueError(msg)
 
     m = model.strip() if isinstance(model, str) and model.strip() else None

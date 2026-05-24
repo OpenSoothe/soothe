@@ -28,7 +28,7 @@ from soothe_sdk.ux.stream_tool_wire import (
 from soothe_daemon.image_understanding import enrich_user_text_with_vision
 from soothe_daemon.logging import set_client_id, set_loop_id
 from soothe_daemon.query.stream_delivery import StreamDeliveryCoalescer
-from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn, run_image_to_text_turn
+from soothe_daemon.services.direct_llm_turn import run_direct_llm_turn
 
 logger = logging.getLogger(__name__)
 
@@ -1017,31 +1017,17 @@ class QueryEngine:
             st_activity.last_activity = datetime.now(UTC)
 
         try:
-            if direct_intent_hint == "image_to_text":
-                att = list(attachments or [])
-                if not att:
-                    raise ValueError("image_to_text requires attachments")
-                answer = await run_image_to_text_turn(
-                    d._config,
-                    user_text=text,
-                    attachments=att,
-                    session_id=thread_id,
-                )
-            elif direct_intent_hint == "direct_llm":
-                answer = await run_direct_llm_turn(
-                    d._config,
-                    user_text=text,
-                    model=model,
-                    model_params=model_params,
-                    session_id=thread_id,
-                    response_schema=response_schema,
-                    response_schema_name=response_schema_name,
-                    response_schema_strict=response_schema_strict,
-                )
-            else:
-                raise ValueError(
-                    f"unsupported intent_hint for direct model: {direct_intent_hint!r}"
-                )
+            answer = await run_direct_llm_turn(
+                d._config,
+                user_text=text,
+                model=model,
+                model_params=model_params,
+                session_id=thread_id,
+                attachments=list(attachments or []) or None,
+                response_schema=response_schema,
+                response_schema_name=response_schema_name,
+                response_schema_strict=response_schema_strict,
+            )
 
             from soothe.core.loop.utils.messages import LoopAIMessage
 

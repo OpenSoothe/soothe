@@ -110,5 +110,6 @@ def test_is_embedding_model_cached_locally_true_with_snapshot(
     snap.mkdir(parents=True)
     (snap / "config.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr(sim, "hf_embedding_cache_dir", lambda: cache)
+    monkeypatch.setattr(sim, "_has_sentence_transformers", True)
     assert sim.is_embedding_model_cached_locally() is True
     assert sim.embedding_model_ready_without_download() is True
