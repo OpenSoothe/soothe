@@ -364,6 +364,25 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
     assert "subagent_type='tacitus'" not in content
 
 
+def test_goal_synthesis_disables_all_tools() -> None:
+    """Goal-completion synthesis must not expose tools (read-only ledger synthesis)."""
+    config = SootheConfig()
+    middleware = SystemPromptOptimizationMiddleware(config=config)
+    model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
+    tools = [SimpleNamespace(name="read_file"), SimpleNamespace(name="task")]
+    request = ModelRequest(
+        model=model,
+        messages=[HumanMessage(content="Synthesize findings")],
+        system_message=SystemMessage(content="orig"),
+        tools=tools,
+        state={},
+    )
+    lg_config = {"configurable": {"soothe_goal_synthesis": True}}
+    with patch("langgraph.config.get_config", return_value=lg_config):
+        modified = middleware.modify_request(request)
+    assert modified.tools == []
+
+
 def test_memory_section_uses_memory_summary_tag():
     """RFC-214: Memory section should use <MEMORY_SUMMARY> tag."""
     from soothe.protocols.memory import MemoryItem

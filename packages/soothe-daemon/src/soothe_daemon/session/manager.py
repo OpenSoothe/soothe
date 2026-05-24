@@ -152,7 +152,7 @@ class ClientSessionManager:
         loop_id: str,
         verbosity: VerbosityLevel = "normal",
         *,
-        stream_delivery: StreamDeliveryMode = "batch",
+        stream_delivery: StreamDeliveryMode | None = None,
     ) -> bool:
         """Subscribe client to loop event topic; replaces prior loop subscriptions.
 
@@ -172,11 +172,14 @@ class ClientSessionManager:
             return False
 
         session.verbosity = verbosity
-        # Accept "streaming" for backwards compatibility, map to "adaptive"
-        delivery: StreamDeliveryMode = (
-            stream_delivery if stream_delivery in ("batch", "adaptive") else "batch"
-        )
-        self._loop_stream_delivery[loop_id] = delivery
+        if stream_delivery is not None:
+            # Accept "streaming" for backwards compatibility, map to "adaptive"
+            delivery: StreamDeliveryMode = (
+                stream_delivery if stream_delivery in ("batch", "adaptive") else "batch"
+            )
+            self._loop_stream_delivery[loop_id] = delivery
+        else:
+            delivery = self._loop_stream_delivery.get(loop_id, "batch")
 
         # Strict single-loop subscription per client for isolation
         for prev in list(session.subscriptions):

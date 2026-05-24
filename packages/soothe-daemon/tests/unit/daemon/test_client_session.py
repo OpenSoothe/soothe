@@ -58,6 +58,26 @@ async def test_subscribe_loop():
 
 
 @pytest.mark.asyncio
+async def test_subscribe_loop_preserves_stream_delivery_when_omitted():
+    """Re-subscribe without ``stream_delivery`` must not reset client preference to batch."""
+    bus = EventBus()
+    manager = ClientSessionManager(bus)
+
+    transport = MagicMock()
+    transport.transport_type = "test"
+
+    client_id = await manager.create_session(transport, None)
+
+    await manager.subscribe_loop(client_id, "loop-abc123", stream_delivery="adaptive")
+    assert manager.get_stream_delivery("loop-abc123") == "adaptive"
+
+    await manager.subscribe_loop(client_id, "loop-abc123")
+    assert manager.get_stream_delivery("loop-abc123") == "adaptive"
+
+    await manager.remove_session(client_id)
+
+
+@pytest.mark.asyncio
 async def test_unsubscribe_loop():
     """Test loop unsubscription."""
     bus = EventBus()
