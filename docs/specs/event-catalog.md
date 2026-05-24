@@ -122,24 +122,19 @@ Where `{name}` is the concrete tool name (e.g., `search`, `crawl`, `read_file`, 
 
 Sparse **`soothe.subagent.*`** events are emitted on the LangGraph **`custom`** stream for CLI/TUI progress. Payloads are **metadata-only** (bounded strings, counts). Full assistant prose and native tool loops use **`messages`** where applicable.
 
-**Authoritative allowlist**: `soothe_sdk.core.subagent_wire.ALLOWLISTED_SUBAGENT_EVENT_TYPES`.
+**Authoritative allowlist**: `soothe_sdk.core.subagent_wire.get_allowlisted_subagent_event_types()`.
 
 | Type | Fields (representative) | CLI/TUI tier |
 |------|-------------------------|--------------|
-| `soothe.subagent.browser.started` | `task_preview` | NORMAL |
-| `soothe.subagent.browser.step.completed` | `step_index`, `url`, `title`, `action_preview`, `status` | NORMAL |
-| `soothe.subagent.browser.completed` | `duration_ms`, `success` | NORMAL |
-| `soothe.subagent.claude.started` | `task_preview` | NORMAL |
-| `soothe.subagent.claude.completed` | `cost_usd`, `duration_ms`, `claude_session_id` | NORMAL |
-| `soothe.subagent.claude.failed` | `message` | NORMAL |
 | `soothe.subagent.explore.started` | `search_target`, `thoroughness` | NORMAL |
-| `soothe.subagent.explore.milestone` | `decision`, `findings_count`, `iterations_used` | NORMAL |
+| `soothe.subagent.explore.milestone` | `decision`, `findings_count`, `iterations_used` | DETAILED |
+| `soothe.subagent.explore.step.completed` | `tool_name`, `args_preview`, `result_preview` | NORMAL |
 | `soothe.subagent.explore.completed` | `total_findings`, `thoroughness`, `iterations_used`, `duration_ms` | NORMAL |
 | `soothe.subagent.tacitus.started` | `topic_preview` | NORMAL |
 | `soothe.subagent.tacitus.gather.summary` | `query_preview`, `result_count`, `sources_touched` | NORMAL |
 | `soothe.subagent.tacitus.completed` | `duration_ms`, `answer_length`, `summary` | NORMAL |
 
-**Removed / not emitted**: `soothe.capability.*` (hard cut). Historical per-phase names such as `soothe.subagent.claude.text` or `soothe.subagent.research.gather` are **not** part of the built-in wire contract unless reintroduced under IG-339-style review.
+**Removed / not emitted (core)**: `soothe.capability.*` (hard cut). Browser, Claude, and Research subagents moved to [soothe-community](https://github.com/OpenSoothe/soothe-community); their wire types are not part of the core daemon contract. Historical per-phase names such as `soothe.subagent.claude.text` or `soothe.subagent.research.gather` are **not** emitted unless reintroduced under IG-339-style review.
 
 ### Skillify Subagent
 
