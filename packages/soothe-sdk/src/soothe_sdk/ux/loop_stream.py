@@ -8,9 +8,9 @@ text path.
 Headless CLI relies on these phases for stdout (IG-343). Delegate-only answers may appear
 as an extra ``phase=goal_completion`` replay after Act when sourced from ``task`` returns (IG-355).
 
-Daemon ``intent_hint`` direct model turns (``direct_llm`` / ``image_to_text``) emit a single
-assistant chunk tagged ``phase=direct_model`` so clients apply the same preview/stream rules
-as other user-visible loop output.
+Daemon ``intent_hint`` direct model turns (``direct_llm``; legacy alias ``image_to_text``)
+emit a single assistant chunk tagged ``phase=direct_model`` so clients apply the same
+preview/stream rules as other user-visible loop output.
 """
 
 from __future__ import annotations

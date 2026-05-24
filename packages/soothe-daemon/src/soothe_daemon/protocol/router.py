@@ -1188,7 +1188,7 @@ class MessageRouter:
             )
             return
 
-        if intent_hint_preview != "image_to_text" and prompt_text is None:
+        if intent_hint_preview not in ("direct_llm", "image_to_text") and prompt_text is None:
             await d._send_client_message(
                 client_id,
                 {
@@ -1245,27 +1245,58 @@ class MessageRouter:
         else:
             attachments_for_queue = None
 
-        if intent_hint_preview == "image_to_text" and not attachments_for_queue:
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "INVALID_REQUEST",
-                    "message": "intent_hint image_to_text requires non-empty attachments",
-                    "request_id": request_id,
-                },
-            )
-            return
+        if intent_hint_preview in ("direct_llm", "image_to_text"):
+            if intent_hint_preview == "image_to_text" and not attachments_for_queue:
+                await d._send_client_message(
+                    client_id,
+                    {
+                        "type": "error",
+                        "code": "INVALID_REQUEST",
+                        "message": "intent_hint image_to_text requires non-empty attachments",
+                        "request_id": request_id,
+                    },
+                )
+                return
+            if (
+                intent_hint_preview == "direct_llm"
+                and not prompt_text
+                and not attachments_for_queue
+            ):
+                await d._send_client_message(
+                    client_id,
+                    {
+                        "type": "error",
+                        "code": "INVALID_REQUEST",
+                        "message": (
+                            "intent_hint direct_llm requires non-empty content or attachments"
+                        ),
+                        "request_id": request_id,
+                    },
+                )
+                return
+            if intent_hint_preview == "image_to_text":
+                q_opts["intent_hint"] = "direct_llm"
 
         response_schema = q_opts.get("response_schema")
         if response_schema is not None:
-            if intent_hint_preview not in (None, "direct_llm"):
+            if intent_hint_preview not in (None, "direct_llm", "image_to_text"):
                 await d._send_client_message(
                     client_id,
                     {
                         "type": "error",
                         "code": "INVALID_REQUEST",
                         "message": "response_schema is only supported with intent_hint direct_llm",
+                        "request_id": request_id,
+                    },
+                )
+                return
+            if attachments_for_queue:
+                await d._send_client_message(
+                    client_id,
+                    {
+                        "type": "error",
+                        "code": "INVALID_REQUEST",
+                        "message": "response_schema is not supported with direct_llm attachments",
                         "request_id": request_id,
                     },
                 )

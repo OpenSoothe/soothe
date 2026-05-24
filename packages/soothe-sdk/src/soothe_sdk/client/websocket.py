@@ -237,10 +237,12 @@ class WebSocketClient:
             attachments: Image attachments (mime_type + base64 data).
             intent_hint: Suggested intent. Standard values bypass in-agent classification:
                 ``quiz``, ``continue_thread``, ``new_goal``. Daemon-only
-                values ``direct_llm`` and ``image_to_text`` invoke a configured chat
-                model directly (no Soothe agent graph); ``image_to_text`` requires
-                ``attachments``. With ``intent_hint=direct_llm``, ``response_schema`` requests
-                strict JSON output matching the client JSON Schema.
+                values ``direct_llm`` invoke a configured chat model directly (no Soothe
+                agent graph). With attachments, the configured ``image`` role vision model
+                is used; without attachments, the ``default`` role (or ``model`` override)
+                is used. ``response_schema`` requests strict JSON output for text-only
+                turns. Deprecated alias ``image_to_text`` (attachments required) is
+                normalized to ``direct_llm``.
         """
         payload: dict[str, Any] = {
             "type": "loop_input",
