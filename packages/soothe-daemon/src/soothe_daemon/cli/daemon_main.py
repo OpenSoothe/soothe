@@ -69,11 +69,10 @@ def daemon_start(
         )
 
         typer.echo("Starting daemon in foreground...")
-        unified_log = str(default_daemon_log_path())
-        setup_logging(cfg, foreground=True, log_file=unified_log)
+        setup_logging(cfg, foreground=True)
         setup_daemon_logging(
             level=_daemon_log_level_from_soothe_config(cfg),
-            log_file=unified_log,
+            log_file=str(default_daemon_log_path()),
             foreground=True,
         )
         run_daemon(cfg, daemon_config=daemon_cfg, detached=False)

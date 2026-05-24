@@ -443,7 +443,7 @@ The debug guide covers:
 
 1. Use `/help` in the TUI to see available commands
 2. Check the [Debug Guide](../howto_debug.md) for comprehensive debugging instructions
-3. Check logs: `~/.soothe/logs/daemon.log`, `~/.soothe/logs/cli.log`
+3. Check logs: `~/.soothe/logs/daemon.log`, `~/.soothe/logs/soothe.log`, `~/.soothe/logs/soothe-cli.log`
 4. Review configuration: `soothe config show`
 5. Check the [documentation](../) for detailed guides
 6. Review RFCs and implementation guides in `docs/specs/` and `docs/impl/`

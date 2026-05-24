@@ -109,11 +109,10 @@ def main() -> None:
     else:
         cfg = daemon_cfg.load_soothe_config()
 
-    unified_log = str(default_daemon_log_path())
-    setup_logging(cfg, foreground=args.foreground, log_file=unified_log)
+    setup_logging(cfg, foreground=args.foreground)
     setup_daemon_logging(
         level=_daemon_log_level_from_soothe_config(cfg),
-        log_file=unified_log,
+        log_file=str(default_daemon_log_path()),
         foreground=args.foreground,
     )
 
