@@ -1946,8 +1946,8 @@ class CognitionStepMessage(Vertical):
                 parts.append(Content.styled(f"{child_gutter}{text}", colors.muted))
 
         if main_preview:
-            if not first_block:
-                parts.append("\n")
+            # ``_append_tool_activity_lines`` already inserts a leading ``\\n`` when
+            # ``parts`` is non-empty; do not add a second separator (blank line).
             first_block = False
             self._append_tool_activity_lines(
                 parts,

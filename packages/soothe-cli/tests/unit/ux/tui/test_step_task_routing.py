@@ -275,6 +275,48 @@ def test_late_subgraph_namespace_binds_via_unified_tool_call_id() -> None:
     assert scope[0].startswith("FJS_02:s:task")
 
 
+def test_two_tasks_on_one_step_bind_by_task_index() -> None:
+    """Second ``task:1`` on the same step must not steal ``t0`` namespace bindings."""
+    router = StepTaskRouter()
+    router.register_task_spawn("WAV_01:s:task:0", "explore", step_id="WAV-01")
+    router.register_task_spawn("WAV_01:s:task:1", "tacitus", step_id="WAV-01")
+    assert router._spawns_by_step_id["WAV-01"][0] == "WAV_01:s:task:0"
+    assert router._spawns_by_task_id["WAV_01:s:task:1"][1] == "tacitus"
+
+    router.on_subgraph_namespace(("tools:first",))
+    router.on_subgraph_namespace(("tools:second",))
+    router.try_route_subgraph_tool(
+        ns_key=("tools:first",),
+        lookup_id="WAV_01:t0:grep:0",
+        display_key="WAV_01:t0:grep:0",
+        tool_name="grep",
+        args={"pattern": "first"},
+        step_cards={},
+        tool_to_step={},
+        tool_display_by_call_id={},
+    )
+    router.try_route_subgraph_tool(
+        ns_key=("tools:second",),
+        lookup_id="WAV_01:t1:grep:0",
+        display_key="WAV_01:t1:grep:0",
+        tool_name="grep",
+        args={"pattern": "second"},
+        step_cards={},
+        tool_to_step={},
+        tool_display_by_call_id={},
+    )
+    assert router.resolve_task_scope(("tools:first",)) == (
+        "WAV_01:s:task:0",
+        "explore",
+        "WAV-01",
+    )
+    assert router.resolve_task_scope(("tools:second",)) == (
+        "WAV_01:s:task:1",
+        "tacitus",
+        "WAV-01",
+    )
+
+
 def test_route_pending_main_tools_uses_unified_id_parsing() -> None:
     """route_pending_main_tools extracts step_id from unified IDs."""
     router = StepTaskRouter()

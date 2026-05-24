@@ -238,17 +238,14 @@ def resolve_task_parent_for_unified_tool_id(
     spawns_by_task_id: dict[str, TaskScope] | None = None,
 ) -> Any | None:
     """Return the Task delegation card for a task-level unified inner tool id."""
-    step_id, type_code, task_idx, _ = parse_unified_tool_call_id(tool_call_id)
-    if not step_id or type_code != "t":
+    _, type_code, _, _ = parse_unified_tool_call_id(tool_call_id)
+    if type_code != "t":
         return None
-    if spawns_by_task_id and task_idx is not None:
-        for scope in spawns_by_task_id.values():
-            sid = task_scope_step_id(scope)
-            if sid == step_id and task_scope_task_idx(scope, sid) == task_idx:
-                parent = tool_display_by_call_id.get(scope[0])
-                if parent is not None:
-                    return parent
-    scope = spawns_by_step.get(step_id)
+    scope = resolve_task_scope_for_subgraph_tool(
+        tool_call_id,
+        spawns_by_step,
+        spawns_by_task_id,
+    )
     if scope is None:
         return None
     return tool_display_by_call_id.get(scope[0])
@@ -275,11 +272,37 @@ def row_key_for_subgraph_tool(
     return scoped_subgraph_tool_key(namespace, tid, task_scope=task_scope)
 
 
+def resolve_task_scope_for_subgraph_tool(
+    tool_call_id: str,
+    spawns_by_step: dict[str, TaskScope],
+    spawns_by_task_id: dict[str, TaskScope] | None = None,
+) -> TaskScope | None:
+    """Resolve the task spawn for a subgraph tool using unified id components."""
+    tcid = str(tool_call_id).strip()
+    if not tcid:
+        return None
+    step_id, type_code, task_idx, _ = parse_unified_tool_call_id(tcid)
+    if type_code == "t" and step_id and task_idx is not None and spawns_by_task_id:
+        parent_id = step_level_parent_task_call_id(step_id, task_idx)
+        scope = spawns_by_task_id.get(parent_id)
+        if scope is not None:
+            return scope
+        for scope in spawns_by_task_id.values():
+            sid = task_scope_step_id(scope)
+            if sid == step_id and task_scope_task_idx(scope, sid) == task_idx:
+                return scope
+    if step_id:
+        return spawns_by_step.get(step_id)
+    return None
+
+
 def try_bind_namespace_from_tool_call_id(
     bindings: dict[tuple[str, ...], TaskScope],
     spawns_by_step: dict[str, TaskScope],
     namespace: tuple[str, ...],
     tool_call_id: str,
+    *,
+    spawns_by_task_id: dict[str, TaskScope] | None = None,
 ) -> bool:
     """Bind ``namespace`` using the execute step id embedded in a unified tool_call_id.
 
@@ -289,11 +312,15 @@ def try_bind_namespace_from_tool_call_id(
     tcid = str(tool_call_id).strip()
     if not namespace or not tcid or is_inner_subgraph_task_tool_id(tcid):
         return False
-    step_id = resolve_step_id_from_subgraph_tool(tcid)
-    if not step_id:
-        return False
-    scope = spawns_by_step.get(step_id)
+    scope = resolve_task_scope_for_subgraph_tool(
+        tcid,
+        spawns_by_step,
+        spawns_by_task_id,
+    )
     if scope is None:
+        return False
+    step_id = task_scope_step_id(scope)
+    if not step_id:
         return False
     if namespace in bindings:
         if task_scope_step_id(bindings[namespace]) == step_id:
@@ -352,13 +379,18 @@ def register_task_spawn_for_step(
     task_call_id = str(scope[0] or "").strip()
     if not step_id:
         return
+    if spawns_by_task_id is not None and task_call_id:
+        spawns_by_task_id[task_call_id] = scope
     existing = spawns_by_step.get(step_id)
     if existing is not None and is_step_level_task_tool_id(str(existing[0])):
         if is_inner_subgraph_task_tool_id(task_call_id):
             return
+        if (
+            is_step_level_task_tool_id(task_call_id)
+            and normalize_step_task_tool_call_id(step_id, task_call_id) != str(existing[0]).strip()
+        ):
+            return
     spawns_by_step[step_id] = scope
-    if spawns_by_task_id is not None and task_call_id:
-        spawns_by_task_id[task_call_id] = scope
 
 
 def prune_bound_pending_namespaces(
@@ -420,6 +452,7 @@ __all__ = [
     "resolve_step_id_from_subgraph_tool",
     "resolve_task_parent_for_unified_tool_id",
     "resolve_task_parent_lookup",
+    "resolve_task_scope_for_subgraph_tool",
     "resolve_task_scope_for_namespace",
     "row_key_for_subgraph_tool",
     "scoped_subgraph_tool_key",

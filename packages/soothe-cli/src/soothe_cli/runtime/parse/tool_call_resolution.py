@@ -162,7 +162,7 @@ def merge_tool_display_args(
                 )
 
                 best: dict[str, Any] = {}
-                for oid, oargs in streaming_overlay.items():
+                for oid, oargs in list(streaming_overlay.items()):
                     if oid == tcid or not isinstance(oargs, dict) or not oargs:
                         continue
                     if not _pending_or_overlay_id_matches_lookup(
