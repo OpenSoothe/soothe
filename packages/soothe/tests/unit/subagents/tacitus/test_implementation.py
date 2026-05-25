@@ -38,7 +38,11 @@ def test_create_tacitus_subagent_accepts_resolver_kwargs() -> None:
     cfg = SootheConfig(
         subagents={
             "tacitus": SubagentConfig(
-                config={"llm_role": "fast", "synthesis_role": "think"},
+                config={
+                    "llm_role": "fast",
+                    "synthesis_role": "think",
+                    "effort": "high",
+                },
             ),
         },
     )

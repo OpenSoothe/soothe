@@ -89,6 +89,7 @@ subagents:
     config:
       llm_role: fast
       synthesis_role: think  # set fast for lower-latency final report
+      effort: normal  # normal | high | xhigh
     runtime_dir: ''
 tools:
   execution:

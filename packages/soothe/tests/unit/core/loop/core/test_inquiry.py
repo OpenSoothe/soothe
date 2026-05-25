@@ -23,6 +23,7 @@ class TestTacitusConfig:
     def test_defaults(self) -> None:
         cfg = TacitusConfig()
         assert cfg.max_loops == 3
+        assert cfg.effort == "normal"
         assert cfg.llm_role == "fast"
         assert cfg.synthesis_role == "think"
         assert "public" in cfg.capability_profiles

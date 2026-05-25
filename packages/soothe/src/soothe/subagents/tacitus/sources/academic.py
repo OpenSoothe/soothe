@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import threading
 from typing import Any
 
@@ -11,6 +12,11 @@ from soothe.subagents.tacitus.protocol import CapabilityId, GatherContext, Sourc
 from soothe.toolkits.deepxiv import resolve_deepxiv_token
 
 logger = logging.getLogger(__name__)
+
+_ARXIV_URL = re.compile(
+    r"https?://(?:arxiv\.org/abs/|arxiv\.org/pdf/)(\d{4}\.\d{4,5}(?:v\d+)?)",
+    re.IGNORECASE,
+)
 
 _CAPABILITY_DESCRIPTION = (
     "Scientific papers, preprints, peer-reviewed research, citations, methods, "
@@ -144,12 +150,22 @@ class AcademicSearchSource:
                 search_q,
                 len(text),
             )
+            url_match = _ARXIV_URL.search(text)
+            paper_url = url_match.group(0) if url_match else None
+            if not paper_url:
+                id_match = re.search(r"\b(\d{4}\.\d{4,5}(?:v\d+)?)\b", text)
+                if id_match:
+                    paper_url = f"https://arxiv.org/abs/{id_match.group(1)}"
             return [
                 SourceResult(
                     content=text[:4000],
-                    source_ref="deepxiv",
+                    source_ref=paper_url or "deepxiv",
                     source_name="academic",
-                    metadata={"sub_source": "deepxiv"},
+                    metadata={
+                        "sub_source": "deepxiv",
+                        "url": paper_url,
+                        "query": search_q,
+                    },
                 )
             ]
         except Exception as exc:
