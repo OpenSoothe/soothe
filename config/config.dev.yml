@@ -58,6 +58,7 @@ subagents:
     config:
       llm_role: fast
       synthesis_role: think
+      effort: normal
 
 agent_loop:
   max_iterations: 99

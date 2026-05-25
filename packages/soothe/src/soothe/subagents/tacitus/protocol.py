@@ -6,6 +6,8 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
+TacitusEffortLevel = Literal["normal", "high", "xhigh"]
+
 CapabilityId = Literal[
     "web_search",
     "academic_search",
@@ -38,6 +40,16 @@ class GatherContext(BaseModel):
     iteration: int = 0
 
 
+class ResearchReference(BaseModel):
+    """Structured source collected during Tacitus gather."""
+
+    url: str | None = None
+    title: str | None = None
+    source_name: str
+    source_ref: str
+    query: str | None = None
+
+
 class TacitusRoutingConfig(BaseModel):
     """Semantic routing configuration."""
 
@@ -55,6 +67,10 @@ class TacitusConfig(BaseModel):
     synthesis_role: str = Field(
         default="think",
         description="Router role for final synthesis (defaults to think; set fast for lower latency).",
+    )
+    effort: TacitusEffortLevel = Field(
+        default="normal",
+        description="Research depth: normal (fast), high, or xhigh.",
     )
     max_loops: int = Field(default=3, ge=1, le=10)
     max_sources_per_query: int = Field(default=3, ge=1, le=10)

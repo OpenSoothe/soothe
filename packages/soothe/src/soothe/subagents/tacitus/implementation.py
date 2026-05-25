@@ -71,13 +71,15 @@ def create_tacitus_subagent(
     is set explicitly. Loop steps use that model; final synthesis uses ``synthesis_role``
     (default ``think``).
     """
-    max_loops = context.get("max_loops", 3)
     domain = _normalize_domain(context.get("domain", "public"))
+    effort = context.get("effort")
 
     sources = _build_public_sources(config)
     sub_cfg = config.subagents.get("tacitus")
     extra = dict(sub_cfg.config) if sub_cfg else {}
-    tacitus_config = TacitusConfig(max_loops=max_loops, **extra)
+    if effort is not None:
+        extra["effort"] = effort
+    tacitus_config = TacitusConfig(**extra)
 
     fast_model = model
     synthesis_model = model

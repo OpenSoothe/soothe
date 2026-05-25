@@ -20,6 +20,7 @@ class TacitusStartedEvent(SootheEvent):
 
     type: Literal["soothe.subagent.tacitus.started"] = SUBAGENT_TACITUS_STARTED  # type: ignore[assignment]
     topic_preview: str = ""
+    effort: str = ""
 
     model_config = ConfigDict(extra="allow")
 

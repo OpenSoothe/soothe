@@ -40,11 +40,23 @@ Public-domain research assistant for multi-source investigation using only publi
 /tacitus What are the latest advances in quantum error correction?
 ```
 
+**Effort levels** (default: `normal`):
+
+| Level | Sub-questions | Queries | Reflection loops | Use when |
+|-------|---------------|---------|------------------|----------|
+| `normal` | up to 3 | up to 4 | 2 | Fast lookup, lighter research |
+| `high` | up to 5 | up to 6 | 3 | Balanced depth |
+| `xhigh` | up to 8 | up to 10 | 5 | Maximum breadth and follow-ups |
+
+Set in config (`effort: high`) or in the task description (`effort: xhigh` on the first line). The final report includes a formatted **References** section with URLs collected during gather.
+
 **Configuration**:
 ```yaml
 subagents:
   tacitus:
     enabled: true
+    config:
+      effort: normal  # normal | high | xhigh
     # Optional: configure source preferences
     sources:
       web_search:

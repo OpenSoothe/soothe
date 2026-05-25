@@ -56,7 +56,14 @@ Check publication dates and relevance to current context.
 <citation_format>
 Use markdown links for sources: [Title](URL)
 Include timestamps when available: [Title](URL) (accessed YYYY-MM-DD)
+A formatted References section is appended to the final report automatically.
 </citation_format>
+<effort_levels>
+Default depth is normal. Optional: effort: normal | high | xhigh in the task description.
+- normal: fewer sub-questions and loops (faster)
+- high: balanced depth (~3 reflection loops)
+- xhigh: maximum breadth and follow-up depth
+</effort_levels>
 <depth_guidelines>
 Start broad, then narrow. Investigate contradictions. Document sources consulted.
 </depth_guidelines>
@@ -69,9 +76,12 @@ Start broad, then narrow. Investigate contradictions. Document sources consulted
         config: Any,
         context: Any,
     ) -> Any:
-        context_dict = {
+        context_dict: dict[str, Any] = {
             "work_dir": getattr(context, "work_dir", ""),
-            "max_loops": getattr(context, "max_loops", 3),
             "domain": getattr(context, "domain", "public"),
         }
+        if hasattr(context, "effort"):
+            context_dict["effort"] = getattr(context, "effort", None)
+        if hasattr(context, "max_loops"):
+            context_dict["max_loops"] = getattr(context, "max_loops", None)
         return create_tacitus_subagent(model, config, context_dict)
