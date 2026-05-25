@@ -105,9 +105,65 @@ class WebSearchSource:
             return str(out) if out is not None else None
         return None
 
+    async def _query_wizsearch_structured(self, search_q: str) -> list[SourceResult]:
+        """Use wizsearch API directly so URLs are preserved for references."""
+        try:
+            from soothe.toolkits._internal.wizsearch import (
+                _check_wizsearch_available,
+                perform_wizsearch_search,
+            )
+        except ImportError:
+            return []
+
+        if not _check_wizsearch_available():
+            return []
+
+        ws_cfg = self._wizsearch_config()
+        result = await perform_wizsearch_search(
+            query=search_q,
+            max_results_per_engine=ws_cfg.get("max_results_per_engine", 10),
+            timeout_seconds=ws_cfg.get("timeout", 30),
+            engines=ws_cfg.get("default_engines") or ["tavily"],
+        )
+        sources = getattr(result, "sources", []) or []
+        if not sources:
+            return []
+
+        parsed: list[SourceResult] = []
+        for src in sources:
+            title = getattr(src, "title", "") or "Untitled"
+            url = getattr(src, "url", "") or ""
+            content = getattr(src, "content", "") or ""
+            domain = ""
+            if url:
+                from soothe.toolkits._internal.wizsearch import _extract_domain
+
+                domain = _extract_domain(url)
+            if not content and not url:
+                continue
+            parsed.append(
+                SourceResult(
+                    content=(content or title)[:4000],
+                    source_ref=url or domain or search_q,
+                    source_name="web_search",
+                    metadata={
+                        "title": title,
+                        "url": url or None,
+                        "domain": domain or None,
+                        "backend": "wizsearch",
+                        "query": search_q,
+                    },
+                )
+            )
+        return parsed
+
     async def query(self, query: str, context: GatherContext) -> list[SourceResult]:
         _ = context
         search_q = compact_search_query(query)
+
+        structured = await self._query_wizsearch_structured(search_q)
+        if structured:
+            return structured
 
         self._ensure_wizsearch()
         if self._wizsearch_tool:

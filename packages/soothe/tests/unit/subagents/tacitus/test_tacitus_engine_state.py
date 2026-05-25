@@ -9,6 +9,7 @@ from langgraph.graph import END, START, StateGraph
 
 from soothe.subagents.tacitus.engine import TacitusEngineState, build_tacitus_engine
 from soothe.subagents.tacitus.json_util import llm_response_text
+from soothe.subagents.tacitus.protocol import SourceResult
 
 
 def test_tacitus_engine_state_retains_private_keys() -> None:
@@ -76,12 +77,22 @@ def test_build_tacitus_passes_sub_questions_to_generate_queries() -> None:
         AIMessage(content="Final synthesized answer."),
     ]
 
-    async def _empty_query(*_args: object, **_kwargs: object) -> list:
-        return []
+    async def _mock_query(*_args: object, **_kwargs: object) -> list:
+        return [
+            SourceResult(
+                content="Finding about agentic memory.",
+                source_ref="https://example.com/paper",
+                source_name="web_search",
+                metadata={
+                    "url": "https://example.com/paper",
+                    "title": "Agentic Memory Survey",
+                },
+            )
+        ]
 
     mock_source = MagicMock()
     mock_source.name = "mock"
-    mock_source.query = _empty_query
+    mock_source.query = _mock_query
 
     mock_router = MagicMock()
     mock_router.select.return_value = [mock_source]
@@ -105,4 +116,8 @@ def test_build_tacitus_passes_sub_questions_to_generate_queries() -> None:
 
     assert mock_model.invoke.call_count >= 2
     assert result.get("_queries")
-    assert result.get("answer") == "Final synthesized answer."
+    assert result.get("effort") == "normal"
+    answer = result.get("answer", "")
+    assert "Final synthesized answer." in answer
+    assert "## References" in answer
+    assert "example.com/paper" in answer

@@ -21,6 +21,7 @@ from langgraph.types import Send
 from soothe.utils.subagent_emit import emit_subagent_wire_event
 
 from .display_summary import tacitus_answer_summary_for_display
+from .effort import resolve_effort
 from .events import TacitusCompletedEvent, TacitusGatherSummaryEvent, TacitusStartedEvent
 from .json_util import (
     compact_search_query,
@@ -29,10 +30,17 @@ from .json_util import (
     llm_response_text,
     parse_json_object,
 )
+from .protocol import ResearchReference
+from .references import (
+    format_references_section,
+    merge_references,
+    reference_from_source_result,
+)
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
+    from .effort import TacitusEffortProfile
     from .protocol import PublicInformationSource, TacitusConfig
 
 logger = logging.getLogger(__name__)
@@ -72,6 +80,8 @@ class TacitusEngineState(dict):
     domain: str  # profile hint: public | web | academic
     search_summaries: Annotated[list[str], add]
     sources_gathered: Annotated[list[str], add]
+    references_gathered: Annotated[list, add]
+    effort: str
     max_loops: int
     loop_count: int
     # Loop scratch (must be declared or LangGraph drops them between nodes).
@@ -97,6 +107,8 @@ Current date: {current_date}
 
 Topic: {topic}
 
+{effort_hint}
+
 Return ONLY a raw JSON object (no markdown fences):
 {{"sub_questions": [
     {{"question": "...", "suggested_domain": "public|web|academic"}}
@@ -111,6 +123,8 @@ Current date: {current_date}
 
 Sub-questions:
 {sub_questions}
+
+{effort_hint}
 
 Return ONLY a raw JSON object (no markdown fences):
 {{"queries": [
@@ -135,9 +149,11 @@ You are an expert research analyst evaluating gathered summaries about "{topic}"
 - Identify knowledge gaps.
 - If the summaries are sufficient to answer the original topic thoroughly, \
 set is_sufficient to true.
-- Otherwise, generate 1-3 follow-up queries (< 50 chars each, same language \
+- Otherwise, generate follow-up queries (< 50 chars each, same language \
 as topic) targeting the gaps.  For each, suggest which information domain \
 is best.
+
+{effort_hint}
 
 Summaries:
 {summaries}
@@ -151,7 +167,8 @@ Return ONLY a raw JSON object (no markdown fences):
 
 _SYNTHESIZE = """\
 Generate a comprehensive, well-structured answer based on the research \
-summaries below.  Include citations from the source references.
+summaries below.  Use inline citations where helpful; a formatted reference \
+list is appended automatically after your answer.
 
 Current date: {current_date}
 Topic: {topic}
@@ -184,6 +201,34 @@ def _now_str() -> str:
     return datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d")
 
 
+def _effort_profile_for_state(state: dict[str, Any], config: TacitusConfig) -> TacitusEffortProfile:
+    topic = _extract_topic(state)
+    ctx_loops = state.get("max_loops")
+    context_max_loops = ctx_loops if isinstance(ctx_loops, int) else None
+    _, profile = resolve_effort(
+        config,
+        topic=topic,
+        context_effort=state.get("effort"),
+        context_max_loops=context_max_loops,
+    )
+    return profile
+
+
+def _cap_list(items: list[Any], limit: int) -> list[Any]:
+    return items[:limit] if limit > 0 else []
+
+
+def _references_from_state(state: dict[str, Any]) -> list[ResearchReference]:
+    raw = state.get("references_gathered", [])
+    refs: list[ResearchReference] = []
+    for item in raw:
+        if isinstance(item, ResearchReference):
+            refs.append(item)
+        elif isinstance(item, dict):
+            refs.append(ResearchReference.model_validate(item))
+    return refs
+
+
 # ---------------------------------------------------------------------------
 # Graph builder
 # ---------------------------------------------------------------------------
@@ -209,14 +254,26 @@ def build_tacitus_engine(
 
     def analyze_topic_node(state: dict[str, Any]) -> dict[str, Any]:
         topic = _extract_topic(state)
+        effort, profile = resolve_effort(
+            _default_config,
+            topic=topic,
+            context_effort=state.get("effort"),
+            context_max_loops=state.get("max_loops")
+            if isinstance(state.get("max_loops"), int)
+            else None,
+        )
         emit_subagent_wire_event(
-            TacitusStartedEvent(topic_preview=str(topic)[:200]).to_dict(),
+            TacitusStartedEvent(
+                topic_preview=str(topic)[:200],
+                effort=effort,
+            ).to_dict(),
             logger,
         )
         prompt = _ANALYZE_TOPIC.format(
             domains=available_domains,
             current_date=_now_str(),
             topic=topic,
+            effort_hint=profile.analyze_question_hint,
         )
 
         resp = loop_model.invoke([{"role": "user", "content": prompt}])
@@ -231,16 +288,26 @@ def build_tacitus_engine(
             logger.warning("[Tacitus] analyze returned no sub-questions, using fallback")
             sub_questions = fallback_sub_questions(topic, domain=domain_hint)
 
-        logger.info("[Tacitus] found %d sub-questions", len(sub_questions))
+        sub_questions = _cap_list(sub_questions, profile.max_sub_questions)
+        logger.info(
+            "[Tacitus] effort=%s, %d sub-questions (cap %d)",
+            effort,
+            len(sub_questions),
+            profile.max_sub_questions,
+        )
         return {
             "_sub_questions": sub_questions,
             "search_summaries": [],
             "sources_gathered": [],
+            "references_gathered": [],
+            "effort": effort,
+            "max_loops": profile.max_loops,
             "loop_count": 0,
         }
 
     def generate_queries_node(state: dict[str, Any]) -> dict[str, Any]:
         topic = _extract_topic(state)
+        profile = _effort_profile_for_state(state, _default_config)
         domain_hint = state.get("domain", _domain) or "public"
         sub_questions = state.get("_sub_questions", [])
         if not sub_questions:
@@ -253,6 +320,7 @@ def build_tacitus_engine(
         prompt = _GENERATE_QUERIES.format(
             current_date=_now_str(),
             sub_questions=sq_text,
+            effort_hint=profile.generate_queries_hint,
         )
 
         resp = loop_model.invoke([{"role": "user", "content": prompt}])
@@ -266,11 +334,17 @@ def build_tacitus_engine(
             logger.warning("[Tacitus] query generation returned no queries, using fallback")
             queries = fallback_queries(topic, sub_questions, default_domain=domain_hint)
 
-        logger.info("[Tacitus] generated %d queries", len(queries))
+        queries = _cap_list(queries, profile.max_initial_queries)
+        logger.info(
+            "[Tacitus] generated %d queries (cap %d)",
+            len(queries),
+            profile.max_initial_queries,
+        )
         return {"_queries": queries}
 
     def route_to_gather(state: dict[str, Any]) -> list[Send]:
-        queries = state.get("_queries", [])
+        profile = _effort_profile_for_state(state, _default_config)
+        queries = _cap_list(state.get("_queries", []), profile.max_initial_queries)
         if not queries:
             topic = _extract_topic(state)
             domain_hint = state.get("domain", _domain) or "public"
@@ -305,8 +379,13 @@ def build_tacitus_engine(
     def gather_node(state: dict[str, Any]) -> dict[str, Any]:
         query = state.get("_gather_query", "")
         domain_hint = state.get("_gather_domain", "public")
+        profile = _effort_profile_for_state(state, _default_config)
 
-        selected = router.select(query, domain=domain_hint)
+        selected = router.select(
+            query,
+            domain=domain_hint,
+            max_sources=profile.max_sources_per_query,
+        )
         if not selected:
             emit_subagent_wire_event(
                 TacitusGatherSummaryEvent(
@@ -369,9 +448,11 @@ def build_tacitus_engine(
 
         summary_parts = []
         source_refs = []
+        ref_dicts: list[dict] = []
         for r in all_results:
             summary_parts.append(f"[{r.source_name}] {r.content}")
             source_refs.append(f"{r.source_name}:{r.source_ref}")
+            ref_dicts.append(reference_from_source_result(r, query=query).model_dump(mode="json"))
 
         emit_subagent_wire_event(
             TacitusGatherSummaryEvent(
@@ -385,6 +466,7 @@ def build_tacitus_engine(
         return {
             "search_summaries": ["\n".join(summary_parts)],
             "sources_gathered": source_refs,
+            "references_gathered": ref_dicts,
         }
 
     def summarize_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -410,12 +492,14 @@ def build_tacitus_engine(
 
     def reflect_node(state: dict[str, Any]) -> dict[str, Any]:
         topic = _extract_topic(state)
+        profile = _effort_profile_for_state(state, _default_config)
         loop_count = state.get("loop_count", 0)
         summaries = "\n\n".join(state.get("search_summaries", []))
 
         prompt = _REFLECT.format(
             topic=topic,
             summaries=summaries[:4000] or "(no summaries yet)",
+            effort_hint=profile.reflect_follow_up_hint,
         )
 
         resp = loop_model.invoke([{"role": "user", "content": prompt}])
@@ -442,11 +526,15 @@ def build_tacitus_engine(
         }
 
     def route_after_reflection(state: dict[str, Any]) -> list[Send] | str:
-        max_loops = state.get("max_loops", _default_config.max_loops)
+        profile = _effort_profile_for_state(state, _default_config)
+        max_loops = state.get("max_loops", profile.max_loops)
         if state.get("_is_sufficient") or state.get("loop_count", 0) >= max_loops:
             return "synthesize"
 
-        follow_ups = state.get("_follow_up_queries", [])
+        follow_ups = _cap_list(
+            state.get("_follow_up_queries", []),
+            profile.max_follow_up_queries,
+        )
         if follow_ups:
             sends = []
             for fq in follow_ups:
@@ -482,9 +570,19 @@ def build_tacitus_engine(
         synth_t0 = time.perf_counter()
         resp = final_model.invoke([{"role": "user", "content": prompt}])
         answer = str(resp.content)
+        refs = merge_references(_references_from_state(state))
+        if refs:
+            bib = format_references_section(refs, accessed_date=_now_str())
+            if bib and bib not in answer:
+                answer = f"{answer.rstrip()}\n\n{bib}"
         elapsed_ms = int((time.perf_counter() - synth_t0) * 1000)
 
-        logger.info("[Tacitus] synthesized %d chars from %d sources", len(answer), num_sources)
+        logger.info(
+            "[Tacitus] synthesized %d chars from %d sources (%d references)",
+            len(answer),
+            num_sources,
+            len(refs),
+        )
         completion_summary = tacitus_answer_summary_for_display(answer)
         emit_subagent_wire_event(
             TacitusCompletedEvent(
