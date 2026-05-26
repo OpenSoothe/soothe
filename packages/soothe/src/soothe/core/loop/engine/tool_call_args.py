@@ -138,6 +138,25 @@ def _record_from_ai_message(
             _store(dest, tid, args, aliases=tuple(aliases))
 
 
+def filter_redundant_stream_tool_updates(
+    updates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Drop stream tool updates when every entry already has complete invocation args.
+
+    Daemon ``tool_call_updates_batch`` carries the same kwargs; keep partial-arg updates
+    for providers that stream tool JSON incrementally.
+    """
+    if not updates:
+        return []
+    for upd in updates:
+        if not isinstance(upd, dict):
+            return updates
+        args = upd.get("args")
+        if not isinstance(args, dict) or not args:
+            return updates
+    return []
+
+
 def wire_updates_from_ai_message(msg: BaseMessage) -> list[dict[str, Any]]:
     """Build ``soothe.stream.tool_call.update`` payloads from a post-backfill AI message."""
     from soothe_sdk.ux.stream_tool_wire import tool_call_update_event
@@ -280,5 +299,6 @@ class ToolCallArgsCollector:
 __all__ = [
     "ToolCallArgsCollector",
     "format_args_for_log",
+    "filter_redundant_stream_tool_updates",
     "wire_updates_from_ai_message",
 ]

@@ -818,6 +818,10 @@ class OutputStreamingConfig(BaseModel):
         file_output_preview_chars: Preview chars in TUI when output saved to file.
         file_output_dir: Directory for output files (default: current workspace root/.soothe/output).
         message_coalesce_enabled: When true, coalesce plain assistant text chunks per namespace.
+        tool_batch_enabled: Debounce tool invocation wire into ``tool_call_updates_batch``.
+        tool_batch_interval_ms: Max wait before flushing a debounced tool batch (milliseconds).
+        suppress_redundant_stream_tool_updates: Drop ``soothe.stream.tool_call.update`` when batched.
+        skip_redundant_tool_message_wire: Drop empty tool-result wire frames (off by default).
     """
 
     mode: Literal["batch", "adaptive"] = Field(
@@ -825,7 +829,7 @@ class OutputStreamingConfig(BaseModel):
         description="Streaming mode - batch: coalesce all, adaptive: stream small, batch large",
     )
     streaming_interval_ms: int = Field(
-        default=200,
+        default=300,
         ge=50,
         le=1000,
         description="Daemon WebSocket batching interval (milliseconds)",
@@ -861,6 +865,24 @@ class OutputStreamingConfig(BaseModel):
     message_coalesce_enabled: bool = Field(
         default=True,
         description="Coalesce plain assistant AIMessageChunk text before WebSocket broadcast",
+    )
+    tool_batch_enabled: bool = Field(
+        default=True,
+        description="Debounce tool invocation metadata into tool_call_updates_batch events",
+    )
+    tool_batch_interval_ms: int = Field(
+        default=200,
+        ge=50,
+        le=1000,
+        description="Debounce window for tool_call_updates_batch (milliseconds)",
+    )
+    suppress_redundant_stream_tool_updates: bool = Field(
+        default=True,
+        description="Suppress soothe.stream.tool_call.update when covered by a pending batch",
+    )
+    skip_redundant_tool_message_wire: bool = Field(
+        default=False,
+        description="Suppress empty ToolMessage wire frames (keep false unless headless-only)",
     )
 
 

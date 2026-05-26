@@ -102,6 +102,36 @@ def test_custom_event_flushes_text_buffer() -> None:
     assert out[0][2][0]["content"] == "buf"
 
 
+def test_internal_custom_event_dropped_at_ingest() -> None:
+    coalescer = StreamDeliveryCoalescer("adaptive")
+    out = coalescer.ingest(
+        (),
+        "custom",
+        {"type": "soothe.internal.policy.checked", "verdict": "allow"},
+    )
+    assert out == []
+
+
+def test_tool_invocation_batches_and_strips_ai() -> None:
+    coalescer = StreamDeliveryCoalescer("adaptive", tool_batch_interval_ms=10_000)
+    wire = (
+        {
+            "type": "ai",
+            "content": "",
+            "tool_calls": [
+                {"id": "tc-1", "name": "read_file", "args": {"path": "/x"}},
+            ],
+        },
+        {},
+    )
+    assert coalescer.ingest((), "messages", wire) == []
+    flushed = coalescer.flush()
+    batches = [item for item in flushed if item[1] == "custom"]
+    assert len(batches) == 1
+    assert batches[0][2]["type"] == "tool_call_updates_batch"
+    assert batches[0][2]["count"] == 1
+
+
 def test_strip_tool_metadata_for_batch() -> None:
     coalescer = StreamDeliveryCoalescer("adaptive")
     wire = (
