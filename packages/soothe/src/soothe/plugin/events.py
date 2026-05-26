@@ -24,7 +24,7 @@ class PluginLoadedEvent(SootheEvent):
         source: Discovery source (built-in, entry_point, config, filesystem).
     """
 
-    type: Literal["soothe.plugin.loaded"] = "soothe.plugin.loaded"
+    type: Literal["soothe.internal.plugin.loaded"] = "soothe.internal.plugin.loaded"
     name: str
     version: str
     source: str
@@ -43,7 +43,7 @@ class PluginFailedEvent(SootheEvent):
         phase: Loading phase where the failure occurred (discovery, validation, dependency, initialization).
     """
 
-    type: Literal["soothe.plugin.failed"] = "soothe.plugin.failed"
+    type: Literal["soothe.internal.plugin.failed"] = "soothe.internal.plugin.failed"
     name: str = ""
     error: str
     phase: Literal["discovery", "validation", "dependency", "initialization"]
@@ -62,7 +62,7 @@ class PluginHealthCheckedEvent(SootheEvent):
         details: Optional details about the health check result.
     """
 
-    type: Literal["soothe.plugin.health_checked"] = "soothe.plugin.health_checked"
+    type: Literal["soothe.internal.plugin.health_checked"] = "soothe.internal.plugin.health_checked"
     name: str
     status: Literal["healthy", "degraded", "unhealthy"]
     details: str = ""
@@ -79,7 +79,7 @@ class PluginUnloadedEvent(SootheEvent):
         name: Plugin name.
     """
 
-    type: Literal["soothe.plugin.unloaded"] = "soothe.plugin.unloaded"
+    type: Literal["soothe.internal.plugin.unloaded"] = "soothe.internal.plugin.unloaded"
     name: str
 
 
@@ -91,19 +91,22 @@ from soothe.core.events import register_event  # noqa: E402
 
 register_event(
     PluginLoadedEvent,
+    verbosity=VerbosityTier.INTERNAL,
     summary_template="Plugin {name} v{version} loaded from {source}",
 )
 register_event(
     PluginFailedEvent,
-    verbosity=VerbosityTier.QUIET,
+    verbosity=VerbosityTier.INTERNAL,
     summary_template="Plugin {name} failed during {phase}: {error}",
 )
 register_event(
     PluginHealthCheckedEvent,
+    verbosity=VerbosityTier.INTERNAL,
     summary_template="Plugin {name} health: {status}",
 )
 register_event(
     PluginUnloadedEvent,
+    verbosity=VerbosityTier.INTERNAL,
     summary_template="Plugin {name} unloaded",
 )
 

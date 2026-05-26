@@ -202,6 +202,32 @@ class SootheConfig(BaseSettings):
             data["agent"] = agent
         return data
 
+    @model_validator(mode="before")
+    @classmethod
+    def _merge_top_level_agent_loop_yaml(cls, data: Any) -> Any:
+        """Fold legacy top-level ``agent_loop:`` into ``agent.loop`` (IG-407)."""
+        if not isinstance(data, dict):
+            return data
+        legacy_loop = data.pop("agent_loop", None)
+        if not isinstance(legacy_loop, dict):
+            return data
+
+        def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+            merged = dict(base)
+            for key, value in overlay.items():
+                existing = merged.get(key)
+                if isinstance(existing, dict) and isinstance(value, dict):
+                    merged[key] = _deep_merge(existing, value)
+                else:
+                    merged[key] = value
+            return merged
+
+        agent = dict(data.get("agent") or {})
+        loop = dict(agent.get("loop") or {})
+        agent["loop"] = _deep_merge(loop, legacy_loop)
+        data["agent"] = agent
+        return data
+
     @model_validator(mode="after")
     def _merge_subagents(self) -> SootheConfig:
         """Merge builtin and plugin-discovered subagents with user configs."""
@@ -297,7 +323,7 @@ class SootheConfig(BaseSettings):
 
     @property
     def logging(self) -> SootheConfigLoggingView:
-        """Maps CLI-style logging fields to ``observability`` and ``agent_loop.report_output``."""
+        """Maps CLI-style logging fields to ``observability`` and ``agent.loop.report_output``."""
         return SootheConfigLoggingView(self)
 
     @property

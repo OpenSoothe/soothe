@@ -65,6 +65,14 @@ class WebSocketClient:
         self._ws: websockets.asyncio.client.ClientConnection | None = None
         self._connected = False
         self._pending_events: deque[dict[str, Any]] = deque()
+        # Background reader drains the socket so daemon sends are not blocked by a
+        # stalled consumer (e.g. heavy Textual UI work on the same event loop).
+        self._inbound_maxsize = 10_000
+        self._inbound_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue(
+            maxsize=self._inbound_maxsize
+        )
+        self._inbound_dropped = 0
+        self._reader_task: asyncio.Task[None] | None = None
         # Coalesce high-frequency daemon_status polls on a long-lived connection.
         self._daemon_status_cache: tuple[float, dict[str, Any]] | None = None
         self._daemon_status_lock = asyncio.Lock()
@@ -89,6 +97,10 @@ class WebSocketClient:
                 max_size=self._max_frame_size,
             )
             self._connected = True
+            self._reader_task = asyncio.create_task(
+                self._socket_reader_loop(),
+                name=f"soothe-ws-reader-{self._client_id}",
+            )
 
             logger.info("[Client:%s] Connected to daemon at %s", self._client_id, self._url)
         except Exception as e:
@@ -96,8 +108,71 @@ class WebSocketClient:
             msg = f"Failed to connect to daemon: {e}"
             raise ConnectionError(msg) from e
 
+    async def _stop_reader(self) -> None:
+        """Cancel the background reader and clear queued inbound events."""
+        task = self._reader_task
+        self._reader_task = None
+        if task is not None and not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        while True:
+            try:
+                self._inbound_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
+    async def _socket_reader_loop(self) -> None:
+        """Continuously read frames from the transport into ``_inbound_queue``."""
+        try:
+            while self._connected and self._ws is not None:
+                event = await self._read_from_socket()
+                if event is None:
+                    await self._enqueue_inbound(None)
+                    break
+                await self._enqueue_inbound(event)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "[Client:%s] WebSocket reader loop failed",
+                self._client_id,
+            )
+            with contextlib.suppress(asyncio.QueueFull):
+                await self._enqueue_inbound(None)
+        finally:
+            self._connected = False
+
+    async def _enqueue_inbound(self, event: dict[str, Any] | None) -> None:
+        """Queue one or more inbound wire messages (expands ``event_batch``)."""
+        if event is None:
+            await self._put_inbound_queue(None)
+            return
+        if event.get("type") == "event_batch":
+            sub_events = event.get("events")
+            if isinstance(sub_events, list):
+                for sub in sub_events:
+                    if isinstance(sub, dict):
+                        await self._put_inbound_queue(sub)
+            return
+        await self._put_inbound_queue(event)
+
+    async def _put_inbound_queue(self, event: dict[str, Any] | None) -> None:
+        if self._inbound_queue.full():
+            with contextlib.suppress(asyncio.QueueEmpty):
+                self._inbound_queue.get_nowait()
+            self._inbound_dropped += 1
+            if self._inbound_dropped % 1000 == 1:
+                logger.warning(
+                    "[Client:%s] Inbound queue full; dropping oldest (dropped=%d)",
+                    self._client_id,
+                    self._inbound_dropped,
+                )
+        await self._inbound_queue.put(event)
+
     async def close(self) -> None:
         """Close the connection with timeout to prevent exit hangs."""
+        await self._stop_reader()
         inflight: asyncio.Task[dict[str, Any]] | None = None
         async with self._daemon_status_lock:
             inflight = self._daemon_status_inflight
@@ -552,7 +627,7 @@ class WebSocketClient:
         try:
             async with asyncio.timeout(timeout):
                 while True:
-                    event = await self._read_from_socket()
+                    event = await self._read_inbound_event()
                     if not event:
                         raise TimeoutError(
                             f"WebSocket closed while waiting for {response_type} "
@@ -732,18 +807,18 @@ class WebSocketClient:
             while True:
                 event = self._pop_pending_event_by_type("daemon_ready")
                 if event is None:
-                    if self._ws and self._connected:
-                        event = await self._read_from_socket()
-                    else:
-                        # Test/mocked clients may not initialize websocket transport.
-                        event = await self.read_event()
+                    event = await self._read_inbound_event()
                 if not event:
                     if not self.is_connection_alive():
                         self._connected = False
                         raise ConnectionError("Connection closed")
                     raise TimeoutError("No daemon_ready event received")
                 if event.get("type") != "daemon_ready":
-                    self._pending_events.append(event)
+                    # Discard handshake ``status`` — keeping it in ``_pending_events`` would
+                    # make ``read_event()`` spin forever and block ``daemon_ready`` in the
+                    # inbound queue (CLI hang after daemon restart).
+                    if event.get("type") != "status":
+                        self._pending_events.append(event)
                     continue
                 state = event.get("state")
                 if state == "ready":
@@ -779,6 +854,17 @@ class WebSocketClient:
         self._pending_events = kept_events
         return matched
 
+    async def _read_inbound_event(self) -> dict[str, Any] | None:
+        """Read the next frame from the transport queue, ignoring ``_pending_events``.
+
+        Used for RPC/handshake waits so a stray ``status`` frame cannot block matching
+        responses that arrive later on the inbound queue.
+        """
+        if self._reader_task is not None:
+            return await self._inbound_queue.get()
+
+        return await self._read_from_socket()
+
     async def read_event(self) -> dict[str, Any] | None:
         """Read the next event from the daemon.
 
@@ -788,7 +874,7 @@ class WebSocketClient:
         if self._pending_events:
             return self._pending_events.popleft()
 
-        return await self._read_from_socket()
+        return await self._read_inbound_event()
 
     def clear_pending_events(self) -> None:
         """Clear all pending events from the internal queue.
@@ -797,6 +883,51 @@ class WebSocketClient:
         affect isolation verification.
         """
         self._pending_events.clear()
+
+    # Handshake / RPC responses that must not count as turn progress (TUI stall detection).
+    _STALE_TURN_PENDING_TYPES = frozenset(
+        {
+            "daemon_ready",
+            "subscription_confirmed",
+            "history_replay",
+            "loop_reattached",
+            "replay_complete",
+            "loop_new_response",
+            "loop_subscribe_response",
+            "loop_input_response",
+            "loop_list_response",
+            "skills_list_response",
+            "models_list_response",
+            "invoke_skill_response",
+            "daemon_status_response",
+            "command_response",
+        }
+    )
+
+    def peel_stale_pending_control_events(self) -> list[str]:
+        """Remove stale handshake/RPC frames left in ``_pending_events`` before a turn.
+
+        ``request_response`` queues unrelated inbound frames while waiting for a
+        matching ``request_id``. If a ``daemon_ready`` frame remains at turn start,
+        the TUI can mistake it for live progress and never log a stalled stream.
+
+        Returns:
+            List of removed frame types (in order).
+        """
+        if not self._pending_events:
+            return []
+
+        kept: deque[dict[str, Any]] = deque()
+        removed: list[str] = []
+        while self._pending_events:
+            event = self._pending_events.popleft()
+            event_type = str(event.get("type") or "")
+            if event_type in self._STALE_TURN_PENDING_TYPES:
+                removed.append(event_type)
+                continue
+            kept.append(event)
+        self._pending_events = kept
+        return removed
 
     async def _read_from_socket(self) -> dict[str, Any] | None:
         """Read one event directly from the websocket transport."""

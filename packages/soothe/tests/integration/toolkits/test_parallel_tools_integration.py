@@ -16,7 +16,7 @@ async def test_parallel_tools_config_propagation():
     """Verify concurrency config propagates correctly."""
     # Create config with custom concurrency settings
     config = SootheConfig(
-        agent_loop={"limits": {"max_parallel_steps": 5}},
+        agent={"loop": {"limits": {"max_parallel_steps": 5}}},
     )
 
     # Create agent
@@ -60,7 +60,7 @@ async def test_parallel_tools_performance_improvement():
 
     # Test with parallel execution (max_parallel_steps=3)
     config_parallel = SootheConfig(
-        agent_loop={"limits": {"max_parallel_steps": 3}},
+        agent={"loop": {"limits": {"max_parallel_steps": 3}}},
     )
 
     create_soothe_agent(
@@ -71,7 +71,7 @@ async def test_parallel_tools_performance_improvement():
 
     # Test with sequential execution (max_parallel_steps=1)
     config_sequential = SootheConfig(
-        agent_loop={"limits": {"max_parallel_steps": 1}},
+        agent={"loop": {"limits": {"max_parallel_steps": 1}}},
     )
 
     create_soothe_agent(
@@ -102,7 +102,7 @@ async def test_parallel_tools_mixed_sync_async():
         return x * 3
 
     config = SootheConfig(
-        agent_loop={"limits": {"max_parallel_steps": 5}},
+        agent={"loop": {"limits": {"max_parallel_steps": 5}}},
     )
 
     create_soothe_agent(
@@ -121,7 +121,7 @@ async def test_parallel_tools_default_parallelism():
     config = SootheConfig()
 
     # Check default value for max_parallel_steps
-    assert config.agent_loop.limits.max_parallel_steps == 2
+    assert config.agent.loop.limits.max_parallel_steps == 2
 
     create_soothe_agent(
         model=config.create_chat_model("agent"),
@@ -144,7 +144,7 @@ async def test_parallel_tools_extreme_cases():
 
     # Test sequential (max_parallel_steps=1)
     config_seq = SootheConfig()
-    config_seq.agent_loop.limits.max_parallel_steps = 1
+    config_seq.agent.loop.limits.max_parallel_steps = 1
 
     create_soothe_agent(
         model=config_seq.create_chat_model("agent"),
@@ -154,7 +154,7 @@ async def test_parallel_tools_extreme_cases():
 
     # Test high parallelism (max_parallel_steps=10)
     config_high = SootheConfig()
-    config_high.agent_loop.limits.max_parallel_steps = 10
+    config_high.agent.loop.limits.max_parallel_steps = 10
 
     create_soothe_agent(
         model=config_high.create_chat_model("agent"),
@@ -171,7 +171,7 @@ async def test_parallel_tools_zero_means_unlimited():
     """Verify that max_parallel_steps=0 means unlimited (valid special value)."""
     # 0 is valid - it means unlimited parallelism
     config_unlimited = SootheConfig()
-    config_unlimited.agent_loop.limits.max_parallel_steps = 0
+    config_unlimited.agent.loop.limits.max_parallel_steps = 0
 
     # Should create successfully
     create_soothe_agent(

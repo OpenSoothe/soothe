@@ -68,8 +68,6 @@ class ErrorEvent(SootheEvent):
 
 # Plan events
 PLAN_CREATED = "soothe.cognition.plan.created"
-PLAN_STEP_STARTED = "soothe.cognition.plan.step.started"
-PLAN_STEP_COMPLETED = "soothe.cognition.plan.step.completed"
 
 # Tool events (DEBUG/DETAILED level)
 TOOL_STARTED = "soothe.tool.execution.started"
@@ -102,8 +100,6 @@ __all__ = [
     "SubagentEvent",
     # Event type constants - plan
     "PLAN_CREATED",
-    "PLAN_STEP_STARTED",
-    "PLAN_STEP_COMPLETED",
     # Tool (DEBUG/DETAILED)
     "TOOL_STARTED",
     "TOOL_COMPLETED",

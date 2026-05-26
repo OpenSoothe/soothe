@@ -104,17 +104,6 @@ class MockRenderer:
     def on_plan_created(self, plan: Any) -> None:
         self.calls.append(("on_plan_created", (plan,), {}))
 
-    def on_plan_step_started(self, step_id: str, description: str) -> None:
-        self.calls.append(("on_plan_step_started", (step_id, description), {}))
-
-    def on_plan_step_completed(
-        self,
-        step_id: str,
-        success: bool,  # noqa: FBT001
-        duration_ms: int,
-    ) -> None:
-        self.calls.append(("on_plan_step_completed", (step_id, success, duration_ms), {}))
-
     def on_turn_end(self) -> None:
         self.calls.append(("on_turn_end", (), {}))
 

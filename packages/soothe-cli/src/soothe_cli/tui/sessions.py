@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -231,26 +230,19 @@ async def list_loops_via_daemon_rpc(
         msg = f"Invalid sort_by {sort_by!r}; expected 'updated' or 'created'"
         raise ValueError(msg)
 
-    # Use daemon session's WebSocket client
-    client = daemon_session._client
-    if client is None:
-        raise RuntimeError("Daemon WebSocket client not connected")
+    list_method = getattr(daemon_session, "list_loops", None)
+    if not callable(list_method):
+        raise RuntimeError("Daemon session does not support loop_list RPC")
 
-    # Send loop_list RPC to daemon
-    await client.send_loop_list(limit=limit)
+    try:
+        resp = await list_method(limit=limit)
+    except Exception:
+        logger.warning("loop_list RPC failed", exc_info=True)
+        return []
 
-    # Wait for response
-    async with asyncio.timeout(10.0):
-        while True:
-            event = await client.read_event()
-            if not event:
-                logger.warning("No response from daemon for loop_list RPC")
-                return []
-            if event.get("type") == "loop_list_response":
-                loops_data = event.get("loops", [])
-                if not isinstance(loops_data, list):
-                    loops_data = []
-                break
+    loops_data = resp.get("loops", [])
+    if not isinstance(loops_data, list):
+        loops_data = []
 
     # Convert daemon response to LoopInfo format
     loops: list[LoopInfo] = []

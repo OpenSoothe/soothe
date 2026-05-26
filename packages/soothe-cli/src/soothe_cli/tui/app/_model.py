@@ -343,34 +343,18 @@ class _ModelMixin:
             self._update_tokens(0)
             self._update_status("")
 
-            # Subscribe to loop via daemon RPC
-            client = self._daemon_session._client
-            if client is None:
-                raise RuntimeError("Daemon WebSocket client not connected")
+            status = await self._daemon_session.switch_loop(loop_id)
+            if status.get("type") == "error":
+                raise RuntimeError(str(status.get("message", "loop switch failed")))
+            self._session_state.loop_id = loop_id
+            self._lc_loop_id = loop_id
+            self._clear_loop_model_override()
 
-            await client.send_loop_subscribe(loop_id)
-
-            # Wait for response
-            import asyncio
-
-            async with asyncio.timeout(10.0):
-                while True:
-                    event = await client.read_event()
-                    if not event:
-                        logger.warning("No response from daemon for loop_subscribe RPC")
-                        break
-                    if event.get("type") == "loop_subscribe_response":
-                        # Update session state
-                        self._session_state.loop_id = loop_id
-                        self._lc_loop_id = loop_id
-                        self._clear_loop_model_override()
-
-                        self._update_welcome_banner(
-                            loop_id,
-                            missing_message="Welcome banner not found during loop switch to %s",
-                            warn_if_missing=False,
-                        )
-                        break
+            self._update_welcome_banner(
+                loop_id,
+                missing_message="Welcome banner not found during loop switch to %s",
+                warn_if_missing=False,
+            )
 
             # Start consuming daemon events for this loop
             self.run_worker(

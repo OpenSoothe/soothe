@@ -53,7 +53,7 @@ async def test_synthesize_appends_goal_completion_ledger_pair() -> None:
     agent_loop.loop_planner = Mock()
     agent_loop.loop_planner._model = Mock()
     agent_loop.core_agent = Mock()
-    agent_loop.config.agent_loop.final_response = "adaptive"
+    agent_loop.config.agent.loop.final_response = "adaptive"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -130,7 +130,7 @@ async def test_goal_completion_logs_planning_dag_at_info(
     agent_loop.loop_planner = Mock()
     agent_loop.loop_planner._model = Mock()
     agent_loop.core_agent = Mock()
-    agent_loop.config.agent_loop.final_response = "adaptive"
+    agent_loop.config.agent.loop.final_response = "adaptive"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -184,7 +184,7 @@ async def test_ledger_direct_does_not_duplicate_completion_in_ledger() -> None:
     agent_loop.loop_planner = Mock()
     agent_loop.loop_planner._model = Mock()
     agent_loop.core_agent = Mock()
-    agent_loop.config.agent_loop.final_response = "adaptive"
+    agent_loop.config.agent.loop.final_response = "adaptive"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -223,7 +223,7 @@ async def test_summary_completion_sets_skip_replay_false() -> None:
     agent_loop.loop_planner = Mock()
     agent_loop.loop_planner._model = Mock()
     agent_loop.core_agent = Mock()
-    agent_loop.config.agent_loop.final_response = "adaptive"
+    agent_loop.config.agent.loop.final_response = "adaptive"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -302,7 +302,7 @@ async def test_ledger_direct_filters_out_planning_messages_for_final_output() ->
     agent_loop.loop_planner = Mock()
     agent_loop.loop_planner._model = Mock()
     agent_loop.core_agent = Mock()
-    agent_loop.config.agent_loop.final_response = "adaptive"
+    agent_loop.config.agent.loop.final_response = "adaptive"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()

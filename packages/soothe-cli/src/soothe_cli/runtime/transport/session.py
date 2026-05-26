@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -88,19 +89,9 @@ class TuiDaemonSession:
             # Map old "streaming" to "adaptive" for backwards compatibility
             return "adaptive" if mode == "streaming" else mode
 
-        # Check daemon config's output_streaming section
-        streaming_cfg = None
-        if self._cfg:
-            # Try agent_loop.output_streaming first (new config structure)
-            agent_loop = getattr(self._cfg, "agent_loop", None)
-            if agent_loop:
-                streaming_cfg = getattr(agent_loop, "output_streaming", None)
-            # Fallback to direct output_streaming attribute
-            if streaming_cfg is None:
-                streaming_cfg = getattr(self._cfg, "output_streaming", None)
-
-        if streaming_cfg:
-            mode = getattr(streaming_cfg, "mode", "adaptive")
+        if self._cfg and hasattr(self._cfg, "agent"):
+            streaming_cfg = self._cfg.agent.loop.output_streaming
+            mode = streaming_cfg.mode
             return "adaptive" if mode == "streaming" else mode
 
         return "adaptive"  # Default to adaptive mode
@@ -215,9 +206,6 @@ class TuiDaemonSession:
             if event_type != "event":
                 continue
             data = event.get("data")
-            if isinstance(data, dict) and data.get("type") == "soothe.system.daemon.heartbeat":
-                self.turn_event_stats.heartbeats_dropped += 1
-                continue
             namespace = tuple(event.get("namespace", []) or [])
             mode = str(event.get("mode", ""))
             if should_drop_stream_chunk_early(namespace, mode, data):
@@ -228,16 +216,53 @@ class TuiDaemonSession:
             if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
                 continue
 
+    async def list_loops(self, *, limit: int = 20) -> dict[str, Any]:
+        """Return ``loop_list_response`` from the daemon (RPC socket, not stream socket)."""
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            return await self._rpc_client.request_response(
+                {"type": "loop_list", "limit": limit},
+                response_type="loop_list_response",
+                timeout=15.0,
+            )
+
     async def iter_turn_chunks(self) -> Any:
         """Yield `(namespace, mode, data)` chunks for the active daemon turn."""
         self.turn_event_stats = TurnEventStats()
         query_started = False
         expected_loop_id = self._loop_id
         self._streaming = True
+        turn_read_started = time.monotonic()
+        first_event_logged = False
+        progress_seen = False
+        stale_pending = self._client.peel_stale_pending_control_events()
+        if stale_pending:
+            logger.debug(
+                "Peeled %d stale pending control frame(s) before turn (loop=%s): %s",
+                len(stale_pending),
+                (expected_loop_id or "?")[:16],
+                ", ".join(stale_pending[:8]),
+            )
         async with self._read_lock:
             try:
                 while True:
+                    if not progress_seen and time.monotonic() - turn_read_started > 30.0:
+                        logger.warning(
+                            "No daemon stream progress after %.0fs (loop=%s, "
+                            "query_started=%s); check daemon sender / WebSocket reader",
+                            time.monotonic() - turn_read_started,
+                            (expected_loop_id or "?")[:16],
+                            query_started,
+                        )
+                        turn_read_started = time.monotonic()
                     event = await self._client.read_event()
+                    if event and not first_event_logged:
+                        first_event_logged = True
+                        logger.debug(
+                            "First daemon event on turn: type=%s loop_id=%s",
+                            event.get("type"),
+                            event.get("loop_id"),
+                        )
                     if not event:
                         if query_started and not self._client.is_connection_alive():
                             raise ConnectionError("Daemon connection lost")
@@ -273,6 +298,7 @@ class TuiDaemonSession:
                         state = event.get("state", "")
                         if state == "running":
                             query_started = True
+                            progress_seen = True
                         elif query_started and state in {"idle", "stopped"}:
                             async for chunk in self._drain_stream_events_after_idle(
                                 expected_loop_id=expected_loop_id,
@@ -285,18 +311,12 @@ class TuiDaemonSession:
                         continue
 
                     data = event.get("data")
-                    if (
-                        isinstance(data, dict)
-                        and data.get("type") == "soothe.system.daemon.heartbeat"
-                    ):
-                        self.turn_event_stats.heartbeats_dropped += 1
-                        continue
-
                     namespace = tuple(event.get("namespace", []) or [])
                     mode = str(event.get("mode", ""))
                     if should_drop_stream_chunk_early(namespace, mode, data):
                         self.turn_event_stats.filtered_early += 1
                         continue
+                    progress_seen = True
                     yield (namespace, mode, data)
                     # Graph may auto-resume after HITL interrupts; keep consuming events.
                     if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:

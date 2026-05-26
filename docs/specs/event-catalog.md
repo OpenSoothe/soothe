@@ -64,10 +64,7 @@ Granular rename tables in older RFC drafts are partially superseded: built-in su
 | Type | Fields | VerbosityTier |
 |------|--------|---------------|
 | `soothe.cognition.plan.created` | `goal: str`, `steps: list[StepDict]` | NORMAL |
-| `soothe.cognition.plan.step_started` | `step_id: str`, `description: str`, `depends_on: list[str]`, `batch_index: int?` | NORMAL |
-| `soothe.cognition.plan.step_completed` | `step_id: str`, `success: bool`, `result_preview: str?`, `duration_ms: int?` | NORMAL |
-| `soothe.cognition.plan.step_failed` | `step_id: str`, `error: str`, `blocked_steps: list[str]?`, `duration_ms: int?` | NORMAL |
-| `soothe.cognition.plan.batch_started` | `batch_index: int`, `step_ids: list[str]`, `parallel_count: int` | NORMAL |
+| `soothe.cognition.plan.batch.started` | `batch_index: int`, `step_ids: list[str]`, `parallel_count: int` | NORMAL |
 | `soothe.cognition.plan.reflected` | `should_revise: bool`, `assessment: str` | DETAILED |
 | `soothe.cognition.plan.dag_snapshot` | `steps: list[StepDepDict]` | DEBUG |
 | `soothe.cognition.plan.plan_only` | `thread_id: str`, `goal: str`, `step_count: int` | NORMAL |

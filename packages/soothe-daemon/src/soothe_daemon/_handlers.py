@@ -81,7 +81,7 @@ class DaemonHandlersMixin:
                 else None
             )
             if session is not None:
-                await session.transport.send(session.transport_client, msg)
+                await self._session_manager.send_to_client(session, msg)
                 return
             if hasattr(client_id, "writer"):
                 await self._send(client_id, msg)

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, messages_from_dict
 from soothe_sdk.client.protocol import _serialize_for_json
+from soothe_sdk.client.websocket import WebSocketClient
 from soothe_sdk.langchain_wire import envelope_langchain_message_dict
 
 from soothe_cli.runtime.transport.session import TuiDaemonSession
@@ -14,6 +15,19 @@ from soothe_cli.runtime.transport.session import TuiDaemonSession
 class _StubEventClient:
     def __init__(self, events: list[dict]) -> None:
         self._events = list(events)
+
+    def peel_stale_pending_control_events(self) -> list[str]:
+        removed: list[str] = []
+        kept: list[dict] = []
+        stale = WebSocketClient._STALE_TURN_PENDING_TYPES  # noqa: SLF001
+        for event in self._events:
+            event_type = str(event.get("type") or "")
+            if event_type in stale:
+                removed.append(event_type)
+            else:
+                kept.append(event)
+        self._events = kept
+        return removed
 
     async def read_event(self) -> dict | None:
         if not self._events:
@@ -172,6 +186,35 @@ async def test_iter_turn_chunks_filters_non_active_loop_events() -> None:
 
     assert chunks == [((), "messages", ("main", {}))]
     assert session._loop_id == "loop-main"
+
+
+@pytest.mark.asyncio
+async def test_iter_turn_chunks_peels_stale_daemon_ready_before_stream() -> None:
+    """Stale ``daemon_ready`` in the read path must not hide a missing live stream."""
+    session = object.__new__(TuiDaemonSession)
+    session._loop_id = "loop-main"
+    session._read_lock = asyncio.Lock()
+    session._streaming = False
+    session.turn_event_stats = None
+    session._client = _StubEventClient(
+        [
+            {"type": "daemon_ready", "state": "ready"},
+            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {
+                "type": "event",
+                "loop_id": "loop-main",
+                "namespace": [],
+                "mode": "custom",
+                "data": {"type": "soothe.cognition.agent_loop.started"},
+            },
+            {"type": "status", "state": "idle", "loop_id": "loop-main"},
+        ]
+    )
+
+    chunks = [chunk async for chunk in session.iter_turn_chunks()]
+
+    assert len(chunks) == 1
+    assert chunks[0][1] == "custom"
 
 
 @pytest.mark.asyncio

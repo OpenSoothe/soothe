@@ -14,8 +14,6 @@ __all__ = [
     "ErrorEvent",
     # Event type constants - plan
     "PLAN_CREATED",
-    "PLAN_STEP_STARTED",
-    "PLAN_STEP_COMPLETED",
     # Tool (DEBUG/DETAILED)
     "TOOL_STARTED",
     "TOOL_COMPLETED",
@@ -61,8 +59,6 @@ from soothe_sdk.core.events import (
     MESSAGE_RECEIVED,
     MESSAGE_SENT,
     PLAN_CREATED,
-    PLAN_STEP_COMPLETED,
-    PLAN_STEP_STARTED,
     TOOL_COMPLETED,
     TOOL_ERROR,
     TOOL_STARTED,

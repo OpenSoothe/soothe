@@ -948,6 +948,7 @@ class MessageRouter:
         await handle_loop_reattach(loop_id, d, client_id)
 
         verbosity = msg.get("verbosity", "normal")
+        wire_tier = msg.get("wire_tier", "full")
         stream_delivery = msg.get("stream_delivery", "batch")
         # Accept "streaming" for backwards compatibility, map to "adaptive"
         if stream_delivery not in ("batch", "streaming", "adaptive"):
@@ -959,11 +960,12 @@ class MessageRouter:
             loop_id,
             verbosity=verbosity,
             stream_delivery=stream_delivery,
+            wire_tier=wire_tier,
         )
         session = await d._session_manager.get_session(client_id)
         if session:
-            await session.transport.send(
-                session.transport_client,
+            await d._session_manager.send_to_client(
+                session,
                 {
                     "type": "subscription_confirmed",
                     "loop_id": loop_id,
