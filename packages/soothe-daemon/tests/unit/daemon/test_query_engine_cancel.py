@@ -8,6 +8,7 @@ from contextlib import suppress
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -129,6 +130,22 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
                 thread_logging=SimpleNamespace(retention_days=7, max_size_mb=10)
             ),
             workspace_dir=".",
+            agent=SimpleNamespace(
+                loop=SimpleNamespace(
+                    output_streaming=SimpleNamespace(
+                        adaptive_threshold_chars=500,
+                        file_output_threshold_chars=0,
+                        file_output_preview_chars=500,
+                        file_output_dir=None,
+                        streaming_interval_ms=300,
+                        message_coalesce_enabled=True,
+                        tool_batch_enabled=True,
+                        tool_batch_interval_ms=200,
+                        suppress_redundant_stream_tool_updates=True,
+                        skip_redundant_tool_message_wire=False,
+                    )
+                )
+            ),
         ),
         _daemon_config=daemon_config,
         _global_history=None,
@@ -142,6 +159,7 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
             release_loop_ownership=lambda *_args, **_kwargs: None,
             subscribe_loop=lambda *_args, **_kwargs: True,
             get_stream_delivery=lambda *_args, **_kwargs: "batch",
+            await_loop_delivery_drained=AsyncMock(return_value=True),
         ),
         _persistence_manager=_FakePersistenceManager(),
     )
@@ -197,6 +215,22 @@ def _daemon_factory(
                 thread_logging=SimpleNamespace(retention_days=7, max_size_mb=10)
             ),
             workspace_dir=".",
+            agent=SimpleNamespace(
+                loop=SimpleNamespace(
+                    output_streaming=SimpleNamespace(
+                        adaptive_threshold_chars=500,
+                        file_output_threshold_chars=0,
+                        file_output_preview_chars=500,
+                        file_output_dir=None,
+                        streaming_interval_ms=300,
+                        message_coalesce_enabled=True,
+                        tool_batch_enabled=True,
+                        tool_batch_interval_ms=200,
+                        suppress_redundant_stream_tool_updates=True,
+                        skip_redundant_tool_message_wire=False,
+                    )
+                )
+            ),
         ),
         _daemon_config=daemon_config,
         _global_history=None,
@@ -210,6 +244,7 @@ def _daemon_factory(
             release_loop_ownership=lambda *_args, **_kwargs: None,
             subscribe_loop=lambda *_args, **_kwargs: True,
             get_stream_delivery=lambda *_args, **_kwargs: "batch",
+            await_loop_delivery_drained=AsyncMock(return_value=True),
         ),
         _persistence_manager=_FakePersistenceManager(),
     )
@@ -328,6 +363,22 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
                 thread_logging=SimpleNamespace(retention_days=7, max_size_mb=10)
             ),
             workspace_dir=".",
+            agent=SimpleNamespace(
+                loop=SimpleNamespace(
+                    output_streaming=SimpleNamespace(
+                        adaptive_threshold_chars=500,
+                        file_output_threshold_chars=0,
+                        file_output_preview_chars=500,
+                        file_output_dir=None,
+                        streaming_interval_ms=300,
+                        message_coalesce_enabled=True,
+                        tool_batch_enabled=True,
+                        tool_batch_interval_ms=200,
+                        suppress_redundant_stream_tool_updates=True,
+                        skip_redundant_tool_message_wire=False,
+                    )
+                )
+            ),
         ),
         _daemon_config=daemon_config,
         _global_history=None,
@@ -341,6 +392,7 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
             release_loop_ownership=lambda *_args, **_kwargs: None,
             subscribe_loop=lambda *_args, **_kwargs: True,
             get_stream_delivery=lambda *_args, **_kwargs: "batch",
+            await_loop_delivery_drained=AsyncMock(return_value=True),
         ),
         _persistence_manager=_FakePersistenceManager(),
     )
