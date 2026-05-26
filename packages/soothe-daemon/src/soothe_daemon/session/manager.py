@@ -351,9 +351,7 @@ class ClientSessionManager:
         """Ensure sender tasks are running for clients subscribed to a loop."""
         async with self._lock:
             sessions = [
-                session
-                for session in self._sessions.values()
-                if loop_id in session.subscriptions
+                session for session in self._sessions.values() if loop_id in session.subscriptions
             ]
         for session in sessions:
             await self._ensure_sender_loop(session)
@@ -475,8 +473,7 @@ class ClientSessionManager:
                         await self.send_to_client(session, filtered_events[0])
                 except websockets.exceptions.ConnectionClosedOK:
                     logger.warning(
-                        "Client %s sender stopped: disconnected normally while sending "
-                        "(%d queued)",
+                        "Client %s sender stopped: disconnected normally while sending (%d queued)",
                         session.client_id,
                         session.event_queue.qsize(),
                     )

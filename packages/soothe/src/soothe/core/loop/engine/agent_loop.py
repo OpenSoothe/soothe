@@ -144,14 +144,20 @@ class AgentLoop:
             parse_slash_skill_user_line,
             try_expand_slash_skill_user_line,
         )
-        from soothe.skills.workspace_sync import sync_external_skills_to_workspace
-
-        if workspace and filesystem_virtual_mode_from_soothe_config(self.config):
-            sync_external_skills_to_workspace(self.config, workspace)
+        from soothe.skills.workspace_sync import sync_specific_skill_to_workspace
 
         goal_user_submission: str | None = None
         skill_context: str | None = None
         execution_goal = goal
+
+        # IG-XXX: Targeted skill sync - only sync the addressed skill
+        parsed_skill = parse_slash_skill_user_line(goal)
+        if workspace and filesystem_virtual_mode_from_soothe_config(self.config):
+            if parsed_skill is not None:
+                skill_name = parsed_skill[0]
+                sync_specific_skill_to_workspace(self.config, workspace, skill_name)
+            # If no skill addressed, skip sync (skills are synced on-demand via middleware)
+
         skill_env = try_expand_slash_skill_user_line(
             goal,
             self.config,
@@ -161,7 +167,7 @@ class AgentLoop:
             goal_user_submission = goal
             execution_goal = skill_env.prompt
             skill_context = skill_env.skill_context or None
-        elif parse_slash_skill_user_line(goal) is not None:
+        elif parsed_skill is not None:
             logger.warning(
                 "[AgentLoop] /skill: user line did not expand (missing skill on this host "
                 "or unreadable SKILL.md); planner will see the raw line: %s",
