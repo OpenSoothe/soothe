@@ -330,6 +330,14 @@ class QueryEngine:
                 has_phase = bool(flat.get("phase"))
                 if not has_content and not has_phase:
                     return
+        if (
+            mode == "messages"
+            and isinstance(wire_data, (tuple, list))
+            and len(wire_data) == _MSG_PAIR_LENGTH
+            and coalescer is not None
+            and coalescer.should_skip_tool_message_wire(wire_data[0])
+        ):
+            return
         await d._broadcast(
             self._loop_scoped_client_message(
                 loop_id,
@@ -360,6 +368,12 @@ class QueryEngine:
             "file_output_dir": streaming_cfg.file_output_dir,
             "streaming_interval_ms": streaming_cfg.streaming_interval_ms,
             "message_coalesce_enabled": streaming_cfg.message_coalesce_enabled,
+            "tool_batch_enabled": streaming_cfg.tool_batch_enabled,
+            "tool_batch_interval_ms": streaming_cfg.tool_batch_interval_ms,
+            "suppress_redundant_stream_tool_updates": (
+                streaming_cfg.suppress_redundant_stream_tool_updates
+            ),
+            "skip_redundant_tool_message_wire": streaming_cfg.skip_redundant_tool_message_wire,
         }
 
     async def _enrich_with_vision_throttled(
@@ -692,6 +706,14 @@ class QueryEngine:
                     workspace=run_workspace,
                     message_coalesce_enabled=streaming_cfg.get("message_coalesce_enabled", True),
                     coalesce_interval_ms=streaming_cfg.get("streaming_interval_ms", 200),
+                    tool_batch_enabled=streaming_cfg.get("tool_batch_enabled", True),
+                    tool_batch_interval_ms=streaming_cfg.get("tool_batch_interval_ms", 200),
+                    suppress_redundant_stream_tool_updates=streaming_cfg.get(
+                        "suppress_redundant_stream_tool_updates", True
+                    ),
+                    skip_redundant_tool_message_wire=streaming_cfg.get(
+                        "skip_redundant_tool_message_wire", False
+                    ),
                 )
 
                 async def _process_stream() -> None:
@@ -870,6 +892,11 @@ class QueryEngine:
                     await d._runner.touch_thread_activity_timestamp(final_thread_id)
 
                 if effective_loop_id:
+                    drain_cfg = self._get_output_streaming_config(d)
+                    await d._session_manager.await_loop_delivery_drained(
+                        effective_loop_id,
+                        batch_timeout_s=drain_cfg.get("streaming_interval_ms", 300) / 1000.0,
+                    )
                     await d._broadcast(
                         self._loop_scoped_client_message(
                             effective_loop_id,

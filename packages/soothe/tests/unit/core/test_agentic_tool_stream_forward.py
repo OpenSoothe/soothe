@@ -175,3 +175,12 @@ def test_custom_event_non_tool_update_not_forwarded() -> None:
     )
     assert _is_subgraph_tool_call_update_chunk(chunk) is False
     assert _forward_messages_chunk(chunk) is False
+
+
+def test_internal_custom_event_not_forwarded() -> None:
+    chunk = (
+        (),
+        "custom",
+        {"type": "soothe.internal.policy.checked", "verdict": "allow"},
+    )
+    assert _forward_messages_chunk(chunk) is False

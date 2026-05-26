@@ -13,11 +13,24 @@ from soothe.core.events.visibility import (
     is_catalog_event_client_wire_visible,
     is_client_broadcast_event_type,
     is_client_wire_visible,
+    is_custom_stream_payload_client_visible,
 )
 
 
 def test_internal_types_not_broadcast() -> None:
     assert is_client_broadcast_event_type("soothe.internal.iteration.started") is False
+
+
+def test_internal_custom_stream_payload_not_visible() -> None:
+    assert (
+        is_custom_stream_payload_client_visible(
+            {"type": "soothe.internal.iteration.started", "iteration": 1}
+        )
+        is False
+    )
+    assert is_custom_stream_payload_client_visible(
+        {"type": TOOL_CALL_UPDATES_BATCH, "updates": [], "count": 0}
+    )
 
 
 def test_client_types_broadcast() -> None:
