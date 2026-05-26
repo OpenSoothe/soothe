@@ -4,6 +4,7 @@ Extracted from verbosity.py per RFC-610 (IG-185).
 """
 
 from soothe_sdk.core.verbosity import VerbosityTier
+from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
 
 
 def _subagent_wire_tier(event_type: str) -> VerbosityTier | None:
@@ -38,6 +39,10 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
         >>> classify_event_to_tier("soothe.cognition.plan.creating")
         <VerbosityTier.NORMAL: 1>
     """
+    # Stream tool wire (IG-416/427) — normal-tier progress for TUI tool/task rows.
+    if event_type in (TOOL_CALL_UPDATES_BATCH, STREAM_TOOL_CALL_UPDATE):
+        return VerbosityTier.NORMAL
+
     if event_type.startswith("soothe."):
         wire = _subagent_wire_tier(event_type)
         if wire is not None:
