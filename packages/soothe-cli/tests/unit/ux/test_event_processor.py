@@ -660,7 +660,7 @@ class TestEventProcessorToolAndAssistantFiltering:
         assert len(tool_result_calls) == 1
         assert tool_result_calls[0][2]["is_error"] is True
 
-    def test_assistant_text_removes_trailing_decorative_filler(self) -> None:
+    def test_assistant_text_preserves_trailing_decorative_filler(self) -> None:
         renderer = MockRenderer()
         processor = EventProcessor(renderer)
 
@@ -682,9 +682,11 @@ class TestEventProcessorToolAndAssistantFiltering:
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert assistant_calls
-        assert assistant_calls[0][1][0] == "The capital of France is Paris."
+        assert assistant_calls[0][1][0] == (
+            "The capital of France is Paris. Let me know if you'd like more."
+        )
 
-    def test_normal_removes_decorative_filler_preserves_identity(self) -> None:
+    def test_normal_preserves_decorative_filler_and_identity(self) -> None:
         renderer = MockRenderer()
         processor = EventProcessor(renderer)
 
@@ -710,12 +712,11 @@ class TestEventProcessorToolAndAssistantFiltering:
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert assistant_calls
-        # Brand/creator language is preserved (no longer filtered)
-        # Decorative filler ("I'm happy to help...") is still removed
         assert "The capital of France is Paris" in assistant_calls[0][1][0]
         assert "I'm Soothe" in assistant_calls[0][1][0]
+        assert "I'm happy to help you with any questions you have!" in assistant_calls[0][1][0]
 
-    def test_normal_strips_light_embellishment_from_answer(self) -> None:
+    def test_normal_preserves_light_embellishment_in_answer(self) -> None:
         renderer = MockRenderer()
         processor = EventProcessor(renderer)
 
@@ -737,7 +738,10 @@ class TestEventProcessorToolAndAssistantFiltering:
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert assistant_calls
-        assert assistant_calls[0][1][0] == "The capital of France is Paris."
+        assert (
+            assistant_calls[0][1][0]
+            == "The capital of France is Paris, a beautiful and historic city! 🇫🇷"
+        )
 
     def test_normal_filters_protocol_but_shows_plan_update(self) -> None:
         renderer = MockRenderer()

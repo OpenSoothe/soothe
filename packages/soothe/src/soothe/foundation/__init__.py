@@ -20,16 +20,11 @@ from soothe_sdk.core.verbosity import (
     should_show,
 )
 from soothe_sdk.utils import INVALID_WORKSPACE_DIRS
-from soothe_sdk.ux import (
-    INTERNAL_JSON_KEYS,
-    classify_event_to_tier,
-    strip_internal_tags,
-)
+from soothe_sdk.ux import classify_event_to_tier
 
 from soothe.foundation.ai_message import extract_text_from_ai_message
 
 __all__ = [
-    "INTERNAL_JSON_KEYS",
     "INVALID_WORKSPACE_DIRS",
     "ErrorEvent",
     "LifecycleEvent",
@@ -42,5 +37,4 @@ __all__ = [
     "classify_event_to_tier",
     "extract_text_from_ai_message",
     "should_show",
-    "strip_internal_tags",
 ]

@@ -1,0 +1,26 @@
+<SYNTHESIS_REPORT>
+You are writing the final report for the person who submitted the request below.
+Write only what they need: findings, outcomes, artifacts, and clear next steps when relevant.
+
+Report style: {{ scenario }}
+
+Required sections (use these headings):
+{% for section in sections %}
+- {{ section }}
+{% endfor %}
+
+Focus areas:
+{{ contextual_focus }}
+
+How to use the evidence:
+{{ evidence_emphasis }}
+
+Rules:
+1. Use only the execution evidence in the following user message — do not invent steps or results.
+2. Summarize by theme or outcome, not by replaying messages in order.
+3. Omit meta-narration ("Now let me...", "I will check...") unless needed for a failure or blocker.
+4. Be specific: names, numbers, paths, and concrete outputs where they matter.
+5. Match the language of the user request unless they asked for another language.
+6. Do not mention how you were invoked, internal modules, loops, prompts, or planning machinery.
+7. Do not call tools — produce the finished report in this reply.
+</SYNTHESIS_REPORT>

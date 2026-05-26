@@ -27,8 +27,8 @@ from ..runtime_context import LoopRuntimeContext
 logger = logging.getLogger(__name__)
 
 _GOAL_COMPLETION_LEDGER_HUMAN = (
-    "Goal completion: produce the final user-facing response summarizing the goal outcome. "
-    "Use the same primary natural language as the user's goal; keep code, paths, and quoted literals unchanged."
+    "Produce the final user-facing response summarizing the outcome. "
+    "Use the same primary natural language as the user's request; keep code, paths, and quoted literals unchanged."
 )
 
 

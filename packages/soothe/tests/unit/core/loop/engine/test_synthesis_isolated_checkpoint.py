@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from soothe.core.loop.engine.scenario_classifier import ScenarioClassification
 from soothe.core.loop.engine.synthesis import (
@@ -15,23 +16,6 @@ from soothe.core.loop.engine.synthesis import (
 from soothe.core.loop.state.schemas import LoopState, StepResult
 from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.utils.observability import langfuse as langfuse_util
-
-
-def test_build_synthesis_instruction_discourages_chronological_replay() -> None:
-    """Final synthesis prompt must ask for logic summary, not ledger re-narration."""
-    classification = ScenarioClassification(
-        scenario="general_summary",
-        sections=["Summary", "Key Points"],
-        contextual_focus=["Outcomes"],
-        evidence_emphasis="Group by outcome",
-    )
-    gen = SynthesisGenerator(MagicMock(), MagicMock(), soothe_config=None)
-    text = gen._build_synthesis_instruction("Integrate feature X", classification)
-    assert "do not quote, paraphrase, or replay" in text
-    assert "major processing logic" in text
-    assert "not by message order" in text
-    assert "Now let me" in text
-    assert "Do not invoke tools" in text
 
 
 def test_synthesis_checkpoint_thread_id_is_unique_and_prefixed() -> None:
@@ -165,8 +149,8 @@ async def test_generate_synthesis_sets_goal_synthesis_langfuse_run_name(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_generate_synthesis_passes_ledger_messages_before_instruction() -> None:
-    """Goal-completion synthesis sends ``loop_messages`` copies then the instruction turn."""
+async def test_generate_synthesis_uses_projected_context_not_raw_ledger() -> None:
+    """Synthesis sends system + projected evidence, excluding plan-phase ledger rows."""
     captured: dict = {}
 
     async def recording_astream(graph_input, config=None, **kwargs):  # noqa: ARG001
@@ -197,6 +181,12 @@ async def test_generate_synthesis_passes_ledger_messages_before_instruction() ->
             iteration=0,
             phase="execute_step",
         ),
+        LoopHumanMessage(
+            content="Plan assess context",
+            thread_id="parent-thread",
+            iteration=0,
+            phase="plan_assess",
+        ),
     ]
     state = LoopState(
         goal="g",
@@ -217,11 +207,12 @@ async def test_generate_synthesis_passes_ledger_messages_before_instruction() ->
             pass
 
     msgs = captured.get("messages") or []
-    assert len(msgs) == 3
-    assert isinstance(msgs[0], LoopHumanMessage)
-    assert isinstance(msgs[1], LoopAIMessage)
-    assert isinstance(msgs[2], LoopHumanMessage)
-    assert msgs[0].content.startswith("Execute:")
-    assert "README says hello" in msgs[1].content
-    assert msgs[2].phase == "goal_completion"
-    assert "Generate a general_summary synthesis" in msgs[2].content
+    assert len(msgs) == 2
+    assert isinstance(msgs[0], SystemMessage)
+    assert isinstance(msgs[1], HumanMessage)
+    human = msgs[1].content
+    assert isinstance(human, str)
+    assert "<user_request>" in human
+    assert "README says hello" in human
+    assert "Plan assess context" not in human
+    assert "AgentLoop" not in human.lower()
