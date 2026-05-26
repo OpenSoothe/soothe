@@ -25,7 +25,7 @@ class TestTacitusConfig:
         assert cfg.max_loops == 3
         assert cfg.effort == "normal"
         assert cfg.llm_role == "fast"
-        assert cfg.synthesis_role == "think"
+        assert cfg.synthesis_role == "fast"  # Changed to fast for lower latency (IG-432)
         assert "public" in cfg.capability_profiles
         assert "web_search" in cfg.enabled_capabilities
 

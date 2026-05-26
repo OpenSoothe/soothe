@@ -1,5 +1,6 @@
 """Shared utility modules for Soothe."""
 
+from soothe.utils.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
 from soothe.utils.path import expand_path
 from soothe.utils.path_display import (
     abbreviate_path,
@@ -13,6 +14,8 @@ from soothe.utils.progress import emit_progress
 from soothe.utils.token_counting import ComplexityLevel, count_tokens
 
 __all__ = [
+    "CircuitBreaker",
+    "CircuitBreakerOpenError",
     "ComplexityLevel",
     "abbreviate_path",
     "convert_and_abbreviate_path",

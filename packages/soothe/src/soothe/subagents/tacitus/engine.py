@@ -22,7 +22,12 @@ from soothe.utils.subagent_emit import emit_subagent_wire_event
 
 from .display_summary import tacitus_answer_summary_for_display
 from .effort import resolve_effort
-from .events import TacitusCompletedEvent, TacitusGatherSummaryEvent, TacitusStartedEvent
+from .events import (
+    TacitusCompletedEvent,
+    TacitusGatherSummaryEvent,
+    TacitusProgressEvent,
+    TacitusStartedEvent,
+)
 from .json_util import (
     compact_search_query,
     fallback_queries,
@@ -30,12 +35,13 @@ from .json_util import (
     llm_response_text,
     parse_json_object,
 )
-from .protocol import ResearchReference
+from .protocol import ResearchReference, SourceResult
 from .references import (
     format_references_section,
     merge_references,
     reference_from_source_result,
 )
+from .termination import LoopTerminationChecker
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -48,6 +54,28 @@ logger = logging.getLogger(__name__)
 # Module-level shared thread pool for async-to-sync conversion in research engine
 # This prevents creating new thread pools for each query
 _shared_pool: ThreadPoolExecutor | None = None
+
+
+def _emit_progress(
+    phase: str,
+    message: str,
+    loop_count: int = 0,
+    total_loops: int = 0,
+    sources_completed: int = 0,
+    total_sources: int = 0,
+) -> None:
+    """Emit a progress event for real-time streaming."""
+    emit_subagent_wire_event(
+        TacitusProgressEvent(
+            phase=phase,
+            message=message,
+            loop_count=loop_count,
+            total_loops=total_loops,
+            sources_completed=sources_completed,
+            total_sources=total_sources,
+        ).to_dict(),
+        logger,
+    )
 
 
 def _get_shared_pool() -> ThreadPoolExecutor:
@@ -230,6 +258,157 @@ def _references_from_state(state: dict[str, Any]) -> list[ResearchReference]:
 
 
 # ---------------------------------------------------------------------------
+# Parallel source gathering with timeout
+# ---------------------------------------------------------------------------
+
+
+async def _query_source_with_timeout(
+    src: Any,
+    query: str,
+    context: Any,
+    timeout_sec: float,
+) -> list[Any]:
+    """Query a single source with timeout handling.
+
+    Args:
+        src: PublicInformationSource to query
+        query: Search query string
+        context: GatherContext
+        timeout_sec: Timeout in seconds
+
+    Returns:
+        List of SourceResult objects (empty on timeout/error)
+    """
+    try:
+        return await asyncio.wait_for(
+            src.query(query, context),
+            timeout=timeout_sec,
+        )
+    except TimeoutError:
+        logger.warning(
+            "Source %s timed out after %.1fs for query: %s",
+            src.name,
+            timeout_sec,
+            query[:60],
+        )
+        return []
+    except Exception:
+        logger.debug(
+            "Source %s failed for query: %s",
+            src.name,
+            query,
+            exc_info=True,
+        )
+        return []
+
+
+async def _gather_from_sources_parallel(
+    sources: list[Any],
+    query: str,
+    context: Any,
+    timeout_sec: float,
+) -> list[Any]:
+    """Query all sources in parallel with individual timeouts.
+
+    Args:
+        sources: List of PublicInformationSource to query
+        query: Search query string
+        context: GatherContext
+        timeout_sec: Timeout per source in seconds
+
+    Returns:
+        Combined list of SourceResult objects from all sources
+    """
+    if not sources:
+        return []
+
+    # Create tasks for all sources
+    tasks = [_query_source_with_timeout(src, query, context, timeout_sec) for src in sources]
+
+    # Run all queries concurrently
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Flatten results, filtering out exceptions
+    all_results: list[Any] = []
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            logger.debug(
+                "Source %s raised exception: %s",
+                sources[i].name,
+                result,
+            )
+        else:
+            all_results.extend(result)
+
+    return all_results
+
+
+# ---------------------------------------------------------------------------
+# LLM invocation with timeout
+# ---------------------------------------------------------------------------
+
+
+async def _invoke_llm_with_timeout(
+    model: Any,
+    messages: list[dict[str, str]],
+    timeout_sec: float,
+    node_name: str = "llm",
+) -> Any:
+    """Invoke LLM with timeout protection.
+
+    Args:
+        model: LangChain chat model
+        messages: List of message dicts with 'role' and 'content'
+        timeout_sec: Timeout in seconds
+        node_name: Name of the node for logging
+
+    Returns:
+        Model response or raises TimeoutError
+    """
+    try:
+        # Use ainvoke for async timeout support
+        return await asyncio.wait_for(
+            model.ainvoke(messages),
+            timeout=timeout_sec,
+        )
+    except TimeoutError:
+        logger.warning(
+            "[%s] LLM invocation timed out after %.1fs",
+            node_name,
+            timeout_sec,
+        )
+        raise
+    except Exception:
+        logger.debug("[%s] LLM invocation failed", node_name, exc_info=True)
+        raise
+
+
+def _invoke_llm_sync_with_timeout(
+    model: Any,
+    messages: list[dict[str, str]],
+    timeout_sec: float,
+    node_name: str = "llm",
+) -> Any:
+    """Synchronous wrapper for LLM invocation with timeout.
+
+    Falls back to sync invoke if ainvoke not available or fails.
+    """
+
+    # Try async first with timeout
+    async def _try_async() -> Any:
+        return await _invoke_llm_with_timeout(model, messages, timeout_sec, node_name)
+
+    try:
+        # Check if we're in an async context
+        asyncio.get_running_loop()
+        # In async context, submit to thread pool
+        return _get_shared_pool().submit(asyncio.run, _try_async()).result()
+    except RuntimeError:
+        # No event loop, use asyncio.run
+        return asyncio.run(_try_async())
+
+
+# ---------------------------------------------------------------------------
 # Graph builder
 # ---------------------------------------------------------------------------
 
@@ -269,6 +448,11 @@ def build_tacitus_engine(
             ).to_dict(),
             logger,
         )
+        _emit_progress(
+            phase="analyze",
+            message=f"Analyzing topic: {topic[:60]}...",
+            total_loops=profile.max_loops,
+        )
         prompt = _ANALYZE_TOPIC.format(
             domains=available_domains,
             current_date=_now_str(),
@@ -276,8 +460,19 @@ def build_tacitus_engine(
             effort_hint=profile.analyze_question_hint,
         )
 
-        resp = loop_model.invoke([{"role": "user", "content": prompt}])
-        parsed = parse_json_object(llm_response_text(resp))
+        # Invoke LLM with timeout
+        try:
+            resp = _invoke_llm_sync_with_timeout(
+                loop_model,
+                [{"role": "user", "content": prompt}],
+                timeout_sec=_default_config.llm_timeout_sec,
+                node_name="analyze_topic",
+            )
+        except TimeoutError:
+            logger.warning("[Tacitus] analyze_topic timed out, using fallback")
+            resp = None
+
+        parsed = parse_json_object(llm_response_text(resp)) if resp else None
         domain_hint = state.get("domain", _domain) or "public"
         if parsed:
             sub_questions = parsed.get("sub_questions", [])
@@ -312,6 +507,13 @@ def build_tacitus_engine(
         sub_questions = state.get("_sub_questions", [])
         if not sub_questions:
             sub_questions = fallback_sub_questions(topic, domain=domain_hint)
+
+        _emit_progress(
+            phase="generate_queries",
+            message=f"Generating {len(sub_questions)} search queries...",
+            total_loops=profile.max_loops,
+        )
+
         sq_text = "\n".join(
             f"- {sq.get('question', sq)}" if isinstance(sq, dict) else f"- {sq}"
             for sq in sub_questions
@@ -323,8 +525,19 @@ def build_tacitus_engine(
             effort_hint=profile.generate_queries_hint,
         )
 
-        resp = loop_model.invoke([{"role": "user", "content": prompt}])
-        parsed = parse_json_object(llm_response_text(resp))
+        # Invoke LLM with timeout
+        try:
+            resp = _invoke_llm_sync_with_timeout(
+                loop_model,
+                [{"role": "user", "content": prompt}],
+                timeout_sec=_default_config.llm_timeout_sec,
+                node_name="generate_queries",
+            )
+        except TimeoutError:
+            logger.warning("[Tacitus] generate_queries timed out, using fallback")
+            resp = None
+
+        parsed = parse_json_object(llm_response_text(resp)) if resp else None
         if parsed:
             queries = parsed.get("queries", [])
         else:
@@ -380,12 +593,22 @@ def build_tacitus_engine(
         query = state.get("_gather_query", "")
         domain_hint = state.get("_gather_domain", "public")
         profile = _effort_profile_for_state(state, _default_config)
+        loop_count = state.get("loop_count", 0)
 
         selected = router.select(
             query,
             domain=domain_hint,
             max_sources=profile.max_sources_per_query,
         )
+
+        _emit_progress(
+            phase="gather",
+            message=f"Gathering from {len(selected)} sources...",
+            loop_count=loop_count,
+            total_loops=profile.max_loops,
+            total_sources=len(selected),
+        )
+
         if not selected:
             emit_subagent_wire_event(
                 TacitusGatherSummaryEvent(
@@ -408,29 +631,26 @@ def build_tacitus_engine(
             iteration=state.get("loop_count", 0),
         )
 
-        all_results = []
-        for src in selected:
-            try:
-                # Python 3.10+ compatible event loop handling
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    # No event loop in this thread, create one
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
+        # Parallel source gathering with timeout
+        timeout_sec = _default_config.source_timeout_sec
+        logger.debug(
+            "[Tacitus] Querying %d sources in parallel with %.1fs timeout",
+            len(selected),
+            timeout_sec,
+        )
 
-                if loop.is_running():
-                    # If loop is running, we need to run in a separate thread
-                    # Use shared module-level pool to avoid creating temporary pools
-                    results = (
-                        _get_shared_pool().submit(asyncio.run, src.query(query, context)).result()
-                    )
-                else:
-                    # Loop exists but not running, use it
-                    results = loop.run_until_complete(src.query(query, context))
-                all_results.extend(results)
-            except Exception:
-                logger.debug("Source %s failed for query: %s", src.name, query, exc_info=True)
+        # Run async gathering - handle both sync and async contexts
+        async def _do_gather() -> list[Any]:
+            return await _gather_from_sources_parallel(selected, query, context, timeout_sec)
+
+        try:
+            # Check if we're in an async context
+            asyncio.get_running_loop()
+            # In async context, submit to thread pool to avoid nested loop issues
+            all_results = _get_shared_pool().submit(asyncio.run, _do_gather()).result()
+        except RuntimeError:
+            # No event loop running, use asyncio.run
+            all_results = asyncio.run(_do_gather())
 
         if not all_results:
             emit_subagent_wire_event(
@@ -485,8 +705,20 @@ def build_tacitus_engine(
             existing_summaries=existing[:3000],
             new_results=new_results[:3000],
         )
-        resp = loop_model.invoke([{"role": "user", "content": prompt}])
-        integrated = str(resp.content)
+
+        # Invoke LLM with timeout
+        try:
+            resp = _invoke_llm_sync_with_timeout(
+                loop_model,
+                [{"role": "user", "content": prompt}],
+                timeout_sec=_default_config.llm_timeout_sec,
+                node_name="summarize",
+            )
+            integrated = str(resp.content)
+        except TimeoutError:
+            logger.warning("[Tacitus] summarize timed out, returning raw summaries")
+            # Fallback: just concatenate the new results
+            integrated = new_results[:3000]
 
         return {"search_summaries": [integrated]}
 
@@ -496,18 +728,83 @@ def build_tacitus_engine(
         loop_count = state.get("loop_count", 0)
         summaries = "\n\n".join(state.get("search_summaries", []))
 
+        # Early termination check (IG-432)
+        early_terminate = False
+        termination_reason = ""
+        if _default_config.enable_early_termination and loop_count >= 1:
+            # Build current results from references_gathered
+            refs = _references_from_state(state)
+            current_results = [
+                SourceResult(
+                    content=r.query or "",
+                    source_ref=r.source_ref,
+                    source_name=r.source_name,
+                )
+                for r in refs[-10:]  # Check last 10 results
+            ]
+
+            checker = LoopTerminationChecker(
+                min_results=_default_config.min_results_for_termination,
+                min_source_diversity=_default_config.min_source_diversity,
+            )
+            decision = checker.check_termination(state, loop_count, current_results)
+
+            if decision.should_terminate:
+                early_terminate = True
+                termination_reason = decision.reason
+                logger.info(
+                    "[Tacitus] Early termination triggered: %s (confidence=%.2f)",
+                    decision.reason,
+                    decision.confidence,
+                )
+
+        # Skip LLM reflection if early termination triggered
+        if early_terminate:
+            _emit_progress(
+                phase="reflect",
+                message=f"Early termination: {termination_reason}",
+                loop_count=loop_count,
+                total_loops=profile.max_loops,
+            )
+            return {
+                "loop_count": loop_count + 1,
+                "_is_sufficient": True,
+                "_follow_up_queries": [],
+                "_early_termination_reason": termination_reason,
+            }
+
+        _emit_progress(
+            phase="reflect",
+            message="Evaluating research sufficiency...",
+            loop_count=loop_count,
+            total_loops=profile.max_loops,
+        )
+
         prompt = _REFLECT.format(
             topic=topic,
             summaries=summaries[:4000] or "(no summaries yet)",
             effort_hint=profile.reflect_follow_up_hint,
         )
 
-        resp = loop_model.invoke([{"role": "user", "content": prompt}])
-        parsed = parse_json_object(llm_response_text(resp)) or {
-            "is_sufficient": True,
-            "knowledge_gap": "",
-            "follow_up_queries": [],
-        }
+        # Invoke LLM with timeout
+        try:
+            resp = _invoke_llm_sync_with_timeout(
+                loop_model,
+                [{"role": "user", "content": prompt}],
+                timeout_sec=_default_config.llm_timeout_sec,
+                node_name="reflect",
+            )
+            parsed = parse_json_object(llm_response_text(resp))
+        except TimeoutError:
+            logger.warning("[Tacitus] reflect timed out, assuming sufficient")
+            parsed = None
+
+        if parsed is None:
+            parsed = {
+                "is_sufficient": True,
+                "knowledge_gap": "",
+                "follow_up_queries": [],
+            }
 
         is_sufficient = parsed.get("is_sufficient", True)
         follow_ups = parsed.get("follow_up_queries", [])
@@ -561,6 +858,14 @@ def build_tacitus_engine(
         topic = _extract_topic(state)
         summaries = "\n\n".join(state.get("search_summaries", []))
         num_sources = len(state.get("sources_gathered", []))
+        loop_count = state.get("loop_count", 0)
+
+        _emit_progress(
+            phase="synthesize",
+            message=f"Synthesizing answer from {num_sources} sources...",
+            loop_count=loop_count,
+            total_loops=state.get("max_loops", 3),
+        )
 
         prompt = _SYNTHESIZE.format(
             current_date=_now_str(),
@@ -568,8 +873,19 @@ def build_tacitus_engine(
             summaries=summaries[:6000],
         )
         synth_t0 = time.perf_counter()
-        resp = final_model.invoke([{"role": "user", "content": prompt}])
-        answer = str(resp.content)
+
+        # Invoke LLM with timeout
+        try:
+            resp = _invoke_llm_sync_with_timeout(
+                final_model,
+                [{"role": "user", "content": prompt}],
+                timeout_sec=_default_config.llm_timeout_sec,
+                node_name="synthesize",
+            )
+            answer = str(resp.content)
+        except TimeoutError:
+            logger.warning("[Tacitus] synthesize timed out, using summaries as answer")
+            answer = f"Research findings:\n\n{summaries[:6000]}\n\n(Note: Synthesis timed out)"
         refs = merge_references(_references_from_state(state))
         if refs:
             bib = format_references_section(refs, accessed_date=_now_str())
