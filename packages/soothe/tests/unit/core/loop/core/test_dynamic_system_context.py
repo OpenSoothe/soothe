@@ -233,9 +233,9 @@ class TestComplexityMapping:
     def middleware(self) -> SystemPromptOptimizationMiddleware:
         """Create middleware instance for testing."""
         config = MagicMock()
-        config.assistant_name = "Soothe"
         config.resolve_model.return_value = "claude-opus-4-6"
-        config.system_prompt = None
+        config.agent.name = "Soothe"
+        config.agent.system_prompt = None
         config.agent_loop.performance_enabled = True
         config.agent_loop.optimize_system_prompts = True
         config.agent_loop.unified_classification = True

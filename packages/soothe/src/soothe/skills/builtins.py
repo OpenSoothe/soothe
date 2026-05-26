@@ -4,6 +4,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
+_BUILTIN_SKILLS_DIR_NAME = "built_in_skills"
+
+
+def is_builtin_skill_directory(skill_dir: str | Path) -> bool:
+    """Return True for package-bundled skills under ``soothe/built_in_skills/``."""
+    resolved = Path(skill_dir).expanduser().resolve()
+    package_builtins = Path(__file__).resolve().parent.parent / _BUILTIN_SKILLS_DIR_NAME
+    try:
+        if resolved.is_relative_to(package_builtins.resolve()):
+            return True
+    except (ValueError, OSError):
+        pass
+    return _BUILTIN_SKILLS_DIR_NAME in resolved.parts
+
 
 def get_built_in_skills_paths(workspace: str | None = None) -> list[str]:
     """Return absolute paths for discovered skill directories.

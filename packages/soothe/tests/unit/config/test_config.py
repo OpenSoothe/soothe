@@ -5,12 +5,10 @@ from pathlib import Path
 import pytest
 
 from soothe.config import (
-    DurabilityProtocolConfig,
     MCPServerConfig,
     ModelProviderConfig,
     ModelRouter,
     PersistenceConfig,
-    ProtocolsConfig,
     SootheConfig,
     SubagentConfig,
     ToolsConfig,
@@ -42,20 +40,21 @@ class TestSootheConfig:
         assert cfg.providers == []
         assert cfg.router.default == "openai:gpt-4o-mini"
         assert cfg.embedding_dims == 1536
-        assert cfg.autonomous.enabled_by_default is False
+        assert cfg.agent.autonomous.enabled_by_default is False
 
     def test_yaml_with_daemon_top_level_block_loads(self, tmp_path: Path) -> None:
         """Daemon-only keys may appear in legacy agent YAML; they must not break parsing."""
         p = tmp_path / "cfg.yml"
         p.write_text(
-            "assistant_name: TestDaemonStrip\n"
+            "agent:\n"
+            "  name: TestDaemonStrip\n"
             "daemon:\n"
             "  event_size_stats_enabled: true\n"
             "  event_size_stats_interval_seconds: 90\n",
             encoding="utf-8",
         )
         cfg = SootheConfig.from_yaml_file(str(p))
-        assert cfg.assistant_name == "TestDaemonStrip"
+        assert cfg.agent.name == "TestDaemonStrip"
 
     def test_default_subagents(self) -> None:
         cfg = SootheConfig()
@@ -69,7 +68,7 @@ class TestSootheConfig:
 
     def test_assistant_name_default(self) -> None:
         cfg = SootheConfig()
-        assert cfg.assistant_name == "Soothe"
+        assert cfg.agent.name == "Soothe"
 
     def test_resolve_system_prompt_default(self) -> None:
         cfg = SootheConfig()
@@ -79,13 +78,13 @@ class TestSootheConfig:
         assert "around-the-clock" in prompt
 
     def test_resolve_system_prompt_custom_name(self) -> None:
-        cfg = SootheConfig(assistant_name="MyBot")
+        cfg = SootheConfig(agent={"name": "MyBot"})
         prompt = cfg.resolve_system_prompt()
         assert "MyBot" in prompt
         assert "Soothe" not in prompt
 
     def test_resolve_system_prompt_override(self) -> None:
-        cfg = SootheConfig(system_prompt="Custom prompt here")
+        cfg = SootheConfig(agent={"system_prompt": "Custom prompt here"})
         result = cfg.resolve_system_prompt()
         assert result.startswith("Custom prompt here")
         assert "Today's date is" in result
@@ -102,12 +101,12 @@ class TestSootheConfig:
 
     def test_planner_routing_default(self) -> None:
         cfg = SootheConfig()
-        assert cfg.protocols.planner.routing == "auto"
+        assert cfg.agent.protocols.planner.routing == "auto"
 
     def test_planner_routing_options(self) -> None:
         for routing in ("auto", "always_direct", "always_planner", "always_claude"):
-            cfg = SootheConfig(protocols={"planner": {"routing": routing}})
-            assert cfg.protocols.planner.routing == routing
+            cfg = SootheConfig(agent={"protocols": {"planner": {"routing": routing}}})
+            assert cfg.agent.protocols.planner.routing == routing
 
     def test_verbosity_default(self) -> None:
         cfg = SootheConfig()
@@ -252,7 +251,7 @@ class TestModelRouter:
         """Test 'default' backend inherits from persistence.default_backend."""
         cfg = SootheConfig(
             persistence=PersistenceConfig(default_backend="postgresql"),
-            protocols=ProtocolsConfig(durability=DurabilityProtocolConfig(backend="default")),
+            agent={"protocols": {"durability": {"backend": "default"}}},
         )
         assert cfg.resolve_backend("default") == "postgresql"
         assert cfg.resolve_durability_backend() == "postgresql"
@@ -261,7 +260,7 @@ class TestModelRouter:
         """Test explicit backend overrides inheritance."""
         cfg = SootheConfig(
             persistence=PersistenceConfig(default_backend="postgresql"),
-            protocols=ProtocolsConfig(durability=DurabilityProtocolConfig(backend="sqlite")),
+            agent={"protocols": {"durability": {"backend": "sqlite"}}},
         )
         assert cfg.resolve_backend("sqlite") == "sqlite"
         assert cfg.resolve_durability_backend() == "sqlite"
@@ -270,7 +269,7 @@ class TestModelRouter:
         """Test checkpointer backend inheritance."""
         cfg = SootheConfig(
             persistence=PersistenceConfig(default_backend="postgresql"),
-            protocols=ProtocolsConfig(durability=DurabilityProtocolConfig(checkpointer="default")),
+            agent={"protocols": {"durability": {"checkpointer": "default"}}},
         )
         assert cfg.resolve_checkpointer_backend() == "postgresql"
 
@@ -478,31 +477,35 @@ class TestProtocolConfig:
     def test_memory_backend_options(self) -> None:
         """Test MemU memory backend configuration."""
         # Test enabled/disabled
-        cfg = SootheConfig(protocols={"memory": {"enabled": False}})
-        assert cfg.protocols.memory.enabled is False
+        cfg = SootheConfig(agent={"protocols": {"memory": {"enabled": False}}})
+        assert cfg.agent.protocols.memory.enabled is False
 
-        cfg = SootheConfig(protocols={"memory": {"enabled": True}})
-        assert cfg.protocols.memory.enabled is True
+        cfg = SootheConfig(agent={"protocols": {"memory": {"enabled": True}}})
+        assert cfg.agent.protocols.memory.enabled is True
 
         # Test persist_dir option
-        cfg = SootheConfig(protocols={"memory": {"persist_dir": "/custom/memory/dir"}})
-        assert cfg.protocols.memory.persist_dir == "/custom/memory/dir"
+        cfg = SootheConfig(agent={"protocols": {"memory": {"persist_dir": "/custom/memory/dir"}}})
+        assert cfg.agent.protocols.memory.persist_dir == "/custom/memory/dir"
 
         # Test LLM role configuration
         cfg = SootheConfig(
-            protocols={"memory": {"llm_chat_role": "fast", "llm_embed_role": "embedding"}}
+            agent={
+                "protocols": {"memory": {"llm_chat_role": "fast", "llm_embed_role": "embedding"}}
+            }
         )
-        assert cfg.protocols.memory.llm_chat_role == "fast"
-        assert cfg.protocols.memory.llm_embed_role == "embedding"
+        assert cfg.agent.protocols.memory.llm_chat_role == "fast"
+        assert cfg.agent.protocols.memory.llm_embed_role == "embedding"
 
     def test_combined_backend_options(self) -> None:
         """Test combined backend format for memory."""
         cfg = SootheConfig(
-            protocols={
-                "memory": {"persist_dir": "/custom/memory/dir"},
+            agent={
+                "protocols": {
+                    "memory": {"persist_dir": "/custom/memory/dir"},
+                }
             }
         )
-        assert cfg.protocols.memory.persist_dir == "/custom/memory/dir"
+        assert cfg.agent.protocols.memory.persist_dir == "/custom/memory/dir"
 
     def test_vector_store_config(self) -> None:
         """Test vector store multi-provider configuration."""

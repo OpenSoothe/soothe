@@ -36,8 +36,7 @@ def test_execute_envelope_slash_skill_skill_context_after_user_query() -> None:
         "Skill: demo\n\n"
         "Skill folder: /skills/demo\n"
         "(Additional files may live under this directory — use filesystem tools to "
-        "read them when SKILL.md is not sufficient.)\n\n"
-        + ("body line\n" * 5)
+        "read them when SKILL.md is not sufficient.)\n\n" + ("body line\n" * 5)
     )
     envelope = build_execute_step_envelope(
         "Run the planned step",

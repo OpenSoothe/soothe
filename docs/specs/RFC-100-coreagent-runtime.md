@@ -1,33 +1,34 @@
-# RFC-100: Layer 1 - CoreAgent Runtime Architecture
+# RFC-100: CoreAgent Runtime Architecture
 
 **RFC**: 100
-**Title**: Layer 1: CoreAgent Runtime Architecture
+**Title**: CoreAgent Runtime Architecture
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-03-29
+**Updated**: 2026-05-26
 **Dependencies**: RFC-000, RFC-001
 
 ## Abstract
 
-This RFC defines Layer 1 of Soothe's three-layer execution architecture: the CoreAgent runtime built on `create_soothe_agent()` factory. CoreAgent provides a CompiledStateGraph with built-in tools, subagents, and middlewares, executing through LangGraph's Model → Tools → Model loop. It serves as the execution foundation for Layer 2's ACT phase and direct CLI/daemon usage.
+This RFC defines CoreAgent, the foundational runtime of Soothe's execution architecture. Built on the `create_soothe_agent()` factory, CoreAgent provides a CompiledStateGraph with built-in tools, subagents, and middlewares, executing through LangGraph's Model → Tools → Model loop. It serves as the execution foundation for AgentLoop's ACT phase and direct CLI/daemon usage.
 
 ## Architecture Position
 
-### Three-Layer Model
+### Three-Level Execution Model
 
 ```
-Layer 3: Autonomous Goal Management (RFC-200) → Layer 2 (PERFORM stage)
-Layer 2: Agentic Goal Execution (RFC-200) → Layer 1 (ACT phase)
-Layer 1: CoreAgent Runtime (this RFC) → Tools/Subagents
+GoalEngine: Autonomous Goal Management (RFC-200) → AgentLoop (PERFORM stage)
+AgentLoop: Agentic Goal Execution (RFC-200) → CoreAgent (ACT phase)
+CoreAgent: Runtime (this RFC) → Tools/Subagents
 ```
 
-**Layer 1 Responsibilities**: CoreAgent factory (`create_soothe_agent()` → CompiledStateGraph), built-in capabilities (tools, subagents, MCP, middlewares), execution engine (LangGraph loop), thread management, middleware integration, protocol attachments, Layer 2 integration.
+**CoreAgent Responsibilities**: CoreAgent factory (`create_soothe_agent()` → CompiledStateGraph), built-in capabilities (tools, subagents, MCP, middlewares), execution engine (LangGraph loop), thread management, middleware integration, protocol attachments, AgentLoop integration.
 
-### Layer Integration
+### Level Integration
 
-**Layer 2 → Layer 1**: Sequential execution `await core_agent.astream(input, config={"thread_id": tid})`, parallel execution `asyncio.gather([astream(step, thread_id=tid)])` (note: RFC-207 simplifies to single thread_id for all executions).
+**AgentLoop → CoreAgent**: Sequential execution `await core_agent.astream(input, config={"thread_id": tid})`, parallel execution `asyncio.gather([astream(step, thread_id=tid)])` (note: RFC-207 simplifies to single thread_id for all executions).
 
-**CoreAgent Usage**: Foundation for Layer 2 ACT phase, CLI direct usage, daemon queries, subagent tool calls.
+**CoreAgent Usage**: Foundation for AgentLoop ACT phase, CLI direct usage, daemon queries, subagent tool calls.
 
 ## CoreAgent Factory
 
@@ -36,7 +37,7 @@ Layer 1: CoreAgent Runtime (this RFC) → Tools/Subagents
 ```python
 def create_soothe_agent(config: SootheConfig) -> CompiledStateGraph:
     """
-    Factory that creates Soothe's CoreAgent runtime (Layer 1).
+    Factory that creates Soothe's CoreAgent runtime.
 
     Assembles: Tools, Subagents, MCP servers, Middlewares, Protocol instances.
 
@@ -89,7 +90,7 @@ Single thread context: `astream(input, config={"thread_id": "tid"})`. Shared con
 
 Concurrent execution: `asyncio.gather([astream(step, thread_id=tid) for step in steps])`. All steps use parent thread_id, langgraph handles concurrent message queue safely.
 
-**Thread Naming** (RFC-207 simplified): Parent `thread-123`, goals `thread-123__goal_id` (for Layer 3). No manual step thread suffixes.
+**Thread Naming** (RFC-207 simplified): Parent `thread-123`, goals `thread-123__goal_id` (for GoalEngine). No manual step thread suffixes.
 
 ## Built-in Capabilities
 
@@ -127,11 +128,11 @@ Protocol instances attached to CompiledStateGraph: `agent.soothe_context`, `agen
 
 **Usage**: Tools/middlewares access protocols via `state["agent"].soothe_*`.
 
-## Layer 2 Integration Contract
+## AgentLoop Integration Contract
 
 ### Execution Hints
 
-Layer 2 passes advisory hints via `config.configurable`:
+AgentLoop passes advisory hints via `config.configurable`:
 
 | Hint | Purpose | Example |
 |------|---------|---------|
@@ -142,7 +143,7 @@ Layer 2 passes advisory hints via `config.configurable`:
 
 **Example**:
 ```python
-# Layer 2 decision
+# AgentLoop decision
 decision = AgentDecision(
     steps=[StepAction(description="Find config files", subagent="explore", expected_output="Matching paths")]
 )
@@ -162,9 +163,9 @@ await core_agent.astream(
 
 ### Responsibility Split
 
-**Layer 2 Controls**: What to execute (step content), when to execute (timing), how to sequence (parallel/sequential/dependency), thread isolation.
+**AgentLoop Controls**: What to execute (step content), when to execute (timing), how to sequence (parallel/sequential/dependency), thread isolation.
 
-**Layer 1 Handles**: How to execute (tool sequencing within turn), middleware application, thread state, tool/subagent orchestration.
+**CoreAgent Handles**: How to execute (tool sequencing within turn), middleware application, thread state, tool/subagent orchestration.
 
 ## Implementation
 
@@ -197,16 +198,16 @@ mcp_servers:
 ## Changelog
 
 ### 2026-03-29
-- Initial RFC establishing Layer 1 foundation
+- Initial RFC establishing CoreAgent foundation
 - Documented CoreAgent architecture, execution interface, thread model, capabilities
-- Specified protocol attachments and Layer 2 integration with execution hints
+- Specified protocol attachments and AgentLoop integration with execution hints
 
 ## References
 
 - RFC-000: System conceptual design
 - RFC-001: Core modules architecture
-- RFC-200: Layer 3 autonomous goal management
-- RFC-200: Layer 2 agentic goal execution
+- RFC-200: GoalEngine autonomous goal management
+- RFC-200: AgentLoop agentic goal execution
 - RFC-601: Skillify subagent
 - RFC-601: Weaver subagent
 - RFC-101: Tool interface
@@ -214,4 +215,4 @@ mcp_servers:
 
 ---
 
-*Layer 1 CoreAgent runtime providing execution foundation through LangGraph Model → Tools → Model loop.*
+*CoreAgent runtime providing execution foundation through LangGraph Model → Tools → Model loop.*
