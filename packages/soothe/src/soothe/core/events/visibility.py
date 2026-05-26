@@ -6,11 +6,20 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.core.types import VerbosityLevel
 from soothe_sdk.core.verbosity import VerbosityTier, should_show
+from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
 
 if TYPE_CHECKING:
     from soothe.core.events import EventMeta
 
 _INTERNAL_PREFIX = "soothe.internal."
+
+# Catalog or wire event types always delivered inside ``type: event`` envelopes.
+_ALWAYS_CLIENT_WIRE_INNER_TYPES = frozenset(
+    {
+        TOOL_CALL_UPDATES_BATCH,
+        STREAM_TOOL_CALL_UPDATE,
+    }
+)
 
 # Wire envelopes that are always delivered (protocol/control, not catalog-gated).
 _ALWAYS_CLIENT_WIRE_TOP_TYPES = frozenset(
@@ -18,7 +27,7 @@ _ALWAYS_CLIENT_WIRE_TOP_TYPES = frozenset(
         "status",
         "error",
         "command_response",
-        "tool_call_updates_batch",
+        TOOL_CALL_UPDATES_BATCH,
         "event_batch",
         "replay_complete",
         "loop_reattached",
@@ -89,6 +98,8 @@ def is_client_wire_visible(
         return True
     wire_type = event_type_from_wire_message(msg)
     if not wire_type:
+        return True
+    if wire_type in _ALWAYS_CLIENT_WIRE_INNER_TYPES:
         return True
     return is_catalog_event_client_wire_visible(wire_type, event_meta)
 
