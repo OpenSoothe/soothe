@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from soothe_sdk.core.events import SootheEvent
+from soothe_sdk.core.verbosity import VerbosityTier
+from soothe_sdk.ux.classification import classify_event_to_tier
+from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
+
 from soothe.core.events import EventMeta
 from soothe.core.events.visibility import (
     event_type_from_wire_message,
@@ -9,10 +14,6 @@ from soothe.core.events.visibility import (
     is_client_broadcast_event_type,
     is_client_wire_visible,
 )
-from soothe_sdk.core.events import SootheEvent
-from soothe_sdk.core.verbosity import VerbosityTier
-from soothe_sdk.ux.classification import classify_event_to_tier
-from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
 
 
 def test_internal_types_not_broadcast() -> None:
@@ -34,9 +35,7 @@ def test_event_type_from_wire_message_custom() -> None:
 
 
 def test_verbose_catalog_events_not_client_wire_visible() -> None:
-    assert (
-        is_catalog_event_client_wire_visible("soothe.lifecycle.loop.checkpoint_saved") is False
-    )
+    assert is_catalog_event_client_wire_visible("soothe.lifecycle.loop.checkpoint_saved") is False
     assert is_catalog_event_client_wire_visible("soothe.cognition.agent_loop.started") is True
 
 

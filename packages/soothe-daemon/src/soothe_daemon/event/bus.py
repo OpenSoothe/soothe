@@ -133,9 +133,7 @@ class EventBus:
                 topic,
                 interval=_DROP_LOG_INTERVAL_SEC,
             ):
-                wire_type = (
-                    event.get("type") if isinstance(event, dict) else None
-                )
+                wire_type = event.get("type") if isinstance(event, dict) else None
                 logger.warning(
                     "No subscribers for topic %s; dropping event (type=%s)",
                     topic,

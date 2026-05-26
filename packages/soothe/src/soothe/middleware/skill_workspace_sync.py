@@ -7,9 +7,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware.types import AgentMiddleware
+from langchain_core.messages import HumanMessage
 
 from soothe.core.workspace.tool_path_resolution import filesystem_virtual_mode_from_soothe_config
-from soothe.skills.workspace_sync import sync_external_skills_to_workspace
+from soothe.skills.catalog import parse_slash_skill_user_line
+from soothe.skills.workspace_sync import (
+    sync_external_skills_to_workspace,
+    sync_specific_skill_to_workspace,
+)
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentState
@@ -35,10 +40,15 @@ class SkillWorkspaceSyncMiddleware(AgentMiddleware):
 
     async def abefore_agent(
         self,
-        state: AgentState,  # noqa: ARG002
+        state: AgentState,
         runtime: Runtime,  # noqa: ARG002
     ) -> dict[str, Any] | None:
-        """Mirror external skills when virtual mode and workspace are configured."""
+        """Mirror external skills when virtual mode and workspace are configured.
+
+        If the first human message contains a ``/skill:<name>`` invocation,
+        only that specific skill is mirrored. Otherwise, all external skills
+        are mirrored (backward-compatible behavior).
+        """
         if not filesystem_virtual_mode_from_soothe_config(self._config):
             return None
 
@@ -59,11 +69,47 @@ class SkillWorkspaceSyncMiddleware(AgentMiddleware):
             return None
 
         ws = Path(str(workspace)).expanduser().resolve()
-        mirrored = sync_external_skills_to_workspace(self._config, ws)
-        if mirrored:
-            logger.info(
-                "[SkillSync] Mirrored %d external skill(s) under %s",
-                len(mirrored),
-                ws / ".soothe" / "skills",
-            )
+
+        # Try to extract skill name from the first human message
+        skill_name = self._extract_skill_name_from_state(state)
+
+        if skill_name:
+            # Targeted sync: only sync the addressed skill
+            mirrored_path = sync_specific_skill_to_workspace(self._config, ws, skill_name)
+            if mirrored_path:
+                logger.info(
+                    "[SkillSync] Mirrored skill '%s' to %s",
+                    skill_name,
+                    mirrored_path,
+                )
+        else:
+            # Fall back to syncing all external skills
+            mirrored = sync_external_skills_to_workspace(self._config, ws)
+            if mirrored:
+                logger.info(
+                    "[SkillSync] Mirrored %d external skill(s) under %s",
+                    len(mirrored),
+                    ws / ".soothe" / "skills",
+                )
+        return None
+
+    def _extract_skill_name_from_state(self, state: AgentState) -> str | None:
+        """Extract skill name from the first human message if it's a /skill: invocation.
+
+        Args:
+            state: Agent state containing messages.
+
+        Returns:
+            Skill name if the first human message is a ``/skill:<name>`` line,
+            otherwise ``None``.
+        """
+        messages = state.get("messages", [])
+        for msg in messages:
+            if isinstance(msg, HumanMessage):
+                content = msg.content
+                if isinstance(content, str):
+                    parsed = parse_slash_skill_user_line(content)
+                    if parsed is not None:
+                        return parsed[0]  # skill_name (lowercased)
+                break  # Only check first human message
         return None

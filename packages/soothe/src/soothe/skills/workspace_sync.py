@@ -165,3 +165,70 @@ def sync_external_skills_to_workspace(
         mirrored[skill_name] = str(dest)
         logger.debug("Mirrored skill %s: %s -> %s", skill_name, src, dest)
     return mirrored
+
+
+def sync_specific_skill_to_workspace(
+    config: SootheConfig,
+    workspace: str | Path,
+    skill_name: str,
+) -> Path | None:
+    """Mirror a single external skill into ``<workspace>/.soothe/skills/<skill_name>``.
+
+    Built-in package skills are not copied. Skills already under the workspace are
+    skipped. Returns ``None`` if the skill is not found, is built-in, or is already
+    under the workspace.
+
+    Args:
+        config: Active Soothe configuration.
+        workspace: Workspace root for the current run.
+        skill_name: Name of the skill to sync.
+
+    Returns:
+        Resolved path to the mirrored skill directory, or ``None`` if the skill
+        was not mirrored (not found, built-in, or already in workspace).
+    """
+    from soothe.skills.catalog import resolve_skill_directory
+
+    ws = Path(workspace).expanduser().resolve()
+
+    # Resolve the skill to get its metadata and path
+    meta = resolve_skill_directory(config, skill_name, str(ws))
+    if meta is None:
+        logger.debug("Skill %s not found; skipping sync", skill_name)
+        return None
+
+    # Get the source path from metadata
+    path_str = meta.get("path")
+    if not path_str:
+        logger.debug("Skill %s has no path; skipping sync", skill_name)
+        return None
+
+    src = Path(path_str).expanduser().resolve()
+
+    # Skip built-in skills (reference text is inlined in prompts)
+    if is_builtin_skill_directory(path_str):
+        logger.debug("Skill %s is built-in; skipping sync", skill_name)
+        return None
+
+    # Skip skills already under the workspace
+    if is_path_under_workspace(src, ws):
+        logger.debug("Skill %s is already under workspace; skipping sync", skill_name)
+        return None
+
+    # Skip if not a valid directory
+    if not src.is_dir():
+        logger.debug("Skill %s source is not a directory: %s", skill_name, src)
+        return None
+
+    try:
+        dest = sync_skill_directory_to_workspace(src, ws, skill_name=skill_name)
+        logger.debug("Mirrored skill %s: %s -> %s", skill_name, src, dest)
+        return dest
+    except OSError:
+        logger.warning(
+            "Failed to mirror skill %s from %s into workspace",
+            skill_name,
+            src,
+            exc_info=True,
+        )
+        return None
