@@ -11,6 +11,8 @@ from soothe.core.events.visibility import (
 )
 from soothe_sdk.core.events import SootheEvent
 from soothe_sdk.core.verbosity import VerbosityTier
+from soothe_sdk.ux.classification import classify_event_to_tier
+from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
 
 
 def test_internal_types_not_broadcast() -> None:
@@ -41,6 +43,44 @@ def test_verbose_catalog_events_not_client_wire_visible() -> None:
 def test_status_running_always_client_wire_visible() -> None:
     msg = {"type": "status", "state": "running", "loop_id": "loop-1"}
     assert is_client_wire_visible(msg) is True
+
+
+def test_stream_tool_wire_events_client_visible_at_normal_verbosity() -> None:
+    assert classify_event_to_tier(TOOL_CALL_UPDATES_BATCH) == VerbosityTier.NORMAL
+    assert classify_event_to_tier(STREAM_TOOL_CALL_UPDATE) == VerbosityTier.NORMAL
+
+    batch_msg = {
+        "type": "event",
+        "loop_id": "loop-1",
+        "namespace": [],
+        "mode": "custom",
+        "data": {
+            "type": TOOL_CALL_UPDATES_BATCH,
+            "updates": [
+                {
+                    "type": STREAM_TOOL_CALL_UPDATE,
+                    "tool_call_id": "tc-1",
+                    "name": "run_command",
+                    "args": {"command": "ls"},
+                }
+            ],
+        },
+    }
+    assert is_client_wire_visible(batch_msg) is True
+
+    update_msg = {
+        "type": "event",
+        "loop_id": "loop-1",
+        "namespace": [],
+        "mode": "custom",
+        "data": {
+            "type": STREAM_TOOL_CALL_UPDATE,
+            "tool_call_id": "tc-1",
+            "name": "task",
+            "args": {"description": "explore repo"},
+        },
+    }
+    assert is_client_wire_visible(update_msg) is True
 
 
 def test_debug_tier_catalog_event_not_client_wire_visible() -> None:
