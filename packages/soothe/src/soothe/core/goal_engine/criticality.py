@@ -202,18 +202,42 @@ async def evaluate_criticality_async(
     *,
     use_llm: bool = False,
     model: BaseChatModel | None = None,
+    use_semantic: bool | None = None,
+    semantic_config: Any | None = None,
+    soothe_config: Any | None = None,
+    context: str | None = None,
 ) -> CriticalityResult:
     """Async version of ``evaluate_criticality`` with full LLM support.
 
     Args:
         description: Goal description text.
         priority: Goal priority (0-100).
-        use_llm: Whether to apply LLM-based evaluation.
-        model: Chat model for LLM evaluation. Required when use_llm=True.
+        use_llm: Whether to apply LLM-based evaluation (legacy path when semantic disabled).
+        model: Chat model for LLM evaluation. Required when use_llm=True or semantic enabled.
+        use_semantic: When True, use semantic risk classifier (IG-433). When None, follows
+            ``semantic_config.enabled`` if config is provided.
+        semantic_config: Semantic risk settings from ``optimization.semantic_risk``.
+        soothe_config: Top-level config for Langfuse tracing.
+        context: Optional context (workspace path, user info) for risk prompt.
 
     Returns:
         CriticalityResult with level, reasons, and confirmation flag.
     """
+    from soothe.config.models import SemanticRiskConfig
+    from soothe.core.goal_engine.semantic_risk_classifier import evaluate_criticality_semantic
+
+    if use_semantic is True or (use_semantic is None and semantic_config is not None):
+        sem_cfg = semantic_config or SemanticRiskConfig()
+        if sem_cfg.enabled and model is not None:
+            return await evaluate_criticality_semantic(
+                description,
+                priority,
+                model=model,
+                config=sem_cfg,
+                soothe_config=soothe_config,
+                context=context,
+            )
+
     reasons: list[str] = []
     desc_lower = description.lower()
 

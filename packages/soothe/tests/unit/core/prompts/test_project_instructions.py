@@ -55,8 +55,7 @@ def test_envelopes_embed_project_instructions_in_context_info() -> None:
         "</project_instructions>"
     )
     execute = build_execute_step_envelope(
-        goal="g",
-        step_description="step",
+        "step",
         project_instructions=snippet,
     )
     plan = build_plan_context_envelope(

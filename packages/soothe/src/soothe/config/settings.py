@@ -11,10 +11,7 @@ from pydantic_settings import BaseSettings
 
 from soothe.config.env import _resolve_env, _resolve_provider_env
 from soothe.config.models import (
-    AgentLoopConfig,
-    AutonomousConfig,
-    AutopilotConfig,
-    CodeInterpreterConfig,
+    AgentConfig,
     ConsoleLoggingConfig,
     FilesystemMiddlewareConfig,
     GlobalHistoryConfig,
@@ -23,9 +20,9 @@ from soothe.config.models import (
     ModelRole,
     ModelRouter,
     ObservabilityConfig,
+    OptimizationConfig,
     PersistenceConfig,
     PluginConfig,
-    ProtocolsConfig,
     ReportOutputConfig,
     SecurityConfig,
     SubagentConfig,
@@ -94,7 +91,7 @@ class SootheConfigLoggingView:
 
     @property
     def report_output(self) -> ReportOutputConfig:
-        return self._cfg.agent_loop.report_output
+        return self._cfg.agent.loop.report_output
 
     @property
     def level(self) -> str:
@@ -140,13 +137,10 @@ class SootheConfig(BaseSettings):
     embedding_dims: int = 1536
     """Embedding vector dimensions. Must match the embedding model output."""
 
-    # --- Agent behaviour ---
+    # --- Agent behaviour (unified) ---
 
-    assistant_name: str = "Soothe"
-    """Display name for the assistant identity in system prompts."""
-
-    system_prompt: str | None = None
-    """System prompt override. When ``None``, a default prompt is generated using ``assistant_name``."""
+    agent: AgentConfig = Field(default_factory=AgentConfig)
+    """Unified agent configuration (IG-434): identity, behavior, autonomous, loop, protocols."""
 
     subagents: dict[str, SubagentConfig] = Field(default_factory=dict)
     """Subagent name to config mapping. Set ``enabled: false`` to disable.
@@ -171,7 +165,7 @@ class SootheConfig(BaseSettings):
     @model_validator(mode="before")
     @classmethod
     def _merge_top_level_logging_yaml(cls, data: Any) -> Any:
-        """Fold top-level ``logging:`` YAML into ``observability`` and ``agent_loop.report_output``."""
+        """Fold top-level ``logging:`` YAML into ``observability`` and ``agent.loop.report_output``."""
         if not isinstance(data, dict):
             return data
         logging_block = data.pop("logging", None)
@@ -199,11 +193,13 @@ class SootheConfig(BaseSettings):
         data["observability"] = obs
         ro = logging_block.get("report_output")
         if isinstance(ro, dict):
-            agent_loop = dict(data.get("agent_loop") or {})
-            prev_ro = agent_loop.get("report_output")
+            agent = dict(data.get("agent") or {})
+            loop = dict(agent.get("loop") or {})
+            prev_ro = loop.get("report_output")
             merged_ro = {**(prev_ro if isinstance(prev_ro, dict) else {}), **ro}
-            agent_loop["report_output"] = merged_ro
-            data["agent_loop"] = agent_loop
+            loop["report_output"] = merged_ro
+            agent["loop"] = loop
+            data["agent"] = agent
         return data
 
     @model_validator(mode="after")
@@ -274,33 +270,19 @@ class SootheConfig(BaseSettings):
     persistence: PersistenceConfig = Field(default_factory=PersistenceConfig)
     """Unified persistence settings for all backends."""
 
-    protocols: ProtocolsConfig = Field(default_factory=ProtocolsConfig)
-    """Protocol backends configuration."""
-
-    autonomous: AutonomousConfig = Field(default_factory=AutonomousConfig)
-    """Autonomous operation configuration."""
-
-    agent_loop: AgentLoopConfig = Field(default_factory=AgentLoopConfig)
-    """Unified agent loop configuration (IG-407: merges agentic + execution)."""
-
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     """Unified observability configuration for debugging and monitoring."""
 
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     """Security policy configuration."""
 
-    """Human-in-the-loop tool approval configuration."""
-
     filesystem_middleware: FilesystemMiddlewareConfig = Field(
         default_factory=FilesystemMiddlewareConfig
     )
     """Filesystem middleware configuration."""
 
-    code_interpreter: CodeInterpreterConfig = Field(default_factory=CodeInterpreterConfig)
-    """Code interpreter middleware configuration (IG-423)."""
-
-    autopilot: AutopilotConfig = Field(default_factory=AutopilotConfig)
-    """Autopilot mode configuration (RFC-204)."""
+    optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
+    """Semantic optimization for risk and relationship heuristics (IG-433)."""
 
     # --- Vector store config ---
 
@@ -856,8 +838,8 @@ class SootheConfig(BaseSettings):
         now = dt.datetime.now(dt.UTC).astimezone()
         current_date = now.strftime("%Y-%m-%d")
 
-        base_prompt = self.system_prompt or _DEFAULT_SYSTEM_PROMPT.format(
-            assistant_name=self.assistant_name
+        base_prompt = self.agent.system_prompt or _DEFAULT_SYSTEM_PROMPT.format(
+            assistant_name=self.agent.name
         )
 
         return f"{base_prompt}\n\nToday's date is {current_date}."

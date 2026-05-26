@@ -105,7 +105,7 @@ async def node_execute(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[
     step_desc = {s.id: s.description for s in decision.steps}
     run_executor = Executor(
         agent_loop.core_agent,
-        max_parallel_steps=agent_loop.config.agent_loop.limits.max_parallel_steps,
+        max_parallel_steps=agent_loop.config.agent.loop.limits.max_parallel_steps,
         config=agent_loop.config,
         goal_context_manager=goal_context_manager,
         loop_id=ctx.state_manager.loop_id,

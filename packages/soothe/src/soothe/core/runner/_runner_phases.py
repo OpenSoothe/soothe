@@ -450,7 +450,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 )
             else:
                 thread_info = await self._durability.create_thread(
-                    ThreadMetadata(policy_profile=self._config.protocols.policy.profile),
+                    ThreadMetadata(policy_profile=self._config.agent.protocols.policy.profile),
                 )
                 yield _custom(
                     LoopCreatedEvent(
@@ -462,7 +462,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
             logger.debug("Thread resume failed, creating a new thread", exc_info=True)
             try:
                 thread_info = await self._durability.create_thread(
-                    ThreadMetadata(policy_profile=self._config.protocols.policy.profile),
+                    ThreadMetadata(policy_profile=self._config.agent.protocols.policy.profile),
                 )
                 yield _custom(
                     LoopCreatedEvent(
@@ -513,7 +513,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 logger.debug("Policy check failed", exc_info=True)
 
         skip_memory_for_simple = getattr(
-            self._config.agent_loop, "skip_memory_recall_for_simple", True
+            self._config.agent.loop, "skip_memory_recall_for_simple", True
         )
         should_run_memory = (not skip_memory_for_simple) or complexity in (
             "medium",

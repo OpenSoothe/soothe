@@ -69,8 +69,7 @@ class TestExecutionHintsEnvelopeIntegration:
         hints = _execution_hints_text(subagent="tacitus", expected_output="Page summary")
         assert hints is not None
         envelope = build_execute_step_envelope(
-            goal="Test goal",
-            step_description="Open the page",
+            "Open the page",
             execution_hints=hints,
         )
         assert "<EXECUTION_HINTS>" in envelope
@@ -89,8 +88,7 @@ class TestExecutionHintsEnvelopeIntegration:
         hints = _execution_hints_text(subagent=None, expected_output="File contents")
         assert hints is not None
         envelope = build_execute_step_envelope(
-            goal=None,
-            step_description="Read file",
+            "Read file",
             execution_hints=hints,
         )
         assert "<EXECUTION_HINTS>" in envelope
@@ -100,8 +98,7 @@ class TestExecutionHintsEnvelopeIntegration:
     def test_envelope_omits_hints_block_when_empty(self) -> None:
         """No step metadata → no <EXECUTION_HINTS> section."""
         envelope = build_execute_step_envelope(
-            goal="G",
-            step_description="Plain step",
+            "Plain step",
             execution_hints=None,
         )
         assert "<EXECUTION_HINTS>" not in envelope

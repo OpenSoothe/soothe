@@ -46,6 +46,8 @@ def reflect_heuristic(
     plan: Plan,
     step_results: list[StepResult],
     goal_context: GoalContext | None = None,
+    *,
+    failure_config: Any | None = None,
 ) -> Reflection:
     """Dependency-aware heuristic reflection (RFC-0010, RFC-0007 §5.4).
 
@@ -101,7 +103,12 @@ def reflect_heuristic(
         len(direct_failed),
     )
 
-    goal_directives = _generate_prerequisite_directives(plan, direct_failed, goal_context)
+    goal_directives = _generate_prerequisite_directives(
+        plan,
+        direct_failed,
+        goal_context,
+        failure_config=failure_config,
+    )
 
     return Reflection(
         assessment=". ".join(parts),
@@ -113,10 +120,32 @@ def reflect_heuristic(
     )
 
 
+def _failure_text_indicates_prerequisite(
+    result_text: str,
+    *,
+    failure_config: Any | None = None,
+) -> bool:
+    """Return True when failure output indicates a missing prerequisite."""
+    from soothe.config.models import FailureIntentConfig
+    from soothe.core.loop.utils.failure_intent_classifier import (
+        classify_failure_intent_keyword,
+        is_missing_prerequisite_intent,
+    )
+
+    cfg = failure_config if failure_config is not None else FailureIntentConfig(enabled=False)
+    if cfg.enabled:
+        intent = classify_failure_intent_keyword(result_text)
+        return is_missing_prerequisite_intent(intent)
+
+    return any(pattern in result_text.lower() for pattern in _PREREQUISITE_PATTERNS)
+
+
 def _generate_prerequisite_directives(
     plan: Plan,
     direct_failed: list[str],
     goal_context: GoalContext | None,
+    *,
+    failure_config: Any | None = None,
 ) -> list[GoalDirective]:
     """Generate goal directives for prerequisite failures (RFC-0007 §5.4).
 
@@ -132,26 +161,29 @@ def _generate_prerequisite_directives(
         if not step or not step.result:
             continue
 
-        result_lower = step.result.lower()
-        if any(pattern in result_lower for pattern in _PREREQUISITE_PATTERNS):
-            current_priority = 50
-            if goal_context.all_goals:
-                for g in goal_context.all_goals:
-                    if g.get("id") == goal_context.current_goal_id:
-                        current_priority = g.get("priority", 50)
-                        break
+        if not _failure_text_indicates_prerequisite(
+            step.result or "", failure_config=failure_config
+        ):
+            continue
 
-            directives.append(
-                GoalDirective(
-                    action="create",
-                    description=f"Resolve prerequisite for: {preview_first(step.description, 80)}",
-                    priority=min(current_priority + 10, 100),
-                    parent_id=None,
-                    depends_on=[],
-                    rationale=f"S_{step_id} failed due to missing prerequisite",
-                )
+        current_priority = 50
+        if goal_context.all_goals:
+            for g in goal_context.all_goals:
+                if g.get("id") == goal_context.current_goal_id:
+                    current_priority = g.get("priority", 50)
+                    break
+
+        directives.append(
+            GoalDirective(
+                action="create",
+                description=f"Resolve prerequisite for: {preview_first(step.description, 80)}",
+                priority=min(current_priority + 10, 100),
+                parent_id=None,
+                depends_on=[],
+                rationale=f"S_{step_id} failed due to missing prerequisite",
             )
-            break
+        )
+        break
 
     return directives
 
@@ -163,6 +195,7 @@ async def reflect_with_llm(
     goal_context: GoalContext | None = None,
     *,
     soothe_config: Any | None = None,
+    failure_config: Any | None = None,
 ) -> Reflection:
     """LLM-assisted reflection for deeper failure analysis (RFC-0007 §5.4).
 
@@ -208,7 +241,10 @@ async def reflect_with_llm(
         return _parse_reflection_response(content, plan, step_results, goal_context)
     except Exception:
         logger.debug("LLM-assisted reflection failed, falling back to heuristic", exc_info=True)
-        return reflect_heuristic(plan, step_results, goal_context)
+        fc = failure_config
+        if fc is None and soothe_config is not None and hasattr(soothe_config, "optimization"):
+            fc = soothe_config.optimization.failure_intent
+        return reflect_heuristic(plan, step_results, goal_context, failure_config=fc)
 
 
 def _build_reflection_prompt(

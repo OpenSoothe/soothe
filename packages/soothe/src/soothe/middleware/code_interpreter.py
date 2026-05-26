@@ -97,7 +97,7 @@ class CodeInterpreterMiddleware(AgentMiddleware):
         super().__init__()
         # Use config values if provided, otherwise use explicit args
         if config is not None:
-            ci_config = config.code_interpreter
+            ci_config = config.agent.code_interpreter
             self._ptc_allowlist = ci_config.ptc_allowlist
             self._memory_limit_mb = ci_config.memory_limit_mb
             self._timeout_seconds = ci_config.timeout_seconds

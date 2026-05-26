@@ -120,14 +120,14 @@ def build_soothe_middleware_stack(
         stack.append(
             SoothePolicyMiddleware(
                 policy=policy,
-                profile_name=config.protocols.policy.profile,
+                profile_name=config.agent.protocols.policy.profile,
             )
         )
         logger.debug("[Middleware] Policy enforcement enabled")
 
     # 2. Tool concurrency limit (bounds parallel tool calls per thread)
     stack.append(ToolConcurrencyMiddleware())
-    max_parallel_tools = config.agent_loop.limits.max_parallel_tools
+    max_parallel_tools = config.agent.loop.limits.max_parallel_tools
     logger.info(
         "[Middleware] Tool concurrency enabled: max_parallel_tools=%d",
         max_parallel_tools,
@@ -151,14 +151,14 @@ def build_soothe_middleware_stack(
 
     # 4. LLM rate limiting (throttles API calls, not threads)
     # This prevents thread hanging by blocking only LLM calls, not entire threads
-    rpm = config.agent_loop.limits.llm_rpm_limit
-    concurrent = config.agent_loop.limits.llm_concurrent_limit
-    timeout = config.agent_loop.limits.llm_call_timeout_seconds
-    timeout_max = config.agent_loop.limits.llm_call_timeout_max_seconds
-    timeout_adaptive = config.agent_loop.limits.llm_call_timeout_adaptive
-    retry_on_timeout = config.agent_loop.limits.llm_retry_on_timeout
-    max_timeout_retries = config.agent_loop.limits.llm_max_timeout_retries
-    timeout_retry_multiplier = config.agent_loop.limits.llm_timeout_retry_multiplier
+    rpm = config.agent.loop.limits.llm_rpm_limit
+    concurrent = config.agent.loop.limits.llm_concurrent_limit
+    timeout = config.agent.loop.limits.llm_call_timeout_seconds
+    timeout_max = config.agent.loop.limits.llm_call_timeout_max_seconds
+    timeout_adaptive = config.agent.loop.limits.llm_call_timeout_adaptive
+    retry_on_timeout = config.agent.loop.limits.llm_retry_on_timeout
+    max_timeout_retries = config.agent.loop.limits.llm_max_timeout_retries
+    timeout_retry_multiplier = config.agent.loop.limits.llm_timeout_retry_multiplier
 
     stack.append(
         LLMRateLimitMiddleware(
@@ -191,13 +191,13 @@ def build_soothe_middleware_stack(
     logger.debug("[Middleware] Execution hints enabled")
 
     # 6. Code interpreter (embedded QuickJS for programmatic tool calling)
-    if config.code_interpreter.enabled:
+    if config.agent.code_interpreter.enabled:
         from .code_interpreter import CodeInterpreterMiddleware
 
         stack.append(CodeInterpreterMiddleware(config=config))
         logger.info(
             "[Middleware] Code interpreter enabled with ptc_allowlist=%s",
-            config.code_interpreter.ptc_allowlist,
+            config.agent.code_interpreter.ptc_allowlist,
         )
     else:
         logger.debug("[Middleware] Code interpreter disabled (opt-in)")

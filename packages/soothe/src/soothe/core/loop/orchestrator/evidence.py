@@ -27,6 +27,6 @@ def validate_plan_evidence(
         True if valid or validation disabled.
     """
     del state, decision  # reserved for future ledger checks
-    if not getattr(config.agent_loop, "loop_orchestrator_evidence_validate", True):
+    if not getattr(config.agent.loop, "loop_orchestrator_evidence_validate", True):
         return True
     return True

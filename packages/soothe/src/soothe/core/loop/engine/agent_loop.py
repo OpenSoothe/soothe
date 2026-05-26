@@ -143,11 +143,13 @@ class AgentLoop:
         )
 
         goal_user_submission: str | None = None
+        skill_context: str | None = None
         execution_goal = goal
         skill_env = try_expand_slash_skill_user_line(goal, self.config)
         if skill_env is not None:
             goal_user_submission = goal
             execution_goal = skill_env.prompt
+            skill_context = skill_env.skill_context or None
         elif parse_slash_skill_user_line(goal) is not None:
             logger.warning(
                 "[AgentLoop] /skill: user line did not expand (missing skill on this host "
@@ -182,7 +184,7 @@ class AgentLoop:
         # RFC-217: Create GoalContextManager for goal-level context injection
         from soothe.config.models import GoalContextConfig
 
-        goal_context_config = getattr(self.config.agent_loop, "goal_context", GoalContextConfig())
+        goal_context_config = getattr(self.config.agent.loop, "goal_context", GoalContextConfig())
         goal_context_manager = GoalContextManager(state_manager, goal_context_config)
 
         # Try to recover from checkpoint (RFC-216: loop-scoped).
@@ -264,6 +266,7 @@ class AgentLoop:
         state = LoopState(
             goal=execution_goal,
             goal_user_submission=goal_user_submission,
+            skill_context=skill_context,
             thread_id=thread_id,
             workspace=workspace,
             git_status=git_status,
@@ -279,7 +282,7 @@ class AgentLoop:
             state.continue_thread = True  # Add flag to LoopState if it exists
             logger.debug("[AgentLoop] Continue-thread flag set for working memory enhancement")
 
-        wm_cfg = self.config.agent_loop.working_memory
+        wm_cfg = self.config.agent.loop.working_memory
         if wm_cfg.enabled:
             state.working_memory = LoopWorkingMemory(
                 thread_id=thread_id,

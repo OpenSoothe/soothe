@@ -20,9 +20,9 @@ from soothe.config.env import (
     _resolve_provider_env,
 )
 from soothe.config.models import (
+    AgentConfig,
     AgentLoopConfig,
     AutonomousConfig,
-    AutopilotConfig,
     ComplexityThresholds,
     ConsoleLoggingConfig,
     DurabilityProtocolConfig,
@@ -71,9 +71,9 @@ __all__ = [
     "_MEDIUM_SYSTEM_PROMPT",
     "_SIMPLE_SYSTEM_PROMPT",
     "_TOOL_ORCHESTRATION_GUIDE",
+    "AgentConfig",
     "AgentLoopConfig",
     "AutonomousConfig",
-    "AutopilotConfig",
     "ComplexityThresholds",
     "ConsoleLoggingConfig",
     "DurabilityProtocolConfig",

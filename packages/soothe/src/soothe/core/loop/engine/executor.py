@@ -822,7 +822,7 @@ class Executor:
         """Configured cap on root-level ``task`` tool completions (0 = unlimited)."""
         if self._config is None:
             return 0
-        return max(0, int(self._config.agent_loop.max_subagent_tasks_per_wave))
+        return max(0, int(self._config.agent.loop.max_subagent_tasks_per_wave))
 
     @staticmethod
     def _max_tool_calls_per_step() -> int:
@@ -873,7 +873,7 @@ class Executor:
 
         if self._config is None:
             return DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES
-        cap = int(self._config.agent_loop.plan_prompt_ledger.plan_ledger_max_messages)
+        cap = int(self._config.agent.loop.plan_prompt_ledger.plan_ledger_max_messages)
         if cap > 0:
             return min(cap, 256)
         return DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES
@@ -1114,7 +1114,7 @@ class Executor:
 
         # Use configurable context limit (IG-151)
         if self._config is not None:
-            context_limit = self._config.agent_loop.context_window_limit
+            context_limit = self._config.agent.loop.context_window_limit
             state.context_percentage_consumed = min(1.0, state.total_tokens_used / context_limit)
 
     async def execute(
@@ -1146,7 +1146,7 @@ class Executor:
         # Initialize tool concurrency semaphore for this thread
         max_parallel_tools = 5  # Default
         if self._config is not None:
-            max_parallel_tools = self._config.agent_loop.limits.max_parallel_tools
+            max_parallel_tools = self._config.agent.loop.limits.max_parallel_tools
         init_tool_concurrency_for_thread(max_parallel_tools)
 
         # IG-XXX: Use fast model for execute phase (tool-heavy operations)
@@ -1612,7 +1612,6 @@ class Executor:
             # Build user message envelope with execution hints (RFC-214)
             from soothe.core.prompts.user_envelope import build_execute_step_envelope
 
-            goal_for_envelope = loop_state.goal if loop_state else None
             graph_input_messages: list[BaseMessage] = []
             use_parallel_branch = (
                 stream_thread_id is not None
@@ -1656,11 +1655,10 @@ class Executor:
                 )
 
             envelope = build_execute_step_envelope(
-                goal=goal_for_envelope,
-                step_description=step.description,
+                step.description,
                 execution_hints=execution_hints,
                 project_instructions=project_instructions,
-                goal_user_submission=loop_state.goal_user_submission if loop_state else None,
+                skill_context=loop_state.skill_context if loop_state else None,
             )
             logger.debug("[Human Message Envelope] %s", log_preview(envelope, chars=150))
             human_msg = LoopHumanMessage(
@@ -1966,7 +1964,15 @@ class Executor:
                         else:
                             chunks.append(text_out)
 
-                    outcome = generate_outcome_metadata(tool_name, content, tool_call_id)
+                    tool_meta_cfg = None
+                    if self._config and hasattr(self._config, "optimization"):
+                        tool_meta_cfg = self._config.optimization.tool_result_registry
+                    outcome = generate_outcome_metadata(
+                        tool_name,
+                        content,
+                        tool_call_id,
+                        registry_config=tool_meta_cfg,
+                    )
 
                     outcomes.append(outcome)
 
@@ -2137,11 +2143,10 @@ class Executor:
                 )
 
             envelope = build_execute_step_envelope(
-                goal=state.goal,
-                step_description=step.description,
+                step.description,
                 execution_hints=execution_hints,
                 project_instructions=project_instructions if step_index == 0 else None,
-                goal_user_submission=state.goal_user_submission,
+                skill_context=state.skill_context,
             )
             msg = LoopHumanMessage(
                 content=envelope,
