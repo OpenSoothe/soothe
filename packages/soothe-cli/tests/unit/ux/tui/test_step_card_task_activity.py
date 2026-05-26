@@ -32,6 +32,22 @@ def test_no_blank_line_between_task_branch_and_main_step_tools() -> None:
     assert "scan both" in lines[list_idx - 1]
 
 
+def test_task_delegation_label_collapses_multiline_description() -> None:
+    card = CognitionStepMessage("MLN-01", "Scan", id="stp-task-multiline-desc")
+    card.add_tool_call(
+        "MLN_01:s:task:0",
+        "task",
+        {
+            "subagent_type": "explore",
+            "description": "Line one\nLine two\n  Line three",
+        },
+        is_task_row=True,
+    )
+    text = _plain(card._step_task_activity_content())
+    assert "Explore(Line one Line two Line three)" in text
+    assert "\n" not in text.split("Explore(", 1)[-1].split(")", 1)[0]
+
+
 def test_task_activity_tree_shows_name_desc_and_child_stats() -> None:
     card = CognitionStepMessage("ABC-01", "Scan workspace", id="stp-task-tree")
     card.add_tool_call(

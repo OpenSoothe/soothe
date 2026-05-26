@@ -46,6 +46,7 @@ from soothe_cli.tui.preview_limits import (
     STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD,
 )
 from soothe_cli.tui.tool_display import (
+    compact_arg_text,
     format_step_tool_activity_command,
     format_step_tool_activity_line,
     format_step_tool_activity_status_tail,
@@ -1625,9 +1626,9 @@ class CognitionStepMessage(Vertical):
         name = get_subagent_display_name(st) if st else "Task"
         desc = args.get("description") or args.get("prompt") or ""
         if isinstance(desc, str):
-            desc_text = desc.strip()
+            desc_text = compact_arg_text(desc.strip())
         else:
-            desc_text = str(desc or "").strip()
+            desc_text = compact_arg_text(str(desc or "").strip())
         if len(desc_text) > _MAX_TASK_DELEGATION_DESC_CHARS:
             desc_text = desc_text[: _MAX_TASK_DELEGATION_DESC_CHARS - 3].rstrip() + "..."
         if desc_text:
