@@ -5,11 +5,14 @@ from __future__ import annotations
 import logging
 import re
 import threading
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from soothe.subagents.tacitus.json_util import compact_search_query
 from soothe.subagents.tacitus.protocol import CapabilityId, GatherContext, SourceResult, SourceType
 from soothe.toolkits.deepxiv import resolve_deepxiv_token
+
+if TYPE_CHECKING:
+    from soothe.subagents.tacitus.protocol import TacitusConfig
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,11 @@ def _is_deepxiv_auth_error(text: str) -> bool:
 
 
 class AcademicSearchSource:
-    """Semantic academic search (DeepxivSearchTool via DeepxivToolkit)."""
+    """Semantic academic search (DeepxivSearchTool via DeepxivToolkit).
+
+    Uses PoliteHTTPClient for rate limiting and circuit breaker protection
+    when configured via TacitusConfig.
+    """
 
     capability_id: CapabilityId = "academic_search"
     capability_description: str = _CAPABILITY_DESCRIPTION
@@ -48,6 +55,100 @@ class AcademicSearchSource:
         self._load_lock = threading.Lock()
         self._auth_failed = False
         self._auth_failure_logged = False
+        self._polite_client: Any | None = None
+        self._tacitus_config: TacitusConfig | None = None
+
+    def _get_polite_client(self) -> Any | None:
+        """Get or create PoliteHTTPClient from TacitusConfig."""
+        if self._polite_client is not None:
+            return self._polite_client
+
+        # Extract TacitusConfig from SootheConfig
+        tacitus_config = self._extract_tacitus_config()
+        if tacitus_config is None:
+            return None
+
+        # Only create client if polite concurrency is enabled
+        if not tacitus_config.enable_polite_concurrency:
+            return None
+
+        from soothe.subagents.tacitus.polite_http import (
+            DomainRateLimiter,
+            PoliteHTTPClient,
+            RateLimit,
+            RateLimitConfig,
+        )
+
+        # Build rate limit config with domain overrides
+        limits: dict[str, RateLimit] = {}
+        for domain, overrides in tacitus_config.polite_domain_overrides.items():
+            limits[domain] = RateLimit(
+                rps=float(overrides.get("rps", tacitus_config.polite_rate_limit_rps)),
+                burst=int(overrides.get("burst", tacitus_config.polite_burst_size)),
+                concurrent=int(overrides.get("concurrent", tacitus_config.polite_max_concurrent)),
+            )
+
+        # Default DeepXiv rate limit
+        limits["deepxiv"] = RateLimit(
+            rps=tacitus_config.polite_rate_limit_rps,
+            burst=tacitus_config.polite_burst_size,
+            concurrent=tacitus_config.polite_max_concurrent,
+        )
+
+        rate_limit_config = RateLimitConfig(limits=limits)
+        rate_limiter = DomainRateLimiter(config=rate_limit_config)
+
+        self._polite_client = PoliteHTTPClient(
+            rate_limiter=rate_limiter,
+            max_retries=tacitus_config.polite_retry_max,
+            base_delay=tacitus_config.polite_retry_base_delay,
+            enable_circuit_breaker=True,
+            circuit_breaker_threshold=tacitus_config.polite_circuit_breaker_threshold,
+            circuit_breaker_reset_sec=tacitus_config.polite_circuit_breaker_reset_sec,
+        )
+
+        logger.debug(
+            "[Tacitus/academic] PoliteHTTPClient initialized "
+            "(rps=%.1f, burst=%d, concurrent=%d, retries=%d)",
+            tacitus_config.polite_rate_limit_rps,
+            tacitus_config.polite_burst_size,
+            tacitus_config.polite_max_concurrent,
+            tacitus_config.polite_retry_max,
+        )
+
+        return self._polite_client
+
+    def _extract_tacitus_config(self) -> TacitusConfig | None:
+        """Extract TacitusConfig from SootheConfig or direct config."""
+        if self._tacitus_config is not None:
+            return self._tacitus_config
+
+        if self._config is None:
+            return None
+
+        # Check if config is already a TacitusConfig
+        from soothe.subagents.tacitus.protocol import TacitusConfig
+
+        if isinstance(self._config, TacitusConfig):
+            self._tacitus_config = self._config
+            return self._tacitus_config
+
+        # Try to get TacitusConfig from subagents.tacitus config
+        try:
+            sub_cfg = getattr(self._config, "subagents", None)
+            if sub_cfg:
+                tacitus_subcfg = (
+                    sub_cfg.get("tacitus")
+                    if hasattr(sub_cfg, "get")
+                    else getattr(sub_cfg, "tacitus", None)
+                )
+                if tacitus_subcfg and hasattr(tacitus_subcfg, "config"):
+                    self._tacitus_config = TacitusConfig(**dict(tacitus_subcfg.config))
+                    return self._tacitus_config
+        except Exception:
+            logger.debug("[Tacitus/academic] Could not extract TacitusConfig from SootheConfig")
+
+        return None
 
     def _ensure_tools(self) -> None:
         with self._load_lock:
@@ -129,9 +230,28 @@ class AcademicSearchSource:
             return []
 
         logger.info("[Tacitus/academic] query=%r status=start backend=deepxiv", search_q)
+
+        # Get polite client for rate limiting
+        polite_client = self._get_polite_client()
+
+        async def _execute_search() -> str:
+            """Execute the search with optional polite rate limiting."""
+            if polite_client is not None:
+                # Apply rate limiting via polite client
+                await polite_client.rate_limiter.acquire("deepxiv")
+                try:
+                    result = await self._deepxiv_tool._arun(query=search_q, size=5)
+                    return str(result) if result is not None else ""
+                finally:
+                    polite_client.rate_limiter.release("deepxiv")
+            else:
+                # No rate limiting - direct call
+                result = await self._deepxiv_tool._arun(query=search_q, size=5)
+                return str(result) if result is not None else ""
+
         try:
-            raw = await self._deepxiv_tool._arun(query=search_q, size=5)
-            text = str(raw) if raw is not None else ""
+            text = await _execute_search()
+
             if text.startswith("Error"):
                 if _is_deepxiv_auth_error(text):
                     self._note_auth_failure(search_q)

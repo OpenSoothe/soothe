@@ -7,6 +7,12 @@ import re
 from typing import Any
 
 from soothe.subagents.tacitus.json_util import compact_search_query
+from soothe.subagents.tacitus.polite_http import (
+    DomainRateLimiter,
+    PoliteHTTPClient,
+    RateLimit,
+    RateLimitConfig,
+)
 from soothe.subagents.tacitus.protocol import CapabilityId, GatherContext, SourceResult, SourceType
 
 logger = logging.getLogger(__name__)
@@ -33,6 +39,63 @@ class WebSearchSource:
         self._wizsearch_tried = False
         self._tavily_tried = False
         self._ddg_tried = False
+        self._polite_client: PoliteHTTPClient | None = None
+        self._init_polite_client()
+
+    def _init_polite_client(self) -> None:
+        """Initialize polite HTTP client from config."""
+        if not self._config:
+            return
+
+        # Get TacitusConfig from subagents.tacitus if available
+        tacitus_config = None
+        if hasattr(self._config, "subagents"):
+            subagent = getattr(self._config.subagents, "tacitus", None)
+            if subagent and hasattr(subagent, "config"):
+                tacitus_config = subagent.config
+
+        if not tacitus_config:
+            return
+
+        # Check if polite concurrency is enabled
+        enable_polite = getattr(tacitus_config, "enable_polite_concurrency", True)
+        if not enable_polite:
+            logger.debug("Polite concurrency disabled for WebSearchSource")
+            return
+
+        # Build rate limit config with domain overrides
+        domain_limits: dict[str, RateLimit] = {
+            "wizsearch": RateLimit(rps=2.0, burst=5, concurrent=8),
+            "tavily": RateLimit(rps=1.0, burst=3, concurrent=5),
+            "duckduckgo": RateLimit(rps=2.0, burst=5, concurrent=10),
+        }
+
+        # Apply domain overrides from config
+        domain_overrides = getattr(tacitus_config, "polite_domain_overrides", {})
+        for domain, overrides in domain_overrides.items():
+            if domain in domain_limits:
+                domain_limits[domain] = RateLimit(
+                    rps=overrides.get("rps", domain_limits[domain].rps),
+                    burst=overrides.get("burst", domain_limits[domain].burst),
+                    concurrent=overrides.get("concurrent", domain_limits[domain].concurrent),
+                )
+
+        rate_limit_config = RateLimitConfig(limits=domain_limits)
+        rate_limiter = DomainRateLimiter(config=rate_limit_config)
+
+        self._polite_client = PoliteHTTPClient(
+            rate_limiter=rate_limiter,
+            max_retries=getattr(tacitus_config, "polite_retry_max", 3),
+            base_delay=getattr(tacitus_config, "polite_retry_base_delay", 1.0),
+            enable_circuit_breaker=True,
+            circuit_breaker_threshold=getattr(
+                tacitus_config, "polite_circuit_breaker_threshold", 5
+            ),
+            circuit_breaker_reset_sec=getattr(
+                tacitus_config, "polite_circuit_breaker_reset_sec", 60.0
+            ),
+        )
+        logger.debug("Polite HTTP client initialized for WebSearchSource")
 
     def _wizsearch_config(self) -> dict[str, Any]:
         web_search_config: dict[str, Any] = {}
@@ -92,7 +155,29 @@ class WebSearchSource:
     def source_type(self) -> SourceType:
         return "web"
 
-    async def _run_backend(self, tool: Any, query: str) -> str | None:
+    async def _run_backend(self, tool: Any, query: str, domain: str = "default") -> str | None:
+        """Run backend tool with optional polite client wrapping."""
+        # Determine the domain for rate limiting based on tool type
+        if self._polite_client and domain != "default":
+            try:
+                return await self._polite_client.request(
+                    "GET",
+                    f"https://{domain}.internal/search",
+                    domain=domain,
+                    request_func=self._execute_backend_tool,
+                    tool=tool,
+                    query=query,
+                )
+            except Exception as e:
+                logger.debug("Polite backend request failed for %s: %s", domain, e)
+                # Fall back to direct execution
+                return await self._execute_backend_tool("GET", "", tool=tool, query=query)
+        return await self._execute_backend_tool("GET", "", tool=tool, query=query)
+
+    async def _execute_backend_tool(
+        self, _method: str, _url: str, *, tool: Any, query: str
+    ) -> str | None:
+        """Execute the actual backend tool call."""
         if hasattr(tool, "_arun"):
             return await tool._arun(query)
         if hasattr(tool, "ainvoke"):
@@ -108,10 +193,7 @@ class WebSearchSource:
     async def _query_wizsearch_structured(self, search_q: str) -> list[SourceResult]:
         """Use wizsearch API directly so URLs are preserved for references."""
         try:
-            from soothe.toolkits._internal.wizsearch import (
-                _check_wizsearch_available,
-                perform_wizsearch_search,
-            )
+            from soothe.toolkits._internal.wizsearch import _check_wizsearch_available
         except ImportError:
             return []
 
@@ -119,12 +201,29 @@ class WebSearchSource:
             return []
 
         ws_cfg = self._wizsearch_config()
-        result = await perform_wizsearch_search(
-            query=search_q,
-            max_results_per_engine=ws_cfg.get("max_results_per_engine", 10),
-            timeout_seconds=ws_cfg.get("timeout", 30),
-            engines=ws_cfg.get("default_engines") or ["tavily"],
-        )
+
+        # Wrap wizsearch call with polite client if available
+        if self._polite_client:
+            try:
+                result = await self._polite_client.request(
+                    "GET",
+                    "https://wizsearch.internal/search",
+                    domain="wizsearch",
+                    request_func=self._perform_wizsearch_search,
+                    search_q=search_q,
+                    ws_cfg=ws_cfg,
+                )
+            except Exception as e:
+                logger.warning("Polite wizsearch request failed: %s", e)
+                # Fall back to direct call
+                result = await self._perform_wizsearch_search(
+                    "GET", "", search_q=search_q, ws_cfg=ws_cfg
+                )
+        else:
+            result = await self._perform_wizsearch_search(
+                "GET", "", search_q=search_q, ws_cfg=ws_cfg
+            )
+
         sources = getattr(result, "sources", []) or []
         if not sources:
             return []
@@ -157,6 +256,19 @@ class WebSearchSource:
             )
         return parsed
 
+    async def _perform_wizsearch_search(
+        self, _method: str, _url: str, *, search_q: str, ws_cfg: dict[str, Any]
+    ) -> Any:
+        """Wrapper to call perform_wizsearch_search with proper signature."""
+        from soothe.toolkits._internal.wizsearch import perform_wizsearch_search
+
+        return await perform_wizsearch_search(
+            query=search_q,
+            max_results_per_engine=ws_cfg.get("max_results_per_engine", 10),
+            timeout_seconds=ws_cfg.get("timeout", 30),
+            engines=ws_cfg.get("default_engines") or ["tavily"],
+        )
+
     async def query(self, query: str, context: GatherContext) -> list[SourceResult]:
         _ = context
         search_q = compact_search_query(query)
@@ -168,7 +280,7 @@ class WebSearchSource:
         self._ensure_wizsearch()
         if self._wizsearch_tool:
             try:
-                raw = await self._run_backend(self._wizsearch_tool, search_q)
+                raw = await self._run_backend(self._wizsearch_tool, search_q, domain="wizsearch")
                 if raw:
                     parsed = self._parse_search_output(raw, search_q)
                     if parsed:
@@ -179,7 +291,7 @@ class WebSearchSource:
         self._ensure_tavily()
         if self._tavily_tool:
             try:
-                raw = await self._run_backend(self._tavily_tool, search_q)
+                raw = await self._run_backend(self._tavily_tool, search_q, domain="tavily")
                 if raw:
                     return self._parse_plain_output(raw, "tavily", search_q)
             except Exception:
@@ -188,7 +300,7 @@ class WebSearchSource:
         self._ensure_ddg()
         if self._ddg_tool:
             try:
-                raw = await self._run_backend(self._ddg_tool, search_q)
+                raw = await self._run_backend(self._ddg_tool, search_q, domain="duckduckgo")
                 if raw:
                     return self._parse_plain_output(raw, "duckduckgo", search_q)
             except Exception:
