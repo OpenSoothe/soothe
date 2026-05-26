@@ -1,11 +1,16 @@
 # RFC-000: System Conceptual Design
 
-**RFC**: RFC-000
+**RFC**: 000
 **Title**: System Conceptual Design
 **Status**: Implemented
 **Kind**: Conceptual Design
 **Created**: 2026-03-12
+**Updated**: 2026-05-26
 **Dependencies**: -
+
+## Abstract
+
+This document defines the conceptual design for Soothe, a Goal-driven orchestration framework for building 24/7 long-running autonomous agents. Soothe extends deepagents with planning, context engineering, security policy, durability, and remote agent interop while remaining runtime-agnostic and langchain-ecosystem-friendly. The architecture is organized into three distinct execution levels: GoalEngine for autonomous goal management, AgentLoop for agentic goal execution, and CoreAgent for the foundational runtime.
 
 ## Overview
 
@@ -19,45 +24,45 @@ Soothe does not implement domain logic. It composes capabilities provided by oth
 
 ## Architectural Level
 
-### Three-Layer Execution Architecture
+### Three-Level Execution Architecture
 
-Soothe operates through a hierarchical execution model with three distinct layers:
+Soothe operates through a hierarchical execution model with three distinct levels:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 3: Autonomous Goal Management (RFC-200)               │
+│ GoalEngine: Autonomous Goal Management (RFC-200)            │
 │ • Scope: Long-running complex workflows, multi-goal DAGs      │
 │ • Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update       │
-│ • Delegation: PERFORM invokes Layer 2's full loop             │
+│ • Delegation: PERFORM invokes AgentLoop's full loop          │
 └─────────────────────────────────────────────────────────────┘
                           ↓ PERFORM (full delegation)
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 2: Agentic Goal Execution (RFC-201)                 │
+│ AgentLoop: Agentic Goal Execution (RFC-201)                 │
 │ • Scope: Single-goal execution through iterative refinement   │
 │ • Loop: Plan → Execute (max iterations: ~8)                  │
-│ • Delegation: EXECUTE invokes Layer 1 CoreAgent for execution │
+│ • Delegation: EXECUTE invokes CoreAgent for execution         │
 └─────────────────────────────────────────────────────────────┘
                           ↓ EXECUTE (step execution)
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 1: CoreAgent Runtime (RFC-100)                        │
+│ CoreAgent: Runtime (RFC-100)                                │
 │ • Foundation: create_soothe_agent() → CompiledStateGraph     │
 │ • Execution: Model → Tools → Model loop (LangGraph native)   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Layer Relationships**:
-- **Layer 3** manages goal DAGs, delegates single-goal execution to Layer 2
-- **Layer 2** executes single goals through iterative Plan → Execute, delegates steps to Layer 1
-- **Layer 1** provides CoreAgent runtime for tool/subagent execution
+**Level Relationships**:
+- **GoalEngine** manages goal DAGs, delegates single-goal execution to AgentLoop
+- **AgentLoop** executes single goals through iterative Plan → Execute, delegates steps to CoreAgent
+- **CoreAgent** provides the foundational runtime for tool/subagent execution
 
 ### Framework Stack
 
 ```
 +------------------------------------------------------+
 |  Soothe (orchestration framework)                    |
-|  - Layer 3: Autonomous Goal Management               |
-|  - Layer 2: Agentic Goal Execution                   |
-|  - Layer 1: CoreAgent Runtime                        |
+|  - GoalEngine: Autonomous Goal Management            |
+|  - AgentLoop: Agentic Goal Execution                 |
+|  - CoreAgent: Runtime                                |
 |  - ContextProtocol, MemoryProtocol,                  |
 |    PlannerProtocol, PolicyProtocol,                  |
 |    DurabilityProtocol                                |
@@ -95,9 +100,9 @@ Soothe operates through a hierarchical execution model with three distinct layer
 
 10. **Graceful degradation** -- Step-level failure handling (mark failed, try next, revise plan), LLM content-policy fallbacks, and configurable retry. Partial results over hard failure.
 
-11. **Three-layer execution architecture** -- Soothe operates through three distinct layers: Layer 3 (autonomous goal management), Layer 2 (agentic goal execution), and Layer 1 (CoreAgent runtime). Each layer has distinct responsibilities, clear delegation boundaries, and explicit integration contracts. Higher layers delegate to lower layers through well-defined interfaces.
+11. **Three-level execution architecture** -- Soothe operates through three distinct levels: GoalEngine (autonomous goal management), AgentLoop (agentic goal execution), and CoreAgent (foundational runtime). Each level has distinct responsibilities, clear delegation boundaries, and explicit integration contracts. Higher levels delegate to lower levels through well-defined interfaces.
 
-12. **Architectural component isolation** -- Each layer maintains clear architectural component boundaries: AgentLoop is Layer 2 Plan → Execute loop runner (not consciousness), ContextProtocol is the consciousness (unbounded knowledge ledger with bounded projections), GoalEngine manages goal lifecycle. These are separate architectural components with distinct ownership boundaries. Consciousness lives in ContextProtocol, not in AgentLoop or GoalEngine. This separation prevents confusion from design brainstorming sessions that assign consciousness to AgentLoop. **See also**: RFC-201 §50-60 (AgentLoop role clarification), RFC-201 §61-66 (retrieval authority clarification), RFC-001 §14-47 (ContextProtocol consciousness concept).
+12. **Architectural component isolation** -- Each level maintains clear architectural component boundaries: AgentLoop is the Plan → Execute loop runner (not consciousness), ContextProtocol is the consciousness (unbounded knowledge ledger with bounded projections), GoalEngine manages goal lifecycle. These are separate architectural components with distinct ownership boundaries. Consciousness lives in ContextProtocol, not in AgentLoop or GoalEngine. This separation prevents confusion from design brainstorming sessions that assign consciousness to AgentLoop. **See also**: RFC-201 §50-60 (AgentLoop role clarification), RFC-201 §61-66 (retrieval authority clarification), RFC-001 §14-47 (ContextProtocol consciousness concept).
 
 ## Core Abstractions
 
@@ -172,7 +177,7 @@ Controls parallel execution of plan steps, subagents, and tools. Steps declare d
 11. MCP session lifecycle is managed alongside thread lifecycle (created on thread start, cleaned up on suspend/archive).
 12. Plan state and context ledger survive thread suspend/resume via `DurabilityProtocol`.
 13. All protocol implementations are swappable via `SootheConfig`.
-14. Layer 2 (AgentLoop) and Layer 1 (CoreAgent) have independent persistence systems: Layer 2 uses DurabilityProtocol + ContextProtocol persistence, Layer 1 uses LangGraph checkpointer. This dual persistence architecture ensures architectural isolation and enables Layer 2 recovery without Layer 1 dependency.
+14. AgentLoop and CoreAgent have independent persistence systems: AgentLoop uses DurabilityProtocol + ContextProtocol persistence, CoreAgent uses LangGraph checkpointer. This dual persistence architecture ensures architectural isolation and enables AgentLoop recovery without CoreAgent dependency.
 
 ## Appendix A: Cross-domain analogies (non-normative)
 
@@ -209,8 +214,8 @@ This is the foundational Conceptual Design spec. All subsequent Architecture Des
 
 - [RFC Standard](./rfc-standard.md) - Specification kinds and process
 - [RFC Index](./rfc-index.md) - All RFCs
-- [RFC-200](./RFC-200-autonomous-goal-management.md) - Layer 3: Autonomous Goal Management
-- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - Layer 2: AgentLoop Plan-Execute Loop
+- [RFC-200](./RFC-200-autonomous-goal-management.md) - GoalEngine: Autonomous Goal Management
+- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - AgentLoop: Agentic Goal ExecutionExecute Loop
 - [RFC-400](./RFC-400-context-protocol-architecture.md) through [RFC-408](./RFC-408-durability-protocol-architecture.md) - Core protocol architecture set
 
 **Note**: RFC consolidation completed 2026-04-17. Canonical merged RFCs are maintained in `docs/specs/`; legacy files are retained for historical context with explicit redirects.

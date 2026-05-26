@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -10,6 +12,19 @@ import pytest
 from soothe.core.loop.engine.executor import Executor
 from soothe.core.loop.state.schemas import AgentDecision, LoopState, StepAction
 from soothe.core.loop.utils.messages import LoopAIMessage, LoopHumanMessage
+
+
+async def _empty_async_gen(*_args: Any, **_kwargs: Any) -> AsyncIterator[Any]:
+    """Empty async generator for mocking agent.astream."""
+    if False:  # pragma: no cover - never yields
+        yield
+
+
+def _make_mock_agent() -> MagicMock:
+    """Create mock agent with async generator astream."""
+    mock_agent = MagicMock()
+    mock_agent.astream = AsyncMock(return_value=_empty_async_gen())
+    return mock_agent
 
 
 def _astream_messages(mock_agent: MagicMock) -> list:
@@ -23,8 +38,7 @@ def _astream_messages(mock_agent: MagicMock) -> list:
 @pytest.mark.asyncio
 async def test_parallel_branch_prepends_predecessor_ledger_before_envelope() -> None:
     """Branched LangGraph thread receives transitive predecessor execute pairs then envelope."""
-    mock_agent = MagicMock()
-    mock_agent.astream = AsyncMock(return_value=iter([]))
+    mock_agent = _make_mock_agent()
 
     step_a = StepAction(id="A", description="first", expected_output="o1")
     step_b = StepAction(
@@ -85,8 +99,7 @@ async def test_parallel_branch_prepends_predecessor_ledger_before_envelope() -> 
 
 @pytest.mark.asyncio
 async def test_parallel_branch_no_predecessors_when_step_has_no_dependencies() -> None:
-    mock_agent = MagicMock()
-    mock_agent.astream = AsyncMock(return_value=iter([]))
+    mock_agent = _make_mock_agent()
 
     step = StepAction(id="solo", description="alone", expected_output="o")
     decision = AgentDecision(
@@ -123,8 +136,7 @@ async def test_parallel_branch_no_predecessors_when_step_has_no_dependencies() -
 @pytest.mark.asyncio
 async def test_same_thread_id_skips_predecessor_injection_even_with_loop_state() -> None:
     """Sequential / single-thread execute path must not replay ledger into graph input."""
-    mock_agent = MagicMock()
-    mock_agent.astream = AsyncMock(return_value=iter([]))
+    mock_agent = _make_mock_agent()
 
     step_b = StepAction(
         id="B",
@@ -162,8 +174,7 @@ async def test_same_thread_id_skips_predecessor_injection_even_with_loop_state()
 
 @pytest.mark.asyncio
 async def test_parallel_branch_without_loop_state_skips_predecessor_injection() -> None:
-    mock_agent = MagicMock()
-    mock_agent.astream = AsyncMock(return_value=iter([]))
+    mock_agent = _make_mock_agent()
 
     step_b = StepAction(
         id="B",
@@ -186,11 +197,10 @@ async def test_parallel_branch_without_loop_state_skips_predecessor_injection() 
 @pytest.mark.asyncio
 async def test_parallel_branch_respects_plan_ledger_max_messages_cap() -> None:
     """Reuse plan_prompt_ledger.plan_ledger_max_messages as predecessor slice cap."""
-    mock_agent = MagicMock()
-    mock_agent.astream = AsyncMock(return_value=iter([]))
+    mock_agent = _make_mock_agent()
 
     cfg = MagicMock()
-    cfg.agent_loop.plan_prompt_ledger.plan_ledger_max_messages = 3
+    cfg.agent.loop.plan_prompt_ledger.plan_ledger_max_messages = 3
 
     step_b = StepAction(
         id="B",
@@ -233,8 +243,7 @@ async def test_parallel_branch_respects_plan_ledger_max_messages_cap() -> None:
 
 @pytest.mark.asyncio
 async def test_parallel_branch_human_envelope_uses_logical_thread_id() -> None:
-    mock_agent = MagicMock()
-    mock_agent.astream = AsyncMock(return_value=iter([]))
+    mock_agent = _make_mock_agent()
 
     step = StepAction(id="X", description="d", expected_output="o")
     decision = AgentDecision(
@@ -259,8 +268,7 @@ async def test_parallel_branch_human_envelope_uses_logical_thread_id() -> None:
 
 @pytest.mark.asyncio
 async def test_parallel_branch_without_current_decision_skips_predecessor_injection() -> None:
-    mock_agent = MagicMock()
-    mock_agent.astream = AsyncMock(return_value=iter([]))
+    mock_agent = _make_mock_agent()
 
     step_b = StepAction(
         id="B",
@@ -295,8 +303,7 @@ async def test_parallel_branch_logs_when_predecessors_injected(
 ) -> None:
     caplog.set_level(logging.INFO)
 
-    mock_agent = MagicMock()
-    mock_agent.astream = AsyncMock(return_value=iter([]))
+    mock_agent = _make_mock_agent()
 
     step_b = StepAction(
         id="B",

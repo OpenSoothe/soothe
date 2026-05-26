@@ -17,15 +17,17 @@ pytest.importorskip("langchain_quickjs")
 def test_initialize_inner_succeeds_without_type_error() -> None:
     """Config fields must map to langchain_quickjs constructor kwargs (no TypeError)."""
     config = SootheConfig(
-        code_interpreter={
-            "enabled": True,
-            "ptc_allowlist": ["task"],
-            "memory_limit_mb": 64,
-            "timeout_seconds": 10,
-            "max_ptc_calls": 25,
-            "max_result_size": 8000,
-            "console_capture": False,
-            "snapshot_between_turns": True,
+        agent={
+            "code_interpreter": {
+                "enabled": True,
+                "ptc_allowlist": ["task"],
+                "memory_limit_mb": 64,
+                "timeout_seconds": 10,
+                "max_ptc_calls": 25,
+                "max_result_size": 8000,
+                "console_capture": False,
+                "snapshot_between_turns": True,
+            }
         }
     )
     middleware = CodeInterpreterMiddleware(config=config)

@@ -200,7 +200,7 @@ def test_execution_hints_extracted_to_state():
 def test_custom_system_prompt_for_complex_queries():
     """Complex queries should use custom system prompt if configured."""
     config = SootheConfig()
-    config.system_prompt = "You are a custom assistant for {assistant_name}."
+    config.agent.system_prompt = "You are a custom assistant for {assistant_name}."
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
     classification = RoutingClassification(
@@ -217,7 +217,7 @@ def test_custom_system_prompt_for_complex_queries():
 
     # Complex queries use custom prompt
     assert "custom assistant" in modified.system_message.content
-    assert config.assistant_name in modified.system_message.content
+    assert config.agent.name in modified.system_message.content
 
 
 def test_all_prompts_do_not_include_date():

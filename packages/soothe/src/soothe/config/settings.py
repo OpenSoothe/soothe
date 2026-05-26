@@ -547,7 +547,7 @@ class SootheConfig(BaseSettings):
         Returns:
             Concrete backend value ('postgresql' or 'sqlite').
         """
-        return self.resolve_backend(self.protocols.durability.checkpointer)
+        return self.resolve_backend(self.agent.protocols.durability.checkpointer)
 
     def resolve_durability_backend(self) -> str:
         """Resolve durability backend from protocols.durability.backend.
@@ -555,7 +555,7 @@ class SootheConfig(BaseSettings):
         Returns:
             Concrete backend value ('postgresql' or 'sqlite').
         """
-        return self.resolve_backend(self.protocols.durability.backend)
+        return self.resolve_backend(self.agent.protocols.durability.backend)
 
     def get_plugin_config(self, name: str) -> dict[str, Any]:
         """Get plugin-specific configuration.
