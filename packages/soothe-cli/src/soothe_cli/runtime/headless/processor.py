@@ -27,7 +27,6 @@ from soothe_cli.runtime.parse.message_processing import (
     extract_tool_brief,
     finalize_pending_tool_call,
     normalize_tool_calls_list,
-    strip_internal_tags,
     tool_calls_have_any_arg_dict,
     try_parse_pending_tool_call_args,
 )
@@ -298,13 +297,11 @@ class EventProcessor:
                 is_chunk=True,
             )
             if display_text:
-                cleaned = self._clean_assistant_text(display_text, is_streaming=True)
-                if cleaned:
-                    self._emit_assistant_text(
-                        cleaned,
-                        is_main=True,
-                        is_streaming=True,
-                    )
+                self._emit_assistant_text(
+                    display_text,
+                    is_main=True,
+                    is_streaming=True,
+                )
             return
 
         if (phase, namespace) in self._state.final_loop_output_emitted:
@@ -315,16 +312,11 @@ class EventProcessor:
             if stream_state and stream_state.accumulated_text.strip():
                 pending_tail = (getattr(stream_state, "pending_fragment", "") or "").strip()
                 if pending_tail:
-                    cleaned_tail = self._clean_assistant_text(
+                    self._emit_assistant_text(
                         pending_tail,
+                        is_main=True,
                         is_streaming=True,
                     )
-                    if cleaned_tail:
-                        self._emit_assistant_text(
-                            cleaned_tail,
-                            is_main=True,
-                            is_streaming=True,
-                        )
                     stream_state.pending_fragment = ""
                 self._presentation.mark_final_answer_locked()
                 self._state.streaming_accumulator.finalize_stream(
@@ -335,10 +327,9 @@ class EventProcessor:
                 return
 
         stream_like = streaming_config.get("mode") == "streaming"
-        cleaned = self._clean_assistant_text(raw_text, is_streaming=stream_like)
-        if cleaned:
+        if raw_text:
             self._emit_assistant_text(
-                cleaned,
+                raw_text,
                 is_main=True,
                 is_streaming=not stream_like,
             )
@@ -589,14 +580,12 @@ class EventProcessor:
                         continue
                     # Always pass to renderer for accumulation, let renderer decide display
                     if text:
-                        cleaned = self._clean_assistant_text(text, is_streaming=is_chunk)
-                        if cleaned:
-                            self._emit_assistant_text(
-                                cleaned,
-                                is_main=is_main,
-                                is_streaming=is_chunk,
-                                namespace=namespace,
-                            )
+                        self._emit_assistant_text(
+                            text,
+                            is_main=is_main,
+                            is_streaming=is_chunk,
+                            namespace=namespace,
+                        )
                 elif btype in ("tool_call", "tool_call_chunk"):
                     if has_tc_args:
                         continue
@@ -619,14 +608,12 @@ class EventProcessor:
             if self._suppress_main_assistant_body_for_headless_obj(msg, is_main=is_main):
                 pass
             elif not (self._state.internal_context_active and not is_main):
-                cleaned = self._clean_assistant_text(msg.content, is_streaming=is_chunk)
-                if cleaned:
-                    self._emit_assistant_text(
-                        cleaned,
-                        is_main=is_main,
-                        is_streaming=is_chunk,
-                        namespace=namespace,
-                    )
+                self._emit_assistant_text(
+                    msg.content,
+                    is_main=is_main,
+                    is_streaming=is_chunk,
+                    namespace=namespace,
+                )
 
         # Handle tool_calls attribute
         # IMPORTANT: Only emit if we have non-empty args. Otherwise, let the accumulation
@@ -783,14 +770,12 @@ class EventProcessor:
                 ):
                     pass
                 else:
-                    cleaned = self._clean_assistant_text(content, is_streaming=is_chunk)
-                    if cleaned:
-                        self._emit_assistant_text(
-                            cleaned,
-                            is_main=is_main,
-                            is_streaming=is_chunk,
-                            namespace=namespace,
-                        )
+                    self._emit_assistant_text(
+                        content,
+                        is_main=is_main,
+                        is_streaming=is_chunk,
+                        namespace=namespace,
+                    )
 
         for block in blocks:
             if not isinstance(block, dict):
@@ -804,14 +789,12 @@ class EventProcessor:
                         msg, is_main=is_main, ai_wire=ai_wire
                     ):
                         continue
-                    cleaned = self._clean_assistant_text(text, is_streaming=is_chunk)
-                    if cleaned:
-                        self._emit_assistant_text(
-                            cleaned,
-                            is_main=is_main,
-                            is_streaming=is_chunk,
-                            namespace=namespace,
-                        )
+                    self._emit_assistant_text(
+                        text,
+                        is_main=is_main,
+                        is_streaming=is_chunk,
+                        namespace=namespace,
+                    )
             elif btype in ("tool_call_chunk", "tool_call"):
                 name = block.get("name", "")
                 if name and self._presentation.tier_visible(VerbosityTier.NORMAL):
@@ -1019,19 +1002,6 @@ class EventProcessor:
                     break
 
         self._renderer.on_plan_step_completed(step_id, success, duration_ms)
-
-    def _clean_assistant_text(self, text: str, *, is_streaming: bool = False) -> str:
-        """Apply shared response cleaning for user-facing assistant text.
-
-        Args:
-            text: Text to clean.
-            is_streaming: If True, preserve boundary whitespace for proper
-                streaming chunk concatenation.
-        """
-        return self._policy.filter_content(
-            strip_internal_tags(text),
-            preserve_boundary_whitespace=is_streaming,
-        )
 
     def _get_effective_streaming_config(self) -> Any:
         """Get effective streaming config with defaults (RFC-614).

@@ -16,13 +16,11 @@ from soothe_cli.runtime.parse.message_processing import (
     finalize_pending_tool_call,
     ingest_tool_call_stream_state,
     normalize_tool_calls_list,
-    strip_internal_tags,
     tool_calls_have_any_arg_dict,
     try_parse_pending_tool_call_args,
 )
 from soothe_cli.runtime.policy.display_policy import (
     INTERNAL_EVENT_TYPES,
-    INTERNAL_JSON_KEYS,
     SKIP_EVENT_TYPES,
     DisplayPolicy,
     create_display_policy,
@@ -46,7 +44,6 @@ from soothe_cli.runtime.turn.prepare import PreparedTurnChunk, TurnPrepareState,
 
 __all__ = [
     "INTERNAL_EVENT_TYPES",
-    "INTERNAL_JSON_KEYS",
     "SKIP_EVENT_TYPES",
     "DisplayPolicy",
     "ESSENTIAL_PROGRESS_EVENT_TYPES",
@@ -80,7 +77,6 @@ __all__ = [
     "prepare_turn_chunk",
     "run_turn_pipeline",
     "setup_logging",
-    "strip_internal_tags",
     "tool_calls_have_any_arg_dict",
     "try_parse_pending_tool_call_args",
 ]

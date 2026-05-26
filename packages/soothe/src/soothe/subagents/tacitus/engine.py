@@ -204,7 +204,8 @@ Topic: {topic}
 Summaries:
 {summaries}
 
-Provide a thorough answer with clear structure and citations."""
+Provide a thorough answer with clear structure and citations. Write for the \
+reader who asked the question — present findings and conclusions directly."""
 
 
 # ---------------------------------------------------------------------------

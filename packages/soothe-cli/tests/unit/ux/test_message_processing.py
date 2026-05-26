@@ -1,7 +1,4 @@
-"""Test message processing utilities (see IG-053).
-
-Tests for whitespace normalization and internal tag stripping.
-"""
+"""Test message processing utilities (see IG-053)."""
 
 from __future__ import annotations
 
@@ -11,7 +8,6 @@ from soothe_cli.runtime.parse.message_processing import (
     _normalize_tool_name_for_arg_map,
     accumulate_tool_call_chunks,
     extract_tool_args_dict,
-    strip_internal_tags,
     try_parse_pending_tool_call_args,
 )
 
@@ -164,69 +160,3 @@ class TestNormalizeToolNameForArgMap:
     def test_snake_case_unchanged(self) -> None:
         assert _normalize_tool_name_for_arg_map("read_file") == "read_file"
 
-
-class TestStripInternalTags:
-    """Test whitespace normalization in strip_internal_tags()."""
-
-    def test_preserves_spaces_between_words(self):
-        """Ensure spaces are preserved between words."""
-        text = "Hello world this is a test"
-        result = strip_internal_tags(text)
-        assert result == "Hello world this is a test"
-
-    def test_normalizes_excessive_spaces(self):
-        """Three or more spaces should collapse to single space."""
-        text = "Hello      world    test"  # 6 spaces, then 4 spaces
-        result = strip_internal_tags(text)
-        assert result == "Hello world test"  # 6->1, 4->1
-
-    def test_preserves_punctuation_as_is(self):
-        """Punctuation spacing is preserved as-is for streaming."""
-        text = "First sentence.Second sentence.Third one"
-        result = strip_internal_tags(text)
-        # We no longer auto-add spaces after punctuation (was causing streaming bugs)
-        assert result == "First sentence.Second sentence.Third one"
-
-    def test_removes_search_data_tags(self):
-        """Remove <search_data> tags and content."""
-        text = "Before <search_data>content</search_data> After"
-        result = strip_internal_tags(text)
-        assert result == "Before After"
-
-    def test_removes_search_data_tags_no_spaces(self):
-        """Remove <search_data> tags when no surrounding spaces."""
-        text = "Before<search_data>content</search_data>After"
-        result = strip_internal_tags(text)
-        # No spaces before/after tags means no space in result
-        assert result == "BeforeAfter"
-
-    def test_complex_formatting_preserved(self):
-        """Test complex markdown formatting is preserved."""
-        text = "**Bold text** here.More text after."
-        result = strip_internal_tags(text)
-        # Punctuation spacing preserved as-is (no auto-correction)
-        assert result == "**Bold text** here.More text after."
-
-    def test_preserves_newlines_in_input(self):
-        """Newlines are preserved (needed for markdown formatting)."""
-        text = "Line one\nLine two\nLine three"
-        result = strip_internal_tags(text)
-        # Newlines preserved for markdown tables, code blocks, etc.
-        assert result == "Line one\nLine two\nLine three"
-
-    def test_removes_synthesis_instructions(self):
-        """Remove synthesis instruction text."""
-        text = (
-            "Data here.Synthesize the search data into a clear answer. "
-            "Do NOT reproduce raw results, source listings, or URLs.More text"
-        )
-        result = strip_internal_tags(text)
-        assert "Synthesize" not in result
-        assert "More text" in result
-
-    def test_preserves_streaming_chunk_whitespace(self):
-        """Streaming chunks with leading spaces should preserve them."""
-        # This is the key fix for IG-053
-        text = " the"  # Chunk with leading space
-        result = strip_internal_tags(text)
-        assert result == " the"  # Leading space preserved for proper concatenation

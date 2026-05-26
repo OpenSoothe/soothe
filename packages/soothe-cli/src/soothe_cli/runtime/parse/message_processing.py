@@ -12,10 +12,6 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from soothe_sdk.ux.internal import (
-    strip_internal_tags,  # noqa: F401 — re-exported via shared.__init__
-)
-
 # ============================================================================
 # Shared Tool Call Streaming Helpers (IG-053)
 # ============================================================================
