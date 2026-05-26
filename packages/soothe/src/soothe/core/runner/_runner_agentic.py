@@ -249,6 +249,13 @@ def _forward_messages_chunk(
     Returns:
         True if chunk should be forwarded.
     """
+    if isinstance(chunk, tuple) and len(chunk) == _STREAM_CHUNK_LEN:
+        _namespace, mode, data = chunk
+        if mode == "custom" and isinstance(data, dict):
+            from soothe.core.events.visibility import is_custom_stream_payload_client_visible
+
+            if not is_custom_stream_payload_client_visible(data):
+                return False
     return (
         _is_tool_stream_chunk(chunk)
         or _is_ai_messages_stream_chunk(chunk)

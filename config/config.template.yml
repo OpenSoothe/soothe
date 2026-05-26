@@ -64,8 +64,12 @@ agent:
     # Output streaming (RFC-614)
     output_streaming:
       mode: adaptive
-      streaming_interval_ms: 200
+      streaming_interval_ms: 300
       message_coalesce_enabled: true
+      tool_batch_enabled: true
+      tool_batch_interval_ms: 200
+      suppress_redundant_stream_tool_updates: true
+      skip_redundant_tool_message_wire: false
       tui_flush_interval_ms: 200
 
     # Planning

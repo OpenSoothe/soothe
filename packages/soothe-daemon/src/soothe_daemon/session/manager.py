@@ -520,6 +520,60 @@ class ClientSessionManager:
         streaming_cfg = self._config.agent.loop.output_streaming
         return streaming_cfg.streaming_interval_ms / 1000.0
 
+    async def await_loop_delivery_drained(
+        self,
+        loop_id: str,
+        *,
+        batch_timeout_s: float | None = None,
+        max_wait_s: float = 30.0,
+    ) -> bool:
+        """Wait until subscribed session queues are empty and sender batch window elapses.
+
+        Ensures ``goal_completion`` and other tail frames are flushed before ``status: idle``.
+
+        Args:
+            loop_id: Loop scope to drain.
+            batch_timeout_s: Sender/coalesce flush window; defaults to config interval.
+            max_wait_s: Hard cap on wait time.
+
+        Returns:
+            True if queues stayed empty after the flush window, False on timeout.
+        """
+        import time
+
+        flush_s = batch_timeout_s if batch_timeout_s is not None else self._get_batch_timeout()
+        settle_s = max(flush_s, 0.05) + 0.05
+        deadline = time.monotonic() + max_wait_s
+
+        while time.monotonic() < deadline:
+            async with self._lock:
+                queues = [
+                    session.event_queue
+                    for session in self._sessions.values()
+                    if loop_id in session.subscriptions
+                ]
+            if not queues:
+                return True
+            if any(q.qsize() > 0 for q in queues):
+                await asyncio.sleep(0.05)
+                continue
+            await asyncio.sleep(settle_s)
+            async with self._lock:
+                queues = [
+                    session.event_queue
+                    for session in self._sessions.values()
+                    if loop_id in session.subscriptions
+                ]
+            if queues and all(q.empty() for q in queues):
+                return True
+            await asyncio.sleep(0.05)
+        logger.warning(
+            "Loop %s delivery drain timed out after %.1fs (queues may still hold events)",
+            loop_id[:16],
+            max_wait_s,
+        )
+        return False
+
     @property
     def session_count(self) -> int:
         """Return number of active sessions."""

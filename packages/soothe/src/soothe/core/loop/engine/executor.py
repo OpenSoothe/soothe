@@ -51,6 +51,7 @@ from soothe.core.loop.engine.predecessor_branch_context import (
 )
 from soothe.core.loop.engine.tool_call_args import (
     ToolCallArgsCollector,
+    filter_redundant_stream_tool_updates,
     format_args_for_log,
     wire_updates_from_ai_message,
 )
@@ -1922,7 +1923,9 @@ class Executor:
                         wire_msg = _stringify_tool_call_chunk_args_on_message(enriched_msg)
                         if wire_msg is not msg0:
                             emit_chunk = (_ns_chunk, mode_chunk, (wire_msg, data_chunk[1]))
-                        tool_update_events = wire_updates_from_ai_message(enriched_msg)
+                        tool_update_events = filter_redundant_stream_tool_updates(
+                            wire_updates_from_ai_message(enriched_msg)
+                        )
                     elif isinstance(msg0, ToolMessage):
                         modified_msg, tool_update_events = tool_args.promote_tool_message(
                             msg0,

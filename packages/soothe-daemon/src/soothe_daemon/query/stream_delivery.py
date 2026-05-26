@@ -9,10 +9,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
+from soothe.core.events.visibility import is_custom_stream_payload_client_visible
 from soothe.foundation import extract_text_from_ai_message
 from soothe_sdk.client.wire import prepare_stream_data_for_wire
 from soothe_sdk.core.events import AGENT_LOOP_COMPLETED
 from soothe_sdk.ux.loop_stream import assistant_output_phase
+from soothe_sdk.ux.stream_tool_wire import (
+    TOOL_CALL_UPDATES_BATCH,
+    extract_tool_call_updates_from_wire_message,
+)
 
 StreamDeliveryMode = Literal["batch", "adaptive"]
 
@@ -39,6 +44,16 @@ class _TextCoalesceBuffer:
     parts: list[str] = field(default_factory=list)
     template_msg: dict[str, Any] | None = None
     template_meta: dict[str, Any] | None = None
+    last_activity_monotonic: float = 0.0
+
+
+@dataclass
+class _ToolBatchBuffer:
+    """Debounced accumulator for ``tool_call_updates_batch`` per namespace."""
+
+    namespace: tuple[str, ...]
+    updates: list[dict[str, Any]] = field(default_factory=list)
+    seen_ids: set[str] = field(default_factory=set)
     last_activity_monotonic: float = 0.0
 
 
@@ -162,6 +177,10 @@ class StreamDeliveryCoalescer:
         workspace: str | None = None,
         message_coalesce_enabled: bool = True,
         coalesce_interval_ms: int = 200,
+        tool_batch_enabled: bool = True,
+        tool_batch_interval_ms: int = 200,
+        suppress_redundant_stream_tool_updates: bool = True,
+        skip_redundant_tool_message_wire: bool = False,
     ) -> None:
         self._mode: StreamDeliveryMode = mode
         self._adaptive_threshold_chars = adaptive_threshold_chars
@@ -171,8 +190,13 @@ class StreamDeliveryCoalescer:
         self._workspace = workspace
         self._message_coalesce_enabled = message_coalesce_enabled
         self._coalesce_interval_s = max(coalesce_interval_ms, 50) / 1000.0
+        self._tool_batch_enabled = tool_batch_enabled
+        self._tool_batch_interval_s = max(tool_batch_interval_ms, 50) / 1000.0
+        self._suppress_redundant_stream_tool_updates = suppress_redundant_stream_tool_updates
+        self._skip_redundant_tool_message_wire = skip_redundant_tool_message_wire
         self._gc: _GoalCompletionBuffer | None = None
         self._text_buffers: dict[tuple[str, ...], _TextCoalesceBuffer] = {}
+        self._tool_batches: dict[tuple[str, ...], _ToolBatchBuffer] = {}
         self._turn_complete_pending = False
         self._effective_mode: Literal["batch", "streaming"] = "streaming"
         self._adaptive_decision_made = False
@@ -194,6 +218,26 @@ class StreamDeliveryCoalescer:
         self._turn_complete_pending = False
         return pending
 
+    def should_skip_tool_message_wire(self, msg: Any) -> bool:
+        """Return True when an empty tool result wire frame adds no client value."""
+        if not self._skip_redundant_tool_message_wire:
+            return False
+        body = _msg_to_wire_dict(msg)
+        if body is None:
+            return False
+        content = body.get("content")
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict) and item.get("type") == "text":
+                    parts.append(str(item.get("text") or ""))
+            text = "".join(parts).strip()
+        else:
+            text = str(content or "").strip()
+        return not text
+
     def ingest(
         self,
         namespace: tuple[str, ...] | list[str],
@@ -203,50 +247,82 @@ class StreamDeliveryCoalescer:
         """Return zero or more stream tuples to broadcast for this ingested chunk."""
         ns = tuple(namespace) if namespace else ()
         now = time.monotonic()
+        out_prefix = self._flush_due_tool_batches(now)
 
         if mode == "updates":
             if _updates_has_interrupt(data):
-                return [(ns, mode, data)]
-            return []
+                return out_prefix + [(ns, mode, data)]
+            return out_prefix
 
         if mode == "custom" and isinstance(data, dict) and data.get("type") == AGENT_LOOP_COMPLETED:
             out = self._flush_all_text_buffers(final=True)
             out.extend(self._flush_goal_completion(final=True))
             out.append((ns, mode, data))
             self._turn_complete_pending = True
-            return out
+            return out_prefix + out
 
         if mode == "custom":
+            if isinstance(data, dict) and not is_custom_stream_payload_client_visible(data):
+                return out_prefix + self._maybe_flush_tool_batch(ns, now, force=False)
+            if (
+                self._suppress_redundant_stream_tool_updates
+                and isinstance(data, dict)
+                and self._should_suppress_stream_tool_update(ns, data)
+            ):
+                out = self._flush_all_text_buffers(final=False)
+                out.extend(self._maybe_flush_tool_batch(ns, now, force=False))
+                return out_prefix + out
             out = self._flush_all_text_buffers(final=False)
+            out.extend(self._maybe_flush_tool_batch(ns, now, force=False))
             out.append((ns, mode, data))
-            return out
+            return out_prefix + out
 
         if mode != "messages":
-            return [(ns, mode, data)]
+            return out_prefix + [(ns, mode, data)]
 
         if not isinstance(data, (tuple, list)) or len(data) != _MSG_PAIR_LEN:
-            return [(ns, mode, data)]
+            return out_prefix + [(ns, mode, data)]
 
         msg, metadata = data[0], data[1] if len(data) > 1 else {}
 
         if _is_tool_wire_message(msg):
             out = self._flush_text_buffer(ns, final=False)
-            out.append((ns, mode, data))
-            return out
+            out.extend(self._flush_tool_batch(ns, force=True))
+            if not self.should_skip_tool_message_wire(msg):
+                out.append((ns, mode, data))
+            return out_prefix + out
 
         phase = assistant_output_phase(msg)
         if phase == "goal_completion":
             out = self._flush_text_buffer(ns, final=False)
             out.extend(self._ingest_goal_completion(ns, msg, metadata))
-            return out
+            return out_prefix + out
 
         if not self._message_coalesce_enabled:
-            return [(ns, mode, data)]
+            return out_prefix + [(ns, mode, data)]
 
         if _wire_has_tool_invocation(_msg_to_wire_dict(msg) or {}):
             out = self._flush_text_buffer(ns, final=False)
+            wire_data = prepare_stream_data_for_wire((msg, metadata))
+            msg_wire = wire_data[0] if isinstance(wire_data, (tuple, list)) and wire_data else None
+            if isinstance(msg_wire, dict):
+                tool_updates = list(extract_tool_call_updates_from_wire_message(msg_wire))
+                if tool_updates and self._tool_batch_enabled:
+                    self._accumulate_tool_batch(ns, tool_updates, now)
+                    wire_data = self.strip_tool_metadata_for_batch(wire_data)
+                    out.extend(self._maybe_flush_tool_batch(ns, now, force=False))
+                    body = wire_data[0] if wire_data else None
+                    if isinstance(body, dict):
+                        from soothe_sdk.client.wire import flatten_enveloped_message_dict
+
+                        flat = flatten_enveloped_message_dict(body)
+                        text = "".join(extract_text_from_ai_message(flat)).strip()
+                        has_phase = bool(flat.get("phase"))
+                        if text or has_phase:
+                            out.append((ns, mode, wire_data))
+                    return out_prefix + out
             out.append((ns, mode, data))
-            return out
+            return out_prefix + out
 
         if _plain_text_ai_message(msg):
             out: list[tuple[tuple[str, ...], str, Any]] = []
@@ -274,16 +350,108 @@ class StreamDeliveryCoalescer:
                 out.extend(self._flush_text_buffer(ns, final=True))
             elif interval_due:
                 out.extend(self._flush_text_buffer(ns, final=False))
-            return out
+            return out_prefix + out
 
         out = self._flush_text_buffer(ns, final=False)
         out.append((ns, mode, data))
+        return out_prefix + out
+
+    def _flush_due_tool_batches(self, now: float) -> list[tuple[tuple[str, ...], str, Any]]:
+        out: list[tuple[tuple[str, ...], str, Any]] = []
+        for ns in list(self._tool_batches.keys()):
+            out.extend(self._maybe_flush_tool_batch(ns, now, force=False))
         return out
 
     def flush(self) -> list[tuple[tuple[str, ...], str, Any]]:
         """Flush any buffered text and goal-completion at stream end."""
         out = self._flush_all_text_buffers(final=True)
+        out.extend(self._flush_all_tool_batches(force=True))
         out.extend(self._flush_goal_completion(final=True))
+        return out
+
+    def _accumulate_tool_batch(
+        self,
+        namespace: tuple[str, ...],
+        updates: list[dict[str, Any]],
+        now: float,
+    ) -> None:
+        buf = self._tool_batches.get(namespace)
+        if buf is None:
+            buf = _ToolBatchBuffer(namespace=namespace)
+            self._tool_batches[namespace] = buf
+        for upd in updates:
+            if not isinstance(upd, dict):
+                continue
+            tid = str(upd.get("tool_call_id") or "").strip()
+            if tid and tid in buf.seen_ids:
+                continue
+            if tid:
+                buf.seen_ids.add(tid)
+            buf.updates.append(upd)
+        buf.last_activity_monotonic = now
+
+    def _should_suppress_stream_tool_update(
+        self,
+        namespace: tuple[str, ...],
+        data: dict[str, Any],
+    ) -> bool:
+        from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
+
+        if str(data.get("type", "")) != STREAM_TOOL_CALL_UPDATE:
+            return False
+        tid = str(data.get("tool_call_id") or "").strip()
+        if not tid:
+            return False
+        buf = self._tool_batches.get(namespace)
+        if buf is None:
+            return False
+        return tid in buf.seen_ids
+
+    def _maybe_flush_tool_batch(
+        self,
+        namespace: tuple[str, ...],
+        now: float,
+        *,
+        force: bool,
+    ) -> list[tuple[tuple[str, ...], str, Any]]:
+        buf = self._tool_batches.get(namespace)
+        if buf is None or not buf.updates:
+            return []
+        interval_due = (
+            buf.last_activity_monotonic > 0
+            and (now - buf.last_activity_monotonic) >= self._tool_batch_interval_s
+        )
+        if not force and not interval_due:
+            return []
+        return self._flush_tool_batch(namespace, force=True)
+
+    def _flush_tool_batch(
+        self,
+        namespace: tuple[str, ...],
+        *,
+        force: bool,
+    ) -> list[tuple[tuple[str, ...], str, Any]]:
+        if not force:
+            return self._maybe_flush_tool_batch(namespace, time.monotonic(), force=True)
+        buf = self._tool_batches.pop(namespace, None)
+        if buf is None or not buf.updates:
+            return []
+        return [
+            (
+                namespace,
+                "custom",
+                {
+                    "type": TOOL_CALL_UPDATES_BATCH,
+                    "updates": list(buf.updates),
+                    "count": len(buf.updates),
+                },
+            )
+        ]
+
+    def _flush_all_tool_batches(self, *, force: bool) -> list[tuple[tuple[str, ...], str, Any]]:
+        out: list[tuple[tuple[str, ...], str, Any]] = []
+        for ns in list(self._tool_batches.keys()):
+            out.extend(self._flush_tool_batch(ns, force=force))
         return out
 
     def strip_tool_metadata_for_batch(self, wire_data: Any) -> Any:

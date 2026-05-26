@@ -104,6 +104,23 @@ def is_client_wire_visible(
     return is_catalog_event_client_wire_visible(wire_type, event_meta)
 
 
+def is_custom_stream_payload_client_visible(data: Any) -> bool:
+    """Return True if a runner ``custom`` stream payload may leave the worker."""
+    if not isinstance(data, dict):
+        return False
+    event_type = data.get("type")
+    if not isinstance(event_type, str):
+        return True
+    if event_type in _ALWAYS_CLIENT_WIRE_INNER_TYPES:
+        return True
+    event_meta = None
+    if event_type.startswith("soothe."):
+        from soothe.core.events.catalog import REGISTRY
+
+        event_meta = REGISTRY.get_meta(event_type)
+    return is_catalog_event_client_wire_visible(event_type, event_meta)
+
+
 def event_type_from_wire_message(msg: dict[str, Any]) -> str | None:
     """Extract catalog event type from a daemon wire message dict."""
     if not isinstance(msg, dict):
@@ -160,6 +177,7 @@ __all__ = [
     "is_catalog_event_client_wire_visible",
     "is_client_broadcast_event_type",
     "is_client_wire_visible",
+    "is_custom_stream_payload_client_visible",
     "is_progress_wire_event",
     "resolve_event_verbosity_tier",
 ]
