@@ -65,8 +65,8 @@ class TacitusConfig(BaseModel):
         description="Router role for loop LLM steps (analyze, queries, summarize, reflect).",
     )
     synthesis_role: str = Field(
-        default="think",
-        description="Router role for final synthesis (defaults to think; set fast for lower latency).",
+        default="fast",
+        description="Router role for final synthesis (defaults to fast for lower latency; set think for higher quality).",
     )
     effort: TacitusEffortLevel = Field(
         default="normal",
@@ -91,6 +91,92 @@ class TacitusConfig(BaseModel):
         },
     )
     routing: TacitusRoutingConfig = Field(default_factory=TacitusRoutingConfig)
+
+    # Latency control options (IG-432)
+    source_timeout_sec: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=60.0,
+        description="Per-source query timeout in seconds.",
+    )
+    enable_parallel_sources: bool = Field(
+        default=True,
+        description="Query sources in parallel (vs sequential).",
+    )
+    enable_early_termination: bool = Field(
+        default=True,
+        description="Enable adaptive loop termination based on result quality.",
+    )
+    min_results_for_termination: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="Minimum results before considering early termination.",
+    )
+    min_source_diversity: int = Field(
+        default=2,
+        ge=1,
+        le=5,
+        description="Minimum distinct sources for early termination.",
+    )
+    llm_timeout_sec: float = Field(
+        default=30.0,
+        ge=5.0,
+        le=120.0,
+        description="LLM invocation timeout in seconds.",
+    )
+
+    # Politeness controls (IG-432 Phase 6)
+    enable_polite_concurrency: bool = Field(
+        default=True,
+        description="Enable polite rate limiting for external HTTP requests.",
+    )
+    polite_rate_limit_rps: float = Field(
+        default=1.0,
+        ge=0.1,
+        le=10.0,
+        description="Default requests per second for rate limiting.",
+    )
+    polite_burst_size: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="Default burst size for token bucket rate limiter.",
+    )
+    polite_max_concurrent: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Default max concurrent requests per domain.",
+    )
+    polite_retry_max: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="Max retries for failed HTTP requests.",
+    )
+    polite_retry_base_delay: float = Field(
+        default=1.0,
+        ge=0.1,
+        le=10.0,
+        description="Base delay in seconds for exponential backoff.",
+    )
+    polite_circuit_breaker_threshold: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Failures before circuit breaker opens.",
+    )
+    polite_circuit_breaker_reset_sec: float = Field(
+        default=60.0,
+        ge=5.0,
+        le=300.0,
+        description="Seconds before circuit breaker attempts reset.",
+    )
+    polite_domain_overrides: dict[str, dict[str, float | int]] = Field(
+        default_factory=dict,
+        description="Per-domain rate limit overrides. Keys: domain, values: {rps, burst, concurrent}.",
+    )
 
 
 @runtime_checkable

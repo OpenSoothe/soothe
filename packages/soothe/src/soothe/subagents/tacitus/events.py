@@ -11,6 +11,7 @@ from soothe_sdk.core.verbosity import VerbosityTier
 from soothe.core.events import register_event
 
 SUBAGENT_TACITUS_STARTED = "soothe.subagent.tacitus.started"
+SUBAGENT_TACITUS_PROGRESS = "soothe.subagent.tacitus.progress"
 SUBAGENT_TACITUS_GATHER_SUMMARY = "soothe.subagent.tacitus.gather.summary"
 SUBAGENT_TACITUS_COMPLETED = "soothe.subagent.tacitus.completed"
 
@@ -21,6 +22,20 @@ class TacitusStartedEvent(SootheEvent):
     type: Literal["soothe.subagent.tacitus.started"] = SUBAGENT_TACITUS_STARTED  # type: ignore[assignment]
     topic_preview: str = ""
     effort: str = ""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class TacitusProgressEvent(SootheEvent):
+    """Real-time progress update during Tacitus execution."""
+
+    type: Literal["soothe.subagent.tacitus.progress"] = SUBAGENT_TACITUS_PROGRESS  # type: ignore[assignment]
+    phase: str = ""  # analyze, generate_queries, gather, summarize, reflect, synthesize
+    loop_count: int = 0
+    total_loops: int = 0
+    sources_completed: int = 0
+    total_sources: int = 0
+    message: str = ""
 
     model_config = ConfigDict(extra="allow")
 
@@ -53,6 +68,11 @@ register_event(
     summary_template="Tacitus: {topic_preview}",
 )
 register_event(
+    TacitusProgressEvent,
+    verbosity=VerbosityTier.DETAILED,  # Progress events are detailed
+    summary_template="{phase}: {message}",
+)
+register_event(
     TacitusGatherSummaryEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Gather: {result_count} hits ({sources_touched} sources)",
@@ -66,8 +86,10 @@ register_event(
 __all__ = [
     "SUBAGENT_TACITUS_COMPLETED",
     "SUBAGENT_TACITUS_GATHER_SUMMARY",
+    "SUBAGENT_TACITUS_PROGRESS",
     "SUBAGENT_TACITUS_STARTED",
     "TacitusCompletedEvent",
     "TacitusGatherSummaryEvent",
+    "TacitusProgressEvent",
     "TacitusStartedEvent",
 ]

@@ -63,7 +63,7 @@ def test_build_tacitus_passes_sub_questions_to_generate_queries() -> None:
         '{"queries": [{"query": "agentic memory papers 2025", "domain_hint": "academic"}]}'
     )
     mock_model = MagicMock()
-    mock_model.invoke.side_effect = [
+    side_effect = [
         AIMessage(content=analyze_json),
         AIMessage(content=generate_json),
         AIMessage(
@@ -76,6 +76,12 @@ def test_build_tacitus_passes_sub_questions_to_generate_queries() -> None:
         ),
         AIMessage(content="Final synthesized answer."),
     ]
+    mock_model.invoke.side_effect = side_effect
+
+    async def _async_side_effect(*_args: object, **_kwargs: object) -> AIMessage:
+        return side_effect.pop(0)
+
+    mock_model.ainvoke.side_effect = _async_side_effect
 
     async def _mock_query(*_args: object, **_kwargs: object) -> list:
         return [
@@ -114,7 +120,9 @@ def test_build_tacitus_passes_sub_questions_to_generate_queries() -> None:
             }
         )
 
-    assert mock_model.invoke.call_count >= 2
+    # Check that LLM was invoked (either sync or async)
+    total_calls = mock_model.invoke.call_count + mock_model.ainvoke.call_count
+    assert total_calls >= 2
     assert result.get("_queries")
     assert result.get("effort") == "normal"
     answer = result.get("answer", "")
