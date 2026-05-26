@@ -19,9 +19,12 @@ _EDIT_STRING_ARG_KEYS = frozenset({"old_string", "new_string"})
 _SKIP_ARG_KEYS = frozenset({"_raw"})
 
 
-def _compact_arg_text(text: str) -> str:
+def compact_arg_text(text: str) -> str:
     """Collapse whitespace/newlines so activity lines stay on one row."""
     return " ".join(text.split())
+
+
+_compact_arg_text = compact_arg_text
 
 
 def _coerce_arg_text(value: Any) -> str:
