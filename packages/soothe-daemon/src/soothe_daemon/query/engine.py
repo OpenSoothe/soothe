@@ -283,6 +283,8 @@ class QueryEngine:
         coalescer: Any | None = None,
     ) -> None:
         """Broadcast one runner stream tuple to loop subscribers."""
+        if mode == "updates":
+            return
         d = self._daemon
         wire_data = data
         if mode == "messages":
@@ -350,29 +352,14 @@ class QueryEngine:
                 "file_output_preview_chars": 500,
                 "file_output_dir": None,
             }
-        agent_loop = getattr(config, "agent_loop", None)
-        if agent_loop is None:
-            return {
-                "adaptive_threshold_chars": 500,
-                "file_output_threshold_chars": 0,
-                "file_output_preview_chars": 500,
-                "file_output_dir": None,
-            }
-        streaming_cfg = getattr(agent_loop, "output_streaming", None)
-        if streaming_cfg is None:
-            return {
-                "adaptive_threshold_chars": 500,
-                "file_output_threshold_chars": 0,
-                "file_output_preview_chars": 500,
-                "file_output_dir": None,
-            }
+        streaming_cfg = config.agent.loop.output_streaming
         return {
-            "adaptive_threshold_chars": getattr(streaming_cfg, "adaptive_threshold_chars", 500),
-            "file_output_threshold_chars": getattr(streaming_cfg, "file_output_threshold_chars", 0),
-            "file_output_preview_chars": getattr(streaming_cfg, "file_output_preview_chars", 500),
-            "file_output_dir": getattr(streaming_cfg, "file_output_dir", None),
-            "streaming_interval_ms": getattr(streaming_cfg, "streaming_interval_ms", 200),
-            "message_coalesce_enabled": getattr(streaming_cfg, "message_coalesce_enabled", True),
+            "adaptive_threshold_chars": streaming_cfg.adaptive_threshold_chars,
+            "file_output_threshold_chars": streaming_cfg.file_output_threshold_chars,
+            "file_output_preview_chars": streaming_cfg.file_output_preview_chars,
+            "file_output_dir": streaming_cfg.file_output_dir,
+            "streaming_interval_ms": streaming_cfg.streaming_interval_ms,
+            "message_coalesce_enabled": streaming_cfg.message_coalesce_enabled,
         }
 
     async def _enrich_with_vision_throttled(

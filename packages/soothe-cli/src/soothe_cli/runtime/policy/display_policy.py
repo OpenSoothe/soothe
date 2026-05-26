@@ -43,12 +43,6 @@ SKIP_EVENT_TYPES = frozenset(
     {
         # Plan events handled by renderer's plan update mechanism
         "soothe.cognition.plan.batch.started",
-        "soothe.cognition.plan.step.started",
-        "soothe.cognition.plan.step.completed",
-        "soothe.cognition.plan.step.failed",
-        # Policy events not rendered (RFC-0019)
-        "soothe.protocol.policy.checked",
-        "soothe.protocol.policy.denied",
     }
 )
 
@@ -56,18 +50,10 @@ PLAN_EVENT_TYPES = frozenset(
     {
         "soothe.cognition.plan.created",
         "soothe.cognition.plan.reflected",
-        "soothe.cognition.plan.step.started",
-        "soothe.cognition.plan.step.completed",
-        "soothe.cognition.plan.step.failed",
     }
 )
 
-MILESTONE_EVENT_TYPES = frozenset(
-    {
-        "soothe.cognition.plan.step.completed",
-        "soothe.cognition.plan.step.failed",
-    }
-)
+MILESTONE_EVENT_TYPES = frozenset()
 
 # =============================================================================
 # Display Policy Class

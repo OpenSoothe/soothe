@@ -46,21 +46,22 @@ router:
   image: "coding-plan:qwen3.5-plus"
   embedding: "dashscope:multimodal-embedding-v1"
 
-agent_loop:
-  max_iterations: 99
-  max_subagent_tasks_per_wave: 4
-  plan_prompt_ledger:
-    plan_ledger_max_messages: 40
-    plan_ledger_max_total_chars: 60000
-    plan_ledger_max_message_chars: 8000
-  limits:
-    max_parallel_steps: 4
-    max_parallel_tools: 10
-    global_max_llm_calls: 10
-    llm_call_timeout_max_seconds: 240
-    tool_call_limit:
-      global_thread_limit: 220
-      global_run_limit: 80
+agent:
+  loop:
+    max_iterations: 99
+    max_subagent_tasks_per_wave: 4
+    plan_prompt_ledger:
+      plan_ledger_max_messages: 40
+      plan_ledger_max_total_chars: 60000
+      plan_ledger_max_message_chars: 8000
+    limits:
+      max_parallel_steps: 4
+      max_parallel_tools: 10
+      global_max_llm_calls: 10
+      llm_call_timeout_max_seconds: 240
+      tool_call_limit:
+        global_thread_limit: 220
+        global_run_limit: 80
 
 observability:
   log_file_level: DEBUG

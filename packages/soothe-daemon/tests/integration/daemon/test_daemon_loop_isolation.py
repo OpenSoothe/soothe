@@ -473,12 +473,8 @@ class TestLoopIsolation:
             client1.clear_pending_events()
             await client1.send_loop_reattach(loop1)
             await await_event_type(client1.read_event, "history_replay", timeout=30.0)
-            await await_event_type(
-                client1.read_event, "soothe.lifecycle.loop.reattached", timeout=15.0
-            )
-            await await_event_type(
-                client1.read_event, "soothe.lifecycle.loop.history.replayed", timeout=15.0
-            )
+            await await_event_type(client1.read_event, "loop_reattached", timeout=15.0)
+            await await_event_type(client1.read_event, "replay_complete", timeout=15.0)
 
             # Verify replay events go only to client1 (already consumed above)
 

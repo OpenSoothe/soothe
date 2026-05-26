@@ -295,8 +295,16 @@ class WebSocketTransport(TransportServer):
             if self._handshake_callback:
                 try:
                     handshake_msgs = self._handshake_callback(websocket)
+                    session = (
+                        await self._session_manager.get_session(client_id)
+                        if client_id and hasattr(self, "_session_manager") and self._session_manager
+                        else None
+                    )
                     for msg in handshake_msgs:
-                        await websocket.send_text(encode_websocket_text(msg))
+                        if session is not None:
+                            await self._session_manager.send_to_client(session, msg)
+                        else:
+                            await websocket.send_text(encode_websocket_text(msg))
                 except Exception:
                     logger.exception("Failed to send initial handshake to WebSocket client")
 
@@ -318,7 +326,17 @@ class WebSocketTransport(TransportServer):
                             errors[0],
                             {"errors": errors},
                         )
-                        await websocket.send_text(encode_websocket_text(error_msg))
+                        session = (
+                            await self._session_manager.get_session(client_id)
+                            if client_id
+                            and hasattr(self, "_session_manager")
+                            and self._session_manager
+                            else None
+                        )
+                        if session is not None:
+                            await self._session_manager.send_to_client(session, error_msg)
+                        else:
+                            await websocket.send_text(encode_websocket_text(error_msg))
                         continue
 
                     if self._message_handler:

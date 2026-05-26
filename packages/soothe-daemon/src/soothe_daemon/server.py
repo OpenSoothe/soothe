@@ -907,15 +907,27 @@ class SootheDaemon(DaemonHandlersMixin):
         lid = str(msg.get("loop_id") or "").strip()
 
         from soothe.core.events import REGISTRY
+        from soothe.core.events.visibility import (
+            event_type_from_wire_message,
+            is_client_wire_visible,
+        )
 
-        event_type_for_meta = msg_type
-        if msg_type == "event" and isinstance(msg.get("data"), dict):
-            event_type_for_meta = msg["data"].get("type", msg_type)
-
+        event_type_for_meta = event_type_from_wire_message(msg) or msg_type
         event_meta = REGISTRY.get_meta(event_type_for_meta) if event_type_for_meta else None
+        if not is_client_wire_visible(msg, event_meta=event_meta):
+            suppressed = getattr(self, "_internal_events_suppressed", 0) + 1
+            self._internal_events_suppressed = suppressed
+            if suppressed % 500 == 1:
+                logger.debug(
+                    "Suppressing non-client-visible event broadcast (type=%s, total=%d)",
+                    event_type_for_meta,
+                    suppressed,
+                )
+            return
 
         if lid:
             await self._event_bus.publish(loop_event_topic(lid), msg, event_meta=event_meta)
+            await self._session_manager.wake_senders_for_loop(lid)
             return
 
         # Unscoped daemon-wide frames only (never infer scope from thread_id).

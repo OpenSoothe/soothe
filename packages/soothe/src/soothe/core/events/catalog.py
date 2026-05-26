@@ -17,11 +17,11 @@ and imported here for registry.
 **Usage:**
 
 For type-safe event emission (recommended):
-    from soothe.core.events import GoalCreatedEvent, PlanStepStartedEvent
+    from soothe.core.events import GoalCreatedEvent
     yield custom_event(GoalCreatedEvent(goal_id=gid).to_dict())
 
 For event type string constants:
-    from soothe.core.events import GOAL_CREATED, PLAN_STEP_STARTED
+    from soothe.core.events import GOAL_CREATED, PLAN_CREATED
     # Use constants for comparisons, routing, etc.
     if event_type == GOAL_CREATED:
         ...
@@ -51,20 +51,20 @@ from .constants import (
     AGENT_LOOP_STEP_QUEUED,
     AGENT_LOOP_STEP_STARTED,
     # Cognition - AgentLoop
-    AUTOPILLOT_CHECKPOINT_SAVED,
-    AUTOPILLOT_DREAMING_ENTERED,
-    AUTOPILLOT_DREAMING_EXITED,
-    AUTOPILLOT_GOAL_BLOCKED,
-    AUTOPILLOT_GOAL_COMPLETED,
-    AUTOPILLOT_GOAL_CREATED,
-    AUTOPILLOT_GOAL_PROGRESS,
-    AUTOPILLOT_GOAL_SUSPENDED,
-    AUTOPILLOT_GOAL_VALIDATED,
+    AUTOPILOT_CHECKPOINT_SAVED,
+    AUTOPILOT_DREAMING_ENTERED,
+    AUTOPILOT_DREAMING_EXITED,
+    AUTOPILOT_GOAL_BLOCKED,
+    AUTOPILOT_GOAL_COMPLETED,
+    AUTOPILOT_GOAL_CREATED,
+    AUTOPILOT_GOAL_PROGRESS,
+    AUTOPILOT_GOAL_SUSPENDED,
+    AUTOPILOT_GOAL_VALIDATED,
     # ... more imports below
-    AUTOPILLOT_RELATIONSHIP_DETECTED,
-    AUTOPILLOT_SEND_BACK,
+    AUTOPILOT_RELATIONSHIP_DETECTED,
+    AUTOPILOT_SEND_BACK,
     # System - Autopilot
-    AUTOPILLOT_STATUS_CHANGED,
+    AUTOPILOT_STATUS_CHANGED,
     BRANCH_ANALYZED,
     # Cognition - Branch
     BRANCH_CREATED,
@@ -95,9 +95,6 @@ from .constants import (
     PLAN_CREATED,
     PLAN_DAG_SNAPSHOT,
     PLAN_REFLECTED,
-    PLAN_STEP_COMPLETED,
-    PLAN_STEP_FAILED,
-    PLAN_STEP_STARTED,
     POLICY_CHECKED,
     POLICY_DENIED,
     # Lifecycle - Recovery
@@ -136,7 +133,7 @@ def custom_event(data: dict[str, Any]) -> StreamChunk:
 
 
 class IterationStartedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.iteration.started"] = "soothe.lifecycle.iteration.started"
+    type: Literal["soothe.internal.iteration.started"] = "soothe.internal.iteration.started"
     iteration: int | str
     goal_id: str = ""
     goal_description: str = ""
@@ -144,7 +141,7 @@ class IterationStartedEvent(LifecycleEvent):
 
 
 class IterationCompletedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.iteration.completed"] = "soothe.lifecycle.iteration.completed"
+    type: Literal["soothe.internal.iteration.completed"] = "soothe.internal.iteration.completed"
     iteration: int | str
     goal_id: str = ""
     outcome: str = ""
@@ -152,14 +149,14 @@ class IterationCompletedEvent(LifecycleEvent):
 
 
 class CheckpointSavedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.checkpoint.saved"] = "soothe.lifecycle.checkpoint.saved"
+    type: Literal["soothe.internal.checkpoint.saved"] = "soothe.internal.checkpoint.saved"
     thread_id: str
     completed_steps: int = 0
     completed_goals: int = 0
 
 
 class RecoveryResumedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.recovery.resumed"] = "soothe.lifecycle.recovery.resumed"
+    type: Literal["soothe.internal.recovery.resumed"] = "soothe.internal.recovery.resumed"
     thread_id: str
     completed_steps: list[str] = []  # noqa: RUF012
     completed_goals: list[str] = []  # noqa: RUF012
@@ -167,20 +164,20 @@ class RecoveryResumedEvent(LifecycleEvent):
 
 
 class LoopCreatedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.loop.created"] = "soothe.lifecycle.loop.created"
+    type: Literal["soothe.internal.loop.created"] = "soothe.internal.loop.created"
     loop_id: str
     thread_id: str = ""
 
 
 class LoopStartedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.loop.started"] = "soothe.lifecycle.loop.started"
+    type: Literal["soothe.internal.loop.started"] = "soothe.internal.loop.started"
     loop_id: str
     thread_id: str = ""
     protocols: list[str] = []  # noqa: RUF012
 
 
 class LoopCompletedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.loop.completed"] = "soothe.lifecycle.loop.completed"
+    type: Literal["soothe.internal.loop.completed"] = "soothe.internal.loop.completed"
     loop_id: str
     thread_id: str = ""
 
@@ -193,7 +190,7 @@ class DaemonHeartbeatEvent(LifecycleEvent):
     query start timeout (default 20 seconds).
     """
 
-    type: Literal["soothe.system.daemon.heartbeat"] = "soothe.system.daemon.heartbeat"
+    type: Literal["soothe.internal.daemon.heartbeat"] = "soothe.internal.daemon.heartbeat"
     thread_id: str = ""
     timestamp: str = ""  # ISO format timestamp
     state: str = "running"  # "running" | "idle"
@@ -278,13 +275,13 @@ class AgenticStepCompletedEvent(LifecycleEvent):
 
 
 class MemoryRecalledEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.memory.recalled"] = "soothe.protocol.memory.recalled"
+    type: Literal["soothe.internal.memory.recalled"] = "soothe.internal.memory.recalled"
     count: int = 0
     query: str = ""
 
 
 class MemoryStoredEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.memory.stored"] = "soothe.protocol.memory.stored"
+    type: Literal["soothe.internal.memory.stored"] = "soothe.internal.memory.stored"
     id: str = ""
     source_thread: str = ""
 
@@ -296,32 +293,6 @@ class PlanCreatedEvent(ProtocolEvent):
     steps: list[dict[str, Any]] = []  # noqa: RUF012
     reasoning: str | None = None
     is_plan_only: bool = False
-
-
-class PlanStepStartedEvent(ProtocolEvent):
-    type: Literal["soothe.cognition.plan.step.started"] = "soothe.cognition.plan.step.started"
-    step_id: str = ""
-    description: str = ""
-    depends_on: list[str] = []  # noqa: RUF012
-    batch_index: int | None = None
-    index: int | None = None
-
-
-class PlanStepCompletedEvent(ProtocolEvent):
-    type: Literal["soothe.cognition.plan.step.completed"] = "soothe.cognition.plan.step.completed"
-    step_id: str = ""
-    success: bool = False
-    result_preview: str | None = None
-    duration_ms: int | None = None
-    index: int | None = None
-
-
-class PlanStepFailedEvent(ProtocolEvent):
-    type: Literal["soothe.cognition.plan.step.failed"] = "soothe.cognition.plan.step.failed"
-    step_id: str = ""
-    error: str = ""
-    blocked_steps: list[str] | None = None
-    duration_ms: int | None = None
 
 
 class PlanBatchStartedEvent(ProtocolEvent):
@@ -338,19 +309,19 @@ class PlanReflectedEvent(ProtocolEvent):
 
 
 class PlanDagSnapshotEvent(ProtocolEvent):
-    type: Literal["soothe.cognition.plan.dag_snapshot"] = "soothe.cognition.plan.dag_snapshot"
+    type: Literal["soothe.internal.plan.dag_snapshot"] = "soothe.internal.plan.dag_snapshot"
     steps: list[dict[str, Any]] = []  # noqa: RUF012
 
 
 class PolicyCheckedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.policy.checked"] = "soothe.protocol.policy.checked"
+    type: Literal["soothe.internal.policy.checked"] = "soothe.internal.policy.checked"
     action: str = ""
     verdict: str = ""
     profile: str | None = None
 
 
 class PolicyDeniedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.policy.denied"] = "soothe.protocol.policy.denied"
+    type: Literal["soothe.internal.policy.denied"] = "soothe.internal.policy.denied"
     action: str = ""
     reason: str = ""
     profile: str | None = None
@@ -468,6 +439,7 @@ class EventMeta:
 
 
 _DOMAIN_DEFAULT_TIER: dict[str, VerbosityTier] = {
+    "internal": VerbosityTier.INTERNAL,
     "lifecycle": VerbosityTier.DETAILED,
     "protocol": VerbosityTier.DETAILED,
     "cognition": VerbosityTier.NORMAL,
@@ -502,6 +474,8 @@ class EventRegistry:
         """Return the domain from an event type string via ``split('.')[1]``."""
         segments = event_type.split(".")
         _min_segments = 2
+        if len(segments) >= _min_segments and segments[1] == "internal":
+            return "internal"
         return segments[1] if len(segments) >= _min_segments else "unknown"
 
     def get_verbosity(self, event_type: str) -> VerbosityTier:
@@ -541,22 +515,24 @@ def _reg(
     """Internal helper for registering core events.
 
     Args:
-        type_string: Event type string (e.g., "soothe.lifecycle.loop.started").
+        type_string: Event type string (e.g., "soothe.internal.loop.started").
         model: Event model class.
         verbosity: Optional VerbosityTier override.
         summary_template: Optional template for event summaries.
         priority: Event priority for queue overflow management (IG-258).
     """
     parts = type_string.split(".")
-    domain = parts[1] if len(parts) >= 2 else "unknown"
-    component = parts[2] if len(parts) >= 3 else ""
-    action = parts[3] if len(parts) >= 4 else ""
-    # Use explicit verbosity if provided (including QUIET=0), otherwise domain default
-    v = (
-        verbosity
-        if verbosity is not None
-        else _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.DEBUG)
-    )
+    if len(parts) >= 2 and parts[1] == "internal":
+        domain = "internal"
+        component = parts[2] if len(parts) >= 3 else ""
+        action = ".".join(parts[3:]) if len(parts) >= 4 else ""
+        default_tier = VerbosityTier.INTERNAL
+    else:
+        domain = parts[1] if len(parts) >= 2 else "unknown"
+        component = parts[2] if len(parts) >= 3 else ""
+        action = parts[3] if len(parts) >= 4 else ""
+        default_tier = _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.DEBUG)
+    v = verbosity if verbosity is not None else default_tier
     REGISTRY.register(
         EventMeta(
             type_string=type_string,
@@ -667,7 +643,7 @@ _reg(LOOP_COMPLETED, LoopCompletedEvent, summary_template="loop={loop_id}")
 _reg(
     DAEMON_HEARTBEAT,
     DaemonHeartbeatEvent,
-    verbosity=VerbosityTier.DEBUG,
+    verbosity=VerbosityTier.INTERNAL,
     summary_template="Daemon heartbeat: state={state}",
 )
 
@@ -677,36 +653,42 @@ _reg(
     AgenticLoopStartedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="{goal}",
+    priority=EventPriority.HIGH,
 )
 _reg(
     AGENT_LOOP_COMPLETED,
     AgenticLoopCompletedEvent,
     verbosity=VerbosityTier.QUIET,
     summary_template="Done: {completion_summary}",
+    priority=EventPriority.HIGH,
 )
 _reg(
     AGENT_LOOP_PLAN_DECISION,
     AgenticPlanDecisionEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Act plan · {execution_mode}",
+    priority=EventPriority.HIGH,
 )
 _reg(
     AGENT_LOOP_STEP_STARTED,
     AgenticStepStartedEvent,
     verbosity=VerbosityTier.NORMAL,  # RFC-0020: Step descriptions visible at normal verbosity
     summary_template="{description}",
+    priority=EventPriority.HIGH,
 )
 _reg(
     AGENT_LOOP_STEP_QUEUED,
     AgenticStepQueuedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Queued: {description}",
+    priority=EventPriority.HIGH,
 )
 _reg(
     AGENT_LOOP_STEP_COMPLETED,
     AgenticStepCompletedEvent,
     verbosity=VerbosityTier.NORMAL,  # Show step completion at normal verbosity for progress visibility
     summary_template="{summary} ({duration_ms}ms)",
+    priority=EventPriority.HIGH,
 )
 
 # -- Protocol: memory --------------------------------------------------------
@@ -716,21 +698,13 @@ _reg(MEMORY_STORED, MemoryStoredEvent, summary_template="Stored memory: {id}")
 # -- Protocol: plan ----------------------------------------------------------
 # Plan display is handled by on_plan_created() renderer, not summary template
 _reg(PLAN_CREATED, PlanCreatedEvent)
-_reg(PLAN_STEP_STARTED, PlanStepStartedEvent, summary_template="Step {step_id}: {description}")
-_reg(
-    PLAN_STEP_COMPLETED,
-    PlanStepCompletedEvent,
-    verbosity=VerbosityTier.DETAILED,
-    summary_template="Step {step_id}: done",
-)
-_reg(PLAN_STEP_FAILED, PlanStepFailedEvent, summary_template="Step {step_id}: FAILED - {error}")
 _reg(
     PLAN_BATCH_STARTED,
     PlanBatchStartedEvent,
     summary_template="Batch: {parallel_count} steps in parallel",
 )
 _reg(PLAN_REFLECTED, PlanReflectedEvent, summary_template="Reflected: {assessment}")
-_reg(PLAN_DAG_SNAPSHOT, PlanDagSnapshotEvent, verbosity=VerbosityTier.DEBUG)
+_reg(PLAN_DAG_SNAPSHOT, PlanDagSnapshotEvent, verbosity=VerbosityTier.INTERNAL)
 
 # -- Protocol: policy --------------------------------------------------------
 _reg(POLICY_CHECKED, PolicyCheckedEvent, summary_template="Policy: {verdict}")
@@ -768,7 +742,7 @@ class _BranchCreatedEvent(SootheEvent):
 
 
 class _BranchAnalyzedEvent(SootheEvent):
-    type: str = "soothe.cognition.branch.analyzed"
+    type: str = "soothe.internal.branch.analyzed"
     branch_id: str
     avoid_patterns: list[str] = []
     suggested_adjustments: list[str] = []
@@ -782,15 +756,15 @@ class _BranchRetryStartedEvent(SootheEvent):
 
 
 class _BranchPrunedEvent(SootheEvent):
-    type: str = "soothe.cognition.branch.pruned"
+    type: str = "soothe.internal.branch.pruned"
     branch_id: str
     loop_id: str
 
 
 _reg(BRANCH_CREATED, _BranchCreatedEvent, verbosity=VerbosityTier.NORMAL)
-_reg(BRANCH_ANALYZED, _BranchAnalyzedEvent, verbosity=VerbosityTier.DETAILED)
+_reg(BRANCH_ANALYZED, _BranchAnalyzedEvent, verbosity=VerbosityTier.INTERNAL)
 _reg(BRANCH_RETRY_STARTED, _BranchRetryStartedEvent, verbosity=VerbosityTier.NORMAL)
-_reg(BRANCH_PRUNED, _BranchPrunedEvent, verbosity=VerbosityTier.DETAILED)
+_reg(BRANCH_PRUNED, _BranchPrunedEvent, verbosity=VerbosityTier.INTERNAL)
 
 
 class _AutopilotStatusChanged(SootheEvent):
@@ -827,7 +801,7 @@ class _AutopilotDreamingExited(SootheEvent):
 
 
 class _AutopilotGoalValidated(SootheEvent):
-    type: str = "soothe.system.autopilot.goal.validated"
+    type: str = "soothe.internal.autopilot.goal.validated"
     goal_id: str
     confidence: float = 1.0
 
@@ -839,14 +813,14 @@ class _AutopilotGoalSuspended(SootheEvent):
 
 
 class _AutopilotSendBack(SootheEvent):
-    type: str = "soothe.system.autopilot.feedback.sent"
+    type: str = "soothe.internal.autopilot.feedback.sent"
     goal_id: str
     remaining_budget: int = 0
     feedback: str = ""
 
 
 class _AutopilotRelationshipDetected(SootheEvent):
-    type: str = "soothe.system.autopilot.relationship.detected"
+    type: str = "soothe.internal.autopilot.relationship.detected"
     from_goal: str
     to_goal: str
     relationship_type: str
@@ -854,7 +828,7 @@ class _AutopilotRelationshipDetected(SootheEvent):
 
 
 class _AutopilotCheckpointSaved(SootheEvent):
-    type: str = "soothe.system.autopilot.checkpoint.saved"
+    type: str = "soothe.internal.autopilot.checkpoint.saved"
     thread_id: str
     trigger: str = ""
 
@@ -865,22 +839,22 @@ class _AutopilotGoalBlocked(SootheEvent):
     reason: str = ""
 
 
-_reg(AUTOPILLOT_STATUS_CHANGED, _AutopilotStatusChanged, verbosity=VerbosityTier.NORMAL)
-_reg(AUTOPILLOT_GOAL_CREATED, _AutopilotGoalCreated, verbosity=VerbosityTier.NORMAL)
-_reg(AUTOPILLOT_GOAL_PROGRESS, _AutopilotGoalProgress, verbosity=VerbosityTier.NORMAL)
-_reg(AUTOPILLOT_GOAL_COMPLETED, _AutopilotGoalCompleted, verbosity=VerbosityTier.NORMAL)
-_reg(AUTOPILLOT_DREAMING_ENTERED, _AutopilotDreamingEntered, verbosity=VerbosityTier.NORMAL)
-_reg(AUTOPILLOT_DREAMING_EXITED, _AutopilotDreamingExited, verbosity=VerbosityTier.NORMAL)
-_reg(AUTOPILLOT_GOAL_VALIDATED, _AutopilotGoalValidated, verbosity=VerbosityTier.DETAILED)
-_reg(AUTOPILLOT_GOAL_SUSPENDED, _AutopilotGoalSuspended, verbosity=VerbosityTier.NORMAL)
-_reg(AUTOPILLOT_SEND_BACK, _AutopilotSendBack, verbosity=VerbosityTier.DETAILED)
+_reg(AUTOPILOT_STATUS_CHANGED, _AutopilotStatusChanged, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILOT_GOAL_CREATED, _AutopilotGoalCreated, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILOT_GOAL_PROGRESS, _AutopilotGoalProgress, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILOT_GOAL_COMPLETED, _AutopilotGoalCompleted, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILOT_DREAMING_ENTERED, _AutopilotDreamingEntered, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILOT_DREAMING_EXITED, _AutopilotDreamingExited, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILOT_GOAL_VALIDATED, _AutopilotGoalValidated, verbosity=VerbosityTier.INTERNAL)
+_reg(AUTOPILOT_GOAL_SUSPENDED, _AutopilotGoalSuspended, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILOT_SEND_BACK, _AutopilotSendBack, verbosity=VerbosityTier.INTERNAL)
 _reg(
-    AUTOPILLOT_RELATIONSHIP_DETECTED,
+    AUTOPILOT_RELATIONSHIP_DETECTED,
     _AutopilotRelationshipDetected,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.INTERNAL,
 )
-_reg(AUTOPILLOT_CHECKPOINT_SAVED, _AutopilotCheckpointSaved, verbosity=VerbosityTier.DETAILED)
-_reg(AUTOPILLOT_GOAL_BLOCKED, _AutopilotGoalBlocked, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILOT_CHECKPOINT_SAVED, _AutopilotCheckpointSaved, verbosity=VerbosityTier.INTERNAL)
+_reg(AUTOPILOT_GOAL_BLOCKED, _AutopilotGoalBlocked, verbosity=VerbosityTier.NORMAL)
 
 
 # ---------------------------------------------------------------------------

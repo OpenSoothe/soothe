@@ -12,14 +12,19 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.core.events import HISTORY_REPLAY_COMPLETE, LOOP_REATTACHED
+from soothe.core.events import REPLAY_COMPLETE
 from soothe.core.events.replay import (
     enrich_events_with_coreagent_details,
     reconstruct_event_stream,
 )
+from soothe.core.events.visibility import (
+    is_catalog_event_client_wire_visible,
+)
 from soothe.core.loop.state.persistence.manager import (
     AgentLoopCheckpointPersistenceManager,
 )
+
+LOOP_REATTACHED_WIRE = "loop_reattached"
 
 logger = logging.getLogger(__name__)
 
@@ -66,33 +71,40 @@ async def handle_loop_reattach(
             event_stream, checkpointer_thread_map
         )
 
+        client_stream = [
+            event
+            for event in enriched_stream
+            if isinstance(event, dict)
+            and is_catalog_event_client_wire_visible(str(event.get("type") or ""))
+        ]
+
         # Send history_replay event to client
         await daemon._send_client_message(
             client_id,
             {
                 "type": "history_replay",
                 "loop_id": loop_id,
-                "events": enriched_stream,
-                "total_events": len(enriched_stream),
+                "events": client_stream,
+                "total_events": len(client_stream),
             },
         )
 
-        # Send LOOP_REATTACHED confirmation
+        # Send loop reattached control frame (not soothe.internal catalog type on wire)
         await daemon._send_client_message(
             client_id,
             {
-                "type": LOOP_REATTACHED,
+                "type": LOOP_REATTACHED_WIRE,
                 "loop_id": loop_id,
                 "timestamp": enriched_stream[-1].get("timestamp") if enriched_stream else None,
             },
         )
 
-        # Send HISTORY_REPLAY_COMPLETE marker
         await daemon._send_client_message(
             client_id,
             {
-                "type": HISTORY_REPLAY_COMPLETE,
+                "type": REPLAY_COMPLETE,
                 "loop_id": loop_id,
+                "event_count": len(client_stream),
             },
         )
 

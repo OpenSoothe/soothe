@@ -10,11 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
-from soothe_sdk.core.events import (
-    PLAN_CREATED,
-    PLAN_STEP_COMPLETED,
-    PLAN_STEP_STARTED,
-)
+from soothe_sdk.core.events import PLAN_CREATED
 from soothe_sdk.core.verbosity import VerbosityTier
 from soothe_sdk.ux import classify_event_to_tier
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
@@ -942,10 +938,6 @@ class EventProcessor:
         # Update plan state and call specific hooks
         if etype == PLAN_CREATED:
             self._handle_plan_created(data)
-        elif etype == PLAN_STEP_STARTED:
-            self._handle_plan_step_started(data)
-        elif etype == PLAN_STEP_COMPLETED:
-            self._handle_plan_step_completed(data)
         elif category == VerbosityTier.QUIET and "error" in etype:
             error_text = data.get("error", data.get("message", str(etype)))
             self._renderer.on_error(error_text)
@@ -975,33 +967,6 @@ class EventProcessor:
         )
         self._state.current_plan = plan
         self._renderer.on_plan_created(plan)
-
-    def _handle_plan_step_started(self, data: dict[str, Any]) -> None:
-        """Handle plan step started event."""
-        step_id = data.get("step_id", "")
-        description = data.get("description", "")
-
-        if self._state.current_plan:
-            for step in self._state.current_plan.steps:
-                if step.step_id == step_id:
-                    step.status = "in_progress"
-                    break
-
-        self._renderer.on_plan_step_started(step_id, description)
-
-    def _handle_plan_step_completed(self, data: dict[str, Any]) -> None:
-        """Handle plan step completed event."""
-        step_id = data.get("step_id", "")
-        success = data.get("success", False)
-        duration_ms = data.get("duration_ms", 0)
-
-        if self._state.current_plan:
-            for step in self._state.current_plan.steps:
-                if step.step_id == step_id:
-                    step.status = "completed" if success else "failed"
-                    break
-
-        self._renderer.on_plan_step_completed(step_id, success, duration_ms)
 
     def _get_effective_streaming_config(self) -> Any:
         """Get effective streaming config with defaults (RFC-614).

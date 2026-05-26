@@ -220,10 +220,10 @@ async def test_websocket_cors_accepts_allowed_origin(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_websocket_heartbeat_emits_while_query_running(
+async def test_websocket_internal_heartbeat_not_broadcast_while_query_running(
     websocket_daemon: tuple[SootheDaemon, int],
 ) -> None:
-    """Daemon emits heartbeat events over WebSocket while query is marked running."""
+    """Internal catalog events must not be broadcast to WebSocket clients (IG-435)."""
     daemon, port = websocket_daemon
     client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
     await client.connect()
@@ -240,17 +240,21 @@ async def test_websocket_heartbeat_emits_while_query_running(
         await client.send_loop_subscribe(loop_id)
         await await_event_type(client.read_event, "subscription_confirmed", timeout=5.0)
 
-        async with asyncio.timeout(8.0):
-            while True:
-                event = await client.read_event()
-                if event is None or event.get("type") != "event":
-                    continue
-                data = event.get("data")
-                if isinstance(data, dict) and data.get("type") == "soothe.system.daemon.heartbeat":
-                    ctx = event.get("loop_id") or event.get("thread_id")
-                    assert ctx == loop_id
-                    assert data["state"] == "running"
-                    break
+        try:
+            async with asyncio.timeout(3.0):
+                while True:
+                    event = await client.read_event()
+                    if event is None or event.get("type") != "event":
+                        continue
+                    data = event.get("data")
+                    if isinstance(data, dict) and str(data.get("type", "")).startswith(
+                        "soothe.internal."
+                    ):
+                        pytest.fail(
+                            f"internal catalog event must not reach clients: {data.get('type')}"
+                        )
+        except TimeoutError:
+            pass
     finally:
         daemon._query_running = False
         if client.is_connected:

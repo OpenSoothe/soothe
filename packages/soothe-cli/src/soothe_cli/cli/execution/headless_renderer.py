@@ -92,16 +92,5 @@ class HeadlessCliRenderer(RendererBase):
     def on_plan_created(self, plan: Any) -> None:
         del plan
 
-    def on_plan_step_started(self, step_id: str, description: str) -> None:
-        del step_id, description
-
-    def on_plan_step_completed(
-        self,
-        step_id: str,
-        success: bool,
-        duration_ms: int,
-    ) -> None:
-        del step_id, success, duration_ms
-
     def on_turn_end(self) -> None:
         """End of turn; headless does not append synthetic newlines to stdout."""
