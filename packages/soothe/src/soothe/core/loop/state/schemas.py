@@ -738,6 +738,8 @@ class LoopState(BaseModel):
         goal: Goal description (after any ``/skill:`` expansion for orchestration).
         goal_user_submission: Original user line when ``goal`` was expanded from ``/skill:``;
             used for Langfuse trace input so dashboards stay aligned with submitted text.
+        skill_context: Skill reference only (SKILL.md body) when ``goal`` was expanded from
+            ``/skill:``; used in execute-step ``<SKILL_CONTEXT>`` (not the full composed goal).
         thread_id: Thread context
         workspace: Thread-specific workspace path (RFC-103)
         git_status: Optional git snapshot for planner prompts (branch, main_branch, recent_commits; IG-383)
@@ -765,6 +767,10 @@ class LoopState(BaseModel):
     goal_user_submission: str | None = Field(
         default=None,
         description="User-submitted line before /skill: expansion (Langfuse / UX).",
+    )
+    skill_context: str | None = Field(
+        default=None,
+        description="Skill reference text for execute-step SKILL_CONTEXT when goal expanded from /skill:.",
     )
     thread_id: str
     workspace: str | None = None  # Thread-specific workspace (RFC-103)

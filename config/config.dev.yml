@@ -4,6 +4,30 @@
 # Docker (repo root): docker compose up -d  → Postgres + pgvector on localhost:6432, Langfuse on :3300
 # Keys: pk-lf-soothe-local / sk-lf-soothe-local (see docker-compose LANGFUSE_INIT_*). Export DASHSCOPE_*.
 
+# ============================================================
+# AGENT (Unified)
+# ============================================================
+agent:
+  name: Soothe
+  autonomous:
+    enabled_by_default: false
+    max_iterations: 15
+
+  loop:
+    max_iterations: 99
+    plan_prompt_ledger:
+      plan_ledger_max_messages: 20
+    limits:
+      max_parallel_steps: 3
+      max_parallel_tools: 30
+      global_max_llm_calls: 10
+      tool_call_limit:
+        global_thread_limit: 200
+        global_run_limit: 80
+
+# ============================================================
+# PROVIDERS
+# ============================================================
 providers:
   - name: dashscope
     provider_type: openai
@@ -44,9 +68,11 @@ router:
   image: "coding-plan:qwen3.6-plus"
   embedding: "dashscope:multimodal-embedding-v1"
 
-# Built-in subagents (explore, plan, tacitus are registered in resolver/_resolver_tools.py).
-# Community subagents (claude, browser_use) require soothe-community package — disable in core config.
-# See: https://github.com/OpenSoothe/soothe-community for community agent extensions.
+# ============================================================
+# SUBAGENTS
+# ============================================================
+# Built-in subagents (explore, plan, tacitus) are registered automatically.
+# Community subagents (claude, browser_use) require soothe-community package.
 subagents:
   sample_echo:
     enabled: true
@@ -60,18 +86,9 @@ subagents:
       synthesis_role: think
       effort: normal
 
-agent_loop:
-  max_iterations: 99
-  plan_prompt_ledger:
-    plan_ledger_max_messages: 20
-  limits:
-    max_parallel_steps: 3
-    max_parallel_tools: 30
-    global_max_llm_calls: 10
-    tool_call_limit:
-      global_thread_limit: 200
-      global_run_limit: 80
-
+# ============================================================
+# OBSERVABILITY
+# ============================================================
 observability:
   log_file_level: DEBUG
   langfuse:
@@ -83,6 +100,9 @@ observability:
     tags:
       - soothe
 
+# ============================================================
+# PERSISTENCE & STORAGE
+# ============================================================
 persistence:
   default_backend: postgresql
   # Thread pool (daemon_config.dev.yml): one checkpointer + one AgentLoop pool per daemon process.
@@ -102,3 +122,9 @@ vector_stores:
 
 vector_store_router:
   default: pgvector_dev:soothe_default
+
+# ============================================================
+# OPTIMIZATION
+# ============================================================
+# Uses defaults from OptimizationConfig (IG-433).
+# All semantic features enabled with graceful keyword/regex fallback.

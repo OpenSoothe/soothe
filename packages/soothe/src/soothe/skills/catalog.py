@@ -242,16 +242,52 @@ def read_skill_markdown(meta: dict[str, Any]) -> str | None:
         return None
 
 
+def build_skill_context_text(meta: dict[str, Any], markdown: str) -> str:
+    """Compose skill reference text (name, folder path, description, SKILL.md body).
+
+    Used for execute-step ``<SKILL_CONTEXT>`` blocks; excludes the short user instruction
+    prefix that ``build_skill_invocation_envelope`` places ahead of the reference.
+
+    Args:
+        meta: Skill metadata dict (``name``, ``description``, ``path``, etc.).
+        markdown: Full SKILL.md content (frontmatter + body).
+
+    Returns:
+        Skill reference body for ``<SKILL_CONTEXT>``.
+    """
+    body = _strip_frontmatter(markdown)
+    name = meta.get("name", "")
+    description = meta.get("description", "")
+    skill_dir = str(meta.get("path") or "").strip()
+
+    reference_parts: list[str] = []
+    if name:
+        reference_parts.append(f"Skill: {name}")
+    if skill_dir:
+        reference_parts.append(
+            f"Skill folder: {skill_dir}\n"
+            "(Additional files may live under this directory — use filesystem tools to "
+            "read them when SKILL.md is not sufficient.)"
+        )
+    if description:
+        reference_parts.append(f"Description: {description}")
+    if body.strip():
+        reference_parts.append(body.strip())
+    return "\n\n".join(reference_parts)
+
+
 @dataclass
 class SkillInvocationEnvelope:
     """Envelope for a skill invocation turn queued to the agent.
 
     Attributes:
         prompt: Composed skill invocation prompt sent as agent input.
+        skill_context: Skill reference only (for execute-step ``<SKILL_CONTEXT>``).
         message_kwargs: Additional kwargs with ``soothe_skill`` marker.
     """
 
     prompt: str
+    skill_context: str
     message_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
@@ -326,18 +362,8 @@ def build_skill_invocation_envelope(
     Returns:
         ``SkillInvocationEnvelope`` with composed prompt and message kwargs.
     """
-    body = _strip_frontmatter(markdown)
+    reference_text = build_skill_context_text(meta, markdown)
     name = meta.get("name", "")
-    description = meta.get("description", "")
-
-    reference_parts: list[str] = []
-    if name:
-        reference_parts.append(f"Skill: {name}")
-    if description:
-        reference_parts.append(f"Description: {description}")
-    if body.strip():
-        reference_parts.append(body.strip())
-    reference_text = "\n\n".join(reference_parts)
 
     user_instruction = (args or "").strip()
     composed: list[str] = []
@@ -359,7 +385,11 @@ def build_skill_invocation_envelope(
         },
     }
 
-    return SkillInvocationEnvelope(prompt=prompt, message_kwargs=message_kwargs)
+    return SkillInvocationEnvelope(
+        prompt=prompt,
+        skill_context=reference_text,
+        message_kwargs=message_kwargs,
+    )
 
 
 def try_expand_slash_skill_user_line(

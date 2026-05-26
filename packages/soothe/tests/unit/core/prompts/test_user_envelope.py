@@ -10,8 +10,7 @@ from soothe.core.prompts.user_envelope import (
 
 def test_execute_envelope_includes_response_language_hint() -> None:
     envelope = build_execute_step_envelope(
-        goal="请总结项目",
-        step_description="Read README",
+        "Read README",
         execution_hints=None,
     )
     assert "<response_language_hint>" in envelope
@@ -19,31 +18,41 @@ def test_execute_envelope_includes_response_language_hint() -> None:
     assert "<CONTEXT_INFO>" in envelope
 
 
-def test_execute_envelope_omits_goal_block_for_plain_goals() -> None:
+def test_execute_envelope_plain_goal_layout() -> None:
     envelope = build_execute_step_envelope(
-        goal="analyze why the exec interrupted. how to fix (iteration 1/99)",
-        step_description="Do the thing",
+        "Do the thing",
         execution_hints=None,
     )
-    assert "<CURRENT_GOAL>" not in envelope
-    assert "analyze why the exec interrupted" not in envelope
     assert envelope.startswith("<USER_QUERY>")
+    assert "<SKILL_CONTEXT>" not in envelope
+    assert "<USER_PRIMARY_QUERY>" not in envelope
+    assert "--- Context ---" in envelope
+    assert envelope.index("</USER_QUERY>") < envelope.index("--- Context ---")
 
 
-def test_execute_envelope_slash_skill_surfaces_primary_query_first() -> None:
-    """Long expanded goal + /skill: submission → USER_PRIMARY_QUERY before full context."""
-    long_skill = "Skill: demo\n\n" + ("body line\n" * 40)
-    envelope = build_execute_step_envelope(
-        goal=long_skill,
-        step_description="Run the planned step",
-        goal_user_submission="/skill:demo summarize the README",
+def test_execute_envelope_slash_skill_skill_context_after_user_query() -> None:
+    """Skill reference only in SKILL_CONTEXT, same top-level shape as non-skill."""
+    skill_ref = (
+        "Skill: demo\n\n"
+        "Skill folder: /skills/demo\n"
+        "(Additional files may live under this directory — use filesystem tools to "
+        "read them when SKILL.md is not sufficient.)\n\n"
+        + ("body line\n" * 5)
     )
-    assert "<CURRENT_GOAL>" not in envelope
-    assert "<USER_PRIMARY_QUERY>" in envelope
-    assert "summarize the README" in envelope
-    assert "<FULL_GOAL_AND_SKILL_CONTEXT>" in envelope
-    assert envelope.index("<USER_PRIMARY_QUERY>") < envelope.index("<FULL_GOAL_AND_SKILL_CONTEXT>")
-    assert envelope.index("<FULL_GOAL_AND_SKILL_CONTEXT>") < envelope.index("<USER_QUERY>")
+    envelope = build_execute_step_envelope(
+        "Run the planned step",
+        skill_context=skill_ref,
+    )
+    assert "<USER_PRIMARY_QUERY>" not in envelope
+    assert "<FULL_GOAL_AND_SKILL_CONTEXT>" not in envelope
+    assert "<SKILL_CONTEXT>" in envelope
+    assert "Skill: demo" in envelope
+    assert "Skill folder: /skills/demo" in envelope
+    assert "User instruction" not in envelope
+    uq = envelope.index("<USER_QUERY>")
+    sk = envelope.index("<SKILL_CONTEXT>")
+    ctx = envelope.index("--- Context ---")
+    assert uq < sk < ctx
 
 
 def test_plan_context_envelope_slash_skill_surfaces_primary_query() -> None:

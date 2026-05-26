@@ -18,13 +18,20 @@ from soothe_sdk.utils import get_outcome_type
 PLANNER_OUTCOME_PREVIEW_CAP = 2500
 
 
-def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) -> dict[str, Any]:
+def generate_outcome_metadata(
+    tool_name: str,
+    result: Any,
+    tool_call_id: str,
+    *,
+    registry_config: Any | None = None,
+) -> dict[str, Any]:
     """Generate structured outcome metadata from tool result.
 
     Args:
         tool_name: Name of the tool that was executed
         result: Tool execution result (string, dict, or list)
         tool_call_id: Unique identifier for this tool invocation
+        registry_config: Optional tool result registry settings (IG-433).
 
     Returns:
         Structured metadata dict for Layer 2 reasoning with fields:
@@ -35,6 +42,16 @@ def generate_outcome_metadata(tool_name: str, result: Any, tool_call_id: str) ->
         - entities: Key resources found/affected
         - size_bytes: Result size
     """
+    if registry_config is not None and getattr(registry_config, "enabled", False):
+        from soothe.core.loop.engine.tool_result_registry import generate_outcome_metadata_v2
+
+        return generate_outcome_metadata_v2(
+            tool_name,
+            result,
+            tool_call_id,
+            config=registry_config,
+        )
+
     outcome: dict[str, Any] = {
         "tool_call_id": tool_call_id,
         "tool_name": tool_name,

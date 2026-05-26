@@ -118,7 +118,7 @@ class PromptBuilder:
         # RFC-214: execute ledger as real messages (IG-380: optional projection for plan caps).
         ledger_cfg = None
         if self.config is not None:
-            ledger_cfg = self.config.agent_loop.plan_prompt_ledger
+            ledger_cfg = self.config.agent.loop.plan_prompt_ledger
         projected = project_loop_messages_for_plan(state.loop_messages, ledger_cfg)
         out.extend(projected)
         if len(projected) != len(state.loop_messages):

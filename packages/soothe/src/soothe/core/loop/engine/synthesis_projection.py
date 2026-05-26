@@ -35,6 +35,7 @@ _EXCLUDED_LEDGER_PHASES = frozenset(
     }
 )
 
+
 @dataclass(frozen=True)
 class SynthesisUserContext:
     """User-safe inputs for final report generation."""

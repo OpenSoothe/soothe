@@ -63,154 +63,6 @@ def _plan_phase_chat_model(model: Any) -> Any:
         return model
 
 
-def _detect_completion_fallback(
-    state: LoopState,
-    plan_result: Any,
-    goal: str,
-) -> Any:
-    """Detect completion when LLM fails to set status="done" despite evidence.
-
-    This is a fallback mechanism to prevent infinite loops when the LLM
-    doesn't recognize clear completion signals.
-
-    Criteria for forced completion:
-    1. High evidence volume (≥10,000 chars) with no new discoveries
-    2. Action repetition across iterations
-    3. Diminishing returns (no evidence growth in recent iterations)
-    4. All steps successful with substantial output
-
-    Args:
-        state: Current loop state with step results
-        plan_result: Plan result from LLM
-        goal: The original goal
-
-    Returns:
-        PlanResult with status potentially updated to "done"
-    """
-    # Only override if LLM returned status != "done"
-    if plan_result.status == "done":
-        return plan_result
-
-    # Check completion indicators
-    completion_indicators = []
-
-    # 1. Action repetition detection
-    if len(state.action_history) >= 2:
-        recent_actions = state.get_recent_actions(2)
-        if len(recent_actions) == 2:
-            # Normalize actions for comparison
-            action1 = recent_actions[0].lower().strip()
-            action2 = recent_actions[1].lower().strip()
-            if action1 == action2 or _actions_semantically_similar(action1, action2):
-                completion_indicators.append("action_repetition")
-                logger.info(
-                    "[Completion] action-repeat: '%s' → '%s'",
-                    action1,
-                    action2,
-                )
-
-    # 2. Evidence volume threshold
-    total_evidence_chars = sum(
-        r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0 for r in state.step_results
-    )
-    _prog = plan_result.goal_progress
-    if total_evidence_chars >= 10_000 and _prog in ("high", "complete"):
-        completion_indicators.append("high_evidence_volume")
-        logger.info(
-            "[Completion] high-evidence: %d chars prog=%s",
-            total_evidence_chars,
-            _prog,
-        )
-
-    # 3. Diminishing returns (no evidence growth in last iteration)
-    if len(state.step_results) >= 2:
-        recent_size = sum(
-            r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0
-            for r in state.step_results[-2:]
-        )
-        earlier_size = sum(
-            r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0
-            for r in state.step_results[:-2]
-        )
-        # If recent iterations added < 10% new evidence
-        if earlier_size > 0 and recent_size < earlier_size * 0.1:
-            completion_indicators.append("diminishing_returns")
-            logger.info(
-                "[Completion] diminishing: earlier=%d recent=%d",
-                earlier_size,
-                recent_size,
-            )
-
-    # 4. All steps successful with substantial output
-    if state.step_results:
-        all_successful = all(r.success for r in state.step_results)
-        has_substantial_output = any(
-            r.outcome.get("size_bytes", 0) > 5000
-            for r in state.step_results
-            if r.success and r.outcome
-        )
-        if (
-            all_successful
-            and has_substantial_output
-            and plan_result.goal_progress in ("high", "complete")
-        ):
-            completion_indicators.append("all_steps_successful")
-            logger.info(
-                "[Completion] all-success: %d steps prog=%s",
-                len(state.step_results),
-                plan_result.goal_progress,
-            )
-
-    # Decision: force completion if ≥2 indicators OR action repetition
-    if len(completion_indicators) >= 2 or "action_repetition" in completion_indicators:
-        logger.warning(
-            "[Completion] force-done: %s (LLM=%s)",
-            ", ".join(completion_indicators),
-            plan_result.status,
-        )
-        # Update result to mark as done
-        updated = plan_result.model_copy(
-            update={
-                "status": "done",
-                "goal_progress": "complete",
-                "next_action": plan_result.next_action or "I've completed the task.",
-            }
-        )
-        return updated
-
-    return plan_result
-
-
-def _actions_semantically_similar(action1: str, action2: str) -> bool:
-    """Check if two actions are semantically similar despite wording differences.
-
-    Args:
-        action1: First action description
-        action2: Second action description
-
-    Returns:
-        True if actions are semantically similar
-    """
-    # Normalize both actions
-    norm1 = action1.lower().strip()
-    norm2 = action2.lower().strip()
-
-    # Remove common filler words
-    fillers = {"use", "using", "will", "to", "the", "in", "for", "and", "with"}
-    words1 = set(w for w in norm1.split() if w not in fillers)
-    words2 = set(w for w in norm2.split() if w not in fillers)
-
-    # Check Jaccard similarity
-    if not words1 or not words2:
-        return False
-
-    intersection = words1 & words2
-    union = words1 | words2
-    similarity = len(intersection) / len(union)
-
-    return similarity >= 0.7  # 70% word overlap indicates similar actions
-
-
 _SIMPLE_PLANNER_HINT_MAP = {
     "search": "tool",
     "web": "tool",
@@ -431,7 +283,15 @@ class LLMPlanner:
             )
 
         # Fallback: Use heuristic reflection for step_results-based analysis
-        return reflect_heuristic(plan, step_results, goal_context)
+        failure_cfg = None
+        if self._config and hasattr(self._config, "optimization"):
+            failure_cfg = self._config.optimization.failure_intent
+        return reflect_heuristic(
+            plan,
+            step_results,
+            goal_context,
+            failure_config=failure_cfg,
+        )
 
     async def _invoke_messages(self, messages: list[Any]) -> str:
         """Invoke the LLM with a message list and return the response (RFC-207).
@@ -1049,7 +909,7 @@ class LLMPlanner:
                     }
                 )
 
-        return _detect_completion_fallback(state, result, goal)
+        return result
 
     async def assess_status(
         self,
@@ -1128,7 +988,7 @@ class LLMPlanner:
 
         if assessment.status == "done":
             gc_mode = (
-                self._config.agent_loop.goal_completion_mode
+                self._config.agent.loop.goal_completion_mode
                 if self._config is not None
                 else "llm_only"
             )
@@ -1320,7 +1180,7 @@ class LLMPlanner:
                     )
 
                     gc_mode = (
-                        self._config.agent_loop.goal_completion_mode
+                        self._config.agent.loop.goal_completion_mode
                         if self._config is not None
                         else "llm_only"
                     )

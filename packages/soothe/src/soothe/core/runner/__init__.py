@@ -108,7 +108,7 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
         if fast_model:
             self._intent_classifier = IntentClassifier(
                 model=fast_model,
-                assistant_name=self._config.assistant_name,
+                assistant_name=self._config.agent.name,
                 soothe_config=self._config,
             )
             logger.info("[IntentClassifier] Initialized in LLM mode")
@@ -171,7 +171,7 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
         self._artifact_store: Any | None = (
             None  # Last-known store for CLI/debug; authoritative copy is on RunnerState
         )
-        _lim = self._config.agent_loop.limits
+        _lim = self._config.agent.loop.limits
         self._concurrency = ConcurrencyController(
             ConcurrencyPolicy(
                 max_parallel_goals=_lim.max_parallel_goals,
@@ -545,7 +545,7 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
                     user_input,
                     thread_id=thread_id,
                     workspace=effective_workspace,
-                    max_iterations=max_iterations or self._config.autonomous.max_iterations,
+                    max_iterations=max_iterations or self._config.agent.autonomous.max_iterations,
                     intent_hint=intent_hint,
                 ):
                     yield chunk
@@ -556,7 +556,7 @@ class SootheRunner(CheckpointMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
                 user_input,
                 thread_id=thread_id,
                 workspace=effective_workspace,
-                max_iterations=max_iterations or self._config.agent_loop.max_iterations,
+                max_iterations=max_iterations or self._config.agent.loop.max_iterations,
                 preferred_subagent=preferred_subagent,
                 intent_hint=intent_hint,
             ):

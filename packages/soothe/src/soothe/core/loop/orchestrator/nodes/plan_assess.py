@@ -218,7 +218,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             )
 
         gc_mode = (
-            agent_loop.config.agent_loop.goal_completion_mode
+            agent_loop.config.agent.loop.goal_completion_mode
             if agent_loop.config is not None
             else "llm_only"
         )
@@ -265,7 +265,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             assessment.goal_progress,
         )
         gc_mode = (
-            agent_loop.config.agent_loop.goal_completion_mode
+            agent_loop.config.agent.loop.goal_completion_mode
             if agent_loop.config is not None
             else "llm_only"
         )

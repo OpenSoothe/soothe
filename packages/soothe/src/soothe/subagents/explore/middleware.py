@@ -905,9 +905,9 @@ def build_explore_middleware_stack(
 
     # Build tool limit and retry middleware from config
     tool_middlewares: list[AgentMiddleware[Any, None]] = []
-    if soothe_config is not None and soothe_config.agent_loop.limits is not None:
+    if soothe_config is not None and soothe_config.agent.loop.limits is not None:
         # Use explore-specific limits if set, otherwise use global config
-        limits_config = soothe_config.agent_loop.limits
+        limits_config = soothe_config.agent.loop.limits
         thread_limit = (
             explore_config.tool_call_limit_thread
             or limits_config.tool_call_limit.global_thread_limit
