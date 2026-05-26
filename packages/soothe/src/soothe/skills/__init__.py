@@ -3,6 +3,7 @@
 from soothe.skills.builtins import get_built_in_skills_paths
 from soothe.skills.catalog import (
     SkillInvocationEnvelope,
+    build_skill_context_text,
     build_skill_invocation_envelope,
     format_slash_skill_invoke_line,
     parse_slash_skill_user_line,
@@ -14,6 +15,7 @@ from soothe.skills.catalog import (
 
 __all__ = [
     "SkillInvocationEnvelope",
+    "build_skill_context_text",
     "build_skill_invocation_envelope",
     "format_slash_skill_invoke_line",
     "get_built_in_skills_paths",

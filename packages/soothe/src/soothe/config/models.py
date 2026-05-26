@@ -489,23 +489,52 @@ class ProtocolsConfig(BaseModel):
 
 
 class AutonomousConfig(BaseModel):
-    """Autonomous operation configuration.
+    """Unified self-driving configuration (autonomous + autopilot merged).
+
+    Controls 24/7 self-running behavior for both goal-level and daemon-level.
+    Merges former 'autonomous' and 'autopilot' sections into one unified config.
 
     Args:
         enabled_by_default: Whether new runs default to autonomous mode.
-        max_iterations: Maximum iterations per autonomous thread.
+        max_iterations: Maximum iterations per autonomous thread (goal-level).
         max_retries: Maximum retries per goal on failure.
         max_total_goals: Maximum goals allowed (RFC-0007 §5.6).
         max_goal_depth: Maximum hierarchy depth (RFC-0007 §5.6).
+        max_parallel_goals: Maximum goals running simultaneously.
         enable_dynamic_goals: Enable/disable dynamic creation (RFC-0007 §5.4).
+
+        max_send_backs: Per-goal send-back budget for consensus validation (daemon-level).
+        checkpoint_interval: Iterations between periodic checkpoints.
+        dreaming_enabled: Enter dreaming mode when all goals complete.
+        dreaming_consolidation_interval: Seconds between memory consolidation during dreaming.
+        dreaming_health_check_interval: Seconds between health checks during dreaming.
+        scheduler_enabled: Whether scheduler service is active.
+        max_scheduled_tasks: Maximum pending scheduled tasks.
+        webhooks: Webhook URLs by event type (e.g., on_goal_completed).
     """
 
+    # === Goal execution (from old autonomous) ===
     enabled_by_default: bool = False
     max_iterations: int = 10
     max_retries: int = 2
     max_total_goals: int = Field(default=50, ge=1, le=500)
     max_goal_depth: int = Field(default=5, ge=1, le=10)
+    max_parallel_goals: int = Field(default=3, ge=1, le=10)
     enable_dynamic_goals: bool = Field(default=True)
+
+    # === Orchestration (from old autopilot) ===
+    max_send_backs: int = Field(default=3, ge=1, le=10)
+    checkpoint_interval: int = Field(default=10, ge=1, le=100)
+
+    # === Dreaming ===
+    dreaming_enabled: bool = True
+    dreaming_consolidation_interval: int = Field(default=300, ge=10)
+    dreaming_health_check_interval: int = Field(default=60, ge=5)
+
+    # === Scheduler ===
+    scheduler_enabled: bool = True
+    max_scheduled_tasks: int = Field(default=100, ge=1, le=1000)
+    webhooks: dict[str, str | None] = Field(default_factory=dict)
 
 
 class PlanningConfig(BaseModel):
@@ -1193,38 +1222,53 @@ class ObservabilityConfig(BaseModel):
     )
 
 
-class AutopilotConfig(BaseModel):
-    """Autopilot mode configuration (RFC-204)."""
+class SemanticRiskConfig(BaseModel):
+    """Semantic risk assessment for goal criticality (IG-433)."""
 
-    max_iterations: int = Field(default=50, ge=1, le=500)
-    """Maximum iterations for autonomous goal execution."""
+    enabled: bool = True
+    cache_enabled: bool = True
+    cache_similarity_threshold: float = Field(default=0.9, ge=0.5, le=1.0)
+    confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    """Minimum confidence for LLM assessment; below this uses keyword fallback."""
 
-    max_send_backs: int = Field(default=3, ge=1, le=10)
-    """Per-goal send-back budget for consensus validation."""
 
-    max_parallel_goals: int = Field(default=3, ge=1, le=10)
-    """Maximum number of goals executed in parallel."""
+class SemanticRelationshipsConfig(BaseModel):
+    """Embedding-based goal relationship detection (IG-433)."""
 
-    dreaming_enabled: bool = True
-    """Whether to enter dreaming mode when all goals complete."""
+    enabled: bool = True
+    auto_apply_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
+    flag_threshold: float = Field(default=0.70, ge=0.0, le=1.0)
 
-    dreaming_consolidation_interval: int = Field(default=300, ge=10)
-    """Seconds between memory consolidation during dreaming."""
 
-    dreaming_health_check_interval: int = Field(default=60, ge=5)
-    """Seconds between health checks during dreaming."""
+class FailureIntentConfig(BaseModel):
+    """Failure intent classification for reflection (IG-433)."""
 
-    checkpoint_interval: int = Field(default=10, ge=1, le=100)
-    """Iterations between periodic checkpoints."""
+    enabled: bool = True
+    llm_confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
 
-    scheduler_enabled: bool = True
-    """Whether scheduler service is active."""
 
-    max_scheduled_tasks: int = Field(default=100, ge=1, le=1000)
-    """Maximum number of pending scheduled tasks."""
+class StructuredPlanConfig(BaseModel):
+    """Structured LLM plan parsing (IG-433)."""
 
-    webhooks: dict[str, str | None] = Field(default_factory=dict)
-    """Webhook URLs by event type (e.g., on_goal_completed, on_goal_failed)."""
+    enabled: bool = False
+
+
+class ToolResultRegistryConfig(BaseModel):
+    """Tool-specific result parsers (IG-433)."""
+
+    enabled: bool = True
+
+
+class OptimizationConfig(BaseModel):
+    """Keyword/heuristic optimization settings (IG-433)."""
+
+    semantic_risk: SemanticRiskConfig = Field(default_factory=SemanticRiskConfig)
+    semantic_relationships: SemanticRelationshipsConfig = Field(
+        default_factory=SemanticRelationshipsConfig
+    )
+    failure_intent: FailureIntentConfig = Field(default_factory=FailureIntentConfig)
+    structured_plan: StructuredPlanConfig = Field(default_factory=StructuredPlanConfig)
+    tool_result_registry: ToolResultRegistryConfig = Field(default_factory=ToolResultRegistryConfig)
 
 
 class FilesystemMiddlewareConfig(BaseModel):
@@ -1301,6 +1345,83 @@ class CodeInterpreterConfig(BaseModel):
 
     snapshot_between_turns: bool = False
     """Preserve interpreter state between conversation turns."""
+
+
+class AgentConfig(BaseModel):
+    """Unified agent configuration with progressive disclosure.
+
+    Consolidates all agent-related settings into one section:
+    - Basic: name, system_prompt (user identity)
+    - Behavior: goal_completion_mode, final_response (response mode)
+    - Autonomous: self-driving configuration (merged autonomous+autopilot)
+    - Loop: AgentLoop internal tuning
+    - Protocols: Planner, Policy, Durability backend selection
+    - CodeInterpreter: Embedded QuickJS configuration
+
+    Args:
+        name: Display name for the assistant identity in system prompts.
+        system_prompt: System prompt override. None generates default using name.
+        goal_completion_mode: How planner completion combines with execution heuristics.
+        final_response: Whether to always synthesize final report or use adaptive heuristics.
+        autonomous: Unified self-driving configuration (IG-434: merged autonomous+autopilot).
+        loop: AgentLoop configuration (IG-407: unified agentic+execution).
+        protocols: Protocol backends configuration (planner, policy, durability).
+        code_interpreter: Code interpreter middleware configuration (IG-423).
+    """
+
+    # === BASIC (User Identity) ===
+    name: str = "Soothe"
+    """Display name for the assistant identity in system prompts."""
+
+    system_prompt: str | None = None
+    """System prompt override. When None, a default prompt is generated using ``name``."""
+
+    # === BEHAVIOR (Response Mode) ===
+    goal_completion_mode: AgenticGoalCompletionMode = Field(
+        default="llm_only",
+        description=(
+            "When planner marks goal done: llm_only trusts StatusAssessment only; "
+            "heuristic_only uses execution heuristics only; hybrid uses LLM first with fallback"
+        ),
+    )
+    """How planner completion (require_goal_completion) combines with execution heuristics."""
+
+    final_response: AgenticFinalResponseMode = Field(
+        default="adaptive",
+        description=(
+            "On goal completion: adaptive uses heuristics to choose ledger direct vs "
+            "a final CoreAgent report; always_synthesize always runs the report"
+        ),
+    )
+    """Whether to always synthesize a final CoreAgent report or use adaptive heuristics."""
+
+    # === AUTONOMOUS (Self-Driving - Unified) ===
+    autonomous: AutonomousConfig = Field(
+        default_factory=AutonomousConfig,
+        description="Unified self-driving configuration (IG-434: merged autonomous+autopilot)",
+    )
+    """Controls 24/7 self-running behavior for both goal-level and daemon-level."""
+
+    # === LOOP (AgentLoop Internal Tuning) ===
+    loop: AgentLoopConfig = Field(
+        default_factory=AgentLoopConfig,
+        description="AgentLoop configuration (IG-407: unified agentic+execution)",
+    )
+    """Internal tuning for the agent loop execution mode."""
+
+    # === PROTOCOLS (Backend Selection) ===
+    protocols: ProtocolsConfig = Field(
+        default_factory=ProtocolsConfig,
+        description="Protocol backends configuration (planner, policy, durability)",
+    )
+    """Backend protocol selection for planner, policy, and durability."""
+
+    # === CODE INTERPRETER ===
+    code_interpreter: CodeInterpreterConfig = Field(
+        default_factory=CodeInterpreterConfig,
+        description="Code interpreter middleware configuration (IG-423)",
+    )
+    """Embedded QuickJS interpreter for programmatic tool calling."""
 
 
 class SecurityConfig(BaseModel):

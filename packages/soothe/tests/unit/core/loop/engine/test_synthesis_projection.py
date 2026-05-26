@@ -21,7 +21,6 @@ from soothe.core.prompts.user_envelope import (
 
 def test_flatten_execute_envelope_extracts_user_query() -> None:
     envelope = build_execute_step_envelope(
-        "Find config files",
         "Search the repo for *.yml config",
         execution_hints="hint",
     )

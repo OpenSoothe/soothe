@@ -705,8 +705,26 @@ class AutonomousMixin(GoalDirectivesMixin):
         if not description:
             return
 
+        sem_cfg = None
+        if self._config and hasattr(self._config, "optimization"):
+            sem_cfg = self._config.optimization.semantic_risk
+
+        # Build context for risk assessment (workspace helps evaluate danger level)
+        context_parts: list[str] = []
+        workspace = getattr(self._state, "workspace", None) if hasattr(self, "_state") else None
+        if workspace:
+            context_parts.append(f"Workspace: {workspace}")
+        context = " | ".join(context_parts) if context_parts else None
+
         result = await evaluate_criticality_async(
-            description, priority, use_llm=True, model=getattr(self, "_model", None)
+            description,
+            priority,
+            use_llm=True,
+            model=getattr(self, "_model", None),
+            use_semantic=sem_cfg.enabled if sem_cfg else False,
+            semantic_config=sem_cfg,
+            soothe_config=self._config,
+            context=context,
         )
 
         if result.is_must:
@@ -796,8 +814,8 @@ class AutonomousMixin(GoalDirectivesMixin):
             from soothe.core.goal_engine.webhooks import WebhookConfig, WebhookService
 
             webhook_url = None
-            if self._config and hasattr(self._config, "autopilot"):
-                webhook_url = self._config.autopilot.webhooks.get(f"on_{event_type}")
+            if self._config and hasattr(self._config.agent, "autonomous"):
+                webhook_url = self._config.agent.autonomous.webhooks.get(f"on_{event_type}")
 
             if not webhook_url:
                 return
@@ -826,28 +844,35 @@ class AutonomousMixin(GoalDirectivesMixin):
             return []
 
         try:
-            from soothe.core.goal_engine.relationship_detector import (
-                auto_apply_relationships,
-                detect_relationships,
+            from soothe.core.goal_engine.relationship_detector import auto_apply_relationships
+            from soothe.core.goal_engine.semantic_relationship_detector import (
+                detect_relationships_async,
             )
 
             all_goals = await self._goal_engine.list_goals()
-            relationships = detect_relationships(completed_goal, all_goals)
+            rel_cfg = None
+            if self._config and hasattr(self._config, "optimization"):
+                rel_cfg = self._config.optimization.semantic_relationships
+
+            relationships = await detect_relationships_async(
+                completed_goal,
+                all_goals,
+                config=rel_cfg,
+            )
             if not relationships:
                 return []
 
             # IG-271: Relationship detecting events removed, replaced with logging
-            # Log relationships instead of emitting events
             for rel in relationships:
                 logger.info(
                     "Relationship detected: %s %s %s (confidence=%.2f)",
-                    rel.source_id,
+                    rel.from_goal,
                     rel.rel_type,
-                    rel.target_id,
+                    rel.to_goal,
                     rel.confidence,
                 )
 
-            auto_apply_relationships(relationships, self._goal_engine)
+            auto_apply_relationships(relationships, all_goals)
         except Exception:
             logger.debug("Relationship detection failed", exc_info=True)
             return []

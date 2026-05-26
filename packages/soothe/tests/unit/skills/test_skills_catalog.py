@@ -61,6 +61,7 @@ def test_build_skill_invocation_envelope_includes_name() -> None:
         "source": "test",
     }
     env = build_skill_invocation_envelope(meta, "---\nname: x\n---\nDo thing.\n", "please")
+    assert "Skill folder: /tmp/ignored" in env.skill_context
     assert "x" in env.prompt
     assert "Do thing" in env.prompt
     assert env.message_kwargs is not None
@@ -97,4 +98,9 @@ def test_try_expand_slash_skill_user_line(tmp_path: Path) -> None:
     assert "Do the thing" in env.prompt
     assert "run it" in env.prompt
     assert env.prompt.index("User instruction") < env.prompt.index("Skill reference")
+    assert "Skill: expand-me" in env.skill_context
+    assert f"Skill folder: {d.resolve()}" in env.skill_context
+    assert "Do the thing" in env.skill_context
+    assert "User instruction" not in env.skill_context
+    assert "run it" not in env.skill_context
     assert try_expand_slash_skill_user_line("/skill:missing-skill x", cfg) is None

@@ -186,7 +186,7 @@ class GoalDirectivesMixin:
             [g for g in await self._goal_engine.list_goals() if g.status in ("pending", "active")]
         )
 
-        max_total = getattr(self._config.autonomous, "max_total_goals", 50)
+        max_total = getattr(self._config.agent.autonomous, "max_total_goals", 50)
         if total_goals >= max_total:
             return {"applied": False, "reason": f"Max goals limit reached ({max_total})"}
 
@@ -197,8 +197,8 @@ class GoalDirectivesMixin:
             description=directive.description,
             priority=directive.priority or 50,
             parent_id=directive.parent_id,
-            max_retries=self._config.autonomous.max_retries
-            if hasattr(self._config, "autonomous")
+            max_retries=self._config.agent.autonomous.max_retries
+            if hasattr(self._config.agent, "autonomous")
             else 2,
         )
 

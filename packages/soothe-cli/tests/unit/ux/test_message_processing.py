@@ -159,4 +159,3 @@ class TestNormalizeToolNameForArgMap:
 
     def test_snake_case_unchanged(self) -> None:
         assert _normalize_tool_name_for_arg_map("read_file") == "read_file"
-

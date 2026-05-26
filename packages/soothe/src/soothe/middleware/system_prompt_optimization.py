@@ -274,14 +274,14 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         complexity_str = str(complexity) if hasattr(complexity, "value") else complexity
 
         if complexity_str == "minimal":
-            return _SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
+            return _SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.agent.name)
         if complexity_str == "simple":
-            return _SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
+            return _SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.agent.name)
         if complexity_str == "medium":
-            return _MEDIUM_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
-        if self._config.system_prompt:
-            return self._config.system_prompt.format(assistant_name=self._config.assistant_name)
-        return _DEFAULT_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
+            return _MEDIUM_SYSTEM_PROMPT.format(assistant_name=self._config.agent.name)
+        if self._config.agent.system_prompt:
+            return self._config.agent.system_prompt.format(assistant_name=self._config.agent.name)
+        return _DEFAULT_SYSTEM_PROMPT.format(assistant_name=self._config.agent.name)
 
     def _get_prompt_for_complexity(
         self, complexity: str, state: dict[str, Any] | None = None
@@ -585,7 +585,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Returns:
             XML section string, or None if contract is disabled.
         """
-        if config is None or not config.agent_loop.agent_loop_output_contract_enabled:
+        if config is None or not config.agent.loop.agent_loop_output_contract_enabled:
             return None
 
         return (

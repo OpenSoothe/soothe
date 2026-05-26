@@ -2,9 +2,8 @@
 
 Builds the XML envelope that wraps per-turn dynamic content:
 - <USER_QUERY> up front (what to do this turn)
-- Slash-skill turns: ``goal_user_submission`` is a ``/skill:`` line; the trailing user
-  text is repeated in ``<USER_PRIMARY_QUERY>`` before long skill reference in
-  ``<FULL_GOAL_AND_SKILL_CONTEXT>`` so the model keeps focus on the short query.
+- Slash-skill turns: optional ``<SKILL_CONTEXT>`` after ``<USER_QUERY>`` (skill reference
+  only, not the full expanded goal prompt)
 - ``--- Context ---`` then <DYNAMIC_CONTEXT>: execution hints, timestamp, language hint
 
 This envelope keeps volatile content out of the system prompt,
@@ -80,29 +79,25 @@ def _append_project_instructions_to_context_info(
 
 
 def build_execute_step_envelope(
-    goal: str | None,
     step_description: str,
     *,
     execution_hints: str | None = None,
     workspace_state: str | None = None,
     project_instructions: str | None = None,
-    goal_user_submission: str | None = None,
+    skill_context: str | None = None,
 ) -> str:
     """Build the user message envelope for an execute-step (RFC-214).
 
     The envelope contains all per-turn volatile content that should NOT
-    be in the system prompt (date, goal context, execution hints).
+    be in the system prompt (date, execution hints, optional skill reference).
 
     Args:
-        goal: Current goal text.
         step_description: The step's description (what to execute).
         execution_hints: Optional hints text from ExecutionHintsMiddleware.
         workspace_state: Optional lightweight workspace diff summary.
         project_instructions: Optional ``<project_instructions>`` XML from workspace
             ``CLAUDE.md`` / ``AGENTS.md`` (first N lines).
-        goal_user_submission: When set to the original ``/skill:`` user line (after expansion),
-            repeats the short trailing user text in ``<USER_PRIMARY_QUERY>`` before the
-            full expanded goal so long SKILL.md bodies do not bury the real query.
+        skill_context: Skill reference only (SKILL.md); omitted when not a slash-skill turn.
 
     Returns:
         XML envelope string for the LoopHumanMessage content.
@@ -113,20 +108,10 @@ def build_execute_step_envelope(
 
     user_query = f"<USER_QUERY>\n{step_description}\n</USER_QUERY>"
 
-    skill_tail = _slash_skill_trailing_user_text(goal_user_submission)
-    if skill_tail is not None:
-        goal_text = _goal_text_for_execute_step_envelope(goal)
-        focus = skill_tail.strip() if skill_tail.strip() else _EMPTY_SKILL_USER_TEXT_PLACEHOLDER
-        prefix = (
-            "<USER_PRIMARY_QUERY>\n"
-            f"{focus}\n"
-            "</USER_PRIMARY_QUERY>\n\n"
-            "<FULL_GOAL_AND_SKILL_CONTEXT>\n"
-            f"{goal_text}\n"
-            "</FULL_GOAL_AND_SKILL_CONTEXT>"
-        )
-    else:
-        prefix = ""
+    body_parts: list[str] = [user_query]
+    skill_ref = (skill_context or "").strip()
+    if skill_ref:
+        body_parts.append(f"<SKILL_CONTEXT>\n{skill_ref}\n</SKILL_CONTEXT>")
 
     # <DYNAMIC_CONTEXT>: hints + context only (step instruction is above the fold)
     dynamic_parts: list[str] = []
@@ -146,10 +131,7 @@ def build_execute_step_envelope(
 
     dynamic_context = "<DYNAMIC_CONTEXT>\n" + "\n".join(dynamic_parts) + "\n</DYNAMIC_CONTEXT>"
 
-    body = user_query + _EXECUTE_STEP_CONTEXT_SEPARATOR + dynamic_context
-    if prefix:
-        return prefix + "\n\n" + body
-    return body
+    return "\n\n".join(body_parts) + _EXECUTE_STEP_CONTEXT_SEPARATOR + dynamic_context
 
 
 def build_plan_context_envelope(

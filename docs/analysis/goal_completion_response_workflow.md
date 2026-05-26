@@ -38,42 +38,7 @@ The Plan phase produces a `PlanResult` with:
 
 **Progress (`goal_progress`)**: Taken from the assess model’s `StatusAssessment.goal_progress` and carried into `PlanResult` (RFC-604). Evidence-based **blending** of `goal_progress` was **removed** (IG-376); **`confidence`** may still be calibrated from execution metrics in `LLMPlanner.plan()`.
 
-#### Fallback detection: action-based heuristics
-
-When LLM fails to set `status="done"` despite clear completion signals, `_detect_completion_fallback()` (`planner.py:91-202`) forces completion based on:
-
-**Completion Indicators** (≥2 required OR action repetition detected):
-
-1. **Action Repetition**: Same action repeated across consecutive iterations
-   ```python
-   recent_actions = state.get_recent_actions(2)
-   if actions_semantically_similar(action1, action2):
-       completion_indicators.append("action_repetition")
-   ```
-
-2. **High Evidence Volume**: ≥10,000 chars with progress ≥0.8
-   ```python
-   if total_evidence_chars >= 10_000 and progress >= 0.8:
-       completion_indicators.append("high_evidence_volume")
-   ```
-
-3. **Diminishing Returns**: Recent iterations added <10% new evidence
-   ```python
-   if recent_size < earlier_size * 0.1:
-       completion_indicators.append("diminishing_returns")
-   ```
-
-4. **All Steps Successful**: All steps succeeded with substantial output (>5KB) and progress ≥0.85
-   ```python
-   if all_successful and has_substantial_output and progress >= 0.85:
-       completion_indicators.append("all_steps_successful")
-   ```
-
-**Decision Logic**:
-```python
-if len(completion_indicators) >= 2 or "action_repetition" in completion_indicators:
-    plan_result.status = "done"  # Force completion
-```
+**Completion authority**: Only `StatusAssessment.status` (RFC-604) ends the loop. Heuristic force-done (`completion_classifier`, IG-433) was **removed** — evidence volume and diminishing-returns must not override assess `continue`.
 
 ---
 
@@ -420,9 +385,9 @@ async def fail_goal(self, goal_id: str, error: str, evidence: EvidenceBundle) ->
 
 ### 1. Evidence-aware completion (RFC-204)
 
-- **`goal_progress`**: From StatusAssessment (IG-376); optional completion heuristics in `planner.py` can still force `done` when stuck.
+- **`goal_progress`**: From StatusAssessment (IG-376).
 - **`confidence`**: May blend LLM self-score with execution metrics in `LLMPlanner.plan()`.
-- **Fallback detection**: `_detect_completion_fallback()` when the model misses clear completion signals.
+- **Completion**: RFC-604 assess only; heuristic force-done removed.
 
 ### 2. Adaptive Response Sizing (IG-268)
 
@@ -528,7 +493,6 @@ agentic:
 | `generate_user_fallback_summary()` | `packages/soothe/src/soothe/core/agent_loop/core/fallback_summary.py` | User-safe summary when synthesis unavailable |
 | `SynthesisGenerator` (class) | `packages/soothe/src/soothe/core/agent_loop/analysis/synthesis.py` | Optional synthesis stream for goal completion |
 | `evaluate_goal_completion()` | `packages/soothe/src/soothe/core/goal_engine/consensus.py` | Consensus validation |
-| `_detect_completion_fallback()` | `packages/soothe/src/soothe/core/agent_loop/core/planner.py` | Force completion when stuck |
 
 ---
 
@@ -595,7 +559,7 @@ Runs:
 
 The goal completion response generation workflow in Soothe is a sophisticated adaptive system with:
 
-1. **Completion detection** from `StatusAssessment` plus heuristics (`_detect_completion_fallback`)
+1. **Completion detection** from RFC-604 `StatusAssessment` only
 2. **Adaptive final response** (`agentic.final_response`) choosing direct execute vs synthesis vs summary
 3. **Policies and analysis modules** under `core/agent_loop/policies` and `core/agent_loop/analysis`
 4. **GoalEngine consensus** where applicable before accepting completion

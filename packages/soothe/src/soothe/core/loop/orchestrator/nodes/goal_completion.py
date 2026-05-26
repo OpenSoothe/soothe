@@ -137,7 +137,7 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     action = plan_manager.determine_completion_strategy(
         state,
         plan_result,
-        agent_loop.config.agent_loop.final_response,
+        agent_loop.config.agent.loop.final_response,
     )
 
     dag_report = plan_manager.format_completion_dag_report().strip()

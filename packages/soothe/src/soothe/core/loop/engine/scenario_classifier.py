@@ -19,8 +19,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Built-in scenario templates (minimal: scenario name + sections only)
-BUILTIN_SCENARIOS = {
+# Built-in scenario templates with descriptions
+BUILTIN_SCENARIOS: dict[str, list[str]] = {
     "code_architecture_design": [
         "Summary",
         "Component Analysis",
@@ -78,6 +78,19 @@ BUILTIN_SCENARIOS = {
         "Summary",
         "Key Points",
     ],
+}
+
+_SCENARIO_DESCRIPTIONS: dict[str, str] = {
+    "code_architecture_design": "System/module structure analysis",
+    "code_implementation_design": "Concrete implementation patterns and examples",
+    "research_synthesis": "Multi-source information gathering and findings",
+    "travel_activity_plan": "Structured planning for trips, events, activities",
+    "tutorial_guide": "Step-by-step instructional content",
+    "analysis_report": "Data/metrics/trends analysis with recommendations",
+    "investigation_summary": "Problem/troubleshooting investigation process",
+    "decision_analysis": "Options comparison with trade-offs",
+    "content_draft": "Blog, documentation, proposal, email drafts",
+    "general_summary": "Simple summarization fallback",
 }
 
 _JSON_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.IGNORECASE | re.DOTALL)
@@ -161,11 +174,9 @@ def _build_classifier_prompt(
     Returns:
         Complete classifier prompt text.
     """
-    # Format built-in scenarios list
     scenarios_list = "\n".join(
-        f"{i + 1}. {name} - {desc}"
-        for i, (name, sections) in enumerate(BUILTIN_SCENARIOS.items())
-        for desc in [_get_scenario_description(name)]
+        f"{i + 1}. {name} - {_SCENARIO_DESCRIPTIONS.get(name, 'General synthesis')}"
+        for i, name in enumerate(BUILTIN_SCENARIOS.keys())
     )
 
     return f"""Analyze the goal and execution pattern to determine the most appropriate synthesis scenario.
@@ -225,30 +236,6 @@ ANOTHER EXAMPLE (custom):
     ],
     "evidence_emphasis": "Include full recipe content, ingredient lists, and cooking times from web search results"
 }}"""
-
-
-def _get_scenario_description(scenario_name: str) -> str:
-    """Get brief description for built-in scenario (IG-300).
-
-    Args:
-        scenario_name: Built-in scenario name.
-
-    Returns:
-        Brief description of scenario purpose.
-    """
-    descriptions = {
-        "code_architecture_design": "System/module structure analysis",
-        "code_implementation_design": "Concrete implementation patterns and examples",
-        "research_synthesis": "Multi-source information gathering and findings",
-        "travel_activity_plan": "Structured planning for trips, events, activities",
-        "tutorial_guide": "Step-by-step instructional content",
-        "analysis_report": "Data/metrics/trends analysis with recommendations",
-        "investigation_summary": "Problem/troubleshooting investigation process",
-        "decision_analysis": "Options comparison with trade-offs",
-        "content_draft": "Blog, documentation, proposal, email drafts",
-        "general_summary": "Simple summarization fallback",
-    }
-    return descriptions.get(scenario_name, "General synthesis")
 
 
 def _coerce_response_text(content: object) -> str:
@@ -387,7 +374,7 @@ async def classify_synthesis_scenario(
         logger.warning("Scenario classification failed, using fallback", exc_info=True)
         return ScenarioClassification(
             scenario="general_summary",
-            sections=BUILTIN_SCENARIOS["general_summary"],
+            sections=list(BUILTIN_SCENARIOS["general_summary"]),
             contextual_focus=["Provide concise summary of goal completion"],
             evidence_emphasis="Use any available tool results or AI responses",
         )
