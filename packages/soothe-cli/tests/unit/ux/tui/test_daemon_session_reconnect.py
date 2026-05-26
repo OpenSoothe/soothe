@@ -81,6 +81,9 @@ async def test_iter_turn_chunks_raises_when_connection_drops_mid_query() -> None
         def is_connection_alive(self) -> bool:
             return False
 
+        def peel_stale_pending_control_events(self) -> list[str]:
+            return []
+
         async def read_event(self) -> dict[str, Any] | None:
             if self._events:
                 return self._events.pop(0)
