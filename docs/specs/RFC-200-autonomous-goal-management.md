@@ -1,55 +1,55 @@
-# RFC-200: Layer 3 - Autonomous Goal Management Loop
+# RFC-200: Autonomous Goal Management Loop
 
 **RFC**: 200
-**Title**: Layer 3: Autonomous Goal Management Loop
+**Title**: Autonomous Goal Management Loop
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-15
-**Updated**: 2026-04-17
+**Updated**: 2026-05-26
 **Dependencies**: RFC-000, RFC-001, RFC-500, RFC-201
 
 ## Abstract
 
-This RFC defines Layer 3 of Soothe's three-layer execution architecture: autonomous goal management for long-running complex workflows. Layer 3 manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. It delegates single-goal execution to Layer 2 (RFC-201) through explicit PERFORM → Layer 2 delegation, and receives PlanResult for Layer 3 reflection. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
+This RFC defines GoalEngine, Soothe's autonomous goal management system for long-running complex workflows. GoalEngine manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. It delegates single-goal execution to AgentLoop (RFC-201) through explicit PERFORM → AgentLoop delegation, and receives PlanResult for GoalEngine reflection. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
 
 ## Architecture Position
 
-### Three-Layer Model
+### Three-Level Execution Model
 
-Soothe operates through a hierarchical execution model with three distinct layers:
+Soothe operates through a hierarchical execution model with three distinct levels:
 
 ```
-Layer 3: Autonomous Goal Management (this RFC)
+GoalEngine: Autonomous Goal Management (this RFC)
   ├─ Scope: Long-running complex workflows, multi-goal DAGs
   ├─ Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update → repeat
-  └─ Delegation: PERFORM invokes Layer 2's full Plan → Execute loop
+  └─ Delegation: PERFORM invokes AgentLoop's full Plan → Execute loop
 
-Layer 2: Agentic Goal Execution (RFC-201)
+AgentLoop: Agentic Goal Execution (RFC-201)
   ├─ Scope: Single-goal execution through iterative refinement
   ├─ Loop: Plan → Execute (max iterations: ~8)
-  └─ Delegation: Execute invokes Layer 1 CoreAgent for step execution
+  └─ Delegation: Execute invokes CoreAgent for step execution
 
-Layer 1: CoreAgent Runtime (RFC-100)
+CoreAgent: Runtime (RFC-100)
   ├─ Foundation: create_soothe_agent() → CompiledStateGraph
   └─ Execution: Model → Tools → Model loop (LangGraph native)
 ```
 
-### Layer 3 Responsibilities
+### GoalEngine Responsibilities
 
-Layer 3 operates at the highest abstraction level, focusing on goal lifecycle management rather than execution details:
+GoalEngine operates at the highest abstraction level, focusing on goal lifecycle management rather than execution details:
 
 - **Goal DAG orchestration**: Create, schedule, and manage goals with dependencies
 - **Goal-level planning**: Decompose complex objectives into goal DAGs
-- **Delegation to Layer 2**: PERFORM stage invokes Layer 2's complete loop
-- **Goal DAG reflection**: Evaluate progress across multiple goals using Layer 2 PlanResult
+- **Delegation to AgentLoop**: PERFORM stage invokes AgentLoop's complete loop
+- **Goal DAG reflection**: Evaluate progress across multiple goals using AgentLoop PlanResult
 - **Dynamic goal restructuring**: Mutate goal DAG based on execution learning
 - **Large iteration budgets**: Support complex problem solving (10-50+ iterations)
 
-### Integration with Layer 2
+### Integration with AgentLoop
 
 **AgentLoop Goal Pull Architecture** (Inverted Control Flow):
 
-Layer 2 AgentLoop actively queries Layer 3 GoalEngine for goal assignment (pull-based). GoalEngine provides goal state service, never invokes AgentLoop.
+AgentLoop actively queries GoalEngine for goal assignment (pull-based). GoalEngine provides goal state service, never invokes AgentLoop.
 
 ```python
 # AgentLoop initialization (run_with_progress)
@@ -70,7 +70,7 @@ async def run_with_progress(...):
         thread_id=thread_id,
     )
     
-    # Execute Layer 2 Plan → Execute loop (AgentLoop drives)
+    # Execute AgentLoop Plan → Execute loop (AgentLoop drives)
     plan_result = await self.run_iteration(state)
     
     # REPORT: AgentLoop reports completion to GoalEngine
@@ -114,7 +114,7 @@ while total_iterations < max_iterations and not GoalEngine.is_complete():
     |
     +-- for each executing goal (PERFORM stage):
            |
-           +-- Delegate to Layer 2's Plan → Execute loop
+           +-- Delegate to AgentLoop's Plan → Execute loop
            |      Receive: PlanResult with evidence_summary, goal_progress
            |
            +-- REFLECT stage:
@@ -148,9 +148,9 @@ while total_iterations < max_iterations and not GoalEngine.is_complete():
 ### Iteration Semantics
 
 - **Max iterations**: Large budget (10-50+) for complex problem solving
-- **Goal lifecycle**: Create → Activate → Execute (via Layer 2) → Reflect → Complete/Fail
+- **Goal lifecycle**: Create → Activate → Execute (via AgentLoop) → Reflect → Complete/Fail
 - **DAG scheduling**: Goals execute when dependencies satisfied, parallel batches when independent
-- **Evidence flow**: Layer 2 PlanResult → Layer 3 REFLECT → goal directives → DAG restructuring
+- **Evidence flow**: AgentLoop PlanResult → GoalEngine REFLECT → goal directives → DAG restructuring
 
 ## Components
 
@@ -181,7 +181,7 @@ class Goal(BaseModel):
 - `create_goal(description, priority, parent_id)` → Goal
 - `next_goal()` → Goal | None (backward-compatible single-goal)
 - `ready_goals(limit)` → list[Goal] (DAG-satisfied, activated goals)
-- `complete_goal(goal_id, plan_result)` → None (mark completed with Layer 2 evidence)
+- `complete_goal(goal_id, plan_result)` → None (mark completed with AgentLoop evidence)
 - `fail_goal(goal_id, evidence, allow_retry)` → BackoffDecision | None (apply backoff reasoning)
 - `list_goals(status)` → list[Goal]
 - `get_goal(goal_id)` → Goal | None (query goal metadata)

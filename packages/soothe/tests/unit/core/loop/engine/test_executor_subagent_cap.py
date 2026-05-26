@@ -26,7 +26,7 @@ async def test_stream_stops_after_subagent_cap(monkeypatch: pytest.MonkeyPatch) 
     from langchain_core.messages import ToolMessage
 
     cfg = SootheConfig()
-    cfg.agent_loop.max_subagent_tasks_per_wave = 1
+    cfg.agent.loop.max_subagent_tasks_per_wave = 1
 
     agent = MagicMock()
     chunks: list = [
@@ -66,7 +66,7 @@ async def test_unlimited_subagent_when_cap_zero(monkeypatch: pytest.MonkeyPatch)
     from langchain_core.messages import ToolMessage
 
     cfg = SootheConfig()
-    cfg.agent_loop.max_subagent_tasks_per_wave = 0
+    cfg.agent.loop.max_subagent_tasks_per_wave = 0
 
     agent = MagicMock()
     chunks: list = [

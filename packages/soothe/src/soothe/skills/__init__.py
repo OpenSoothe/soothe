@@ -1,6 +1,6 @@
 """Skills discovery and invocation for Soothe agent runtime."""
 
-from soothe.skills.builtins import get_built_in_skills_paths
+from soothe.skills.builtins import get_built_in_skills_paths, is_builtin_skill_directory
 from soothe.skills.catalog import (
     SkillInvocationEnvelope,
     build_skill_context_text,
@@ -19,6 +19,7 @@ __all__ = [
     "build_skill_invocation_envelope",
     "format_slash_skill_invoke_line",
     "get_built_in_skills_paths",
+    "is_builtin_skill_directory",
     "parse_slash_skill_user_line",
     "read_skill_markdown",
     "resolve_skill_directory",

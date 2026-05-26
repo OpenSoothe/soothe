@@ -30,7 +30,7 @@ class MemUMemory(MemoryProtocol):
             config: Soothe configuration.
         """
         # Create LLM adapter from LangChain models
-        chat_model = config.create_chat_model(config.protocols.memory.llm_chat_role)
+        chat_model = config.create_chat_model(config.agent.protocols.memory.llm_chat_role)
         embedding_model = config.create_embedding_model()
 
         llm_adapter = LangChainLLMAdapter(
@@ -39,13 +39,13 @@ class MemUMemory(MemoryProtocol):
         )
 
         # Resolve memory directory
-        memory_dir = Path(config.protocols.memory.persist_dir or "~/.soothe/memory")
+        memory_dir = Path(config.agent.protocols.memory.persist_dir or "~/.soothe/memory")
         memory_dir = memory_dir.expanduser()
 
         # Create MemuMemoryStore
         self._store = MemuMemoryStore(
             memory_dir=str(memory_dir),
-            agent_id=config.assistant_name,  # Use assistant name as agent identifier
+            agent_id=config.agent.name,  # Use assistant name as agent identifier
             user_id="default_user",  # Will be overridden per-request
             llm_client=llm_adapter,
             enable_embeddings=True,

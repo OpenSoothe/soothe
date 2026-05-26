@@ -137,15 +137,26 @@ class AgentLoop:
         Yields:
             Tuples of (event_type, event_data) for progress updates
         """
+        from soothe.core.workspace.tool_path_resolution import (
+            filesystem_virtual_mode_from_soothe_config,
+        )
         from soothe.skills.catalog import (
             parse_slash_skill_user_line,
             try_expand_slash_skill_user_line,
         )
+        from soothe.skills.workspace_sync import sync_external_skills_to_workspace
+
+        if workspace and filesystem_virtual_mode_from_soothe_config(self.config):
+            sync_external_skills_to_workspace(self.config, workspace)
 
         goal_user_submission: str | None = None
         skill_context: str | None = None
         execution_goal = goal
-        skill_env = try_expand_slash_skill_user_line(goal, self.config)
+        skill_env = try_expand_slash_skill_user_line(
+            goal,
+            self.config,
+            workspace=str(workspace) if workspace else None,
+        )
         if skill_env is not None:
             goal_user_submission = goal
             execution_goal = skill_env.prompt

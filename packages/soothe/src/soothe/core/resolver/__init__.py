@@ -58,7 +58,7 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
     Returns:
         A MemoryProtocol instance, or None if disabled.
     """
-    if not config.protocols.memory.enabled:
+    if not config.agent.protocols.memory.enabled:
         return None
 
     try:
@@ -66,8 +66,8 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
 
         logger.info(
             "Using MemU memory backend (chat: %s, embed: %s)",
-            config.resolve_model(config.protocols.memory.llm_chat_role),
-            config.resolve_model(config.protocols.memory.llm_embed_role),
+            config.resolve_model(config.agent.protocols.memory.llm_chat_role),
+            config.resolve_model(config.agent.protocols.memory.llm_embed_role),
         )
 
         return MemUMemory(config)
@@ -93,7 +93,7 @@ def resolve_planner(
     Returns:
         LLMPlanner instance.
     """
-    planner_role = config.protocols.planner.model or "think"
+    planner_role = config.agent.protocols.planner.model or "think"
     planner_model = model
     if planner_model is None:
         try:

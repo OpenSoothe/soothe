@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from soothe.config import SootheConfig
-from soothe.skills.builtins import get_built_in_skills_paths
+from soothe.skills.builtins import is_builtin_skill_directory
+from soothe.skills.workspace_sync import skill_directories_for_resolution
 
 logger = logging.getLogger(__name__)
 
@@ -140,9 +141,7 @@ def wire_entries_for_agent_config(
         alphabetically by name. No ``path`` field is included.
     """
     ws = workspace or str(Path.cwd().resolve())
-    all_dirs: list[str] = list(get_built_in_skills_paths(ws))
-    if config.skills:
-        all_dirs.extend(config.skills)
+    all_dirs = skill_directories_for_resolution(config, ws)
 
     entries: list[dict[str, str]] = []
     seen_names: set[str] = set()
@@ -153,8 +152,7 @@ def wire_entries_for_agent_config(
             continue
 
         # Determine source label
-        builtin_dirs = get_built_in_skills_paths(ws)
-        if dir_path in builtin_dirs or "built_in_skills" in dir_path:
+        if is_builtin_skill_directory(dir_path):
             source = "builtin"
         else:
             source = "user"
@@ -199,9 +197,7 @@ def resolve_skill_directory(
         or ``None`` if the skill is not found.
     """
     ws = workspace or str(Path.cwd().resolve())
-    all_dirs: list[str] = list(get_built_in_skills_paths(ws))
-    if config.skills:
-        all_dirs.extend(config.skills)
+    all_dirs = skill_directories_for_resolution(config, ws)
 
     # Last-wins: iterate all, keep last match
     result: dict[str, Any] | None = None
@@ -211,8 +207,7 @@ def resolve_skill_directory(
             continue
         if meta["name"] == skill_name:
             # Determine source label
-            builtin_dirs = get_built_in_skills_paths()
-            if dir_path in builtin_dirs or "built_in_skills" in dir_path:
+            if is_builtin_skill_directory(dir_path):
                 meta["source"] = "builtin"
             else:
                 meta["source"] = "user"
@@ -259,11 +254,12 @@ def build_skill_context_text(meta: dict[str, Any], markdown: str) -> str:
     name = meta.get("name", "")
     description = meta.get("description", "")
     skill_dir = str(meta.get("path") or "").strip()
+    source = str(meta.get("source") or "").strip().lower()
 
     reference_parts: list[str] = []
     if name:
         reference_parts.append(f"Skill: {name}")
-    if skill_dir:
+    if skill_dir and source != "builtin" and not is_builtin_skill_directory(skill_dir):
         reference_parts.append(
             f"Skill folder: {skill_dir}\n"
             "(Additional files may live under this directory — use filesystem tools to "

@@ -49,10 +49,10 @@ def test_token_reduction_estimates():
         _SIMPLE_SYSTEM_PROMPT,
     )
 
-    simple_prompt = _SIMPLE_SYSTEM_PROMPT.format(assistant_name=config.assistant_name)
-    medium_prompt = _MEDIUM_SYSTEM_PROMPT.format(assistant_name=config.assistant_name)
-    complex_prompt = config.system_prompt or _DEFAULT_SYSTEM_PROMPT.format(
-        assistant_name=config.assistant_name
+    simple_prompt = _SIMPLE_SYSTEM_PROMPT.format(assistant_name=config.agent.name)
+    medium_prompt = _MEDIUM_SYSTEM_PROMPT.format(assistant_name=config.agent.name)
+    complex_prompt = config.agent.system_prompt or _DEFAULT_SYSTEM_PROMPT.format(
+        assistant_name=config.agent.name
     )
 
     # Rough token count (words * 1.3 is a common approximation)

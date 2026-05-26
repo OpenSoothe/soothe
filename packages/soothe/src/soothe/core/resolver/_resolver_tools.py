@@ -549,7 +549,7 @@ def resolve_goal_engine(config: SootheConfig) -> GoalEngine:
 
     # RFC-200: Pass config for GoalBackoffReasoner initialization
     return GoalEngine(
-        max_retries=config.autonomous.max_retries,
+        max_retries=config.agent.autonomous.max_retries,
         config=config,  # Enable LLM-driven backoff reasoning
     )
 
